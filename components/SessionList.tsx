@@ -224,7 +224,7 @@ export function SessionList({
       <div className="flex items-center justify-between p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
-          <h2 className="font-semibold">Sessions</h2>
+          <h2 className="font-semibold">AgentOS</h2>
         </div>
         <div className="flex gap-1">
           <Button
