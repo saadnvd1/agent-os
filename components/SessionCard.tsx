@@ -15,8 +15,16 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import type { Session, Group } from "@/lib/db";
+import type { AgentType } from "@/lib/providers";
 
 type TmuxStatus = "idle" | "running" | "waiting" | "error" | "dead";
+
+// Agent badge colors and labels
+const agentBadgeConfig: Record<AgentType, { label: string; bgClass: string }> = {
+  claude: { label: "C", bgClass: "bg-orange-500/20 text-orange-400" },
+  codex: { label: "X", bgClass: "bg-green-500/20 text-green-400" },
+  opencode: { label: "O", bgClass: "bg-blue-500/20 text-blue-400" },
+};
 
 interface SessionCardProps {
   session: Session;
@@ -91,6 +99,19 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
         status === "waiting" && !isActive && "bg-yellow-500/5"
       )}
     >
+      {/* Agent type badge */}
+      {session.agent_type && session.agent_type !== "claude" && (
+        <span
+          className={cn(
+            "flex-shrink-0 text-[9px] font-bold px-1 rounded",
+            agentBadgeConfig[session.agent_type]?.bgClass || agentBadgeConfig.claude.bgClass
+          )}
+          title={session.agent_type}
+        >
+          {agentBadgeConfig[session.agent_type]?.label || "C"}
+        </span>
+      )}
+
       {/* Status indicator */}
       <div className={cn("flex-shrink-0", config.color)} title={config.label}>
         {config.icon}
