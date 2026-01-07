@@ -115,18 +115,29 @@ function HomeContent() {
       const sessionName = `claude-${session.id}`;
       const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
 
+      // Check if user wants to skip permissions (from localStorage)
+      const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
+
       // Determine the claude command flags
-      let claudeFlags = '';
+      const flags: string[] = [];
+
+      if (skipPermissions) {
+        flags.push("--dangerously-skip-permissions");
+      }
+
       if (session.claude_session_id) {
         // Normal resume - session has its own Claude session ID
-        claudeFlags = `--resume ${session.claude_session_id}`;
+        flags.push(`--resume ${session.claude_session_id}`);
       } else if (session.parent_session_id) {
         // Forked session without its own ID yet - need to fork from parent
         const parentSession = sessions.find(s => s.id === session.parent_session_id);
         if (parentSession?.claude_session_id) {
-          claudeFlags = `--resume ${parentSession.claude_session_id} --fork-session`;
+          flags.push(`--resume ${parentSession.claude_session_id}`);
+          flags.push("--fork-session");
         }
       }
+
+      const claudeFlags = flags.join(" ");
 
       terminal.sendInput("\x02d");
       setTimeout(() => {
@@ -158,7 +169,9 @@ function HomeContent() {
             setTimeout(() => {
               const cwd = data.session.working_directory?.replace('~', '$HOME') || '$HOME';
               const sessionName = `claude-${data.session.id}`;
-              terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" claude`);
+              const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
+              const claudeFlags = skipPermissions ? "--dangerously-skip-permissions" : "";
+              terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "claude ${claudeFlags}"`);
               attachSession(focusedPaneId, data.session.id, sessionName);
             }, 50);
           }, 100);
