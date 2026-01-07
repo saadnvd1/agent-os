@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
+import type { AgentType } from "./providers";
 
 const DB_PATH =
   process.env.DB_PATH || path.join(process.cwd(), "agent-os.db");
@@ -17,6 +18,7 @@ export interface Session {
   model: string;
   system_prompt: string | null;
   group_path: string;
+  agent_type: AgentType;
 }
 
 export interface Group {
@@ -69,6 +71,7 @@ export function initDb(): Database.Database {
       model TEXT DEFAULT 'sonnet',
       system_prompt TEXT,
       group_path TEXT NOT NULL DEFAULT 'sessions',
+      agent_type TEXT NOT NULL DEFAULT 'claude',
       FOREIGN KEY (parent_session_id) REFERENCES sessions(id)
     );
 
@@ -123,6 +126,13 @@ export function initDb(): Database.Database {
     // Column already exists, ignore
   }
 
+  // Migration: Add agent_type column if it doesn't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'claude'`);
+  } catch {
+    // Column already exists, ignore
+  }
+
   // Create group_path index after migration ensures column exists
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_group ON sessions(group_path)`);
 
@@ -161,8 +171,8 @@ export const queries = {
   createSession: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO sessions (id, name, working_directory, parent_session_id, model, system_prompt, group_path)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sessions (id, name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ),
 
   getSession: (db: Database.Database) =>

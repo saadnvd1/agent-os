@@ -19,8 +19,17 @@ import {
 } from "./ui/select";
 import { Plus } from "lucide-react";
 import type { Group } from "@/lib/db";
+import type { AgentType } from "@/lib/providers";
 
 const SKIP_PERMISSIONS_KEY = "agentOS:skipPermissions";
+const AGENT_TYPE_KEY = "agentOS:defaultAgentType";
+
+// Agent type options with display names
+const AGENT_OPTIONS: { value: AgentType; label: string; description: string }[] = [
+  { value: "claude", label: "Claude Code", description: "Anthropic's CLI" },
+  { value: "codex", label: "Codex", description: "OpenAI's CLI" },
+  { value: "opencode", label: "OpenCode", description: "Multi-provider CLI" },
+];
 
 interface NewSessionDialogProps {
   open: boolean;
@@ -44,12 +53,17 @@ export function NewSessionDialog({
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [skipPermissions, setSkipPermissions] = useState(false);
+  const [agentType, setAgentType] = useState<AgentType>("claude");
 
-  // Load skipPermissions preference from localStorage
+  // Load preferences from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem(SKIP_PERMISSIONS_KEY);
-    if (saved !== null) {
-      setSkipPermissions(saved === "true");
+    const savedSkipPerms = localStorage.getItem(SKIP_PERMISSIONS_KEY);
+    if (savedSkipPerms !== null) {
+      setSkipPermissions(savedSkipPerms === "true");
+    }
+    const savedAgentType = localStorage.getItem(AGENT_TYPE_KEY);
+    if (savedAgentType && ["claude", "codex", "opencode"].includes(savedAgentType)) {
+      setAgentType(savedAgentType as AgentType);
     }
   }, []);
 
@@ -57,6 +71,12 @@ export function NewSessionDialog({
   const handleSkipPermissionsChange = (checked: boolean) => {
     setSkipPermissions(checked);
     localStorage.setItem(SKIP_PERMISSIONS_KEY, String(checked));
+  };
+
+  // Save agentType preference to localStorage
+  const handleAgentTypeChange = (value: AgentType) => {
+    setAgentType(value);
+    localStorage.setItem(AGENT_TYPE_KEY, value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,6 +91,7 @@ export function NewSessionDialog({
           name: name.trim() || undefined, // Let API auto-generate if empty
           workingDirectory,
           groupPath,
+          agentType,
         }),
       });
 
@@ -111,6 +132,22 @@ export function NewSessionDialog({
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Agent</label>
+            <Select value={agentType} onValueChange={(v) => handleAgentTypeChange(v as AgentType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AGENT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    <span className="font-medium">{option.label}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{option.description}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Name <span className="text-muted-foreground font-normal">(optional)</span></label>
             <Input
@@ -205,7 +242,11 @@ export function NewSessionDialog({
             />
             <label htmlFor="skipPermissions" className="text-sm cursor-pointer">
               Skip permission prompts
-              <span className="text-muted-foreground ml-1">(--dangerously-skip-permissions)</span>
+              <span className="text-muted-foreground ml-1">
+                {agentType === "claude" && "(--dangerously-skip-permissions)"}
+                {agentType === "codex" && "(--approval-mode full-auto)"}
+                {agentType === "opencode" && "(via config)"}
+              </span>
             </label>
           </div>
           <DialogFooter>
