@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,8 @@ import {
 } from "./ui/select";
 import { Plus } from "lucide-react";
 import type { Group } from "@/lib/db";
+
+const SKIP_PERMISSIONS_KEY = "agentOS:skipPermissions";
 
 interface NewSessionDialogProps {
   open: boolean;
@@ -41,6 +43,21 @@ export function NewSessionDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [skipPermissions, setSkipPermissions] = useState(false);
+
+  // Load skipPermissions preference from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(SKIP_PERMISSIONS_KEY);
+    if (saved !== null) {
+      setSkipPermissions(saved === "true");
+    }
+  }, []);
+
+  // Save skipPermissions preference to localStorage
+  const handleSkipPermissionsChange = (checked: boolean) => {
+    setSkipPermissions(checked);
+    localStorage.setItem(SKIP_PERMISSIONS_KEY, String(checked));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,6 +194,19 @@ export function NewSessionDialog({
                 )}
               </div>
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="skipPermissions"
+              checked={skipPermissions}
+              onChange={(e) => handleSkipPermissionsChange(e.target.checked)}
+              className="h-4 w-4 rounded border-border bg-background accent-primary"
+            />
+            <label htmlFor="skipPermissions" className="text-sm cursor-pointer">
+              Skip permission prompts
+              <span className="text-muted-foreground ml-1">(--dangerously-skip-permissions)</span>
+            </label>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>
