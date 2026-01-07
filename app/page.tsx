@@ -10,6 +10,7 @@ import { PaneLayout } from "@/components/PaneLayout";
 import { Pane } from "@/components/Pane";
 import type { Session, Group } from "@/lib/db";
 import type { TerminalHandle } from "@/components/Terminal";
+import { getProvider } from "@/lib/providers";
 
 interface SessionStatus {
   sessionName: string;
@@ -112,38 +113,36 @@ function HomeContent() {
   const attachToSession = useCallback((session: Session) => {
     const terminal = getFocusedTerminal();
     if (terminal) {
-      const sessionName = `claude-${session.id}`;
+      // Get the provider for this session's agent type
+      const provider = getProvider(session.agent_type || "claude");
+      const sessionName = `${provider.id}-${session.id}`;
       const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
 
       // Check if user wants to skip permissions (from localStorage)
       const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
 
-      // Determine the claude command flags
-      const flags: string[] = [];
-
-      if (skipPermissions) {
-        flags.push("--dangerously-skip-permissions");
-      }
-
-      if (session.claude_session_id) {
-        // Normal resume - session has its own Claude session ID
-        flags.push(`--resume ${session.claude_session_id}`);
-      } else if (session.parent_session_id) {
-        // Forked session without its own ID yet - need to fork from parent
+      // Get parent session ID for forking
+      let parentSessionId: string | null = null;
+      if (!session.claude_session_id && session.parent_session_id) {
         const parentSession = sessions.find(s => s.id === session.parent_session_id);
-        if (parentSession?.claude_session_id) {
-          flags.push(`--resume ${parentSession.claude_session_id}`);
-          flags.push("--fork-session");
-        }
+        parentSessionId = parentSession?.claude_session_id || null;
       }
 
-      const claudeFlags = flags.join(" ");
+      // Build flags using the provider
+      const flags = provider.buildFlags({
+        sessionId: session.claude_session_id,
+        parentSessionId,
+        skipPermissions,
+        model: session.model,
+      });
+
+      const flagsStr = flags.join(" ");
 
       terminal.sendInput("\x02d");
       setTimeout(() => {
         terminal.sendInput("\x15");
         setTimeout(() => {
-          terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "claude ${claudeFlags}"`);
+          terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
           attachSession(focusedPaneId, session.id, sessionName);
         }, 50);
       }, 100);
@@ -153,10 +152,17 @@ function HomeContent() {
   // Create new session and attach
   const createAndAttach = async () => {
     try {
+      // Get saved agent type preference
+      const savedAgentType = localStorage.getItem("agentOS:defaultAgentType") || "claude";
+      const provider = getProvider(savedAgentType as "claude" | "codex" | "opencode");
+
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: `Session ${sessions.length + 1}` }),
+        body: JSON.stringify({
+          name: `Session ${sessions.length + 1}`,
+          agentType: savedAgentType,
+        }),
       });
       const data = await res.json();
       if (data.session) {
@@ -168,10 +174,11 @@ function HomeContent() {
             terminal.sendInput("\x15");
             setTimeout(() => {
               const cwd = data.session.working_directory?.replace('~', '$HOME') || '$HOME';
-              const sessionName = `claude-${data.session.id}`;
+              const sessionName = `${provider.id}-${data.session.id}`;
               const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
-              const claudeFlags = skipPermissions ? "--dangerously-skip-permissions" : "";
-              terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "claude ${claudeFlags}"`);
+              const flags = provider.buildFlags({ skipPermissions });
+              const flagsStr = flags.join(" ");
+              terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
               attachSession(focusedPaneId, data.session.id, sessionName);
             }, 50);
           }, 100);
