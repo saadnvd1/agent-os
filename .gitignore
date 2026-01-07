@@ -1,19 +1,49 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+.next/
+out/
+
+# Environment
 .env
 .env.local
+.env*.local
+
+# Python
 __pycache__/
 *.pyc
 .venv/
 venv/
+
+# OS
 .DS_Store
+
+# Logs
 *.log
+npm-debug.log*
+
+# IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# Testing
 coverage/
 .cache/
 
-# mem database (local working copy)
+# Databases (local working copies)
 .mem.db
 .mem.db-wal
 .mem.db-shm
+agent-os.db
+agent-os.db-wal
+agent-os.db-shm
+
+# TypeScript
+*.tsbuildinfo
+
+# Vercel
+.vercel
