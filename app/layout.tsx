@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agent-OS",
+  title: "AgentOS",
   description: "AI Agent Command Center",
 };
 
