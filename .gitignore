@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.env
+.env.local
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+*.log
+.idea/
+.vscode/
+coverage/
+.cache/
+
+# mem database (local working copy)
+.mem.db
+.mem.db-wal
+.mem.db-shm
