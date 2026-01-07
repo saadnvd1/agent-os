@@ -1,26 +1,35 @@
 # AgentOS
 
-A self-hosted web UI for managing multiple Claude Code sessions with multi-pane terminals, session groups, and conversation forking.
+A self-hosted web UI for managing multiple AI coding assistant sessions with multi-pane terminals, session groups, and conversation forking.
 
 ![AgentOS Screenshot](docs/screenshot.png)
 
+## Supported Agents
+
+- **Claude Code** (Anthropic) - Full support with resume/fork
+- **Codex** (OpenAI) - Basic support with approval modes
+- **OpenCode** - Basic support for multi-provider CLI
+
 ## Features
 
-- **Multi-Pane View** - Run up to 4 Claude sessions side-by-side with resizable panes
+- **Multi-Agent Support** - Switch between Claude, Codex, and OpenCode per session
+- **Multi-Pane View** - Run up to 4 sessions side-by-side with resizable panes
 - **Session Groups** - Organize sessions in collapsible folder hierarchy
 - **Tabbed Terminals** - Multiple tabs per pane for quick switching
-- **Session Forking** - Fork conversations to explore different approaches
-- **Claude Session Detection** - Auto-detects Claude session IDs from files
+- **Session Forking** - Fork conversations to explore different approaches (Claude)
+- **Session Resume** - Auto-detects session IDs for seamless resume (Claude)
 - **Skip Permissions** - Optional flag to bypass permission prompts
-- **External Session Import** - Import existing tmux Claude sessions
+- **External Session Import** - Import existing tmux sessions
 - **tmux Integration** - Sessions persist across page reloads
 
 ## Prerequisites
 
 - Node.js 20+
 - tmux
-- [Claude Code CLI](https://github.com/anthropics/claude-code) installed and authenticated
-- jq (for parsing Claude session IDs)
+- At least one of:
+  - [Claude Code CLI](https://github.com/anthropics/claude-code) installed and authenticated
+  - [Codex CLI](https://github.com/openai/codex) installed and authenticated
+  - [OpenCode CLI](https://github.com/opencode-ai/opencode) installed and configured
 - macOS or Linux
 
 ## Quick Start
@@ -41,13 +50,14 @@ npm run dev
 
 ## How It Works
 
-AgentOS manages Claude Code sessions through tmux. Each session runs in its own tmux session, allowing:
+AgentOS manages AI coding CLI sessions through tmux. Each session runs in its own tmux session (`{agent}-{uuid}`), allowing:
 
 - **Persistence** - Sessions survive browser refreshes and server restarts
-- **Resume** - Pick up conversations where you left off with `--resume`
-- **Fork** - Branch conversations using `--fork-session`
+- **Resume** - Pick up conversations where you left off (Claude: `--resume`)
+- **Fork** - Branch conversations using `--fork-session` (Claude only)
+- **Multi-Agent** - Choose between Claude, Codex, or OpenCode when creating sessions
 
-The web UI provides an xterm.js terminal connected to tmux, with a sidebar for session management.
+The web UI provides an xterm.js terminal connected to tmux, with a sidebar for session management. Provider-specific flags are handled automatically via the abstraction in `lib/providers.ts`.
 
 ## Architecture
 
@@ -63,10 +73,10 @@ Browser (React 19)
 server.ts (Next.js + node-pty)
          │
          ▼
-tmux sessions → Claude Code CLI
+tmux sessions → AI CLI (claude/codex/opencode)
          │
          ▼
-SQLite (sessions, groups)
+SQLite (sessions, groups, agent_type)
 ```
 
 ## Scripts

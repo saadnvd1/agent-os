@@ -4,6 +4,7 @@ import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { providers, type AgentType } from "@/lib/providers";
 
 const execAsync = promisify(exec);
 
@@ -12,40 +13,26 @@ interface SessionStatus {
   status: "idle" | "running" | "waiting" | "error" | "dead";
   lastLine?: string;
   claudeSessionId?: string | null;
+  agentType?: AgentType;
 }
 
-// Patterns to detect Claude's state
+// Combined patterns from all providers for general detection
 const WAITING_PATTERNS = [
-  /\[Y\/n\]/i,
-  /\[y\/N\]/i,
-  /Allow\?/i,
-  /Approve\?/i,
-  /Continue\?/i,
-  /Press Enter/i,
-  /waiting for/i,
-  /\(yes\/no\)/i,
-  /Do you want to/i,
-  /Esc to cancel/i,
-  />\s*1\.\s*Yes/,  // Claude's approval menu
-  /Yes, allow all/i,
-  /allow all edits/i,
-  /allow all commands/i,
+  ...providers.claude.waitingPatterns,
+  ...providers.codex.waitingPatterns,
+  ...providers.opencode.waitingPatterns,
 ];
 
 const RUNNING_PATTERNS = [
-  /thinking/i,
-  /Working/i,
-  /Reading/i,
-  /Writing/i,
-  /Searching/i,
-  /Running/i,
-  /Executing/i,
-  /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/, // Spinner characters
+  ...providers.claude.runningPatterns,
+  ...providers.codex.runningPatterns,
+  ...providers.opencode.runningPatterns,
 ];
 
 const IDLE_PATTERNS = [
-  /^>\s*$/m, // Just a prompt
-  /claude.*>\s*$/im,
+  ...providers.claude.idlePatterns,
+  ...providers.codex.idlePatterns,
+  ...providers.opencode.idlePatterns,
 ];
 
 async function getTmuxSessions(): Promise<string[]> {
@@ -214,14 +201,27 @@ async function getSessionStatus(sessionName: string): Promise<SessionStatus> {
   }
 }
 
-// UUID pattern for agent-os managed sessions: claude-{uuid}
-const UUID_PATTERN = /^claude-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// UUID pattern for agent-os managed sessions: {provider}-{uuid}
+// Matches: claude-{uuid}, codex-{uuid}, opencode-{uuid}
+const UUID_PATTERN = /^(claude|codex|opencode)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Extract agent type from session name
+function getAgentTypeFromSessionName(sessionName: string): AgentType {
+  if (sessionName.startsWith("codex-")) return "codex";
+  if (sessionName.startsWith("opencode-")) return "opencode";
+  return "claude";
+}
+
+// Extract session ID from session name (removes provider prefix)
+function getSessionIdFromName(sessionName: string): string {
+  return sessionName.replace(/^(claude|codex|opencode)-/, "");
+}
 
 export async function GET() {
   try {
     const sessions = await getTmuxSessions();
 
-    // Get status for agent-os managed sessions (claude-{uuid} pattern)
+    // Get status for agent-os managed sessions ({provider}-{uuid} pattern)
     const managedSessions = sessions.filter(s => UUID_PATTERN.test(s));
     const statuses = await Promise.all(
       managedSessions.map(s => getSessionStatus(s))
@@ -230,9 +230,10 @@ export async function GET() {
     // Create a map of session ID to status
     const statusMap: Record<string, SessionStatus> = {};
     for (const status of statuses) {
-      // Extract session ID from "claude-{id}"
-      const id = status.sessionName.replace("claude-", "");
-      statusMap[id] = status;
+      // Extract session ID (remove provider prefix)
+      const id = getSessionIdFromName(status.sessionName);
+      const agentType = getAgentTypeFromSessionName(status.sessionName);
+      statusMap[id] = { ...status, agentType };
     }
 
     // Get other tmux sessions (not managed by agent-os)

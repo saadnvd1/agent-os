@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb, queries, type Session, type Group } from "@/lib/db";
+import { isValidAgentType, type AgentType } from "@/lib/providers";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -53,7 +54,11 @@ export async function POST(request: NextRequest) {
       systemPrompt = null,
       groupPath = "sessions",
       claudeSessionId = null,
+      agentType: rawAgentType = "claude",
     } = body;
+
+    // Validate agent type
+    const agentType: AgentType = isValidAgentType(rawAgentType) ? rawAgentType : "claude";
 
     // Auto-generate name if not provided
     const name = providedName?.trim() || generateSessionName(db);
@@ -67,7 +72,8 @@ export async function POST(request: NextRequest) {
       parentSessionId,
       model,
       systemPrompt,
-      groupPath
+      groupPath,
+      agentType
     );
 
     // Set claude_session_id if provided (for importing external sessions)
