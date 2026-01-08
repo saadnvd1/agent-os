@@ -1,31 +1,29 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { getDb, queries } from "@/lib/db";
+import { getDb, queries, type Session } from "@/lib/db";
 
 const execAsync = promisify(exec);
 
 // POST /api/tmux/kill-all - Kill all AgentOS tmux sessions and remove from database
 export async function POST() {
   try {
+    const db = getDb();
+
     // Get all tmux sessions
     const { stdout } = await execAsync(
       'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',
       { timeout: 5000 }
     );
 
-    const sessions = stdout
+    const tmuxSessions = stdout
       .trim()
       .split("\n")
       .filter((s) => s && (s.startsWith("claude-") || s.startsWith("codex-") || s.startsWith("opencode-")));
 
-    if (sessions.length === 0) {
-      return NextResponse.json({ killed: 0, sessions: [] });
-    }
-
-    // Kill each session
+    // Kill each tmux session
     const killed: string[] = [];
-    for (const session of sessions) {
+    for (const session of tmuxSessions) {
       try {
         await execAsync(`tmux kill-session -t "${session}"`, { timeout: 5000 });
         killed.push(session);
@@ -34,19 +32,21 @@ export async function POST() {
       }
     }
 
-    // Delete sessions from database
-    const db = getDb();
-    for (const tmuxName of killed) {
-      // Extract session ID from tmux name (e.g., "claude-abc123" -> "abc123")
-      const sessionId = tmuxName.replace(/^(claude|codex|opencode)-/, "");
+    // Delete ALL sessions from database
+    const dbSessions = queries.getAllSessions(db).all() as Session[];
+    for (const session of dbSessions) {
       try {
-        queries.deleteSession(db).run(sessionId);
+        queries.deleteSession(db).run(session.id);
       } catch {
-        // Session might not exist in DB, continue
+        // Continue on error
       }
     }
 
-    return NextResponse.json({ killed: killed.length, sessions: killed });
+    return NextResponse.json({
+      killed: killed.length,
+      sessions: killed,
+      deletedFromDb: dbSessions.length
+    });
   } catch (error) {
     console.error("Error killing tmux sessions:", error);
     return NextResponse.json(
