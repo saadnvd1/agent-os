@@ -28,17 +28,20 @@ Self-hosted web UI for managing multiple AI coding CLI sessions.
 - `server.ts` - WebSocket server entry point
 - `lib/db.ts` - Database schema (sessions, groups, messages)
 - `lib/providers.ts` - Agent provider abstraction (Claude, Codex, OpenCode)
+- `lib/status-detector.ts` - Session status detection with spike filtering
+- `lib/notifications.ts` - Browser notifications and sound alerts
 - `lib/panes.ts` - Multi-pane layout types
 - `lib/worktrees.ts` - Git worktree creation/deletion
 - `lib/git.ts` - Git utilities (branch detection, repo checks)
 - `lib/env-setup.ts` - Worktree environment setup (env files, package install)
 - `lib/ports.ts` - Dev server port management (3100-3900 range)
 - `contexts/PaneContext.tsx` - Pane/tab state management
+- `hooks/useNotifications.ts` - Notification state changes and browser alerts
 - `components/PaneLayout.tsx` - Resizable pane renderer (react-resizable-panels)
 - `components/Pane.tsx` - Individual pane with tabs and toolbar
 - `components/SessionList.tsx` - Grouped session sidebar
 - `components/Terminal.tsx` - xterm.js wrapper
-- `app/api/sessions/status/route.ts` - Session status detection from tmux
+- `app/api/sessions/status/route.ts` - Session status API endpoint
 - `app/api/sessions/[id]/pr/route.ts` - GitHub PR creation/status via `gh` CLI
 
 ## Session Management
@@ -66,6 +69,20 @@ Config file (`.agent-os/worktrees.json` or `.agent-os.json`):
   "devServer": { "command": "npm run dev", "portEnvVar": "PORT" }
 }
 ```
+
+## Status Detection
+
+Session status is detected via `lib/status-detector.ts`:
+- **running** (green) - Sustained activity or busy indicators detected
+- **waiting** (yellow) - Needs user input (approval prompts, Y/n questions)
+- **idle** (gray) - No recent activity, user has seen it
+- **dead** - tmux session doesn't exist
+
+Detection uses:
+1. Waiting patterns in last 5 lines (highest priority)
+2. Busy indicators ("esc to interrupt", spinners) with recent activity check
+3. Spike detection (2+ timestamp changes in 1s = sustained activity)
+4. 2s cooldown after activity stops
 
 ## Standards
 
