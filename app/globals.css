@@ -88,3 +88,11 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Prevent page scrolling on terminal touch */
+.xterm-viewport,
+.xterm-screen,
+.xterm {
+  touch-action: none;
+  -webkit-overflow-scrolling: auto;
+}
