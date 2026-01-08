@@ -8,8 +8,8 @@
  * - "dead": Session doesn't exist
  *
  * Detection Strategy:
- * 1. Waiting patterns (highest priority) - user input needed
- * 2. Busy indicators + recent activity - text-based detection
+ * 1. Busy indicators + recent activity (highest priority - actively working)
+ * 2. Waiting patterns - user input needed
  * 3. Spike detection - activity timestamp changes (2+ in 1s = sustained)
  * 4. Cooldown - 2s grace period after activity stops
  */
@@ -234,17 +234,18 @@ class SessionStatusDetector {
     const timestamp = this.getTimestamp(sessionName);
     const tracker = this.getTracker(sessionName, timestamp);
     const content = await this.capturePane(sessionName);
-
-    // 1. Waiting patterns (highest priority)
-    if (checkWaitingPatterns(content)) return "waiting";
-
-    // 2. Busy indicators (only with recent activity to avoid false positives)
     const activityAge = Date.now() - (timestamp * 1000);
-    if (activityAge < CONFIG.RECENT_ACTIVITY_MS && checkBusyIndicators(content)) {
+    const hasRecentActivity = activityAge < CONFIG.RECENT_ACTIVITY_MS;
+
+    // 1. Busy indicators with recent activity (highest priority - Claude is actively working)
+    if (hasRecentActivity && checkBusyIndicators(content)) {
       tracker.lastChangeTime = Date.now();
       tracker.acknowledged = false;
       return "running";
     }
+
+    // 2. Waiting patterns (only if not actively running)
+    if (checkWaitingPatterns(content)) return "waiting";
 
     // 3. Spike detection
     const spikeResult = this.processSpikeDetection(tracker, timestamp);
