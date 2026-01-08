@@ -5,12 +5,13 @@ import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { Button } from "@/components/ui/button";
-import { PanelLeftClose, PanelLeft, Plus, Bell } from "lucide-react";
+import { PanelLeftClose, PanelLeft, Plus, Bell, Copy, Check } from "lucide-react";
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { PaneLayout } from "@/components/PaneLayout";
 import { Pane } from "@/components/Pane";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { Session, Group } from "@/lib/db";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
 
@@ -43,18 +44,21 @@ function HomeContent() {
 
   const { focusedPaneId, attachSession, getActiveTab } = usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
+  const [copiedSessionId, setCopiedSessionId] = useState(false);
 
   // Callback for notification clicks - needs to be defined before useNotifications
   const handleNotificationClick = useCallback((sessionId: string) => {
     const session = sessions.find(s => s.id === sessionId);
     if (session) {
-      // We'll call attachToSession once it's defined
       const terminal = terminalRefs.current.get(`${focusedPaneId}:${getActiveTab(focusedPaneId)?.id}`);
       if (terminal) {
         const provider = getProvider(session.agent_type || "claude");
         const sessionName = `${provider.id}-${session.id}`;
         const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
         const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
+
+        // Ensure MCP config exists for orchestration
+        fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
 
         let parentSessionId: string | null = null;
         if (!session.claude_session_id && session.parent_session_id) {
@@ -168,12 +172,18 @@ function HomeContent() {
     fetchSessions();
   }, [fetchSessions]);
 
-  // Poll for status every 2 seconds
+  // Poll for status every 3 seconds
   useEffect(() => {
     fetchStatuses();
     const interval = setInterval(fetchStatuses, 3000);
     return () => clearInterval(interval);
   }, [fetchStatuses]);
+
+  // Poll for new sessions every 10 seconds (for workers spawned via MCP)
+  useEffect(() => {
+    const interval = setInterval(fetchSessions, 10000);
+    return () => clearInterval(interval);
+  }, [fetchSessions]);
 
   // Memoized pane renderer to prevent unnecessary re-renders
   const renderPane = useCallback((paneId: string) => (
@@ -186,13 +196,16 @@ function HomeContent() {
   ), [sessions, registerTerminalRef]);
 
   // Attach session to focused pane
-  const attachToSession = useCallback((session: Session) => {
+  const attachToSession = useCallback(async (session: Session) => {
     const terminal = getFocusedTerminal();
     if (terminal) {
       // Get the provider for this session's agent type
       const provider = getProvider(session.agent_type || "claude");
       const sessionName = `${provider.id}-${session.id}`;
       const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
+
+      // Ensure MCP config exists for orchestration (fire and forget)
+      fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
 
       // Check if user wants to skip permissions (from localStorage)
       const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
@@ -220,6 +233,8 @@ function HomeContent() {
         setTimeout(() => {
           terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
           attachSession(focusedPaneId, session.id, sessionName);
+          // Focus terminal after attaching
+          terminal.focus();
         }, 50);
       }, 100);
     }
@@ -540,6 +555,30 @@ function HomeContent() {
                     {focusedActiveTab.attachedTmux}
                   </span>
                 )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-6 w-6"
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeSession.id);
+                        setCopiedSessionId(true);
+                        setTimeout(() => setCopiedSessionId(false), 2000);
+                      }}
+                    >
+                      {copiedSessionId ? (
+                        <Check className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Copy session ID for orchestration</p>
+                    <p className="text-xs text-muted-foreground font-mono">{activeSession.id.slice(0, 8)}...</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             )}
           </div>
