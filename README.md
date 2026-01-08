@@ -30,6 +30,7 @@ A self-hosted web UI for managing multiple AI coding assistant sessions with mul
 - **External Session Import** - Import existing tmux sessions
 - **Mobile Responsive** - Touch-friendly interface with collapsible sidebar
 - **tmux Integration** - Sessions persist across page reloads
+- **Session Orchestration** - Spawn worker sessions with isolated worktrees via MCP
 
 ## Prerequisites
 

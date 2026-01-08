@@ -117,13 +117,24 @@ export function SessionList({
     }
   };
 
-  // Group sessions by group_path
-  const sessionsByGroup = sessions.reduce((acc, session) => {
-    const path = session.group_path || "sessions";
-    if (!acc[path]) acc[path] = [];
-    acc[path].push(session);
+  // Separate workers from regular sessions
+  const workersByConduct = sessions.reduce((acc, session) => {
+    if (session.conductor_session_id) {
+      if (!acc[session.conductor_session_id]) acc[session.conductor_session_id] = [];
+      acc[session.conductor_session_id].push(session);
+    }
     return acc;
   }, {} as Record<string, Session[]>);
+
+  // Group non-worker sessions by group_path
+  const sessionsByGroup = sessions
+    .filter(s => !s.conductor_session_id) // Exclude workers
+    .reduce((acc, session) => {
+      const path = session.group_path || "sessions";
+      if (!acc[path]) acc[path] = [];
+      acc[path].push(session);
+      return acc;
+    }, {} as Record<string, Session[]>);
 
   // Build group hierarchy
   const groupMap = new Map(groups.map(g => [g.path, g]));
@@ -250,21 +261,55 @@ export function SessionList({
             {childGroups.map(child => renderGroup(child, level + 1))}
 
             {/* Sessions in this group */}
-            {groupSessions.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                isActive={session.id === activeSessionId}
-                tmuxStatus={sessionStatuses?.[session.id]?.status}
-                groups={groups}
-                onClick={() => onSelect(session.id)}
-                onMove={onMoveSession ? (groupPath) => onMoveSession(session.id, groupPath) : undefined}
-                onFork={onForkSession ? () => onForkSession(session.id) : undefined}
-                onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
-                onRename={onRenameSession ? (newName) => onRenameSession(session.id, newName) : undefined}
-                onCreatePR={onCreatePR ? () => onCreatePR(session.id) : undefined}
-              />
-            ))}
+            {groupSessions.map((session) => {
+              const workers = workersByConduct[session.id] || [];
+              const hasWorkers = workers.length > 0;
+
+              return (
+                <div key={session.id} className="space-y-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className="flex-1 min-w-0">
+                      <SessionCard
+                        session={session}
+                        isActive={session.id === activeSessionId}
+                        tmuxStatus={sessionStatuses?.[session.id]?.status}
+                        groups={groups}
+                        onClick={() => onSelect(session.id)}
+                        onMove={onMoveSession ? (groupPath) => onMoveSession(session.id, groupPath) : undefined}
+                        onFork={onForkSession ? () => onForkSession(session.id) : undefined}
+                        onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
+                        onRename={onRenameSession ? (newName) => onRenameSession(session.id, newName) : undefined}
+                        onCreatePR={onCreatePR ? () => onCreatePR(session.id) : undefined}
+                      />
+                    </div>
+                    {/* Workers badge */}
+                    {hasWorkers && (
+                      <span className="flex-shrink-0 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                        {workers.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Nested workers */}
+                  {hasWorkers && (
+                    <div className="ml-4 pl-2 border-l border-border/30 space-y-0.5">
+                      {workers.map((worker) => (
+                        <SessionCard
+                          key={worker.id}
+                          session={worker}
+                          isActive={worker.id === activeSessionId}
+                          tmuxStatus={sessionStatuses?.[worker.id]?.status}
+                          groups={groups}
+                          onClick={() => onSelect(worker.id)}
+                          onDelete={onDeleteSession ? () => onDeleteSession(worker.id) : undefined}
+                          onRename={onRenameSession ? (newName) => onRenameSession(worker.id, newName) : undefined}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
