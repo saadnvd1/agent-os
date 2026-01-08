@@ -5,7 +5,7 @@ import { SessionCard } from "./SessionCard";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import { Plus, RefreshCw, Bot, TerminalSquare, Circle, Loader2, AlertCircle, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Pencil } from "lucide-react";
+import { Plus, RefreshCw, Bot, TerminalSquare, Circle, Loader2, AlertCircle, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session, Group } from "@/lib/db";
 import {
@@ -14,6 +14,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "./ui/context-menu";
 
 interface SessionStatus {
   sessionName: string;
@@ -77,6 +83,8 @@ export function SessionList({
   const [showNewGroupInput, setShowNewGroupInput] = useState<string | null>(null);
   const [editingTmuxSession, setEditingTmuxSession] = useState<string | null>(null);
   const [editTmuxName, setEditTmuxName] = useState("");
+  const [showKillAllConfirm, setShowKillAllConfirm] = useState(false);
+  const [killingAll, setKillingAll] = useState(false);
   const tmuxInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -90,6 +98,22 @@ export function SessionList({
     setRefreshing(true);
     await onRefresh();
     setRefreshing(false);
+  };
+
+  const handleKillAll = async () => {
+    setKillingAll(true);
+    try {
+      const res = await fetch("/api/tmux/kill-all", { method: "POST" });
+      const data = await res.json();
+      if (data.killed > 0) {
+        await onRefresh();
+      }
+    } catch (error) {
+      console.error("Failed to kill sessions:", error);
+    } finally {
+      setKillingAll(false);
+      setShowKillAllConfirm(false);
+    }
   };
 
   // Group sessions by group_path
@@ -118,60 +142,82 @@ export function SessionList({
     const groupSessions = sessionsByGroup[group.path] || [];
     const childGroups = getChildGroups(group.path);
     const hasContent = groupSessions.length > 0 || childGroups.length > 0;
+    const indent = level * 12; // 12px per level
+
+    const groupHeader = (
+      <div
+        className="flex items-center gap-1 py-1.5 px-2 rounded hover:bg-accent/50 cursor-pointer group"
+        style={{ marginLeft: indent }}
+        onClick={() => onToggleGroup?.(group.path, !group.expanded)}
+      >
+        <button className="p-0.5">
+          {group.expanded ? (
+            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="w-3 h-3 text-muted-foreground" />
+          )}
+        </button>
+        <span className="text-sm font-medium flex-1 truncate">{group.name}</span>
+        <span className="text-xs text-muted-foreground">{groupSessions.length}</span>
+
+        {/* Group actions */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-6 w-6">
+              <MoreHorizontal className="w-3 h-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={(e) => {
+              e.stopPropagation();
+              setShowNewGroupInput(group.path);
+            }}>
+              <FolderPlus className="w-3 h-3 mr-2" />
+              Add subgroup
+            </DropdownMenuItem>
+            {group.path !== "sessions" && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteGroup?.(group.path);
+                }}
+                className="text-red-500"
+              >
+                Delete group
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
 
     return (
-      <div key={group.path} className="space-y-1">
-        {/* Group header */}
-        <div
-          className={cn(
-            "flex items-center gap-1 py-1.5 px-2 rounded hover:bg-accent/50 cursor-pointer group",
-            level > 0 && "ml-3"
-          )}
-          onClick={() => onToggleGroup?.(group.path, !group.expanded)}
-        >
-          <button className="p-0.5">
-            {group.expanded ? (
-              <ChevronDown className="w-3 h-3 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="w-3 h-3 text-muted-foreground" />
+      <div key={group.path} className="space-y-0.5">
+        {/* Group header with context menu */}
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            {groupHeader}
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={() => setShowNewGroupInput(group.path)}>
+              <FolderPlus className="w-3 h-3 mr-2" />
+              Add subgroup
+            </ContextMenuItem>
+            {group.path !== "sessions" && (
+              <ContextMenuItem
+                onClick={() => onDeleteGroup?.(group.path)}
+                className="text-red-500 focus:text-red-500"
+              >
+                <Trash2 className="w-3 h-3 mr-2" />
+                Delete group
+              </ContextMenuItem>
             )}
-          </button>
-          <span className="text-sm font-medium flex-1 truncate">{group.name}</span>
-          <span className="text-xs text-muted-foreground">{groupSessions.length}</span>
-
-          {/* Group actions */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-6 w-6">
-                <MoreHorizontal className="w-3 h-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e) => {
-                e.stopPropagation();
-                setShowNewGroupInput(group.path);
-              }}>
-                <FolderPlus className="w-3 h-3 mr-2" />
-                Add subgroup
-              </DropdownMenuItem>
-              {group.path !== "sessions" && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteGroup?.(group.path);
-                  }}
-                  className="text-red-500"
-                >
-                  Delete group
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+          </ContextMenuContent>
+        </ContextMenu>
 
         {/* New subgroup input */}
         {showNewGroupInput === group.path && (
-          <div className={cn("flex gap-1 px-2", level > 0 && "ml-3")}>
+          <div className="flex gap-1 px-2" style={{ marginLeft: indent }}>
             <input
               type="text"
               placeholder="Group name"
@@ -195,7 +241,10 @@ export function SessionList({
 
         {/* Group contents */}
         {group.expanded && (
-          <div className={cn(level > 0 && "ml-3")}>
+          <div
+            className="border-l border-border/50 ml-3"
+            style={{ marginLeft: indent + 12, paddingLeft: 8 }}
+          >
             {/* Child groups */}
             {childGroups.map(child => renderGroup(child, level + 1))}
 
@@ -247,8 +296,49 @@ export function SessionList({
           >
             <Plus className="w-4 h-4" />
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => setShowKillAllConfirm(true)}
+                className="text-red-500 focus:text-red-500"
+              >
+                <Trash2 className="w-3 h-3 mr-2" />
+                Kill all sessions
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      {/* Kill All Confirmation */}
+      {showKillAllConfirm && (
+        <div className="mx-4 mb-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+          <p className="text-sm text-red-400 mb-2">Kill all tmux sessions?</p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleKillAll}
+              disabled={killingAll}
+            >
+              {killingAll ? "Killing..." : "Yes, kill all"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowKillAllConfirm(false)}
+              disabled={killingAll}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Session list */}
       <ScrollArea className="flex-1 w-full">
@@ -283,9 +373,10 @@ export function SessionList({
                         setEditingTmuxSession(null);
                       };
 
-                      return (
+                      const hasActions = onRenameTmuxSession || onImportTmuxSession;
+
+                      const sessionContent = (
                         <div
-                          key={session.sessionName}
                           onClick={isEditing ? undefined : () => onTmuxAttach?.(session.sessionName)}
                           className={cn(
                             "w-full text-left px-2 py-1.5 rounded-md transition-colors overflow-hidden flex items-center gap-2 cursor-pointer group",
@@ -316,7 +407,7 @@ export function SessionList({
                           ) : (
                             <span className="flex-1 text-sm truncate">{session.sessionName}</span>
                           )}
-                          {(onRenameTmuxSession || onImportTmuxSession) && !isEditing && (
+                          {hasActions && !isEditing && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                 <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-5 w-5 flex-shrink-0">
@@ -352,6 +443,42 @@ export function SessionList({
                           )}
                         </div>
                       );
+
+                      // Wrap with context menu if actions are available
+                      if (hasActions) {
+                        return (
+                          <ContextMenu key={session.sessionName}>
+                            <ContextMenuTrigger asChild>
+                              {sessionContent}
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              {onRenameTmuxSession && (
+                                <ContextMenuItem
+                                  onClick={() => {
+                                    setEditTmuxName(session.sessionName);
+                                    setEditingTmuxSession(session.sessionName);
+                                  }}
+                                >
+                                  <Pencil className="w-3 h-3 mr-2" />
+                                  Rename
+                                </ContextMenuItem>
+                              )}
+                              {onImportTmuxSession && (
+                                <ContextMenuItem
+                                  onClick={() => {
+                                    onImportTmuxSession(session.sessionName, session.claudeSessionId || undefined);
+                                  }}
+                                >
+                                  <Plus className="w-3 h-3 mr-2" />
+                                  Import to Sessions
+                                </ContextMenuItem>
+                              )}
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        );
+                      }
+
+                      return <div key={session.sessionName}>{sessionContent}</div>;
                     })}
                   </div>
                 </div>
