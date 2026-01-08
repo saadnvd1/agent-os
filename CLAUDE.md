@@ -43,6 +43,10 @@ Self-hosted web UI for managing multiple AI coding CLI sessions.
 - `components/Terminal.tsx` - xterm.js wrapper
 - `app/api/sessions/status/route.ts` - Session status API endpoint
 - `app/api/sessions/[id]/pr/route.ts` - GitHub PR creation/status via `gh` CLI
+- `lib/orchestration.ts` - Conductor/worker session spawning
+- `lib/mcp-config.ts` - Auto-generate MCP config for sessions
+- `mcp/orchestration-server.ts` - MCP server for spawning workers
+- `components/ConductorPanel.tsx` - Workers view for conductor sessions
 
 ## Session Management
 
@@ -83,6 +87,15 @@ Detection uses:
 2. Busy indicators ("esc to interrupt", spinners) with recent activity check
 3. Spike detection (2+ timestamp changes in 1s = sustained activity)
 4. 2s cooldown after activity stops
+
+## Session Orchestration
+
+Conductors can spawn worker sessions with isolated worktrees:
+- Workers get their own git branch and worktree in `~/.agent-os/worktrees/`
+- MCP server (`mcp/orchestration-server.ts`) exposes tools: `spawn_worker`, `list_workers`, `get_worker_output`
+- `.mcp.json` auto-generated when attaching to sessions
+- Workers shown nested under conductor in sidebar with badge count
+- Terminal/Workers view toggle in Pane header for conductors
 
 ## Standards
 
