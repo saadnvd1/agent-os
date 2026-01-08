@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
@@ -130,9 +130,19 @@ function HomeContent() {
   // Poll for status every 2 seconds
   useEffect(() => {
     fetchStatuses();
-    const interval = setInterval(fetchStatuses, 2000);
+    const interval = setInterval(fetchStatuses, 3000);
     return () => clearInterval(interval);
   }, [fetchStatuses]);
+
+  // Memoized pane renderer to prevent unnecessary re-renders
+  const renderPane = useCallback((paneId: string) => (
+    <Pane
+      key={paneId}
+      paneId={paneId}
+      sessions={sessions}
+      onRegisterTerminal={registerTerminalRef}
+    />
+  ), [sessions, registerTerminalRef]);
 
   // Attach session to focused pane
   const attachToSession = useCallback((session: Session) => {
@@ -546,14 +556,7 @@ function HomeContent() {
         {/* Pane Layout */}
         <div className="flex-1 min-h-0 p-2">
           <PaneLayout
-            renderPane={(paneId) => (
-              <Pane
-                key={paneId}
-                paneId={paneId}
-                sessions={sessions}
-                onRegisterTerminal={registerTerminalRef}
-              />
-            )}
+            renderPane={renderPane}
           />
         </div>
       </div>
