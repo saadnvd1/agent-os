@@ -12,10 +12,12 @@ A self-hosted web UI for managing multiple AI coding assistant sessions with mul
 - **Codex** (OpenAI) - Basic support with approval modes
 - **OpenCode** - Basic support for multi-provider CLI
 - **Gemini CLI** (Google) - Basic support for Gemini models
+- **Aider** - AI pair programming with multi-LLM support
+- **Cursor CLI** - Cursor's AI agent in the terminal
 
 ## Features
 
-- **Multi-Agent Support** - Switch between Claude, Codex, OpenCode, and Gemini per session
+- **Multi-Agent Support** - Switch between Claude, Codex, OpenCode, Gemini, Aider, and Cursor per session
 - **Multi-Pane View** - Run up to 4 sessions side-by-side with resizable panes
 - **Session Groups** - Organize sessions in collapsible folder hierarchy
 - **Tabbed Terminals** - Multiple tabs per pane for quick switching
@@ -42,6 +44,8 @@ A self-hosted web UI for managing multiple AI coding assistant sessions with mul
   - [Codex CLI](https://github.com/openai/codex) installed and authenticated
   - [OpenCode CLI](https://github.com/opencode-ai/opencode) installed and configured
   - [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed and authenticated
+  - [Aider](https://aider.chat/) installed and configured
+  - [Cursor CLI](https://cursor.com/cli) installed (requires Cursor subscription)
 - [GitHub CLI](https://cli.github.com/) (`gh`) - Optional, for PR integration
 - macOS or Linux
 
@@ -68,7 +72,7 @@ AgentOS manages AI coding CLI sessions through tmux. Each session runs in its ow
 - **Persistence** - Sessions survive browser refreshes and server restarts
 - **Resume** - Pick up conversations where you left off (Claude: `--resume`)
 - **Fork** - Branch conversations using `--fork-session` (Claude only)
-- **Multi-Agent** - Choose between Claude, Codex, OpenCode, or Gemini when creating sessions
+- **Multi-Agent** - Choose between Claude, Codex, OpenCode, Gemini, Aider, or Cursor when creating sessions
 
 The web UI provides an xterm.js terminal connected to tmux, with a sidebar for session management. Provider-specific flags are handled automatically via the abstraction in `lib/providers.ts`.
 
