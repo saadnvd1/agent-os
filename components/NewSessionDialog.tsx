@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +17,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Plus } from "lucide-react";
+import { Plus, GitBranch, Loader2 } from "lucide-react";
 import type { Group } from "@/lib/db";
 import type { AgentType } from "@/lib/providers";
 
 const SKIP_PERMISSIONS_KEY = "agentOS:skipPermissions";
 const AGENT_TYPE_KEY = "agentOS:defaultAgentType";
+
+interface GitInfo {
+  isGitRepo: boolean;
+  branches: string[];
+  defaultBranch: string | null;
+  currentBranch: string | null;
+}
 
 // Agent type options with display names
 const AGENT_OPTIONS: { value: AgentType; label: string; description: string }[] = [
@@ -55,6 +62,48 @@ export function NewSessionDialog({
   const [skipPermissions, setSkipPermissions] = useState(false);
   const [agentType, setAgentType] = useState<AgentType>("claude");
 
+  // Worktree state
+  const [useWorktree, setUseWorktree] = useState(false);
+  const [featureName, setFeatureName] = useState("");
+  const [baseBranch, setBaseBranch] = useState("main");
+  const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
+  const [checkingGit, setCheckingGit] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Check if working directory is a git repo
+  const checkGitRepo = useCallback(async (path: string) => {
+    if (!path || path === "~") {
+      setGitInfo(null);
+      return;
+    }
+
+    setCheckingGit(true);
+    try {
+      const res = await fetch("/api/git/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      const data = await res.json();
+      setGitInfo(data);
+      if (data.defaultBranch) {
+        setBaseBranch(data.defaultBranch);
+      }
+    } catch {
+      setGitInfo(null);
+    } finally {
+      setCheckingGit(false);
+    }
+  }, []);
+
+  // Debounce git check when working directory changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkGitRepo(workingDirectory);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [workingDirectory, checkGitRepo]);
+
   // Load preferences from localStorage
   useEffect(() => {
     const savedSkipPerms = localStorage.getItem(SKIP_PERMISSIONS_KEY);
@@ -81,6 +130,19 @@ export function NewSessionDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    // Validate worktree requirements
+    if (useWorktree) {
+      if (!featureName.trim()) {
+        setError("Feature name is required for worktree");
+        return;
+      }
+      if (!gitInfo?.isGitRepo) {
+        setError("Working directory must be a git repository");
+        return;
+      }
+    }
 
     setIsLoading(true);
     try {
@@ -92,18 +154,30 @@ export function NewSessionDialog({
           workingDirectory,
           groupPath,
           agentType,
+          // Worktree options
+          useWorktree,
+          featureName: useWorktree ? featureName.trim() : null,
+          baseBranch: useWorktree ? baseBranch : null,
         }),
       });
 
       const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
       if (data.session) {
         setName("");
         setWorkingDirectory("~");
         setGroupPath("sessions");
+        setUseWorktree(false);
+        setFeatureName("");
+        setError(null);
         onCreated(data.session.id);
       }
-    } catch (error) {
-      console.error("Failed to create session:", error);
+    } catch (err) {
+      console.error("Failed to create session:", err);
+      setError("Failed to create session");
     } finally {
       setIsLoading(false);
     }
@@ -122,6 +196,9 @@ export function NewSessionDialog({
     setGroupPath("sessions");
     setShowNewGroup(false);
     setNewGroupName("");
+    setUseWorktree(false);
+    setFeatureName("");
+    setError(null);
     onClose();
   };
 
@@ -159,12 +236,78 @@ export function NewSessionDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Working Directory</label>
-            <Input
-              value={workingDirectory}
-              onChange={(e) => setWorkingDirectory(e.target.value)}
-              placeholder="~/projects/my-app"
-            />
+            <div className="relative">
+              <Input
+                value={workingDirectory}
+                onChange={(e) => setWorkingDirectory(e.target.value)}
+                placeholder="~/projects/my-app"
+              />
+              {checkingGit && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            {gitInfo?.isGitRepo && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <GitBranch className="w-3 h-3" />
+                Git repo on {gitInfo.currentBranch}
+              </p>
+            )}
           </div>
+
+          {/* Worktree option - only show if it's a git repo */}
+          {gitInfo?.isGitRepo && (
+            <div className="space-y-3 p-3 rounded-lg bg-accent/40">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="useWorktree"
+                  checked={useWorktree}
+                  onChange={(e) => setUseWorktree(e.target.checked)}
+                  className="h-4 w-4 rounded border-border bg-background accent-primary"
+                />
+                <label htmlFor="useWorktree" className="text-sm cursor-pointer font-medium">
+                  Create isolated worktree
+                </label>
+              </div>
+
+              {useWorktree && (
+                <div className="space-y-3 pl-6">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Feature Name</label>
+                    <Input
+                      value={featureName}
+                      onChange={(e) => setFeatureName(e.target.value)}
+                      placeholder="add-dark-mode"
+                      className="h-8 text-sm"
+                    />
+                    {featureName && (
+                      <p className="text-xs text-muted-foreground">
+                        Branch: feature/{featureName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Base Branch</label>
+                    <Select value={baseBranch} onValueChange={setBaseBranch}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gitInfo.branches.map((branch) => (
+                          <SelectItem key={branch} value={branch}>
+                            {branch}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Group</label>
             {showNewGroup ? (
@@ -249,11 +392,15 @@ export function NewSessionDialog({
               </span>
             </label>
           </div>
+          {error && (
+            <p className="text-sm text-red-500">{error}</p>
+          )}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading || (useWorktree && !featureName.trim())}>
               {isLoading ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>

@@ -19,6 +19,15 @@ export interface Session {
   system_prompt: string | null;
   group_path: string;
   agent_type: AgentType;
+  // Worktree fields (optional)
+  worktree_path: string | null;
+  branch_name: string | null;
+  base_branch: string | null;
+  dev_server_port: number | null;
+  // PR tracking
+  pr_url: string | null;
+  pr_number: number | null;
+  pr_status: "open" | "merged" | "closed" | null;
 }
 
 export interface Group {
@@ -133,6 +142,45 @@ export function initDb(): Database.Database {
     // Column already exists, ignore
   }
 
+  // Migration: Add worktree columns if they don't exist
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN worktree_path TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN branch_name TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN base_branch TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN dev_server_port INTEGER`);
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Migration: Add PR tracking columns if they don't exist
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN pr_url TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN pr_number INTEGER`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN pr_status TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+
   // Create group_path index after migration ensures column exists
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_group ON sessions(group_path)`);
 
@@ -201,6 +249,18 @@ export const queries = {
 
   deleteSession: (db: Database.Database) =>
     getStmt(db, `DELETE FROM sessions WHERE id = ?`),
+
+  updateSessionWorktree: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ?, dev_server_port = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
+
+  updateSessionPR: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
 
   // Messages
   createMessage: (db: Database.Database) =>

@@ -31,9 +31,8 @@ function LayoutRenderer({ layout, renderPane }: PaneLayoutProps) {
           {index < layout.children.length - 1 && (
             <Separator
               className={`
-                ${orientation === "horizontal" ? "w-1.5 cursor-col-resize" : "h-1.5 cursor-row-resize"}
-                bg-border hover:bg-primary/50 active:bg-primary transition-colors
-                flex items-center justify-center
+                ${orientation === "horizontal" ? "w-0.5 cursor-col-resize" : "h-0.5 cursor-row-resize"}
+                bg-white/5 hover:bg-primary/40 active:bg-primary/60 transition-colors rounded-full
               `}
             />
           )}

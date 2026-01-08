@@ -29,12 +29,17 @@ Self-hosted web UI for managing multiple AI coding CLI sessions.
 - `lib/db.ts` - Database schema (sessions, groups, messages)
 - `lib/providers.ts` - Agent provider abstraction (Claude, Codex, OpenCode)
 - `lib/panes.ts` - Multi-pane layout types
+- `lib/worktrees.ts` - Git worktree creation/deletion
+- `lib/git.ts` - Git utilities (branch detection, repo checks)
+- `lib/env-setup.ts` - Worktree environment setup (env files, package install)
+- `lib/ports.ts` - Dev server port management (3100-3900 range)
 - `contexts/PaneContext.tsx` - Pane/tab state management
 - `components/PaneLayout.tsx` - Resizable pane renderer (react-resizable-panels)
 - `components/Pane.tsx` - Individual pane with tabs and toolbar
 - `components/SessionList.tsx` - Grouped session sidebar
 - `components/Terminal.tsx` - xterm.js wrapper
 - `app/api/sessions/status/route.ts` - Session status detection from tmux
+- `app/api/sessions/[id]/pr/route.ts` - GitHub PR creation/status via `gh` CLI
 
 ## Session Management
 
@@ -45,6 +50,22 @@ Sessions are managed through tmux:
 - Claude session IDs detected from `~/.claude/projects/` files
 - Forking uses `--resume {parentId} --fork-session` (Claude only)
 - Skip permissions stored in localStorage
+
+## Git Worktrees
+
+Worktree sessions create isolated git branches for parallel feature development:
+- Worktrees stored in `~/.agent-os/worktrees/{project}-{feature}`
+- Auto-setup: copies `.env*` files, runs package manager install
+- Port assignment: each worktree gets unique port (3100, 3110, 3120...)
+- PR integration: Create PR button uses `gh` CLI, tracks PR status
+
+Config file (`.agent-os/worktrees.json` or `.agent-os.json`):
+```json
+{
+  "setup": ["cp $ROOT_WORKTREE_PATH/.env.local .env.local", "pnpm install"],
+  "devServer": { "command": "npm run dev", "portEnvVar": "PORT" }
+}
+```
 
 ## Standards
 

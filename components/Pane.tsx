@@ -103,14 +103,14 @@ export function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
   return (
     <div
       className={cn(
-        "flex flex-col h-full border rounded-lg overflow-hidden",
-        isFocused ? "border-primary" : "border-border"
+        "flex flex-col h-full rounded-lg overflow-hidden shadow-lg shadow-black/20",
+        isFocused ? "ring-1 ring-primary/50" : ""
       )}
       onClick={handleFocus}
     >
       {/* Tab Bar */}
-      <div className="flex items-center bg-muted/30 border-b border-border overflow-x-auto">
-        <div className="flex items-center flex-1 min-w-0">
+      <div className="flex items-center bg-zinc-900/80 overflow-x-auto px-1 pt-1 gap-1">
+        <div className="flex items-center flex-1 min-w-0 gap-0.5">
           {paneData.tabs.map((tab) => (
             <div
               key={tab.id}
@@ -119,10 +119,10 @@ export function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
                 switchTab(paneId, tab.id);
               }}
               className={cn(
-                "flex items-center gap-1 px-3 py-1.5 text-xs cursor-pointer border-r border-border group",
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer group rounded-t-md transition-colors",
                 tab.id === paneData.activeTabId
-                  ? "bg-background text-foreground"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                  ? "bg-zinc-950 text-foreground"
+                  : "text-muted-foreground hover:text-foreground/80 hover:bg-zinc-800/50"
               )}
             >
               <span className="truncate max-w-[120px]">{getTabName(tab)}</span>
@@ -154,7 +154,7 @@ export function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
         </div>
 
         {/* Pane Controls */}
-        <div className="flex items-center gap-0.5 px-1 border-l border-border">
+        <div className="flex items-center gap-0.5 px-2 ml-auto">
           {activeTab?.attachedTmux && (
             <Button
               variant="ghost"

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil } from "lucide-react";
+import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, ExternalLink } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -36,6 +36,7 @@ interface SessionCardProps {
   onFork?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
+  onCreatePR?: () => void;
 }
 
 const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: React.ReactNode }> = {
@@ -66,7 +67,7 @@ const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: Rea
   },
 };
 
-export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClick, onMove, onFork, onDelete, onRename }: SessionCardProps) {
+export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClick, onMove, onFork, onDelete, onRename, onCreatePR }: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
@@ -100,7 +101,7 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
       )}
     >
       {/* Agent type badge */}
-      {session.agent_type && session.agent_type !== "claude" && (
+      {session.agent_type && (
         <span
           className={cn(
             "flex-shrink-0 text-[9px] font-bold px-1 rounded",
@@ -146,13 +147,48 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
         <GitFork className="w-3 h-3 text-muted-foreground flex-shrink-0" />
       )}
 
+      {/* Branch indicator for worktree sessions */}
+      {session.branch_name && (
+        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground flex-shrink-0" title={session.branch_name}>
+          <GitBranch className="w-3 h-3" />
+          <span className="max-w-[60px] truncate">{session.branch_name.replace("feature/", "")}</span>
+        </span>
+      )}
+
+      {/* Port indicator for worktree sessions */}
+      {session.dev_server_port && (
+        <span className="text-[10px] text-muted-foreground flex-shrink-0" title={`Dev server port: ${session.dev_server_port}`}>
+          :{session.dev_server_port}
+        </span>
+      )}
+
+      {/* PR status badge */}
+      {session.pr_status && (
+        <a
+          href={session.pr_url || "#"}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "flex items-center gap-0.5 text-[10px] px-1 rounded flex-shrink-0",
+            session.pr_status === "open" && "bg-green-500/20 text-green-400",
+            session.pr_status === "merged" && "bg-purple-500/20 text-purple-400",
+            session.pr_status === "closed" && "bg-red-500/20 text-red-400"
+          )}
+          title={`PR #${session.pr_number}: ${session.pr_status}`}
+        >
+          <GitPullRequest className="w-2.5 h-2.5" />
+          <span>{session.pr_status === "merged" ? "M" : session.pr_status === "closed" ? "X" : "O"}</span>
+        </a>
+      )}
+
       {/* Time ago */}
       <span className="text-[10px] text-muted-foreground flex-shrink-0 hidden group-hover:hidden sm:block">
         {timeAgo}
       </span>
 
       {/* Actions menu */}
-      {(onMove || onFork || onDelete || onRename) && (
+      {(onMove || onFork || onDelete || onRename || onCreatePR) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-5 w-5 flex-shrink-0">
@@ -180,6 +216,21 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
               >
                 <Copy className="w-3 h-3 mr-2" />
                 Fork session
+              </DropdownMenuItem>
+            )}
+            {onCreatePR && session.branch_name && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (session.pr_url) {
+                    window.open(session.pr_url, "_blank");
+                  } else {
+                    onCreatePR();
+                  }
+                }}
+              >
+                <GitPullRequest className="w-3 h-3 mr-2" />
+                {session.pr_url ? "Open PR" : "Create PR"}
               </DropdownMenuItem>
             )}
             {onMove && groups.length > 0 && (
