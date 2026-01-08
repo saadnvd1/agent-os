@@ -4,36 +4,18 @@ import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { providers, type AgentType } from "@/lib/providers";
+import { statusDetector, type SessionStatus } from "@/lib/status-detector";
+import type { AgentType } from "@/lib/providers";
 
 const execAsync = promisify(exec);
 
-interface SessionStatus {
+interface SessionStatusResponse {
   sessionName: string;
-  status: "idle" | "running" | "waiting" | "error" | "dead";
+  status: SessionStatus;
   lastLine?: string;
   claudeSessionId?: string | null;
   agentType?: AgentType;
 }
-
-// Combined patterns from all providers for general detection
-const WAITING_PATTERNS = [
-  ...providers.claude.waitingPatterns,
-  ...providers.codex.waitingPatterns,
-  ...providers.opencode.waitingPatterns,
-];
-
-const RUNNING_PATTERNS = [
-  ...providers.claude.runningPatterns,
-  ...providers.codex.runningPatterns,
-  ...providers.opencode.runningPatterns,
-];
-
-const IDLE_PATTERNS = [
-  ...providers.claude.idlePatterns,
-  ...providers.codex.idlePatterns,
-  ...providers.opencode.idlePatterns,
-];
 
 async function getTmuxSessions(): Promise<string[]> {
   try {
@@ -75,22 +57,17 @@ async function getClaudeSessionIdFromEnv(sessionName: string): Promise<string | 
   }
 }
 
-// Get Claude session ID by looking at session files on disk (like agent-deck does)
+// Get Claude session ID by looking at session files on disk
 function getClaudeSessionIdFromFiles(projectPath: string): string | null {
   const home = os.homedir();
   const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude");
-
-  // Convert project path to Claude's directory format
-  // /Users/saad/dev/agent-os -> -Users-saad-dev-agent-os
   const projectDirName = projectPath.replace(/\//g, "-");
   const projectDir = path.join(claudeDir, "projects", projectDirName);
 
-  // Check if project directory exists
   if (!fs.existsSync(projectDir)) {
     return null;
   }
 
-  // Find session files (UUID format .jsonl files)
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/;
 
   try {
@@ -99,28 +76,22 @@ function getClaudeSessionIdFromFiles(projectPath: string): string | null {
     let mostRecentTime = 0;
 
     for (const file of files) {
-      // Skip agent files
       if (file.startsWith("agent-")) continue;
-
-      // Only consider UUID-named files
       if (!uuidPattern.test(file)) continue;
 
       const filePath = path.join(projectDir, file);
       const stat = fs.statSync(filePath);
 
-      // Find the most recently modified file
       if (stat.mtimeMs > mostRecentTime) {
         mostRecentTime = stat.mtimeMs;
         mostRecent = file.replace(".jsonl", "");
       }
     }
 
-    // Only return if modified within last 5 minutes (actively used)
     if (mostRecent && Date.now() - mostRecentTime < 5 * 60 * 1000) {
       return mostRecent;
     }
 
-    // Fallback: check lastSessionId in .claude.json
     const configFile = path.join(claudeDir, ".claude.json");
     if (fs.existsSync(configFile)) {
       try {
@@ -139,15 +110,12 @@ function getClaudeSessionIdFromFiles(projectPath: string): string | null {
   }
 }
 
-// Get Claude session ID - tries environment variable first, then file-based detection
 async function getClaudeSessionId(sessionName: string): Promise<string | null> {
-  // First try the tmux environment variable
   const envId = await getClaudeSessionIdFromEnv(sessionName);
   if (envId) {
     return envId;
   }
 
-  // Fall back to file-based detection
   const cwd = await getTmuxSessionCwd(sessionName);
   if (cwd) {
     return getClaudeSessionIdFromFiles(cwd);
@@ -156,63 +124,27 @@ async function getClaudeSessionId(sessionName: string): Promise<string | null> {
   return null;
 }
 
-async function getSessionStatus(sessionName: string): Promise<SessionStatus> {
+async function getLastLine(sessionName: string): Promise<string> {
   try {
-    // Capture the last 10 lines of the pane
     const { stdout } = await execAsync(
-      `tmux capture-pane -t "${sessionName}" -p -S -10 2>/dev/null || echo ""`
+      `tmux capture-pane -t "${sessionName}" -p -S -5 2>/dev/null || echo ""`
     );
-
-    const content = stdout.trim();
-    const lastLine = content.split("\n").filter(Boolean).pop() || "";
-
-    // Also get Claude session ID from tmux env
-    const claudeSessionId = await getClaudeSessionId(sessionName);
-
-    // Check for waiting patterns first (highest priority)
-    for (const pattern of WAITING_PATTERNS) {
-      if (pattern.test(content)) {
-        return { sessionName, status: "waiting", lastLine, claudeSessionId };
-      }
-    }
-
-    // Check for running patterns
-    for (const pattern of RUNNING_PATTERNS) {
-      if (pattern.test(lastLine)) {
-        return { sessionName, status: "running", lastLine, claudeSessionId };
-      }
-    }
-
-    // Check for idle patterns
-    for (const pattern of IDLE_PATTERNS) {
-      if (pattern.test(lastLine)) {
-        return { sessionName, status: "idle", lastLine, claudeSessionId };
-      }
-    }
-
-    // Default to running if there's recent content
-    if (content.length > 0) {
-      return { sessionName, status: "idle", lastLine, claudeSessionId };
-    }
-
-    return { sessionName, status: "idle", lastLine, claudeSessionId };
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    return lines.pop() || "";
   } catch {
-    return { sessionName, status: "dead" };
+    return "";
   }
 }
 
-// UUID pattern for agent-os managed sessions: {provider}-{uuid}
-// Matches: claude-{uuid}, codex-{uuid}, opencode-{uuid}
+// UUID pattern for agent-os managed sessions
 const UUID_PATTERN = /^(claude|codex|opencode)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Extract agent type from session name
 function getAgentTypeFromSessionName(sessionName: string): AgentType {
   if (sessionName.startsWith("codex-")) return "codex";
   if (sessionName.startsWith("opencode-")) return "opencode";
   return "claude";
 }
 
-// Extract session ID from session name (removes provider prefix)
 function getSessionIdFromName(sessionName: string): string {
   return sessionName.replace(/^(claude|codex|opencode)-/, "");
 }
@@ -221,26 +153,47 @@ export async function GET() {
   try {
     const sessions = await getTmuxSessions();
 
-    // Get status for agent-os managed sessions ({provider}-{uuid} pattern)
+    // Get status for agent-os managed sessions
     const managedSessions = sessions.filter(s => UUID_PATTERN.test(s));
-    const statuses = await Promise.all(
-      managedSessions.map(s => getSessionStatus(s))
-    );
 
-    // Create a map of session ID to status
-    const statusMap: Record<string, SessionStatus> = {};
-    for (const status of statuses) {
-      // Extract session ID (remove provider prefix)
-      const id = getSessionIdFromName(status.sessionName);
-      const agentType = getAgentTypeFromSessionName(status.sessionName);
-      statusMap[id] = { ...status, agentType };
+    // Use the new status detector
+    const statusMap: Record<string, SessionStatusResponse> = {};
+
+    for (const sessionName of managedSessions) {
+      const status = await statusDetector.getStatus(sessionName);
+      const claudeSessionId = await getClaudeSessionId(sessionName);
+      const lastLine = await getLastLine(sessionName);
+      const id = getSessionIdFromName(sessionName);
+      const agentType = getAgentTypeFromSessionName(sessionName);
+
+      statusMap[id] = {
+        sessionName,
+        status,
+        lastLine,
+        claudeSessionId,
+        agentType,
+      };
     }
 
     // Get other tmux sessions (not managed by agent-os)
     const otherSessions = sessions.filter(s => !UUID_PATTERN.test(s));
-    const otherStatuses = await Promise.all(
-      otherSessions.map(s => getSessionStatus(s))
-    );
+    const otherStatuses: SessionStatusResponse[] = [];
+
+    for (const sessionName of otherSessions) {
+      const status = await statusDetector.getStatus(sessionName);
+      const claudeSessionId = await getClaudeSessionId(sessionName);
+      const lastLine = await getLastLine(sessionName);
+
+      otherStatuses.push({
+        sessionName,
+        status,
+        lastLine,
+        claudeSessionId,
+      });
+    }
+
+    // Cleanup old trackers
+    statusDetector.cleanup();
 
     return NextResponse.json({
       statuses: statusMap,

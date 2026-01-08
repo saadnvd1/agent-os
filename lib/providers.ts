@@ -102,7 +102,12 @@ export const claudeProvider: AgentProvider = {
     SPINNER_CHARS,
   ],
 
-  idlePatterns: [/^>\s*$/m, /claude.*>\s*$/im],
+  idlePatterns: [
+    /^>\s*$/m,
+    /claude.*>\s*$/im,
+    /✻\s*Sautéed/i, // Claude finished processing
+    /✻\s*Done/i,
+  ],
 };
 
 /**

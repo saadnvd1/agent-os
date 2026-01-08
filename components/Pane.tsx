@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, memo } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +28,7 @@ interface PaneProps {
   onRegisterTerminal: (paneId: string, tabId: string, ref: TerminalHandle | null) => void;
 }
 
-export function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
+export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
   const {
     focusedPaneId,
     canSplit,
@@ -243,4 +243,4 @@ export function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
       </div>
     </div>
   );
-}
+});
