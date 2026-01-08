@@ -349,6 +349,46 @@ function HomeContent() {
     }
   };
 
+  // Create PR for worktree session
+  const handleCreatePR = async (sessionId: string) => {
+    try {
+      const session = sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
+      // First check if PR already exists
+      const checkRes = await fetch(`/api/sessions/${sessionId}/pr`);
+      const checkData = await checkRes.json();
+
+      if (checkData.pr) {
+        // PR exists, open it
+        window.open(checkData.pr.url, "_blank");
+        return;
+      }
+
+      // Create new PR
+      const res = await fetch(`/api/sessions/${sessionId}/pr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: session.name,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      if (data.pr?.url) {
+        window.open(data.pr.url, "_blank");
+      }
+    } catch (error) {
+      console.error("Failed to create PR:", error);
+      alert("Failed to create PR. Make sure gh CLI is installed and authenticated.");
+    }
+  };
+
   // Get active session from focused pane's active tab
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
 
@@ -358,7 +398,7 @@ function HomeContent() {
       <div
         className={`
         ${sidebarOpen ? "w-72" : "w-0"}
-        flex-shrink-0 border-r border-border transition-all duration-200 overflow-hidden
+        flex-shrink-0 transition-all duration-200 overflow-hidden shadow-xl shadow-black/30
       `}
       >
         <SessionList
@@ -383,13 +423,14 @@ function HomeContent() {
           onRenameSession={handleRenameSession}
           onRenameTmuxSession={handleRenameTmuxSession}
           onImportTmuxSession={handleImportTmuxSession}
+          onCreatePR={handleCreatePR}
         />
       </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-border px-4 py-3">
+        <header className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"

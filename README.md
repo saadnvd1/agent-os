@@ -2,6 +2,8 @@
 
 A self-hosted web UI for managing multiple AI coding assistant sessions with multi-pane terminals, session groups, and conversation forking.
 
+> If you find AgentOS useful, please consider giving it a star! It helps the project grow and reach more developers.
+
 ![AgentOS Screenshot](docs/screenshot.png)
 
 ## Supported Agents
@@ -18,6 +20,10 @@ A self-hosted web UI for managing multiple AI coding assistant sessions with mul
 - **Tabbed Terminals** - Multiple tabs per pane for quick switching
 - **Session Forking** - Fork conversations to explore different approaches (Claude)
 - **Session Resume** - Auto-detects session IDs for seamless resume (Claude)
+- **Git Worktrees** - Isolated branches for parallel feature development
+- **Auto Environment Setup** - Copies `.env` files, installs dependencies automatically
+- **Dev Server Ports** - Each worktree gets a unique port (3100, 3110, 3120...)
+- **PR Integration** - Create PRs and track status directly from the UI (requires `gh` CLI)
 - **Skip Permissions** - Optional flag to bypass permission prompts
 - **External Session Import** - Import existing tmux sessions
 - **tmux Integration** - Sessions persist across page reloads
@@ -30,6 +36,7 @@ A self-hosted web UI for managing multiple AI coding assistant sessions with mul
   - [Claude Code CLI](https://github.com/anthropics/claude-code) installed and authenticated
   - [Codex CLI](https://github.com/openai/codex) installed and authenticated
   - [OpenCode CLI](https://github.com/opencode-ai/opencode) installed and configured
+- [GitHub CLI](https://cli.github.com/) (`gh`) - Optional, for PR integration
 - macOS or Linux
 
 ## Quick Start
@@ -58,6 +65,36 @@ AgentOS manages AI coding CLI sessions through tmux. Each session runs in its ow
 - **Multi-Agent** - Choose between Claude, Codex, or OpenCode when creating sessions
 
 The web UI provides an xterm.js terminal connected to tmux, with a sidebar for session management. Provider-specific flags are handled automatically via the abstraction in `lib/providers.ts`.
+
+## Git Worktrees
+
+When creating a session in a git repository, you can enable "Create isolated worktree" to:
+
+1. **Create a feature branch** - Automatically generates `feature/{name}` branch
+2. **Isolated directory** - Worktree created in `~/.agent-os/worktrees/`
+3. **Auto-setup environment** - Copies `.env*` files and runs package manager install
+4. **Unique dev port** - Each worktree gets assigned a port (3100, 3110, etc.)
+5. **PR workflow** - Create PRs directly from the session menu
+
+### Configuration (Optional)
+
+Create `.agent-os/worktrees.json` in your project to customize setup:
+
+```json
+{
+  "setup": [
+    "cp $ROOT_WORKTREE_PATH/.env.local .env.local",
+    "pnpm install",
+    "npm run db:migrate"
+  ],
+  "devServer": {
+    "command": "npm run dev",
+    "portEnvVar": "PORT"
+  }
+}
+```
+
+Without a config file, AgentOS auto-detects your package manager and copies `.env*` files automatically.
 
 ## Architecture
 
