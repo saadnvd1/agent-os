@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { getDb, queries } from "@/lib/db";
 
 const execAsync = promisify(exec);
 
-// POST /api/tmux/kill-all - Kill all AgentOS tmux sessions
+// POST /api/tmux/kill-all - Kill all AgentOS tmux sessions and remove from database
 export async function POST() {
   try {
     // Get all tmux sessions
@@ -30,6 +31,18 @@ export async function POST() {
         killed.push(session);
       } catch {
         // Session might already be dead, continue
+      }
+    }
+
+    // Delete sessions from database
+    const db = getDb();
+    for (const tmuxName of killed) {
+      // Extract session ID from tmux name (e.g., "claude-abc123" -> "abc123")
+      const sessionId = tmuxName.replace(/^(claude|codex|opencode)-/, "");
+      try {
+        queries.deleteSession(db).run(sessionId);
+      } catch {
+        // Session might not exist in DB, continue
       }
     }
 
