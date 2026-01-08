@@ -20,6 +20,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "./ui/context-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface SessionStatus {
   sessionName: string;
@@ -279,29 +280,44 @@ export function SessionList({
           <h2 className="font-semibold">AgentOS</h2>
         </div>
         <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
-            <RefreshCw
-              className={cn("w-4 h-4", refreshing && "animate-spin")}
-            />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setShowNewDialog(true)}
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm">
-                <MoreHorizontal className="w-4 h-4" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCw
+                  className={cn("w-4 h-4", refreshing && "animate-spin")}
+                />
               </Button>
-            </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Refresh</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setShowNewDialog(true)}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>New session</TooltipContent>
+          </Tooltip>
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>More options</TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() => setShowKillAllConfirm(true)}
@@ -386,9 +402,16 @@ export function SessionList({
                             session.status === "waiting" && !isAttached && "bg-yellow-500/5"
                           )}
                         >
-                          <div className="flex-shrink-0" title={session.status}>
-                            {statusIcon}
-                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex-shrink-0">
+                                {statusIcon}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                              <span className="capitalize">{session.status}</span>
+                            </TooltipContent>
+                          </Tooltip>
                           <TerminalSquare className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                           {isEditing ? (
                             <input

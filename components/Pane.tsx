@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { usePanes } from "@/contexts/PaneContext";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TerminalHandle } from "@/components/Terminal";
 import type { Session } from "@/lib/db";
 
@@ -139,80 +140,100 @@ export function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
               )}
             </div>
           ))}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              addTab(paneId);
-            }}
-            className="h-6 w-6 mx-1"
-            title="New tab"
-          >
-            <Plus className="w-3 h-3" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addTab(paneId);
+                }}
+                className="h-6 w-6 mx-1"
+              >
+                <Plus className="w-3 h-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>New tab</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Pane Controls */}
         <div className="flex items-center gap-0.5 px-2 ml-auto">
           {activeTab?.attachedTmux && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDetach();
-              }}
-              className="h-6 w-6"
-              title="Detach"
-            >
-              <Unplug className="w-3 h-3" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDetach();
+                  }}
+                  className="h-6 w-6"
+                >
+                  <Unplug className="w-3 h-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Detach from tmux</TooltipContent>
+            </Tooltip>
           )}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              splitHorizontal(paneId);
-            }}
-            disabled={!canSplit}
-            className="h-6 w-6"
-            title="Split horizontally"
-          >
-            <SplitSquareHorizontal className="w-3 h-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              splitVertical(paneId);
-            }}
-            disabled={!canSplit}
-            className="h-6 w-6"
-            title="Split vertically"
-          >
-            <SplitSquareVertical className="w-3 h-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              close(paneId);
-            }}
-            disabled={!canClose}
-            className="h-6 w-6"
-            title="Close pane"
-          >
-            <X className="w-3 h-3" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  splitHorizontal(paneId);
+                }}
+                disabled={!canSplit}
+                className="h-6 w-6"
+              >
+                <SplitSquareHorizontal className="w-3 h-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Split horizontal</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  splitVertical(paneId);
+                }}
+                disabled={!canSplit}
+                className="h-6 w-6"
+              >
+                <SplitSquareVertical className="w-3 h-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Split vertical</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  close(paneId);
+                }}
+                disabled={!canClose}
+                className="h-6 w-6"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Close pane</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       {/* Terminal */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 touch-none">
         <Terminal
           key={activeTab?.id}
           ref={terminalRef}

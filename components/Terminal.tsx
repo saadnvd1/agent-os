@@ -136,9 +136,75 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       };
       window.addEventListener("resize", handleResize);
 
+      // Handle touch scrolling for mobile
+      // xterm creates nested elements, attach to all of them
+      let lastScrollY = 0;
+      const SCROLL_THRESHOLD = 15; // pixels to trigger a scroll line
+      const touchElements: HTMLElement[] = [];
+
+      const handleTouchStart = (e: TouchEvent) => {
+        lastScrollY = e.touches[0].clientY;
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        // Prevent page scroll
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Safety check - terminal might be disposed
+        if (!termRef.current) return;
+
+        const touchY = e.touches[0].clientY;
+        const deltaY = lastScrollY - touchY;
+
+        // Convert touch movement to scroll lines
+        if (Math.abs(deltaY) >= SCROLL_THRESHOLD) {
+          const lines = Math.floor(Math.abs(deltaY) / SCROLL_THRESHOLD);
+          try {
+            if (deltaY > 0) {
+              // Scrolling up (finger moving up) - scroll terminal down
+              termRef.current.scrollLines(lines);
+            } else {
+              // Scrolling down (finger moving down) - scroll terminal up
+              termRef.current.scrollLines(-lines);
+            }
+          } catch {
+            // Terminal might be in invalid state, ignore
+          }
+          lastScrollY = touchY;
+        }
+      };
+
+      // Apply touch-action and attach listeners to all xterm elements
+      const applyTouchHandlers = (el: HTMLElement | null) => {
+        if (!el) return;
+        el.style.touchAction = "none";
+        el.addEventListener("touchstart", handleTouchStart, { passive: true });
+        el.addEventListener("touchmove", handleTouchMove, { passive: false });
+        touchElements.push(el);
+      };
+
+      // Attach to container
+      applyTouchHandlers(container);
+
+      // Attach to all xterm internal elements after a frame (to ensure they exist)
+      requestAnimationFrame(() => {
+        const selectors = [".xterm", ".xterm-viewport", ".xterm-screen", ".xterm-scrollable-element", ".xterm-rows"];
+        selectors.forEach(sel => {
+          const el = container.querySelector(sel) as HTMLElement | null;
+          if (el && !touchElements.includes(el)) {
+            applyTouchHandlers(el);
+          }
+        });
+      });
+
       // Cleanup
       return () => {
         window.removeEventListener("resize", handleResize);
+        touchElements.forEach(el => {
+          el.removeEventListener("touchstart", handleTouchStart);
+          el.removeEventListener("touchmove", handleTouchMove);
+        });
         inputDisposable.dispose();
         ws.close();
         term.dispose();
@@ -151,7 +217,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     return (
       <div
         ref={containerRef}
-        className="h-full w-full overflow-hidden bg-zinc-950 px-1"
+        className="h-full w-full overflow-hidden bg-zinc-950 px-1 touch-none"
       />
     );
   }
