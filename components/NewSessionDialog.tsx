@@ -38,6 +38,7 @@ const AGENT_OPTIONS: { value: AgentType; label: string; description: string }[] 
   { value: "claude", label: "Claude Code", description: "Anthropic's CLI" },
   { value: "codex", label: "Codex", description: "OpenAI's CLI" },
   { value: "opencode", label: "OpenCode", description: "Multi-provider CLI" },
+  { value: "gemini", label: "Gemini CLI", description: "Google's CLI" },
 ];
 
 interface NewSessionDialogProps {
@@ -116,7 +117,7 @@ export function NewSessionDialog({
       setSkipPermissions(savedSkipPerms === "true");
     }
     const savedAgentType = localStorage.getItem(AGENT_TYPE_KEY);
-    if (savedAgentType && ["claude", "codex", "opencode"].includes(savedAgentType)) {
+    if (savedAgentType && ["claude", "codex", "opencode", "gemini"].includes(savedAgentType)) {
       setAgentType(savedAgentType as AgentType);
     }
     // Load recent directories
@@ -432,6 +433,7 @@ export function NewSessionDialog({
                 {agentType === "claude" && "(--dangerously-skip-permissions)"}
                 {agentType === "codex" && "(--approval-mode full-auto)"}
                 {agentType === "opencode" && "(via config)"}
+                {agentType === "gemini" && "(not supported)"}
               </span>
             </label>
           </div>
