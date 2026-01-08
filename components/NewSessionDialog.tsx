@@ -23,6 +23,8 @@ import type { AgentType } from "@/lib/providers";
 
 const SKIP_PERMISSIONS_KEY = "agentOS:skipPermissions";
 const AGENT_TYPE_KEY = "agentOS:defaultAgentType";
+const RECENT_DIRS_KEY = "agentOS:recentDirectories";
+const MAX_RECENT_DIRS = 5;
 
 interface GitInfo {
   isGitRepo: boolean;
@@ -70,6 +72,9 @@ export function NewSessionDialog({
   const [checkingGit, setCheckingGit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Recent directories
+  const [recentDirs, setRecentDirs] = useState<string[]>([]);
+
   // Check if working directory is a git repo
   const checkGitRepo = useCallback(async (path: string) => {
     if (!path || path === "~") {
@@ -114,6 +119,26 @@ export function NewSessionDialog({
     if (savedAgentType && ["claude", "codex", "opencode"].includes(savedAgentType)) {
       setAgentType(savedAgentType as AgentType);
     }
+    // Load recent directories
+    try {
+      const saved = localStorage.getItem(RECENT_DIRS_KEY);
+      if (saved) {
+        setRecentDirs(JSON.parse(saved));
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }, []);
+
+  // Save directory to recent list
+  const addRecentDirectory = useCallback((dir: string) => {
+    if (!dir || dir === "~") return;
+    setRecentDirs((prev) => {
+      const filtered = prev.filter((d) => d !== dir);
+      const updated = [dir, ...filtered].slice(0, MAX_RECENT_DIRS);
+      localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(updated));
+      return updated;
+    });
   }, []);
 
   // Save skipPermissions preference to localStorage
@@ -167,6 +192,9 @@ export function NewSessionDialog({
         return;
       }
       if (data.session) {
+        // Save to recent directories
+        addRecentDirectory(workingDirectory);
+
         setName("");
         setWorkingDirectory("~");
         setGroupPath("sessions");
@@ -253,6 +281,21 @@ export function NewSessionDialog({
                 <GitBranch className="w-3 h-3" />
                 Git repo on {gitInfo.currentBranch}
               </p>
+            )}
+            {recentDirs.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {recentDirs.map((dir) => (
+                  <button
+                    key={dir}
+                    type="button"
+                    onClick={() => setWorkingDirectory(dir)}
+                    className="text-xs px-2 py-0.5 rounded-full bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors truncate max-w-[200px]"
+                    title={dir}
+                  >
+                    {dir.replace(/^~\//, "").split("/").pop() || dir}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
