@@ -104,11 +104,8 @@ export function SessionList({
   const handleKillAll = async () => {
     setKillingAll(true);
     try {
-      const res = await fetch("/api/tmux/kill-all", { method: "POST" });
-      const data = await res.json();
-      if (data.killed > 0) {
-        await onRefresh();
-      }
+      await fetch("/api/tmux/kill-all", { method: "POST" });
+      await onRefresh();
     } catch (error) {
       console.error("Failed to kill sessions:", error);
     } finally {
