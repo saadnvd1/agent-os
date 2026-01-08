@@ -28,6 +28,10 @@ export interface Session {
   pr_url: string | null;
   pr_number: number | null;
   pr_status: "open" | "merged" | "closed" | null;
+  // Orchestration fields
+  conductor_session_id: string | null;
+  worker_task: string | null;
+  worker_status: "pending" | "running" | "completed" | "failed" | null;
 }
 
 export interface Group {
@@ -183,6 +187,26 @@ export function initDb(): Database.Database {
 
   // Create group_path index after migration ensures column exists
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_group ON sessions(group_path)`);
+
+  // Migration: Add orchestration columns if they don't exist
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN conductor_session_id TEXT REFERENCES sessions(id)`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN worker_task TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN worker_status TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Index for finding workers by conductor
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_conductor ON sessions(conductor_session_id)`);
 
   return db;
 }
@@ -358,5 +382,25 @@ export const queries = {
     getStmt(
       db,
       `UPDATE sessions SET group_path = ?, updated_at = datetime('now') WHERE group_path = ?`
+    ),
+
+  // Orchestration queries
+  getWorkersByConductor: (db: Database.Database) =>
+    getStmt(
+      db,
+      `SELECT * FROM sessions WHERE conductor_session_id = ? ORDER BY created_at ASC`
+    ),
+
+  updateWorkerStatus: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE sessions SET worker_status = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
+
+  createWorkerSession: (db: Database.Database) =>
+    getStmt(
+      db,
+      `INSERT INTO sessions (id, name, working_directory, conductor_session_id, worker_task, worker_status, model, group_path, agent_type)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
     ),
 };

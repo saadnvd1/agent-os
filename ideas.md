@@ -23,6 +23,16 @@
 - [ ] WebSocket reconnection handling
 - [ ] Session auto-save/recovery
 
+## Workspaces (inspired by catnip)
+
+- [ ] Project-tied workspaces - Sessions grouped by project, not just folders
+- [ ] Auto dev server management - Each worktree gets its own dev server with unique port
+- [ ] Parallel development environments - Run multiple features simultaneously with isolated servers
+- [ ] Workspace dashboard - See all active worktrees, their branches, ports, and session status
+- [ ] One-click environment spin-up - Create worktree + session + dev server in single action
+- [ ] Port forwarding UI - View/manage all running dev servers across worktrees
+- [ ] Worktree health monitoring - Track build status, test results per environment
+
 ## Integration
 
 - [ ] tmux session linking - Attach Claude to existing tmux sessions

@@ -9,6 +9,7 @@ import "@xterm/xterm/css/xterm.css";
 export interface TerminalHandle {
   sendCommand: (command: string) => void;
   sendInput: (data: string) => void;
+  focus: () => void;
 }
 
 interface TerminalProps {
@@ -37,6 +38,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: "input", data }));
         }
+      },
+      focus: () => {
+        termRef.current?.focus();
       },
     }));
 
@@ -96,6 +100,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       ws.onopen = () => {
         callbacksRef.current.onConnected?.();
         ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+        // Auto-focus terminal when connected
+        term.focus();
       };
 
       ws.onmessage = (event) => {
