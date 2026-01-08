@@ -30,7 +30,8 @@ interface OtherTmuxSession {
 function HomeContent() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [otherTmuxSessions, setOtherTmuxSessions] = useState<OtherTmuxSession[]>([]);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
@@ -95,6 +96,18 @@ function HomeContent() {
     } catch (error) {
       console.error("Failed to fetch statuses:", error);
     }
+  }, []);
+
+  // Detect mobile and set initial sidebar state
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setSidebarOpen(true);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // Initial load
@@ -394,11 +407,22 @@ function HomeContent() {
 
   return (
     <div className="flex h-[100dvh] bg-background">
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <div
         className={`
-        ${sidebarOpen ? "w-72" : "w-0"}
-        flex-shrink-0 transition-all duration-200 overflow-hidden shadow-xl shadow-black/30
+        ${isMobile
+          ? `fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`
+          : `${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 transition-all duration-200 overflow-hidden`
+        }
+        shadow-xl shadow-black/30 bg-background
       `}
       >
         <SessionList
@@ -411,6 +435,7 @@ function HomeContent() {
           onSelect={(id) => {
             const session = sessions.find((s) => s.id === id);
             if (session) attachToSession(session);
+            if (isMobile) setSidebarOpen(false);
           }}
           onRefresh={fetchSessions}
           onTmuxAttach={handleTmuxAttach}
@@ -458,8 +483,8 @@ function HomeContent() {
 
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => setShowNewSessionDialog(true)}>
-              <Plus className="w-4 h-4 mr-1" />
-              New Session
+              <Plus className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">New Session</span>
             </Button>
           </div>
         </header>
