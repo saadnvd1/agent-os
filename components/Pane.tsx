@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect, memo } from "react";
+import { useRef, useCallback, useEffect, memo, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,12 +9,15 @@ import {
   X,
   Unplug,
   Plus,
+  Terminal as TerminalIcon,
+  Users,
 } from "lucide-react";
 import { usePanes } from "@/contexts/PaneContext";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TerminalHandle } from "@/components/Terminal";
 import type { Session } from "@/lib/db";
+import { ConductorPanel } from "./ConductorPanel";
 
 // Dynamic import for Terminal (client-only)
 const Terminal = dynamic(
@@ -27,6 +30,8 @@ interface PaneProps {
   sessions: Session[];
   onRegisterTerminal: (paneId: string, tabId: string, ref: TerminalHandle | null) => void;
 }
+
+type ViewMode = "terminal" | "workers";
 
 export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
   const {
@@ -45,11 +50,25 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
     detachSession,
   } = usePanes();
 
+  const [viewMode, setViewMode] = useState<ViewMode>("terminal");
   const terminalRef = useRef<TerminalHandle>(null);
   const paneData = getPaneData(paneId);
   const activeTab = getActiveTab(paneId);
   const isFocused = focusedPaneId === paneId;
   const session = activeTab ? sessions.find((s) => s.id === activeTab.sessionId) : null;
+
+  // Check if this session is a conductor (has workers)
+  const workerCount = useMemo(() => {
+    if (!session) return 0;
+    return sessions.filter(s => s.conductor_session_id === session.id).length;
+  }, [session, sessions]);
+
+  const isConductor = workerCount > 0;
+
+  // Reset view mode when session changes
+  useEffect(() => {
+    setViewMode("terminal");
+  }, [session?.id]);
 
   const handleFocus = useCallback(() => {
     focusPane(paneId);
@@ -158,6 +177,55 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
           </Tooltip>
         </div>
 
+        {/* View Toggle for Conductors */}
+        {isConductor && (
+          <div className="flex items-center bg-zinc-800/50 rounded-md p-0.5 mx-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewMode("terminal");
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                    viewMode === "terminal"
+                      ? "bg-zinc-700 text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <TerminalIcon className="w-3 h-3" />
+                  <span className="hidden sm:inline">Terminal</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Terminal view</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewMode("workers");
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                    viewMode === "workers"
+                      ? "bg-zinc-700 text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Users className="w-3 h-3" />
+                  <span className="hidden sm:inline">Workers</span>
+                  <span className="text-[10px] bg-primary/20 text-primary px-1 rounded">
+                    {workerCount}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>View workers</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+
         {/* Pane Controls */}
         <div className="flex items-center gap-0.5 px-2 ml-auto">
           {activeTab?.attachedTmux && (
@@ -232,14 +300,35 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
         </div>
       </div>
 
-      {/* Terminal */}
+      {/* Content Area */}
       <div className="flex-1 min-h-0 touch-none">
-        <Terminal
-          key={activeTab?.id}
-          ref={terminalRef}
-          onConnected={handleTerminalConnected}
-          onDisconnected={() => {}}
-        />
+        {viewMode === "workers" && session ? (
+          <ConductorPanel
+            conductorSessionId={session.id}
+            onAttachToWorker={(workerId) => {
+              // Switch to terminal and attach to worker
+              setViewMode("terminal");
+              const worker = sessions.find(s => s.id === workerId);
+              if (worker && terminalRef.current) {
+                const sessionName = `claude-${workerId}`;
+                terminalRef.current.sendInput("\x02d");
+                setTimeout(() => {
+                  terminalRef.current?.sendInput("\x15");
+                  setTimeout(() => {
+                    terminalRef.current?.sendCommand(`tmux attach -t ${sessionName}`);
+                  }, 50);
+                }, 100);
+              }
+            }}
+          />
+        ) : (
+          <Terminal
+            key={activeTab?.id}
+            ref={terminalRef}
+            onConnected={handleTerminalConnected}
+            onDisconnected={() => {}}
+          />
+        )}
       </div>
     </div>
   );

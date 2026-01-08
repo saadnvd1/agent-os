@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, queries, type Session } from "@/lib/db";
 import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
+import { killWorker } from "@/lib/orchestration";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -94,6 +95,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const existing = queries.getSession(db).get(id) as Session | undefined;
     if (!existing) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    // If this is a conductor, delete all its workers first
+    const workers = queries.getWorkersByConductor(db).all(id) as Session[];
+    for (const worker of workers) {
+      try {
+        await killWorker(worker.id, true); // true = cleanup worktree
+      } catch (error) {
+        console.error(`Failed to kill worker ${worker.id}:`, error);
+      }
+      queries.deleteSession(db).run(worker.id);
     }
 
     // Release port if this session had one assigned
