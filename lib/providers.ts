@@ -5,7 +5,7 @@
  * (Claude Code, Codex, OpenCode, etc.)
  */
 
-export type AgentType = "claude" | "codex" | "opencode" | "gemini";
+export type AgentType = "claude" | "codex" | "opencode" | "gemini" | "aider" | "cursor";
 
 export interface AgentProvider {
   // Metadata
@@ -242,12 +242,106 @@ export const geminiProvider: AgentProvider = {
   idlePatterns: [/^>\s*$/m, /gemini.*>\s*$/im, /\$\s*$/m],
 };
 
+/**
+ * Aider Provider
+ * Open-source AI pair programming in the terminal
+ */
+export const aiderProvider: AgentProvider = {
+  id: "aider",
+  name: "Aider",
+  description: "AI pair programming",
+  command: "aider",
+  configDir: "~/.aider",
+
+  supportsResume: false,
+  supportsFork: false,
+
+  buildFlags(options: BuildFlagsOptions): string[] {
+    const flags: string[] = [];
+
+    if (options.model) {
+      flags.push(`--model ${options.model}`);
+    }
+
+    // Aider uses --yes to auto-confirm prompts
+    if (options.skipPermissions) {
+      flags.push("--yes");
+    }
+
+    return flags;
+  },
+
+  waitingPatterns: [
+    /\[Y\/n\]/i,
+    /\[y\/N\]/i,
+    />\s*$/m,
+    /Press Enter/i,
+    /\(yes\/no\)/i,
+  ],
+
+  runningPatterns: [
+    /thinking/i,
+    /processing/i,
+    /working/i,
+    /Committing/i,
+    SPINNER_CHARS,
+  ],
+
+  idlePatterns: [/^>\s*$/m, /aider.*>\s*$/im, /\$\s*$/m],
+};
+
+/**
+ * Cursor CLI Provider
+ * Cursor's AI agent in the terminal
+ */
+export const cursorProvider: AgentProvider = {
+  id: "cursor",
+  name: "Cursor CLI",
+  description: "Cursor's AI agent",
+  command: "cursor-agent",
+  configDir: "~/.cursor",
+
+  supportsResume: false,
+  supportsFork: false,
+
+  buildFlags(options: BuildFlagsOptions): string[] {
+    const flags: string[] = ["chat"]; // cursor-agent chat is the main command
+
+    if (options.model) {
+      flags.push(`--model ${options.model}`);
+    }
+
+    return flags;
+  },
+
+  waitingPatterns: [
+    /\[Y\/n\]/i,
+    /\[y\/N\]/i,
+    /approve/i,
+    /confirm/i,
+    /Press Enter/i,
+    /\(yes\/no\)/i,
+  ],
+
+  runningPatterns: [
+    /thinking/i,
+    /processing/i,
+    /working/i,
+    /writing/i,
+    SPINNER_CHARS,
+  ],
+
+  idlePatterns: [/^>\s*$/m, /cursor.*>\s*$/im, /\$\s*$/m],
+};
+
 // Provider registry
 export const providers: Record<AgentType, AgentProvider> = {
   claude: claudeProvider,
   codex: codexProvider,
   opencode: opencodeProvider,
   gemini: geminiProvider,
+  aider: aiderProvider,
+  cursor: cursorProvider,
 };
 
 // Get provider by ID
@@ -262,5 +356,5 @@ export function getAllProviders(): AgentProvider[] {
 
 // Type guard
 export function isValidAgentType(value: string): value is AgentType {
-  return value === "claude" || value === "codex" || value === "opencode" || value === "gemini";
+  return value in providers;
 }

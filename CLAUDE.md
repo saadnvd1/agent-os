@@ -8,6 +8,8 @@ Self-hosted web UI for managing multiple AI coding CLI sessions.
 - **Codex** (OpenAI) - `codex` CLI with approval modes
 - **OpenCode** - `opencode` CLI with multi-provider support
 - **Gemini CLI** (Google) - `gemini` CLI powered by Gemini models
+- **Aider** - `aider` CLI for AI pair programming
+- **Cursor CLI** - `cursor-agent` CLI from Cursor
 
 ## Commands
 
