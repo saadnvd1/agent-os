@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { Button } from "@/components/ui/button";
-import { PanelLeftClose, PanelLeft, Plus } from "lucide-react";
+import { PanelLeftClose, PanelLeft, Plus, Bell } from "lucide-react";
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { PaneLayout } from "@/components/PaneLayout";
 import { Pane } from "@/components/Pane";
+import { useNotifications } from "@/hooks/useNotifications";
 import type { Session, Group } from "@/lib/db";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
@@ -35,10 +37,12 @@ function HomeContent() {
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [otherTmuxSessions, setOtherTmuxSessions] = useState<OtherTmuxSession[]>([]);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const updatedSessionIds = useRef<Set<string>>(new Set());
 
   const { focusedPaneId, attachSession, getActiveTab } = usePanes();
+  const { settings: notificationSettings, checkStateChanges, updateSettings, requestPermission, permissionGranted } = useNotifications();
   const focusedActiveTab = getActiveTab(focusedPaneId);
 
   // Register terminal ref for a pane+tab
@@ -75,11 +79,19 @@ function HomeContent() {
     try {
       const res = await fetch("/api/sessions/status");
       const data = await res.json();
-      setSessionStatuses(data.statuses || {});
+      const statuses = data.statuses || {};
+      setSessionStatuses(statuses);
       setOtherTmuxSessions(data.otherSessions || []);
 
+      // Check for notification-worthy state changes
+      const sessionStates = sessions.map(s => ({
+        id: s.id,
+        name: s.name,
+        status: statuses[s.id]?.status || "dead",
+      }));
+      checkStateChanges(sessionStates);
+
       // Check for new Claude session IDs and update DB (only once per session)
-      const statuses = data.statuses || {};
       let needsRefresh = false;
       for (const [sessionId, status] of Object.entries(statuses) as [string, SessionStatus][]) {
         if (status.claudeSessionId && !updatedSessionIds.current.has(sessionId)) {
@@ -96,7 +108,7 @@ function HomeContent() {
     } catch (error) {
       console.error("Failed to fetch statuses:", error);
     }
-  }, []);
+  }, [sessions, checkStateChanges]);
 
   // Detect mobile and set initial sidebar state
   useEffect(() => {
@@ -482,6 +494,21 @@ function HomeContent() {
           </div>
 
           <div className="flex items-center gap-2">
+            <NotificationSettings
+              open={showNotificationSettings}
+              onOpenChange={setShowNotificationSettings}
+              settings={notificationSettings}
+              permissionGranted={permissionGranted}
+              waitingSessions={sessions
+                .filter(s => sessionStatuses[s.id]?.status === "waiting")
+                .map(s => ({ id: s.id, name: s.name }))}
+              onUpdateSettings={updateSettings}
+              onRequestPermission={requestPermission}
+              onSelectSession={(id) => {
+                const session = sessions.find(s => s.id === id);
+                if (session) attachToSession(session);
+              }}
+            />
             <Button size="sm" onClick={() => setShowNewSessionDialog(true)}>
               <Plus className="w-4 h-4 sm:mr-1" />
               <span className="hidden sm:inline">New Session</span>

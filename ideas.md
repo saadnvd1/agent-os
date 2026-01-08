@@ -2,13 +2,14 @@
 
 ## Features
 
+- [ ] Notifications - Alert when session needs attention (waiting state, errors, completed tasks)
 - [ ] MCP server integration - Toggle AI capabilities (web search, GitHub) per session
 - [ ] Session templates - Pre-configured sessions for common tasks
 - [ ] Session groups - Organize sessions into projects/folders
 - [ ] Session search - Fuzzy search across all conversations
 - [ ] Export conversations - Export to Markdown/JSON
 - [ ] Keyboard shortcuts - Quick navigation and actions
-- [ ] Mobile responsive - Better mobile layout
+- [x] Mobile responsive - Better mobile layout
 - [ ] Dark/light theme toggle
 
 ## Technical
