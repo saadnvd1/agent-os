@@ -25,7 +25,7 @@ const CONFIG = {
   SPIKE_WINDOW_MS: 1000,             // Window to detect sustained activity
   SUSTAINED_THRESHOLD: 2,            // Changes needed to confirm activity
   CACHE_VALIDITY_MS: 2000,           // How long tmux cache is valid
-  RECENT_ACTIVITY_MS: 10000,         // Window for "recent" activity
+  RECENT_ACTIVITY_MS: 120000,        // Window for "recent" activity (2 min, tmux updates slowly)
 } as const;
 
 // Detection patterns
@@ -92,18 +92,19 @@ interface SessionCache {
 
 // Content analysis helpers
 function checkBusyIndicators(content: string): boolean {
-  const lower = content.toLowerCase();
   const lines = content.split("\n");
+  // Focus on last 10 lines to avoid old scrollback false positives
+  const recentContent = lines.slice(-10).join("\n").toLowerCase();
 
-  // Check text indicators
-  if (BUSY_INDICATORS.some(ind => lower.includes(ind))) return true;
+  // Check text indicators in recent lines
+  if (BUSY_INDICATORS.some(ind => recentContent.includes(ind))) return true;
 
-  // Check whimsical words + "tokens" pattern
-  if (lower.includes("tokens") && WHIMSICAL_WORDS.some(w => lower.includes(w))) return true;
+  // Check whimsical words + "tokens" pattern in recent lines
+  if (recentContent.includes("tokens") && WHIMSICAL_WORDS.some(w => recentContent.includes(w))) return true;
 
-  // Check spinners in last 5 lines only
-  const recentLines = lines.slice(-5).join("");
-  if (SPINNER_CHARS.some(s => recentLines.includes(s))) return true;
+  // Check spinners in last 5 lines
+  const last5 = lines.slice(-5).join("");
+  if (SPINNER_CHARS.some(s => last5.includes(s))) return true;
 
   return false;
 }
@@ -234,11 +235,10 @@ class SessionStatusDetector {
     const timestamp = this.getTimestamp(sessionName);
     const tracker = this.getTracker(sessionName, timestamp);
     const content = await this.capturePane(sessionName);
-    const activityAge = Date.now() - (timestamp * 1000);
-    const hasRecentActivity = activityAge < CONFIG.RECENT_ACTIVITY_MS;
 
-    // 1. Busy indicators with recent activity (highest priority - Claude is actively working)
-    if (hasRecentActivity && checkBusyIndicators(content)) {
+    // 1. Busy indicators in last 10 lines (highest priority - Claude is actively working)
+    // No activity timestamp check needed since we only look at recent terminal lines
+    if (checkBusyIndicators(content)) {
       tracker.lastChangeTime = Date.now();
       tracker.acknowledged = false;
       return "running";
