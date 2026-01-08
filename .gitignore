@@ -47,3 +47,6 @@ agent-os.db-shm
 
 # Vercel
 .vercel
+
+# Local docs/plans
+docs/
