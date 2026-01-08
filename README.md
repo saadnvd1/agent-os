@@ -20,12 +20,15 @@ A self-hosted web UI for managing multiple AI coding assistant sessions with mul
 - **Tabbed Terminals** - Multiple tabs per pane for quick switching
 - **Session Forking** - Fork conversations to explore different approaches (Claude)
 - **Session Resume** - Auto-detects session IDs for seamless resume (Claude)
+- **Status Detection** - Real-time running/waiting/idle status with spike filtering
+- **Browser Notifications** - Get notified when sessions need input, click to activate
 - **Git Worktrees** - Isolated branches for parallel feature development
 - **Auto Environment Setup** - Copies `.env` files, installs dependencies automatically
 - **Dev Server Ports** - Each worktree gets a unique port (3100, 3110, 3120...)
 - **PR Integration** - Create PRs and track status directly from the UI (requires `gh` CLI)
 - **Skip Permissions** - Optional flag to bypass permission prompts
 - **External Session Import** - Import existing tmux sessions
+- **Mobile Responsive** - Touch-friendly interface with collapsible sidebar
 - **tmux Integration** - Sessions persist across page reloads
 
 ## Prerequisites
