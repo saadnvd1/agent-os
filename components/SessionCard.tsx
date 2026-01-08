@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, ExternalLink } from "lucide-react";
+import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -14,6 +14,16 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "./ui/context-menu";
 import type { Session, Group } from "@/lib/db";
 import type { AgentType } from "@/lib/providers";
 
@@ -89,7 +99,75 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
     setIsEditing(false);
   };
 
-  return (
+  const hasActions = onMove || onFork || onDelete || onRename || onCreatePR;
+
+  // Shared menu items renderer for both context menu and dropdown
+  const renderMenuItems = (isContextMenu: boolean) => {
+    const MenuItem = isContextMenu ? ContextMenuItem : DropdownMenuItem;
+    const MenuSeparator = isContextMenu ? ContextMenuSeparator : DropdownMenuSeparator;
+    const MenuSub = isContextMenu ? ContextMenuSub : DropdownMenuSub;
+    const MenuSubTrigger = isContextMenu ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
+    const MenuSubContent = isContextMenu ? ContextMenuSubContent : DropdownMenuSubContent;
+
+    return (
+      <>
+        {onRename && (
+          <MenuItem onClick={() => setIsEditing(true)}>
+            <Pencil className="w-3 h-3 mr-2" />
+            Rename
+          </MenuItem>
+        )}
+        {onFork && (
+          <MenuItem onClick={() => onFork()}>
+            <Copy className="w-3 h-3 mr-2" />
+            Fork session
+          </MenuItem>
+        )}
+        {onCreatePR && session.branch_name && (
+          <MenuItem
+            onClick={() => {
+              if (session.pr_url) {
+                window.open(session.pr_url, "_blank");
+              } else {
+                onCreatePR();
+              }
+            }}
+          >
+            <GitPullRequest className="w-3 h-3 mr-2" />
+            {session.pr_url ? "Open PR" : "Create PR"}
+          </MenuItem>
+        )}
+        {onMove && groups.length > 0 && (
+          <MenuSub>
+            <MenuSubTrigger>
+              <FolderInput className="w-3 h-3 mr-2" />
+              Move to...
+            </MenuSubTrigger>
+            <MenuSubContent>
+              {groups
+                .filter((g) => g.path !== session.group_path)
+                .map((group) => (
+                  <MenuItem key={group.path} onClick={() => onMove(group.path)}>
+                    {group.name}
+                  </MenuItem>
+                ))}
+            </MenuSubContent>
+          </MenuSub>
+        )}
+        {onDelete && (
+          <>
+            <MenuSeparator />
+            <MenuItem onClick={() => onDelete()} className="text-red-500 focus:text-red-500">
+              <Trash2 className="w-3 h-3 mr-2" />
+              Delete session
+            </MenuItem>
+          </>
+        )}
+      </>
+    );
+  };
+
+  const cardContent = (
     <div
       onClick={isEditing ? undefined : onClick}
       className={cn(
@@ -187,95 +265,37 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
         {timeAgo}
       </span>
 
-      {/* Actions menu */}
-      {(onMove || onFork || onDelete || onRename || onCreatePR) && (
+      {/* Actions menu (button) */}
+      {hasActions && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-5 w-5 flex-shrink-0">
               <MoreHorizontal className="w-3 h-3" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {onRename && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsEditing(true);
-                }}
-              >
-                <Pencil className="w-3 h-3 mr-2" />
-                Rename
-              </DropdownMenuItem>
-            )}
-            {onFork && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFork();
-                }}
-              >
-                <Copy className="w-3 h-3 mr-2" />
-                Fork session
-              </DropdownMenuItem>
-            )}
-            {onCreatePR && session.branch_name && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (session.pr_url) {
-                    window.open(session.pr_url, "_blank");
-                  } else {
-                    onCreatePR();
-                  }
-                }}
-              >
-                <GitPullRequest className="w-3 h-3 mr-2" />
-                {session.pr_url ? "Open PR" : "Create PR"}
-              </DropdownMenuItem>
-            )}
-            {onMove && groups.length > 0 && (
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <FolderInput className="w-3 h-3 mr-2" />
-                  Move to...
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {groups
-                    .filter((g) => g.path !== session.group_path)
-                    .map((group) => (
-                      <DropdownMenuItem
-                        key={group.path}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onMove(group.path);
-                        }}
-                      >
-                        {group.name}
-                      </DropdownMenuItem>
-                    ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            )}
-            {onDelete && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  className="text-red-500 focus:text-red-500"
-                >
-                  <Trash2 className="w-3 h-3 mr-2" />
-                  Delete session
-                </DropdownMenuItem>
-              </>
-            )}
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            {renderMenuItems(false)}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
     </div>
   );
+
+  // Wrap with context menu if actions are available
+  if (hasActions) {
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          {cardContent}
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {renderMenuItems(true)}
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+  }
+
+  return cardContent;
 }
 
 function getTimeAgo(dateStr: string): string {
