@@ -51,3 +51,4 @@ agent-os.db-shm
 # Local docs/plans
 docs/
 .mcp.json
+.git-evening
