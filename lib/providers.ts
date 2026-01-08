@@ -5,7 +5,7 @@
  * (Claude Code, Codex, OpenCode, etc.)
  */
 
-export type AgentType = "claude" | "codex" | "opencode";
+export type AgentType = "claude" | "codex" | "opencode" | "gemini";
 
 export interface AgentProvider {
   // Metadata
@@ -194,11 +194,60 @@ export const opencodeProvider: AgentProvider = {
   idlePatterns: [/^>\s*$/m, /opencode.*>\s*$/im, /\$\s*$/m],
 };
 
+/**
+ * Gemini CLI Provider
+ * Google's AI coding CLI powered by Gemini models
+ */
+export const geminiProvider: AgentProvider = {
+  id: "gemini",
+  name: "Gemini CLI",
+  description: "Google's AI CLI",
+  command: "gemini",
+  configDir: "~/.gemini",
+
+  supportsResume: false,
+  supportsFork: false,
+
+  buildFlags(options: BuildFlagsOptions): string[] {
+    const flags: string[] = [];
+
+    if (options.model) {
+      flags.push(`-m ${options.model}`);
+    }
+
+    // Gemini CLI doesn't have a skip-permissions flag
+    // It may use a different approval mechanism
+
+    return flags;
+  },
+
+  waitingPatterns: [
+    /\[Y\/n\]/i,
+    /\[y\/N\]/i,
+    /approve/i,
+    /confirm/i,
+    /Press Enter/i,
+    /\(yes\/no\)/i,
+    /Do you want to/i,
+  ],
+
+  runningPatterns: [
+    /thinking/i,
+    /processing/i,
+    /working/i,
+    /generating/i,
+    SPINNER_CHARS,
+  ],
+
+  idlePatterns: [/^>\s*$/m, /gemini.*>\s*$/im, /\$\s*$/m],
+};
+
 // Provider registry
 export const providers: Record<AgentType, AgentProvider> = {
   claude: claudeProvider,
   codex: codexProvider,
   opencode: opencodeProvider,
+  gemini: geminiProvider,
 };
 
 // Get provider by ID
@@ -213,5 +262,5 @@ export function getAllProviders(): AgentProvider[] {
 
 // Type guard
 export function isValidAgentType(value: string): value is AgentType {
-  return value === "claude" || value === "codex" || value === "opencode";
+  return value === "claude" || value === "codex" || value === "opencode" || value === "gemini";
 }

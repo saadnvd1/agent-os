@@ -19,7 +19,7 @@ export async function POST() {
     const tmuxSessions = stdout
       .trim()
       .split("\n")
-      .filter((s) => s && (s.startsWith("claude-") || s.startsWith("codex-") || s.startsWith("opencode-")));
+      .filter((s) => s && (s.startsWith("claude-") || s.startsWith("codex-") || s.startsWith("opencode-") || s.startsWith("gemini-")));
 
     // Kill each tmux session
     const killed: string[] = [];
