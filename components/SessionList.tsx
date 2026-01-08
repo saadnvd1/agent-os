@@ -47,6 +47,7 @@ interface SessionListProps {
   onRenameSession?: (sessionId: string, newName: string) => void;
   onRenameTmuxSession?: (oldName: string, newName: string) => void;
   onImportTmuxSession?: (sessionName: string, claudeSessionId?: string) => void;
+  onCreatePR?: (sessionId: string) => void;
 }
 
 export function SessionList({
@@ -68,6 +69,7 @@ export function SessionList({
   onRenameSession,
   onRenameTmuxSession,
   onImportTmuxSession,
+  onCreatePR,
 }: SessionListProps) {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -185,7 +187,7 @@ export function SessionList({
                   setShowNewGroupInput(null);
                 }
               }}
-              className="flex-1 text-sm px-2 py-1 rounded border border-border bg-background"
+              className="flex-1 text-sm px-2 py-1 rounded bg-muted/50 focus:bg-muted focus:outline-none focus:ring-1 focus:ring-primary/50"
               autoFocus
             />
           </div>
@@ -210,6 +212,7 @@ export function SessionList({
                 onFork={onForkSession ? () => onForkSession(session.id) : undefined}
                 onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
                 onRename={onRenameSession ? (newName) => onRenameSession(session.id, newName) : undefined}
+                onCreatePR={onCreatePR ? () => onCreatePR(session.id) : undefined}
               />
             ))}
           </div>
@@ -221,7 +224,7 @@ export function SessionList({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border">
+      <div className="flex items-center justify-between p-4 pb-3">
         <div className="flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
           <h2 className="font-semibold">AgentOS</h2>
@@ -261,7 +264,7 @@ export function SessionList({
 
               {/* External tmux sessions */}
               {otherTmuxSessions && otherTmuxSessions.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-border">
+                <div className="mt-6 pt-2">
                   <div className="text-xs text-muted-foreground px-2 mb-1">External Sessions</div>
                   <div className="space-y-0.5">
                     {otherTmuxSessions.map((session) => {

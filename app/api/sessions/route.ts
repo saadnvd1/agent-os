@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb, queries, type Session, type Group } from "@/lib/db";
 import { isValidAgentType, type AgentType } from "@/lib/providers";
+import { createWorktree } from "@/lib/worktrees";
+import { setupWorktree, type SetupResult } from "@/lib/env-setup";
+import { findAvailablePort } from "@/lib/ports";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -55,26 +58,84 @@ export async function POST(request: NextRequest) {
       groupPath = "sessions",
       claudeSessionId = null,
       agentType: rawAgentType = "claude",
+      // Worktree options
+      useWorktree = false,
+      featureName = null,
+      baseBranch = "main",
     } = body;
 
     // Validate agent type
     const agentType: AgentType = isValidAgentType(rawAgentType) ? rawAgentType : "claude";
 
     // Auto-generate name if not provided
-    const name = providedName?.trim() || generateSessionName(db);
+    const name = providedName?.trim() || (featureName ? featureName : generateSessionName(db));
 
     const id = randomUUID();
+
+    // Handle worktree creation if requested
+    let worktreePath: string | null = null;
+    let branchName: string | null = null;
+    let actualWorkingDirectory = workingDirectory;
+    let port: number | null = null;
+    let setupResult: SetupResult | null = null;
+
+    if (useWorktree && featureName) {
+      try {
+        const worktreeInfo = await createWorktree({
+          projectPath: workingDirectory,
+          featureName,
+          baseBranch,
+        });
+        worktreePath = worktreeInfo.worktreePath;
+        branchName = worktreeInfo.branchName;
+        actualWorkingDirectory = worktreeInfo.worktreePath;
+
+        // Find an available port for the dev server
+        port = await findAvailablePort();
+
+        // Run environment setup (copy env files, install dependencies)
+        setupResult = await setupWorktree({
+          worktreePath: worktreeInfo.worktreePath,
+          sourcePath: workingDirectory,
+          port,
+        });
+
+        console.log("Worktree setup completed:", {
+          port,
+          envFilesCopied: setupResult.envFilesCopied,
+          stepsRun: setupResult.steps.length,
+          success: setupResult.success,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        return NextResponse.json(
+          { error: `Failed to create worktree: ${message}` },
+          { status: 400 }
+        );
+      }
+    }
 
     queries.createSession(db).run(
       id,
       name,
-      workingDirectory,
+      actualWorkingDirectory,
       parentSessionId,
       model,
       systemPrompt,
       groupPath,
       agentType
     );
+
+    // Set worktree info if created
+    if (worktreePath) {
+      queries.updateSessionWorktree(db).run(
+        worktreePath,
+        branchName,
+        baseBranch,
+        port,
+        id
+      );
+    }
 
     // Set claude_session_id if provided (for importing external sessions)
     if (claudeSessionId) {
@@ -95,7 +156,13 @@ export async function POST(request: NextRequest) {
 
     const session = queries.getSession(db).get(id) as Session;
 
-    return NextResponse.json({ session }, { status: 201 });
+    // Include setup result in response if worktree was created
+    const response: { session: Session; setup?: SetupResult } = { session };
+    if (setupResult) {
+      response.setup = setupResult;
+    }
+
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     console.error("Error creating session:", error);
     return NextResponse.json(

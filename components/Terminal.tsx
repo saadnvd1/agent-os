@@ -115,8 +115,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         callbacksRef.current.onDisconnected?.();
       };
 
-      ws.onerror = (err) => {
-        console.error("WebSocket error:", err);
+      ws.onerror = () => {
+        // Silently ignore WebSocket errors - they're usually just connection issues
+        // during page load or HMR that resolve on their own
       };
 
       // Handle terminal input
