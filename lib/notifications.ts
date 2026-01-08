@@ -70,7 +70,8 @@ export function canSendBrowserNotification(): boolean {
 
 export function sendBrowserNotification(
   title: string,
-  options?: NotificationOptions
+  options?: NotificationOptions,
+  onClick?: () => void
 ): Notification | null {
   if (!canSendBrowserNotification()) return null;
 
@@ -86,10 +87,11 @@ export function sendBrowserNotification(
   // Auto-close after 5 seconds
   setTimeout(() => notification.close(), 5000);
 
-  // Focus window when clicked
+  // Focus window and trigger callback when clicked
   notification.onclick = () => {
     window.focus();
     notification.close();
+    onClick?.();
   };
 
   return notification;
