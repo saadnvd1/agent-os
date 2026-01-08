@@ -151,7 +151,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     return (
       <div
         ref={containerRef}
-        className="h-full w-full overflow-hidden rounded-lg bg-zinc-950 p-2"
+        className="h-full w-full overflow-hidden bg-zinc-950 px-1"
       />
     );
   }
