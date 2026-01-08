@@ -42,8 +42,49 @@ function HomeContent() {
   const updatedSessionIds = useRef<Set<string>>(new Set());
 
   const { focusedPaneId, attachSession, getActiveTab } = usePanes();
-  const { settings: notificationSettings, checkStateChanges, updateSettings, requestPermission, permissionGranted } = useNotifications();
   const focusedActiveTab = getActiveTab(focusedPaneId);
+
+  // Callback for notification clicks - needs to be defined before useNotifications
+  const handleNotificationClick = useCallback((sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      // We'll call attachToSession once it's defined
+      const terminal = terminalRefs.current.get(`${focusedPaneId}:${getActiveTab(focusedPaneId)?.id}`);
+      if (terminal) {
+        const provider = getProvider(session.agent_type || "claude");
+        const sessionName = `${provider.id}-${session.id}`;
+        const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
+        const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
+
+        let parentSessionId: string | null = null;
+        if (!session.claude_session_id && session.parent_session_id) {
+          const parentSession = sessions.find(s => s.id === session.parent_session_id);
+          parentSessionId = parentSession?.claude_session_id || null;
+        }
+
+        const flags = provider.buildFlags({
+          sessionId: session.claude_session_id,
+          parentSessionId,
+          skipPermissions,
+          model: session.model,
+        });
+        const flagsStr = flags.join(" ");
+
+        terminal.sendInput("\x02d");
+        setTimeout(() => {
+          terminal.sendInput("\x15");
+          setTimeout(() => {
+            terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
+            attachSession(focusedPaneId, session.id, sessionName);
+          }, 50);
+        }, 100);
+      }
+    }
+  }, [sessions, focusedPaneId, getActiveTab, attachSession]);
+
+  const { settings: notificationSettings, checkStateChanges, updateSettings, requestPermission, permissionGranted } = useNotifications({
+    onSessionClick: handleNotificationClick,
+  });
 
   // Register terminal ref for a pane+tab
   const registerTerminalRef = useCallback((paneId: string, tabId: string, ref: TerminalHandle | null) => {

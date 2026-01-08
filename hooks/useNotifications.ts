@@ -25,7 +25,12 @@ interface SessionState {
   status: SessionStatus;
 }
 
-export function useNotifications() {
+interface UseNotificationsOptions {
+  onSessionClick?: (sessionId: string) => void;
+}
+
+export function useNotifications(options: UseNotificationsOptions = {}) {
+  const { onSessionClick } = options;
   const [settings, setSettings] = useState<NotificationSettings>(defaultSettings);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const previousStates = useRef<Map<string, SessionStatus>>(new Map());
@@ -67,7 +72,7 @@ export function useNotifications() {
 
   // Send notification for an event
   const notify = useCallback(
-    (event: NotificationEvent, sessionName: string, message?: string) => {
+    (event: NotificationEvent, sessionId: string, sessionName: string, message?: string) => {
       if (!settings.enabled || !settings.events[event]) return;
 
       const titles: Record<NotificationEvent, string> = {
@@ -89,7 +94,11 @@ export function useNotifications() {
 
       // Browser notification (only if page not focused)
       if (settings.browserNotifications && permissionGranted) {
-        sendBrowserNotification(title, { body, tag: `agentos-${event}-${sessionName}` });
+        sendBrowserNotification(
+          title,
+          { body, tag: `agentos-${event}-${sessionName}` },
+          () => onSessionClick?.(sessionId)
+        );
       }
 
       // Sound
@@ -102,7 +111,7 @@ export function useNotifications() {
         flashTabTitle(`Waiting: ${sessionName}`);
       }
     },
-    [settings, permissionGranted]
+    [settings, permissionGranted, onSessionClick]
   );
 
   // Check for state changes and notify
@@ -132,14 +141,14 @@ export function useNotifications() {
 
         // Detect transitions
         if (currentStatus === "waiting" && prevStatus !== "waiting") {
-          notify("waiting", session.name);
+          notify("waiting", session.id, session.name);
         } else if (currentStatus === "error" && prevStatus !== "error") {
-          notify("error", session.name);
+          notify("error", session.id, session.name);
         } else if (
           currentStatus === "idle" &&
           (prevStatus === "running" || prevStatus === "waiting")
         ) {
-          notify("completed", session.name);
+          notify("completed", session.id, session.name);
         }
 
         previousStates.current.set(session.id, currentStatus);
