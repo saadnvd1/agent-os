@@ -7,6 +7,7 @@ Self-hosted web UI for managing multiple AI coding CLI sessions.
 - **Claude Code** (Anthropic) - `claude` CLI with resume/fork support
 - **Codex** (OpenAI) - `codex` CLI with approval modes
 - **OpenCode** - `opencode` CLI with multi-provider support
+- **Gemini CLI** (Google) - `gemini` CLI powered by Gemini models
 
 ## Commands
 
