@@ -1,18 +1,14 @@
 /**
- * File system utilities for file explorer
+ * File system utilities for file explorer (server-only)
  */
 
 import { readdirSync, statSync, readFileSync } from "fs";
-import { join, relative, basename, extname } from "path";
+import { join, extname } from "path";
 
-export interface FileNode {
-  name: string;
-  path: string;
-  type: "file" | "directory";
-  size?: number;
-  extension?: string;
-  children?: FileNode[];
-}
+// Re-export client-safe types and utilities
+export type { FileNode } from "./file-utils";
+export { getLanguageFromExtension } from "./file-utils";
+import type { FileNode } from "./file-utils";
 
 /**
  * Default exclude patterns (matches common ignore patterns)
@@ -177,40 +173,3 @@ export function readFileContent(
   }
 }
 
-/**
- * Get file extension for syntax highlighting
- */
-export function getLanguageFromExtension(ext: string): string {
-  const languageMap: Record<string, string> = {
-    js: "javascript",
-    jsx: "javascript",
-    ts: "typescript",
-    tsx: "typescript",
-    py: "python",
-    rb: "ruby",
-    go: "go",
-    rs: "rust",
-    java: "java",
-    c: "c",
-    cpp: "cpp",
-    cs: "csharp",
-    php: "php",
-    html: "html",
-    css: "css",
-    scss: "scss",
-    json: "json",
-    xml: "xml",
-    yaml: "yaml",
-    yml: "yaml",
-    md: "markdown",
-    sh: "bash",
-    bash: "bash",
-    zsh: "bash",
-    sql: "sql",
-    graphql: "graphql",
-    vue: "vue",
-    svelte: "svelte",
-  };
-
-  return languageMap[ext.toLowerCase()] || "plaintext";
-}
