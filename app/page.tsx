@@ -204,8 +204,9 @@ function HomeContent() {
       paneId={paneId}
       sessions={sessions}
       onRegisterTerminal={registerTerminalRef}
+      onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined}
     />
-  ), [sessions, registerTerminalRef]);
+  ), [sessions, registerTerminalRef, isMobile]);
 
   // Attach session to focused pane
   const attachToSession = useCallback(async (session: Session) => {
@@ -528,15 +529,6 @@ function HomeContent() {
         <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
           {sessionListContent}
         </SwipeSidebar>
-
-        {/* Menu button to open sidebar */}
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="absolute top-3 left-3 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800/90 backdrop-blur-sm border border-zinc-700 text-zinc-400 active:scale-95 touch-manipulation"
-          aria-label="Open menu"
-        >
-          <PanelLeft className="h-5 w-5" />
-        </button>
 
         {/* Terminal fills the screen */}
         <div className="flex-1 min-h-0">
