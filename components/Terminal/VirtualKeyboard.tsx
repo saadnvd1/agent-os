@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Delete, Space, CornerDownLeft } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ANSI escape sequences
@@ -27,9 +27,11 @@ const ROWS = {
   row1: ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
   row2: ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
   row3: ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
-  symbols1: ['-', '=', '[', ']', '\\', ';', "'", ',', '.', '/'],
-  symbols2: ['_', '+', '{', '}', '|', ':', '"', '<', '>', '?'],
+  symbols: ['-', '/', ':', ';', '(', ')', '$', '&', '@', '"'],
+  symbolsMore: ['.', ',', '?', '!', "'", '`', '~', '=', '+', '*'],
 };
+
+type KeyboardMode = 'quick' | 'abc' | 'num';
 
 interface VirtualKeyboardProps {
   onKeyPress: (key: string) => void;
@@ -39,32 +41,19 @@ interface VirtualKeyboardProps {
 interface KeyProps {
   char: string;
   onPress: () => void;
-  width?: 'normal' | 'wide' | 'wider' | 'space';
-  variant?: 'default' | 'special' | 'action' | 'danger';
+  className?: string;
 }
 
-function Key({ char, onPress, width = 'normal', variant = 'default' }: KeyProps) {
-  const widthClasses = {
-    normal: 'min-w-[32px] flex-1',
-    wide: 'min-w-[48px] px-2',
-    wider: 'min-w-[64px] px-3',
-    space: 'flex-[4]',
-  };
-
-  const variantClasses = {
-    default: 'bg-zinc-800 text-zinc-200 active:bg-zinc-600',
-    special: 'bg-zinc-700 text-zinc-300 active:bg-zinc-500',
-    action: 'bg-primary/30 text-primary active:bg-primary/50',
-    danger: 'bg-red-900/30 text-red-400 active:bg-red-800/50',
-  };
-
+function Key({ char, onPress, className }: KeyProps) {
   return (
     <button
       onClick={onPress}
+      onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'flex h-[42px] touch-manipulation items-center justify-center rounded-md text-sm font-medium transition-colors',
-        widthClasses[width],
-        variantClasses[variant]
+        'flex h-[38px] flex-1 touch-manipulation items-center justify-center rounded-md text-sm font-medium',
+        'bg-zinc-800 text-zinc-200 active:bg-zinc-600',
+        'select-none',
+        className
       )}
     >
       {char}
@@ -73,130 +62,206 @@ function Key({ char, onPress, width = 'normal', variant = 'default' }: KeyProps)
 }
 
 export function VirtualKeyboard({ onKeyPress, visible = true }: VirtualKeyboardProps) {
+  const [mode, setMode] = useState<KeyboardMode>('abc');
   const [shifted, setShifted] = useState(false);
-  const [showSymbols, setShowSymbols] = useState(false);
-  const [showCtrl, setShowCtrl] = useState(false);
 
   if (!visible) return null;
 
   const handleKey = (key: string) => {
-    if (showCtrl) {
-      // Send Ctrl+key
-      const ctrlKey = String.fromCharCode(key.toUpperCase().charCodeAt(0) - 64);
-      onKeyPress(ctrlKey);
-      setShowCtrl(false);
-    } else {
-      onKeyPress(shifted ? key.toUpperCase() : key);
-      if (shifted) setShifted(false);
-    }
+    onKeyPress(shifted ? key.toUpperCase() : key);
+    if (shifted) setShifted(false);
   };
 
-  const currentNumbers = shifted ? ROWS.numbersShift : ROWS.numbers;
-
-  return (
-    <div className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-900/98 px-1 py-1.5 backdrop-blur-sm">
-      {showSymbols ? (
-        <>
-          {/* Symbols layout */}
-          <div className="flex gap-1">
-            {ROWS.symbols1.map((char) => (
-              <Key key={char} char={char} onPress={() => handleKey(char)} />
-            ))}
-          </div>
-          <div className="flex gap-1">
-            {ROWS.symbols2.map((char) => (
-              <Key key={char} char={char} onPress={() => handleKey(char)} />
-            ))}
-          </div>
-          <div className="flex gap-1">
-            <Key char="ABC" onPress={() => setShowSymbols(false)} width="wider" variant="special" />
-            <Key char="Space" onPress={() => onKeyPress(' ')} width="space" variant="special" />
-            <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} width="wider" variant="special" />
-          </div>
-        </>
-      ) : (
-        <>
-          {/* Number row */}
-          <div className="flex gap-1">
-            {currentNumbers.map((char, i) => (
-              <Key key={i} char={char} onPress={() => handleKey(char)} />
-            ))}
-            <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} width="wide" variant="special" />
-          </div>
-
-          {/* QWERTY rows */}
-          <div className="flex gap-1">
-            {ROWS.row1.map((char) => (
-              <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
-            ))}
-          </div>
-
-          <div className="flex gap-1 px-2">
-            {ROWS.row2.map((char) => (
-              <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
-            ))}
-          </div>
-
-          <div className="flex gap-1">
-            <Key
-              char={shifted ? '⬆' : '⇧'}
-              onPress={() => setShifted(!shifted)}
-              width="wide"
-              variant={shifted ? 'action' : 'special'}
-            />
-            {ROWS.row3.map((char) => (
-              <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
-            ))}
-            <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} width="wide" variant="action" />
-          </div>
-
-          {/* Bottom row */}
-          <div className="flex gap-1">
-            <Key
-              char={showCtrl ? 'Ctrl✓' : 'Ctrl'}
-              onPress={() => setShowCtrl(!showCtrl)}
-              width="wide"
-              variant={showCtrl ? 'action' : 'special'}
-            />
-            <Key char="#+=" onPress={() => setShowSymbols(true)} width="wide" variant="special" />
-            <Key char="" onPress={() => onKeyPress(' ')} width="space" variant="special" />
-            <Key char="Tab" onPress={() => onKeyPress(SPECIAL_KEYS.TAB)} width="wide" variant="special" />
-            <Key char="Esc" onPress={() => onKeyPress(SPECIAL_KEYS.ESC)} width="wide" variant="special" />
-          </div>
-        </>
-      )}
-
-      {/* Arrow keys + special row - always visible */}
-      <div className="flex gap-1 border-t border-zinc-800 pt-1">
-        <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} width="wide" variant="danger" />
-        <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} width="wide" variant="special" />
-        <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} width="wide" variant="special" />
-        <div className="flex-1" />
-        <button
-          onClick={() => onKeyPress(SPECIAL_KEYS.LEFT)}
-          className="flex h-[42px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div className="flex flex-col gap-0.5">
+  // Quick mode - just essential terminal keys
+  if (mode === 'quick') {
+    return (
+      <div
+        className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-900/98 px-1.5 py-1.5 backdrop-blur-sm select-none"
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Mode tabs + common keys */}
+        <div className="flex gap-1">
           <button
-            onClick={() => onKeyPress(SPECIAL_KEYS.UP)}
-            className="flex h-[20px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+            onClick={() => setMode('abc')}
+            className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
           >
-            <ChevronUp className="h-4 w-4" />
+            ABC
           </button>
           <button
-            onClick={() => onKeyPress(SPECIAL_KEYS.DOWN)}
-            className="flex h-[20px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+            onClick={() => setMode('num')}
+            className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
           >
-            <ChevronDown className="h-4 w-4" />
+            123
+          </button>
+          <Key char="Tab" onPress={() => onKeyPress(SPECIAL_KEYS.TAB)} className="bg-zinc-700" />
+          <Key char="Esc" onPress={() => onKeyPress(SPECIAL_KEYS.ESC)} className="bg-zinc-700" />
+          <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} className="bg-zinc-700" />
+        </div>
+
+        {/* Arrow keys + Enter + Ctrl shortcuts */}
+        <div className="flex gap-1">
+          <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} className="bg-red-900/40 text-red-400" />
+          <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} className="bg-zinc-700" />
+          <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} className="bg-zinc-700" />
+          <div className="flex-1" />
+          <button
+            onClick={() => onKeyPress(SPECIAL_KEYS.LEFT)}
+            className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="flex flex-col gap-0.5">
+            <button
+              onClick={() => onKeyPress(SPECIAL_KEYS.UP)}
+              className="flex h-[18px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onKeyPress(SPECIAL_KEYS.DOWN)}
+              className="flex h-[18px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => onKeyPress(SPECIAL_KEYS.RIGHT)}
+            className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+          <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} className="bg-primary/30 text-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  // ABC mode - full QWERTY
+  if (mode === 'abc') {
+    return (
+      <div
+        className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-900/98 px-1.5 py-1.5 backdrop-blur-sm select-none"
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* QWERTY rows */}
+        <div className="flex gap-0.5">
+          {ROWS.row1.map((char) => (
+            <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
+          ))}
+        </div>
+        <div className="flex gap-0.5 px-3">
+          {ROWS.row2.map((char) => (
+            <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
+          ))}
+        </div>
+        <div className="flex gap-0.5">
+          <button
+            onClick={() => setShifted(!shifted)}
+            className={cn(
+              'flex h-[38px] w-[42px] items-center justify-center rounded-md text-sm font-medium active:bg-zinc-500',
+              shifted ? 'bg-primary/30 text-primary' : 'bg-zinc-700 text-zinc-300'
+            )}
+          >
+            ⇧
+          </button>
+          {ROWS.row3.map((char) => (
+            <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
+          ))}
+          <button
+            onClick={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)}
+            className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-sm font-medium text-zinc-300 active:bg-zinc-500"
+          >
+            ⌫
           </button>
         </div>
+
+        {/* Bottom row */}
+        <div className="flex gap-0.5">
+          <button
+            onClick={() => setMode('quick')}
+            className="flex h-[38px] w-[50px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+          >
+            ^C
+          </button>
+          <button
+            onClick={() => setMode('num')}
+            className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+          >
+            123
+          </button>
+          <button
+            onClick={() => onKeyPress(' ')}
+            className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-800 text-sm text-zinc-400 active:bg-zinc-600"
+          >
+            space
+          </button>
+          <button
+            onClick={() => onKeyPress(SPECIAL_KEYS.ENTER)}
+            className="flex h-[38px] w-[60px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary/50"
+          >
+            ⏎
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Num mode - numbers and symbols
+  return (
+    <div
+      className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-900/98 px-1.5 py-1.5 backdrop-blur-sm select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Number row */}
+      <div className="flex gap-0.5">
+        {ROWS.numbers.map((char) => (
+          <Key key={char} char={char} onPress={() => onKeyPress(char)} />
+        ))}
+      </div>
+
+      {/* Symbols rows */}
+      <div className="flex gap-0.5">
+        {ROWS.symbols.map((char) => (
+          <Key key={char} char={char} onPress={() => onKeyPress(char)} />
+        ))}
+      </div>
+      <div className="flex gap-0.5">
+        {ROWS.symbolsMore.map((char) => (
+          <Key key={char} char={char} onPress={() => onKeyPress(char)} />
+        ))}
+      </div>
+
+      {/* Bottom row */}
+      <div className="flex gap-0.5">
         <button
-          onClick={() => onKeyPress(SPECIAL_KEYS.RIGHT)}
-          className="flex h-[42px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+          onClick={() => setMode('quick')}
+          className="flex h-[38px] w-[50px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
         >
-          <ChevronRight className="h-5 w-5" />
+          ^C
+        </button>
+        <button
+          onClick={() => setMode('abc')}
+          className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+        >
+          ABC
+        </button>
+        <button
+          onClick={() => onKeyPress(' ')}
+          className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-800 text-sm text-zinc-400 active:bg-zinc-600"
+        >
+          space
+        </button>
+        <button
+          onClick={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)}
+          className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-sm font-medium text-zinc-300 active:bg-zinc-500"
+        >
+          ⌫
+        </button>
+        <button
+          onClick={() => onKeyPress(SPECIAL_KEYS.ENTER)}
+          className="flex h-[38px] w-[60px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary/50"
+        >
+          ⏎
         </button>
       </div>
     </div>
