@@ -87,6 +87,26 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Mobile optimizations */
+  @media (max-width: 767px) {
+    html {
+      /* Disable pull-to-refresh */
+      overscroll-behavior-y: none;
+    }
+
+    body {
+      /* Support safe area insets for notch/home indicator */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+
+      /* Prevent bounce scroll */
+      overscroll-behavior-y: none;
+
+      /* Prevent text size adjustment on orientation change */
+      -webkit-text-size-adjust: 100%;
+    }
+  }
 }
 
 /* Prevent page scrolling on terminal touch */
