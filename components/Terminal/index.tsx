@@ -33,7 +33,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   ref
 ) {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const { isVisible: keybarVisible, toggle: toggleKeybar } = useKeybarVisibility();
+  const { isVisible: keybarVisible, toggle: toggleKeybar, show: showKeybar } = useKeybarVisibility();
   const { isMobile } = useViewport();
 
   const {
@@ -77,13 +77,19 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   }));
 
   // Trigger terminal resize when keybar visibility changes (mobile only)
+  // Preserve scroll position to avoid jarring jumps
   useEffect(() => {
     if (!isMobile) return;
+    const scrollState = getScrollState();
     const timer = setTimeout(() => {
       triggerResize();
+      // Restore scroll position after resize
+      if (scrollState) {
+        restoreScrollState(scrollState);
+      }
     }, 50);
     return () => clearTimeout(timer);
-  }, [keybarVisible, isMobile, triggerResize]);
+  }, [keybarVisible, isMobile, triggerResize, getScrollState, restoreScrollState]);
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
@@ -104,6 +110,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         ref={terminalRef}
         className="min-h-0 w-full flex-1 overflow-hidden bg-zinc-950"
         style={isMobile ? { touchAction: 'none' } : undefined}
+        onClick={isMobile ? showKeybar : undefined}
       />
 
       {/* Scroll to bottom button */}
