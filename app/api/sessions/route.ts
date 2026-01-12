@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
       groupPath = "sessions",
       claudeSessionId = null,
       agentType: rawAgentType = "claude",
+      autoApprove = false,
       // Worktree options
       useWorktree = false,
       featureName = null,
@@ -123,7 +124,8 @@ export async function POST(request: NextRequest) {
       model,
       systemPrompt,
       groupPath,
-      agentType
+      agentType,
+      autoApprove ? 1 : 0 // SQLite stores booleans as integers
     );
 
     // Set worktree info if created

@@ -2,6 +2,33 @@
 
 Self-hosted web UI for managing multiple AI coding CLI sessions.
 
+## Target Users: Mobile-First, On-the-Go Developers
+
+**CRITICAL DESIGN PRINCIPLE:** AgentOS is designed for developers who need to manage AI coding sessions **on the go from their mobile devices**. Every feature must work well on mobile, not just be "responsive."
+
+When implementing any feature:
+- **Primary device:** Phone (iOS/Android)
+- **Primary context:** On the go, away from desktop
+- **Primary need:** Full functionality, not a subset
+
+If a feature exists in desktop tools (Emdash, VS Code, etc.), figure out how to make it work **simply on mobile** - don't skip it. Examples:
+- Multi-pane layout → Single pane + bottom tabs
+- Hover menus → Touch-friendly buttons (44x44px min)
+- Side-by-side diffs → Unified diff view
+- Keyboard shortcuts → Quick action toolbar
+- Monaco editor → Read-only syntax viewer
+
+**Mobile users need:**
+- File browsing and viewing
+- Git workflows (status, staging, diffs, commits, PRs)
+- Dev server management
+- Terminal interaction with touch optimizations
+- All features that desktop users have, adapted for mobile
+
+See `master.md` for full transformation plan.
+
+---
+
 ## Supported Agents
 
 - **Claude Code** (Anthropic) - `claude` CLI with resume/fork support
@@ -103,5 +130,7 @@ Conductors can spawn worker sessions with isolated worktrees:
 ## Standards
 
 - Conventional commits (feat, fix, docs, etc.)
-- Run typecheck before committing
+- Run typecheck at end of each phase and fix all errors
 - Purple theme (HSL hue 270)
+- **NEVER mention competitor products (Emdash, Cursor, etc.) in code comments or documentation**
+- This file (CLAUDE.md) is gitignored - it's for development only, not in the open source repo
