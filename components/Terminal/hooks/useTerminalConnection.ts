@@ -142,6 +142,8 @@ export function useTerminalConnection({
     let handleTouchCancel: (() => void) | null = null;
     let touchElement: HTMLElement | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let mqListeners: { mq: MediaQueryList; handler: () => void }[] = [];
+    let fitTimeouts: NodeJS.Timeout[] = [];
 
     const connectTimeout = setTimeout(() => {
       if (cancelled || !terminalRef.current) return;
@@ -371,29 +373,62 @@ export function useTerminalConnection({
         }
       });
 
-      // Debounced resize handler
+      // Debounced resize handler with triple-fit pattern for reliability
       let resizeTimeout: NodeJS.Timeout | null = null;
+
+      const doFit = () => {
+        // Clear any pending fit timeouts
+        fitTimeouts.forEach(clearTimeout);
+        fitTimeouts = [];
+
+        requestAnimationFrame(() => {
+          // First fit - immediate
+          fitAddon.fit();
+
+          const sendResize = () => {
+            const activeWs = wsRef.current;
+            if (activeWs?.readyState === WebSocket.OPEN) {
+              activeWs.send(
+                JSON.stringify({ type: 'resize', cols: currentTerm.cols, rows: currentTerm.rows })
+              );
+            }
+          };
+
+          sendResize();
+
+          // Second fit - after 100ms (handles most delayed layout updates)
+          fitTimeouts.push(setTimeout(() => {
+            fitAddon.fit();
+            sendResize();
+          }, 100));
+
+          // Third fit - after 250ms (handles slow layout updates, e.g., DevTools toggle)
+          fitTimeouts.push(setTimeout(() => {
+            fitAddon.fit();
+            sendResize();
+          }, 250));
+        });
+      };
+
       handleResize = () => {
         if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(
-          () => {
-            requestAnimationFrame(() => {
-              fitAddon.fit();
-              const activeWs = wsRef.current;
-              if (activeWs?.readyState === WebSocket.OPEN) {
-                activeWs.send(
-                  JSON.stringify({ type: 'resize', cols: currentTerm.cols, rows: currentTerm.rows })
-                );
-              }
-              setTimeout(() => {
-                fitAddon.fit();
-              }, 50);
-            });
-          },
-          isMobile ? 100 : 50
-        );
+        resizeTimeout = setTimeout(doFit, isMobile ? 100 : 50);
       };
       window.addEventListener('resize', handleResize);
+
+      // Media query listeners for Chrome DevTools mobile toggle
+      // DevTools doesn't trigger window.resize but DOES trigger matchMedia
+      const mediaQueries = [
+        '(max-width: 640px)',
+        '(max-width: 768px)',
+        '(max-width: 1024px)',
+      ];
+      mediaQueries.forEach(query => {
+        const mq = window.matchMedia(query);
+        const handler = () => handleResize?.();
+        mq.addEventListener('change', handler);
+        mqListeners.push({ mq, handler });
+      });
 
       // Handle orientation change on mobile
       if (isMobile && 'orientation' in screen) {
@@ -434,6 +469,14 @@ export function useTerminalConnection({
           window.visualViewport.removeEventListener('resize', handleResize);
         }
       }
+
+      // Clean up media query listeners
+      mqListeners.forEach(({ mq, handler }) => {
+        mq.removeEventListener('change', handler);
+      });
+
+      // Clean up pending fit timeouts
+      fitTimeouts.forEach(clearTimeout);
 
       if (touchElement) {
         if (handleTouchStart) touchElement.removeEventListener('touchstart', handleTouchStart);
