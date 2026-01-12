@@ -43,12 +43,13 @@ export default function RootLayout({
         </Providers>
         <Toaster
           theme="dark"
-          position="bottom-right"
+          position="top-center"
           toastOptions={{
             style: {
-              background: "hsl(var(--background))",
-              border: "1px solid hsl(var(--border))",
-              color: "hsl(var(--foreground))",
+              background: "hsl(270 20% 12%)",
+              border: "1px solid hsl(270 15% 25%)",
+              color: "hsl(270 10% 95%)",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
             },
           }}
         />
