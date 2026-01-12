@@ -127,6 +127,35 @@ Conductors can spawn worker sessions with isolated worktrees:
 - Workers shown nested under conductor in sidebar with badge count
 - Terminal/Workers view toggle in Pane header for conductors
 
+## Code Style
+
+### General Rules
+- Use **TypeScript everywhere** - never use `any`
+- Keep code as simple and concise as possible unless complexity is needed
+- Break down large components into sub-components
+- Extract shared logic into hooks **only if used in multiple places**
+- In `useEffect` dependencies, be mindful that object references change on re-render; prefer primitives or memoized objects to avoid duplicate runs
+- Do not add unnecessary comments - if code is self-explanatory, don't add a comment
+- Use absolute imports: `import { X } from "@/lib/x"` not relative `../lib/x`
+
+### Component Organization
+- Components go in `components/` with subdirectories for features (e.g., `components/FileExplorer/`)
+- Shared hooks go in `hooks/`
+- Business logic goes in `lib/` as pure functions
+- API routes go in `app/api/`
+
+### API Routes
+- API routes should be **orchestrators**, not contain heavy business logic
+- Business logic should live in `lib/` modules
+- Use Zod schemas for request validation when appropriate
+- Keep routes thin: validate → call lib function → return response
+
+### React Patterns
+- Prefer functional components with hooks
+- Use `useState` for local state, context for shared state
+- Keep state as close to where it's used as possible
+- Memoize expensive computations with `useMemo`, callbacks with `useCallback`
+
 ## Standards
 
 - Conventional commits (feat, fix, docs, etc.)
