@@ -13,6 +13,7 @@ import {
   Users,
   FolderOpen,
   GitBranch,
+  Menu,
 } from "lucide-react";
 import { usePanes } from "@/contexts/PaneContext";
 import { cn } from "@/lib/utils";
@@ -42,11 +43,13 @@ interface PaneProps {
   paneId: string;
   sessions: Session[];
   onRegisterTerminal: (paneId: string, tabId: string, ref: TerminalHandle | null) => void;
+  /** Callback when menu button is clicked (mobile only) */
+  onMenuClick?: () => void;
 }
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
 
-export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
+export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, onMenuClick }: PaneProps) {
   const {
     focusedPaneId,
     canSplit,
@@ -169,6 +172,20 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
     >
       {/* Tab Bar */}
       <div className="flex items-center bg-zinc-900/80 overflow-x-auto px-1 pt-1 gap-1">
+        {/* Mobile menu button */}
+        {onMenuClick && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMenuClick();
+            }}
+            className="h-7 w-7 shrink-0"
+          >
+            <Menu className="w-4 h-4" />
+          </Button>
+        )}
         <div className="flex items-center flex-1 min-w-0 gap-0.5">
           {paneData.tabs.map((tab) => (
             <div
