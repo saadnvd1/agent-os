@@ -5,7 +5,7 @@ import { FileTree } from "./FileTree";
 import { FileViewer } from "./FileViewer";
 import { Loader2, AlertCircle, ArrowLeft, Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { FileNode } from "@/lib/files";
+import type { FileNode } from "@/lib/file-utils";
 
 interface FileExplorerProps {
   workingDirectory: string;

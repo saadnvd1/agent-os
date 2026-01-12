@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { FileNode } from "@/lib/files";
+import type { FileNode } from "@/lib/file-utils";
 
 interface FileTreeProps {
   nodes: FileNode[];
