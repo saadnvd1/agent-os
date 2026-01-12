@@ -260,3 +260,102 @@ export function getGitRoot(workingDir: string): string {
     return workingDir;
   }
 }
+
+/**
+ * Check if on main/master branch
+ */
+export function isMainBranch(workingDir: string): boolean {
+  try {
+    const branch = execSync("git branch --show-current", {
+      cwd: workingDir,
+      encoding: "utf-8",
+    }).trim();
+    return branch === "main" || branch === "master";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Create a new branch and switch to it
+ */
+export function createBranch(workingDir: string, branchName: string): void {
+  execSync(`git checkout -b "${branchName}"`, {
+    cwd: workingDir,
+    encoding: "utf-8",
+  });
+}
+
+/**
+ * Commit staged changes
+ */
+export function commit(workingDir: string, message: string): string {
+  const output = execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
+    cwd: workingDir,
+    encoding: "utf-8",
+  });
+  return output;
+}
+
+/**
+ * Push to remote
+ */
+export function push(workingDir: string, setUpstream = false): string {
+  const branch = execSync("git branch --show-current", {
+    cwd: workingDir,
+    encoding: "utf-8",
+  }).trim();
+
+  const upstreamFlag = setUpstream ? `-u origin "${branch}"` : "";
+  const output = execSync(`git push ${upstreamFlag}`, {
+    cwd: workingDir,
+    encoding: "utf-8",
+  });
+  return output;
+}
+
+/**
+ * Check if branch has upstream
+ */
+export function hasUpstream(workingDir: string): boolean {
+  try {
+    execSync("git rev-parse --abbrev-ref @{upstream}", {
+      cwd: workingDir,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get remote URL
+ */
+export function getRemoteUrl(workingDir: string): string | null {
+  try {
+    return execSync("git remote get-url origin", {
+      cwd: workingDir,
+      encoding: "utf-8",
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get the default branch name (main or master)
+ */
+export function getDefaultBranch(workingDir: string): string {
+  try {
+    // Try to get from remote
+    const output = execSync(
+      "git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo 'refs/heads/main'",
+      { cwd: workingDir, encoding: "utf-8" }
+    ).trim();
+    return output.replace("refs/remotes/origin/", "").replace("refs/heads/", "");
+  } catch {
+    return "main";
+  }
+}

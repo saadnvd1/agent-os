@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FileChanges } from "./FileChanges";
+import { CommitForm } from "./CommitForm";
 import type { GitStatus, GitFile } from "@/lib/git-status";
 
 interface GitPanelProps {
@@ -258,12 +259,23 @@ export function GitPanel({ workingDirectory, onFileSelect }: GitPanelProps) {
         )}
       </div>
 
+      {/* Commit form */}
+      <CommitForm
+        workingDirectory={workingDirectory}
+        stagedCount={status.staged.length}
+        isOnMainBranch={status.branch === "main" || status.branch === "master"}
+        branch={status.branch}
+        onCommit={fetchStatus}
+      />
+
       {/* Mobile hint */}
-      <div className="md:hidden px-3 py-2 border-t border-border">
-        <p className="text-xs text-muted-foreground text-center">
-          Swipe right to stage, left to unstage
-        </p>
-      </div>
+      {hasChanges && status.staged.length === 0 && (
+        <div className="md:hidden px-3 py-2 border-t border-border">
+          <p className="text-xs text-muted-foreground text-center">
+            Swipe right to stage, left to unstage
+          </p>
+        </div>
+      )}
     </div>
   );
 }
