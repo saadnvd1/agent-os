@@ -135,8 +135,8 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
   const tmuxSessionName = `${provider.id}-${sessionId}`;
   const cwd = actualWorkingDir.replace("~", "$HOME");
 
-  // Build the initial prompt command
-  const flags = provider.buildFlags({ model });
+  // Build the initial prompt command (workers use auto-approve by default for automation)
+  const flags = provider.buildFlags({ model, autoApprove: true });
   const flagsStr = flags.join(" ");
 
   // Create tmux session with the agent and send the task

@@ -20,6 +20,7 @@ import {
 import { Plus, GitBranch, Loader2 } from "lucide-react";
 import type { Group } from "@/lib/db";
 import type { AgentType } from "@/lib/providers";
+import { getProviderDefinition } from "@/lib/providers";
 
 const SKIP_PERMISSIONS_KEY = "agentOS:skipPermissions";
 const AGENT_TYPE_KEY = "agentOS:defaultAgentType";
@@ -186,6 +187,7 @@ export function NewSessionDialog({
           useWorktree,
           featureName: useWorktree ? featureName.trim() : null,
           baseBranch: useWorktree ? baseBranch : null,
+          autoApprove: skipPermissions,
         }),
       });
 
@@ -430,14 +432,15 @@ export function NewSessionDialog({
               className="h-4 w-4 rounded border-border bg-background accent-primary"
             />
             <label htmlFor="skipPermissions" className="text-sm cursor-pointer">
-              Skip permission prompts
+              Auto-approve tool calls
               <span className="text-muted-foreground ml-1">
-                {agentType === "claude" && "(--dangerously-skip-permissions)"}
-                {agentType === "codex" && "(--approval-mode full-auto)"}
-                {agentType === "opencode" && "(via config)"}
-                {agentType === "gemini" && "(not supported)"}
-                {agentType === "aider" && "(--yes)"}
-                {agentType === "cursor" && "(not supported)"}
+                {(() => {
+                  const provider = getProviderDefinition(agentType);
+                  if (provider.autoApproveFlag) {
+                    return `(${provider.autoApproveFlag})`;
+                  }
+                  return "(not supported)";
+                })()}
               </span>
             </label>
           </div>
