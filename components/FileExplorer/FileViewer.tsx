@@ -7,7 +7,7 @@ import { Copy, Check, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { getLanguageFromExtension } from "@/lib/files";
+import { getLanguageFromExtension } from "@/lib/file-utils";
 
 interface FileViewerProps {
   content: string;

@@ -47,6 +47,9 @@
 
 :root {
   --radius: 0.625rem;
+  /* Mobile viewport height - JS hook sets this dynamically for keyboard */
+  --app-height: 100vh;
+  --app-height: 100dvh;
   --background: hsl(270 20% 8%);
   --foreground: hsl(270 10% 95%);
   --card: hsl(270 15% 12%);
@@ -87,32 +90,81 @@
   body {
     @apply bg-background text-foreground;
   }
+}
 
-  /* Mobile optimizations */
-  @media (max-width: 767px) {
-    html {
-      /* Disable pull-to-refresh */
-      overscroll-behavior-y: none;
-    }
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE LAYOUT STYLES
+   ═══════════════════════════════════════════════════════════════════════ */
 
-    body {
-      /* Support safe area insets for notch/home indicator */
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
+/* Prevent iOS bounce/overscroll on mobile */
+html, body {
+  overscroll-behavior: none;
+}
 
-      /* Prevent bounce scroll */
-      overscroll-behavior-y: none;
+@media (max-width: 767px) {
+  /* Prevent text size adjustment on orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
 
-      /* Prevent text size adjustment on orientation change */
-      -webkit-text-size-adjust: 100%;
-    }
+  /* Disable text selection highlight on touch */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Allow scrolling in specific containers */
+  .mobile-scroll {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Touch-friendly active states */
+  .touch-active:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+
+  /* Mobile viewport height utilities */
+  .h-screen-safe {
+    height: 100vh;
+    height: 100dvh;
   }
 }
 
-/* Prevent page scrolling on terminal touch */
-.xterm-viewport,
-.xterm-screen,
-.xterm {
-  touch-action: none;
-  -webkit-overflow-scrolling: auto;
+/* Hide scrollbar utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area padding utilities */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Mobile keyboard viewport handling */
+/* h-app uses --app-height which is set dynamically by useViewportHeight hook */
+.h-app {
+  height: var(--app-height, 100vh);
+}
+
+.min-h-app {
+  min-height: var(--app-height, 100vh);
+}
+
+.max-h-app {
+  max-height: var(--app-height, 100vh);
+}
+
+/* Ensure terminal container respects visual viewport */
+@media (max-width: 767px) {
+  .terminal-container {
+    height: 100%;
+    max-height: calc(100vh - env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
 }

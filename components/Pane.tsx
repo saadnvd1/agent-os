@@ -11,17 +11,30 @@ import {
   Plus,
   Terminal as TerminalIcon,
   Users,
+  FolderOpen,
+  GitBranch,
 } from "lucide-react";
 import { usePanes } from "@/contexts/PaneContext";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { TerminalHandle } from "@/components/Terminal";
+import type { TerminalHandle, TerminalScrollState } from "@/components/Terminal";
 import type { Session } from "@/lib/db";
+import { sessionRegistry } from "@/lib/client/session-registry";
 import { ConductorPanel } from "./ConductorPanel";
 
-// Dynamic import for Terminal (client-only)
+// Dynamic imports for client-only components
 const Terminal = dynamic(
   () => import("@/components/Terminal").then((mod) => mod.Terminal),
+  { ssr: false }
+);
+
+const FileExplorer = dynamic(
+  () => import("@/components/FileExplorer").then((mod) => mod.FileExplorer),
+  { ssr: false }
+);
+
+const GitPanel = dynamic(
+  () => import("@/components/GitPanel").then((mod) => mod.GitPanel),
   { ssr: false }
 );
 
@@ -31,7 +44,7 @@ interface PaneProps {
   onRegisterTerminal: (paneId: string, tabId: string, ref: TerminalHandle | null) => void;
 }
 
-type ViewMode = "terminal" | "workers";
+type ViewMode = "terminal" | "files" | "git" | "workers";
 
 export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }: PaneProps) {
   const {
@@ -64,6 +77,32 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
   }, [session, sessions]);
 
   const isConductor = workerCount > 0;
+
+  // Get saved scroll state for current tab
+  const initialScrollState = useMemo(() => {
+    if (!activeTab?.id) return undefined;
+    const saved = sessionRegistry.getTerminalState(paneId, activeTab.id);
+    if (saved) {
+      return {
+        scrollTop: saved.scrollTop,
+        cursorY: saved.cursorY,
+        baseY: 0, // baseY not stored in registry
+      } as TerminalScrollState;
+    }
+    return undefined;
+  }, [paneId, activeTab?.id]);
+
+  // Save scroll state when terminal unmounts
+  const handleBeforeUnmount = useCallback((scrollState: TerminalScrollState) => {
+    if (activeTab?.id) {
+      sessionRegistry.saveTerminalState(paneId, activeTab.id, {
+        scrollTop: scrollState.scrollTop,
+        scrollHeight: 0,
+        lastActivity: Date.now(),
+        cursorY: scrollState.cursorY,
+      });
+    }
+  }, [paneId, activeTab?.id]);
 
   // Reset view mode when session changes
   useEffect(() => {
@@ -177,8 +216,8 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
           </Tooltip>
         </div>
 
-        {/* View Toggle for Conductors */}
-        {isConductor && (
+        {/* View Toggle - show for sessions with working directory */}
+        {session?.working_directory && (
           <div className="flex items-center bg-zinc-800/50 rounded-md p-0.5 mx-2">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -195,34 +234,76 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
                   )}
                 >
                   <TerminalIcon className="w-3 h-3" />
-                  <span className="hidden sm:inline">Terminal</span>
+                  <span className="hidden sm:inline">Term</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Terminal view</TooltipContent>
+              <TooltipContent>Terminal</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setViewMode("workers");
+                    setViewMode("files");
                   }}
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
-                    viewMode === "workers"
+                    viewMode === "files"
                       ? "bg-zinc-700 text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Users className="w-3 h-3" />
-                  <span className="hidden sm:inline">Workers</span>
-                  <span className="text-[10px] bg-primary/20 text-primary px-1 rounded">
-                    {workerCount}
-                  </span>
+                  <FolderOpen className="w-3 h-3" />
+                  <span className="hidden sm:inline">Files</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>View workers</TooltipContent>
+              <TooltipContent>File explorer</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewMode("git");
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                    viewMode === "git"
+                      ? "bg-zinc-700 text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <GitBranch className="w-3 h-3" />
+                  <span className="hidden sm:inline">Git</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Git status</TooltipContent>
+            </Tooltip>
+            {isConductor && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewMode("workers");
+                    }}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                      viewMode === "workers"
+                        ? "bg-zinc-700 text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Users className="w-3 h-3" />
+                    <span className="hidden sm:inline">Workers</span>
+                    <span className="text-[10px] bg-primary/20 text-primary px-1 rounded">
+                      {workerCount}
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>View workers</TooltipContent>
+              </Tooltip>
+            )}
           </div>
         )}
 
@@ -301,8 +382,28 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 min-h-0 touch-none">
-        {viewMode === "workers" && session ? (
+      <div className="flex-1 min-h-0">
+        {viewMode === "terminal" && (
+          <Terminal
+            key={activeTab?.id}
+            ref={terminalRef}
+            onConnected={handleTerminalConnected}
+            onDisconnected={() => {}}
+            onBeforeUnmount={handleBeforeUnmount}
+            initialScrollState={initialScrollState}
+          />
+        )}
+        {viewMode === "files" && session?.working_directory && (
+          <FileExplorer
+            workingDirectory={session.working_directory}
+          />
+        )}
+        {viewMode === "git" && session?.working_directory && (
+          <GitPanel
+            workingDirectory={session.working_directory}
+          />
+        )}
+        {viewMode === "workers" && session && (
           <ConductorPanel
             conductorSessionId={session.id}
             onAttachToWorker={(workerId) => {
@@ -320,13 +421,6 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal }:
                 }, 100);
               }
             }}
-          />
-        ) : (
-          <Terminal
-            key={activeTab?.id}
-            ref={terminalRef}
-            onConnected={handleTerminalConnected}
-            onDisconnected={() => {}}
           />
         )}
       </div>
