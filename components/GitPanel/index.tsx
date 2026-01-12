@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { FileChanges } from "./FileChanges";
 import { CommitForm } from "./CommitForm";
+import { PRCreationModal } from "@/components/PRCreationModal";
 import type { GitStatus, GitFile } from "@/lib/git-status";
 
 interface GitPanelProps {
@@ -26,6 +27,7 @@ export function GitPanel({ workingDirectory, onFileSelect }: GitPanelProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showPRModal, setShowPRModal] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -266,6 +268,7 @@ export function GitPanel({ workingDirectory, onFileSelect }: GitPanelProps) {
         isOnMainBranch={status.branch === "main" || status.branch === "master"}
         branch={status.branch}
         onCommit={fetchStatus}
+        onCreatePR={() => setShowPRModal(true)}
       />
 
       {/* Mobile hint */}
@@ -275,6 +278,14 @@ export function GitPanel({ workingDirectory, onFileSelect }: GitPanelProps) {
             Swipe right to stage, left to unstage
           </p>
         </div>
+      )}
+
+      {/* PR Creation Modal */}
+      {showPRModal && (
+        <PRCreationModal
+          workingDirectory={workingDirectory}
+          onClose={() => setShowPRModal(false)}
+        />
       )}
     </div>
   );
