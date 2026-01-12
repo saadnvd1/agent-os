@@ -5,20 +5,19 @@ import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { Button } from "@/components/ui/button";
-import { PanelLeftClose, PanelLeft, Plus, Bell, Copy, Check } from "lucide-react";
+import { PanelLeftClose, PanelLeft, Plus, Bell, Copy, Check, Command } from "lucide-react";
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { PaneLayout } from "@/components/PaneLayout";
 import { Pane } from "@/components/Pane";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewport } from "@/hooks/useViewport";
+import { useViewportHeight } from "@/hooks/useViewportHeight";
 import type { Session, Group } from "@/lib/db";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
 import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
-import { BottomNav } from "@/components/mobile/BottomNav";
-import { FloatingActionButton } from "@/components/mobile/FloatingActionButton";
-import { cn } from "@/lib/utils";
+import { QuickSwitcher } from "@/components/QuickSwitcher";
 
 interface SessionStatus {
   sessionName: string;
@@ -43,6 +42,7 @@ function HomeContent() {
   const [otherTmuxSessions, setOtherTmuxSessions] = useState<OtherTmuxSession[]>([]);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const updatedSessionIds = useRef<Set<string>>(new Set());
 
@@ -50,6 +50,9 @@ function HomeContent() {
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const { isMobile } = useViewport();
+
+  // Set CSS variable for viewport height (handles mobile keyboard)
+  useViewportHeight();
 
   // Callback for notification clicks - needs to be defined before useNotifications
   const handleNotificationClick = useCallback((sessionId: string) => {
@@ -181,6 +184,18 @@ function HomeContent() {
     const interval = setInterval(fetchSessions, 10000);
     return () => clearInterval(interval);
   }, [fetchSessions]);
+
+  // Keyboard shortcut: Cmd+K to open quick switcher
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShowQuickSwitcher(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Memoized pane renderer to prevent unnecessary re-renders
   const renderPane = useCallback((paneId: string) => (
@@ -505,24 +520,65 @@ function HomeContent() {
     />
   );
 
-  return (
-    <div className="flex h-[100dvh] bg-background">
-      {/* Mobile Sidebar */}
-      {isMobile ? (
+  // Mobile layout - fullscreen terminal with swipe sidebar
+  if (isMobile) {
+    return (
+      <main className="h-screen-safe flex flex-col overflow-hidden bg-background">
+        {/* Swipe sidebar */}
         <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
           {sessionListContent}
         </SwipeSidebar>
-      ) : (
-        /* Desktop Sidebar */
-        <div
-          className={`
-            ${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 transition-all duration-200 overflow-hidden
-            shadow-xl shadow-black/30 bg-background
-          `}
-        >
-          {sessionListContent}
+
+        {/* Terminal fills the screen */}
+        <div className="flex-1 min-h-0">
+          <PaneLayout renderPane={renderPane} />
         </div>
-      )}
+
+        {/* Dialogs */}
+        <NewSessionDialog
+          open={showNewSessionDialog}
+          groups={groups}
+          onClose={() => setShowNewSessionDialog(false)}
+          onCreated={(id) => {
+            setShowNewSessionDialog(false);
+            fetchSessions().then(() => {
+              fetch(`/api/sessions/${id}`)
+                .then((res) => res.json())
+                .then((data) => {
+                  if (data.session) attachToSession(data.session);
+                });
+            });
+          }}
+          onCreateGroup={async (name) => {
+            await handleCreateGroup(name);
+          }}
+        />
+        <QuickSwitcher
+          sessions={sessions}
+          open={showQuickSwitcher}
+          onOpenChange={setShowQuickSwitcher}
+          currentSessionId={focusedActiveTab?.sessionId ?? undefined}
+          onSelectSession={(sessionId) => {
+            const session = sessions.find((s) => s.id === sessionId);
+            if (session) attachToSession(session);
+          }}
+        />
+      </main>
+    );
+  }
+
+  // Desktop layout - sidebar + header + terminal
+  return (
+    <div className="flex h-screen-safe overflow-hidden bg-background">
+      {/* Desktop Sidebar */}
+      <div
+        className={`
+          ${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 transition-all duration-200 overflow-hidden
+          shadow-xl shadow-black/30 bg-background
+        `}
+      >
+        {sessionListContent}
+      </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -578,6 +634,21 @@ function HomeContent() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setShowQuickSwitcher(true)}
+                >
+                  <Command className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Quick switch</p>
+                <p className="text-xs text-muted-foreground">⌘K</p>
+              </TooltipContent>
+            </Tooltip>
             <NotificationSettings
               open={showNotificationSettings}
               onOpenChange={setShowNotificationSettings}
@@ -594,69 +665,52 @@ function HomeContent() {
               }}
             />
             <Button size="sm" onClick={() => setShowNewSessionDialog(true)}>
-              <Plus className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">New Session</span>
+              <Plus className="w-4 h-4 mr-1" />
+              New Session
             </Button>
           </div>
         </header>
 
-        {/* New Session Dialog */}
-        <NewSessionDialog
-          open={showNewSessionDialog}
-          groups={groups}
-          onClose={() => setShowNewSessionDialog(false)}
-          onCreated={(id) => {
-            setShowNewSessionDialog(false);
-            const session = sessions.find((s) => s.id === id);
-            if (session) {
-              attachToSession(session);
-            } else {
-              // Session was just created, refetch and then attach
-              fetchSessions().then(() => {
-                // We need to get the session from the API since it's new
-                fetch(`/api/sessions/${id}`)
-                  .then((res) => res.json())
-                  .then((data) => {
-                    if (data.session) attachToSession(data.session);
-                  });
-              });
-            }
-          }}
-          onCreateGroup={async (name) => {
-            await handleCreateGroup(name);
-          }}
-        />
-
         {/* Pane Layout */}
-        <div className={cn(
-          "flex-1 min-h-0 p-2",
-          isMobile && "pb-20" // Extra padding for bottom nav on mobile
-        )}>
-          <PaneLayout
-            renderPane={renderPane}
-          />
+        <div className="flex-1 min-h-0 p-2">
+          <PaneLayout renderPane={renderPane} />
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      {isMobile && (
-        <BottomNav
-          sessions={sessions}
-          activeSessionId={focusedActiveTab?.sessionId || null}
-          onSessionClick={(id) => {
-            const session = sessions.find(s => s.id === id);
-            if (session) attachToSession(session);
-          }}
-          onNewSession={() => setShowNewSessionDialog(true)}
-        />
-      )}
-
-      {/* Mobile Floating Action Button (alternative to bottom nav new button) */}
-      {/* Commented out - using bottom nav new button instead
-      {isMobile && (
-        <FloatingActionButton onClick={() => setShowNewSessionDialog(true)} />
-      )}
-      */}
+      {/* Dialogs */}
+      <NewSessionDialog
+        open={showNewSessionDialog}
+        groups={groups}
+        onClose={() => setShowNewSessionDialog(false)}
+        onCreated={(id) => {
+          setShowNewSessionDialog(false);
+          const session = sessions.find((s) => s.id === id);
+          if (session) {
+            attachToSession(session);
+          } else {
+            fetchSessions().then(() => {
+              fetch(`/api/sessions/${id}`)
+                .then((res) => res.json())
+                .then((data) => {
+                  if (data.session) attachToSession(data.session);
+                });
+            });
+          }
+        }}
+        onCreateGroup={async (name) => {
+          await handleCreateGroup(name);
+        }}
+      />
+      <QuickSwitcher
+        sessions={sessions}
+        open={showQuickSwitcher}
+        onOpenChange={setShowQuickSwitcher}
+        currentSessionId={focusedActiveTab?.sessionId ?? undefined}
+        onSelectSession={(sessionId) => {
+          const session = sessions.find((s) => s.id === sessionId);
+          if (session) attachToSession(session);
+        }}
+      />
     </div>
   );
 }
