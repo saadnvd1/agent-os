@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { useRef, forwardRef, useImperativeHandle } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { SearchBar } from './SearchBar';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
@@ -47,7 +47,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     focus,
     getScrollState,
     restoreScrollState,
-    triggerResize,
   } = useTerminalConnection({
     terminalRef,
     onConnected,
@@ -76,20 +75,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     restoreScrollState,
   }));
 
-  // Trigger terminal resize when keybar visibility changes (mobile only)
-  // Preserve scroll position to avoid jarring jumps
-  useEffect(() => {
-    if (!isMobile) return;
-    const scrollState = getScrollState();
-    const timer = setTimeout(() => {
-      triggerResize();
-      // Restore scroll position after resize
-      if (scrollState) {
-        restoreScrollState(scrollState);
-      }
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [keybarVisible, isMobile, triggerResize, getScrollState, restoreScrollState]);
+  // NOTE: We intentionally do NOT resize the terminal when keybar visibility changes.
+  // Resizing causes xterm to recalculate rows which scrolls the viewport.
+  // The flex container handles the visual shrink/grow - xterm just clips at the bottom.
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
