@@ -31,6 +31,7 @@ export function SessionList({
   activeSessionId,
   sessionStatuses,
   onSelect,
+  onOpenInTab,
   onNewSessionInProject,
   onStartDevServer,
   onCreateDevServer,
@@ -145,6 +146,7 @@ export function SessionList({
                 onRenameProject={mutations.handleRenameProject}
                 onNewSession={onNewSessionInProject}
                 onSelectSession={onSelect}
+                onOpenSessionInTab={onOpenInTab}
                 onMoveSession={mutations.handleMoveSessionToProject}
                 onForkSession={mutations.handleForkSession}
                 onSummarize={mutations.handleSummarize}

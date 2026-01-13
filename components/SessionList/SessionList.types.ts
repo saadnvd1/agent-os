@@ -10,6 +10,7 @@ export interface SessionListProps {
   activeSessionId?: string;
   sessionStatuses?: Record<string, SessionStatus>;
   onSelect: (sessionId: string) => void;
+  onOpenInTab?: (sessionId: string) => void;
   onNewSessionInProject?: (projectId: string) => void;
   onStartDevServer?: (projectId: string) => void;
   onCreateDevServer?: (opts: {

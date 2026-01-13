@@ -48,7 +48,7 @@ function HomeContent() {
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
 
   // Pane context
-  const { focusedPaneId, attachSession, getActiveTab } = usePanes();
+  const { focusedPaneId, attachSession, getActiveTab, addTab } = usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const { isMobile } = useViewport();
 
@@ -175,6 +175,74 @@ function HomeContent() {
     }, isInTmux ? 100 : 0);
   }, [getTerminalWithFallback, attachSession, sessions, getInitScriptCommand, getActiveTab]);
 
+  // Open session in new tab
+  const openSessionInNewTab = useCallback((session: Session) => {
+    // Snapshot existing terminal keys before adding new tab
+    const existingKeys = new Set(terminalRefs.current.keys());
+
+    // Add a new tab (which becomes active)
+    addTab(focusedPaneId);
+
+    // Poll for a NEW terminal to appear in this pane
+    let attempts = 0;
+    const maxAttempts = 20; // 20 * 50ms = 1 second max wait
+
+    const waitForNewTerminal = () => {
+      attempts++;
+
+      // Find a terminal key that didn't exist before (in the focused pane)
+      for (const key of terminalRefs.current.keys()) {
+        if (!existingKeys.has(key) && key.startsWith(`${focusedPaneId}:`)) {
+          // Found the new terminal! Now attach the session using it directly
+          const terminal = terminalRefs.current.get(key);
+          if (terminal) {
+            const provider = getProvider(session.agent_type || "claude");
+            const sessionName = `${provider.id}-${session.id}`;
+            const cwd = session.working_directory?.replace("~", "$HOME") || "$HOME";
+
+            // Ensure MCP config exists
+            fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
+
+            // Get parent session ID for forking
+            let parentSessionId: string | null = null;
+            if (!session.claude_session_id && session.parent_session_id) {
+              const parentSession = sessions.find(s => s.id === session.parent_session_id);
+              parentSessionId = parentSession?.claude_session_id || null;
+            }
+
+            const flags = provider.buildFlags({
+              sessionId: session.claude_session_id,
+              parentSessionId,
+              autoApprove: session.auto_approve,
+              model: session.model,
+            });
+            const flagsStr = flags.join(" ");
+
+            // Run tmux command in the new terminal
+            (async () => {
+              const agentCmd = `${provider.command} ${flagsStr}`;
+              const newSessionCmd = await getInitScriptCommand(agentCmd);
+              terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
+              attachSession(focusedPaneId, session.id, sessionName);
+              terminal.focus();
+            })();
+            return;
+          }
+        }
+      }
+
+      // Keep polling if new terminal not found yet
+      if (attempts < maxAttempts) {
+        setTimeout(waitForNewTerminal, 50);
+      } else {
+        debugLog(`Failed to find new terminal after ${maxAttempts} attempts`);
+      }
+    };
+
+    // Start polling after initial delay for React to process state update
+    setTimeout(waitForNewTerminal, 50);
+  }, [addTab, focusedPaneId, attachSession, sessions, getInitScriptCommand]);
+
   // Notification click handler
   const handleNotificationClick = useCallback((sessionId: string) => {
     const session = sessions.find(s => s.id === sessionId);
@@ -279,6 +347,7 @@ function HomeContent() {
     updateSettings,
     requestPermission,
     attachToSession,
+    openSessionInNewTab,
     fetchSessions,
     fetchProjects,
     handleNewSessionInProject,

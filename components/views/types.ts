@@ -38,6 +38,7 @@ export interface ViewProps {
 
   // Handlers
   attachToSession: (session: Session) => void;
+  openSessionInNewTab: (session: Session) => void;
   fetchSessions: () => Promise<void>;
   fetchProjects: () => Promise<void>;
   handleNewSessionInProject: (projectId: string) => void;
