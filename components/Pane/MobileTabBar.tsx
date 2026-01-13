@@ -3,6 +3,12 @@
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Menu,
   ChevronLeft,
   ChevronRight,
@@ -10,9 +16,12 @@ import {
   FolderOpen,
   GitBranch,
   Users,
+  ChevronDown,
+  Circle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session, Project } from "@/lib/db";
+import type { TabData } from "@/lib/panes";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
 
@@ -20,24 +29,30 @@ interface MobileTabBarProps {
   session: Session | null | undefined;
   sessions: Session[];
   projects: Project[];
+  tabs: TabData[];
+  activeTabId: string;
   viewMode: ViewMode;
   isConductor: boolean;
   workerCount: number;
   onMenuClick?: () => void;
   onViewModeChange: (mode: ViewMode) => void;
   onSelectSession: (sessionId: string) => void;
+  onTabSwitch: (tabId: string) => void;
 }
 
 export function MobileTabBar({
   session,
   sessions,
   projects,
+  tabs,
+  activeTabId,
   viewMode,
   isConductor,
   workerCount,
   onMenuClick,
   onViewModeChange,
   onSelectSession,
+  onTabSwitch,
 }: MobileTabBarProps) {
   // Find current session index and calculate prev/next
   const currentIndex = session ? sessions.findIndex(s => s.id === session.id) : -1;
@@ -104,7 +119,7 @@ export function MobileTabBar({
         </Button>
       )}
 
-      {/* Session navigation */}
+      {/* Session/Tab navigation */}
       <div className="flex items-center gap-1 flex-1 min-w-0">
         <button
           type="button"
@@ -116,12 +131,62 @@ export function MobileTabBar({
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        <span className="flex-1 text-sm font-medium truncate text-center">
-          {session?.name || "No session"}
-          {projectName && projectName !== "Uncategorized" && (
-            <span className="text-muted-foreground font-normal"> [{projectName}]</span>
+        {/* Tab selector dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1 rounded-md hover:bg-accent"
+            >
+              <span className="text-sm font-medium truncate">
+                {session?.name || "No session"}
+                {projectName && projectName !== "Uncategorized" && (
+                  <span className="text-muted-foreground font-normal"> [{projectName}]</span>
+                )}
+              </span>
+              {tabs.length > 1 && (
+                <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          {tabs.length > 1 && (
+            <DropdownMenuContent align="center" className="max-h-[300px] overflow-y-auto">
+              {tabs.map((tab, index) => {
+                const tabSession = tab.sessionId
+                  ? sessions.find(s => s.id === tab.sessionId)
+                  : null;
+                const tabProject = tabSession?.project_id
+                  ? projects.find(p => p.id === tabSession.project_id)
+                  : null;
+                const isActive = tab.id === activeTabId;
+
+                return (
+                  <DropdownMenuItem
+                    key={tab.id}
+                    onClick={() => onTabSwitch(tab.id)}
+                    className={cn(
+                      "flex items-center gap-2",
+                      isActive && "bg-accent"
+                    )}
+                  >
+                    <Circle className={cn(
+                      "w-2 h-2",
+                      isActive ? "fill-primary text-primary" : "text-muted-foreground"
+                    )} />
+                    <span className="truncate">
+                      {tabSession?.name || `Tab ${index + 1}`}
+                    </span>
+                    {tabProject && tabProject.name !== "Uncategorized" && (
+                      <span className="text-xs text-muted-foreground">
+                        [{tabProject.name}]
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
           )}
-        </span>
+        </DropdownMenu>
 
         <button
           type="button"
