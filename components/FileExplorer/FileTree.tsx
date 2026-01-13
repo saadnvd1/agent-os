@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from "lucide-react";
+import { useState, useCallback } from "react";
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FileNode } from "@/lib/file-utils";
 
@@ -15,11 +15,37 @@ interface FileTreeProps {
 /**
  * Recursive file tree component
  * Mobile-optimized with larger touch targets
+ * Lazily loads directory contents when expanded
  */
 export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [loadedChildren, setLoadedChildren] = useState<Map<string, FileNode[]>>(new Map());
+  const [loadingDirs, setLoadingDirs] = useState<Set<string>>(new Set());
 
-  const toggleExpand = (path: string) => {
+  const fetchChildren = useCallback(async (dirPath: string) => {
+    if (loadedChildren.has(dirPath)) return;
+
+    setLoadingDirs(prev => new Set(prev).add(dirPath));
+    try {
+      const res = await fetch(`/api/files?path=${encodeURIComponent(dirPath)}`);
+      const data = await res.json();
+      if (data.files) {
+        setLoadedChildren(prev => new Map(prev).set(dirPath, data.files));
+      }
+    } catch (err) {
+      console.error("Failed to load directory:", err);
+    } finally {
+      setLoadingDirs(prev => {
+        const next = new Set(prev);
+        next.delete(dirPath);
+        return next;
+      });
+    }
+  }, [loadedChildren]);
+
+  const toggleExpand = useCallback(async (path: string) => {
+    const isCurrentlyExpanded = expanded.has(path);
+
     setExpanded(prev => {
       const next = new Set(prev);
       if (next.has(path)) {
@@ -29,13 +55,20 @@ export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreePr
       }
       return next;
     });
-  };
+
+    // Fetch children if expanding and not already loaded
+    if (!isCurrentlyExpanded && !loadedChildren.has(path)) {
+      await fetchChildren(path);
+    }
+  }, [expanded, loadedChildren, fetchChildren]);
 
   return (
     <div className="w-full">
       {nodes.map((node) => {
         const isExpanded = expanded.has(node.path);
         const isDirectory = node.type === "directory";
+        const isLoading = loadingDirs.has(node.path);
+        const children = loadedChildren.get(node.path) || node.children;
 
         return (
           <div key={node.path}>
@@ -58,7 +91,9 @@ export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreePr
               {/* Expand/collapse icon */}
               {isDirectory && (
                 <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                  {isExpanded ? (
+                  {isLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                  ) : isExpanded ? (
                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
                   ) : (
                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -96,9 +131,9 @@ export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreePr
             </button>
 
             {/* Children (if expanded) */}
-            {isDirectory && isExpanded && node.children && (
+            {isDirectory && isExpanded && children && children.length > 0 && (
               <FileTree
-                nodes={node.children}
+                nodes={children}
                 basePath={basePath}
                 onFileClick={onFileClick}
                 depth={depth + 1}

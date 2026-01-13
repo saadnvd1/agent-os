@@ -2,7 +2,7 @@
  * File system utilities for file explorer (server-only)
  */
 
-import { readdirSync, statSync, readFileSync } from "fs";
+import { readdirSync, statSync, readFileSync, writeFileSync } from "fs";
 import { join, extname } from "path";
 
 // Re-export client-safe types and utilities
@@ -170,6 +170,35 @@ export function readFileContent(
     };
   } catch (error) {
     throw new Error(`Failed to read file: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+
+/**
+ * Write content to a file
+ */
+export function writeFileContent(
+  filePath: string,
+  content: string,
+  options: { maxSize?: number } = {}
+): { success: boolean; size: number } {
+  const { maxSize = 1024 * 1024 } = options; // Default 1MB max
+
+  const contentBuffer = Buffer.from(content, "utf-8");
+
+  if (contentBuffer.length > maxSize) {
+    throw new Error(
+      `Content too large (${(contentBuffer.length / 1024 / 1024).toFixed(2)}MB). Maximum size: ${(maxSize / 1024 / 1024).toFixed(2)}MB`
+    );
+  }
+
+  try {
+    writeFileSync(filePath, content, "utf-8");
+    return {
+      success: true,
+      size: contentBuffer.length,
+    };
+  } catch (error) {
+    throw new Error(`Failed to write file: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 }
 
