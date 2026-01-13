@@ -101,8 +101,6 @@ export function MobileTabBar({
     <div
       className="flex items-center px-2 py-1.5 gap-2 bg-muted"
       onClick={(e) => e.stopPropagation()}
-      onTouchStart={(e) => e.stopPropagation()}
-      onTouchEnd={(e) => e.stopPropagation()}
     >
       {/* Menu button */}
       {onMenuClick && (
@@ -144,13 +142,10 @@ export function MobileTabBar({
                   <span className="text-muted-foreground font-normal"> [{projectName}]</span>
                 )}
               </span>
-              {tabs.length > 1 && (
-                <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
-              )}
+              <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
-          {tabs.length > 1 && (
-            <DropdownMenuContent align="center" className="max-h-[300px] overflow-y-auto">
+          <DropdownMenuContent align="center" className="max-h-[300px] overflow-y-auto">
               {tabs.map((tab, index) => {
                 const tabSession = tab.sessionId
                   ? sessions.find(s => s.id === tab.sessionId)
@@ -185,7 +180,6 @@ export function MobileTabBar({
                 );
               })}
             </DropdownMenuContent>
-          )}
         </DropdownMenu>
 
         <button
