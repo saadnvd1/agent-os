@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, RotateCcw } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ANSI escape sequences
@@ -37,8 +37,6 @@ interface VirtualKeyboardProps {
   onKeyPress: (key: string) => void;
   onImagePick?: () => void;
   visible?: boolean;
-  recentCommands?: string[];
-  onCommandSelect?: (command: string) => void;
 }
 
 interface KeyProps {
@@ -52,6 +50,52 @@ function haptic() {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     navigator.vibrate(5);
   }
+}
+
+// Hook for key repeat on hold (like native keyboard backspace)
+function useKeyRepeat(onKeyPress: () => void) {
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const repeatCountRef = useRef(0);
+
+  const startRepeat = useCallback(() => {
+    // Immediate first press
+    haptic();
+    onKeyPress();
+    repeatCountRef.current = 0;
+
+    // Start repeating after initial delay (like native keyboard)
+    timeoutRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(() => {
+        haptic();
+        onKeyPress();
+        repeatCountRef.current++;
+
+        // Accelerate after a few repeats
+        if (repeatCountRef.current === 5 && intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = setInterval(() => {
+            haptic();
+            onKeyPress();
+          }, 30); // Fast repeat
+        }
+      }, 75); // Initial repeat speed
+    }, 200); // Initial delay before repeat starts
+  }, [onKeyPress]);
+
+  const stopRepeat = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    repeatCountRef.current = 0;
+  }, []);
+
+  return { startRepeat, stopRepeat };
 }
 
 function Key({ char, onPress, className }: KeyProps) {
@@ -73,26 +117,38 @@ function Key({ char, onPress, className }: KeyProps) {
   );
 }
 
-// Recent commands bar component
-function RecentCommandsBar({
-  commands,
-  onSelect
+// Terminal shortcuts bar - common keys for terminal interaction
+function TerminalShortcutsBar({
+  onKeyPress,
 }: {
-  commands: string[];
-  onSelect: (cmd: string) => void;
+  onKeyPress: (key: string) => void;
 }) {
-  if (!commands || commands.length === 0) return null;
+  const shortcuts = [
+    { label: 'Esc', key: SPECIAL_KEYS.ESC },
+    { label: '^C', key: SPECIAL_KEYS.CTRL_C, highlight: true },
+    { label: 'Tab', key: SPECIAL_KEYS.TAB },
+    { label: '^D', key: SPECIAL_KEYS.CTRL_D },
+    { label: '^Z', key: SPECIAL_KEYS.CTRL_Z },
+    { label: '^L', key: SPECIAL_KEYS.CTRL_L },
+    { label: '↑', key: SPECIAL_KEYS.UP },
+    { label: '↓', key: SPECIAL_KEYS.DOWN },
+  ];
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 overflow-x-auto scrollbar-none">
-      <RotateCcw className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-      {commands.map((cmd, i) => (
+    <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none">
+      {shortcuts.map((shortcut) => (
         <button
-          key={`${cmd}-${i}`}
-          onClick={() => { haptic(); onSelect(cmd); }}
-          className="flex-shrink-0 px-3 py-1.5 rounded-full bg-secondary text-xs text-secondary-foreground active:bg-primary active:text-primary-foreground transition-colors"
+          key={shortcut.label}
+          onClick={() => { haptic(); onKeyPress(shortcut.key); }}
+          className={cn(
+            "flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+            "active:bg-primary active:text-primary-foreground active:scale-105",
+            shortcut.highlight
+              ? "bg-red-500/20 text-red-500"
+              : "bg-secondary text-secondary-foreground"
+          )}
         >
-          {cmd.length > 20 ? cmd.slice(0, 20) + '…' : cmd}
+          {shortcut.label}
         </button>
       ))}
     </div>
@@ -103,27 +159,21 @@ export function VirtualKeyboard({
   onKeyPress,
   onImagePick,
   visible = true,
-  recentCommands = [],
-  onCommandSelect,
 }: VirtualKeyboardProps) {
   const [mode, setMode] = useState<KeyboardMode>('abc');
   const [shifted, setShifted] = useState(false);
+
+  // Key repeat for backspace
+  const handleBackspace = useCallback(() => {
+    onKeyPress(SPECIAL_KEYS.BACKSPACE);
+  }, [onKeyPress]);
+  const { startRepeat: startBackspace, stopRepeat: stopBackspace } = useKeyRepeat(handleBackspace);
 
   if (!visible) return null;
 
   const handleKey = (key: string) => {
     onKeyPress(shifted ? key.toUpperCase() : key);
     if (shifted) setShifted(false);
-  };
-
-  const handleCommandSelect = (cmd: string) => {
-    if (onCommandSelect) {
-      onCommandSelect(cmd);
-    } else {
-      // Default: type command and press enter
-      onKeyPress(cmd);
-      onKeyPress(SPECIAL_KEYS.ENTER);
-    }
   };
 
   // Quick mode - just essential terminal keys
@@ -133,8 +183,8 @@ export function VirtualKeyboard({
         className="flex flex-col bg-background select-none"
         onContextMenu={(e) => e.preventDefault()}
       >
-        {/* Recent commands */}
-        <RecentCommandsBar commands={recentCommands} onSelect={handleCommandSelect} />
+        {/* Terminal shortcuts */}
+        <TerminalShortcutsBar onKeyPress={onKeyPress} />
 
         <div className="flex flex-col gap-1.5 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {/* Mode tabs + common keys */}
@@ -151,14 +201,6 @@ export function VirtualKeyboard({
             >
               123
             </button>
-            <Key char="Tab" onPress={() => onKeyPress(SPECIAL_KEYS.TAB)} className="bg-muted" />
-            <Key char="Esc" onPress={() => onKeyPress(SPECIAL_KEYS.ESC)} className="bg-muted" />
-            <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} className="bg-muted" />
-          </div>
-
-          {/* Arrow keys + Enter + Ctrl shortcuts */}
-          <div className="flex gap-1.5">
-            <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} className="bg-red-500/20 text-red-500" />
             {onImagePick && (
               <button
                 onClick={() => { haptic(); onImagePick(); }}
@@ -167,9 +209,22 @@ export function VirtualKeyboard({
                 <ImagePlus className="h-5 w-5" />
               </button>
             )}
-            <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} className="bg-muted" />
-            <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} className="bg-muted" />
             <div className="flex-1" />
+            <button
+              onTouchStart={startBackspace}
+              onTouchEnd={stopBackspace}
+              onTouchCancel={stopBackspace}
+              onMouseDown={startBackspace}
+              onMouseUp={stopBackspace}
+              onMouseLeave={stopBackspace}
+              className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground transition-transform duration-75"
+            >
+              ⌫
+            </button>
+          </div>
+
+          {/* Arrow keys + Enter */}
+          <div className="flex gap-1.5">
             <button
               onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.LEFT); }}
               className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
@@ -196,7 +251,8 @@ export function VirtualKeyboard({
             >
               <ChevronRight className="h-6 w-6" />
             </button>
-            <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} className="bg-primary/30 text-primary" />
+            <div className="flex-1" />
+            <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} className="bg-primary/30 text-primary w-[68px]" />
           </div>
         </div>
       </div>
@@ -210,8 +266,8 @@ export function VirtualKeyboard({
         className="flex flex-col bg-background select-none"
         onContextMenu={(e) => e.preventDefault()}
       >
-        {/* Recent commands */}
-        <RecentCommandsBar commands={recentCommands} onSelect={handleCommandSelect} />
+        {/* Terminal shortcuts */}
+        <TerminalShortcutsBar onKeyPress={onKeyPress} />
 
         <div className="flex flex-col gap-1.5 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {/* QWERTY rows */}
@@ -239,8 +295,13 @@ export function VirtualKeyboard({
               <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
             ))}
             <button
-              onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.BACKSPACE); }}
-              className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+              onTouchStart={startBackspace}
+              onTouchEnd={stopBackspace}
+              onTouchCancel={stopBackspace}
+              onMouseDown={startBackspace}
+              onMouseUp={stopBackspace}
+              onMouseLeave={stopBackspace}
+              className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground transition-transform duration-75"
             >
               ⌫
             </button>
@@ -284,8 +345,8 @@ export function VirtualKeyboard({
       className="flex flex-col bg-background select-none"
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Recent commands */}
-      <RecentCommandsBar commands={recentCommands} onSelect={handleCommandSelect} />
+      {/* Terminal shortcuts */}
+      <TerminalShortcutsBar onKeyPress={onKeyPress} />
 
       <div className="flex flex-col gap-1.5 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         {/* Number row */}
@@ -328,8 +389,13 @@ export function VirtualKeyboard({
             space
           </button>
           <button
-            onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.BACKSPACE); }}
-            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            onTouchStart={startBackspace}
+            onTouchEnd={stopBackspace}
+            onTouchCancel={stopBackspace}
+            onMouseDown={startBackspace}
+            onMouseUp={stopBackspace}
+            onMouseLeave={stopBackspace}
+            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground transition-transform duration-75"
           >
             ⌫
           </button>
