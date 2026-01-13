@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGitStatus, isGitRepo, getFileDiff, getUntrackedFileDiff } from "@/lib/git-status";
+import { getGitStatus, isGitRepo, getFileDiff, getUntrackedFileDiff, expandPath } from "@/lib/git-status";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const path = searchParams.get("path");
+  const rawPath = searchParams.get("path");
   const filePath = searchParams.get("file");
   const staged = searchParams.get("staged") === "true";
 
-  if (!path) {
+  if (!rawPath) {
     return NextResponse.json({ error: "Path is required" }, { status: 400 });
   }
+
+  const path = expandPath(rawPath);
 
   if (!isGitRepo(path)) {
     return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
