@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles } from "lucide-react";
+import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles, Square, CheckSquare } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -37,6 +37,11 @@ interface SessionCardProps {
   tmuxStatus?: TmuxStatus;
   groups?: Group[];
   projects?: ProjectWithDevServers[];
+  // Selection props
+  isSelected?: boolean;
+  isInSelectMode?: boolean;
+  onToggleSelect?: (shiftKey: boolean) => void;
+  // Navigation
   onClick?: () => void;
   onMove?: (groupPath: string) => void;
   onMoveToProject?: (projectId: string) => void;
@@ -77,7 +82,7 @@ const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: Rea
   },
 };
 
-export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], onClick, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
+export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], isSelected, isInSelectMode, onToggleSelect, onClick, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
@@ -133,6 +138,36 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
   };
 
   const hasActions = onMove || onMoveToProject || onFork || onDelete || onRename || onCreatePR;
+
+  // Handle card click - coordinates selection with navigation
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (isEditing) return;
+
+    // If in select mode (any items selected), any click toggles selection
+    if (isInSelectMode && onToggleSelect) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect(e.shiftKey);
+      return;
+    }
+
+    // Not in select mode - shift+click starts selection
+    if (e.shiftKey && onToggleSelect) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect(false);
+      return;
+    }
+
+    // Normal click - navigate to session
+    onClick?.();
+  };
+
+  // Handle checkbox click
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleSelect?.(e.shiftKey);
+  };
 
   // Shared menu items renderer for both context menu and dropdown
   const renderMenuItems = (isContextMenu: boolean) => {
@@ -230,29 +265,47 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
   const cardContent = (
     <div
       ref={cardRef}
-      onClick={isEditing ? undefined : onClick}
+      onClick={handleCardClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
         "w-full text-left px-3 py-2.5 md:px-2 md:py-1.5 rounded-md transition-colors overflow-hidden cursor-pointer group flex items-center gap-2",
         "min-h-[44px] md:min-h-0", // Touch target size on mobile
-        isActive
-          ? "bg-primary/10"
-          : "hover:bg-accent/50",
-        status === "waiting" && !isActive && "bg-yellow-500/5"
+        isSelected
+          ? "bg-primary/20"
+          : isActive
+            ? "bg-primary/10"
+            : "hover:bg-accent/50",
+        status === "waiting" && !isActive && !isSelected && "bg-yellow-500/5"
       )}
     >
-      {/* Status indicator */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={cn("flex-shrink-0", config.color)}>
-            {config.icon}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="right">
-          <span className="capitalize">{config.label}</span>
-        </TooltipContent>
-      </Tooltip>
+      {/* Selection checkbox - visible when in select mode */}
+      {isInSelectMode && onToggleSelect && (
+        <button
+          onClick={handleCheckboxClick}
+          className="flex-shrink-0 text-primary hover:text-primary/80"
+        >
+          {isSelected ? (
+            <CheckSquare className="w-4 h-4" />
+          ) : (
+            <Square className="w-4 h-4" />
+          )}
+        </button>
+      )}
+
+      {/* Status indicator - hidden when in select mode */}
+      {!isInSelectMode && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className={cn("flex-shrink-0", config.color)}>
+              {config.icon}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <span className="capitalize">{config.label}</span>
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       {/* Session name */}
       {isEditing ? (
