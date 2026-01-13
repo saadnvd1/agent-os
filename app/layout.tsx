@@ -44,6 +44,7 @@ export default function RootLayout({
         <Toaster
           theme="dark"
           position="top-center"
+          closeButton
           toastOptions={{
             style: {
               background: "hsl(270 20% 12%)",
