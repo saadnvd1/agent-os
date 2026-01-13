@@ -48,7 +48,7 @@ export function FileViewer({ content, filePath, isBinary, onClose }: FileViewerP
   return (
     <div className="h-full w-full flex flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+      <div className="flex items-center justify-between p-3 bg-background/95 backdrop-blur-sm sticky top-0 z-10 shadow-sm">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-medium truncate" title={filePath}>
             {filePath.split("/").pop()}

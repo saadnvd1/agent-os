@@ -1,30 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { SessionList } from "@/components/SessionList";
-import { NewSessionDialog } from "@/components/NewSessionDialog";
-import { NotificationSettings } from "@/components/NotificationSettings";
-import { Button } from "@/components/ui/button";
-import { PanelLeftClose, PanelLeft, Plus, Bell, Copy, Check, Command } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
-import { PaneLayout } from "@/components/PaneLayout";
 import { Pane } from "@/components/Pane";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewport } from "@/hooks/useViewport";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import type { Session, Group } from "@/lib/db";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
-import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
-import { QuickSwitcher } from "@/components/QuickSwitcher";
-
-interface SessionStatus {
-  sessionName: string;
-  status: "idle" | "running" | "waiting" | "error" | "dead";
-  lastLine?: string;
-  claudeSessionId?: string | null;
-}
+import { DesktopView } from "@/components/views/DesktopView";
+import { MobileView } from "@/components/views/MobileView";
+import type { SessionStatus } from "@/components/views/types";
 
 interface ExternalTmuxSession {
   sessionName: string;
@@ -501,223 +488,45 @@ function HomeContent() {
   // Get active session from focused pane's active tab
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
 
-  // Shared session list content
-  const sessionListContent = (
-    <SessionList
-      sessions={sessions}
-      groups={groups}
-      activeSessionId={focusedActiveTab?.sessionId || undefined}
-      sessionStatuses={sessionStatuses}
-      onSelect={(id) => {
-        const session = sessions.find((s) => s.id === id);
-        if (session) attachToSession(session);
-        if (isMobile) setSidebarOpen(false);
-      }}
-      onRefresh={fetchSessions}
-      onToggleGroup={handleToggleGroup}
-      onCreateGroup={handleCreateGroup}
-      onDeleteGroup={handleDeleteGroup}
-      onMoveSession={handleMoveSession}
-      onForkSession={handleForkSession}
-      onDeleteSession={handleDeleteSession}
-      onRenameSession={handleRenameSession}
-      onCreatePR={handleCreatePR}
-    />
-  );
+  // Shared props for views
+  const viewProps = {
+    sessions,
+    groups,
+    sessionStatuses,
+    sidebarOpen,
+    setSidebarOpen,
+    activeSession,
+    focusedActiveTab,
+    copiedSessionId,
+    setCopiedSessionId,
+    showNewSessionDialog,
+    setShowNewSessionDialog,
+    showNotificationSettings,
+    setShowNotificationSettings,
+    showQuickSwitcher,
+    setShowQuickSwitcher,
+    notificationSettings,
+    permissionGranted,
+    updateSettings,
+    requestPermission,
+    attachToSession,
+    fetchSessions,
+    handleToggleGroup,
+    handleCreateGroup,
+    handleDeleteGroup,
+    handleMoveSession,
+    handleForkSession,
+    handleDeleteSession,
+    handleRenameSession,
+    handleCreatePR,
+    renderPane,
+  };
 
-  // Mobile layout - fullscreen terminal with swipe sidebar
   if (isMobile) {
-    return (
-      <main className="h-screen-safe flex flex-col overflow-hidden bg-background">
-        {/* Swipe sidebar */}
-        <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
-          {sessionListContent}
-        </SwipeSidebar>
-
-        {/* Terminal fills the screen */}
-        <div className="flex-1 min-h-0">
-          <PaneLayout renderPane={renderPane} />
-        </div>
-
-        {/* Dialogs */}
-        <NewSessionDialog
-          open={showNewSessionDialog}
-          groups={groups}
-          onClose={() => setShowNewSessionDialog(false)}
-          onCreated={(id) => {
-            setShowNewSessionDialog(false);
-            fetchSessions().then(() => {
-              fetch(`/api/sessions/${id}`)
-                .then((res) => res.json())
-                .then((data) => {
-                  if (data.session) attachToSession(data.session);
-                });
-            });
-          }}
-          onCreateGroup={async (name) => {
-            await handleCreateGroup(name);
-          }}
-        />
-        <QuickSwitcher
-          sessions={sessions}
-          open={showQuickSwitcher}
-          onOpenChange={setShowQuickSwitcher}
-          currentSessionId={focusedActiveTab?.sessionId ?? undefined}
-          onSelectSession={(sessionId) => {
-            const session = sessions.find((s) => s.id === sessionId);
-            if (session) attachToSession(session);
-          }}
-        />
-      </main>
-    );
+    return <MobileView {...viewProps} />;
   }
 
-  // Desktop layout - sidebar + header + terminal
-  return (
-    <div className="flex h-screen-safe overflow-hidden bg-background">
-      {/* Desktop Sidebar */}
-      <div
-        className={`
-          ${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 transition-all duration-200 overflow-hidden
-          shadow-xl shadow-black/30 bg-background
-        `}
-      >
-        {sessionListContent}
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              {sidebarOpen ? (
-                <PanelLeftClose className="w-4 h-4" />
-              ) : (
-                <PanelLeft className="w-4 h-4" />
-              )}
-            </Button>
-
-            {activeSession && (
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{activeSession.name}</span>
-                {focusedActiveTab?.attachedTmux && (
-                  <span className="text-xs text-muted-foreground">
-                    {focusedActiveTab.attachedTmux}
-                  </span>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="h-6 w-6"
-                      onClick={() => {
-                        navigator.clipboard.writeText(activeSession.id);
-                        setCopiedSessionId(true);
-                        setTimeout(() => setCopiedSessionId(false), 2000);
-                      }}
-                    >
-                      {copiedSessionId ? (
-                        <Check className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Copy session ID for orchestration</p>
-                    <p className="text-xs text-muted-foreground font-mono">{activeSession.id.slice(0, 8)}...</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setShowQuickSwitcher(true)}
-                >
-                  <Command className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Quick switch</p>
-                <p className="text-xs text-muted-foreground">⌘K</p>
-              </TooltipContent>
-            </Tooltip>
-            <NotificationSettings
-              open={showNotificationSettings}
-              onOpenChange={setShowNotificationSettings}
-              settings={notificationSettings}
-              permissionGranted={permissionGranted}
-              waitingSessions={sessions
-                .filter(s => sessionStatuses[s.id]?.status === "waiting")
-                .map(s => ({ id: s.id, name: s.name }))}
-              onUpdateSettings={updateSettings}
-              onRequestPermission={requestPermission}
-              onSelectSession={(id) => {
-                const session = sessions.find(s => s.id === id);
-                if (session) attachToSession(session);
-              }}
-            />
-            <Button size="sm" onClick={() => setShowNewSessionDialog(true)}>
-              <Plus className="w-4 h-4 mr-1" />
-              New Session
-            </Button>
-          </div>
-        </header>
-
-        {/* Pane Layout */}
-        <div className="flex-1 min-h-0 p-2">
-          <PaneLayout renderPane={renderPane} />
-        </div>
-      </div>
-
-      {/* Dialogs */}
-      <NewSessionDialog
-        open={showNewSessionDialog}
-        groups={groups}
-        onClose={() => setShowNewSessionDialog(false)}
-        onCreated={(id) => {
-          setShowNewSessionDialog(false);
-          const session = sessions.find((s) => s.id === id);
-          if (session) {
-            attachToSession(session);
-          } else {
-            fetchSessions().then(() => {
-              fetch(`/api/sessions/${id}`)
-                .then((res) => res.json())
-                .then((data) => {
-                  if (data.session) attachToSession(data.session);
-                });
-            });
-          }
-        }}
-        onCreateGroup={async (name) => {
-          await handleCreateGroup(name);
-        }}
-      />
-      <QuickSwitcher
-        sessions={sessions}
-        open={showQuickSwitcher}
-        onOpenChange={setShowQuickSwitcher}
-        currentSessionId={focusedActiveTab?.sessionId ?? undefined}
-        onSelectSession={(sessionId) => {
-          const session = sessions.find((s) => s.id === sessionId);
-          if (session) attachToSession(session);
-        }}
-      />
-    </div>
-  );
+  return <DesktopView {...viewProps} />;
 }
 
 export default function Home() {

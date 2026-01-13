@@ -7,7 +7,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { CanvasAddon } from '@xterm/addon-canvas';
 import {
-  TERMINAL_THEME,
+  TERMINAL_THEME_DARK,
+  TERMINAL_THEME_LIGHT,
   WS_RECONNECT_BASE_DELAY,
   WS_RECONNECT_MAX_DELAY,
 } from '../constants';
@@ -25,6 +26,7 @@ interface UseTerminalConnectionProps {
   onBeforeUnmount?: (scrollState: TerminalScrollState) => void;
   initialScrollState?: TerminalScrollState;
   isMobile?: boolean;
+  theme?: 'light' | 'dark';
 }
 
 export function useTerminalConnection({
@@ -34,6 +36,7 @@ export function useTerminalConnection({
   onBeforeUnmount,
   initialScrollState,
   isMobile = false,
+  theme = 'dark',
 }: UseTerminalConnectionProps) {
   const [connected, setConnected] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -150,6 +153,7 @@ export function useTerminalConnection({
 
       // Initialize xterm.js - smaller font for mobile
       const fontSize = isMobile ? 11 : 14;
+      const terminalTheme = theme === 'light' ? TERMINAL_THEME_LIGHT : TERMINAL_THEME_DARK;
       term = new XTerm({
         cursorBlink: true,
         fontSize,
@@ -165,7 +169,7 @@ export function useTerminalConnection({
         cursorStyle: 'bar',
         cursorWidth: 2,
         allowProposedApi: true,
-        theme: TERMINAL_THEME,
+        theme: terminalTheme,
       });
 
       const fitAddon = new FitAddon();
@@ -551,6 +555,15 @@ export function useTerminalConnection({
       }
     }
   }, [isMobile]);
+
+  // Handle theme changes dynamically
+  useEffect(() => {
+    const term = xtermRef.current;
+    if (!term) return;
+
+    const terminalTheme = theme === 'light' ? TERMINAL_THEME_LIGHT : TERMINAL_THEME_DARK;
+    term.options.theme = terminalTheme;
+  }, [theme]);
 
   return {
     connected,

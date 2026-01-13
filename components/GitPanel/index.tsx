@@ -273,7 +273,7 @@ export function GitPanel({ workingDirectory, onFileSelect }: GitPanelProps) {
 
       {/* Mobile hint */}
       {hasChanges && status.staged.length === 0 && (
-        <div className="md:hidden px-3 py-2 border-t border-border">
+        <div className="md:hidden px-3 py-2">
           <p className="text-xs text-muted-foreground text-center">
             Swipe right to stage, left to unstage
           </p>
@@ -301,7 +301,7 @@ interface HeaderProps {
 
 function Header({ branch, ahead, behind, onRefresh, refreshing }: HeaderProps) {
   return (
-    <div className="flex items-center gap-2 p-3 border-b border-border">
+    <div className="flex items-center gap-2 p-3">
       <GitBranch className="w-4 h-4 text-muted-foreground flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{branch || "Git Status"}</p>

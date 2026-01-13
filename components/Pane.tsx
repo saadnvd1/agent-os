@@ -172,14 +172,14 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
 
   return (
     <div
-      className={cn(
-        "flex flex-col h-full rounded-lg overflow-hidden shadow-lg shadow-black/20",
-        isFocused ? "ring-1 ring-primary/50" : ""
-      )}
+      className="flex flex-col h-full rounded-lg overflow-hidden shadow-lg shadow-black/10 dark:shadow-black/30"
       onClick={handleFocus}
     >
       {/* Tab Bar */}
-      <div className="flex items-center bg-zinc-900/80 overflow-x-auto px-1 pt-1 gap-1">
+      <div className={cn(
+        "flex items-center overflow-x-auto px-1 pt-1 gap-1 transition-colors",
+        isFocused ? "bg-muted" : "bg-muted/50"
+      )}>
         {/* Mobile menu button */}
         {onMenuClick && (
           <Button
@@ -205,8 +205,8 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer group rounded-t-md transition-colors",
                 tab.id === paneData.activeTabId
-                  ? "bg-zinc-950 text-foreground"
-                  : "text-muted-foreground hover:text-foreground/80 hover:bg-zinc-800/50"
+                  ? "bg-background text-foreground"
+                  : "text-muted-foreground hover:text-foreground/80 hover:bg-accent/50"
               )}
             >
               <span className="truncate max-w-[120px]">{getTabName(tab)}</span>
@@ -243,7 +243,7 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
 
         {/* View Toggle - show for sessions with working directory */}
         {session?.working_directory && (
-          <div className="flex items-center bg-zinc-800/50 rounded-md p-0.5 mx-2">
+          <div className="flex items-center bg-accent/50 rounded-md p-0.5 mx-2">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -254,7 +254,7 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
                     viewMode === "terminal"
-                      ? "bg-zinc-700 text-foreground"
+                      ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -274,7 +274,7 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
                     viewMode === "files"
-                      ? "bg-zinc-700 text-foreground"
+                      ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -294,7 +294,7 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
                     viewMode === "git"
-                      ? "bg-zinc-700 text-foreground"
+                      ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -315,7 +315,7 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
                     className={cn(
                       "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
                       viewMode === "workers"
-                        ? "bg-zinc-700 text-foreground"
+                        ? "bg-secondary text-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
