@@ -104,16 +104,34 @@ function HomeContent() {
     }
   }, []);
 
-  const getFocusedTerminal = useCallback(() => {
+  // Get terminal for a pane, with fallback to first available
+  const getTerminalWithFallback = useCallback((): { terminal: TerminalHandle; paneId: string; tabId: string } | undefined => {
+    // Try focused pane first
     const activeTab = getActiveTab(focusedPaneId);
-    if (!activeTab) return undefined;
-    return terminalRefs.current.get(`${focusedPaneId}:${activeTab.id}`);
+    if (activeTab) {
+      const terminal = terminalRefs.current.get(`${focusedPaneId}:${activeTab.id}`);
+      if (terminal) {
+        return { terminal, paneId: focusedPaneId, tabId: activeTab.id };
+      }
+    }
+
+    // Fallback to first available terminal
+    const firstEntry = terminalRefs.current.entries().next().value;
+    if (firstEntry) {
+      const [key, terminal] = firstEntry as [string, TerminalHandle];
+      const [paneId, tabId] = key.split(":");
+      return { terminal, paneId, tabId };
+    }
+
+    return undefined;
   }, [focusedPaneId, getActiveTab]);
 
   // Attach session to terminal
   const attachToSession = useCallback(async (session: Session) => {
-    const terminal = getFocusedTerminal();
-    if (!terminal) return;
+    const terminalInfo = getTerminalWithFallback();
+    if (!terminalInfo) return;
+
+    const { terminal, paneId } = terminalInfo;
 
     const provider = getProvider(session.agent_type || "claude");
     const sessionName = `${provider.id}-${session.id}`;
@@ -138,7 +156,7 @@ function HomeContent() {
     const flagsStr = flags.join(" ");
 
     // Check if we're currently attached to a tmux session
-    const activeTab = getActiveTab(focusedPaneId);
+    const activeTab = getActiveTab(paneId);
     const isInTmux = !!activeTab?.attachedTmux;
 
     if (isInTmux) {
@@ -151,11 +169,11 @@ function HomeContent() {
         const agentCmd = `${provider.command} ${flagsStr}`;
         const newSessionCmd = await getInitScriptCommand(agentCmd);
         terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
-        attachSession(focusedPaneId, session.id, sessionName);
+        attachSession(paneId, session.id, sessionName);
         terminal.focus();
       }, 50);
     }, isInTmux ? 100 : 0);
-  }, [getFocusedTerminal, focusedPaneId, attachSession, sessions, getInitScriptCommand, getActiveTab]);
+  }, [getTerminalWithFallback, attachSession, sessions, getInitScriptCommand, getActiveTab]);
 
   // Notification click handler
   const handleNotificationClick = useCallback((sessionId: string) => {
@@ -224,11 +242,12 @@ function HomeContent() {
       key={paneId}
       paneId={paneId}
       sessions={sessions}
+      projects={projects}
       onRegisterTerminal={registerTerminalRef}
       onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined}
       onSelectSession={handleSelectSession}
     />
-  ), [sessions, registerTerminalRef, isMobile, handleSelectSession]);
+  ), [sessions, projects, registerTerminalRef, isMobile, handleSelectSession]);
 
   // Project edit handler
   const [showProjectSettings, setShowProjectSettings] = useState<typeof projects[0] | null>(null);

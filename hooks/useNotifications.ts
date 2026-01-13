@@ -86,13 +86,19 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       const title = titles[event];
       const body = message || getDefaultMessage(event);
 
-      // In-app toast
+      // In-app toast with click action
       const toastTypes: Record<NotificationEvent, "warning" | "error" | "success"> = {
         waiting: "warning",
         error: "error",
         completed: "success",
       };
-      toast[toastTypes[event]](title, { description: body });
+      toast[toastTypes[event]](title, {
+        description: body,
+        action: {
+          label: "Go to session",
+          onClick: () => onSessionClick?.(sessionId),
+        },
+      });
 
       // Browser notification (only if page not focused)
       if (settings.browserNotifications && permissionGranted) {

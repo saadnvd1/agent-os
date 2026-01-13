@@ -12,13 +12,14 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Session } from "@/lib/db";
+import type { Session, Project } from "@/lib/db";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
 
 interface MobileTabBarProps {
   session: Session | null | undefined;
   sessions: Session[];
+  projects: Project[];
   viewMode: ViewMode;
   isConductor: boolean;
   workerCount: number;
@@ -30,6 +31,7 @@ interface MobileTabBarProps {
 export function MobileTabBar({
   session,
   sessions,
+  projects,
   viewMode,
   isConductor,
   workerCount,
@@ -39,6 +41,11 @@ export function MobileTabBar({
 }: MobileTabBarProps) {
   // Find current session index and calculate prev/next
   const currentIndex = session ? sessions.findIndex(s => s.id === session.id) : -1;
+
+  // Get project name for current session
+  const projectName = session?.project_id
+    ? projects.find(p => p.id === session.project_id)?.name
+    : null;
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex >= 0 && currentIndex < sessions.length - 1;
 
@@ -111,6 +118,9 @@ export function MobileTabBar({
 
         <span className="flex-1 text-sm font-medium truncate text-center">
           {session?.name || "No session"}
+          {projectName && projectName !== "Uncategorized" && (
+            <span className="text-muted-foreground font-normal"> [{projectName}]</span>
+          )}
         </span>
 
         <button
