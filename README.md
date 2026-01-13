@@ -41,7 +41,6 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 
 ### Session Management
 - **Multi-Agent Support** - Switch between Claude, Codex, OpenCode, Gemini, Aider, and Cursor per session
-- **Auto-Import tmux Sessions** - Existing Claude/Codex/Aider sessions detected on startup
 - **Session Preview on Hover** - Quick preview of session terminal state
 - **Status Detection** - Real-time running/waiting/idle status with spike filtering
 - **Browser Notifications** - Get notified when sessions need input

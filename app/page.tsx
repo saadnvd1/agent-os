@@ -195,7 +195,7 @@ function HomeContent() {
     permissionGranted,
   } = useNotifications({ onSessionClick: handleNotificationClick });
 
-  // Session statuses with auto-import
+  // Session statuses
   const { sessionStatuses } = useSessionStatuses({
     sessions,
     activeSessionId: focusedActiveTab?.sessionId,

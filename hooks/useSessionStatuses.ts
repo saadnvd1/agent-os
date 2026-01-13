@@ -1,13 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Session } from "@/lib/db";
 import type { SessionStatus } from "@/components/views/types";
-
-interface ExternalTmuxSession {
-  sessionName: string;
-  status: "idle" | "running" | "waiting" | "error" | "dead";
-  lastLine?: string;
-  claudeSessionId?: string | null;
-}
 
 interface UseSessionStatusesOptions {
   sessions: Session[];
@@ -33,7 +26,6 @@ export function useSessionStatuses({
   checkStateChanges,
 }: UseSessionStatusesOptions): UseSessionStatusesReturn {
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
-  const importedTmuxSessions = useRef<Set<string>>(new Set());
 
   const fetchStatuses = useCallback(async () => {
     try {
@@ -57,44 +49,6 @@ export function useSessionStatuses({
           updatedSessionIds.current.add(sessionId);
           await fetch(`/api/sessions/${sessionId}/claude-session`);
           needsRefresh = true;
-        }
-      }
-
-      // Auto-import external tmux sessions (sessions not managed by AgentOS)
-      const externalSessions = (data.otherSessions || []) as ExternalTmuxSession[];
-      for (const extSession of externalSessions) {
-        if (importedTmuxSessions.current.has(extSession.sessionName)) continue;
-
-        try {
-          importedTmuxSessions.current.add(extSession.sessionName);
-
-          const importRes = await fetch("/api/sessions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: extSession.sessionName,
-              claudeSessionId: extSession.claudeSessionId,
-              importFromTmux: extSession.sessionName,
-            }),
-          });
-
-          if (importRes.ok) {
-            const importData = await importRes.json();
-            if (importData.session) {
-              const newTmuxName = `claude-${importData.session.id}`;
-              await fetch("/api/tmux/rename", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ oldName: extSession.sessionName, newName: newTmuxName }),
-              });
-              needsRefresh = true;
-            }
-          } else {
-            importedTmuxSessions.current.delete(extSession.sessionName);
-          }
-        } catch (importError) {
-          importedTmuxSessions.current.delete(extSession.sessionName);
-          console.error(`Failed to auto-import session ${extSession.sessionName}:`, importError);
         }
       }
 
