@@ -19,6 +19,7 @@ export function MobileView({
   focusedActiveTab,
   showNewSessionDialog,
   setShowNewSessionDialog,
+  newSessionProjectId,
   showQuickSwitcher,
   setShowQuickSwitcher,
   attachToSession,
@@ -111,6 +112,7 @@ export function MobileView({
       <NewSessionDialog
         open={showNewSessionDialog}
         projects={projects}
+        selectedProjectId={newSessionProjectId ?? undefined}
         onClose={() => setShowNewSessionDialog(false)}
         onCreated={(id) => {
           setShowNewSessionDialog(false);
