@@ -9,6 +9,7 @@ import type { Session } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
 import { ConductorPanel } from "@/components/ConductorPanel";
 import type { GitFile } from "@/lib/git-status";
+import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
 import { DesktopTabBar } from "./DesktopTabBar";
 
@@ -75,6 +76,9 @@ export const Pane = memo(function Pane({
   const isFocused = focusedPaneId === paneId;
   const session = activeTab ? sessions.find((s) => s.id === activeTab.sessionId) : null;
 
+  // File editor state - lifted here so it persists across view switches
+  const fileEditor = useFileEditor();
+
   // Check if this session is a conductor (has workers)
   const workerCount = useMemo(() => {
     if (!session) return 0;
@@ -109,11 +113,12 @@ export const Pane = memo(function Pane({
     }
   }, [paneId, activeTab?.id]);
 
-  // Reset view mode and diff when session changes
+  // Reset view mode, diff, and file editor when session changes
   useEffect(() => {
     setViewMode("terminal");
     setSelectedDiff(null);
-  }, [session?.id]);
+    fileEditor.reset();
+  }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFocus = useCallback(() => {
     focusPane(paneId);
@@ -228,13 +233,14 @@ export const Pane = memo(function Pane({
         />
       )}
 
-      {/* Content Area */}
+      {/* Content Area - components stay mounted but hidden for instant switching */}
       <div
-        className="flex-1 min-h-0"
+        className="flex-1 min-h-0 relative"
         onTouchStart={isMobile ? handleTouchStart : undefined}
         onTouchEnd={isMobile ? handleTouchEnd : undefined}
       >
-        {viewMode === "terminal" && (
+        {/* Terminal - always mounted to maintain WebSocket connection */}
+        <div className={viewMode === "terminal" ? "h-full" : "hidden"}>
           <Terminal
             key={activeTab?.id}
             ref={terminalRef}
@@ -243,14 +249,21 @@ export const Pane = memo(function Pane({
             onBeforeUnmount={handleBeforeUnmount}
             initialScrollState={initialScrollState}
           />
+        </div>
+
+        {/* Files - mounted once accessed, stays mounted */}
+        {session?.working_directory && (
+          <div className={viewMode === "files" ? "h-full" : "hidden"}>
+            <FileExplorer
+              workingDirectory={session.working_directory}
+              fileEditor={fileEditor}
+            />
+          </div>
         )}
-        {viewMode === "files" && session?.working_directory && (
-          <FileExplorer
-            workingDirectory={session.working_directory}
-          />
-        )}
-        {viewMode === "git" && session?.working_directory && (
-          <>
+
+        {/* Git - mounted once accessed, stays mounted */}
+        {session?.working_directory && (
+          <div className={viewMode === "git" ? "h-full" : "hidden"}>
             <GitPanel
               workingDirectory={session.working_directory}
               onFileSelect={(file, diff) => setSelectedDiff({ file, diff })}
@@ -263,8 +276,10 @@ export const Pane = memo(function Pane({
                 onClose={() => setSelectedDiff(null)}
               />
             )}
-          </>
+          </div>
         )}
+
+        {/* Workers - only for conductor sessions */}
         {viewMode === "workers" && session && (
           <ConductorPanel
             conductorSessionId={session.id}
