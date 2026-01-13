@@ -6,7 +6,8 @@ import { Pane } from "@/components/Pane";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewport } from "@/hooks/useViewport";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
-import type { Session, Group } from "@/lib/db";
+import type { Session, Group, DevServer } from "@/lib/db";
+import type { ProjectWithDevServers } from "@/lib/projects";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
 import { DesktopView } from "@/components/views/DesktopView";
@@ -24,12 +25,17 @@ interface ExternalTmuxSession {
 function HomeContent() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [projects, setProjects] = useState<ProjectWithDevServers[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [showProjectSettings, setShowProjectSettings] = useState<ProjectWithDevServers | null>(null);
   const importedTmuxSessions = useRef<Set<string>>(new Set());
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
+  const [devServers, setDevServers] = useState<DevServer[]>([]);
+  const [startDevServerSessionId, setStartDevServerSessionId] = useState<string | null>(null);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const updatedSessionIds = useRef<Set<string>>(new Set());
 
@@ -143,6 +149,19 @@ function HomeContent() {
     }
   }, []);
 
+  // Fetch all projects
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await fetch("/api/projects");
+      const data = await res.json();
+      setProjects(data.projects || []);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      if (error instanceof TypeError && error.message === 'Failed to fetch') return;
+      console.error("Failed to fetch projects:", error);
+    }
+  }, []);
+
   // Fetch session statuses from tmux and auto-import external sessions
   const fetchStatuses = useCallback(async () => {
     try {
@@ -228,6 +247,19 @@ function HomeContent() {
     }
   }, [sessions, checkStateChanges, focusedActiveTab?.sessionId]);
 
+  // Fetch dev servers
+  const fetchDevServers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dev-servers");
+      const data = await res.json();
+      setDevServers(data.servers || []);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      if (error instanceof TypeError && error.message === "Failed to fetch") return;
+      console.error("Failed to fetch dev servers:", error);
+    }
+  }, []);
+
   // Set initial sidebar state based on viewport
   useEffect(() => {
     if (!isMobile) setSidebarOpen(true);
@@ -236,7 +268,8 @@ function HomeContent() {
   // Initial load
   useEffect(() => {
     fetchSessions();
-  }, [fetchSessions]);
+    fetchProjects();
+  }, [fetchSessions, fetchProjects]);
 
   // Poll for status every 3 seconds
   useEffect(() => {
@@ -250,6 +283,13 @@ function HomeContent() {
     const interval = setInterval(fetchSessions, 10000);
     return () => clearInterval(interval);
   }, [fetchSessions]);
+
+  // Poll for dev servers every 5 seconds
+  useEffect(() => {
+    fetchDevServers();
+    const interval = setInterval(fetchDevServers, 5000);
+    return () => clearInterval(interval);
+  }, [fetchDevServers]);
 
   // Keyboard shortcut: Cmd+K to open quick switcher
   useEffect(() => {
@@ -443,6 +483,78 @@ function HomeContent() {
     }
   };
 
+  // Toggle project expanded state
+  const handleToggleProject = async (projectId: string, expanded: boolean) => {
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expanded }),
+      });
+      setProjects(prev => prev.map(p =>
+        p.id === projectId ? { ...p, expanded } : p
+      ));
+    } catch (error) {
+      console.error("Failed to toggle project:", error);
+    }
+  };
+
+  // Edit project (opens settings dialog)
+  const handleEditProject = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setShowProjectSettings(project);
+    }
+  };
+
+  // Delete project
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm("Delete this project? Sessions will be moved to Uncategorized.")) return;
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
+      await fetchProjects();
+      await fetchSessions();
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+    }
+  };
+
+  // Rename project
+  const handleRenameProject = async (projectId: string, newName: string) => {
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName }),
+      });
+      await fetchProjects();
+    } catch (error) {
+      console.error("Failed to rename project:", error);
+    }
+  };
+
+  // Move session to project
+  const handleMoveSessionToProject = async (sessionId: string, projectId: string) => {
+    try {
+      await fetch(`/api/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+      await fetchSessions();
+    } catch (error) {
+      console.error("Failed to move session to project:", error);
+    }
+  };
+
+  // Create new session in project
+  const handleNewSessionInProject = (projectId: string) => {
+    // TODO: Pre-select project in NewSessionDialog
+    setShowNewSessionDialog(true);
+  };
+
   // Fork session
   const handleForkSession = async (sessionId: string) => {
     try {
@@ -554,15 +666,59 @@ function HomeContent() {
     }
   };
 
+  // Dev server handlers
+  const handleStartDevServer = useCallback((sessionId: string) => {
+    setStartDevServerSessionId(sessionId);
+  }, []);
+
+  const handleStopDevServer = useCallback(async (serverId: string) => {
+    await fetch(`/api/dev-servers/${serverId}/stop`, { method: "POST" });
+    await fetchDevServers();
+  }, [fetchDevServers]);
+
+  const handleRestartDevServer = useCallback(async (serverId: string) => {
+    await fetch(`/api/dev-servers/${serverId}/restart`, { method: "POST" });
+    await fetchDevServers();
+  }, [fetchDevServers]);
+
+  const handleRemoveDevServer = useCallback(async (serverId: string) => {
+    await fetch(`/api/dev-servers/${serverId}`, { method: "DELETE" });
+    await fetchDevServers();
+  }, [fetchDevServers]);
+
+  const handleCreateDevServer = useCallback(async (opts: {
+    sessionId: string;
+    type: "node" | "docker";
+    name: string;
+    command: string;
+    workingDirectory: string;
+    ports?: number[];
+  }) => {
+    await fetch("/api/dev-servers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    await fetchDevServers();
+    setStartDevServerSessionId(null);
+  }, [fetchDevServers]);
+
   // Get active session from focused pane's active tab
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
+
+  // Session for starting dev server dialog
+  const startDevServerSession = startDevServerSessionId
+    ? sessions.find((s) => s.id === startDevServerSessionId) ?? null
+    : null;
 
   // Shared props for views
   const viewProps = {
     sessions,
     groups,
+    projects,
     sessionStatuses,
     summarizingSessionId,
+    devServers,
     sidebarOpen,
     setSidebarOpen,
     activeSession,
@@ -571,6 +727,10 @@ function HomeContent() {
     setCopiedSessionId,
     showNewSessionDialog,
     setShowNewSessionDialog,
+    showNewProjectDialog,
+    setShowNewProjectDialog,
+    showProjectSettings,
+    setShowProjectSettings,
     showNotificationSettings,
     setShowNotificationSettings,
     showQuickSwitcher,
@@ -581,15 +741,29 @@ function HomeContent() {
     requestPermission,
     attachToSession,
     fetchSessions,
+    fetchProjects,
     handleToggleGroup,
     handleCreateGroup,
     handleDeleteGroup,
     handleMoveSession,
+    handleToggleProject,
+    handleEditProject,
+    handleDeleteProject,
+    handleRenameProject,
+    handleMoveSessionToProject,
+    handleNewSessionInProject,
     handleForkSession,
     handleSummarize,
     handleDeleteSession,
     handleRenameSession,
     handleCreatePR,
+    handleStartDevServer,
+    handleStopDevServer,
+    handleRestartDevServer,
+    handleRemoveDevServer,
+    handleCreateDevServer,
+    startDevServerSession,
+    setStartDevServerSessionId,
     renderPane,
   };
 
