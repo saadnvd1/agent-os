@@ -22,6 +22,7 @@ export function MobileView({
   showQuickSwitcher,
   setShowQuickSwitcher,
   attachToSession,
+  openSessionInNewTab,
   fetchSessions,
   fetchProjects,
   handleNewSessionInProject,
@@ -44,6 +45,11 @@ export function MobileView({
               onSelect={(id) => {
                 const session = sessions.find((s) => s.id === id);
                 if (session) attachToSession(session);
+                setSidebarOpen(false);
+              }}
+              onOpenInTab={(id) => {
+                const session = sessions.find((s) => s.id === id);
+                if (session) openSessionInNewTab(session);
                 setSidebarOpen(false);
               }}
               onNewSessionInProject={handleNewSessionInProject}

@@ -28,6 +28,7 @@ interface ProjectsSectionProps {
   onRenameProject?: (projectId: string, newName: string) => void;
   onNewSession?: (projectId: string) => void;
   onSelectSession: (sessionId: string) => void;
+  onOpenSessionInTab?: (sessionId: string) => void;
   onMoveSession?: (sessionId: string, projectId: string) => void;
   onForkSession?: (sessionId: string) => void;
   onSummarize?: (sessionId: string) => void;
@@ -57,6 +58,7 @@ export function ProjectsSection({
   onRenameProject,
   onNewSession,
   onSelectSession,
+  onOpenSessionInTab,
   onMoveSession,
   onForkSession,
   onSummarize,
@@ -227,6 +229,7 @@ export function ProjectsSection({
                               isInSelectMode={isInSelectMode}
                               onToggleSelect={(shiftKey) => handleToggleSelect(session.id, shiftKey)}
                               onClick={() => onSelectSession(session.id)}
+                              onOpenInTab={onOpenSessionInTab ? () => onOpenSessionInTab(session.id) : undefined}
                               onMoveToProject={
                                 onMoveSession
                                   ? (projectId) =>
@@ -292,6 +295,7 @@ export function ProjectsSection({
                                 isInSelectMode={isInSelectMode}
                                 onToggleSelect={(shiftKey) => handleToggleSelect(worker.id, shiftKey)}
                                 onClick={() => onSelectSession(worker.id)}
+                                onOpenInTab={onOpenSessionInTab ? () => onOpenSessionInTab(worker.id) : undefined}
                                 onDelete={
                                   onDeleteSession
                                     ? () => onDeleteSession(worker.id)

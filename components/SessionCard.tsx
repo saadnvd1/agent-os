@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles, Square, CheckSquare } from "lucide-react";
+import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles, Square, CheckSquare, ExternalLink } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -43,6 +43,7 @@ interface SessionCardProps {
   onToggleSelect?: (shiftKey: boolean) => void;
   // Navigation
   onClick?: () => void;
+  onOpenInTab?: () => void;
   onMove?: (groupPath: string) => void;
   onMoveToProject?: (projectId: string) => void;
   onFork?: () => void;
@@ -82,7 +83,7 @@ const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: Rea
   },
 };
 
-export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], isSelected, isInSelectMode, onToggleSelect, onClick, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
+export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], isSelected, isInSelectMode, onToggleSelect, onClick, onOpenInTab, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
@@ -137,7 +138,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
     setIsEditing(false);
   };
 
-  const hasActions = onMove || onMoveToProject || onFork || onDelete || onRename || onCreatePR;
+  const hasActions = onMove || onMoveToProject || onFork || onDelete || onRename || onCreatePR || onOpenInTab;
 
   // Handle card click - coordinates selection with navigation
   const handleCardClick = (e: React.MouseEvent) => {
@@ -179,6 +180,12 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
 
     return (
       <>
+        {onOpenInTab && (
+          <MenuItem onClick={() => onOpenInTab()}>
+            <ExternalLink className="w-3 h-3 mr-2" />
+            Open in new tab
+          </MenuItem>
+        )}
         {onRename && (
           <MenuItem onClick={() => setIsEditing(true)}>
             <Pencil className="w-3 h-3 mr-2" />

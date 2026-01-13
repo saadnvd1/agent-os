@@ -34,6 +34,7 @@ export function DesktopView({
   updateSettings,
   requestPermission,
   attachToSession,
+  openSessionInNewTab,
   fetchSessions,
   fetchProjects,
   handleNewSessionInProject,
@@ -61,6 +62,10 @@ export function DesktopView({
               onSelect={(id) => {
                 const session = sessions.find((s) => s.id === id);
                 if (session) attachToSession(session);
+              }}
+              onOpenInTab={(id) => {
+                const session = sessions.find((s) => s.id === id);
+                if (session) openSessionInNewTab(session);
               }}
               onNewSessionInProject={handleNewSessionInProject}
               onStartDevServer={handleStartDevServer}
