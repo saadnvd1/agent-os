@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { SessionCard } from "./SessionCard";
 import { SessionPreviewPopover } from "./SessionPreviewPopover";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { ServerLogsModal } from "./DevServers";
 import { ProjectsSection, NewProjectDialog, ProjectSettingsDialog } from "./Projects";
+import { SelectionToolbar } from "./SessionList/SelectionToolbar";
+import { SessionMultiSelectProvider } from "@/contexts/SessionMultiSelectContext";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Plus, RefreshCw, Bot, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Trash2, Loader2 } from "lucide-react";
@@ -115,6 +117,19 @@ export function SessionList({
 
   // Use projects if available
   const useProjects = projects.length > 0;
+
+  // Flatten all session IDs for bulk operations
+  const allSessionIds = useMemo(() => {
+    return sessions.map((s) => s.id);
+  }, [sessions]);
+
+  // Bulk delete handler
+  const handleBulkDelete = useCallback(async (sessionIds: string[]) => {
+    for (const sessionId of sessionIds) {
+      await onDeleteSession?.(sessionId);
+    }
+    await onRefresh();
+  }, [onDeleteSession, onRefresh]);
 
   // Find server for logs modal
   const logsServer = logsServerId
@@ -357,6 +372,210 @@ export function SessionList({
   };
 
   return (
+    <SessionMultiSelectProvider>
+      <SessionListContent
+        sessions={sessions}
+        groups={groups}
+        projects={projects}
+        activeSessionId={activeSessionId}
+        sessionStatuses={sessionStatuses}
+        summarizingSessionId={summarizingSessionId}
+        devServers={devServers}
+        allSessionIds={allSessionIds}
+        onBulkDelete={handleBulkDelete}
+        showNewDialog={showNewDialog}
+        setShowNewDialog={setShowNewDialog}
+        showNewProjectDialog={showNewProjectDialog}
+        setShowNewProjectDialog={setShowNewProjectDialog}
+        editingProject={editingProject}
+        setEditingProject={setEditingProject}
+        refreshing={refreshing}
+        newGroupName={newGroupName}
+        setNewGroupName={setNewGroupName}
+        showNewGroupInput={showNewGroupInput}
+        setShowNewGroupInput={setShowNewGroupInput}
+        showKillAllConfirm={showKillAllConfirm}
+        setShowKillAllConfirm={setShowKillAllConfirm}
+        killingAll={killingAll}
+        hoveredSession={hoveredSession}
+        hoverPosition={hoverPosition}
+        logsServerId={logsServerId}
+        setLogsServerId={setLogsServerId}
+        logsServer={logsServer}
+        isMobile={isMobile}
+        useProjects={useProjects}
+        sessionsByGroup={sessionsByGroup}
+        workersByConduct={workersByConduct}
+        groupMap={groupMap}
+        rootGroups={rootGroups}
+        getChildGroups={getChildGroups}
+        handleHoverStart={handleHoverStart}
+        handleHoverEnd={handleHoverEnd}
+        handleRefresh={handleRefresh}
+        handleKillAll={handleKillAll}
+        setKillingAll={setKillingAll}
+        setRefreshing={setRefreshing}
+        renderGroup={renderGroup}
+        onSelect={onSelect}
+        onRefresh={onRefresh}
+        onRefreshProjects={onRefreshProjects}
+        onToggleGroup={onToggleGroup}
+        onCreateGroup={onCreateGroup}
+        onDeleteGroup={onDeleteGroup}
+        onToggleProject={onToggleProject}
+        onEditProject={onEditProject}
+        onDeleteProject={onDeleteProject}
+        onRenameProject={onRenameProject}
+        onNewSessionInProject={onNewSessionInProject}
+        onMoveSession={onMoveSession}
+        onMoveSessionToProject={onMoveSessionToProject}
+        onForkSession={onForkSession}
+        onSummarize={onSummarize}
+        onDeleteSession={onDeleteSession}
+        onRenameSession={onRenameSession}
+        onCreatePR={onCreatePR}
+        onStartDevServer={onStartDevServer}
+        onStopDevServer={onStopDevServer}
+        onRestartDevServer={onRestartDevServer}
+        onRemoveDevServer={onRemoveDevServer}
+      />
+    </SessionMultiSelectProvider>
+  );
+}
+
+// Inner component to access the multi-select context
+function SessionListContent({
+  sessions,
+  groups,
+  projects,
+  activeSessionId,
+  sessionStatuses,
+  summarizingSessionId,
+  devServers,
+  allSessionIds,
+  onBulkDelete,
+  showNewDialog,
+  setShowNewDialog,
+  showNewProjectDialog,
+  setShowNewProjectDialog,
+  editingProject,
+  setEditingProject,
+  refreshing,
+  newGroupName,
+  setNewGroupName,
+  showNewGroupInput,
+  setShowNewGroupInput,
+  showKillAllConfirm,
+  setShowKillAllConfirm,
+  killingAll,
+  hoveredSession,
+  hoverPosition,
+  logsServerId,
+  setLogsServerId,
+  logsServer,
+  isMobile,
+  useProjects,
+  sessionsByGroup,
+  workersByConduct,
+  groupMap,
+  rootGroups,
+  getChildGroups,
+  handleHoverStart,
+  handleHoverEnd,
+  handleRefresh,
+  handleKillAll,
+  setKillingAll,
+  setRefreshing,
+  renderGroup,
+  onSelect,
+  onRefresh,
+  onRefreshProjects,
+  onToggleGroup,
+  onCreateGroup,
+  onDeleteGroup,
+  onToggleProject,
+  onEditProject,
+  onDeleteProject,
+  onRenameProject,
+  onNewSessionInProject,
+  onMoveSession,
+  onMoveSessionToProject,
+  onForkSession,
+  onSummarize,
+  onDeleteSession,
+  onRenameSession,
+  onCreatePR,
+  onStartDevServer,
+  onStopDevServer,
+  onRestartDevServer,
+  onRemoveDevServer,
+}: {
+  sessions: Session[];
+  groups: Group[];
+  projects: ProjectWithDevServers[];
+  activeSessionId?: string;
+  sessionStatuses?: Record<string, SessionStatus>;
+  summarizingSessionId?: string | null;
+  devServers: DevServer[];
+  allSessionIds: string[];
+  onBulkDelete: (sessionIds: string[]) => Promise<void>;
+  showNewDialog: boolean;
+  setShowNewDialog: (v: boolean) => void;
+  showNewProjectDialog: boolean;
+  setShowNewProjectDialog: (v: boolean) => void;
+  editingProject: ProjectWithDevServers | null;
+  setEditingProject: (v: ProjectWithDevServers | null) => void;
+  refreshing: boolean;
+  newGroupName: string;
+  setNewGroupName: (v: string) => void;
+  showNewGroupInput: string | null;
+  setShowNewGroupInput: (v: string | null) => void;
+  showKillAllConfirm: boolean;
+  setShowKillAllConfirm: (v: boolean) => void;
+  killingAll: boolean;
+  hoveredSession: Session | null;
+  hoverPosition: { x: number; y: number };
+  logsServerId: string | null;
+  setLogsServerId: (v: string | null) => void;
+  logsServer: DevServer | null | undefined;
+  isMobile: boolean;
+  useProjects: boolean;
+  sessionsByGroup: Record<string, Session[]>;
+  workersByConduct: Record<string, Session[]>;
+  groupMap: Map<string, Group>;
+  rootGroups: Group[];
+  getChildGroups: (parentPath: string) => Group[];
+  handleHoverStart: (session: Session, rect: DOMRect) => void;
+  handleHoverEnd: () => void;
+  handleRefresh: () => Promise<void>;
+  handleKillAll: () => Promise<void>;
+  setKillingAll: (v: boolean) => void;
+  setRefreshing: (v: boolean) => void;
+  renderGroup: (group: Group, level?: number) => React.ReactNode;
+  onSelect: (id: string) => void;
+  onRefresh: () => void;
+  onRefreshProjects?: () => void;
+  onToggleGroup?: (path: string, expanded: boolean) => void;
+  onCreateGroup?: (name: string, parentPath?: string) => void;
+  onDeleteGroup?: (path: string) => void;
+  onToggleProject?: (projectId: string, expanded: boolean) => void;
+  onEditProject?: (projectId: string) => void;
+  onDeleteProject?: (projectId: string) => void;
+  onRenameProject?: (projectId: string, newName: string) => void;
+  onNewSessionInProject?: (projectId: string) => void;
+  onMoveSession?: (sessionId: string, groupPath: string) => void;
+  onMoveSessionToProject?: (sessionId: string, projectId: string) => void;
+  onForkSession?: (sessionId: string) => void;
+  onSummarize?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string) => void;
+  onRenameSession?: (sessionId: string, newName: string) => void;
+  onCreatePR?: (sessionId: string) => void;
+  onStartDevServer?: (projectId: string) => void;
+  onStopDevServer?: (serverId: string) => Promise<void>;
+  onRestartDevServer?: (serverId: string) => Promise<void>;
+  onRemoveDevServer?: (serverId: string) => Promise<void>;
+}) {
+  return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 pb-3">
@@ -445,6 +664,12 @@ export function SessionList({
           </div>
         </div>
       )}
+
+      {/* Selection Toolbar */}
+      <SelectionToolbar
+        allSessionIds={allSessionIds}
+        onDeleteSessions={onBulkDelete}
+      />
 
       {/* Summarizing indicator */}
       {summarizingSessionId && (
