@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { createQueryClient } from "@/lib/query-client";
@@ -45,7 +44,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
         </ThemeClassHandler>
       </NextThemesProvider>
-      {process.env.NODE_ENV === "development" && <ReactQueryDevtools />}
     </QueryClientProvider>
   );
 }
