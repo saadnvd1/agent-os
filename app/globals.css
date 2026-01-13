@@ -50,6 +50,43 @@
   /* Mobile viewport height - JS hook sets this dynamically for keyboard */
   --app-height: 100vh;
   --app-height: 100dvh;
+
+  /* Light theme (base) */
+  --background: hsl(270 20% 98%);
+  --foreground: hsl(270 20% 10%);
+  --card: hsl(270 15% 96%);
+  --card-foreground: hsl(270 20% 10%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(270 20% 10%);
+  --primary: hsl(270 70% 50%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(270 15% 92%);
+  --secondary-foreground: hsl(270 20% 15%);
+  --muted: hsl(270 12% 94%);
+  --muted-foreground: hsl(270 10% 45%);
+  --accent: hsl(270 20% 92%);
+  --accent-foreground: hsl(270 20% 10%);
+  --destructive: hsl(0 70% 50%);
+  --border: hsl(270 8% 88%);
+  --input: hsl(270 8% 93%);
+  --ring: hsl(270 40% 65%);
+  --chart-1: hsl(270 70% 50%);
+  --chart-2: hsl(290 60% 55%);
+  --chart-3: hsl(250 50% 55%);
+  --chart-4: hsl(280 65% 45%);
+  --chart-5: hsl(260 55% 40%);
+  --sidebar-background: hsl(270 15% 96%);
+  --sidebar-foreground: hsl(270 15% 40%);
+  --sidebar-primary: hsl(270 70% 50%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(270 15% 92%);
+  --sidebar-accent-foreground: hsl(270 20% 10%);
+  --sidebar-border: hsl(270 8% 88%);
+  --sidebar-ring: hsl(270 40% 65%);
+}
+
+/* Dark theme */
+.dark {
   --background: hsl(270 20% 8%);
   --foreground: hsl(270 10% 95%);
   --card: hsl(270 15% 12%);
@@ -177,4 +214,13 @@ html, body {
     max-height: calc(100vh - env(safe-area-inset-bottom));
     overflow: hidden;
   }
+}
+
+/* Terminal background matches theme */
+.terminal-container {
+  background: #09090b;
+}
+
+.light .terminal-container {
+  background: #d6dde0;
 }

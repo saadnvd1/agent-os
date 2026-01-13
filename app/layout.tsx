@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
@@ -42,16 +42,10 @@ export default function RootLayout({
           {children}
         </Providers>
         <Toaster
-          theme="dark"
           position="top-center"
           closeButton
           toastOptions={{
-            style: {
-              background: "hsl(270 20% 12%)",
-              border: "1px solid hsl(270 15% 25%)",
-              color: "hsl(270 10% 95%)",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
-            },
+            className: "!bg-card !border-border !text-foreground !shadow-lg",
           }}
         />
       </body>
