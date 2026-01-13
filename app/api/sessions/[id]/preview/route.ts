@@ -13,12 +13,18 @@ export async function GET(
     const { id } = await params;
     const sessionName = `claude-${id}`;
 
-    // Capture last 20 lines from tmux pane
+    // Capture visible pane content plus scrollback, take last 50 lines
     const { stdout } = await execAsync(
-      `tmux capture-pane -t "${sessionName}" -p -S -20 2>/dev/null || echo ""`
+      `tmux capture-pane -t "${sessionName}" -p -S -100 2>/dev/null || echo ""`
     );
 
-    const lines = stdout.split("\n");
+    // Take the last 50 non-empty lines (trim trailing empty lines)
+    const allLines = stdout.split("\n");
+    let lastNonEmpty = allLines.length - 1;
+    while (lastNonEmpty > 0 && allLines[lastNonEmpty].trim() === "") {
+      lastNonEmpty--;
+    }
+    const lines = allLines.slice(Math.max(0, lastNonEmpty - 49), lastNonEmpty + 1);
 
     return NextResponse.json({ lines });
   } catch (error) {
