@@ -45,15 +45,29 @@ interface KeyProps {
   className?: string;
 }
 
+// Trigger haptic feedback if available
+function haptic() {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    navigator.vibrate(5);
+  }
+}
+
 function Key({ char, onPress, className }: KeyProps) {
+  const handlePress = () => {
+    haptic();
+    onPress();
+  };
+
   return (
     <button
-      onClick={onPress}
+      onClick={handlePress}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'flex h-[38px] flex-1 touch-manipulation items-center justify-center rounded-md text-sm font-medium',
-        'bg-zinc-800 text-zinc-200 active:bg-zinc-600',
-        'select-none',
+        'flex h-[44px] flex-1 touch-manipulation items-center justify-center rounded-md text-sm font-medium',
+        'bg-secondary text-secondary-foreground',
+        'active:bg-primary active:text-primary-foreground active:scale-110 active:z-10',
+        'transition-transform duration-75',
+        'select-none min-w-[32px]',
         className
       )}
     >
@@ -77,67 +91,67 @@ export function VirtualKeyboard({ onKeyPress, onImagePick, visible = true }: Vir
   if (mode === 'quick') {
     return (
       <div
-        className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-900/98 px-1.5 py-1.5 backdrop-blur-sm select-none"
+        className="flex flex-col gap-1.5 bg-background px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] select-none"
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Mode tabs + common keys */}
-        <div className="flex gap-1">
+        <div className="flex gap-1.5">
           <button
-            onClick={() => setMode('abc')}
-            className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+            onClick={() => { haptic(); setMode('abc'); }}
+            className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
             ABC
           </button>
           <button
-            onClick={() => setMode('num')}
-            className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+            onClick={() => { haptic(); setMode('num'); }}
+            className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
             123
           </button>
-          <Key char="Tab" onPress={() => onKeyPress(SPECIAL_KEYS.TAB)} className="bg-zinc-700" />
-          <Key char="Esc" onPress={() => onKeyPress(SPECIAL_KEYS.ESC)} className="bg-zinc-700" />
-          <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} className="bg-zinc-700" />
+          <Key char="Tab" onPress={() => onKeyPress(SPECIAL_KEYS.TAB)} className="bg-muted" />
+          <Key char="Esc" onPress={() => onKeyPress(SPECIAL_KEYS.ESC)} className="bg-muted" />
+          <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} className="bg-muted" />
         </div>
 
         {/* Arrow keys + Enter + Ctrl shortcuts */}
-        <div className="flex gap-1">
-          <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} className="bg-red-900/40 text-red-400" />
+        <div className="flex gap-1.5">
+          <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} className="bg-red-500/20 text-red-500" />
           {onImagePick && (
             <button
-              onClick={onImagePick}
-              className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+              onClick={() => { haptic(); onImagePick(); }}
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
             >
-              <ImagePlus className="h-4 w-4" />
+              <ImagePlus className="h-5 w-5" />
             </button>
           )}
-          <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} className="bg-zinc-700" />
-          <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} className="bg-zinc-700" />
+          <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} className="bg-muted" />
+          <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} className="bg-muted" />
           <div className="flex-1" />
           <button
-            onClick={() => onKeyPress(SPECIAL_KEYS.LEFT)}
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+            onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.LEFT); }}
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-6 w-6" />
           </button>
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             <button
-              onClick={() => onKeyPress(SPECIAL_KEYS.UP)}
-              className="flex h-[18px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+              onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.UP); }}
+              className="flex h-[20px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground transition-colors duration-75"
             >
               <ChevronUp className="h-4 w-4" />
             </button>
             <button
-              onClick={() => onKeyPress(SPECIAL_KEYS.DOWN)}
-              className="flex h-[18px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+              onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.DOWN); }}
+              className="flex h-[20px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground transition-colors duration-75"
             >
               <ChevronDown className="h-4 w-4" />
             </button>
           </div>
           <button
-            onClick={() => onKeyPress(SPECIAL_KEYS.RIGHT)}
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+            onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.RIGHT); }}
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-6 w-6" />
           </button>
           <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} className="bg-primary/30 text-primary" />
         </div>
@@ -149,26 +163,26 @@ export function VirtualKeyboard({ onKeyPress, onImagePick, visible = true }: Vir
   if (mode === 'abc') {
     return (
       <div
-        className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-900/98 px-1.5 py-1.5 backdrop-blur-sm select-none"
+        className="flex flex-col gap-1.5 bg-background px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] select-none"
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* QWERTY rows */}
-        <div className="flex gap-0.5">
+        <div className="flex gap-1">
           {ROWS.row1.map((char) => (
             <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
           ))}
         </div>
-        <div className="flex gap-0.5 px-3">
+        <div className="flex gap-1 px-4">
           {ROWS.row2.map((char) => (
             <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
           ))}
         </div>
-        <div className="flex gap-0.5">
+        <div className="flex gap-1">
           <button
-            onClick={() => setShifted(!shifted)}
+            onClick={() => { haptic(); setShifted(!shifted); }}
             className={cn(
-              'flex h-[38px] w-[42px] items-center justify-center rounded-md text-sm font-medium active:bg-zinc-500',
-              shifted ? 'bg-primary/30 text-primary' : 'bg-zinc-700 text-zinc-300'
+              'flex h-[44px] w-[48px] items-center justify-center rounded-md text-sm font-medium active:scale-105 transition-transform duration-75',
+              shifted ? 'bg-primary/30 text-primary active:bg-primary active:text-primary-foreground' : 'bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground'
             )}
           >
             ⇧
@@ -177,36 +191,36 @@ export function VirtualKeyboard({ onKeyPress, onImagePick, visible = true }: Vir
             <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
           ))}
           <button
-            onClick={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)}
-            className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-sm font-medium text-zinc-300 active:bg-zinc-500"
+            onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.BACKSPACE); }}
+            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
             ⌫
           </button>
         </div>
 
         {/* Bottom row */}
-        <div className="flex gap-0.5">
+        <div className="flex gap-1">
           <button
-            onClick={() => setMode('quick')}
-            className="flex h-[38px] w-[50px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+            onClick={() => { haptic(); setMode('quick'); }}
+            className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
             ^C
           </button>
           <button
-            onClick={() => setMode('num')}
-            className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+            onClick={() => { haptic(); setMode('num'); }}
+            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
             123
           </button>
           <button
-            onClick={() => onKeyPress(' ')}
-            className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-800 text-sm text-zinc-400 active:bg-zinc-600"
+            onClick={() => { haptic(); onKeyPress(' '); }}
+            className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-secondary text-sm text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-[1.02] transition-transform duration-75"
           >
             space
           </button>
           <button
-            onClick={() => onKeyPress(SPECIAL_KEYS.ENTER)}
-            className="flex h-[38px] w-[60px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary/50"
+            onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.ENTER); }}
+            className="flex h-[44px] w-[68px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
           >
             ⏎
           </button>
@@ -218,57 +232,57 @@ export function VirtualKeyboard({ onKeyPress, onImagePick, visible = true }: Vir
   // Num mode - numbers and symbols
   return (
     <div
-      className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-900/98 px-1.5 py-1.5 backdrop-blur-sm select-none"
+      className="flex flex-col gap-1.5 bg-background px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] select-none"
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* Number row */}
-      <div className="flex gap-0.5">
+      <div className="flex gap-1">
         {ROWS.numbers.map((char) => (
           <Key key={char} char={char} onPress={() => onKeyPress(char)} />
         ))}
       </div>
 
       {/* Symbols rows */}
-      <div className="flex gap-0.5">
+      <div className="flex gap-1">
         {ROWS.symbols.map((char) => (
           <Key key={char} char={char} onPress={() => onKeyPress(char)} />
         ))}
       </div>
-      <div className="flex gap-0.5">
+      <div className="flex gap-1">
         {ROWS.symbolsMore.map((char) => (
           <Key key={char} char={char} onPress={() => onKeyPress(char)} />
         ))}
       </div>
 
       {/* Bottom row */}
-      <div className="flex gap-0.5">
+      <div className="flex gap-1">
         <button
-          onClick={() => setMode('quick')}
-          className="flex h-[38px] w-[50px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+          onClick={() => { haptic(); setMode('quick'); }}
+          className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
         >
           ^C
         </button>
         <button
-          onClick={() => setMode('abc')}
-          className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-xs font-medium text-zinc-300 active:bg-zinc-500"
+          onClick={() => { haptic(); setMode('abc'); }}
+          className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
         >
           ABC
         </button>
         <button
-          onClick={() => onKeyPress(' ')}
-          className="flex h-[38px] flex-1 items-center justify-center rounded-md bg-zinc-800 text-sm text-zinc-400 active:bg-zinc-600"
+          onClick={() => { haptic(); onKeyPress(' '); }}
+          className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-secondary text-sm text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-[1.02] transition-transform duration-75"
         >
           space
         </button>
         <button
-          onClick={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)}
-          className="flex h-[38px] w-[42px] items-center justify-center rounded-md bg-zinc-700 text-sm font-medium text-zinc-300 active:bg-zinc-500"
+          onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.BACKSPACE); }}
+          className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
         >
           ⌫
         </button>
         <button
-          onClick={() => onKeyPress(SPECIAL_KEYS.ENTER)}
-          className="flex h-[38px] w-[60px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary/50"
+          onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.ENTER); }}
+          className="flex h-[44px] w-[68px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
         >
           ⏎
         </button>

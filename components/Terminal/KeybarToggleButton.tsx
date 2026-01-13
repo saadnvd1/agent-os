@@ -20,13 +20,13 @@ export function KeybarToggleButton({ isVisible, onToggle }: KeybarToggleButtonPr
         'absolute z-30 right-3',
         'flex items-center justify-center',
         'h-11 w-11 rounded-full',
-        'bg-zinc-800/90 backdrop-blur-sm',
-        'border border-zinc-700',
-        'text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100',
+        'bg-secondary/90 backdrop-blur-sm',
+        'shadow-lg',
+        'text-muted-foreground hover:bg-accent hover:text-foreground',
         'touch-manipulation transition-all duration-200',
         'active:scale-95',
-        // Position: moves up when keyboard is visible (~170px for tallest mode)
-        isVisible ? 'bottom-[175px]' : 'bottom-4'
+        // Position: moves up when keyboard is visible (accounts for safe-area + taller keys)
+        isVisible ? 'bottom-[230px]' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'
       )}
       aria-label={isVisible ? 'Hide keyboard' : 'Show keyboard'}
     >
