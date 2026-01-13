@@ -21,7 +21,7 @@ export function FileTabs({
   isDirty,
 }: FileTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const activeTabRef = useRef<HTMLButtonElement>(null);
+  const activeTabRef = useRef<HTMLDivElement>(null);
 
   // Scroll active tab into view
   useEffect(() => {
@@ -50,12 +50,20 @@ export function FileTabs({
         const ext = fileName.split(".").pop()?.toLowerCase() || "";
 
         return (
-          <button
+          <div
             key={file.path}
             ref={isActive ? activeTabRef : null}
+            role="button"
+            tabIndex={0}
             onClick={() => onSelect(file.path)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(file.path);
+              }
+            }}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap transition-colors",
+              "flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap transition-colors cursor-pointer",
               "min-h-[40px] md:min-h-[36px]",
               "hover:bg-accent/50",
               isActive
@@ -81,7 +89,7 @@ export function FileTabs({
             >
               <X className="w-3 h-3" />
             </button>
-          </button>
+          </div>
         );
       })}
     </div>
