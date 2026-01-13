@@ -6,44 +6,74 @@ import { Pane } from "@/components/Pane";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewport } from "@/hooks/useViewport";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
-import type { Session, Group, DevServer } from "@/lib/db";
-import type { ProjectWithDevServers } from "@/lib/projects";
+import { useSessions } from "@/hooks/useSessions";
+import { useProjects } from "@/hooks/useProjects";
+import { useGroups } from "@/hooks/useGroups";
+import { useDevServersManager } from "@/hooks/useDevServersManager";
+import { useSessionStatuses } from "@/hooks/useSessionStatuses";
+import type { Session } from "@/lib/db";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
 import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
-import type { SessionStatus } from "@/components/views/types";
 
-interface ExternalTmuxSession {
-  sessionName: string;
-  status: "idle" | "running" | "waiting" | "error" | "dead";
-  lastLine?: string;
-  claudeSessionId?: string | null;
-}
-
-// Main content component that uses pane context
 function HomeContent() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [projects, setProjects] = useState<ProjectWithDevServers[]>([]);
+  // UI State
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
-  const [showProjectSettings, setShowProjectSettings] = useState<ProjectWithDevServers | null>(null);
-  const importedTmuxSessions = useRef<Set<string>>(new Set());
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
-  const [devServers, setDevServers] = useState<DevServer[]>([]);
-  const [startDevServerProjectId, setStartDevServerProjectId] = useState<string | null>(null);
+  const [copiedSessionId, setCopiedSessionId] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
-  const updatedSessionIds = useRef<Set<string>>(new Set());
 
+  // Pane context
   const { focusedPaneId, attachSession, getActiveTab } = usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
-  const [copiedSessionId, setCopiedSessionId] = useState(false);
-  const [summarizingSessionId, setSummarizingSessionId] = useState<string | null>(null);
   const { isMobile } = useViewport();
+
+  // Data hooks
+  const {
+    sessions,
+    groups,
+    summarizingSessionId,
+    fetchSessions,
+    deleteSession,
+    renameSession,
+    forkSession,
+    summarizeSession,
+    moveSessionToGroup,
+    moveSessionToProject,
+    setSessions,
+    setGroups,
+    updatedSessionIds,
+  } = useSessions();
+
+  const {
+    projects,
+    fetchProjects,
+    toggleProject,
+    deleteProject,
+    renameProject,
+    setProjects,
+  } = useProjects(fetchSessions);
+
+  const {
+    toggleGroup,
+    createGroup,
+    deleteGroup,
+  } = useGroups(setGroups, fetchSessions);
+
+  const {
+    devServers,
+    startDevServerProjectId,
+    setStartDevServerProjectId,
+    startDevServer,
+    stopDevServer,
+    restartDevServer,
+    removeDevServer,
+    createDevServer,
+  } = useDevServersManager();
 
   // Helper to get init script command from API
   const getInitScriptCommand = useCallback(async (agentCommand: string): Promise<string> => {
@@ -56,7 +86,6 @@ function HomeContent() {
       const data = await res.json();
       return data.command || agentCommand;
     } catch {
-      // Fallback to raw command if API fails
       return agentCommand;
     }
   }, []);
@@ -64,60 +93,7 @@ function HomeContent() {
   // Set CSS variable for viewport height (handles mobile keyboard)
   useViewportHeight();
 
-  // Callback for notification clicks - needs to be defined before useNotifications
-  const handleNotificationClick = useCallback((sessionId: string) => {
-    const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      const terminal = terminalRefs.current.get(`${focusedPaneId}:${getActiveTab(focusedPaneId)?.id}`);
-      if (terminal) {
-        const provider = getProvider(session.agent_type || "claude");
-        const sessionName = `${provider.id}-${session.id}`;
-        const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
-
-        // Ensure MCP config exists for orchestration
-        fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
-
-        let parentSessionId: string | null = null;
-        if (!session.claude_session_id && session.parent_session_id) {
-          const parentSession = sessions.find(s => s.id === session.parent_session_id);
-          parentSessionId = parentSession?.claude_session_id || null;
-        }
-
-        const flags = provider.buildFlags({
-          sessionId: session.claude_session_id,
-          parentSessionId,
-          autoApprove: session.auto_approve,
-          model: session.model,
-        });
-        const flagsStr = flags.join(" ");
-
-        // Check if we're currently attached to a tmux session
-        const activeTab = getActiveTab(focusedPaneId);
-        const isInTmux = !!activeTab?.attachedTmux;
-
-        // Only send detach command if we're in tmux
-        if (isInTmux) {
-          terminal.sendInput("\x02d");
-        }
-
-        setTimeout(() => {
-          terminal.sendInput("\x03"); // Ctrl+C to interrupt anything
-          setTimeout(async () => {
-            const agentCmd = `${provider.command} ${flagsStr}`;
-            const newSessionCmd = await getInitScriptCommand(agentCmd);
-            terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
-            attachSession(focusedPaneId, session.id, sessionName);
-          }, 50);
-        }, isInTmux ? 100 : 0);
-      }
-    }
-  }, [sessions, focusedPaneId, getActiveTab, attachSession, getInitScriptCommand]);
-
-  const { settings: notificationSettings, checkStateChanges, updateSettings, requestPermission, permissionGranted } = useNotifications({
-    onSessionClick: handleNotificationClick,
-  });
-
-  // Register terminal ref for a pane+tab
+  // Terminal ref management
   const registerTerminalRef = useCallback((paneId: string, tabId: string, ref: TerminalHandle | null) => {
     const key = `${paneId}:${tabId}`;
     if (ref) {
@@ -127,156 +103,90 @@ function HomeContent() {
     }
   }, []);
 
-  // Get terminal for focused pane's active tab
   const getFocusedTerminal = useCallback(() => {
     const activeTab = getActiveTab(focusedPaneId);
     if (!activeTab) return undefined;
     return terminalRefs.current.get(`${focusedPaneId}:${activeTab.id}`);
   }, [focusedPaneId, getActiveTab]);
 
-  // Fetch all sessions and groups
-  const fetchSessions = useCallback(async () => {
-    try {
-      const res = await fetch("/api/sessions");
-      const data = await res.json();
-      setSessions(data.sessions || []);
-      setGroups(data.groups || []);
-    } catch (error) {
-      // Ignore abort/network errors on initial load
-      if (error instanceof Error && error.name === 'AbortError') return;
-      if (error instanceof TypeError && error.message === 'Failed to fetch') return;
-      console.error("Failed to fetch sessions:", error);
+  // Attach session to terminal
+  const attachToSession = useCallback(async (session: Session) => {
+    const terminal = getFocusedTerminal();
+    if (!terminal) return;
+
+    const provider = getProvider(session.agent_type || "claude");
+    const sessionName = `${provider.id}-${session.id}`;
+    const cwd = session.working_directory?.replace("~", "$HOME") || "$HOME";
+
+    // Ensure MCP config exists for orchestration
+    fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
+
+    // Get parent session ID for forking
+    let parentSessionId: string | null = null;
+    if (!session.claude_session_id && session.parent_session_id) {
+      const parentSession = sessions.find(s => s.id === session.parent_session_id);
+      parentSessionId = parentSession?.claude_session_id || null;
     }
-  }, []);
 
-  // Fetch all projects
-  const fetchProjects = useCallback(async () => {
-    try {
-      const res = await fetch("/api/projects");
-      const data = await res.json();
-      setProjects(data.projects || []);
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      if (error instanceof TypeError && error.message === 'Failed to fetch') return;
-      console.error("Failed to fetch projects:", error);
+    const flags = provider.buildFlags({
+      sessionId: session.claude_session_id,
+      parentSessionId,
+      autoApprove: session.auto_approve,
+      model: session.model,
+    });
+    const flagsStr = flags.join(" ");
+
+    // Check if we're currently attached to a tmux session
+    const activeTab = getActiveTab(focusedPaneId);
+    const isInTmux = !!activeTab?.attachedTmux;
+
+    if (isInTmux) {
+      terminal.sendInput("\x02d");
     }
-  }, []);
 
-  // Fetch session statuses from tmux and auto-import external sessions
-  const fetchStatuses = useCallback(async () => {
-    try {
-      const res = await fetch("/api/sessions/status");
-      const data = await res.json();
-      const statuses = data.statuses || {};
-      setSessionStatuses(statuses);
+    setTimeout(() => {
+      terminal.sendInput("\x03");
+      setTimeout(async () => {
+        const agentCmd = `${provider.command} ${flagsStr}`;
+        const newSessionCmd = await getInitScriptCommand(agentCmd);
+        terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
+        attachSession(focusedPaneId, session.id, sessionName);
+        terminal.focus();
+      }, 50);
+    }, isInTmux ? 100 : 0);
+  }, [getFocusedTerminal, focusedPaneId, attachSession, sessions, getInitScriptCommand, getActiveTab]);
 
-      // Check for notification-worthy state changes
-      const sessionStates = sessions.map(s => ({
-        id: s.id,
-        name: s.name,
-        status: statuses[s.id]?.status || "dead",
-      }));
-      // Pass the active session ID to skip notifications for the currently viewed session
-      checkStateChanges(sessionStates, focusedActiveTab?.sessionId);
-
-      // Check for new Claude session IDs and update DB (only once per session)
-      let needsRefresh = false;
-      for (const [sessionId, status] of Object.entries(statuses) as [string, SessionStatus][]) {
-        if (status.claudeSessionId && !updatedSessionIds.current.has(sessionId)) {
-          updatedSessionIds.current.add(sessionId);
-          await fetch(`/api/sessions/${sessionId}/claude-session`);
-          needsRefresh = true;
-        }
-      }
-
-      // Auto-import external tmux sessions (sessions not managed by AgentOS)
-      const externalSessions = (data.otherSessions || []) as ExternalTmuxSession[];
-      for (const extSession of externalSessions) {
-        // Skip if already imported or currently importing
-        if (importedTmuxSessions.current.has(extSession.sessionName)) continue;
-
-        try {
-          // Mark as importing to avoid duplicate attempts
-          importedTmuxSessions.current.add(extSession.sessionName);
-
-          // Import the session
-          const importRes = await fetch("/api/sessions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: extSession.sessionName,
-              claudeSessionId: extSession.claudeSessionId,
-              importFromTmux: extSession.sessionName,
-            }),
-          });
-
-          if (importRes.ok) {
-            const importData = await importRes.json();
-            if (importData.session) {
-              // Rename tmux session to match our naming convention
-              const newTmuxName = `claude-${importData.session.id}`;
-              await fetch("/api/tmux/rename", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ oldName: extSession.sessionName, newName: newTmuxName }),
-              });
-              needsRefresh = true;
-            }
-          } else {
-            // Import failed, allow retry on next poll
-            importedTmuxSessions.current.delete(extSession.sessionName);
-          }
-        } catch (importError) {
-          // Import failed, allow retry on next poll
-          importedTmuxSessions.current.delete(extSession.sessionName);
-          console.error(`Failed to auto-import session ${extSession.sessionName}:`, importError);
-        }
-      }
-
-      if (needsRefresh) {
-        const sessRes = await fetch("/api/sessions");
-        const sessData = await sessRes.json();
-        setSessions(sessData.sessions || []);
-      }
-    } catch (error) {
-      // Ignore abort errors (happens during React Strict Mode remounting)
-      if (error instanceof Error && error.name === 'AbortError') return;
-      // Ignore network errors on initial load
-      if (error instanceof TypeError && error.message === 'Failed to fetch') return;
-      console.error("Failed to fetch statuses:", error);
+  // Notification click handler
+  const handleNotificationClick = useCallback((sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      attachToSession(session);
     }
-  }, [sessions, checkStateChanges, focusedActiveTab?.sessionId]);
+  }, [sessions, attachToSession]);
 
-  // Fetch dev servers
-  const fetchDevServers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/dev-servers");
-      const data = await res.json();
-      setDevServers(data.servers || []);
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") return;
-      if (error instanceof TypeError && error.message === "Failed to fetch") return;
-      console.error("Failed to fetch dev servers:", error);
-    }
-  }, []);
+  // Notifications
+  const {
+    settings: notificationSettings,
+    checkStateChanges,
+    updateSettings,
+    requestPermission,
+    permissionGranted,
+  } = useNotifications({ onSessionClick: handleNotificationClick });
 
-  // Set initial sidebar state based on viewport
-  useEffect(() => {
-    if (!isMobile) setSidebarOpen(true);
-  }, [isMobile]);
+  // Session statuses with auto-import
+  const { sessionStatuses } = useSessionStatuses({
+    sessions,
+    activeSessionId: focusedActiveTab?.sessionId,
+    updatedSessionIds,
+    setSessions,
+    checkStateChanges,
+  });
 
-  // Initial load
+  // Initial data load
   useEffect(() => {
     fetchSessions();
     fetchProjects();
   }, [fetchSessions, fetchProjects]);
-
-  // Poll for status every 3 seconds
-  useEffect(() => {
-    fetchStatuses();
-    const interval = setInterval(fetchStatuses, 3000);
-    return () => clearInterval(interval);
-  }, [fetchStatuses]);
 
   // Poll for new sessions every 10 seconds (for workers spawned via MCP)
   useEffect(() => {
@@ -284,12 +194,10 @@ function HomeContent() {
     return () => clearInterval(interval);
   }, [fetchSessions]);
 
-  // Poll for dev servers every 5 seconds
+  // Set initial sidebar state based on viewport
   useEffect(() => {
-    fetchDevServers();
-    const interval = setInterval(fetchDevServers, 5000);
-    return () => clearInterval(interval);
-  }, [fetchDevServers]);
+    if (!isMobile) setSidebarOpen(true);
+  }, [isMobile]);
 
   // Keyboard shortcut: Cmd+K to open quick switcher
   useEffect(() => {
@@ -303,67 +211,13 @@ function HomeContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Attach session to focused pane
-  const attachToSession = useCallback(async (session: Session) => {
-    const terminal = getFocusedTerminal();
-    if (terminal) {
-      // Get the provider for this session's agent type
-      const provider = getProvider(session.agent_type || "claude");
-      const sessionName = `${provider.id}-${session.id}`;
-      const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
-
-      // Ensure MCP config exists for orchestration (fire and forget)
-      fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
-
-      // Get parent session ID for forking
-      let parentSessionId: string | null = null;
-      if (!session.claude_session_id && session.parent_session_id) {
-        const parentSession = sessions.find(s => s.id === session.parent_session_id);
-        parentSessionId = parentSession?.claude_session_id || null;
-      }
-
-      // Build flags using the provider
-      const flags = provider.buildFlags({
-        sessionId: session.claude_session_id,
-        parentSessionId,
-        autoApprove: session.auto_approve,
-        model: session.model,
-      });
-
-      const flagsStr = flags.join(" ");
-
-      // Check if we're currently attached to a tmux session
-      const activeTab = getActiveTab(focusedPaneId);
-      const isInTmux = !!activeTab?.attachedTmux;
-
-      // Only send detach command if we're in tmux, otherwise it types "d"
-      if (isInTmux) {
-        terminal.sendInput("\x02d");
-      }
-
-      setTimeout(() => {
-        terminal.sendInput("\x03"); // Ctrl+C to interrupt anything
-        setTimeout(async () => {
-          const agentCmd = `${provider.command} ${flagsStr}`;
-          const newSessionCmd = await getInitScriptCommand(agentCmd);
-          terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
-          attachSession(focusedPaneId, session.id, sessionName);
-          // Focus terminal after attaching
-          terminal.focus();
-        }, 50);
-      }, isInTmux ? 100 : 0); // No delay needed if not detaching
-    }
-  }, [getFocusedTerminal, focusedPaneId, attachSession, sessions, getInitScriptCommand, getActiveTab]);
-
-  // Handle session selection (for mobile prev/next arrows)
+  // Session selection handler
   const handleSelectSession = useCallback((sessionId: string) => {
     const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      attachToSession(session);
-    }
+    if (session) attachToSession(session);
   }, [sessions, attachToSession]);
 
-  // Memoized pane renderer to prevent unnecessary re-renders
+  // Pane renderer
   const renderPane = useCallback((paneId: string) => (
     <Pane
       key={paneId}
@@ -375,280 +229,48 @@ function HomeContent() {
     />
   ), [sessions, registerTerminalRef, isMobile, handleSelectSession]);
 
-  // Create new session and attach
-  const createAndAttach = async () => {
-    try {
-      // Get saved agent type preference
-      const savedAgentType = localStorage.getItem("agentOS:defaultAgentType") || "claude";
-      const provider = getProvider(savedAgentType as "claude" | "codex" | "opencode");
-
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `Session ${sessions.length + 1}`,
-          agentType: savedAgentType,
-        }),
-      });
-      const data = await res.json();
-      if (data.session) {
-        await fetchSessions();
-        const terminal = getFocusedTerminal();
-        if (terminal) {
-          // Check if we're currently attached to a tmux session
-          const activeTab = getActiveTab(focusedPaneId);
-          const isInTmux = !!activeTab?.attachedTmux;
-
-          // Only send detach command if we're in tmux
-          if (isInTmux) {
-            terminal.sendInput("\x02d");
-          }
-
-          setTimeout(() => {
-            terminal.sendInput("\x03"); // Ctrl+C to interrupt anything
-            setTimeout(async () => {
-              const cwd = data.session.working_directory?.replace('~', '$HOME') || '$HOME';
-              const sessionName = `${provider.id}-${data.session.id}`;
-              const flags = provider.buildFlags({ autoApprove: data.session.auto_approve });
-              const flagsStr = flags.join(" ");
-              const agentCmd = `${provider.command} ${flagsStr}`;
-              const newSessionCmd = await getInitScriptCommand(agentCmd);
-              terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
-              attachSession(focusedPaneId, data.session.id, sessionName);
-            }, 50);
-          }, isInTmux ? 100 : 0);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to create session:", error);
-    }
-  };
-
-  // Toggle group expanded state
-  const handleToggleGroup = async (path: string, expanded: boolean) => {
-    try {
-      await fetch(`/api/groups/${encodeURIComponent(path)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expanded }),
-      });
-      setGroups(prev => prev.map(g =>
-        g.path === path ? { ...g, expanded } : g
-      ));
-    } catch (error) {
-      console.error("Failed to toggle group:", error);
-    }
-  };
-
-  // Create new group
-  const handleCreateGroup = async (name: string, parentPath?: string) => {
-    try {
-      const res = await fetch("/api/groups", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, parentPath }),
-      });
-      if (res.ok) {
-        await fetchSessions();
-      }
-    } catch (error) {
-      console.error("Failed to create group:", error);
-    }
-  };
-
-  // Delete group
-  const handleDeleteGroup = async (path: string) => {
-    if (!confirm("Delete this group? Sessions will be moved to parent.")) return;
-    try {
-      await fetch(`/api/groups/${encodeURIComponent(path)}`, {
-        method: "DELETE",
-      });
-      await fetchSessions();
-    } catch (error) {
-      console.error("Failed to delete group:", error);
-    }
-  };
-
-  // Move session to group
-  const handleMoveSession = async (sessionId: string, groupPath: string) => {
-    try {
-      await fetch(`/api/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupPath }),
-      });
-      await fetchSessions();
-    } catch (error) {
-      console.error("Failed to move session:", error);
-    }
-  };
-
-  // Toggle project expanded state
-  const handleToggleProject = async (projectId: string, expanded: boolean) => {
-    try {
-      await fetch(`/api/projects/${projectId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expanded }),
-      });
-      setProjects(prev => prev.map(p =>
-        p.id === projectId ? { ...p, expanded } : p
-      ));
-    } catch (error) {
-      console.error("Failed to toggle project:", error);
-    }
-  };
-
-  // Edit project (opens settings dialog)
-  const handleEditProject = (projectId: string) => {
+  // Project edit handler
+  const [showProjectSettings, setShowProjectSettings] = useState<typeof projects[0] | null>(null);
+  const handleEditProject = useCallback((projectId: string) => {
     const project = projects.find(p => p.id === projectId);
-    if (project) {
-      setShowProjectSettings(project);
-    }
-  };
+    if (project) setShowProjectSettings(project);
+  }, [projects]);
 
-  // Delete project
-  const handleDeleteProject = async (projectId: string) => {
-    if (!confirm("Delete this project? Sessions will be moved to Uncategorized.")) return;
-    try {
-      await fetch(`/api/projects/${projectId}`, {
-        method: "DELETE",
-      });
-      await fetchProjects();
-      await fetchSessions();
-    } catch (error) {
-      console.error("Failed to delete project:", error);
-    }
-  };
-
-  // Rename project
-  const handleRenameProject = async (projectId: string, newName: string) => {
-    try {
-      await fetch(`/api/projects/${projectId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName }),
-      });
-      await fetchProjects();
-    } catch (error) {
-      console.error("Failed to rename project:", error);
-    }
-  };
-
-  // Move session to project
-  const handleMoveSessionToProject = async (sessionId: string, projectId: string) => {
-    try {
-      await fetch(`/api/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId }),
-      });
-      await fetchSessions();
-    } catch (error) {
-      console.error("Failed to move session to project:", error);
-    }
-  };
-
-  // Create new session in project
-  const handleNewSessionInProject = (projectId: string) => {
-    // TODO: Pre-select project in NewSessionDialog
+  // New session in project handler
+  const handleNewSessionInProject = useCallback(() => {
     setShowNewSessionDialog(true);
-  };
+  }, []);
 
-  // Fork session
-  const handleForkSession = async (sessionId: string) => {
+  // Fork session and attach
+  const handleForkSession = useCallback(async (sessionId: string) => {
+    const forkedSession = await forkSession(sessionId);
+    if (forkedSession) attachToSession(forkedSession);
+  }, [forkSession, attachToSession]);
+
+  // Summarize session and attach to new session
+  const handleSummarize = useCallback(async (sessionId: string) => {
+    const newSession = await summarizeSession(sessionId);
+    if (newSession) attachToSession(newSession);
+  }, [summarizeSession, attachToSession]);
+
+  // Create PR handler
+  const handleCreatePR = useCallback(async (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/fork`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (data.session) {
-        await fetchSessions();
-        // Optionally attach to the forked session
-        attachToSession(data.session);
-      }
-    } catch (error) {
-      console.error("Failed to fork session:", error);
-    }
-  };
-
-  // Summarize and create fresh session
-  const handleSummarize = async (sessionId: string) => {
-    setSummarizingSessionId(sessionId);
-    try {
-      const res = await fetch(`/api/sessions/${sessionId}/summarize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ createFork: true }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        console.error("Summarize failed:", data.error);
-        setSummarizingSessionId(null);
-        return;
-      }
-      if (data.newSession) {
-        await fetchSessions();
-        // Server already started tmux and sent the context, just attach
-        attachToSession(data.newSession);
-      }
-    } catch (error) {
-      console.error("Failed to summarize session:", error);
-    } finally {
-      setSummarizingSessionId(null);
-    }
-  };
-
-  // Delete session
-  const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm("Delete this session? This cannot be undone.")) return;
-    try {
-      await fetch(`/api/sessions/${sessionId}`, {
-        method: "DELETE",
-      });
-      await fetchSessions();
-    } catch (error) {
-      console.error("Failed to delete session:", error);
-    }
-  };
-
-  // Rename session
-  const handleRenameSession = async (sessionId: string, newName: string) => {
-    try {
-      await fetch(`/api/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName }),
-      });
-      await fetchSessions();
-    } catch (error) {
-      console.error("Failed to rename session:", error);
-    }
-  };
-
-  // Create PR for worktree session
-  const handleCreatePR = async (sessionId: string) => {
-    try {
-      const session = sessions.find(s => s.id === sessionId);
-      if (!session) return;
-
-      // First check if PR already exists
       const checkRes = await fetch(`/api/sessions/${sessionId}/pr`);
       const checkData = await checkRes.json();
 
       if (checkData.pr) {
-        // PR exists, open it
         window.open(checkData.pr.url, "_blank");
         return;
       }
 
-      // Create new PR
       const res = await fetch(`/api/sessions/${sessionId}/pr`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: session.name,
-        }),
+        body: JSON.stringify({ title: session.name }),
       });
 
       const data = await res.json();
@@ -664,54 +286,15 @@ function HomeContent() {
       console.error("Failed to create PR:", error);
       alert("Failed to create PR. Make sure gh CLI is installed and authenticated.");
     }
-  };
+  }, [sessions]);
 
-  // Dev server handlers
-  const handleStartDevServer = useCallback((projectId: string) => {
-    setStartDevServerProjectId(projectId);
-  }, []);
-
-  const handleStopDevServer = useCallback(async (serverId: string) => {
-    await fetch(`/api/dev-servers/${serverId}/stop`, { method: "POST" });
-    await fetchDevServers();
-  }, [fetchDevServers]);
-
-  const handleRestartDevServer = useCallback(async (serverId: string) => {
-    await fetch(`/api/dev-servers/${serverId}/restart`, { method: "POST" });
-    await fetchDevServers();
-  }, [fetchDevServers]);
-
-  const handleRemoveDevServer = useCallback(async (serverId: string) => {
-    await fetch(`/api/dev-servers/${serverId}`, { method: "DELETE" });
-    await fetchDevServers();
-  }, [fetchDevServers]);
-
-  const handleCreateDevServer = useCallback(async (opts: {
-    projectId: string;
-    type: "node" | "docker";
-    name: string;
-    command: string;
-    workingDirectory: string;
-    ports?: number[];
-  }) => {
-    await fetch("/api/dev-servers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opts),
-    });
-    await fetchDevServers();
-    setStartDevServerProjectId(null);
-  }, [fetchDevServers]);
-
-  // Get active session from focused pane's active tab
+  // Active session and dev server project
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
-
-  // Project for starting dev server dialog
   const startDevServerProject = startDevServerProjectId
-    ? projects.find((p) => p.id === startDevServerProjectId) ?? null
+    ? projects.find(p => p.id === startDevServerProjectId) ?? null
     : null;
 
-  // Shared props for views
+  // View props
   const viewProps = {
     sessions,
     groups,
@@ -742,26 +325,26 @@ function HomeContent() {
     attachToSession,
     fetchSessions,
     fetchProjects,
-    handleToggleGroup,
-    handleCreateGroup,
-    handleDeleteGroup,
-    handleMoveSession,
-    handleToggleProject,
+    handleToggleGroup: toggleGroup,
+    handleCreateGroup: createGroup,
+    handleDeleteGroup: deleteGroup,
+    handleMoveSession: moveSessionToGroup,
+    handleToggleProject: toggleProject,
     handleEditProject,
-    handleDeleteProject,
-    handleRenameProject,
-    handleMoveSessionToProject,
+    handleDeleteProject: deleteProject,
+    handleRenameProject: renameProject,
+    handleMoveSessionToProject: moveSessionToProject,
     handleNewSessionInProject,
     handleForkSession,
     handleSummarize,
-    handleDeleteSession,
-    handleRenameSession,
+    handleDeleteSession: deleteSession,
+    handleRenameSession: renameSession,
     handleCreatePR,
-    handleStartDevServer,
-    handleStopDevServer,
-    handleRestartDevServer,
-    handleRemoveDevServer,
-    handleCreateDevServer,
+    handleStartDevServer: startDevServer,
+    handleStopDevServer: stopDevServer,
+    handleRestartDevServer: restartDevServer,
+    handleRemoveDevServer: removeDevServer,
+    handleCreateDevServer: createDevServer,
     startDevServerProject,
     setStartDevServerProjectId,
     renderPane,
