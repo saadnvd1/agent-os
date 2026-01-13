@@ -81,3 +81,34 @@ export function useRenameProject() {
     },
   });
 }
+
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      name,
+      workingDirectory,
+      agentType,
+      defaultModel,
+    }: {
+      projectId: string;
+      name?: string;
+      workingDirectory?: string;
+      agentType?: string;
+      defaultModel?: string;
+    }) => {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, workingDirectory, agentType, defaultModel }),
+      });
+      if (!res.ok) throw new Error("Failed to update project");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.list() });
+    },
+  });
+}
