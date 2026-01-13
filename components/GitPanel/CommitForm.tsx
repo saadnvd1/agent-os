@@ -121,7 +121,7 @@ export function CommitForm({
   }
 
   return (
-    <div className="border-t border-border p-3 space-y-3">
+    <div className="p-3 space-y-3 bg-muted/20">
       {/* Branch name input (if on main) */}
       {isOnMainBranch && (
         <div className="space-y-1.5">
@@ -136,7 +136,7 @@ export function CommitForm({
             placeholder="feature/my-feature"
             className={cn(
               "w-full px-3 py-2 text-sm rounded-md",
-              "bg-muted/50 border border-border",
+              "bg-muted/50",
               "focus:outline-none focus:ring-2 focus:ring-primary/50",
               "placeholder:text-muted-foreground/50",
               "min-h-[44px]" // Mobile touch target
@@ -158,7 +158,7 @@ export function CommitForm({
           rows={3}
           className={cn(
             "w-full px-3 py-2 text-sm rounded-md resize-none",
-            "bg-muted/50 border border-border",
+            "bg-muted/50",
             "focus:outline-none focus:ring-2 focus:ring-primary/50",
             "placeholder:text-muted-foreground/50"
           )}
