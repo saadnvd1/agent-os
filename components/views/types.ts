@@ -1,4 +1,4 @@
-import type { Session, Group, DevServer } from "@/lib/db";
+import type { Session, Group, DevServer, Project } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import type { NotificationSettings } from "@/lib/notifications";
 import type { TabData } from "@/lib/panes";
@@ -65,20 +65,20 @@ export interface ViewProps {
   handleNewSessionInProject: (projectId: string) => void;
 
   // Dev server handlers
-  handleStartDevServer: (sessionId: string) => void;
+  handleStartDevServer: (projectId: string) => void;
   handleStopDevServer: (serverId: string) => Promise<void>;
   handleRestartDevServer: (serverId: string) => Promise<void>;
   handleRemoveDevServer: (serverId: string) => Promise<void>;
   handleCreateDevServer: (opts: {
-    sessionId: string;
+    projectId: string;
     type: "node" | "docker";
     name: string;
     command: string;
     workingDirectory: string;
     ports?: number[];
   }) => Promise<void>;
-  startDevServerSession: Session | null;
-  setStartDevServerSessionId: (id: string | null) => void;
+  startDevServerProject: ProjectWithDevServers | null;
+  setStartDevServerProjectId: (id: string | null) => void;
 
   // Pane
   renderPane: (paneId: string) => React.ReactNode;
