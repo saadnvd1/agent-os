@@ -3,11 +3,83 @@ import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import { getDb, queries, type Session } from "@/lib/db";
 import { randomUUID } from "crypto";
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync, unlinkSync, readFileSync, existsSync } from "fs";
+import { homedir } from "os";
 
 const execAsync = promisify(exec);
 
-// Capture recent tmux scrollback (last 500 lines for reasonable context)
+// Get Claude session ID from tmux environment
+async function getClaudeSessionId(tmuxSession: string): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync(
+      `tmux show-environment -t "${tmuxSession}" CLAUDE_SESSION_ID 2>/dev/null || echo ""`
+    );
+    const line = stdout.trim();
+    if (line.startsWith("CLAUDE_SESSION_ID=")) {
+      const sessionId = line.replace("CLAUDE_SESSION_ID=", "");
+      return sessionId && sessionId !== "null" ? sessionId : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Encode path for Claude's project directory format (/ becomes -)
+function encodeProjectPath(cwd: string): string {
+  return cwd.replace(/\//g, "-");
+}
+
+// Read and parse Claude session JSONL file
+function readClaudeSessionHistory(cwd: string, claudeSessionId: string): string | null {
+  const projectPath = encodeProjectPath(cwd);
+  const jsonlPath = `${homedir()}/.claude/projects/${projectPath}/${claudeSessionId}.jsonl`;
+
+  if (!existsSync(jsonlPath)) {
+    console.log(`[summarize] JSONL not found: ${jsonlPath}`);
+    return null;
+  }
+
+  try {
+    const content = readFileSync(jsonlPath, "utf-8");
+    const lines = content.trim().split("\n");
+    const messages: string[] = [];
+
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+
+        // Extract user messages
+        if (entry.type === "user" && entry.message?.content) {
+          const content = typeof entry.message.content === "string"
+            ? entry.message.content
+            : JSON.stringify(entry.message.content);
+          messages.push(`User: ${content}`);
+        }
+
+        // Extract assistant text responses (skip tool calls and thinking)
+        if (entry.type === "assistant" && entry.message?.content) {
+          const textBlocks = entry.message.content
+            .filter((block: { type: string }) => block.type === "text")
+            .map((block: { text: string }) => block.text)
+            .join("\n");
+          if (textBlocks) {
+            messages.push(`Assistant: ${textBlocks}`);
+          }
+        }
+      } catch {
+        // Skip malformed lines
+      }
+    }
+
+    return messages.join("\n\n");
+  } catch (error) {
+    console.error(`[summarize] Error reading JSONL:`, error);
+    return null;
+  }
+}
+
+// Fallback: Capture recent tmux scrollback (last 500 lines)
 async function captureScrollback(sessionName: string): Promise<string> {
   try {
     const { stdout } = await execAsync(
@@ -33,7 +105,7 @@ async function getTmuxCwd(sessionName: string): Promise<string | null> {
 
 // Generate summary using Claude CLI with stdin
 async function generateSummary(conversation: string): Promise<string> {
-  const prompt = `Summarize this Claude Code terminal output in under 300 words. Focus on: what was built, key files changed, current state. Be specific.`;
+  const prompt = `Summarize this Claude Code conversation in under 300 words. Focus on: what was built, key files changed, current state, and any pending work. Be specific.`;
 
   return new Promise((resolve, reject) => {
     const claude = spawn("claude", ["-p", prompt], {
@@ -127,20 +199,33 @@ export async function POST(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Only support Claude sessions for now
-    if (session.agent_type !== "claude") {
-      return NextResponse.json(
-        { error: "Summarize is only supported for Claude sessions" },
-        { status: 400 }
-      );
+    // Get tmux session name (pattern: {agent_type}-{id})
+    const tmuxSessionName = `${session.agent_type}-${id}`;
+
+    // Get actual working directory from tmux
+    const cwd = await getTmuxCwd(tmuxSessionName) || session.working_directory;
+    const cwdExpanded = cwd?.replace(/^~/, process.env.HOME || "~") || process.env.HOME || "~";
+
+    // Try to get full conversation from Claude's JSONL (only for Claude sessions)
+    let conversation: string | null = null;
+    if (session.agent_type === "claude") {
+      const claudeSessionId = await getClaudeSessionId(tmuxSessionName);
+      if (claudeSessionId && cwdExpanded) {
+        console.log(`[summarize] Found Claude session ID: ${claudeSessionId}`);
+        conversation = readClaudeSessionHistory(cwdExpanded, claudeSessionId);
+        if (conversation) {
+          console.log(`[summarize] Read ${conversation.length} chars from JSONL`);
+        }
+      }
     }
 
-    // Get tmux session name
-    const tmuxSessionName = `claude-${id}`;
+    // Fallback to terminal scrollback for non-Claude or if JSONL not available
+    if (!conversation) {
+      console.log(`[summarize] Using terminal scrollback for ${session.agent_type}`);
+      conversation = await captureScrollback(tmuxSessionName);
+    }
 
-    // Capture scrollback
-    const scrollback = await captureScrollback(tmuxSessionName);
-    if (!scrollback || scrollback.trim().length < 100) {
+    if (!conversation || conversation.trim().length < 100) {
       return NextResponse.json(
         { error: "No conversation found to summarize" },
         { status: 400 }
@@ -148,7 +233,7 @@ export async function POST(
     }
 
     // Generate summary
-    const summary = await generateSummary(scrollback);
+    const summary = await generateSummary(conversation);
 
     // Create a new session with the summary as context
     let newSession: Session | null = null;
@@ -156,15 +241,11 @@ export async function POST(
       const newId = randomUUID();
       const newName = `${session.name} (fresh)`;
 
-      // Get actual working directory from tmux (falls back to session's stored value)
-      const actualCwd = await getTmuxCwd(tmuxSessionName) || session.working_directory;
-      const cwdExpanded = actualCwd?.replace(/^~/, process.env.HOME || "~") || process.env.HOME || "~";
-
-      // Create new session in DB
+      // Create new session in DB (using cwd already fetched above)
       queries.createSession(db).run(
         newId,
         newName,
-        actualCwd,
+        cwd,
         null, // no parent - fresh start
         session.model,
         `Continue from previous session. Here's a summary of the work so far:\n\n${summary}`,
