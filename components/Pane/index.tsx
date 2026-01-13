@@ -202,12 +202,15 @@ export const Pane = memo(function Pane({
           session={session}
           sessions={sessions}
           projects={projects}
+          tabs={paneData.tabs}
+          activeTabId={paneData.activeTabId}
           viewMode={viewMode}
           isConductor={isConductor}
           workerCount={workerCount}
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
           onSelectSession={handleSelectSession}
+          onTabSwitch={(tabId) => switchTab(paneId, tabId)}
         />
       ) : (
         <DesktopTabBar
