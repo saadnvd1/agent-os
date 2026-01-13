@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
+import { useRef, forwardRef, useImperativeHandle, useCallback, useState, useMemo } from 'react';
 import { useTheme } from 'next-themes';
 import '@xterm/xterm/css/xterm.css';
 import { ImagePlus } from 'lucide-react';
@@ -42,6 +42,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const { resolvedTheme } = useTheme();
   const [showImagePicker, setShowImagePicker] = useState(false);
 
+  // Track recent commands for quick re-run
+  const [recentCommands, setRecentCommands] = useState<string[]>([]);
+  const currentInputRef = useRef<string>('');
+
   const {
     connectionState,
     isAtBottom,
@@ -79,6 +83,41 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     setShowImagePicker(false);
     focus();
   }, [sendInput, focus]);
+
+  // Track keyboard input for recent commands
+  const handleKeyboardInput = useCallback((key: string) => {
+    if (key === '\r') {
+      // Enter pressed - save command if non-empty
+      const cmd = currentInputRef.current.trim();
+      if (cmd && cmd.length > 1) {
+        setRecentCommands(prev => {
+          // Remove duplicates and add to front
+          const filtered = prev.filter(c => c !== cmd);
+          return [cmd, ...filtered].slice(0, 5);
+        });
+      }
+      currentInputRef.current = '';
+    } else if (key === '\x7f') {
+      // Backspace
+      currentInputRef.current = currentInputRef.current.slice(0, -1);
+    } else if (key.length === 1 && key.charCodeAt(0) >= 32) {
+      // Printable character
+      currentInputRef.current += key;
+    } else if (key.length > 1 && !key.startsWith('\x1b')) {
+      // Multi-char input (e.g., pasted text or command from recent)
+      currentInputRef.current += key;
+    }
+    sendInput(key);
+  }, [sendInput]);
+
+  // Handle selecting a recent command
+  const handleCommandSelect = useCallback((cmd: string) => {
+    // Clear current input first (send Ctrl+U to clear line)
+    sendInput('\x15');
+    // Then type the command
+    sendInput(cmd);
+    currentInputRef.current = cmd;
+  }, [sendInput]);
 
   // Expose imperative methods
   useImperativeHandle(ref, () => ({
@@ -142,7 +181,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {isMobile && (
         <>
           <KeybarToggleButton isVisible={keybarVisible} onToggle={toggleKeybar} />
-          <VirtualKeyboard onKeyPress={sendInput} onImagePick={() => setShowImagePicker(true)} visible={keybarVisible} />
+          <VirtualKeyboard
+            onKeyPress={handleKeyboardInput}
+            onImagePick={() => setShowImagePicker(true)}
+            visible={keybarVisible}
+            recentCommands={recentCommands}
+            onCommandSelect={handleCommandSelect}
+          />
         </>
       )}
 
