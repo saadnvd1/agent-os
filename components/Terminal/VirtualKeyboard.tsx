@@ -1,8 +1,130 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, Mic, MicOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Web Speech API types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onstart: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
+
+// Hook for speech recognition
+function useSpeechRecognition(onTranscript: (text: string, isFinal: boolean) => void) {
+  const [isListening, setIsListening] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const lastTranscriptRef = useRef('');
+
+  useEffect(() => {
+    // Check for browser support
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    setIsSupported(!!SpeechRecognitionAPI);
+
+    if (SpeechRecognitionAPI) {
+      const recognition = new SpeechRecognitionAPI();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        lastTranscriptRef.current = '';
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        // Only send new final transcripts
+        if (finalTranscript && finalTranscript !== lastTranscriptRef.current) {
+          lastTranscriptRef.current = finalTranscript;
+          onTranscript(finalTranscript, true);
+        }
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [onTranscript]);
+
+  const toggle = useCallback(() => {
+    if (!recognitionRef.current) return;
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      try {
+        recognitionRef.current.start();
+      } catch {
+        // Already started, ignore
+      }
+    }
+  }, [isListening]);
+
+  return { isListening, isSupported, toggle };
+}
 
 // ANSI escape sequences
 const SPECIAL_KEYS = {
@@ -120,8 +242,14 @@ function Key({ char, onPress, className }: KeyProps) {
 // Terminal shortcuts bar - common keys for terminal interaction
 function TerminalShortcutsBar({
   onKeyPress,
+  isListening,
+  onMicToggle,
+  isMicSupported,
 }: {
   onKeyPress: (key: string) => void;
+  isListening?: boolean;
+  onMicToggle?: () => void;
+  isMicSupported?: boolean;
 }) {
   const shortcuts = [
     { label: 'Esc', key: SPECIAL_KEYS.ESC },
@@ -136,6 +264,21 @@ function TerminalShortcutsBar({
 
   return (
     <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none">
+      {/* Mic button - always visible when supported */}
+      {isMicSupported && onMicToggle && (
+        <button
+          onClick={() => { haptic(); onMicToggle(); }}
+          className={cn(
+            "flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+            "active:scale-105",
+            isListening
+              ? "bg-red-500 text-white animate-pulse"
+              : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+          )}
+        >
+          {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </button>
+      )}
       {shortcuts.map((shortcut) => (
         <button
           key={shortcut.label}
@@ -163,6 +306,16 @@ export function VirtualKeyboard({
   const [mode, setMode] = useState<KeyboardMode>('abc');
   const [shifted, setShifted] = useState(false);
 
+  // Speech recognition - send transcript directly to terminal
+  const handleTranscript = useCallback((text: string) => {
+    // Send each character individually to the terminal
+    for (const char of text) {
+      onKeyPress(char);
+    }
+  }, [onKeyPress]);
+
+  const { isListening, isSupported: isMicSupported, toggle: toggleMic } = useSpeechRecognition(handleTranscript);
+
   // Key repeat for backspace
   const handleBackspace = useCallback(() => {
     onKeyPress(SPECIAL_KEYS.BACKSPACE);
@@ -184,7 +337,7 @@ export function VirtualKeyboard({
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Terminal shortcuts */}
-        <TerminalShortcutsBar onKeyPress={onKeyPress} />
+        <TerminalShortcutsBar onKeyPress={onKeyPress} isListening={isListening} onMicToggle={toggleMic} isMicSupported={isMicSupported} />
 
         <div className="flex flex-col gap-1.5 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {/* Mode tabs + common keys */}
@@ -267,7 +420,7 @@ export function VirtualKeyboard({
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Terminal shortcuts */}
-        <TerminalShortcutsBar onKeyPress={onKeyPress} />
+        <TerminalShortcutsBar onKeyPress={onKeyPress} isListening={isListening} onMicToggle={toggleMic} isMicSupported={isMicSupported} />
 
         <div className="flex flex-col gap-1.5 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {/* QWERTY rows */}
@@ -346,7 +499,7 @@ export function VirtualKeyboard({
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* Terminal shortcuts */}
-      <TerminalShortcutsBar onKeyPress={onKeyPress} />
+      <TerminalShortcutsBar onKeyPress={onKeyPress} isListening={isListening} onMicToggle={toggleMic} isMicSupported={isMicSupported} />
 
       <div className="flex flex-col gap-1.5 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         {/* Number row */}

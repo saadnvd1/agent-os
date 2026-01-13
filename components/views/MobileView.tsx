@@ -1,12 +1,9 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import { useTheme } from "next-themes";
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
-import { Button } from "@/components/ui/button";
-import { Sun, Moon } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { PaneLayout } from "@/components/PaneLayout";
 import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
 import { QuickSwitcher } from "@/components/QuickSwitcher";
@@ -53,13 +50,6 @@ export function MobileView({
   setStartDevServerProjectId,
   renderPane,
 }: ViewProps) {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   return (
     <main className="h-dvh flex flex-col overflow-hidden bg-background">
       {/* Swipe sidebar */}
@@ -107,17 +97,7 @@ export function MobileView({
           {/* Sidebar footer with theme toggle */}
           <div className="flex items-center justify-between px-4 py-2 mt-auto">
             <span className="text-xs text-muted-foreground">Theme</span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              {mounted && (theme === "dark" ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              ))}
-            </Button>
+            <ThemeToggle />
           </div>
         </div>
       </SwipeSidebar>

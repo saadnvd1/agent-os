@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { useTheme } from "next-themes";
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { PanelLeftClose, PanelLeft, Plus, Copy, Check, Command, Sun, Moon } from "lucide-react";
+import { PanelLeftClose, PanelLeft, Plus, Copy, Check, Command } from "lucide-react";
 import { PaneLayout } from "@/components/PaneLayout";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { QuickSwitcher } from "@/components/QuickSwitcher";
@@ -63,13 +63,6 @@ export function DesktopView({
   setStartDevServerProjectId,
   renderPane,
 }: ViewProps) {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* Desktop Sidebar */}
@@ -121,17 +114,7 @@ export function DesktopView({
           {/* Sidebar footer with theme toggle */}
           <div className="flex items-center justify-between px-4 py-2 mt-auto">
             <span className="text-xs text-muted-foreground">Theme</span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              {mounted && (theme === "dark" ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              ))}
-            </Button>
+            <ThemeToggle />
           </div>
         </div>
       </div>

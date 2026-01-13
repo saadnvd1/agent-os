@@ -39,8 +39,17 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const terminalRef = useRef<HTMLDivElement>(null);
   const { isVisible: keybarVisible, toggle: toggleKeybar, show: showKeybar } = useKeybarVisibility();
   const { isMobile } = useViewport();
-  const { resolvedTheme } = useTheme();
+  const { theme: currentTheme, resolvedTheme } = useTheme();
   const [showImagePicker, setShowImagePicker] = useState(false);
+
+  // Use the full theme string (e.g., "dark-purple") for terminal theming
+  const terminalTheme = useMemo(() => {
+    // For system theme, use the resolved theme
+    if (currentTheme === 'system') {
+      return resolvedTheme || 'dark';
+    }
+    return currentTheme || 'dark';
+  }, [currentTheme, resolvedTheme]);
 
   const {
     connectionState,
@@ -60,7 +69,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     onBeforeUnmount,
     initialScrollState,
     isMobile,
-    theme: resolvedTheme === 'light' ? 'light' : 'dark',
+    theme: terminalTheme,
   });
 
   const {

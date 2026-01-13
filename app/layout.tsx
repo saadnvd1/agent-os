@@ -35,6 +35,48 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Theme initialization script - prevents flash of unstyled content */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  // Get theme from localStorage (where next-themes stores it)
+                  const theme = localStorage.getItem('theme') || 'dark';
+                  const root = document.documentElement;
+
+                  // Handle system theme
+                  let actualTheme = theme;
+                  if (theme === 'system') {
+                    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    actualTheme = isDark ? 'dark' : 'light';
+                  }
+
+                  // Parse compound themes like "dark-warm" or "light-default"
+                  const parts = actualTheme.split('-');
+                  const mode = parts[0];
+                  const variant = parts[1];
+
+                  // Apply theme class
+                  root.classList.remove('light', 'dark');
+                  root.classList.add(mode === 'dark' || mode === 'light' ? mode : 'dark');
+
+                  // Apply variant as data attribute
+                  // "deep" and "default" are base themes - no data attribute needed
+                  root.removeAttribute('data-theme-variant');
+                  if (variant && variant !== 'default' && variant !== 'deep') {
+                    root.setAttribute('data-theme-variant', variant);
+                  }
+                } catch (e) {
+                  // Fallback to dark mode if anything fails
+                  document.documentElement.classList.add('dark');
+                }
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
