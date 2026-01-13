@@ -1,4 +1,4 @@
-import type { Session, Group, DevServer, Project } from "@/lib/db";
+import type { Session } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import type { NotificationSettings } from "@/lib/notifications";
 import type { TabData } from "@/lib/panes";
@@ -12,11 +12,8 @@ export interface SessionStatus {
 
 export interface ViewProps {
   sessions: Session[];
-  groups: Group[];
   projects: ProjectWithDevServers[];
   sessionStatuses: Record<string, SessionStatus>;
-  summarizingSessionId: string | null;
-  devServers: DevServer[];
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   activeSession: Session | undefined;
@@ -28,10 +25,6 @@ export interface ViewProps {
   showNewSessionDialog: boolean;
   setShowNewSessionDialog: (show: boolean) => void;
   newSessionProjectId: string | null;
-  showNewProjectDialog: boolean;
-  setShowNewProjectDialog: (show: boolean) => void;
-  showProjectSettings: ProjectWithDevServers | null;
-  setShowProjectSettings: (project: ProjectWithDevServers | null) => void;
   showNotificationSettings: boolean;
   setShowNotificationSettings: (show: boolean) => void;
   showQuickSwitcher: boolean;
@@ -47,29 +40,10 @@ export interface ViewProps {
   attachToSession: (session: Session) => void;
   fetchSessions: () => Promise<void>;
   fetchProjects: () => Promise<void>;
-  handleToggleGroup: (path: string, expanded: boolean) => Promise<void>;
-  handleCreateGroup: (name: string, parentPath?: string) => Promise<void>;
-  handleDeleteGroup: (path: string) => Promise<void>;
-  handleMoveSession: (sessionId: string, groupPath: string) => Promise<void>;
-  handleForkSession: (sessionId: string) => Promise<void>;
-  handleSummarize: (sessionId: string) => Promise<void>;
-  handleDeleteSession: (sessionId: string) => Promise<void>;
-  handleRenameSession: (sessionId: string, newName: string) => Promise<void>;
-  handleCreatePR: (sessionId: string) => Promise<void>;
-
-  // Project handlers
-  handleToggleProject: (projectId: string, expanded: boolean) => Promise<void>;
-  handleEditProject: (projectId: string) => void;
-  handleDeleteProject: (projectId: string) => Promise<void>;
-  handleRenameProject: (projectId: string, newName: string) => Promise<void>;
-  handleMoveSessionToProject: (sessionId: string, projectId: string) => Promise<void>;
   handleNewSessionInProject: (projectId: string) => void;
 
-  // Dev server handlers
+  // Dev server (for StartServerDialog)
   handleStartDevServer: (projectId: string) => void;
-  handleStopDevServer: (serverId: string) => Promise<void>;
-  handleRestartDevServer: (serverId: string) => Promise<void>;
-  handleRemoveDevServer: (serverId: string) => Promise<void>;
   handleCreateDevServer: (opts: {
     projectId: string;
     type: "node" | "docker";

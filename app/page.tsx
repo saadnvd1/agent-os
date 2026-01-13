@@ -29,7 +29,6 @@ import { useViewport } from "@/hooks/useViewport";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useSessions } from "@/hooks/useSessions";
 import { useProjects } from "@/hooks/useProjects";
-import { useGroups } from "@/hooks/useGroups";
 import { useDevServersManager } from "@/hooks/useDevServersManager";
 import { useSessionStatuses } from "@/hooks/useSessionStatuses";
 import type { Session } from "@/lib/db";
@@ -43,7 +42,6 @@ function HomeContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
   const [newSessionProjectId, setNewSessionProjectId] = useState<string | null>(null);
-  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
@@ -55,41 +53,12 @@ function HomeContent() {
   const { isMobile } = useViewport();
 
   // Data hooks
+  const { sessions, fetchSessions } = useSessions();
+  const { projects, fetchProjects } = useProjects();
   const {
-    sessions,
-    groups,
-    summarizingSessionId,
-    fetchSessions,
-    deleteSession,
-    renameSession,
-    forkSession,
-    summarizeSession,
-    moveSessionToGroup,
-    moveSessionToProject,
-  } = useSessions();
-
-  const {
-    projects,
-    fetchProjects,
-    toggleProject,
-    deleteProject,
-    renameProject,
-  } = useProjects();
-
-  const {
-    toggleGroup,
-    createGroup,
-    deleteGroup,
-  } = useGroups();
-
-  const {
-    devServers,
     startDevServerProjectId,
     setStartDevServerProjectId,
     startDevServer,
-    stopDevServer,
-    restartDevServer,
-    removeDevServer,
     createDevServer,
   } = useDevServersManager();
 
@@ -272,65 +241,11 @@ function HomeContent() {
     />
   ), [sessions, projects, registerTerminalRef, isMobile, handleSelectSession]);
 
-  // Project edit handler
-  const [showProjectSettings, setShowProjectSettings] = useState<typeof projects[0] | null>(null);
-  const handleEditProject = useCallback((projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    if (project) setShowProjectSettings(project);
-  }, [projects]);
-
   // New session in project handler
   const handleNewSessionInProject = useCallback((projectId: string) => {
     setNewSessionProjectId(projectId);
     setShowNewSessionDialog(true);
   }, []);
-
-  // Fork session and attach
-  const handleForkSession = useCallback(async (sessionId: string) => {
-    const forkedSession = await forkSession(sessionId);
-    if (forkedSession) attachToSession(forkedSession);
-  }, [forkSession, attachToSession]);
-
-  // Summarize session and attach to new session
-  const handleSummarize = useCallback(async (sessionId: string) => {
-    const newSession = await summarizeSession(sessionId);
-    if (newSession) attachToSession(newSession);
-  }, [summarizeSession, attachToSession]);
-
-  // Create PR handler
-  const handleCreatePR = useCallback(async (sessionId: string) => {
-    const session = sessions.find(s => s.id === sessionId);
-    if (!session) return;
-
-    try {
-      const checkRes = await fetch(`/api/sessions/${sessionId}/pr`);
-      const checkData = await checkRes.json();
-
-      if (checkData.pr) {
-        window.open(checkData.pr.url, "_blank");
-        return;
-      }
-
-      const res = await fetch(`/api/sessions/${sessionId}/pr`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: session.name }),
-      });
-
-      const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-        return;
-      }
-
-      if (data.pr?.url) {
-        window.open(data.pr.url, "_blank");
-      }
-    } catch (error) {
-      console.error("Failed to create PR:", error);
-      alert("Failed to create PR. Make sure gh CLI is installed and authenticated.");
-    }
-  }, [sessions]);
 
   // Active session and dev server project
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
@@ -341,11 +256,8 @@ function HomeContent() {
   // View props
   const viewProps = {
     sessions,
-    groups,
     projects,
     sessionStatuses,
-    summarizingSessionId,
-    devServers,
     sidebarOpen,
     setSidebarOpen,
     activeSession,
@@ -355,13 +267,9 @@ function HomeContent() {
     showNewSessionDialog,
     setShowNewSessionDialog: (show: boolean) => {
       setShowNewSessionDialog(show);
-      if (!show) setNewSessionProjectId(null); // Clear project when closing
+      if (!show) setNewSessionProjectId(null);
     },
     newSessionProjectId,
-    showNewProjectDialog,
-    setShowNewProjectDialog,
-    showProjectSettings,
-    setShowProjectSettings,
     showNotificationSettings,
     setShowNotificationSettings,
     showQuickSwitcher,
@@ -373,25 +281,8 @@ function HomeContent() {
     attachToSession,
     fetchSessions,
     fetchProjects,
-    handleToggleGroup: toggleGroup,
-    handleCreateGroup: createGroup,
-    handleDeleteGroup: deleteGroup,
-    handleMoveSession: moveSessionToGroup,
-    handleToggleProject: toggleProject,
-    handleEditProject,
-    handleDeleteProject: deleteProject,
-    handleRenameProject: renameProject,
-    handleMoveSessionToProject: moveSessionToProject,
     handleNewSessionInProject,
-    handleForkSession,
-    handleSummarize,
-    handleDeleteSession: deleteSession,
-    handleRenameSession: renameSession,
-    handleCreatePR,
     handleStartDevServer: startDevServer,
-    handleStopDevServer: stopDevServer,
-    handleRestartDevServer: restartDevServer,
-    handleRemoveDevServer: removeDevServer,
     handleCreateDevServer: createDevServer,
     startDevServerProject,
     setStartDevServerProjectId,
