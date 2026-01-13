@@ -6,7 +6,7 @@ import { SessionPreviewPopover } from "./SessionPreviewPopover";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import { Plus, RefreshCw, Bot, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Bot, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session, Group } from "@/lib/db";
 import { useViewport } from "@/hooks/useViewport";
@@ -394,6 +394,14 @@ export function SessionList({
               Cancel
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Summarizing indicator */}
+      {summarizingSessionId && (
+        <div className="mx-4 mb-2 p-2 rounded-lg bg-primary/10 flex items-center gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-primary">Generating summary...</span>
         </div>
       )}
 
