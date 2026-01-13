@@ -373,6 +373,20 @@ export function useTerminalConnection({
         }
       });
 
+      // Handle Shift+Enter to send newline without carriage return
+      // This allows multi-line input in Claude Code CLI
+      currentTerm.attachCustomKeyEventHandler((event) => {
+        if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
+          // Send soft newline (just \n, not \r)
+          const activeWs = wsRef.current;
+          if (activeWs?.readyState === WebSocket.OPEN) {
+            activeWs.send(JSON.stringify({ type: 'input', data: '\n' }));
+          }
+          return false; // Prevent default Enter handling
+        }
+        return true; // Allow all other keys
+      });
+
       // Debounced resize handler with triple-fit pattern for reliability
       let resizeTimeout: NodeJS.Timeout | null = null;
 
