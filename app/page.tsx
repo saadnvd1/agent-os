@@ -1,6 +1,27 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+
+// Debug log buffer - persists even if console is closed
+const debugLogs: string[] = [];
+const MAX_DEBUG_LOGS = 100;
+
+function debugLog(message: string) {
+  const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+  const entry = `[${timestamp}] ${message}`;
+  debugLogs.push(entry);
+  if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.shift();
+  console.log(`[AgentOS] ${message}`);
+}
+
+// Expose to window for debugging
+if (typeof window !== 'undefined') {
+  (window as unknown as { agentOSLogs: () => void }).agentOSLogs = () => {
+    console.log('=== AgentOS Debug Logs ===');
+    debugLogs.forEach(log => console.log(log));
+    console.log('=== End Logs ===');
+  };
+}
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { Pane } from "@/components/Pane";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -99,25 +120,25 @@ function HomeContent() {
     const key = `${paneId}:${tabId}`;
     if (ref) {
       terminalRefs.current.set(key, ref);
-      console.log(`[AgentOS] Terminal registered: ${key}, total refs: ${terminalRefs.current.size}`);
+      debugLog(`Terminal registered: ${key}, total refs: ${terminalRefs.current.size}`);
     } else {
       terminalRefs.current.delete(key);
-      console.log(`[AgentOS] Terminal unregistered: ${key}, total refs: ${terminalRefs.current.size}`);
+      debugLog(`Terminal unregistered: ${key}, total refs: ${terminalRefs.current.size}`);
     }
   }, []);
 
   // Get terminal for a pane, with fallback to first available
   const getTerminalWithFallback = useCallback((): { terminal: TerminalHandle; paneId: string; tabId: string } | undefined => {
-    console.log(`[AgentOS] getTerminalWithFallback called, total refs: ${terminalRefs.current.size}, focusedPaneId: ${focusedPaneId}`);
+    debugLog(`getTerminalWithFallback called, total refs: ${terminalRefs.current.size}, focusedPaneId: ${focusedPaneId}`);
 
     // Try focused pane first
     const activeTab = getActiveTab(focusedPaneId);
-    console.log(`[AgentOS] activeTab for focused pane:`, activeTab?.id || 'null');
+    debugLog(`activeTab for focused pane: ${activeTab?.id || 'null'}`);
 
     if (activeTab) {
       const key = `${focusedPaneId}:${activeTab.id}`;
       const terminal = terminalRefs.current.get(key);
-      console.log(`[AgentOS] Looking for terminal at key "${key}": ${terminal ? 'found' : 'not found'}`);
+      debugLog(`Looking for terminal at key "${key}": ${terminal ? 'found' : 'not found'}`);
       if (terminal) {
         return { terminal, paneId: focusedPaneId, tabId: activeTab.id };
       }
@@ -128,11 +149,11 @@ function HomeContent() {
     if (firstEntry) {
       const [key, terminal] = firstEntry as [string, TerminalHandle];
       const [paneId, tabId] = key.split(":");
-      console.log(`[AgentOS] Using fallback terminal: ${key}`);
+      debugLog(`Using fallback terminal: ${key}`);
       return { terminal, paneId, tabId };
     }
 
-    console.log(`[AgentOS] No terminal found at all. Available keys:`, Array.from(terminalRefs.current.keys()));
+    debugLog(`NO TERMINAL FOUND. Available keys: ${Array.from(terminalRefs.current.keys()).join(', ') || 'none'}`);
     return undefined;
   }, [focusedPaneId, getActiveTab]);
 
@@ -140,7 +161,8 @@ function HomeContent() {
   const attachToSession = useCallback(async (session: Session) => {
     const terminalInfo = getTerminalWithFallback();
     if (!terminalInfo) {
-      console.warn("[AgentOS] No terminal available to attach session:", session.name);
+      debugLog(`ERROR: No terminal available to attach session: ${session.name}`);
+      alert(`[AgentOS Debug] No terminal available!\n\nRun agentOSLogs() in console to see debug logs.`);
       return;
     }
 
@@ -245,13 +267,13 @@ function HomeContent() {
 
   // Session selection handler
   const handleSelectSession = useCallback((sessionId: string) => {
-    console.log(`[AgentOS] handleSelectSession called for: ${sessionId}`);
+    debugLog(`handleSelectSession called for: ${sessionId}`);
     const session = sessions.find(s => s.id === sessionId);
     if (session) {
-      console.log(`[AgentOS] Found session: ${session.name}, calling attachToSession`);
+      debugLog(`Found session: ${session.name}, calling attachToSession`);
       attachToSession(session);
     } else {
-      console.log(`[AgentOS] Session not found in sessions array (length: ${sessions.length})`);
+      debugLog(`Session not found in sessions array (length: ${sessions.length})`);
     }
   }, [sessions, attachToSession]);
 
