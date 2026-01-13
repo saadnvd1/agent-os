@@ -6,6 +6,11 @@ import * as path from "path";
 import * as os from "os";
 import { statusDetector, type SessionStatus } from "@/lib/status-detector";
 import type { AgentType } from "@/lib/providers";
+import {
+  getManagedSessionPattern,
+  getProviderIdFromSessionName,
+  getSessionIdFromName,
+} from "@/lib/providers/registry";
 import { getDb } from "@/lib/db";
 
 const execAsync = promisify(exec);
@@ -137,23 +142,14 @@ async function getLastLine(sessionName: string): Promise<string> {
   }
 }
 
-// UUID pattern for agent-os managed sessions (all supported providers)
-const UUID_PATTERN = /^(claude|codex|opencode|gemini|aider|cursor)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// UUID pattern for agent-os managed sessions (derived from registry)
+const UUID_PATTERN = getManagedSessionPattern();
 
 // Track previous statuses to detect changes
 const previousStatuses = new Map<string, SessionStatus>();
 
 function getAgentTypeFromSessionName(sessionName: string): AgentType {
-  if (sessionName.startsWith("codex-")) return "codex";
-  if (sessionName.startsWith("opencode-")) return "opencode";
-  if (sessionName.startsWith("gemini-")) return "gemini";
-  if (sessionName.startsWith("aider-")) return "aider";
-  if (sessionName.startsWith("cursor-")) return "cursor";
-  return "claude";
-}
-
-function getSessionIdFromName(sessionName: string): string {
-  return sessionName.replace(/^(claude|codex|opencode|gemini|aider|cursor)-/, "");
+  return getProviderIdFromSessionName(sessionName) || "claude";
 }
 
 export async function GET() {
