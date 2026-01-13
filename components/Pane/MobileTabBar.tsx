@@ -21,38 +21,61 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session, Project } from "@/lib/db";
-import type { TabData } from "@/lib/panes";
+import type { LucideIcon } from "lucide-react";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
+
+interface ViewModeButtonProps {
+  mode: ViewMode;
+  currentMode: ViewMode;
+  icon: LucideIcon;
+  onClick: (mode: ViewMode) => void;
+  badge?: React.ReactNode;
+}
+
+function ViewModeButton({ mode, currentMode, icon: Icon, onClick, badge }: ViewModeButtonProps) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(mode);
+      }}
+      className={cn(
+        "p-1.5 rounded transition-colors",
+        badge && "flex items-center gap-0.5",
+        currentMode === mode
+          ? "bg-secondary text-foreground"
+          : "text-muted-foreground"
+      )}
+    >
+      <Icon className="w-4 h-4" />
+      {badge}
+    </button>
+  );
+}
 
 interface MobileTabBarProps {
   session: Session | null | undefined;
   sessions: Session[];
   projects: Project[];
-  tabs: TabData[];
-  activeTabId: string;
   viewMode: ViewMode;
   isConductor: boolean;
   workerCount: number;
   onMenuClick?: () => void;
   onViewModeChange: (mode: ViewMode) => void;
   onSelectSession: (sessionId: string) => void;
-  onTabSwitch: (tabId: string) => void;
 }
 
 export function MobileTabBar({
   session,
   sessions,
   projects,
-  tabs,
-  activeTabId,
   viewMode,
   isConductor,
   workerCount,
   onMenuClick,
   onViewModeChange,
   onSelectSession,
-  onTabSwitch,
 }: MobileTabBarProps) {
   // Find current session index and calculate prev/next
   const currentIndex = session ? sessions.findIndex(s => s.id === session.id) : -1;
@@ -101,6 +124,8 @@ export function MobileTabBar({
     <div
       className="flex items-center px-2 py-1.5 gap-2 bg-muted"
       onClick={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
     >
       {/* Menu button */}
       {onMenuClick && (
@@ -129,12 +154,12 @@ export function MobileTabBar({
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {/* Tab selector dropdown */}
-        <DropdownMenu>
+        {/* Session selector dropdown */}
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1 rounded-md hover:bg-accent"
+              className="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1 rounded-md hover:bg-accent active:bg-accent"
             >
               <span className="text-sm font-medium truncate">
                 {session?.name || "No session"}
@@ -145,41 +170,38 @@ export function MobileTabBar({
               <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" className="max-h-[300px] overflow-y-auto">
-              {tabs.map((tab, index) => {
-                const tabSession = tab.sessionId
-                  ? sessions.find(s => s.id === tab.sessionId)
-                  : null;
-                const tabProject = tabSession?.project_id
-                  ? projects.find(p => p.id === tabSession.project_id)
-                  : null;
-                const isActive = tab.id === activeTabId;
+          <DropdownMenuContent align="center" className="max-h-[300px] overflow-y-auto min-w-[200px]">
+            {sessions.filter(s => !s.conductor_session_id).map((s) => {
+              const sessionProject = s.project_id
+                ? projects.find(p => p.id === s.project_id)
+                : null;
+              const isActive = s.id === session?.id;
 
-                return (
-                  <DropdownMenuItem
-                    key={tab.id}
-                    onClick={() => onTabSwitch(tab.id)}
-                    className={cn(
-                      "flex items-center gap-2",
-                      isActive && "bg-accent"
-                    )}
-                  >
-                    <Circle className={cn(
-                      "w-2 h-2",
-                      isActive ? "fill-primary text-primary" : "text-muted-foreground"
-                    )} />
-                    <span className="truncate">
-                      {tabSession?.name || `Tab ${index + 1}`}
+              return (
+                <DropdownMenuItem
+                  key={s.id}
+                  onSelect={() => onSelectSession(s.id)}
+                  className={cn(
+                    "flex items-center gap-2",
+                    isActive && "bg-accent"
+                  )}
+                >
+                  <Circle className={cn(
+                    "w-2 h-2",
+                    isActive ? "fill-primary text-primary" : "text-muted-foreground"
+                  )} />
+                  <span className="truncate flex-1">
+                    {s.name}
+                  </span>
+                  {sessionProject && sessionProject.name !== "Uncategorized" && (
+                    <span className="text-xs text-muted-foreground">
+                      [{sessionProject.name}]
                     </span>
-                    {tabProject && tabProject.name !== "Uncategorized" && (
-                      <span className="text-xs text-muted-foreground">
-                        [{tabProject.name}]
-                      </span>
-                    )}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
+                  )}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
         </DropdownMenu>
 
         <button
@@ -196,66 +218,17 @@ export function MobileTabBar({
       {/* View mode toggle */}
       {session?.working_directory && (
         <div className="flex items-center bg-accent/50 rounded-md p-0.5 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewModeChange("terminal");
-            }}
-            className={cn(
-              "p-1.5 rounded transition-colors",
-              viewMode === "terminal"
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground"
-            )}
-          >
-            <TerminalIcon className="w-4 h-4" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewModeChange("files");
-            }}
-            className={cn(
-              "p-1.5 rounded transition-colors",
-              viewMode === "files"
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground"
-            )}
-          >
-            <FolderOpen className="w-4 h-4" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewModeChange("git");
-            }}
-            className={cn(
-              "p-1.5 rounded transition-colors",
-              viewMode === "git"
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground"
-            )}
-          >
-            <GitBranch className="w-4 h-4" />
-          </button>
+          <ViewModeButton mode="terminal" currentMode={viewMode} icon={TerminalIcon} onClick={onViewModeChange} />
+          <ViewModeButton mode="files" currentMode={viewMode} icon={FolderOpen} onClick={onViewModeChange} />
+          <ViewModeButton mode="git" currentMode={viewMode} icon={GitBranch} onClick={onViewModeChange} />
           {isConductor && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewModeChange("workers");
-              }}
-              className={cn(
-                "p-1.5 rounded transition-colors flex items-center gap-0.5",
-                viewMode === "workers"
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground"
-              )}
-            >
-              <Users className="w-4 h-4" />
-              <span className="text-[10px] bg-primary/20 text-primary px-1 rounded">
-                {workerCount}
-              </span>
-            </button>
+            <ViewModeButton
+              mode="workers"
+              currentMode={viewMode}
+              icon={Users}
+              onClick={onViewModeChange}
+              badge={<span className="text-[10px] bg-primary/20 text-primary px-1 rounded">{workerCount}</span>}
+            />
           )}
         </div>
       )}

@@ -157,11 +157,10 @@ export const Pane = memo(function Pane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, onRegisterTerminal]);
 
-  const handleSelectSession = useCallback((sessionId: string) => {
-    if (onSelectSession) {
-      onSelectSession(sessionId);
-    }
-  }, [onSelectSession]);
+  const handleSelectSession = useCallback(
+    (sessionId: string) => onSelectSession?.(sessionId),
+    [onSelectSession]
+  );
 
   // Swipe gesture handling for mobile session switching
   const touchStartX = useRef<number | null>(null);
@@ -202,15 +201,12 @@ export const Pane = memo(function Pane({
           session={session}
           sessions={sessions}
           projects={projects}
-          tabs={paneData.tabs}
-          activeTabId={paneData.activeTabId}
           viewMode={viewMode}
           isConductor={isConductor}
           workerCount={workerCount}
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
           onSelectSession={handleSelectSession}
-          onTabSwitch={(tabId) => switchTab(paneId, tabId)}
         />
       ) : (
         <DesktopTabBar
