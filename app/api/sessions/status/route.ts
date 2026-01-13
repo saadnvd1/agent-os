@@ -6,6 +6,7 @@ import * as path from "path";
 import * as os from "os";
 import { statusDetector, type SessionStatus } from "@/lib/status-detector";
 import type { AgentType } from "@/lib/providers";
+import { getDb } from "@/lib/db";
 
 const execAsync = promisify(exec);
 
@@ -139,6 +140,9 @@ async function getLastLine(sessionName: string): Promise<string> {
 // UUID pattern for agent-os managed sessions
 const UUID_PATTERN = /^(claude|codex|opencode)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Track previous statuses to detect changes
+const previousStatuses = new Map<string, SessionStatus>();
+
 function getAgentTypeFromSessionName(sessionName: string): AgentType {
   if (sessionName.startsWith("codex-")) return "codex";
   if (sessionName.startsWith("opencode-")) return "opencode";
@@ -159,12 +163,24 @@ export async function GET() {
     // Use the new status detector
     const statusMap: Record<string, SessionStatusResponse> = {};
 
+    const db = getDb();
+    const sessionsToUpdate: string[] = [];
+
     for (const sessionName of managedSessions) {
       const status = await statusDetector.getStatus(sessionName);
       const claudeSessionId = await getClaudeSessionId(sessionName);
       const lastLine = await getLastLine(sessionName);
       const id = getSessionIdFromName(sessionName);
       const agentType = getAgentTypeFromSessionName(sessionName);
+
+      // Track status changes - update DB when session becomes active
+      const prevStatus = previousStatuses.get(id);
+      if (status === "running" || status === "waiting") {
+        if (prevStatus !== status) {
+          sessionsToUpdate.push(id);
+        }
+      }
+      previousStatuses.set(id, status);
 
       statusMap[id] = {
         sessionName,
@@ -173,6 +189,14 @@ export async function GET() {
         claudeSessionId,
         agentType,
       };
+    }
+
+    // Batch update sessions that became active (updates updated_at for sorting)
+    if (sessionsToUpdate.length > 0) {
+      const updateStmt = db.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ?");
+      for (const id of sessionsToUpdate) {
+        updateStmt.run(id);
+      }
     }
 
     // Get other tmux sessions (not managed by agent-os)

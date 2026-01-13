@@ -42,6 +42,7 @@ interface SessionListProps {
   onDeleteGroup?: (path: string) => void;
   onMoveSession?: (sessionId: string, groupPath: string) => void;
   onForkSession?: (sessionId: string) => void;
+  onSummarize?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newName: string) => void;
   onCreatePR?: (sessionId: string) => void;
@@ -59,6 +60,7 @@ export function SessionList({
   onDeleteGroup,
   onMoveSession,
   onForkSession,
+  onSummarize,
   onDeleteSession,
   onRenameSession,
   onCreatePR,
@@ -263,6 +265,7 @@ export function SessionList({
                         onClick={() => onSelect(session.id)}
                         onMove={onMoveSession ? (groupPath) => onMoveSession(session.id, groupPath) : undefined}
                         onFork={onForkSession ? () => onForkSession(session.id) : undefined}
+                        onSummarize={onSummarize ? () => onSummarize(session.id) : undefined}
                         onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
                         onRename={onRenameSession ? (newName) => onRenameSession(session.id, newName) : undefined}
                         onCreatePR={onCreatePR ? () => onCreatePR(session.id) : undefined}
