@@ -7,8 +7,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { CanvasAddon } from '@xterm/addon-canvas';
 import {
-  TERMINAL_THEME_DARK,
-  TERMINAL_THEME_LIGHT,
+  getTerminalThemeForApp,
   WS_RECONNECT_BASE_DELAY,
   WS_RECONNECT_MAX_DELAY,
 } from '../constants';
@@ -26,7 +25,7 @@ interface UseTerminalConnectionProps {
   onBeforeUnmount?: (scrollState: TerminalScrollState) => void;
   initialScrollState?: TerminalScrollState;
   isMobile?: boolean;
-  theme?: 'light' | 'dark';
+  theme?: string; // Full theme string (e.g., "dark", "dark-purple", "light-mint")
 }
 
 export function useTerminalConnection({
@@ -154,7 +153,7 @@ export function useTerminalConnection({
 
       // Initialize xterm.js - smaller font for mobile
       const fontSize = isMobile ? 11 : 14;
-      const terminalTheme = theme === 'light' ? TERMINAL_THEME_LIGHT : TERMINAL_THEME_DARK;
+      const terminalTheme = getTerminalThemeForApp(theme || 'dark');
       term = new XTerm({
         cursorBlink: true,
         fontSize,
@@ -590,7 +589,7 @@ export function useTerminalConnection({
     const term = xtermRef.current;
     if (!term) return;
 
-    const terminalTheme = theme === 'light' ? TERMINAL_THEME_LIGHT : TERMINAL_THEME_DARK;
+    const terminalTheme = getTerminalThemeForApp(theme || 'dark');
     term.options.theme = terminalTheme;
   }, [theme]);
 
