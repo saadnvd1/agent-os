@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
+import { useTheme } from 'next-themes';
 import '@xterm/xterm/css/xterm.css';
 import { ImagePlus } from 'lucide-react';
 import { SearchBar } from './SearchBar';
@@ -38,6 +39,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const terminalRef = useRef<HTMLDivElement>(null);
   const { isVisible: keybarVisible, toggle: toggleKeybar, show: showKeybar } = useKeybarVisibility();
   const { isMobile } = useViewport();
+  const { resolvedTheme } = useTheme();
   const [showImagePicker, setShowImagePicker] = useState(false);
 
   const {
@@ -58,6 +60,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     onBeforeUnmount,
     initialScrollState,
     isMobile,
+    theme: resolvedTheme === 'light' ? 'light' : 'dark',
   });
 
   const {
@@ -107,7 +110,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {/* touch-action: none is CRITICAL for mobile - prevents browser from intercepting touch events */}
       <div
         ref={terminalRef}
-        className="min-h-0 w-full flex-1 overflow-hidden bg-zinc-950"
+        className="terminal-container min-h-0 w-full flex-1 overflow-hidden"
         style={isMobile ? { touchAction: 'none' } : undefined}
         onClick={isMobile ? showKeybar : undefined}
       />
@@ -116,7 +119,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {!isMobile && (
         <button
           onClick={() => setShowImagePicker(true)}
-          className="absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 shadow-lg transition-all hover:bg-zinc-700"
+          className="absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-secondary shadow-lg transition-all hover:bg-accent"
           title="Select image"
         >
           <ImagePlus className="h-4 w-4" />
