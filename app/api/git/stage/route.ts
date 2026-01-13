@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stageFile, stageAll, isGitRepo } from "@/lib/git-status";
+import { stageFile, stageAll, isGitRepo, expandPath } from "@/lib/git-status";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { path, files } = body as { path: string; files?: string[] };
+    const { path: rawPath, files } = body as { path: string; files?: string[] };
 
-    if (!path) {
+    if (!rawPath) {
       return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
+
+    const path = expandPath(rawPath);
 
     if (!isGitRepo(path)) {
       return NextResponse.json({ error: "Not a git repository" }, { status: 400 });

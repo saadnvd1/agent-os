@@ -22,6 +22,7 @@ import type { TerminalHandle, TerminalScrollState } from "@/components/Terminal"
 import type { Session } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
 import { ConductorPanel } from "./ConductorPanel";
+import type { GitFile } from "@/lib/git-status";
 
 // Dynamic imports for client-only components
 const Terminal = dynamic(
@@ -36,6 +37,11 @@ const FileExplorer = dynamic(
 
 const GitPanel = dynamic(
   () => import("@/components/GitPanel").then((mod) => mod.GitPanel),
+  { ssr: false }
+);
+
+const DiffModal = dynamic(
+  () => import("@/components/DiffViewer/DiffModal").then((mod) => mod.DiffModal),
   { ssr: false }
 );
 
@@ -67,6 +73,7 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
   } = usePanes();
 
   const [viewMode, setViewMode] = useState<ViewMode>("terminal");
+  const [selectedDiff, setSelectedDiff] = useState<{ file: GitFile; diff: string } | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
   const paneData = getPaneData(paneId);
   const activeTab = getActiveTab(paneId);
@@ -107,9 +114,10 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
     }
   }, [paneId, activeTab?.id]);
 
-  // Reset view mode when session changes
+  // Reset view mode and diff when session changes
   useEffect(() => {
     setViewMode("terminal");
+    setSelectedDiff(null);
   }, [session?.id]);
 
   const handleFocus = useCallback(() => {
@@ -416,9 +424,20 @@ export const Pane = memo(function Pane({ paneId, sessions, onRegisterTerminal, o
           />
         )}
         {viewMode === "git" && session?.working_directory && (
-          <GitPanel
-            workingDirectory={session.working_directory}
-          />
+          <>
+            <GitPanel
+              workingDirectory={session.working_directory}
+              onFileSelect={(file, diff) => setSelectedDiff({ file, diff })}
+            />
+            {selectedDiff && (
+              <DiffModal
+                diff={selectedDiff.diff}
+                fileName={selectedDiff.file.path}
+                isStaged={selectedDiff.file.staged}
+                onClose={() => setSelectedDiff(null)}
+              />
+            )}
+          </>
         )}
         {viewMode === "workers" && session && (
           <ConductorPanel
