@@ -18,6 +18,18 @@ async function captureScrollback(sessionName: string): Promise<string> {
   }
 }
 
+// Get the actual working directory from tmux pane
+async function getTmuxCwd(sessionName: string): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync(
+      `tmux display-message -t "${sessionName}" -p "#{pane_current_path}" 2>/dev/null`
+    );
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 // Generate summary using Claude CLI with stdin
 async function generateSummary(conversation: string): Promise<string> {
   const prompt = `Summarize this Claude Code terminal output in under 300 words. Focus on: what was built, key files changed, current state. Be specific.`;
@@ -103,11 +115,14 @@ export async function POST(
       const newId = randomUUID();
       const newName = `${session.name} (fresh)`;
 
+      // Get actual working directory from tmux (falls back to session's stored value)
+      const actualCwd = await getTmuxCwd(tmuxSessionName) || session.working_directory;
+
       // Create new session
       queries.createSession(db).run(
         newId,
         newName,
-        session.working_directory,
+        actualCwd,
         null, // no parent - fresh start
         session.model,
         `Continue from previous session. Here's a summary of the work so far:\n\n${summary}`,
