@@ -112,21 +112,16 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         onClick={isMobile ? showKeybar : undefined}
       />
 
-      {/* Image picker button */}
-      <button
-        onClick={() => setShowImagePicker(true)}
-        className={cn(
-          "absolute z-40 flex items-center justify-center rounded-full bg-zinc-800 shadow-lg transition-all hover:bg-zinc-700",
-          "h-9 w-9",
-          isMobile
-            ? "bottom-2 right-2"  // Mobile: bottom right
-            : "right-3 top-3",     // Desktop: top right
-          keybarVisible && isMobile && "bottom-[140px]" // Shift up when keyboard visible
-        )}
-        title="Select image"
-      >
-        <ImagePlus className="h-4 w-4" />
-      </button>
+      {/* Image picker button - desktop only (mobile uses virtual keyboard) */}
+      {!isMobile && (
+        <button
+          onClick={() => setShowImagePicker(true)}
+          className="absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 shadow-lg transition-all hover:bg-zinc-700"
+          title="Select image"
+        >
+          <ImagePlus className="h-4 w-4" />
+        </button>
+      )}
 
       {/* Image picker modal */}
       {showImagePicker && (
@@ -144,7 +139,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {isMobile && (
         <>
           <KeybarToggleButton isVisible={keybarVisible} onToggle={toggleKeybar} />
-          <VirtualKeyboard onKeyPress={sendInput} visible={keybarVisible} />
+          <VirtualKeyboard onKeyPress={sendInput} onImagePick={() => setShowImagePicker(true)} visible={keybarVisible} />
         </>
       )}
 
