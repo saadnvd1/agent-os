@@ -130,7 +130,6 @@ export function MobileView({
       {/* Dialogs */}
       <NewSessionDialog
         open={showNewSessionDialog}
-        groups={groups}
         projects={projects}
         onClose={() => setShowNewSessionDialog(false)}
         onCreated={(id) => {
@@ -143,8 +142,18 @@ export function MobileView({
               });
           });
         }}
-        onCreateGroup={async (name) => {
-          await handleCreateGroup(name);
+        onCreateProject={async (name, workingDirectory, agentType) => {
+          const res = await fetch("/api/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, workingDirectory, agentType }),
+          });
+          const data = await res.json();
+          if (data.project) {
+            await fetchProjects();
+            return data.project.id;
+          }
+          return null;
         }}
       />
       <QuickSwitcher

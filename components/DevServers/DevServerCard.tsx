@@ -11,6 +11,7 @@ import {
   Check,
   Server,
   Container,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DevServer, DevServerStatus } from "@/lib/db";
@@ -46,6 +47,7 @@ export function DevServerCard({
 }: DevServerCardProps) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [confirmingStop, setConfirmingStop] = useState(false);
 
   const status = statusConfig[server.status] || statusConfig.stopped;
   const ports: number[] = JSON.parse(server.ports || "[]");
@@ -136,24 +138,48 @@ export function DevServerCard({
       <div className="mt-3 flex items-center gap-1">
         {isRunning && (
           <>
-            <ActionButton
-              icon={Square}
-              label="Stop"
-              onClick={() => handleAction(() => onStop(server.id))}
-              disabled={loading}
-            />
-            <ActionButton
-              icon={RefreshCw}
-              label="Restart"
-              onClick={() => handleAction(() => onRestart(server.id))}
-              disabled={loading}
-            />
-            <ActionButton
-              icon={FileText}
-              label="Logs"
-              onClick={() => onViewLogs(server.id)}
-              disabled={loading}
-            />
+            {confirmingStop ? (
+              <>
+                <ActionButton
+                  icon={Square}
+                  label="Confirm"
+                  onClick={() => {
+                    setConfirmingStop(false);
+                    handleAction(() => onStop(server.id));
+                  }}
+                  disabled={loading}
+                  variant="danger"
+                />
+                <ActionButton
+                  icon={X}
+                  label="Cancel"
+                  onClick={() => setConfirmingStop(false)}
+                  disabled={loading}
+                />
+              </>
+            ) : (
+              <>
+                <ActionButton
+                  icon={Square}
+                  label="Stop"
+                  onClick={() => setConfirmingStop(true)}
+                  disabled={loading}
+                  variant="danger"
+                />
+                <ActionButton
+                  icon={RefreshCw}
+                  label="Restart"
+                  onClick={() => handleAction(() => onRestart(server.id))}
+                  disabled={loading}
+                />
+                <ActionButton
+                  icon={FileText}
+                  label="Logs"
+                  onClick={() => onViewLogs(server.id)}
+                  disabled={loading}
+                />
+              </>
+            )}
           </>
         )}
 
