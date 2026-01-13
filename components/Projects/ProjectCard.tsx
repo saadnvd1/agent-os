@@ -12,8 +12,6 @@ import {
   Trash2,
   Pencil,
   FolderOpen,
-  Play,
-  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,8 +39,7 @@ interface ProjectCardProps {
   onToggleExpanded?: (expanded: boolean) => void;
   onEdit?: () => void;
   onNewSession?: () => void;
-  onStartDevServers?: () => void;
-  onStopDevServers?: () => void;
+  onStartDevServer?: () => void;
   onOpenInEditor?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
@@ -56,8 +53,7 @@ export function ProjectCard({
   onToggleExpanded,
   onEdit,
   onNewSession,
-  onStartDevServers,
-  onStopDevServers,
+  onStartDevServer,
   onOpenInEditor,
   onDelete,
   onRename,
@@ -67,7 +63,7 @@ export function ProjectCard({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hasRunningServers = runningDevServers.length > 0;
-  const hasActions = !project.is_uncategorized && (onEdit || onNewSession || onDelete || onRename);
+  const hasActions = !project.is_uncategorized && (onEdit || onNewSession || onStartDevServer || onDelete || onRename);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -119,21 +115,13 @@ export function ProjectCard({
             Open in editor
           </MenuItem>
         )}
-        {(onStartDevServers || onStopDevServers) && (
+        {onStartDevServer && (
           <>
             <MenuSeparator />
-            {hasRunningServers && onStopDevServers && (
-              <MenuItem onClick={() => onStopDevServers()}>
-                <Square className="w-3 h-3 mr-2" />
-                Stop all servers
-              </MenuItem>
-            )}
-            {!hasRunningServers && onStartDevServers && (
-              <MenuItem onClick={() => onStartDevServers()}>
-                <Play className="w-3 h-3 mr-2" />
-                Start dev servers
-              </MenuItem>
-            )}
+            <MenuItem onClick={() => onStartDevServer()}>
+              <Server className="w-3 h-3 mr-2" />
+              Start dev server
+            </MenuItem>
           </>
         )}
         {onDelete && (

@@ -63,7 +63,7 @@ interface SessionListProps {
   onDeleteSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newName: string) => void;
   onCreatePR?: (sessionId: string) => void;
-  onStartDevServer?: (sessionId: string) => void;
+  onStartDevServer?: (projectId: string) => void;
   onStopDevServer?: (serverId: string) => Promise<void>;
   onRestartDevServer?: (serverId: string) => Promise<void>;
   onRemoveDevServer?: (serverId: string) => Promise<void>;
@@ -316,7 +316,6 @@ export function SessionList({
                         onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
                         onRename={onRenameSession ? (newName) => onRenameSession(session.id, newName) : undefined}
                         onCreatePR={onCreatePR ? () => onCreatePR(session.id) : undefined}
-                        onStartDevServer={onStartDevServer ? () => onStartDevServer(session.id) : undefined}
                         onHoverStart={(rect) => handleHoverStart(session, rect)}
                         onHoverEnd={handleHoverEnd}
                       />
@@ -459,7 +458,7 @@ export function SessionList({
       {devServers.length > 0 && onStopDevServer && onRestartDevServer && onRemoveDevServer && (
         <DevServersSection
           servers={devServers}
-          sessions={sessions}
+          projects={projects}
           onStart={async (id) => {
             const server = devServers.find((s) => s.id === id);
             if (server) {

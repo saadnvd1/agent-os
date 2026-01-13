@@ -1,35 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { detectServers } from "@/lib/dev-servers";
-import { db, queries, Session } from "@/lib/db";
+import { db, queries, Project } from "@/lib/db";
 
-// GET /api/dev-servers/detect?sessionId=X - Auto-detect available dev servers
+// GET /api/dev-servers/detect?projectId=X - Auto-detect available dev servers
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const sessionId = searchParams.get("sessionId");
+    const projectId = searchParams.get("projectId");
 
-    if (!sessionId) {
+    if (!projectId) {
       return NextResponse.json(
-        { error: "sessionId is required" },
+        { error: "projectId is required" },
         { status: 400 }
       );
     }
 
-    const session = queries.getSession(db).get(sessionId) as Session | undefined;
-    if (!session) {
+    const project = queries.getProject(db).get(projectId) as Project | undefined;
+    if (!project) {
       return NextResponse.json(
-        { error: "Session not found" },
+        { error: "Project not found" },
         { status: 404 }
       );
     }
 
-    // Use worktree path if available, otherwise session working directory
-    const workingDir = session.worktree_path || session.working_directory;
-
     // Expand ~ to home directory
-    const expandedPath = workingDir.startsWith("~")
-      ? workingDir.replace("~", process.env.HOME || "")
-      : workingDir;
+    const expandedPath = project.working_directory.startsWith("~")
+      ? project.working_directory.replace("~", process.env.HOME || "")
+      : project.working_directory;
 
     const servers = await detectServers(expandedPath);
     return NextResponse.json({ servers, workingDirectory: expandedPath });

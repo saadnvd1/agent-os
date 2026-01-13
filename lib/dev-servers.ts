@@ -18,7 +18,7 @@ if (!fs.existsSync(LOGS_DIR)) {
 }
 
 export interface StartServerOptions {
-  sessionId: string;
+  projectId: string;
   type: DevServerType;
   name: string;
   command: string;
@@ -139,9 +139,9 @@ export async function getAllServers(): Promise<DevServer[]> {
   return servers;
 }
 
-// Get servers for a session
-export async function getServersBySession(sessionId: string): Promise<DevServer[]> {
-  const servers = queries.getDevServersBySession(db).all(sessionId) as DevServer[];
+// Get servers for a project
+export async function getServersByProject(projectId: string): Promise<DevServer[]> {
+  const servers = queries.getDevServersByProject(db).all(projectId) as DevServer[];
 
   for (const server of servers) {
     const liveStatus = await getServerStatus(server);
@@ -233,7 +233,7 @@ export async function startServer(opts: StartServerOptions): Promise<DevServer> 
   // Create database record first
   queries.createDevServer(db).run(
     id,
-    opts.sessionId,
+    opts.projectId,
     opts.type,
     opts.name,
     opts.command,
