@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
+import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon } from "lucide-react";
 import { PaneLayout } from "@/components/PaneLayout";
@@ -14,6 +15,7 @@ import type { ViewProps } from "./types";
 export function MobileView({
   sessions,
   groups,
+  projects,
   sessionStatuses,
   sidebarOpen,
   setSidebarOpen,
@@ -24,16 +26,31 @@ export function MobileView({
   setShowQuickSwitcher,
   attachToSession,
   fetchSessions,
+  fetchProjects,
   handleToggleGroup,
   handleCreateGroup,
   handleDeleteGroup,
   handleMoveSession,
+  handleToggleProject,
+  handleEditProject,
+  handleDeleteProject,
+  handleRenameProject,
+  handleMoveSessionToProject,
+  handleNewSessionInProject,
   handleForkSession,
   handleSummarize,
   summarizingSessionId,
   handleDeleteSession,
   handleRenameSession,
   handleCreatePR,
+  devServers,
+  handleStartDevServer,
+  handleStopDevServer,
+  handleRestartDevServer,
+  handleRemoveDevServer,
+  handleCreateDevServer,
+  startDevServerSession,
+  setStartDevServerSessionId,
   renderPane,
 }: ViewProps) {
   const { theme, setTheme } = useTheme();
@@ -53,24 +70,37 @@ export function MobileView({
             <SessionList
               sessions={sessions}
               groups={groups}
+              projects={projects}
               activeSessionId={focusedActiveTab?.sessionId || undefined}
               sessionStatuses={sessionStatuses}
+              summarizingSessionId={summarizingSessionId}
+              devServers={devServers}
               onSelect={(id) => {
                 const session = sessions.find((s) => s.id === id);
                 if (session) attachToSession(session);
                 setSidebarOpen(false);
               }}
               onRefresh={fetchSessions}
+              onRefreshProjects={fetchProjects}
               onToggleGroup={handleToggleGroup}
               onCreateGroup={handleCreateGroup}
               onDeleteGroup={handleDeleteGroup}
               onMoveSession={handleMoveSession}
+              onToggleProject={handleToggleProject}
+              onEditProject={handleEditProject}
+              onDeleteProject={handleDeleteProject}
+              onRenameProject={handleRenameProject}
+              onMoveSessionToProject={handleMoveSessionToProject}
+              onNewSessionInProject={handleNewSessionInProject}
               onForkSession={handleForkSession}
               onSummarize={handleSummarize}
-              summarizingSessionId={summarizingSessionId}
               onDeleteSession={handleDeleteSession}
               onRenameSession={handleRenameSession}
               onCreatePR={handleCreatePR}
+              onStartDevServer={handleStartDevServer}
+              onStopDevServer={handleStopDevServer}
+              onRestartDevServer={handleRestartDevServer}
+              onRemoveDevServer={handleRemoveDevServer}
             />
           </div>
 
@@ -101,6 +131,7 @@ export function MobileView({
       <NewSessionDialog
         open={showNewSessionDialog}
         groups={groups}
+        projects={projects}
         onClose={() => setShowNewSessionDialog(false)}
         onCreated={(id) => {
           setShowNewSessionDialog(false);
@@ -126,6 +157,18 @@ export function MobileView({
           if (session) attachToSession(session);
         }}
       />
+      {startDevServerSession && (
+        <StartServerDialog
+          session={startDevServerSession}
+          projectDevServers={
+            startDevServerSession.project_id
+              ? projects.find((p) => p.id === startDevServerSession.project_id)?.devServers
+              : undefined
+          }
+          onStart={handleCreateDevServer}
+          onClose={() => setStartDevServerSessionId(null)}
+        />
+      )}
     </main>
   );
 }

@@ -17,7 +17,8 @@ export interface Session {
   claude_session_id: string | null;
   model: string;
   system_prompt: string | null;
-  group_path: string;
+  group_path: string; // Deprecated - use project_id
+  project_id: string | null;
   agent_type: AgentType;
   auto_approve: boolean;
   // Worktree fields (optional)
@@ -43,6 +44,32 @@ export interface Group {
   created_at: string;
 }
 
+// Projects (replaces Groups)
+export interface Project {
+  id: string;
+  name: string;
+  working_directory: string;
+  agent_type: AgentType;
+  default_model: string;
+  expanded: boolean;
+  sort_order: number;
+  is_uncategorized: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Project dev server configuration (template for dev servers)
+export interface ProjectDevServer {
+  id: string;
+  project_id: string;
+  name: string;
+  type: DevServerType;
+  command: string;
+  port: number | null;
+  port_env_var: string | null;
+  sort_order: number;
+}
+
 export interface Message {
   id: number;
   session_id: string;
@@ -63,13 +90,20 @@ export interface ToolCall {
   timestamp: string;
 }
 
+export type DevServerType = "node" | "docker";
+export type DevServerStatus = "stopped" | "starting" | "running" | "failed";
+
 export interface DevServer {
   id: string;
   session_id: string;
-  status: "building" | "starting" | "ready" | "stopped" | "failed";
+  type: DevServerType;
+  name: string;
+  command: string;
+  status: DevServerStatus;
+  pid: number | null;
   container_id: string | null;
-  ports: string; // JSON array of port mappings
-  preview_url: string | null;
+  ports: string; // JSON array of port numbers
+  working_directory: string;
   created_at: string;
   updated_at: string;
 }
@@ -141,13 +175,44 @@ export function initDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS dev_servers (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'node',
+      name TEXT NOT NULL DEFAULT '',
+      command TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'stopped',
+      pid INTEGER,
       container_id TEXT,
       ports TEXT NOT NULL DEFAULT '[]',
-      preview_url TEXT,
+      working_directory TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+
+    -- Projects table (replaces groups)
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      working_directory TEXT NOT NULL,
+      agent_type TEXT NOT NULL DEFAULT 'claude',
+      default_model TEXT NOT NULL DEFAULT 'sonnet',
+      expanded INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_uncategorized INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Project dev servers (configuration templates)
+    CREATE TABLE IF NOT EXISTS project_dev_servers (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'node',
+      command TEXT NOT NULL,
+      port INTEGER,
+      port_env_var TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     );
 
     -- Indexes for common queries
@@ -156,6 +221,11 @@ export function initDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
     CREATE INDEX IF NOT EXISTS idx_dev_servers_session ON dev_servers(session_id);
+    CREATE INDEX IF NOT EXISTS idx_project_dev_servers_project ON project_dev_servers(project_id);
+
+    -- Default Uncategorized project
+    INSERT OR IGNORE INTO projects (id, name, working_directory, is_uncategorized, sort_order)
+    VALUES ('uncategorized', 'Uncategorized', '~', 1, 999999);
   `);
 
   // Migration: Add group_path column if it doesn't exist (for existing databases)
@@ -241,6 +311,57 @@ export function initDb(): Database.Database {
     // Column already exists, ignore
   }
 
+  // Migration: Add new dev_servers columns if they don't exist
+  try {
+    db.exec(`ALTER TABLE dev_servers ADD COLUMN type TEXT NOT NULL DEFAULT 'node'`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE dev_servers ADD COLUMN name TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE dev_servers ADD COLUMN command TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE dev_servers ADD COLUMN pid INTEGER`);
+  } catch {
+    // Column already exists, ignore
+  }
+  try {
+    db.exec(`ALTER TABLE dev_servers ADD COLUMN working_directory TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Migration: Remove preview_url column from dev_servers (no longer used)
+  // SQLite doesn't support DROP COLUMN in older versions, so we just ignore the column
+
+  // Migration: Add project_id column to sessions
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN project_id TEXT REFERENCES projects(id)`);
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Migration: Set existing sessions without project_id to uncategorized
+  try {
+    db.exec(`UPDATE sessions SET project_id = 'uncategorized' WHERE project_id IS NULL`);
+  } catch {
+    // Ignore errors
+  }
+
+  // Create index on project_id after the column exists
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)`);
+  } catch {
+    // Index might already exist or column doesn't exist, ignore
+  }
+
   return db;
 }
 
@@ -276,8 +397,8 @@ export const queries = {
   createSession: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO sessions (id, name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type, auto_approve)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sessions (id, name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type, auto_approve, project_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
 
   getSession: (db: Database.Database) =>
@@ -433,23 +554,29 @@ export const queries = {
   createWorkerSession: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO sessions (id, name, working_directory, conductor_session_id, worker_task, worker_status, model, group_path, agent_type)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
+      `INSERT INTO sessions (id, name, working_directory, conductor_session_id, worker_task, worker_status, model, group_path, agent_type, project_id)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`
     ),
 
   // Dev servers (for Phase 9: Container & Development Server Management)
   createDevServer: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO dev_servers (id, session_id, status, container_id, ports, preview_url)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO dev_servers (id, session_id, type, name, command, status, pid, container_id, ports, working_directory)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
 
   getDevServer: (db: Database.Database) =>
     getStmt(db, `SELECT * FROM dev_servers WHERE id = ?`),
 
+  getAllDevServers: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM dev_servers ORDER BY created_at DESC`),
+
   getDevServerBySession: (db: Database.Database) =>
     getStmt(db, `SELECT * FROM dev_servers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1`),
+
+  getDevServersBySession: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM dev_servers WHERE session_id = ? ORDER BY created_at DESC`),
 
   updateDevServerStatus: (db: Database.Database) =>
     getStmt(
@@ -457,10 +584,16 @@ export const queries = {
       `UPDATE dev_servers SET status = ?, updated_at = datetime('now') WHERE id = ?`
     ),
 
+  updateDevServerPid: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE dev_servers SET pid = ?, status = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
+
   updateDevServer: (db: Database.Database) =>
     getStmt(
       db,
-      `UPDATE dev_servers SET status = ?, container_id = ?, ports = ?, preview_url = ?, updated_at = datetime('now') WHERE id = ?`
+      `UPDATE dev_servers SET status = ?, pid = ?, container_id = ?, ports = ?, updated_at = datetime('now') WHERE id = ?`
     ),
 
   deleteDevServer: (db: Database.Database) =>
@@ -468,4 +601,71 @@ export const queries = {
 
   deleteDevServersBySession: (db: Database.Database) =>
     getStmt(db, `DELETE FROM dev_servers WHERE session_id = ?`),
+
+  // Projects
+  createProject: (db: Database.Database) =>
+    getStmt(
+      db,
+      `INSERT INTO projects (id, name, working_directory, agent_type, default_model, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ),
+
+  getProject: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM projects WHERE id = ?`),
+
+  getAllProjects: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM projects ORDER BY is_uncategorized ASC, sort_order ASC, name ASC`),
+
+  updateProject: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE projects SET name = ?, working_directory = ?, agent_type = ?, default_model = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
+
+  updateProjectExpanded: (db: Database.Database) =>
+    getStmt(db, `UPDATE projects SET expanded = ? WHERE id = ?`),
+
+  updateProjectOrder: (db: Database.Database) =>
+    getStmt(db, `UPDATE projects SET sort_order = ? WHERE id = ?`),
+
+  deleteProject: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM projects WHERE id = ? AND is_uncategorized = 0`),
+
+  getSessionsByProject: (db: Database.Database) =>
+    getStmt(
+      db,
+      `SELECT * FROM sessions WHERE project_id = ? ORDER BY updated_at DESC`
+    ),
+
+  updateSessionProject: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE sessions SET project_id = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
+
+  // Project dev servers
+  createProjectDevServer: (db: Database.Database) =>
+    getStmt(
+      db,
+      `INSERT INTO project_dev_servers (id, project_id, name, type, command, port, port_env_var, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ),
+
+  getProjectDevServer: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM project_dev_servers WHERE id = ?`),
+
+  getProjectDevServers: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM project_dev_servers WHERE project_id = ? ORDER BY sort_order ASC`),
+
+  updateProjectDevServer: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE project_dev_servers SET name = ?, type = ?, command = ?, port = ?, port_env_var = ?, sort_order = ? WHERE id = ?`
+    ),
+
+  deleteProjectDevServer: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM project_dev_servers WHERE id = ?`),
+
+  deleteProjectDevServers: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM project_dev_servers WHERE project_id = ?`),
 };
