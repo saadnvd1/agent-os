@@ -11,6 +11,7 @@ interface CommitFormProps {
   isOnMainBranch: boolean;
   branch: string;
   onCommit: () => void;
+  onCreatePR?: () => void;
 }
 
 export function CommitForm({
@@ -19,6 +20,7 @@ export function CommitForm({
   isOnMainBranch,
   branch,
   onCommit,
+  onCreatePR,
 }: CommitFormProps) {
   const [message, setMessage] = useState("");
   const [branchName, setBranchName] = useState("");
@@ -207,14 +209,14 @@ export function CommitForm({
       </div>
 
       {/* Create PR button */}
-      {showCreatePR && (
+      {showCreatePR && onCreatePR && (
         <Button
           variant="outline"
           size="default"
           className="w-full min-h-[44px] text-primary"
           onClick={() => {
-            // This will be connected to Phase 8
             setShowCreatePR(false);
+            onCreatePR();
           }}
         >
           <ExternalLink className="w-4 h-4 mr-1" />
