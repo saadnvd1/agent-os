@@ -26,7 +26,7 @@ interface SessionStatus {
   claudeSessionId?: string | null;
 }
 
-interface OtherTmuxSession {
+interface ExternalTmuxSession {
   sessionName: string;
   status: "idle" | "running" | "waiting" | "error" | "dead";
   lastLine?: string;
@@ -39,8 +39,8 @@ function HomeContent() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
-  const [otherTmuxSessions, setOtherTmuxSessions] = useState<OtherTmuxSession[]>([]);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
+  const importedTmuxSessions = useRef<Set<string>>(new Set());
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
@@ -126,14 +126,13 @@ function HomeContent() {
     }
   }, []);
 
-  // Fetch session statuses from tmux
+  // Fetch session statuses from tmux and auto-import external sessions
   const fetchStatuses = useCallback(async () => {
     try {
       const res = await fetch("/api/sessions/status");
       const data = await res.json();
       const statuses = data.statuses || {};
       setSessionStatuses(statuses);
-      setOtherTmuxSessions(data.otherSessions || []);
 
       // Check for notification-worthy state changes
       const sessionStates = sessions.map(s => ({
@@ -152,6 +151,51 @@ function HomeContent() {
           needsRefresh = true;
         }
       }
+
+      // Auto-import external tmux sessions (sessions not managed by AgentOS)
+      const externalSessions = (data.otherSessions || []) as ExternalTmuxSession[];
+      for (const extSession of externalSessions) {
+        // Skip if already imported or currently importing
+        if (importedTmuxSessions.current.has(extSession.sessionName)) continue;
+
+        try {
+          // Mark as importing to avoid duplicate attempts
+          importedTmuxSessions.current.add(extSession.sessionName);
+
+          // Import the session
+          const importRes = await fetch("/api/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: extSession.sessionName,
+              claudeSessionId: extSession.claudeSessionId,
+              importFromTmux: extSession.sessionName,
+            }),
+          });
+
+          if (importRes.ok) {
+            const importData = await importRes.json();
+            if (importData.session) {
+              // Rename tmux session to match our naming convention
+              const newTmuxName = `claude-${importData.session.id}`;
+              await fetch("/api/tmux/rename", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ oldName: extSession.sessionName, newName: newTmuxName }),
+              });
+              needsRefresh = true;
+            }
+          } else {
+            // Import failed, allow retry on next poll
+            importedTmuxSessions.current.delete(extSession.sessionName);
+          }
+        } catch (importError) {
+          // Import failed, allow retry on next poll
+          importedTmuxSessions.current.delete(extSession.sessionName);
+          console.error(`Failed to auto-import session ${extSession.sessionName}:`, importError);
+        }
+      }
+
       if (needsRefresh) {
         const sessRes = await fetch("/api/sessions");
         const sessData = await sessRes.json();
@@ -289,21 +333,6 @@ function HomeContent() {
     }
   };
 
-  // Handle clicking on existing tmux session
-  const handleTmuxAttach = (sessionName: string) => {
-    const terminal = getFocusedTerminal();
-    if (terminal) {
-      terminal.sendInput("\x02d");
-      setTimeout(() => {
-        terminal.sendInput("\x15");
-        setTimeout(() => {
-          terminal.sendCommand(`tmux attach -t ${sessionName}`);
-          attachSession(focusedPaneId, "", sessionName);
-        }, 50);
-      }, 100);
-    }
-  };
-
   // Toggle group expanded state
   const handleToggleGroup = async (path: string, expanded: boolean) => {
     try {
@@ -407,48 +436,6 @@ function HomeContent() {
     }
   };
 
-  // Rename tmux session
-  const handleRenameTmuxSession = async (oldName: string, newName: string) => {
-    try {
-      await fetch("/api/tmux/rename", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldName, newName }),
-      });
-      await fetchStatuses();
-    } catch (error) {
-      console.error("Failed to rename tmux session:", error);
-    }
-  };
-
-  // Import external tmux session
-  const handleImportTmuxSession = async (sessionName: string, claudeSessionId?: string) => {
-    try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: sessionName,
-          claudeSessionId,
-        }),
-      });
-      const data = await res.json();
-      if (data.session) {
-        await fetchSessions();
-        // Rename tmux session to match our naming convention
-        const newTmuxName = `claude-${data.session.id}`;
-        await fetch("/api/tmux/rename", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ oldName: sessionName, newName: newTmuxName }),
-        });
-        await fetchStatuses();
-      }
-    } catch (error) {
-      console.error("Failed to import tmux session:", error);
-    }
-  };
-
   // Create PR for worktree session
   const handleCreatePR = async (sessionId: string) => {
     try {
@@ -499,15 +486,12 @@ function HomeContent() {
       groups={groups}
       activeSessionId={focusedActiveTab?.sessionId || undefined}
       sessionStatuses={sessionStatuses}
-      otherTmuxSessions={otherTmuxSessions}
-      attachedTmux={focusedActiveTab?.attachedTmux}
       onSelect={(id) => {
         const session = sessions.find((s) => s.id === id);
         if (session) attachToSession(session);
         if (isMobile) setSidebarOpen(false);
       }}
       onRefresh={fetchSessions}
-      onTmuxAttach={handleTmuxAttach}
       onToggleGroup={handleToggleGroup}
       onCreateGroup={handleCreateGroup}
       onDeleteGroup={handleDeleteGroup}
@@ -515,8 +499,6 @@ function HomeContent() {
       onForkSession={handleForkSession}
       onDeleteSession={handleDeleteSession}
       onRenameSession={handleRenameSession}
-      onRenameTmuxSession={handleRenameTmuxSession}
-      onImportTmuxSession={handleImportTmuxSession}
       onCreatePR={handleCreatePR}
     />
   );
