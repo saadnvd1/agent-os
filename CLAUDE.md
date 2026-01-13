@@ -25,6 +25,8 @@ If a feature exists in desktop tools (Emdash, VS Code, etc.), figure out how to 
 - Terminal interaction with touch optimizations
 - All features that desktop users have, adapted for mobile
 
+- If the mobile vs desktop views differ significantly enough, create separate views and use shared props
+
 See `master.md` for full transformation plan.
 
 ---

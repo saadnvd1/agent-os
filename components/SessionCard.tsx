@@ -294,7 +294,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
       {hasActions && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-5 w-5 flex-shrink-0">
+            <Button variant="ghost" size="icon-sm" className="opacity-100 md:opacity-0 md:group-hover:opacity-100 h-6 w-6 md:h-5 md:w-5 flex-shrink-0">
               <MoreHorizontal className="w-3 h-3" />
             </Button>
           </DropdownMenuTrigger>

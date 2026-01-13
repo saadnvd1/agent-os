@@ -85,16 +85,24 @@ function HomeContent() {
         });
         const flagsStr = flags.join(" ");
 
-        terminal.sendInput("\x02d");
+        // Check if we're currently attached to a tmux session
+        const activeTab = getActiveTab(focusedPaneId);
+        const isInTmux = !!activeTab?.attachedTmux;
+
+        // Only send detach command if we're in tmux
+        if (isInTmux) {
+          terminal.sendInput("\x02d");
+        }
+
         setTimeout(() => {
-          terminal.sendInput("\x15");
+          terminal.sendInput("\x03"); // Ctrl+C to interrupt anything
           setTimeout(async () => {
             const agentCmd = `${provider.command} ${flagsStr}`;
             const newSessionCmd = await getInitScriptCommand(agentCmd);
             terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
             attachSession(focusedPaneId, session.id, sessionName);
           }, 50);
-        }, 100);
+        }, isInTmux ? 100 : 0);
       }
     }
   }, [sessions, focusedPaneId, getActiveTab, attachSession, getInitScriptCommand]);
@@ -254,17 +262,6 @@ function HomeContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Memoized pane renderer to prevent unnecessary re-renders
-  const renderPane = useCallback((paneId: string) => (
-    <Pane
-      key={paneId}
-      paneId={paneId}
-      sessions={sessions}
-      onRegisterTerminal={registerTerminalRef}
-      onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined}
-    />
-  ), [sessions, registerTerminalRef, isMobile]);
-
   // Attach session to focused pane
   const attachToSession = useCallback(async (session: Session) => {
     const terminal = getFocusedTerminal();
@@ -294,9 +291,17 @@ function HomeContent() {
 
       const flagsStr = flags.join(" ");
 
-      terminal.sendInput("\x02d");
+      // Check if we're currently attached to a tmux session
+      const activeTab = getActiveTab(focusedPaneId);
+      const isInTmux = !!activeTab?.attachedTmux;
+
+      // Only send detach command if we're in tmux, otherwise it types "d"
+      if (isInTmux) {
+        terminal.sendInput("\x02d");
+      }
+
       setTimeout(() => {
-        terminal.sendInput("\x15");
+        terminal.sendInput("\x03"); // Ctrl+C to interrupt anything
         setTimeout(async () => {
           const agentCmd = `${provider.command} ${flagsStr}`;
           const newSessionCmd = await getInitScriptCommand(agentCmd);
@@ -305,9 +310,29 @@ function HomeContent() {
           // Focus terminal after attaching
           terminal.focus();
         }, 50);
-      }, 100);
+      }, isInTmux ? 100 : 0); // No delay needed if not detaching
     }
-  }, [getFocusedTerminal, focusedPaneId, attachSession, sessions, getInitScriptCommand]);
+  }, [getFocusedTerminal, focusedPaneId, attachSession, sessions, getInitScriptCommand, getActiveTab]);
+
+  // Handle session selection (for mobile prev/next arrows)
+  const handleSelectSession = useCallback((sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      attachToSession(session);
+    }
+  }, [sessions, attachToSession]);
+
+  // Memoized pane renderer to prevent unnecessary re-renders
+  const renderPane = useCallback((paneId: string) => (
+    <Pane
+      key={paneId}
+      paneId={paneId}
+      sessions={sessions}
+      onRegisterTerminal={registerTerminalRef}
+      onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined}
+      onSelectSession={handleSelectSession}
+    />
+  ), [sessions, registerTerminalRef, isMobile, handleSelectSession]);
 
   // Create new session and attach
   const createAndAttach = async () => {
@@ -329,9 +354,17 @@ function HomeContent() {
         await fetchSessions();
         const terminal = getFocusedTerminal();
         if (terminal) {
-          terminal.sendInput("\x02d");
+          // Check if we're currently attached to a tmux session
+          const activeTab = getActiveTab(focusedPaneId);
+          const isInTmux = !!activeTab?.attachedTmux;
+
+          // Only send detach command if we're in tmux
+          if (isInTmux) {
+            terminal.sendInput("\x02d");
+          }
+
           setTimeout(() => {
-            terminal.sendInput("\x15");
+            terminal.sendInput("\x03"); // Ctrl+C to interrupt anything
             setTimeout(async () => {
               const cwd = data.session.working_directory?.replace('~', '$HOME') || '$HOME';
               const sessionName = `${provider.id}-${data.session.id}`;
@@ -342,7 +375,7 @@ function HomeContent() {
               terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
               attachSession(focusedPaneId, data.session.id, sessionName);
             }, 50);
-          }, 100);
+          }, isInTmux ? 100 : 0);
         }
       }
     } catch (error) {
