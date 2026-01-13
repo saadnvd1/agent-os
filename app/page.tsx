@@ -157,7 +157,8 @@ function HomeContent() {
         name: s.name,
         status: statuses[s.id]?.status || "dead",
       }));
-      checkStateChanges(sessionStates);
+      // Pass the active session ID to skip notifications for the currently viewed session
+      checkStateChanges(sessionStates, focusedActiveTab?.sessionId);
 
       // Check for new Claude session IDs and update DB (only once per session)
       let needsRefresh = false;
@@ -225,7 +226,7 @@ function HomeContent() {
       if (error instanceof TypeError && error.message === 'Failed to fetch') return;
       console.error("Failed to fetch statuses:", error);
     }
-  }, [sessions, checkStateChanges]);
+  }, [sessions, checkStateChanges, focusedActiveTab?.sessionId]);
 
   // Set initial sidebar state based on viewport
   useEffect(() => {

@@ -116,7 +116,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
   // Check for state changes and notify
   const checkStateChanges = useCallback(
-    (sessions: SessionState[]) => {
+    (sessions: SessionState[], activeSessionId?: string | null) => {
       if (!settings.enabled) return;
 
       let newWaitingCount = 0;
@@ -138,6 +138,12 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
         // Skip if status unchanged
         if (prevStatus === currentStatus) return;
+
+        // Skip notifications for the currently active/focused session
+        if (session.id === activeSessionId) {
+          previousStates.current.set(session.id, currentStatus);
+          return;
+        }
 
         // Detect transitions
         if (currentStatus === "waiting" && prevStatus !== "waiting") {
