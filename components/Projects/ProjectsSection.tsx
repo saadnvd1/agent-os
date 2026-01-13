@@ -136,7 +136,7 @@ export function ProjectsSection({
                   : undefined
               }
               onRename={
-                !project.is_uncategorized && onRenameProject
+                onRenameProject
                   ? (newName) => onRenameProject(project.id, newName)
                   : undefined
               }

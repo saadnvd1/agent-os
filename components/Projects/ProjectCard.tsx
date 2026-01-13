@@ -63,7 +63,10 @@ export function ProjectCard({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hasRunningServers = runningDevServers.length > 0;
-  const hasActions = !project.is_uncategorized && (onEdit || onNewSession || onStartDevServer || onDelete || onRename);
+  // Uncategorized can have New Session and Rename, but not Edit/Delete/DevServer
+  const hasActions = project.is_uncategorized
+    ? (onNewSession || onRename)
+    : (onEdit || onNewSession || onStartDevServer || onDelete || onRename);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
