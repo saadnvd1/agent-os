@@ -1,10 +1,18 @@
 # AgentOS
 
-A self-hosted web UI for managing multiple AI coding assistant sessions with multi-pane terminals, session groups, and conversation forking.
+A **mobile-first** self-hosted web UI for managing multiple AI coding assistant sessions. Built for developers who need to manage AI coding sessions on the go from their phones.
 
 > If you find AgentOS useful, please consider giving it a star! It helps the project grow and reach more developers.
 
 ![AgentOS Screenshot](docs/screenshot.png)
+
+## Why AgentOS?
+
+Most AI coding tools assume you're at a desktop. AgentOS is designed for developers who need **full functionality from their mobile device** - not just a dumbed-down "responsive" version.
+
+- **Primary device**: Phone (iOS/Android)
+- **Primary context**: On the go, away from your desktop
+- **Primary need**: Everything desktop users have, adapted for touch
 
 ## Supported Agents
 
@@ -17,23 +25,46 @@ A self-hosted web UI for managing multiple AI coding assistant sessions with mul
 
 ## Features
 
+### Mobile-First Terminal
+- **Virtual Keyboard** - 3 modes: Quick keys (common shortcuts), ABC, Numbers
+- **Touch-Optimized Scrolling** - Smooth scrolling in both normal and alternate buffers
+- **Shift+Enter Support** - Multi-line input in Claude Code CLI
+- **Image Picker** - Browse server filesystem to select images for Claude Code
+
+### Session Management
 - **Multi-Agent Support** - Switch between Claude, Codex, OpenCode, Gemini, Aider, and Cursor per session
+- **Auto-Import tmux Sessions** - Existing Claude/Codex/Aider sessions detected on startup
+- **Session Preview on Hover** - Quick preview of session terminal state
+- **Status Detection** - Real-time running/waiting/idle status with spike filtering
+- **Browser Notifications** - Get notified when sessions need input
+
+### Multi-Pane Layout
 - **Multi-Pane View** - Run up to 4 sessions side-by-side with resizable panes
 - **Session Groups** - Organize sessions in collapsible folder hierarchy
 - **Tabbed Terminals** - Multiple tabs per pane for quick switching
+
+### Git Integration
+- **Git Status Panel** - View staged/unstaged/untracked files
+- **Inline Diff Viewer** - Tap files to see unified diffs
+- **Swipe to Stage** - Mobile-friendly staging gestures
+- **Commit & Push** - Full git workflow from the UI
+- **PR Integration** - Create PRs and track status (requires `gh` CLI)
+
+### Git Worktrees
+- **Isolated Branches** - Each worktree gets its own feature branch
+- **Auto Environment Setup** - Copies `.env*` files, installs dependencies
+- **Unique Dev Ports** - Each worktree gets assigned a port (3100, 3110...)
+
+### Session Orchestration
+- **Conductor/Worker Model** - Spawn worker sessions with isolated worktrees via MCP
+- **Worker Status Tracking** - Monitor worker progress from conductor view
+
+### Developer Experience
+- **ASCII Banner** - Custom AgentOS branding on session start
+- **Custom tmux Status Bar** - AgentOS-themed status bar with session info
+- **File Explorer** - Browse project files with syntax highlighting
 - **Session Forking** - Fork conversations to explore different approaches (Claude)
 - **Session Resume** - Auto-detects session IDs for seamless resume (Claude)
-- **Status Detection** - Real-time running/waiting/idle status with spike filtering
-- **Browser Notifications** - Get notified when sessions need input, click to activate
-- **Git Worktrees** - Isolated branches for parallel feature development
-- **Auto Environment Setup** - Copies `.env` files, installs dependencies automatically
-- **Dev Server Ports** - Each worktree gets a unique port (3100, 3110, 3120...)
-- **PR Integration** - Create PRs and track status directly from the UI (requires `gh` CLI)
-- **Skip Permissions** - Optional flag to bypass permission prompts
-- **External Session Import** - Import existing tmux sessions
-- **Mobile Responsive** - Touch-friendly interface with collapsible sidebar
-- **tmux Integration** - Sessions persist across page reloads
-- **Session Orchestration** - Spawn worker sessions with isolated worktrees via MCP
 
 ## Prerequisites
 
@@ -111,16 +142,19 @@ Without a config file, AgentOS auto-detects your package manager and copies `.en
 ```
 Browser (React 19)
 ├── PaneLayout (resizable panels)
-│   └── Pane (tabs + terminal)
+│   └── Pane (tabs + terminal/files/git views)
 ├── SessionList (grouped sidebar)
-└── Terminal (xterm.js)
+├── Terminal (xterm.js + virtual keyboard)
+├── FileExplorer (project browser)
+├── GitPanel (status + diff viewer)
+└── ImagePicker (server filesystem browser)
          │
          │ WebSocket (/ws/terminal)
          ▼
 server.ts (Next.js + node-pty)
          │
          ▼
-tmux sessions → AI CLI (claude/codex/opencode)
+tmux sessions → AI CLI (claude/codex/opencode/aider)
          │
          ▼
 SQLite (sessions, groups, agent_type)
@@ -151,4 +185,10 @@ Environment variables (optional):
 
 ## License
 
-MIT
+Business Source License 1.1 (BUSL-1.1)
+
+- **Allowed**: View, modify, fork, non-production use
+- **Not allowed**: Any production use without a commercial license
+- **Converts to MIT** on January 1, 2029
+
+See [LICENSE](LICENSE) for full terms. For commercial licensing, contact: saad@lumifyhub.io
