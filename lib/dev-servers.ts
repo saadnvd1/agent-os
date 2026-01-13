@@ -176,14 +176,25 @@ async function spawnNodeServer(
   // Expand ~ to absolute path - Node.js spawn doesn't handle tilde
   const cwd = expandHome(workingDirectory);
 
-  // Set up environment with port if specified
-  const env = { ...process.env };
+  // Build minimal env - only essentials for shell to work
+  // This lets Next.js/Vite/etc load .env.local without interference from parent process env
+  const env: Record<string, string | undefined> = {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    USER: process.env.USER,
+    SHELL: process.env.SHELL,
+    TERM: process.env.TERM || 'xterm-256color',
+    LANG: process.env.LANG || 'en_US.UTF-8',
+  };
+
+  // Add port if specified
   if (ports.length > 0) {
     env.PORT = String(ports[0]);
   }
 
-  // Use shell: true to resolve npm/yarn/pnpm from PATH (nvm, volta, etc.)
-  const child = spawn(command, [], {
+  const fullCommand = `cd "${cwd}" && ${command}`;
+
+  const child = spawn(fullCommand, [], {
     cwd,
     env: env as NodeJS.ProcessEnv,
     shell: true,
