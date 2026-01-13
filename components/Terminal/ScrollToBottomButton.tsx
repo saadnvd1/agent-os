@@ -17,7 +17,7 @@ export function ScrollToBottomButton({ visible, onClick }: ScrollToBottomButtonP
       className={cn(
         'absolute bottom-6 right-6 p-3',
         'bg-primary/90 backdrop-blur-sm hover:bg-primary',
-        'rounded-full text-white shadow-xl shadow-primary/30',
+        'rounded-full text-primary-foreground shadow-xl shadow-primary/30',
         'transition-all hover:scale-105 active:scale-95',
         'animate-bounce'
       )}

@@ -32,7 +32,7 @@ function LayoutRenderer({ layout, renderPane }: PaneLayoutProps) {
             <Separator
               className={`
                 ${orientation === "horizontal" ? "w-0.5 cursor-col-resize" : "h-0.5 cursor-row-resize"}
-                bg-white/5 hover:bg-primary/40 active:bg-primary/60 transition-colors rounded-full
+                bg-border hover:bg-primary/40 active:bg-primary/60 transition-colors rounded-full
               `}
             />
           )}
