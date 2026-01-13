@@ -25,8 +25,8 @@ export function KeybarToggleButton({ isVisible, onToggle }: KeybarToggleButtonPr
         'text-muted-foreground hover:bg-accent hover:text-foreground',
         'touch-manipulation transition-all duration-200',
         'active:scale-95',
-        // Position: moves up when keyboard is visible (accounts for safe-area + taller keys)
-        isVisible ? 'bottom-[230px]' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'
+        // Position: moves up when keyboard is visible (accounts for safe-area + taller keys + recent commands bar)
+        isVisible ? 'bottom-[265px]' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'
       )}
       aria-label={isVisible ? 'Hide keyboard' : 'Show keyboard'}
     >
