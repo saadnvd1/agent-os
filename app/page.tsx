@@ -55,7 +55,6 @@ function HomeContent() {
         const provider = getProvider(session.agent_type || "claude");
         const sessionName = `${provider.id}-${session.id}`;
         const cwd = session.working_directory?.replace('~', '$HOME') || '$HOME';
-        const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
 
         // Ensure MCP config exists for orchestration
         fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
@@ -69,7 +68,7 @@ function HomeContent() {
         const flags = provider.buildFlags({
           sessionId: session.claude_session_id,
           parentSessionId,
-          skipPermissions,
+          autoApprove: session.auto_approve,
           model: session.model,
         });
         const flagsStr = flags.join(" ");
@@ -207,9 +206,6 @@ function HomeContent() {
       // Ensure MCP config exists for orchestration (fire and forget)
       fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
 
-      // Check if user wants to skip permissions (from localStorage)
-      const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
-
       // Get parent session ID for forking
       let parentSessionId: string | null = null;
       if (!session.claude_session_id && session.parent_session_id) {
@@ -221,7 +217,7 @@ function HomeContent() {
       const flags = provider.buildFlags({
         sessionId: session.claude_session_id,
         parentSessionId,
-        skipPermissions,
+        autoApprove: session.auto_approve,
         model: session.model,
       });
 
@@ -266,8 +262,7 @@ function HomeContent() {
             setTimeout(() => {
               const cwd = data.session.working_directory?.replace('~', '$HOME') || '$HOME';
               const sessionName = `${provider.id}-${data.session.id}`;
-              const skipPermissions = localStorage.getItem("agentOS:skipPermissions") === "true";
-              const flags = provider.buildFlags({ skipPermissions });
+              const flags = provider.buildFlags({ autoApprove: data.session.auto_approve });
               const flagsStr = flags.join(" ");
               terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
               attachSession(focusedPaneId, data.session.id, sessionName);

@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "setup": "bash scripts/setup.sh"
+    "setup": "bash scripts/setup.sh",
+    "postinstall": "node -e \"try{require('node-pty')}catch(e){process.exit(1)}\" || npm rebuild node-pty"
   },
   "repository": {
     "type": "git",
