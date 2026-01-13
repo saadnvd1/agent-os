@@ -99,17 +99,25 @@ function HomeContent() {
     const key = `${paneId}:${tabId}`;
     if (ref) {
       terminalRefs.current.set(key, ref);
+      console.log(`[AgentOS] Terminal registered: ${key}, total refs: ${terminalRefs.current.size}`);
     } else {
       terminalRefs.current.delete(key);
+      console.log(`[AgentOS] Terminal unregistered: ${key}, total refs: ${terminalRefs.current.size}`);
     }
   }, []);
 
   // Get terminal for a pane, with fallback to first available
   const getTerminalWithFallback = useCallback((): { terminal: TerminalHandle; paneId: string; tabId: string } | undefined => {
+    console.log(`[AgentOS] getTerminalWithFallback called, total refs: ${terminalRefs.current.size}, focusedPaneId: ${focusedPaneId}`);
+
     // Try focused pane first
     const activeTab = getActiveTab(focusedPaneId);
+    console.log(`[AgentOS] activeTab for focused pane:`, activeTab?.id || 'null');
+
     if (activeTab) {
-      const terminal = terminalRefs.current.get(`${focusedPaneId}:${activeTab.id}`);
+      const key = `${focusedPaneId}:${activeTab.id}`;
+      const terminal = terminalRefs.current.get(key);
+      console.log(`[AgentOS] Looking for terminal at key "${key}": ${terminal ? 'found' : 'not found'}`);
       if (terminal) {
         return { terminal, paneId: focusedPaneId, tabId: activeTab.id };
       }
@@ -120,9 +128,11 @@ function HomeContent() {
     if (firstEntry) {
       const [key, terminal] = firstEntry as [string, TerminalHandle];
       const [paneId, tabId] = key.split(":");
+      console.log(`[AgentOS] Using fallback terminal: ${key}`);
       return { terminal, paneId, tabId };
     }
 
+    console.log(`[AgentOS] No terminal found at all. Available keys:`, Array.from(terminalRefs.current.keys()));
     return undefined;
   }, [focusedPaneId, getActiveTab]);
 
@@ -235,8 +245,14 @@ function HomeContent() {
 
   // Session selection handler
   const handleSelectSession = useCallback((sessionId: string) => {
+    console.log(`[AgentOS] handleSelectSession called for: ${sessionId}`);
     const session = sessions.find(s => s.id === sessionId);
-    if (session) attachToSession(session);
+    if (session) {
+      console.log(`[AgentOS] Found session: ${session.name}, calling attachToSession`);
+      attachToSession(session);
+    } else {
+      console.log(`[AgentOS] Session not found in sessions array (length: ${sessions.length})`);
+    }
   }, [sessions, attachToSession]);
 
   // Pane renderer
