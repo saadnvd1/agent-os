@@ -27,6 +27,7 @@ export interface ViewProps {
   // Dialogs
   showNewSessionDialog: boolean;
   setShowNewSessionDialog: (show: boolean) => void;
+  newSessionProjectId: string | null;
   showNewProjectDialog: boolean;
   setShowNewProjectDialog: (show: boolean) => void;
   showProjectSettings: ProjectWithDevServers | null;

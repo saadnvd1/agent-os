@@ -26,6 +26,7 @@ export function DesktopView({
   setCopiedSessionId,
   showNewSessionDialog,
   setShowNewSessionDialog,
+  newSessionProjectId,
   showNotificationSettings,
   setShowNotificationSettings,
   showQuickSwitcher,
@@ -220,6 +221,7 @@ export function DesktopView({
       <NewSessionDialog
         open={showNewSessionDialog}
         projects={projects}
+        selectedProjectId={newSessionProjectId ?? undefined}
         onClose={() => setShowNewSessionDialog(false)}
         onCreated={(id) => {
           setShowNewSessionDialog(false);

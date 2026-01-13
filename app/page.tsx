@@ -21,6 +21,7 @@ function HomeContent() {
   // UI State
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
+  const [newSessionProjectId, setNewSessionProjectId] = useState<string | null>(null);
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
@@ -237,7 +238,8 @@ function HomeContent() {
   }, [projects]);
 
   // New session in project handler
-  const handleNewSessionInProject = useCallback(() => {
+  const handleNewSessionInProject = useCallback((projectId: string) => {
+    setNewSessionProjectId(projectId);
     setShowNewSessionDialog(true);
   }, []);
 
@@ -309,7 +311,11 @@ function HomeContent() {
     copiedSessionId,
     setCopiedSessionId,
     showNewSessionDialog,
-    setShowNewSessionDialog,
+    setShowNewSessionDialog: (show: boolean) => {
+      setShowNewSessionDialog(show);
+      if (!show) setNewSessionProjectId(null); // Clear project when closing
+    },
+    newSessionProjectId,
     showNewProjectDialog,
     setShowNewProjectDialog,
     showProjectSettings,
