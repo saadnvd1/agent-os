@@ -51,6 +51,22 @@ function HomeContent() {
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const { isMobile } = useViewport();
 
+  // Helper to get init script command from API
+  const getInitScriptCommand = useCallback(async (agentCommand: string): Promise<string> => {
+    try {
+      const res = await fetch("/api/sessions/init-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentCommand }),
+      });
+      const data = await res.json();
+      return data.command || agentCommand;
+    } catch {
+      // Fallback to raw command if API fails
+      return agentCommand;
+    }
+  }, []);
+
   // Set CSS variable for viewport height (handles mobile keyboard)
   useViewportHeight();
 
@@ -84,14 +100,16 @@ function HomeContent() {
         terminal.sendInput("\x02d");
         setTimeout(() => {
           terminal.sendInput("\x15");
-          setTimeout(() => {
-            terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
+          setTimeout(async () => {
+            const agentCmd = `${provider.command} ${flagsStr}`;
+            const newSessionCmd = await getInitScriptCommand(agentCmd);
+            terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
             attachSession(focusedPaneId, session.id, sessionName);
           }, 50);
         }, 100);
       }
     }
-  }, [sessions, focusedPaneId, getActiveTab, attachSession]);
+  }, [sessions, focusedPaneId, getActiveTab, attachSession, getInitScriptCommand]);
 
   const { settings: notificationSettings, checkStateChanges, updateSettings, requestPermission, permissionGranted } = useNotifications({
     onSessionClick: handleNotificationClick,
@@ -284,15 +302,17 @@ function HomeContent() {
       terminal.sendInput("\x02d");
       setTimeout(() => {
         terminal.sendInput("\x15");
-        setTimeout(() => {
-          terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
+        setTimeout(async () => {
+          const agentCmd = `${provider.command} ${flagsStr}`;
+          const newSessionCmd = await getInitScriptCommand(agentCmd);
+          terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
           attachSession(focusedPaneId, session.id, sessionName);
           // Focus terminal after attaching
           terminal.focus();
         }, 50);
       }, 100);
     }
-  }, [getFocusedTerminal, focusedPaneId, attachSession, sessions]);
+  }, [getFocusedTerminal, focusedPaneId, attachSession, sessions, getInitScriptCommand]);
 
   // Create new session and attach
   const createAndAttach = async () => {
@@ -317,12 +337,14 @@ function HomeContent() {
           terminal.sendInput("\x02d");
           setTimeout(() => {
             terminal.sendInput("\x15");
-            setTimeout(() => {
+            setTimeout(async () => {
               const cwd = data.session.working_directory?.replace('~', '$HOME') || '$HOME';
               const sessionName = `${provider.id}-${data.session.id}`;
               const flags = provider.buildFlags({ autoApprove: data.session.auto_approve });
               const flagsStr = flags.join(" ");
-              terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "${provider.command} ${flagsStr}"`);
+              const agentCmd = `${provider.command} ${flagsStr}`;
+              const newSessionCmd = await getInitScriptCommand(agentCmd);
+              terminal.sendCommand(`tmux new -s ${sessionName} -c "${cwd}" "${newSessionCmd}"`);
               attachSession(focusedPaneId, data.session.id, sessionName);
             }, 50);
           }, 100);

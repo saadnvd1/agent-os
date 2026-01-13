@@ -13,6 +13,7 @@ import { createWorktree, deleteWorktree } from "./worktrees";
 import { setupWorktree } from "./env-setup";
 import { getProvider } from "./providers";
 import { statusDetector } from "./status-detector";
+import { wrapWithBanner } from "./banner";
 
 const execAsync = promisify(exec);
 
@@ -139,8 +140,10 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
   const flags = provider.buildFlags({ model, autoApprove: true });
   const flagsStr = flags.join(" ");
 
-  // Create tmux session with the agent and send the task
-  const createCmd = `tmux new-session -d -s "${tmuxSessionName}" -c "${cwd}" "${provider.command} ${flagsStr}"`;
+  // Create tmux session with the agent and banner
+  const agentCmd = `${provider.command} ${flagsStr}`;
+  const newSessionCmd = wrapWithBanner(agentCmd);
+  const createCmd = `tmux new-session -d -s "${tmuxSessionName}" -c "${cwd}" "${newSessionCmd}"`;
 
   try {
     await execAsync(createCmd);
