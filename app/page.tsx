@@ -50,7 +50,7 @@ function HomeContent() {
   // Pane context
   const { focusedPaneId, attachSession, getActiveTab, addTab } = usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
-  const { isMobile } = useViewport();
+  const { isMobile, isHydrated } = useViewport();
 
   // Data hooks
   const { sessions, fetchSessions } = useSessions();
@@ -267,10 +267,10 @@ function HomeContent() {
     checkStateChanges,
   });
 
-  // Set initial sidebar state based on viewport
+  // Set initial sidebar state based on viewport (only after hydration)
   useEffect(() => {
-    if (!isMobile) setSidebarOpen(true);
-  }, [isMobile]);
+    if (isHydrated && !isMobile) setSidebarOpen(true);
+  }, [isMobile, isHydrated]);
 
   // Keyboard shortcut: Cmd+K to open quick switcher
   useEffect(() => {
