@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { usePanes } from "@/contexts/PaneContext";
 import { useViewport } from "@/hooks/useViewport";
 import type { TerminalHandle, TerminalScrollState } from "@/components/Terminal";
-import type { Session } from "@/lib/db";
+import type { Session, Project } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
 import { ConductorPanel } from "@/components/ConductorPanel";
 import { useFileEditor } from "@/hooks/useFileEditor";
@@ -31,6 +31,7 @@ const GitPanel = dynamic(
 interface PaneProps {
   paneId: string;
   sessions: Session[];
+  projects: Project[];
   onRegisterTerminal: (paneId: string, tabId: string, ref: TerminalHandle | null) => void;
   onMenuClick?: () => void;
   onSelectSession?: (sessionId: string) => void;
@@ -41,6 +42,7 @@ type ViewMode = "terminal" | "files" | "git" | "workers";
 export const Pane = memo(function Pane({
   paneId,
   sessions,
+  projects,
   onRegisterTerminal,
   onMenuClick,
   onSelectSession,
@@ -194,6 +196,7 @@ export const Pane = memo(function Pane({
         <MobileTabBar
           session={session}
           sessions={sessions}
+          projects={projects}
           viewMode={viewMode}
           isConductor={isConductor}
           workerCount={workerCount}
