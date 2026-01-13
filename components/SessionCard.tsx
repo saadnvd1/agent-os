@@ -40,6 +40,8 @@ interface SessionCardProps {
   onDelete?: () => void;
   onRename?: (newName: string) => void;
   onCreatePR?: () => void;
+  onHoverStart?: (rect: DOMRect) => void;
+  onHoverEnd?: () => void;
 }
 
 const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: React.ReactNode }> = {
@@ -70,13 +72,33 @@ const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: Rea
   },
 };
 
-export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClick, onMove, onFork, onDelete, onRename, onCreatePR }: SessionCardProps) {
+export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClick, onMove, onFork, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(session.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = () => {
+    if (!onHoverStart || !cardRef.current) return;
+    // Debounce hover to avoid flickering
+    hoverTimeoutRef.current = setTimeout(() => {
+      if (cardRef.current) {
+        onHoverStart(cardRef.current.getBoundingClientRect());
+      }
+    }, 300);
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    onHoverEnd?.();
+  };
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -162,7 +184,10 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
 
   const cardContent = (
     <div
+      ref={cardRef}
       onClick={isEditing ? undefined : onClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={cn(
         "w-full text-left px-3 py-2.5 md:px-2 md:py-1.5 rounded-md transition-colors overflow-hidden cursor-pointer group flex items-center gap-2",
         "min-h-[44px] md:min-h-0", // Touch target size on mobile

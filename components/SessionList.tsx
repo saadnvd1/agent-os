@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { SessionCard } from "./SessionCard";
+import { SessionPreviewPopover } from "./SessionPreviewPopover";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import { Plus, RefreshCw, Bot, TerminalSquare, Circle, Loader2, AlertCircle, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Bot, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session, Group } from "@/lib/db";
+import { useViewport } from "@/hooks/useViewport";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,23 +30,13 @@ interface SessionStatus {
   lastLine?: string;
 }
 
-interface OtherTmuxSession {
-  sessionName: string;
-  status: "idle" | "running" | "waiting" | "error" | "dead";
-  lastLine?: string;
-  claudeSessionId?: string | null;
-}
-
 interface SessionListProps {
   sessions: Session[];
   groups: Group[];
   activeSessionId?: string;
   sessionStatuses?: Record<string, SessionStatus>;
-  otherTmuxSessions?: OtherTmuxSession[];
-  attachedTmux?: string | null;
   onSelect: (id: string) => void;
   onRefresh: () => void;
-  onTmuxAttach?: (sessionName: string) => void;
   onToggleGroup?: (path: string, expanded: boolean) => void;
   onCreateGroup?: (name: string, parentPath?: string) => void;
   onDeleteGroup?: (path: string) => void;
@@ -52,8 +44,6 @@ interface SessionListProps {
   onForkSession?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newName: string) => void;
-  onRenameTmuxSession?: (oldName: string, newName: string) => void;
-  onImportTmuxSession?: (sessionName: string, claudeSessionId?: string) => void;
   onCreatePR?: (sessionId: string) => void;
 }
 
@@ -62,11 +52,8 @@ export function SessionList({
   groups = [],
   activeSessionId,
   sessionStatuses,
-  otherTmuxSessions,
-  attachedTmux,
   onSelect,
   onRefresh,
-  onTmuxAttach,
   onToggleGroup,
   onCreateGroup,
   onDeleteGroup,
@@ -74,26 +61,28 @@ export function SessionList({
   onForkSession,
   onDeleteSession,
   onRenameSession,
-  onRenameTmuxSession,
-  onImportTmuxSession,
   onCreatePR,
 }: SessionListProps) {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [showNewGroupInput, setShowNewGroupInput] = useState<string | null>(null);
-  const [editingTmuxSession, setEditingTmuxSession] = useState<string | null>(null);
-  const [editTmuxName, setEditTmuxName] = useState("");
   const [showKillAllConfirm, setShowKillAllConfirm] = useState(false);
   const [killingAll, setKillingAll] = useState(false);
-  const tmuxInputRef = useRef<HTMLInputElement>(null);
+  const [hoveredSession, setHoveredSession] = useState<Session | null>(null);
+  const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+  const { isMobile } = useViewport();
 
-  useEffect(() => {
-    if (editingTmuxSession && tmuxInputRef.current) {
-      tmuxInputRef.current.focus();
-      tmuxInputRef.current.select();
-    }
-  }, [editingTmuxSession]);
+  // Handle hover on session card (desktop only)
+  const handleHoverStart = (session: Session, rect: DOMRect) => {
+    if (isMobile) return;
+    setHoveredSession(session);
+    setHoverPosition({ x: rect.right, y: rect.top });
+  };
+
+  const handleHoverEnd = () => {
+    setHoveredSession(null);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -277,6 +266,8 @@ export function SessionList({
                         onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
                         onRename={onRenameSession ? (newName) => onRenameSession(session.id, newName) : undefined}
                         onCreatePR={onCreatePR ? () => onCreatePR(session.id) : undefined}
+                        onHoverStart={(rect) => handleHoverStart(session, rect)}
+                        onHoverEnd={handleHoverEnd}
                       />
                     </div>
                     {/* Workers badge */}
@@ -300,6 +291,8 @@ export function SessionList({
                           onClick={() => onSelect(worker.id)}
                           onDelete={onDeleteSession ? () => onDeleteSession(worker.id) : undefined}
                           onRename={onRenameSession ? (newName) => onRenameSession(worker.id, newName) : undefined}
+                          onHoverStart={(rect) => handleHoverStart(worker, rect)}
+                          onHoverEnd={handleHoverEnd}
                         />
                       ))}
                     </div>
@@ -401,7 +394,7 @@ export function SessionList({
       {/* Session list */}
       <ScrollArea className="flex-1 w-full">
         <div className="p-2 space-y-1 max-w-full">
-          {sessions.length === 0 && (!otherTmuxSessions || otherTmuxSessions.length === 0) ? (
+          {sessions.length === 0 ? (
             <p className="text-center text-muted-foreground text-sm py-8">
               No sessions yet. Create one to get started.
             </p>
@@ -409,145 +402,6 @@ export function SessionList({
             <>
               {/* Grouped sessions */}
               {rootGroups.map(group => renderGroup(group))}
-
-              {/* External tmux sessions */}
-              {otherTmuxSessions && otherTmuxSessions.length > 0 && (
-                <div className="mt-6 pt-2">
-                  <div className="text-xs text-muted-foreground px-2 mb-1">External Sessions</div>
-                  <div className="space-y-0.5">
-                    {otherTmuxSessions.map((session) => {
-                      const isAttached = attachedTmux === session.sessionName;
-                      const isEditing = editingTmuxSession === session.sessionName;
-                      const statusIcon = session.status === "running"
-                        ? <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
-                        : session.status === "waiting"
-                        ? <AlertCircle className="w-3 h-3 text-yellow-500" />
-                        : <Circle className="w-2 h-2 text-muted-foreground fill-current" />;
-
-                      const handleRename = () => {
-                        if (editTmuxName.trim() && editTmuxName !== session.sessionName && onRenameTmuxSession) {
-                          onRenameTmuxSession(session.sessionName, editTmuxName.trim());
-                        }
-                        setEditingTmuxSession(null);
-                      };
-
-                      const hasActions = onRenameTmuxSession || onImportTmuxSession;
-
-                      const sessionContent = (
-                        <div
-                          onClick={isEditing ? undefined : () => onTmuxAttach?.(session.sessionName)}
-                          className={cn(
-                            "w-full text-left px-2 py-1.5 rounded-md transition-colors overflow-hidden flex items-center gap-2 cursor-pointer group",
-                            isAttached
-                              ? "bg-primary/10"
-                              : "hover:bg-accent/50",
-                            session.status === "waiting" && !isAttached && "bg-yellow-500/5"
-                          )}
-                        >
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="flex-shrink-0">
-                                {statusIcon}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                              <span className="capitalize">{session.status}</span>
-                            </TooltipContent>
-                          </Tooltip>
-                          <TerminalSquare className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                          {isEditing ? (
-                            <input
-                              ref={tmuxInputRef}
-                              type="text"
-                              value={editTmuxName}
-                              onChange={(e) => setEditTmuxName(e.target.value)}
-                              onBlur={handleRename}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleRename();
-                                if (e.key === "Escape") setEditingTmuxSession(null);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex-1 text-sm bg-transparent border-b border-primary outline-none min-w-0"
-                            />
-                          ) : (
-                            <span className="flex-1 text-sm truncate">{session.sessionName}</span>
-                          )}
-                          {hasActions && !isEditing && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-5 w-5 flex-shrink-0">
-                                  <MoreHorizontal className="w-3 h-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {onRenameTmuxSession && (
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditTmuxName(session.sessionName);
-                                      setEditingTmuxSession(session.sessionName);
-                                    }}
-                                  >
-                                    <Pencil className="w-3 h-3 mr-2" />
-                                    Rename
-                                  </DropdownMenuItem>
-                                )}
-                                {onImportTmuxSession && (
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onImportTmuxSession(session.sessionName, session.claudeSessionId || undefined);
-                                    }}
-                                  >
-                                    <Plus className="w-3 h-3 mr-2" />
-                                    Import to Sessions
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                      );
-
-                      // Wrap with context menu if actions are available
-                      if (hasActions) {
-                        return (
-                          <ContextMenu key={session.sessionName}>
-                            <ContextMenuTrigger asChild>
-                              {sessionContent}
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              {onRenameTmuxSession && (
-                                <ContextMenuItem
-                                  onClick={() => {
-                                    setEditTmuxName(session.sessionName);
-                                    setEditingTmuxSession(session.sessionName);
-                                  }}
-                                >
-                                  <Pencil className="w-3 h-3 mr-2" />
-                                  Rename
-                                </ContextMenuItem>
-                              )}
-                              {onImportTmuxSession && (
-                                <ContextMenuItem
-                                  onClick={() => {
-                                    onImportTmuxSession(session.sessionName, session.claudeSessionId || undefined);
-                                  }}
-                                >
-                                  <Plus className="w-3 h-3 mr-2" />
-                                  Import to Sessions
-                                </ContextMenuItem>
-                              )}
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        );
-                      }
-
-                      return <div key={session.sessionName}>{sessionContent}</div>;
-                    })}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
@@ -568,6 +422,15 @@ export function SessionList({
           await onRefresh();
         } : undefined}
       />
+
+      {/* Session Preview Popover (desktop only) */}
+      {!isMobile && (
+        <SessionPreviewPopover
+          session={hoveredSession}
+          status={hoveredSession ? sessionStatuses?.[hoveredSession.id]?.status : undefined}
+          position={hoverPosition}
+        />
+      )}
     </div>
   );
 }
