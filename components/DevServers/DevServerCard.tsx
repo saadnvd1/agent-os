@@ -12,6 +12,7 @@ import {
   Server,
   Container,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DevServer, DevServerStatus } from "@/lib/db";
@@ -113,23 +114,48 @@ export function DevServerCard({
       {/* Port badge */}
       {primaryPort && (
         <div className="mt-2 flex items-center gap-1">
+          {isRunning ? (
+            <a
+              href={`http://localhost:${primaryPort}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "flex items-center gap-1 rounded px-2 py-1",
+                "text-xs font-mono transition-colors",
+                "bg-primary/10 text-primary hover:bg-primary/20"
+              )}
+            >
+              <ExternalLink className="h-3 w-3" />
+              localhost:{primaryPort}
+            </a>
+          ) : (
+            <span
+              className={cn(
+                "flex items-center gap-1 rounded px-2 py-1",
+                "text-xs font-mono",
+                "bg-muted/30 text-muted-foreground"
+              )}
+            >
+              localhost:{primaryPort}
+            </span>
+          )}
           <button
             onClick={copyPort}
             disabled={!isRunning}
             className={cn(
-              "flex items-center gap-1 rounded px-2 py-1",
-              "text-xs font-mono transition-colors",
+              "flex items-center justify-center rounded p-1",
+              "text-xs transition-colors",
               isRunning
-                ? "bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer"
-                : "bg-muted/30 text-muted-foreground cursor-not-allowed"
+                ? "text-muted-foreground hover:text-foreground hover:bg-muted"
+                : "text-muted-foreground/50 cursor-not-allowed"
             )}
+            title="Copy URL"
           >
             {copied ? (
-              <Check className="h-3 w-3" />
+              <Check className="h-3 w-3 text-green-500" />
             ) : (
               <Copy className="h-3 w-3" />
             )}
-            localhost:{primaryPort}
           </button>
         </div>
       )}
