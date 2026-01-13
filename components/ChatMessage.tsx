@@ -28,13 +28,13 @@ export function ChatMessage({
       <div
         className={cn(
           "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-          isUser ? "bg-blue-600" : "bg-primary"
+          isUser ? "bg-primary" : "bg-muted"
         )}
       >
         {isUser ? (
-          <User className="w-4 h-4 text-white" />
+          <User className="w-4 h-4 text-primary-foreground" />
         ) : (
-          <Bot className="w-4 h-4 text-primary-foreground" />
+          <Bot className="w-4 h-4 text-muted-foreground" />
         )}
       </div>
 
