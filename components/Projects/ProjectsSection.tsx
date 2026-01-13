@@ -2,6 +2,7 @@
 
 import { ProjectCard } from "./ProjectCard";
 import { SessionCard } from "@/components/SessionCard";
+import { DevServerCard } from "@/components/DevServers/DevServerCard";
 import type { Session, Group, DevServer } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 
@@ -32,6 +33,10 @@ interface ProjectsSectionProps {
   onRenameSession?: (sessionId: string, newName: string) => void;
   onCreatePR?: (sessionId: string) => void;
   onStartDevServer?: (projectId: string) => void;
+  onStopDevServer?: (serverId: string) => Promise<void>;
+  onRestartDevServer?: (serverId: string) => Promise<void>;
+  onRemoveDevServer?: (serverId: string) => Promise<void>;
+  onViewDevServerLogs?: (serverId: string) => void;
   onHoverStart?: (session: Session, rect: DOMRect) => void;
   onHoverEnd?: () => void;
 }
@@ -57,6 +62,10 @@ export function ProjectsSection({
   onRenameSession,
   onCreatePR,
   onStartDevServer,
+  onStopDevServer,
+  onRestartDevServer,
+  onRemoveDevServer,
+  onViewDevServerLogs,
   onHoverStart,
   onHoverEnd,
 }: ProjectsSectionProps) {
@@ -79,11 +88,16 @@ export function ProjectsSection({
     return acc;
   }, {} as Record<string, Session[]>);
 
-  // Get running dev servers for a project
+  // Get running dev servers for a project (for ProjectCard badge)
   const getProjectRunningServers = (projectId: string): DevServer[] => {
     return devServers.filter(
       (ds) => ds.project_id === projectId && ds.status === "running"
     );
+  };
+
+  // Get all dev servers for a project
+  const getProjectDevServers = (projectId: string): DevServer[] => {
+    return devServers.filter((ds) => ds.project_id === projectId);
   };
 
   return (
@@ -91,6 +105,7 @@ export function ProjectsSection({
       {projects.map((project) => {
         const projectSessions = sessionsByProject[project.id] || [];
         const runningServers = getProjectRunningServers(project.id);
+        const projectDevServers = getProjectDevServers(project.id);
 
         return (
           <div key={project.id} className="space-y-0.5">
@@ -127,14 +142,40 @@ export function ProjectsSection({
               }
             />
 
-            {/* Project sessions */}
+            {/* Project contents when expanded */}
             {project.expanded && (
               <div className="ml-4 pl-2 border-l border-border/30 space-y-0.5">
-                {projectSessions.length === 0 ? (
+                {/* Dev servers for this project */}
+                {projectDevServers.length > 0 && (
+                  <div className="space-y-1 pb-1">
+                    {projectDevServers.map((server) => (
+                      <DevServerCard
+                        key={server.id}
+                        server={server}
+                        onStart={
+                          onRestartDevServer
+                            ? (id) => onRestartDevServer(id)
+                            : async () => {}
+                        }
+                        onStop={onStopDevServer || (async () => {})}
+                        onRestart={onRestartDevServer || (async () => {})}
+                        onRemove={onRemoveDevServer || (async () => {})}
+                        onViewLogs={
+                          onViewDevServerLogs
+                            ? (id) => onViewDevServerLogs(id)
+                            : () => {}
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Project sessions */}
+                {projectSessions.length === 0 && projectDevServers.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-2 px-2">
                     No sessions yet
                   </p>
-                ) : (
+                ) : projectSessions.length === 0 ? null : (
                   projectSessions.map((session) => {
                     const workers = workersByConduct[session.id] || [];
                     const hasWorkers = workers.length > 0;
