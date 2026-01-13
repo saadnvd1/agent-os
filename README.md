@@ -44,6 +44,8 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 - **Session Preview on Hover** - Quick preview of session terminal state
 - **Status Detection** - Real-time running/waiting/idle status with spike filtering
 - **Browser Notifications** - Get notified when sessions need input
+- **Bulk Selection** - Shift+click to select multiple sessions for bulk delete
+- **Mobile Session Switcher** - Tap tab bar to quickly switch between sessions
 
 ### Multi-Pane Layout
 - **Multi-Pane View** - Run up to 4 sessions side-by-side with resizable panes
@@ -66,7 +68,9 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 
 ### Git Integration
 - **Git Status Panel** - View staged/unstaged/untracked files
-- **Inline Diff Viewer** - Tap files to see unified diffs
+- **Commit History** - Browse last 30 commits with expandable details
+- **Historical Diffs** - Click any commit to see files changed, click file to view diff
+- **Inline Diff Viewer** - Tap files to see unified diffs (supports merge commits)
 - **Swipe to Stage** - Mobile-friendly staging gestures
 - **Commit & Push** - Full git workflow from the UI
 - **PR Integration** - Create PRs and track status (requires `gh` CLI)
