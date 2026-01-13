@@ -43,6 +43,20 @@ Most AI coding tools assume you're at a desktop. AgentOS is designed for develop
 - **Session Groups** - Organize sessions in collapsible folder hierarchy
 - **Tabbed Terminals** - Multiple tabs per pane for quick switching
 
+### Project Organization
+- **Projects** - Group sessions by project with shared settings
+- **Working Directory** - Each project has a default working directory
+- **Directory Picker** - Browse filesystem to select directories visually
+- **Inline Creation** - Create new projects directly from the new session dialog
+- **Dev Server Integration** - Each project can have configured dev servers
+
+### Dev Server Management
+- **Node.js Servers** - Start/stop/restart npm/yarn/pnpm dev servers
+- **Docker Compose** - Support for Docker-based development environments
+- **Port Management** - Automatic port assignment and tracking
+- **Server Logs** - View real-time logs from running servers
+- **Stop Confirmation** - Safety confirmation before stopping servers
+
 ### Git Integration
 - **Git Status Panel** - View staged/unstaged/untracked files
 - **Inline Diff Viewer** - Tap files to see unified diffs
@@ -143,21 +157,24 @@ Without a config file, AgentOS auto-detects your package manager and copies `.en
 Browser (React 19)
 ├── PaneLayout (resizable panels)
 │   └── Pane (tabs + terminal/files/git views)
-├── SessionList (grouped sidebar)
+├── SessionList (projects + sessions sidebar)
+│   ├── ProjectsSection (project organization)
+│   └── DevServerCard (server status/controls)
 ├── Terminal (xterm.js + virtual keyboard)
 ├── FileExplorer (project browser)
 ├── GitPanel (status + diff viewer)
+├── DirectoryPicker (filesystem browser)
 └── ImagePicker (server filesystem browser)
          │
          │ WebSocket (/ws/terminal)
          ▼
 server.ts (Next.js + node-pty)
          │
-         ▼
-tmux sessions → AI CLI (claude/codex/opencode/aider)
+         ├── tmux sessions → AI CLI (claude/codex/opencode/aider)
+         └── dev servers → child_process (node/docker)
          │
          ▼
-SQLite (sessions, groups, agent_type)
+SQLite (sessions, projects, dev_servers)
 ```
 
 ## Scripts
