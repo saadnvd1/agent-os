@@ -223,20 +223,19 @@ export function DesktopView({
         projects={projects}
         selectedProjectId={newSessionProjectId ?? undefined}
         onClose={() => setShowNewSessionDialog(false)}
-        onCreated={(id) => {
+        onCreated={async (id) => {
           setShowNewSessionDialog(false);
-          const session = sessions.find((s) => s.id === id);
-          if (session) {
-            attachToSession(session);
-          } else {
-            fetchSessions().then(() => {
-              fetch(`/api/sessions/${id}`)
-                .then((res) => res.json())
-                .then((data) => {
-                  if (data.session) attachToSession(data.session);
-                });
-            });
-          }
+
+          // Fetch the new session data
+          await fetchSessions();
+          const res = await fetch(`/api/sessions/${id}`);
+          const data = await res.json();
+          if (!data.session) return;
+
+          // Small delay to ensure terminal is ready after state updates
+          setTimeout(() => {
+            attachToSession(data.session);
+          }, 100);
         }}
         onCreateProject={async (name, workingDirectory, agentType) => {
           const res = await fetch("/api/projects", {

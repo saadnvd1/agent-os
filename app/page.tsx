@@ -129,7 +129,10 @@ function HomeContent() {
   // Attach session to terminal
   const attachToSession = useCallback(async (session: Session) => {
     const terminalInfo = getTerminalWithFallback();
-    if (!terminalInfo) return;
+    if (!terminalInfo) {
+      console.warn("[AgentOS] No terminal available to attach session:", session.name);
+      return;
+    }
 
     const { terminal, paneId } = terminalInfo;
 
