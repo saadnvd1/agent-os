@@ -133,14 +133,14 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
       style={{
         position: 'fixed',
         left: position.x + 16,
-        top: Math.max(16, Math.min(position.y - 100, typeof window !== 'undefined' ? window.innerHeight - 420 : 400)),
+        top: Math.max(16, Math.min(position.y - 150, typeof window !== 'undefined' ? window.innerHeight - 580 : 400)),
         zIndex: 100,
       }}
       className="pointer-events-none animate-in fade-in slide-in-from-left-2 duration-150"
     >
       <div
         className={cn(
-          'w-96 overflow-hidden rounded-xl',
+          'w-[540px] overflow-hidden rounded-xl',
           'bg-zinc-900/95 backdrop-blur-xl',
           'border border-zinc-700/50',
           'shadow-2xl shadow-black/50'
@@ -151,7 +151,7 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <TerminalIcon className="h-4 w-4 text-zinc-400" />
-              <span className="text-sm font-medium text-zinc-100 truncate max-w-[180px]">
+              <span className="text-sm font-medium text-zinc-100 truncate max-w-[280px]">
                 {session.name}
               </span>
             </div>
@@ -173,7 +173,7 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
               {formatRelativeTime(session.created_at)}
             </span>
             {session.working_directory && (
-              <span className="truncate max-w-[150px]">
+              <span className="truncate max-w-[250px]">
                 {session.working_directory.split('/').pop()}
               </span>
             )}
@@ -184,8 +184,8 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
         <div className="p-2">
           <div
             className={cn(
-              'h-56 overflow-hidden rounded-lg',
-              'bg-zinc-950 font-mono text-sm leading-relaxed',
+              'h-96 overflow-hidden rounded-lg',
+              'bg-zinc-950 font-mono text-[13px] leading-relaxed',
               'overflow-y-auto p-3',
               'border border-zinc-800'
             )}
