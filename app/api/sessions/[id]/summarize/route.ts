@@ -251,7 +251,8 @@ export async function POST(
         `Continue from previous session. Here's a summary of the work so far:\n\n${summary}`,
         session.group_path,
         session.agent_type,
-        session.auto_approve ? 1 : 0
+        session.auto_approve ? 1 : 0,
+        session.project_id || "uncategorized"
       );
 
       newSession = queries.getSession(db).get(newId) as Session;
