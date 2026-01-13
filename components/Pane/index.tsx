@@ -8,7 +8,6 @@ import type { TerminalHandle, TerminalScrollState } from "@/components/Terminal"
 import type { Session } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
 import { ConductorPanel } from "@/components/ConductorPanel";
-import type { GitFile } from "@/lib/git-status";
 import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
 import { DesktopTabBar } from "./DesktopTabBar";
@@ -26,11 +25,6 @@ const FileExplorer = dynamic(
 
 const GitPanel = dynamic(
   () => import("@/components/GitPanel").then((mod) => mod.GitPanel),
-  { ssr: false }
-);
-
-const DiffModal = dynamic(
-  () => import("@/components/DiffViewer/DiffModal").then((mod) => mod.DiffModal),
   { ssr: false }
 );
 
@@ -69,7 +63,6 @@ export const Pane = memo(function Pane({
   } = usePanes();
 
   const [viewMode, setViewMode] = useState<ViewMode>("terminal");
-  const [selectedDiff, setSelectedDiff] = useState<{ file: GitFile; diff: string } | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
   const paneData = getPaneData(paneId);
   const activeTab = getActiveTab(paneId);
@@ -113,10 +106,9 @@ export const Pane = memo(function Pane({
     }
   }, [paneId, activeTab?.id]);
 
-  // Reset view mode, diff, and file editor when session changes
+  // Reset view mode and file editor when session changes
   useEffect(() => {
     setViewMode("terminal");
-    setSelectedDiff(null);
     fileEditor.reset();
   }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -264,18 +256,7 @@ export const Pane = memo(function Pane({
         {/* Git - mounted once accessed, stays mounted */}
         {session?.working_directory && (
           <div className={viewMode === "git" ? "h-full" : "hidden"}>
-            <GitPanel
-              workingDirectory={session.working_directory}
-              onFileSelect={(file, diff) => setSelectedDiff({ file, diff })}
-            />
-            {selectedDiff && (
-              <DiffModal
-                diff={selectedDiff.diff}
-                fileName={selectedDiff.file.path}
-                isStaged={selectedDiff.file.staged}
-                onClose={() => setSelectedDiff(null)}
-              />
-            )}
+            <GitPanel workingDirectory={session.working_directory} />
           </div>
         )}
 

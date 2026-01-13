@@ -17,6 +17,7 @@ interface FileChangesProps {
   files: GitFile[];
   title: string;
   emptyMessage: string;
+  selectedPath?: string;
   onFileClick: (file: GitFile) => void;
   onStage?: (file: GitFile) => void;
   onUnstage?: (file: GitFile) => void;
@@ -29,6 +30,7 @@ export function FileChanges({
   files,
   title,
   emptyMessage,
+  selectedPath,
   onFileClick,
   onStage,
   onUnstage,
@@ -64,6 +66,7 @@ export function FileChanges({
             <FileItem
               key={file.path}
               file={file}
+              isSelected={file.path === selectedPath}
               onClick={() => onFileClick(file)}
               onSwipeLeft={isStaged ? () => onUnstage?.(file) : undefined}
               onSwipeRight={!isStaged ? () => onStage?.(file) : undefined}
@@ -78,6 +81,7 @@ export function FileChanges({
 
 interface FileItemProps {
   file: GitFile;
+  isSelected?: boolean;
   onClick: () => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
@@ -86,6 +90,7 @@ interface FileItemProps {
 
 function FileItem({
   file,
+  isSelected = false,
   onClick,
   onSwipeLeft,
   onSwipeRight,
@@ -196,8 +201,9 @@ function FileItem({
         onClick={onClick}
         className={cn(
           "relative w-full flex items-center gap-2 px-3 py-2.5 text-sm",
-          "bg-background hover:bg-accent transition-colors text-left",
-          "min-h-[44px]" // Mobile touch target
+          "transition-colors text-left",
+          "min-h-[44px]", // Mobile touch target
+          isSelected ? "bg-accent" : "bg-background hover:bg-accent/50"
         )}
         style={{
           transform: `translateX(${swipeOffset}px)`,
