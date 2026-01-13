@@ -13,6 +13,7 @@ export interface ViewProps {
   sessions: Session[];
   groups: Group[];
   sessionStatuses: Record<string, SessionStatus>;
+  summarizingSessionId: string | null;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   activeSession: Session | undefined;
