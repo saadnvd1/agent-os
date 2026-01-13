@@ -420,9 +420,6 @@ function HomeContent() {
   };
 
   // Summarize and create fresh session
-  // Track pending summary to send after attach
-  const pendingSummaryRef = useRef<{ sessionId: string; summary: string } | null>(null);
-
   const handleSummarize = async (sessionId: string) => {
     setSummarizingSessionId(sessionId);
     try {
@@ -438,13 +435,18 @@ function HomeContent() {
         return;
       }
       if (data.newSession && data.summary) {
-        // Store summary to send after Claude starts
-        pendingSummaryRef.current = {
-          sessionId: data.newSession.id,
-          summary: data.summary,
-        };
         await fetchSessions();
         attachToSession(data.newSession);
+
+        // Wait for Claude to start, then send the summary
+        setTimeout(() => {
+          const terminal = getFocusedTerminal();
+          if (terminal) {
+            const contextMessage = `Here's a summary of the previous session to continue from:\n\n${data.summary}\n\nPlease acknowledge you've received this context and are ready to continue.`;
+            terminal.sendInput(contextMessage);
+            terminal.sendInput("\r");
+          }
+        }, 4000); // Wait 4s for Claude to initialize
       }
     } catch (error) {
       console.error("Failed to summarize session:", error);
@@ -452,26 +454,6 @@ function HomeContent() {
       setSummarizingSessionId(null);
     }
   };
-
-  // Send pending summary after session is attached
-  useEffect(() => {
-    if (!pendingSummaryRef.current) return;
-
-    const pending = pendingSummaryRef.current;
-    const terminal = getFocusedTerminal();
-
-    if (terminal) {
-      // Wait for Claude to start, then send the summary as context
-      const timeout = setTimeout(() => {
-        const contextMessage = `Here's a summary of the previous session to continue from:\n\n${pending.summary}\n\nPlease acknowledge you've received this context and are ready to continue.`;
-        terminal.sendInput(contextMessage);
-        terminal.sendInput("\r");
-        pendingSummaryRef.current = null;
-      }, 3000); // Wait 3s for Claude to initialize
-
-      return () => clearTimeout(timeout);
-    }
-  }, [getFocusedTerminal]);
 
   // Delete session
   const handleDeleteSession = async (sessionId: string) => {
