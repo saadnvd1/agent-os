@@ -20,13 +20,16 @@ async function captureScrollback(sessionName: string): Promise<string> {
 
 // Generate summary using Claude CLI
 async function generateSummary(conversation: string): Promise<string> {
-  const prompt = `Summarize this Claude Code conversation concisely. Focus on:
-1. What task/problem was being worked on
-2. Key decisions made and why
-3. Current state/progress
-4. Any important context for continuing the work
+  const prompt = `You are looking at terminal output from a Claude Code session. This includes tool calls (Read, Edit, Bash, etc.), file changes, and conversation.
 
-Keep it under 500 words. Output ONLY the summary, no preamble.`;
+Summarize what was accomplished in this session. Focus on:
+1. What task/feature was being worked on
+2. Key files that were modified and why
+3. Important decisions or approaches taken
+4. Current state - what's done vs what's pending
+5. Any errors encountered and how they were resolved
+
+Keep it under 500 words. Be specific about file names and changes. Output ONLY the summary.`;
 
   try {
     const { stdout } = await execAsync(
