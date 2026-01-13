@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import { useEffect, useRef, useImperativeHandle, forwardRef, useState } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import { TerminalToolbar } from "./TerminalToolbar";
+import { useViewport } from "@/hooks/useViewport";
 
 export interface TerminalHandle {
   sendCommand: (command: string) => void;
@@ -17,12 +19,18 @@ interface TerminalProps {
   onDisconnected?: () => void;
 }
 
+const DEFAULT_FONT_SIZE = 14;
+const MIN_FONT_SIZE = 10;
+const MAX_FONT_SIZE = 24;
+
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
   function Terminal({ onConnected, onDisconnected }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const termRef = useRef<XTerm | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+    const { isMobile } = useViewport();
 
     // Store callbacks in refs so effect doesn't depend on them
     const callbacksRef = useRef({ onConnected, onDisconnected });
@@ -51,7 +59,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       // Create terminal
       const term = new XTerm({
         cursorBlink: true,
-        fontSize: 14,
+        fontSize,
         fontFamily: "ui-monospace, monospace",
         theme: {
           background: "#09090b",
@@ -142,14 +150,27 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       };
       window.addEventListener("resize", handleResize);
 
-      // Handle touch scrolling for mobile
-      // xterm creates nested elements, attach to all of them
+      // Handle touch gestures for mobile
       let lastScrollY = 0;
-      const SCROLL_THRESHOLD = 15; // pixels to trigger a scroll line
+      let lastTouchDistance = 0;
+      const SCROLL_THRESHOLD = 10; // Reduced from 15 for better responsiveness
       const touchElements: HTMLElement[] = [];
 
+      const getTouchDistance = (e: TouchEvent): number => {
+        if (e.touches.length !== 2) return 0;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      };
+
       const handleTouchStart = (e: TouchEvent) => {
-        lastScrollY = e.touches[0].clientY;
+        if (e.touches.length === 1) {
+          // Single touch - for scrolling
+          lastScrollY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+          // Two fingers - for pinch-to-zoom
+          lastTouchDistance = getTouchDistance(e);
+        }
       };
 
       const handleTouchMove = (e: TouchEvent) => {
@@ -157,43 +178,60 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         e.preventDefault();
         e.stopPropagation();
 
-        // Safety check - terminal might be disposed
+        // Safety check
         if (!termRef.current) return;
 
-        const touchY = e.touches[0].clientY;
-        const deltaY = lastScrollY - touchY;
+        if (e.touches.length === 1) {
+          // Single touch - scroll
+          const touchY = e.touches[0].clientY;
+          const deltaY = lastScrollY - touchY;
 
-        // Convert touch movement to scroll lines
-        if (Math.abs(deltaY) >= SCROLL_THRESHOLD) {
-          const lines = Math.floor(Math.abs(deltaY) / SCROLL_THRESHOLD);
-          try {
-            if (deltaY > 0) {
-              // Scrolling up (finger moving up) - scroll terminal down
-              termRef.current.scrollLines(lines);
-            } else {
-              // Scrolling down (finger moving down) - scroll terminal up
-              termRef.current.scrollLines(-lines);
+          if (Math.abs(deltaY) >= SCROLL_THRESHOLD) {
+            const lines = Math.floor(Math.abs(deltaY) / SCROLL_THRESHOLD);
+            try {
+              if (deltaY > 0) {
+                termRef.current.scrollLines(lines);
+              } else {
+                termRef.current.scrollLines(-lines);
+              }
+            } catch {
+              // Terminal might be in invalid state
             }
-          } catch {
-            // Terminal might be in invalid state, ignore
+            lastScrollY = touchY;
           }
-          lastScrollY = touchY;
+        } else if (e.touches.length === 2) {
+          // Two fingers - pinch to zoom
+          const currentDistance = getTouchDistance(e);
+          const delta = currentDistance - lastTouchDistance;
+
+          if (Math.abs(delta) > 10) {
+            setFontSize(prev => {
+              const newSize = delta > 0 ? prev + 1 : prev - 1;
+              return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, newSize));
+            });
+            lastTouchDistance = currentDistance;
+          }
         }
       };
 
-      // Apply touch-action and attach listeners to all xterm elements
+      const handleTouchEnd = () => {
+        lastTouchDistance = 0;
+      };
+
+      // Apply touch-action and attach listeners
       const applyTouchHandlers = (el: HTMLElement | null) => {
         if (!el) return;
         el.style.touchAction = "none";
         el.addEventListener("touchstart", handleTouchStart, { passive: true });
         el.addEventListener("touchmove", handleTouchMove, { passive: false });
+        el.addEventListener("touchend", handleTouchEnd, { passive: true });
         touchElements.push(el);
       };
 
       // Attach to container
       applyTouchHandlers(container);
 
-      // Attach to all xterm internal elements after a frame (to ensure they exist)
+      // Attach to xterm internal elements
       requestAnimationFrame(() => {
         const selectors = [".xterm", ".xterm-viewport", ".xterm-screen", ".xterm-scrollable-element", ".xterm-rows"];
         selectors.forEach(sel => {
@@ -210,6 +248,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         touchElements.forEach(el => {
           el.removeEventListener("touchstart", handleTouchStart);
           el.removeEventListener("touchmove", handleTouchMove);
+          el.removeEventListener("touchend", handleTouchEnd);
         });
         inputDisposable.dispose();
         ws.close();
@@ -218,13 +257,125 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         wsRef.current = null;
         fitAddonRef.current = null;
       };
-    }, []); // Empty deps - this effect runs once on mount
+    }, []);
+
+    // Update terminal font size when state changes
+    useEffect(() => {
+      if (termRef.current) {
+        termRef.current.options.fontSize = fontSize;
+        fitAddonRef.current?.fit();
+      }
+    }, [fontSize]);
+
+    // Handle keyboard viewport changes on mobile
+    useEffect(() => {
+      if (!isMobile || typeof window === "undefined") return;
+
+      const handleViewportResize = () => {
+        // When keyboard appears, visualViewport height decreases
+        // Resize terminal to fit visible area
+        if (fitAddonRef.current) {
+          requestAnimationFrame(() => {
+            fitAddonRef.current?.fit();
+          });
+        }
+      };
+
+      const viewport = window.visualViewport;
+      if (viewport) {
+        viewport.addEventListener("resize", handleViewportResize);
+        return () => {
+          viewport.removeEventListener("resize", handleViewportResize);
+        };
+      }
+    }, [isMobile]);
+
+    // Quick action handlers for toolbar
+    const handleSendY = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "input", data: "Y\r" }));
+      }
+    };
+
+    const handleSendN = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "input", data: "n\r" }));
+      }
+    };
+
+    const handleSendEnter = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "input", data: "\r" }));
+      }
+    };
+
+    const handleSendCtrlC = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "input", data: "\x03" }));
+      }
+    };
+
+    const handleZoomIn = () => {
+      setFontSize(prev => Math.min(MAX_FONT_SIZE, prev + 1));
+    };
+
+    const handleZoomOut = () => {
+      setFontSize(prev => Math.max(MIN_FONT_SIZE, prev - 1));
+    };
+
+    const handleCopy = async () => {
+      const selection = termRef.current?.getSelection();
+      if (selection) {
+        try {
+          await navigator.clipboard.writeText(selection);
+        } catch {
+          // Clipboard API might fail on some devices
+        }
+      }
+    };
+
+    const handlePaste = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (wsRef.current?.readyState === WebSocket.OPEN && text) {
+          wsRef.current.send(JSON.stringify({ type: "input", data: text }));
+        }
+      } catch {
+        // Clipboard API might fail
+      }
+    };
+
+    // Tap to focus keyboard (on mobile)
+    const handleContainerTap = () => {
+      if (isMobile) {
+        termRef.current?.focus();
+      }
+    };
 
     return (
-      <div
-        ref={containerRef}
-        className="h-full w-full overflow-hidden bg-zinc-950 px-1 touch-none"
-      />
+      <div className="h-full w-full flex flex-col">
+        {/* Toolbar (mobile only) */}
+        {isMobile && (
+          <TerminalToolbar
+            onSendY={handleSendY}
+            onSendN={handleSendN}
+            onSendEnter={handleSendEnter}
+            onSendCtrlC={handleSendCtrlC}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onCopy={handleCopy}
+            onPaste={handlePaste}
+            fontSize={fontSize}
+          />
+        )}
+
+        {/* Terminal */}
+        <div
+          ref={containerRef}
+          onClick={handleContainerTap}
+          className="flex-1 w-full overflow-hidden bg-zinc-950 px-1 touch-none"
+        />
+      </div>
     );
   }
 );
