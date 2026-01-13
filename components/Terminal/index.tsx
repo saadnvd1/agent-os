@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, forwardRef, useImperativeHandle } from 'react';
+import { useRef, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
+import { ImagePlus } from 'lucide-react';
 import { SearchBar } from './SearchBar';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
 import { VirtualKeyboard } from './VirtualKeyboard';
@@ -10,6 +11,8 @@ import { useTerminalConnection, useTerminalSearch } from './hooks';
 import type { TerminalScrollState } from './hooks';
 import { useKeybarVisibility } from '@/hooks/useKeybarVisibility';
 import { useViewport } from '@/hooks/useViewport';
+import { cn } from '@/lib/utils';
+import { ImagePicker } from '@/components/ImagePicker';
 
 export type { TerminalScrollState };
 
@@ -35,6 +38,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const terminalRef = useRef<HTMLDivElement>(null);
   const { isVisible: keybarVisible, toggle: toggleKeybar, show: showKeybar } = useKeybarVisibility();
   const { isMobile } = useViewport();
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
   const {
     connectionState,
@@ -65,6 +69,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     findNext,
     findPrevious,
   } = useTerminalSearch(searchAddonRef, xtermRef);
+
+  // Handle image selection - paste file path into terminal
+  const handleImageSelect = useCallback((filePath: string) => {
+    sendInput(filePath);
+    setShowImagePicker(false);
+    focus();
+  }, [sendInput, focus]);
 
   // Expose imperative methods
   useImperativeHandle(ref, () => ({
@@ -100,6 +111,31 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         style={isMobile ? { touchAction: 'none' } : undefined}
         onClick={isMobile ? showKeybar : undefined}
       />
+
+      {/* Image picker button */}
+      <button
+        onClick={() => setShowImagePicker(true)}
+        className={cn(
+          "absolute z-40 flex items-center justify-center rounded-full bg-zinc-800 shadow-lg transition-all hover:bg-zinc-700",
+          "h-9 w-9",
+          isMobile
+            ? "bottom-2 right-2"  // Mobile: bottom right
+            : "right-3 top-3",     // Desktop: top right
+          keybarVisible && isMobile && "bottom-[140px]" // Shift up when keyboard visible
+        )}
+        title="Select image"
+      >
+        <ImagePlus className="h-4 w-4" />
+      </button>
+
+      {/* Image picker modal */}
+      {showImagePicker && (
+        <ImagePicker
+          initialPath="~"
+          onSelect={handleImageSelect}
+          onClose={() => setShowImagePicker(false)}
+        />
+      )}
 
       {/* Scroll to bottom button */}
       <ScrollToBottomButton visible={!isAtBottom} onClick={scrollToBottom} />
