@@ -123,13 +123,17 @@ export function SessionList({
     return sessions.map((s) => s.id);
   }, [sessions]);
 
-  // Bulk delete handler
+  // Bulk delete handler - calls API directly to skip individual confirmations
   const handleBulkDelete = useCallback(async (sessionIds: string[]) => {
     for (const sessionId of sessionIds) {
-      await onDeleteSession?.(sessionId);
+      try {
+        await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
+      } catch (error) {
+        console.error(`Failed to delete session ${sessionId}:`, error);
+      }
     }
     await onRefresh();
-  }, [onDeleteSession, onRefresh]);
+  }, [onRefresh]);
 
   // Find server for logs modal
   const logsServer = logsServerId

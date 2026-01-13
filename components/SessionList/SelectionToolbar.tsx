@@ -74,11 +74,11 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-2 bg-primary/10 border-b border-primary/20">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">
-            {selectedCount} selected
-          </span>
+      <div className="flex items-center gap-3 px-4 py-2 bg-primary/10 border-b border-primary/20">
+        <span className="text-sm font-medium whitespace-nowrap">
+          {selectedCount} selected
+        </span>
+        <div className="flex items-center gap-1 ml-auto">
           {!allSelected && (
             <Button
               variant="ghost"
@@ -86,12 +86,9 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
               className="h-7 text-xs"
               onClick={handleSelectAll}
             >
-              <CheckSquare className="w-3 h-3 mr-1" />
               Select all
             </Button>
           )}
-        </div>
-        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -104,7 +101,7 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
           <Button
             variant="ghost"
             size="icon-sm"
-            className="h-7 w-7"
+            className="h-6 w-6"
             onClick={multiSelect.clearSelection}
           >
             <X className="w-3 h-3" />
