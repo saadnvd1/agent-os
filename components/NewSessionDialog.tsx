@@ -21,6 +21,7 @@ import { Plus, GitBranch, Loader2 } from "lucide-react";
 import type { Group } from "@/lib/db";
 import type { AgentType } from "@/lib/providers";
 import { getProviderDefinition } from "@/lib/providers";
+import type { ProjectWithDevServers } from "@/lib/projects";
 
 const SKIP_PERMISSIONS_KEY = "agentOS:skipPermissions";
 const AGENT_TYPE_KEY = "agentOS:defaultAgentType";
@@ -47,6 +48,8 @@ const AGENT_OPTIONS: { value: AgentType; label: string; description: string }[] 
 interface NewSessionDialogProps {
   open: boolean;
   groups: Group[];
+  projects: ProjectWithDevServers[];
+  selectedProjectId?: string;
   onClose: () => void;
   onCreated: (sessionId: string) => void;
   onCreateGroup?: (name: string, parentPath?: string) => Promise<void>;
@@ -55,6 +58,8 @@ interface NewSessionDialogProps {
 export function NewSessionDialog({
   open,
   groups,
+  projects,
+  selectedProjectId,
   onClose,
   onCreated,
   onCreateGroup,
@@ -62,6 +67,7 @@ export function NewSessionDialog({
   const [name, setName] = useState("");
   const [workingDirectory, setWorkingDirectory] = useState("~");
   const [groupPath, setGroupPath] = useState("sessions");
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -134,6 +140,25 @@ export function NewSessionDialog({
     }
   }, []);
 
+  // Initialize projectId when dialog opens with selectedProjectId
+  useEffect(() => {
+    if (open && selectedProjectId) {
+      setProjectId(selectedProjectId);
+    }
+  }, [open, selectedProjectId]);
+
+  // Apply project settings when project changes
+  const handleProjectChange = useCallback((newProjectId: string | null) => {
+    setProjectId(newProjectId);
+    if (newProjectId) {
+      const project = projects.find((p) => p.id === newProjectId);
+      if (project && !project.is_uncategorized) {
+        setWorkingDirectory(project.working_directory);
+        setAgentType(project.agent_type);
+      }
+    }
+  }, [projects]);
+
   // Save directory to recent list
   const addRecentDirectory = useCallback((dir: string) => {
     if (!dir || dir === "~") return;
@@ -182,6 +207,7 @@ export function NewSessionDialog({
           name: name.trim() || undefined, // Let API auto-generate if empty
           workingDirectory,
           groupPath,
+          projectId,
           agentType,
           // Worktree options
           useWorktree,
@@ -203,6 +229,7 @@ export function NewSessionDialog({
         setName("");
         setWorkingDirectory("~");
         setGroupPath("sessions");
+        setProjectId(null);
         setUseWorktree(false);
         setFeatureName("");
         setError(null);
@@ -227,6 +254,7 @@ export function NewSessionDialog({
     setName("");
     setWorkingDirectory("~");
     setGroupPath("sessions");
+    setProjectId(null);
     setShowNewGroup(false);
     setNewGroupName("");
     setUseWorktree(false);
@@ -356,73 +384,109 @@ export function NewSessionDialog({
             </div>
           )}
 
+          {/* Project selector */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Group</label>
-            {showNewGroup ? (
-              <div className="flex gap-2">
-                <Input
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  placeholder="New group name"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleCreateGroup();
-                    } else if (e.key === "Escape") {
-                      setShowNewGroup(false);
-                      setNewGroupName("");
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCreateGroup}
-                  disabled={!newGroupName.trim()}
-                >
-                  Add
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowNewGroup(false);
-                    setNewGroupName("");
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <Select value={groupPath} onValueChange={setGroupPath}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groups.map((group) => (
-                      <SelectItem key={group.path} value={group.path}>
-                        {group.path === "sessions" ? group.name : group.path.replace(/\//g, " / ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {onCreateGroup && (
+            <label className="text-sm font-medium">Project</label>
+            <Select
+              value={projectId || "none"}
+              onValueChange={(v) => handleProjectChange(v === "none" ? null : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">
+                  <span className="text-muted-foreground">No project (uncategorized)</span>
+                </SelectItem>
+                {projects
+                  .filter((p) => !p.is_uncategorized)
+                  .map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {projectId && (() => {
+              const project = projects.find((p) => p.id === projectId);
+              return project && !project.is_uncategorized ? (
+                <p className="text-xs text-muted-foreground">
+                  Settings inherited: {project.working_directory}, {project.agent_type}
+                </p>
+              ) : null;
+            })()}
+          </div>
+
+          {/* Legacy Group selector - only show if no project selected */}
+          {!projectId && groups.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Group <span className="text-xs">(legacy)</span></label>
+              {showNewGroup ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    placeholder="New group name"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleCreateGroup();
+                      } else if (e.key === "Escape") {
+                        setShowNewGroup(false);
+                        setNewGroupName("");
+                      }
+                    }}
+                  />
                   <Button
                     type="button"
                     variant="outline"
-                    size="icon"
-                    onClick={() => setShowNewGroup(true)}
-                    title="Create new group"
+                    size="sm"
+                    onClick={handleCreateGroup}
+                    disabled={!newGroupName.trim()}
                   >
-                    <Plus className="w-4 h-4" />
+                    Add
                   </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowNewGroup(false);
+                      setNewGroupName("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Select value={groupPath} onValueChange={setGroupPath}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups.map((group) => (
+                        <SelectItem key={group.path} value={group.path}>
+                          {group.path === "sessions" ? group.name : group.path.replace(/\//g, " / ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {onCreateGroup && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowNewGroup(true)}
+                      title="Create new group"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
                 )}
               </div>
             )}
           </div>
+          )}
           <div className="flex items-center gap-2">
             <input
               type="checkbox"

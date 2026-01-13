@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles } from "lucide-react";
+import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles, Server } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ import {
 } from "./ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import type { Session, Group } from "@/lib/db";
+import type { ProjectWithDevServers } from "@/lib/projects";
 
 type TmuxStatus = "idle" | "running" | "waiting" | "error" | "dead";
 
@@ -35,13 +36,16 @@ interface SessionCardProps {
   isSummarizing?: boolean;
   tmuxStatus?: TmuxStatus;
   groups?: Group[];
+  projects?: ProjectWithDevServers[];
   onClick?: () => void;
   onMove?: (groupPath: string) => void;
+  onMoveToProject?: (projectId: string) => void;
   onFork?: () => void;
   onSummarize?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
   onCreatePR?: () => void;
+  onStartDevServer?: () => void;
   onHoverStart?: (rect: DOMRect) => void;
   onHoverEnd?: () => void;
 }
@@ -74,21 +78,22 @@ const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: Rea
   },
 };
 
-export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], onClick, onMove, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
+export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], onClick, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onStartDevServer, onHoverStart, onHoverEnd }: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(session.name);
+  const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleMouseEnter = () => {
-    if (!onHoverStart || !cardRef.current) return;
+    if (!onHoverStart || !cardRef.current || menuOpen) return;
     // Debounce hover to avoid flickering
     hoverTimeoutRef.current = setTimeout(() => {
-      if (cardRef.current) {
+      if (cardRef.current && !menuOpen) {
         onHoverStart(cardRef.current.getBoundingClientRect());
       }
     }, 300);
@@ -100,6 +105,18 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
       hoverTimeoutRef.current = null;
     }
     onHoverEnd?.();
+  };
+
+  const handleMenuOpenChange = (open: boolean) => {
+    setMenuOpen(open);
+    if (open) {
+      // Cancel hover preview when menu opens
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+      onHoverEnd?.();
+    }
   };
 
   useEffect(() => {
@@ -116,7 +133,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
     setIsEditing(false);
   };
 
-  const hasActions = onMove || onFork || onDelete || onRename || onCreatePR;
+  const hasActions = onMove || onMoveToProject || onFork || onDelete || onRename || onCreatePR || onStartDevServer;
 
   // Shared menu items renderer for both context menu and dropdown
   const renderMenuItems = (isContextMenu: boolean) => {
@@ -164,11 +181,34 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
             {session.pr_url ? "Open PR" : "Create PR"}
           </MenuItem>
         )}
+        {onStartDevServer && (
+          <MenuItem onClick={() => onStartDevServer()}>
+            <Server className="w-3 h-3 mr-2" />
+            Start Dev Server
+          </MenuItem>
+        )}
+        {onMoveToProject && projects.length > 0 && (
+          <MenuSub>
+            <MenuSubTrigger>
+              <FolderInput className="w-3 h-3 mr-2" />
+              Move to project...
+            </MenuSubTrigger>
+            <MenuSubContent>
+              {projects
+                .filter((p) => p.id !== session.project_id)
+                .map((project) => (
+                  <MenuItem key={project.id} onClick={() => onMoveToProject(project.id)}>
+                    {project.name}
+                  </MenuItem>
+                ))}
+            </MenuSubContent>
+          </MenuSub>
+        )}
         {onMove && groups.length > 0 && (
           <MenuSub>
             <MenuSubTrigger>
               <FolderInput className="w-3 h-3 mr-2" />
-              Move to...
+              Move to group...
             </MenuSubTrigger>
             <MenuSubContent>
               {groups
@@ -292,7 +332,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
 
       {/* Actions menu (button) */}
       {hasActions && (
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={handleMenuOpenChange}>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon-sm" className="opacity-100 md:opacity-0 md:group-hover:opacity-100 h-6 w-6 md:h-5 md:w-5 flex-shrink-0">
               <MoreHorizontal className="w-3 h-3" />

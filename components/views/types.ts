@@ -1,4 +1,5 @@
-import type { Session, Group } from "@/lib/db";
+import type { Session, Group, DevServer } from "@/lib/db";
+import type { ProjectWithDevServers } from "@/lib/projects";
 import type { NotificationSettings } from "@/lib/notifications";
 import type { TabData } from "@/lib/panes";
 
@@ -12,8 +13,10 @@ export interface SessionStatus {
 export interface ViewProps {
   sessions: Session[];
   groups: Group[];
+  projects: ProjectWithDevServers[];
   sessionStatuses: Record<string, SessionStatus>;
   summarizingSessionId: string | null;
+  devServers: DevServer[];
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   activeSession: Session | undefined;
@@ -24,6 +27,10 @@ export interface ViewProps {
   // Dialogs
   showNewSessionDialog: boolean;
   setShowNewSessionDialog: (show: boolean) => void;
+  showNewProjectDialog: boolean;
+  setShowNewProjectDialog: (show: boolean) => void;
+  showProjectSettings: ProjectWithDevServers | null;
+  setShowProjectSettings: (project: ProjectWithDevServers | null) => void;
   showNotificationSettings: boolean;
   setShowNotificationSettings: (show: boolean) => void;
   showQuickSwitcher: boolean;
@@ -38,6 +45,7 @@ export interface ViewProps {
   // Handlers
   attachToSession: (session: Session) => void;
   fetchSessions: () => Promise<void>;
+  fetchProjects: () => Promise<void>;
   handleToggleGroup: (path: string, expanded: boolean) => Promise<void>;
   handleCreateGroup: (name: string, parentPath?: string) => Promise<void>;
   handleDeleteGroup: (path: string) => Promise<void>;
@@ -47,6 +55,30 @@ export interface ViewProps {
   handleDeleteSession: (sessionId: string) => Promise<void>;
   handleRenameSession: (sessionId: string, newName: string) => Promise<void>;
   handleCreatePR: (sessionId: string) => Promise<void>;
+
+  // Project handlers
+  handleToggleProject: (projectId: string, expanded: boolean) => Promise<void>;
+  handleEditProject: (projectId: string) => void;
+  handleDeleteProject: (projectId: string) => Promise<void>;
+  handleRenameProject: (projectId: string, newName: string) => Promise<void>;
+  handleMoveSessionToProject: (sessionId: string, projectId: string) => Promise<void>;
+  handleNewSessionInProject: (projectId: string) => void;
+
+  // Dev server handlers
+  handleStartDevServer: (sessionId: string) => void;
+  handleStopDevServer: (serverId: string) => Promise<void>;
+  handleRestartDevServer: (serverId: string) => Promise<void>;
+  handleRemoveDevServer: (serverId: string) => Promise<void>;
+  handleCreateDevServer: (opts: {
+    sessionId: string;
+    type: "node" | "docker";
+    name: string;
+    command: string;
+    workingDirectory: string;
+    ports?: number[];
+  }) => Promise<void>;
+  startDevServerSession: Session | null;
+  setStartDevServerSessionId: (id: string | null) => void;
 
   // Pane
   renderPane: (paneId: string) => React.ReactNode;

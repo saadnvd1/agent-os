@@ -118,7 +118,8 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
     task,
     model,
     "sessions", // group_path
-    agentType
+    agentType,
+    "uncategorized" // project_id
   );
 
   // Update worktree info if created
