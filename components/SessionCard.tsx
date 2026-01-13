@@ -134,13 +134,13 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
             Rename
           </MenuItem>
         )}
-        {onFork && (
+        {onFork && session.agent_type === "claude" && (
           <MenuItem onClick={() => onFork()}>
             <Copy className="w-3 h-3 mr-2" />
             Fork session
           </MenuItem>
         )}
-        {onSummarize && session.agent_type === "claude" && (
+        {onSummarize && (
           <MenuItem onClick={() => onSummarize()} disabled={isSummarizing}>
             {isSummarizing ? (
               <Loader2 className="w-3 h-3 mr-2 animate-spin" />
