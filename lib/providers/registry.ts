@@ -109,11 +109,10 @@ export const PROVIDERS: ProviderDefinition[] = [
     description: "Cursor's AI agent",
     cli: 'cursor-agent',
     configDir: '~/.cursor',
-    autoApproveFlag: '-p', // Cursor uses -p for auto-approve
+    autoApproveFlag: '-p', // Print mode - non-interactive with full tool access
     supportsResume: false,
     supportsFork: false,
     modelFlag: '--model',
-    defaultArgs: ['chat'], // cursor-agent requires 'chat' subcommand
   },
 ];
 
@@ -148,4 +147,33 @@ export function getAllProviderDefinitions(): ProviderDefinition[] {
  */
 export function isValidProviderId(value: string): value is ProviderId {
   return PROVIDER_MAP.has(value as ProviderId);
+}
+
+/**
+ * Get regex pattern for matching AgentOS-managed tmux session names
+ * Format: {provider}-{uuid}
+ */
+export function getManagedSessionPattern(): RegExp {
+  const providerPattern = PROVIDER_IDS.join('|');
+  return new RegExp(`^(${providerPattern})-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, 'i');
+}
+
+/**
+ * Get provider ID from a session name (e.g., "claude-abc123" -> "claude")
+ */
+export function getProviderIdFromSessionName(sessionName: string): ProviderId | null {
+  for (const id of PROVIDER_IDS) {
+    if (sessionName.startsWith(`${id}-`)) {
+      return id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the UUID from a session name (e.g., "claude-abc123" -> "abc123")
+ */
+export function getSessionIdFromName(sessionName: string): string {
+  const providerPattern = PROVIDER_IDS.join('|');
+  return sessionName.replace(new RegExp(`^(${providerPattern})-`, 'i'), '');
 }
