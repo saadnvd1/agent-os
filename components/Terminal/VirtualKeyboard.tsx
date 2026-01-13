@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +45,6 @@ interface KeyProps {
   char: string;
   onPress: () => void;
   className?: string;
-  showPreview?: boolean;
 }
 
 // Trigger haptic feedback if available
@@ -55,86 +54,22 @@ function haptic() {
   }
 }
 
-// Key preview popup state
-interface PreviewState {
-  char: string;
-  x: number;
-  y: number;
-}
-
-function Key({ char, onPress, className, showPreview = true }: KeyProps) {
-  const [preview, setPreview] = useState<PreviewState | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!showPreview || !buttonRef.current) return;
-
-    const rect = buttonRef.current.getBoundingClientRect();
-    setPreview({
-      char,
-      x: rect.left + rect.width / 2,
-      y: rect.top,
-    });
-  }, [char, showPreview]);
-
-  const handleTouchEnd = useCallback(() => {
-    setPreview(null);
-    haptic();
-    onPress();
-  }, [onPress]);
-
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    // Only fire on non-touch devices (touch devices use touchend)
-    if (e.detail === 0) return; // Triggered by touch
-    haptic();
-    onPress();
-  }, [onPress]);
-
+function Key({ char, onPress, className }: KeyProps) {
   return (
-    <>
-      <button
-        ref={buttonRef}
-        onClick={handleClick}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={() => setPreview(null)}
-        onContextMenu={(e) => e.preventDefault()}
-        className={cn(
-          'flex h-[44px] flex-1 touch-manipulation items-center justify-center rounded-md text-sm font-medium',
-          'bg-secondary text-secondary-foreground',
-          'active:bg-primary active:text-primary-foreground active:scale-110 active:z-10',
-          'transition-transform duration-75',
-          'select-none min-w-[32px]',
-          className
-        )}
-      >
-        {char}
-      </button>
-
-      {/* Key preview popup */}
-      {preview && (
-        <div
-          className="fixed z-50 pointer-events-none"
-          style={{
-            left: preview.x,
-            top: preview.y - 60,
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <div className="flex items-center justify-center w-12 h-14 rounded-lg bg-primary text-primary-foreground text-2xl font-semibold shadow-lg">
-            {preview.char}
-          </div>
-          <div
-            className="absolute left-1/2 -translate-x-1/2 w-0 h-0"
-            style={{
-              borderLeft: '8px solid transparent',
-              borderRight: '8px solid transparent',
-              borderTop: '8px solid hsl(var(--primary))',
-            }}
-          />
-        </div>
+    <button
+      onClick={() => { haptic(); onPress(); }}
+      onContextMenu={(e) => e.preventDefault()}
+      className={cn(
+        'flex h-[44px] flex-1 touch-manipulation items-center justify-center rounded-md text-sm font-medium',
+        'bg-secondary text-secondary-foreground',
+        'active:bg-primary active:text-primary-foreground active:scale-110 active:z-10',
+        'transition-transform duration-75',
+        'select-none min-w-[32px]',
+        className
       )}
-    </>
+    >
+      {char}
+    </button>
   );
 }
 
@@ -216,14 +151,14 @@ export function VirtualKeyboard({
             >
               123
             </button>
-            <Key char="Tab" onPress={() => onKeyPress(SPECIAL_KEYS.TAB)} className="bg-muted" showPreview={false} />
-            <Key char="Esc" onPress={() => onKeyPress(SPECIAL_KEYS.ESC)} className="bg-muted" showPreview={false} />
-            <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} className="bg-muted" showPreview={false} />
+            <Key char="Tab" onPress={() => onKeyPress(SPECIAL_KEYS.TAB)} className="bg-muted" />
+            <Key char="Esc" onPress={() => onKeyPress(SPECIAL_KEYS.ESC)} className="bg-muted" />
+            <Key char="⌫" onPress={() => onKeyPress(SPECIAL_KEYS.BACKSPACE)} className="bg-muted" />
           </div>
 
           {/* Arrow keys + Enter + Ctrl shortcuts */}
           <div className="flex gap-1.5">
-            <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} className="bg-red-500/20 text-red-500" showPreview={false} />
+            <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} className="bg-red-500/20 text-red-500" />
             {onImagePick && (
               <button
                 onClick={() => { haptic(); onImagePick(); }}
@@ -232,8 +167,8 @@ export function VirtualKeyboard({
                 <ImagePlus className="h-5 w-5" />
               </button>
             )}
-            <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} className="bg-muted" showPreview={false} />
-            <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} className="bg-muted" showPreview={false} />
+            <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} className="bg-muted" />
+            <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} className="bg-muted" />
             <div className="flex-1" />
             <button
               onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.LEFT); }}
@@ -261,7 +196,7 @@ export function VirtualKeyboard({
             >
               <ChevronRight className="h-6 w-6" />
             </button>
-            <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} className="bg-primary/30 text-primary" showPreview={false} />
+            <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} className="bg-primary/30 text-primary" />
           </div>
         </div>
       </div>
