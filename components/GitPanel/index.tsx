@@ -281,54 +281,30 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
             <div className="py-2">
               {/* Staged section */}
               {status.staged.length > 0 && (
-                <div className="relative">
-                  <FileChanges
-                    files={status.staged}
-                    title="Staged Changes"
-                    emptyMessage="No staged changes"
-                    selectedPath={selectedFile?.file.path}
-                    onFileClick={handleFileClick}
-                    onUnstage={handleUnstage}
-                    isStaged={true}
-                  />
-                  {status.staged.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleUnstageAll}
-                      className="absolute top-1 right-2 h-7 text-xs"
-                    >
-                      <Minus className="w-3 h-3 mr-1" />
-                      All
-                    </Button>
-                  )}
-                </div>
+                <FileChanges
+                  files={status.staged}
+                  title="Staged Changes"
+                  emptyMessage="No staged changes"
+                  selectedPath={selectedFile?.file.path}
+                  onFileClick={handleFileClick}
+                  onUnstage={handleUnstage}
+                  onUnstageAll={handleUnstageAll}
+                  isStaged={true}
+                />
               )}
 
               {/* Unstaged section */}
               {status.unstaged.length > 0 && (
-                <div className="relative">
-                  <FileChanges
-                    files={status.unstaged}
-                    title="Changes"
-                    emptyMessage="No changes"
-                    selectedPath={selectedFile?.file.path}
-                    onFileClick={handleFileClick}
-                    onStage={handleStage}
-                    isStaged={false}
-                  />
-                  {status.unstaged.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleStageAll}
-                      className="absolute top-1 right-2 h-7 text-xs"
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      All
-                    </Button>
-                  )}
-                </div>
+                <FileChanges
+                  files={status.unstaged}
+                  title="Changes"
+                  emptyMessage="No changes"
+                  selectedPath={selectedFile?.file.path}
+                  onFileClick={handleFileClick}
+                  onStage={handleStage}
+                  onStageAll={handleStageAll}
+                  isStaged={false}
+                />
               )}
 
               {/* Untracked section */}
@@ -523,52 +499,28 @@ function MobileGitPanel({
           <div className="py-2">
             {/* Staged section */}
             {status.staged.length > 0 && (
-              <div className="relative">
-                <FileChanges
-                  files={status.staged}
-                  title="Staged Changes"
-                  emptyMessage="No staged changes"
-                  onFileClick={onFileClick}
-                  onUnstage={onUnstage}
-                  isStaged={true}
-                />
-                {status.staged.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onUnstageAll}
-                    className="absolute top-1 right-2 h-7 text-xs"
-                  >
-                    <Minus className="w-3 h-3 mr-1" />
-                    All
-                  </Button>
-                )}
-              </div>
+              <FileChanges
+                files={status.staged}
+                title="Staged Changes"
+                emptyMessage="No staged changes"
+                onFileClick={onFileClick}
+                onUnstage={onUnstage}
+                onUnstageAll={onUnstageAll}
+                isStaged={true}
+              />
             )}
 
             {/* Unstaged section */}
             {status.unstaged.length > 0 && (
-              <div className="relative">
-                <FileChanges
-                  files={status.unstaged}
-                  title="Changes"
-                  emptyMessage="No changes"
-                  onFileClick={onFileClick}
-                  onStage={onStage}
-                  isStaged={false}
-                />
-                {status.unstaged.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onStageAll}
-                    className="absolute top-1 right-2 h-7 text-xs"
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    All
-                  </Button>
-                )}
-              </div>
+              <FileChanges
+                files={status.unstaged}
+                title="Changes"
+                emptyMessage="No changes"
+                onFileClick={onFileClick}
+                onStage={onStage}
+                onStageAll={onStageAll}
+                isStaged={false}
+              />
             )}
 
             {/* Untracked section */}

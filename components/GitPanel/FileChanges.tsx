@@ -21,6 +21,8 @@ interface FileChangesProps {
   onFileClick: (file: GitFile) => void;
   onStage?: (file: GitFile) => void;
   onUnstage?: (file: GitFile) => void;
+  onStageAll?: () => void;
+  onUnstageAll?: () => void;
   isStaged?: boolean;
 }
 
@@ -34,6 +36,8 @@ export function FileChanges({
   onFileClick,
   onStage,
   onUnstage,
+  onStageAll,
+  onUnstageAll,
   isStaged = false,
 }: FileChangesProps) {
   const [expanded, setExpanded] = useState(true);
@@ -42,23 +46,39 @@ export function FileChanges({
     return null;
   }
 
+  const showAllButton = files.length > 1 && (onStageAll || onUnstageAll);
+
   return (
     <div className="mb-4">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ChevronRight
-          className={cn(
-            "w-4 h-4 transition-transform",
-            expanded && "rotate-90"
-          )}
-        />
-        <span>{title}</span>
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronRight
+            className={cn(
+              "w-4 h-4 transition-transform",
+              expanded && "rotate-90"
+            )}
+          />
+          <span>{title}</span>
+        </button>
         <span className="ml-auto text-xs bg-muted px-2 py-0.5 rounded-full">
           {files.length}
         </span>
-      </button>
+        {showAllButton && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              isStaged ? onUnstageAll?.() : onStageAll?.();
+            }}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isStaged ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+            All
+          </button>
+        )}
+      </div>
 
       {expanded && (
         <div className="space-y-0.5">
