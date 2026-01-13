@@ -4,7 +4,11 @@ A **mobile-first** self-hosted web UI for managing multiple AI coding assistant 
 
 > If you find AgentOS useful, please consider giving it a star! It helps the project grow and reach more developers.
 
+https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
+
 ![AgentOS Screenshot](docs/screenshot.png)
+
+
 
 ## Why AgentOS?
 
