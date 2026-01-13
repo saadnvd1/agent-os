@@ -4,7 +4,7 @@ import { useState } from "react";
 import { SessionCard } from "./SessionCard";
 import { SessionPreviewPopover } from "./SessionPreviewPopover";
 import { NewSessionDialog } from "./NewSessionDialog";
-import { DevServersSection, ServerLogsModal } from "./DevServers";
+import { ServerLogsModal } from "./DevServers";
 import { ProjectsSection, NewProjectDialog, ProjectSettingsDialog } from "./Projects";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
@@ -454,24 +454,6 @@ export function SessionList({
         </div>
       )}
 
-      {/* Dev Servers Section */}
-      {devServers.length > 0 && onStopDevServer && onRestartDevServer && onRemoveDevServer && (
-        <DevServersSection
-          servers={devServers}
-          projects={projects}
-          onStart={async (id) => {
-            const server = devServers.find((s) => s.id === id);
-            if (server) {
-              await onRestartDevServer(id);
-            }
-          }}
-          onStop={onStopDevServer}
-          onRestart={onRestartDevServer}
-          onRemove={onRemoveDevServer}
-          onViewLogs={setLogsServerId}
-        />
-      )}
-
       {/* Session list */}
       <ScrollArea className="flex-1 w-full">
         <div className="p-2 space-y-1 max-w-full">
@@ -514,6 +496,10 @@ export function SessionList({
               onRenameSession={onRenameSession}
               onCreatePR={onCreatePR}
               onStartDevServer={onStartDevServer}
+              onStopDevServer={onStopDevServer}
+              onRestartDevServer={onRestartDevServer}
+              onRemoveDevServer={onRemoveDevServer}
+              onViewDevServerLogs={setLogsServerId}
               onHoverStart={(session, rect) => handleHoverStart(session, rect)}
               onHoverEnd={handleHoverEnd}
             />
