@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Plus, GitBranch, Loader2 } from "lucide-react";
-import type { Group } from "@/lib/db";
+import { GitBranch, Loader2, Plus, FolderOpen } from "lucide-react";
+import { DirectoryPicker } from "./DirectoryPicker";
 import type { AgentType } from "@/lib/providers";
 import { getProviderDefinition } from "@/lib/providers";
 import type { ProjectWithDevServers } from "@/lib/projects";
@@ -47,32 +47,35 @@ const AGENT_OPTIONS: { value: AgentType; label: string; description: string }[] 
 
 interface NewSessionDialogProps {
   open: boolean;
-  groups: Group[];
   projects: ProjectWithDevServers[];
   selectedProjectId?: string;
   onClose: () => void;
   onCreated: (sessionId: string) => void;
-  onCreateGroup?: (name: string, parentPath?: string) => Promise<void>;
+  onCreateProject?: (name: string, workingDirectory: string, agentType: AgentType) => Promise<string | null>;
 }
 
 export function NewSessionDialog({
   open,
-  groups,
   projects,
   selectedProjectId,
   onClose,
   onCreated,
-  onCreateGroup,
+  onCreateProject,
 }: NewSessionDialogProps) {
   const [name, setName] = useState("");
   const [workingDirectory, setWorkingDirectory] = useState("~");
-  const [groupPath, setGroupPath] = useState("sessions");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showNewGroup, setShowNewGroup] = useState(false);
-  const [newGroupName, setNewGroupName] = useState("");
   const [skipPermissions, setSkipPermissions] = useState(false);
   const [agentType, setAgentType] = useState<AgentType>("claude");
+
+  // Inline project creation
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+
+  // Directory picker
+  const [showDirectoryPicker, setShowDirectoryPicker] = useState(false);
 
   // Worktree state
   const [useWorktree, setUseWorktree] = useState(false);
@@ -206,7 +209,6 @@ export function NewSessionDialog({
         body: JSON.stringify({
           name: name.trim() || undefined, // Let API auto-generate if empty
           workingDirectory,
-          groupPath,
           projectId,
           agentType,
           // Worktree options
@@ -228,7 +230,6 @@ export function NewSessionDialog({
 
         setName("");
         setWorkingDirectory("~");
-        setGroupPath("sessions");
         setProjectId(null);
         setUseWorktree(false);
         setFeatureName("");
@@ -243,27 +244,35 @@ export function NewSessionDialog({
     }
   };
 
-  const handleCreateGroup = async () => {
-    if (!newGroupName.trim() || !onCreateGroup) return;
-    await onCreateGroup(newGroupName.trim());
-    setNewGroupName("");
-    setShowNewGroup(false);
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim() || !onCreateProject || !workingDirectory || workingDirectory === "~") return;
+    setCreatingProject(true);
+    try {
+      const newId = await onCreateProject(newProjectName.trim(), workingDirectory, agentType);
+      if (newId) {
+        setProjectId(newId);
+        setShowNewProject(false);
+        setNewProjectName("");
+      }
+    } finally {
+      setCreatingProject(false);
+    }
   };
 
   const handleClose = () => {
     setName("");
     setWorkingDirectory("~");
-    setGroupPath("sessions");
     setProjectId(null);
-    setShowNewGroup(false);
-    setNewGroupName("");
     setUseWorktree(false);
     setFeatureName("");
+    setShowNewProject(false);
+    setNewProjectName("");
     setError(null);
     onClose();
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent>
         <DialogHeader>
@@ -297,17 +306,28 @@ export function NewSessionDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Working Directory</label>
-            <div className="relative">
-              <Input
-                value={workingDirectory}
-                onChange={(e) => setWorkingDirectory(e.target.value)}
-                placeholder="~/projects/my-app"
-              />
-              {checkingGit && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                </div>
-              )}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  value={workingDirectory}
+                  onChange={(e) => setWorkingDirectory(e.target.value)}
+                  placeholder="~/projects/my-app"
+                />
+                {checkingGit && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setShowDirectoryPicker(true)}
+                title="Browse directories"
+              >
+                <FolderOpen className="w-4 h-4" />
+              </Button>
             </div>
             {gitInfo?.isGitRepo && (
               <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -387,27 +407,88 @@ export function NewSessionDialog({
           {/* Project selector */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Project</label>
-            <Select
-              value={projectId || "none"}
-              onValueChange={(v) => handleProjectChange(v === "none" ? null : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">
-                  <span className="text-muted-foreground">No project (uncategorized)</span>
-                </SelectItem>
-                {projects
-                  .filter((p) => !p.is_uncategorized)
-                  .map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
+            {showNewProject ? (
+              <div className="flex gap-2">
+                <Input
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="Project name"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCreateProject();
+                    } else if (e.key === "Escape") {
+                      setShowNewProject(false);
+                      setNewProjectName("");
+                    }
+                  }}
+                  disabled={creatingProject}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCreateProject}
+                  disabled={!newProjectName.trim() || creatingProject || !workingDirectory || workingDirectory === "~"}
+                >
+                  {creatingProject ? "Creating..." : "Create"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowNewProject(false);
+                    setNewProjectName("");
+                  }}
+                  disabled={creatingProject}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Select
+                  value={projectId || "none"}
+                  onValueChange={(v) => handleProjectChange(v === "none" ? null : v)}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="text-muted-foreground">No project (uncategorized)</span>
                     </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-            {projectId && (() => {
+                    {projects
+                      .filter((p) => !p.is_uncategorized)
+                      .map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {onCreateProject && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowNewProject(true)}
+                    title="Create new project"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+            {showNewProject && (
+              <p className="text-xs text-muted-foreground">
+                {workingDirectory && workingDirectory !== "~"
+                  ? `New project will use: ${workingDirectory}, ${agentType}`
+                  : "Enter a working directory above to create a project"}
+              </p>
+            )}
+            {!showNewProject && projectId && (() => {
               const project = projects.find((p) => p.id === projectId);
               return project && !project.is_uncategorized ? (
                 <p className="text-xs text-muted-foreground">
@@ -417,76 +498,6 @@ export function NewSessionDialog({
             })()}
           </div>
 
-          {/* Legacy Group selector - only show if no project selected */}
-          {!projectId && groups.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Group <span className="text-xs">(legacy)</span></label>
-              {showNewGroup ? (
-                <div className="flex gap-2">
-                  <Input
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    placeholder="New group name"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleCreateGroup();
-                      } else if (e.key === "Escape") {
-                        setShowNewGroup(false);
-                        setNewGroupName("");
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCreateGroup}
-                    disabled={!newGroupName.trim()}
-                  >
-                    Add
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowNewGroup(false);
-                      setNewGroupName("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Select value={groupPath} onValueChange={setGroupPath}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groups.map((group) => (
-                        <SelectItem key={group.path} value={group.path}>
-                          {group.path === "sessions" ? group.name : group.path.replace(/\//g, " / ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {onCreateGroup && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowNewGroup(true)}
-                      title="Create new group"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                )}
-              </div>
-            )}
-          </div>
-          )}
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -523,5 +534,13 @@ export function NewSessionDialog({
         </form>
       </DialogContent>
     </Dialog>
+
+    <DirectoryPicker
+      open={showDirectoryPicker}
+      onClose={() => setShowDirectoryPicker(false)}
+      onSelect={(path) => setWorkingDirectory(path)}
+      initialPath={workingDirectory !== "~" ? workingDirectory : "~"}
+    />
+  </>
   );
 }
