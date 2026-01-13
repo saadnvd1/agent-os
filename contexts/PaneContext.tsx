@@ -22,12 +22,14 @@ import {
   loadPaneState,
   MAX_PANES,
 } from "@/lib/panes";
+import { useViewport } from "@/hooks/useViewport";
 
 interface PaneContextValue {
   state: PaneState;
   focusedPaneId: string;
   canSplit: boolean;
   canClose: boolean;
+  isMobile: boolean;
   focusPane: (paneId: string) => void;
   splitHorizontal: (paneId: string) => void;
   splitVertical: (paneId: string) => void;
@@ -51,6 +53,7 @@ const defaultPaneData: PaneData = createPaneData();
 export function PaneProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PaneState>(createInitialPaneState);
   const [hydrated, setHydrated] = useState(false);
+  const { isMobile } = useViewport();
 
   // Load from localStorage after hydration
   useEffect(() => {
@@ -235,8 +238,9 @@ export function PaneProvider({ children }: { children: ReactNode }) {
     [state.panes]
   );
 
-  const canSplit = countPanes(state.layout) < MAX_PANES;
-  const canClose = countPanes(state.layout) > 1;
+  // On mobile: disable splits (single pane only)
+  const canSplit = !isMobile && countPanes(state.layout) < MAX_PANES;
+  const canClose = !isMobile && countPanes(state.layout) > 1;
 
   return (
     <PaneContext.Provider
@@ -245,6 +249,7 @@ export function PaneProvider({ children }: { children: ReactNode }) {
         focusedPaneId: state.focusedPaneId,
         canSplit,
         canClose,
+        isMobile,
         focusPane,
         splitHorizontal,
         splitVertical,
