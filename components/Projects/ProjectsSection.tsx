@@ -31,9 +31,7 @@ interface ProjectsSectionProps {
   onDeleteSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newName: string) => void;
   onCreatePR?: (sessionId: string) => void;
-  onStartDevServer?: (sessionId: string) => void;
-  onStartProjectDevServers?: (projectId: string) => void;
-  onStopProjectDevServers?: (projectId: string) => void;
+  onStartDevServer?: (projectId: string) => void;
   onHoverStart?: (session: Session, rect: DOMRect) => void;
   onHoverEnd?: () => void;
 }
@@ -59,8 +57,6 @@ export function ProjectsSection({
   onRenameSession,
   onCreatePR,
   onStartDevServer,
-  onStartProjectDevServers,
-  onStopProjectDevServers,
   onHoverStart,
   onHoverEnd,
 }: ProjectsSectionProps) {
@@ -85,10 +81,8 @@ export function ProjectsSection({
 
   // Get running dev servers for a project
   const getProjectRunningServers = (projectId: string): DevServer[] => {
-    const projectSessions = sessionsByProject[projectId] || [];
-    const sessionIds = new Set(projectSessions.map((s) => s.id));
     return devServers.filter(
-      (ds) => sessionIds.has(ds.session_id) && ds.status === "running"
+      (ds) => ds.project_id === projectId && ds.status === "running"
     );
   };
 
@@ -116,17 +110,9 @@ export function ProjectsSection({
               onNewSession={
                 onNewSession ? () => onNewSession(project.id) : undefined
               }
-              onStartDevServers={
-                !project.is_uncategorized &&
-                project.devServers.length > 0 &&
-                runningServers.length === 0 &&
-                onStartProjectDevServers
-                  ? () => onStartProjectDevServers(project.id)
-                  : undefined
-              }
-              onStopDevServers={
-                runningServers.length > 0 && onStopProjectDevServers
-                  ? () => onStopProjectDevServers(project.id)
+              onStartDevServer={
+                !project.is_uncategorized && onStartDevServer
+                  ? () => onStartDevServer(project.id)
                   : undefined
               }
               onDelete={
@@ -195,11 +181,6 @@ export function ProjectsSection({
                               onCreatePR={
                                 onCreatePR
                                   ? () => onCreatePR(session.id)
-                                  : undefined
-                              }
-                              onStartDevServer={
-                                onStartDevServer
-                                  ? () => onStartDevServer(session.id)
                                   : undefined
                               }
                               onHoverStart={

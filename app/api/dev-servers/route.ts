@@ -19,9 +19,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId, type, name, command, workingDirectory, ports } = body;
+    const { projectId, type, name, command, workingDirectory, ports } = body;
 
-    if (!sessionId || !type || !name || !command || !workingDirectory) {
+    if (!projectId || !type || !name || !command || !workingDirectory) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const server = await startServer({
-      sessionId,
+      projectId,
       type,
       name,
       command,

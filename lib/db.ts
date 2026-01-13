@@ -95,7 +95,7 @@ export type DevServerStatus = "stopped" | "starting" | "running" | "failed";
 
 export interface DevServer {
   id: string;
-  session_id: string;
+  project_id: string;
   type: DevServerType;
   name: string;
   command: string;
@@ -174,7 +174,7 @@ export function initDb(): Database.Database {
     -- Dev servers table (for Phase 9: Container & Development Server Management)
     CREATE TABLE IF NOT EXISTS dev_servers (
       id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'node',
       name TEXT NOT NULL DEFAULT '',
       command TEXT NOT NULL DEFAULT '',
@@ -185,7 +185,7 @@ export function initDb(): Database.Database {
       working_directory TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     );
 
     -- Projects table (replaces groups)
@@ -220,7 +220,6 @@ export function initDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
     CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
-    CREATE INDEX IF NOT EXISTS idx_dev_servers_session ON dev_servers(session_id);
     CREATE INDEX IF NOT EXISTS idx_project_dev_servers_project ON project_dev_servers(project_id);
 
     -- Default Uncategorized project
@@ -360,6 +359,32 @@ export function initDb(): Database.Database {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)`);
   } catch {
     // Index might already exist or column doesn't exist, ignore
+  }
+
+  // Migration: Add project_id column to dev_servers (replacing session_id)
+  try {
+    db.exec(`ALTER TABLE dev_servers ADD COLUMN project_id TEXT REFERENCES projects(id)`);
+    // Migrate existing dev_servers: get project_id from their session
+    db.exec(`
+      UPDATE dev_servers
+      SET project_id = (
+        SELECT COALESCE(s.project_id, 'uncategorized')
+        FROM sessions s
+        WHERE s.id = dev_servers.session_id
+      )
+      WHERE project_id IS NULL
+    `);
+    // Set any remaining null project_ids to uncategorized
+    db.exec(`UPDATE dev_servers SET project_id = 'uncategorized' WHERE project_id IS NULL`);
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Create index on dev_servers.project_id after the column exists
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_dev_servers_project ON dev_servers(project_id)`);
+  } catch {
+    // Index might already exist, ignore
   }
 
   return db;
@@ -562,7 +587,7 @@ export const queries = {
   createDevServer: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO dev_servers (id, session_id, type, name, command, status, pid, container_id, ports, working_directory)
+      `INSERT INTO dev_servers (id, project_id, type, name, command, status, pid, container_id, ports, working_directory)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
 
@@ -572,11 +597,8 @@ export const queries = {
   getAllDevServers: (db: Database.Database) =>
     getStmt(db, `SELECT * FROM dev_servers ORDER BY created_at DESC`),
 
-  getDevServerBySession: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM dev_servers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1`),
-
-  getDevServersBySession: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM dev_servers WHERE session_id = ? ORDER BY created_at DESC`),
+  getDevServersByProject: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM dev_servers WHERE project_id = ? ORDER BY created_at DESC`),
 
   updateDevServerStatus: (db: Database.Database) =>
     getStmt(
@@ -599,8 +621,8 @@ export const queries = {
   deleteDevServer: (db: Database.Database) =>
     getStmt(db, `DELETE FROM dev_servers WHERE id = ?`),
 
-  deleteDevServersBySession: (db: Database.Database) =>
-    getStmt(db, `DELETE FROM dev_servers WHERE session_id = ?`),
+  deleteDevServersByProject: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM dev_servers WHERE project_id = ?`),
 
   // Projects
   createProject: (db: Database.Database) =>
