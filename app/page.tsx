@@ -418,6 +418,28 @@ function HomeContent() {
     }
   };
 
+  // Summarize and create fresh session
+  const handleSummarize = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/summarize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createFork: true }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        console.error("Summarize failed:", data.error);
+        return;
+      }
+      if (data.newSession) {
+        await fetchSessions();
+        attachToSession(data.newSession);
+      }
+    } catch (error) {
+      console.error("Failed to summarize session:", error);
+    }
+  };
+
   // Delete session
   const handleDeleteSession = async (sessionId: string) => {
     if (!confirm("Delete this session? This cannot be undone.")) return;
@@ -516,6 +538,7 @@ function HomeContent() {
     handleDeleteGroup,
     handleMoveSession,
     handleForkSession,
+    handleSummarize,
     handleDeleteSession,
     handleRenameSession,
     handleCreatePR,

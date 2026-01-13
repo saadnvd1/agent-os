@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil } from "lucide-react";
+import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -37,6 +37,7 @@ interface SessionCardProps {
   onClick?: () => void;
   onMove?: (groupPath: string) => void;
   onFork?: () => void;
+  onSummarize?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
   onCreatePR?: () => void;
@@ -72,7 +73,7 @@ const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: Rea
   },
 };
 
-export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClick, onMove, onFork, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
+export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClick, onMove, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
@@ -136,6 +137,12 @@ export function SessionCard({ session, isActive, tmuxStatus, groups = [], onClic
           <MenuItem onClick={() => onFork()}>
             <Copy className="w-3 h-3 mr-2" />
             Fork session
+          </MenuItem>
+        )}
+        {onSummarize && session.agent_type === "claude" && (
+          <MenuItem onClick={() => onSummarize()}>
+            <Sparkles className="w-3 h-3 mr-2" />
+            Fresh start
           </MenuItem>
         )}
         {onCreatePR && session.branch_name && (
