@@ -198,32 +198,12 @@ export async function GET() {
       }
     }
 
-    // Get other tmux sessions (not managed by agent-os)
-    const otherSessions = sessions.filter(s => !UUID_PATTERN.test(s));
-    const otherStatuses: SessionStatusResponse[] = [];
-
-    for (const sessionName of otherSessions) {
-      const status = await statusDetector.getStatus(sessionName);
-      const claudeSessionId = await getClaudeSessionId(sessionName);
-      const lastLine = await getLastLine(sessionName);
-
-      otherStatuses.push({
-        sessionName,
-        status,
-        lastLine,
-        claudeSessionId,
-      });
-    }
-
     // Cleanup old trackers
     statusDetector.cleanup();
 
-    return NextResponse.json({
-      statuses: statusMap,
-      otherSessions: otherStatuses
-    });
+    return NextResponse.json({ statuses: statusMap });
   } catch (error) {
     console.error("Error getting session statuses:", error);
-    return NextResponse.json({ statuses: {}, otherSessions: [] });
+    return NextResponse.json({ statuses: {} });
   }
 }
