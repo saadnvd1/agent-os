@@ -35,6 +35,8 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   const [permissionGranted, setPermissionGranted] = useState(false);
   const previousStates = useRef<Map<string, SessionStatus>>(new Map());
   const waitingCount = useRef(0);
+  // Track which sessions have been notified to prevent duplicates
+  const notifiedSessions = useRef<Set<string>>(new Set());
 
   // Load settings on mount
   useEffect(() => {
@@ -145,16 +147,36 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
           return;
         }
 
-        // Detect transitions
+        // Detect transitions and notify (with deduplication)
+        const notifyKey = `${session.id}-${currentStatus}`;
+
         if (currentStatus === "waiting" && prevStatus !== "waiting") {
-          notify("waiting", session.id, session.name);
+          if (!notifiedSessions.current.has(notifyKey)) {
+            notifiedSessions.current.add(notifyKey);
+            notify("waiting", session.id, session.name);
+          }
         } else if (currentStatus === "error" && prevStatus !== "error") {
-          notify("error", session.id, session.name);
+          if (!notifiedSessions.current.has(notifyKey)) {
+            notifiedSessions.current.add(notifyKey);
+            notify("error", session.id, session.name);
+          }
         } else if (
           currentStatus === "idle" &&
           (prevStatus === "running" || prevStatus === "waiting")
         ) {
-          notify("completed", session.id, session.name);
+          const completedKey = `${session.id}-completed`;
+          if (!notifiedSessions.current.has(completedKey)) {
+            notifiedSessions.current.add(completedKey);
+            notify("completed", session.id, session.name);
+          }
+        }
+
+        // Clear notification tracking when status changes away from notified state
+        if (prevStatus !== currentStatus) {
+          notifiedSessions.current.delete(`${session.id}-${prevStatus}`);
+          if (prevStatus === "idle") {
+            notifiedSessions.current.delete(`${session.id}-completed`);
+          }
         }
 
         previousStates.current.set(session.id, currentStatus);
