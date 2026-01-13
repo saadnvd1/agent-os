@@ -114,6 +114,42 @@ npm run dev
 # Open http://localhost:3011
 ```
 
+## Mobile Access with Tailscale
+
+AgentOS runs on your dev machine, but you want to access it from your phone. [Tailscale](https://tailscale.com) creates a secure mesh network between your devices - no port forwarding or firewall config needed.
+
+### Step 1: Install Tailscale on Your Dev Machine
+
+**macOS:**
+1. Download from [tailscale.com/download](https://tailscale.com/download)
+2. Sign in with Google/GitHub/etc
+3. Note the IP assigned (visible in menu bar) - it looks like `100.x.x.x`
+
+**Linux:**
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+tailscale ip  # Note your IP
+```
+
+### Step 2: Install Tailscale on Your Phone
+
+1. Download Tailscale from App Store (iOS) or Play Store (Android)
+2. Sign in with the **same account**
+3. Your dev machine should appear in the device list
+
+### Step 3: Access AgentOS
+
+On your phone's browser, go to:
+```
+http://100.x.x.x:3011
+```
+Replace `100.x.x.x` with your dev machine's Tailscale IP.
+
+That's it! The connection is encrypted end-to-end and works from anywhere - home, coffee shop, or mobile data.
+
+**Tip:** Bookmark the URL or add it to your home screen for quick access.
+
 ## How It Works
 
 AgentOS manages AI coding CLI sessions through tmux. Each session runs in its own tmux session (`{agent}-{uuid}`), allowing:
