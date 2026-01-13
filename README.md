@@ -18,6 +18,10 @@ Most AI coding tools assume you're at a desktop. AgentOS is designed for develop
 - **Primary context**: On the go, away from your desktop
 - **Primary need**: Everything desktop users have, adapted for touch
 
+**"But how do you review code without an IDE?"**
+
+AgentOS includes a File Explorer with syntax highlighting and a Git Panel with inline diffs. Browse files, review changes, stage commits - all touch-optimized for mobile.
+
 ## Supported Agents
 
 - **Claude Code** (Anthropic) - Full support with resume/fork

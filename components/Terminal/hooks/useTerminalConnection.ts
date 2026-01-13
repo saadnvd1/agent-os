@@ -139,6 +139,7 @@ export function useTerminalConnection({
     let term: XTerm | null = null;
     let ws: WebSocket | null = null;
     let handleResize: (() => void) | null = null;
+    let handleVisibilityChange: (() => void) | null = null;
     let handleTouchStart: ((e: TouchEvent) => void) | null = null;
     let handleTouchMove: ((e: TouchEvent) => void) | null = null;
     let handleTouchEnd: ((e: TouchEvent) => void) | null = null;
@@ -336,6 +337,23 @@ export function useTerminalConnection({
         }
       };
 
+      // Reconnection function - extracted so it can be called from visibilitychange
+      const attemptReconnect = () => {
+        if (cancelled || intentionalCloseRef.current) return;
+        if (wsRef.current?.readyState === WebSocket.OPEN) return; // Already connected
+
+        setConnectionState('reconnecting');
+        isReconnectRef.current = true;
+
+        const newWs = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
+        ws = newWs;
+        wsRef.current = newWs;
+        newWs.onopen = currentWs.onopen;
+        newWs.onmessage = currentWs.onmessage;
+        newWs.onclose = currentWs.onclose;
+        newWs.onerror = currentWs.onerror;
+      };
+
       currentWs.onclose = () => {
         if (cancelled) return;
         setConnected(false);
@@ -351,20 +369,26 @@ export function useTerminalConnection({
         const currentDelay = reconnectDelayRef.current;
         reconnectDelayRef.current = Math.min(currentDelay * 2, WS_RECONNECT_MAX_DELAY);
 
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (cancelled || intentionalCloseRef.current) return;
-          setConnectionState('reconnecting');
-          isReconnectRef.current = true;
-
-          const newWs = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
-          ws = newWs;
-          wsRef.current = newWs;
-          newWs.onopen = currentWs.onopen;
-          newWs.onmessage = currentWs.onmessage;
-          newWs.onclose = currentWs.onclose;
-          newWs.onerror = currentWs.onerror;
-        }, currentDelay);
+        reconnectTimeoutRef.current = setTimeout(attemptReconnect, currentDelay);
       };
+
+      // Handle page visibility change (iOS Safari suspends JS when backgrounded)
+      handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          // Page is now visible - check if we need to reconnect
+          if (wsRef.current?.readyState !== WebSocket.OPEN && !intentionalCloseRef.current) {
+            // Clear any pending reconnect timeout
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = null;
+            }
+            // Reset delay and reconnect immediately
+            reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
+            attemptReconnect();
+          }
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       currentWs.onerror = () => {
         if (cancelled) return;
@@ -486,6 +510,11 @@ export function useTerminalConnection({
         if (isMobile && window.visualViewport) {
           window.visualViewport.removeEventListener('resize', handleResize);
         }
+      }
+
+      // Clean up visibility change listener
+      if (handleVisibilityChange) {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
 
       // Clean up media query listeners
