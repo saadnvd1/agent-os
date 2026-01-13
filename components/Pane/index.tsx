@@ -127,6 +127,7 @@ export const Pane = memo(function Pane({
 
   // Register terminal when connected
   const handleTerminalConnected = useCallback(() => {
+    console.log(`[AgentOS] Terminal connected for pane: ${paneId}, activeTab: ${activeTab?.id || 'null'}`);
     if (terminalRef.current && activeTab) {
       onRegisterTerminal(paneId, activeTab.id, terminalRef.current);
 
@@ -135,6 +136,8 @@ export const Pane = memo(function Pane({
           terminalRef.current?.sendCommand(`tmux attach -t ${activeTab.attachedTmux}`);
         }, 100);
       }
+    } else {
+      console.log(`[AgentOS] Cannot register terminal - ref: ${!!terminalRef.current}, activeTab: ${!!activeTab}`);
     }
   }, [paneId, activeTab, onRegisterTerminal]);
 
@@ -144,7 +147,9 @@ export const Pane = memo(function Pane({
 
   // Cleanup on unmount only
   useEffect(() => {
+    console.log(`[AgentOS] Pane ${paneId} mounted, activeTab: ${activeTab?.id || 'null'}`);
     return () => {
+      console.log(`[AgentOS] Pane ${paneId} unmounting, clearing terminal ref for tab: ${activeTabIdRef.current}`);
       if (activeTabIdRef.current) {
         onRegisterTerminal(paneId, activeTabIdRef.current, null);
       }

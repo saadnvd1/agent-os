@@ -224,16 +224,25 @@ export function DesktopView({
         selectedProjectId={newSessionProjectId ?? undefined}
         onClose={() => setShowNewSessionDialog(false)}
         onCreated={async (id) => {
+          console.log(`[AgentOS] onCreated called for session: ${id}`);
           setShowNewSessionDialog(false);
 
           // Fetch the new session data
+          console.log(`[AgentOS] Fetching sessions...`);
           await fetchSessions();
+          console.log(`[AgentOS] Sessions fetched, now fetching session data...`);
           const res = await fetch(`/api/sessions/${id}`);
           const data = await res.json();
-          if (!data.session) return;
+          if (!data.session) {
+            console.log(`[AgentOS] No session data returned for id: ${id}`);
+            return;
+          }
+          console.log(`[AgentOS] Session data fetched: ${data.session.name}`);
 
           // Small delay to ensure terminal is ready after state updates
+          console.log(`[AgentOS] Starting 100ms delay before attachToSession...`);
           setTimeout(() => {
+            console.log(`[AgentOS] Delay complete, calling attachToSession...`);
             attachToSession(data.session);
           }, 100);
         }}
