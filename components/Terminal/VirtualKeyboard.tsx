@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ANSI escape sequences
@@ -35,6 +35,7 @@ type KeyboardMode = 'quick' | 'abc' | 'num';
 
 interface VirtualKeyboardProps {
   onKeyPress: (key: string) => void;
+  onImagePick?: () => void;
   visible?: boolean;
 }
 
@@ -61,7 +62,7 @@ function Key({ char, onPress, className }: KeyProps) {
   );
 }
 
-export function VirtualKeyboard({ onKeyPress, visible = true }: VirtualKeyboardProps) {
+export function VirtualKeyboard({ onKeyPress, onImagePick, visible = true }: VirtualKeyboardProps) {
   const [mode, setMode] = useState<KeyboardMode>('abc');
   const [shifted, setShifted] = useState(false);
 
@@ -101,6 +102,14 @@ export function VirtualKeyboard({ onKeyPress, visible = true }: VirtualKeyboardP
         {/* Arrow keys + Enter + Ctrl shortcuts */}
         <div className="flex gap-1">
           <Key char="^C" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_C)} className="bg-red-900/40 text-red-400" />
+          {onImagePick && (
+            <button
+              onClick={onImagePick}
+              className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-zinc-700 text-zinc-300 active:bg-zinc-500"
+            >
+              <ImagePlus className="h-4 w-4" />
+            </button>
+          )}
           <Key char="^D" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_D)} className="bg-zinc-700" />
           <Key char="^Z" onPress={() => onKeyPress(SPECIAL_KEYS.CTRL_Z)} className="bg-zinc-700" />
           <div className="flex-1" />
