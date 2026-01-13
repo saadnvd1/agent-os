@@ -66,9 +66,6 @@ function HomeContent() {
     summarizeSession,
     moveSessionToGroup,
     moveSessionToProject,
-    setSessions,
-    setGroups,
-    updatedSessionIds,
   } = useSessions();
 
   const {
@@ -77,14 +74,13 @@ function HomeContent() {
     toggleProject,
     deleteProject,
     renameProject,
-    setProjects,
-  } = useProjects(fetchSessions);
+  } = useProjects();
 
   const {
     toggleGroup,
     createGroup,
     deleteGroup,
-  } = useGroups(setGroups, fetchSessions);
+  } = useGroups();
 
   const {
     devServers,
@@ -231,22 +227,8 @@ function HomeContent() {
   const { sessionStatuses } = useSessionStatuses({
     sessions,
     activeSessionId: focusedActiveTab?.sessionId,
-    updatedSessionIds,
-    setSessions,
     checkStateChanges,
   });
-
-  // Initial data load
-  useEffect(() => {
-    fetchSessions();
-    fetchProjects();
-  }, [fetchSessions, fetchProjects]);
-
-  // Poll for new sessions every 10 seconds (for workers spawned via MCP)
-  useEffect(() => {
-    const interval = setInterval(fetchSessions, 10000);
-    return () => clearInterval(interval);
-  }, [fetchSessions]);
 
   // Set initial sidebar state based on viewport
   useEffect(() => {
