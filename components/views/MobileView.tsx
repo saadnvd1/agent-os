@@ -29,6 +29,7 @@ export function MobileView({
   handleMoveSession,
   handleForkSession,
   handleSummarize,
+  summarizingSessionId,
   handleDeleteSession,
   handleRenameSession,
   handleCreatePR,
@@ -60,6 +61,7 @@ export function MobileView({
               onMoveSession={handleMoveSession}
               onForkSession={handleForkSession}
               onSummarize={handleSummarize}
+              summarizingSessionId={summarizingSessionId}
               onDeleteSession={handleDeleteSession}
               onRenameSession={handleRenameSession}
               onCreatePR={handleCreatePR}
