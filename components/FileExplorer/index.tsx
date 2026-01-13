@@ -254,8 +254,8 @@ function DesktopFileExplorer({
   return (
     <div ref={containerRef} className="h-full w-full bg-background flex">
       {/* File tree panel */}
-      <div className="h-full flex flex-col border-r border-border" style={{ width: treeWidth }}>
-        <div className="flex items-center gap-2 p-3 border-b border-border">
+      <div className="h-full flex flex-col" style={{ width: treeWidth }}>
+        <div className="flex items-center gap-2 p-3">
           <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <p className="text-sm font-medium truncate flex-1">Files</p>
         </div>
@@ -285,15 +285,15 @@ function DesktopFileExplorer({
 
       {/* Resize handle */}
       <div
-        className="w-1 cursor-col-resize bg-border hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
+        className="w-1 cursor-col-resize bg-muted/50 hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
         onMouseDown={handleMouseDown}
       />
 
       {/* Editor panel */}
-      <div className="h-full flex-1 flex flex-col min-w-0">
+      <div className="h-full flex-1 flex flex-col min-w-0 bg-muted/20">
         {/* Tabs */}
         {openFiles.length > 0 && (
-          <div className="border-b border-border">
+          <div className="bg-background/50">
             <FileTabs
               files={openFiles}
               activeFilePath={activeFilePath}
@@ -375,7 +375,7 @@ function MobileFileExplorer({
     return (
       <div className="h-full w-full flex flex-col bg-background">
         {/* Header */}
-        <div className="flex items-center gap-2 p-2 border-b border-border">
+        <div className="flex items-center gap-2 p-2 bg-muted/30">
           <Button variant="ghost" size="icon-sm" onClick={onBack}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -434,7 +434,7 @@ function MobileFileExplorer({
   // Show file tree
   return (
     <div className="h-full w-full flex flex-col bg-background">
-      <div className="flex items-center gap-2 p-3 border-b border-border">
+      <div className="flex items-center gap-2 p-3">
         <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">Files</p>

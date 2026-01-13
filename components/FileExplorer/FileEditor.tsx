@@ -38,7 +38,7 @@ const editorTheme = EditorView.theme({
   },
   ".cm-gutters": {
     backgroundColor: "hsl(var(--background))",
-    borderRight: "1px solid hsl(var(--border))",
+    borderRight: "none",
     color: "hsl(var(--muted-foreground))",
   },
   ".cm-lineNumbers .cm-gutterElement": {
@@ -65,7 +65,7 @@ const editorTheme = EditorView.theme({
   },
   ".cm-tooltip": {
     backgroundColor: "hsl(var(--popover))",
-    border: "1px solid hsl(var(--border))",
+    boxShadow: "0 4px 12px hsl(var(--foreground) / 0.15)",
     color: "hsl(var(--popover-foreground))",
   },
   ".cm-tooltip-autocomplete": {
@@ -75,8 +75,7 @@ const editorTheme = EditorView.theme({
     },
   },
   ".cm-panels": {
-    backgroundColor: "hsl(var(--background))",
-    borderTop: "1px solid hsl(var(--border))",
+    backgroundColor: "hsl(var(--muted))",
   },
   ".cm-searchMatch": {
     backgroundColor: "hsl(var(--primary) / 0.2)",
