@@ -10,7 +10,6 @@ import { SessionListHeader } from "./SessionListHeader";
 import { GroupSection } from "./GroupSection";
 import { KillAllConfirm } from "./KillAllConfirm";
 import { useSessionListMutations } from "./hooks/useSessionListMutations";
-import { SessionMultiSelectProvider } from "@/contexts/SessionMultiSelectContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Plus, FolderPlus, Loader2 } from "lucide-react";
@@ -87,8 +86,7 @@ export function SessionList({
   };
 
   return (
-    <SessionMultiSelectProvider>
-      <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
         <SessionListHeader
           onRefresh={mutations.handleRefresh}
@@ -219,7 +217,6 @@ export function SessionList({
           onClose={() => setEditingProject(null)}
           onSave={() => setEditingProject(null)}
         />
-      </div>
-    </SessionMultiSelectProvider>
+    </div>
   );
 }

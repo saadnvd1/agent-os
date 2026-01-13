@@ -69,6 +69,7 @@
     "react-resizable-panels": "^4.3.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
+    "valtio": "^2.3.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {

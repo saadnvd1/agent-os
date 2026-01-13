@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { FileChanges } from "./FileChanges";
 import { CommitForm } from "./CommitForm";
 import { PRCreationModal } from "@/components/PRCreationModal";
+import { GitPanelTabs, type GitTab } from "./GitPanelTabs";
+import { CommitHistory } from "./CommitHistory";
 import { DiffView } from "@/components/DiffViewer/DiffModal";
 import { useViewport } from "@/hooks/useViewport";
 import type { GitStatus, GitFile } from "@/lib/git-status";
@@ -33,6 +35,7 @@ interface SelectedFile {
 
 export function GitPanel({ workingDirectory }: GitPanelProps) {
   const { isMobile } = useViewport();
+  const [activeTab, setActiveTab] = useState<GitTab>("changes");
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -245,6 +248,8 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
         refreshing={refreshing}
         showPRModal={showPRModal}
         workingDirectory={workingDirectory}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         onRefresh={handleRefresh}
         onFileClick={handleFileClick}
         onStage={handleStage}
@@ -259,11 +264,10 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
     );
   }
 
-  // Desktop layout: side-by-side
-  return (
-    <div ref={containerRef} className="h-full w-full flex bg-background">
-      {/* Left panel - file list */}
-      <div className="h-full flex flex-col" style={{ width: listWidth }}>
+  // Desktop layout: side-by-side for Changes, or CommitHistory for History
+  if (activeTab === "history") {
+    return (
+      <div className="h-full w-full flex flex-col bg-background">
         <Header
           branch={status.branch}
           ahead={status.ahead}
@@ -271,122 +275,143 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
           onRefresh={handleRefresh}
           refreshing={refreshing}
         />
+        <GitPanelTabs activeTab={activeTab} onTabChange={setActiveTab} />
+        <CommitHistory workingDirectory={workingDirectory} />
+      </div>
+    );
+  }
 
-        <div className="flex-1 overflow-y-auto">
-          {!hasChanges ? (
-            <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-              <p className="text-sm">No changes</p>
+  // Desktop layout: side-by-side (Changes tab)
+  return (
+    <div ref={containerRef} className="h-full w-full flex flex-col bg-background">
+      <div className="flex-1 flex min-h-0">
+        {/* Left panel - file list */}
+        <div className="h-full flex flex-col" style={{ width: listWidth }}>
+          <Header
+            branch={status.branch}
+            ahead={status.ahead}
+            behind={status.behind}
+            onRefresh={handleRefresh}
+            refreshing={refreshing}
+          />
+          <GitPanelTabs activeTab={activeTab} onTabChange={setActiveTab} />
+
+          <div className="flex-1 overflow-y-auto">
+            {!hasChanges ? (
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                <p className="text-sm">No changes</p>
+              </div>
+            ) : (
+              <div className="py-2">
+                {/* Staged section */}
+                {status.staged.length > 0 && (
+                  <FileChanges
+                    files={status.staged}
+                    title="Staged Changes"
+                    emptyMessage="No staged changes"
+                    selectedPath={selectedFile?.file.path}
+                    onFileClick={handleFileClick}
+                    onUnstage={handleUnstage}
+                    onUnstageAll={handleUnstageAll}
+                    isStaged={true}
+                  />
+                )}
+
+                {/* Unstaged section */}
+                {status.unstaged.length > 0 && (
+                  <FileChanges
+                    files={status.unstaged}
+                    title="Changes"
+                    emptyMessage="No changes"
+                    selectedPath={selectedFile?.file.path}
+                    onFileClick={handleFileClick}
+                    onStage={handleStage}
+                    onStageAll={handleStageAll}
+                    isStaged={false}
+                  />
+                )}
+
+                {/* Untracked section */}
+                {status.untracked.length > 0 && (
+                  <FileChanges
+                    files={status.untracked}
+                    title="Untracked Files"
+                    emptyMessage="No untracked files"
+                    selectedPath={selectedFile?.file.path}
+                    onFileClick={handleFileClick}
+                    onStage={handleStage}
+                    isStaged={false}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Commit form */}
+          <CommitForm
+            workingDirectory={workingDirectory}
+            stagedCount={status.staged.length}
+            isOnMainBranch={status.branch === "main" || status.branch === "master"}
+            branch={status.branch}
+            onCommit={fetchStatus}
+            onCreatePR={() => setShowPRModal(true)}
+          />
+        </div>
+
+        {/* Resize handle */}
+        <div
+          className="w-1 cursor-col-resize bg-muted/50 hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
+          onMouseDown={handleMouseDown}
+        />
+
+        {/* Right panel - diff viewer */}
+        <div className="flex-1 h-full flex flex-col min-w-0 bg-muted/20">
+          {loadingDiff ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
+          ) : selectedFile ? (
+            <>
+              {/* Diff header with stage/unstage */}
+              <div className="flex items-center gap-2 p-3 bg-background/50">
+                <FileCode className="w-4 h-4 text-muted-foreground" />
+                <span className="flex-1 text-sm font-medium truncate">
+                  {selectedFile.file.path}
+                </span>
+                <Button
+                  variant={selectedFile.file.staged ? "outline" : "default"}
+                  size="sm"
+                  onClick={() =>
+                    selectedFile.file.staged
+                      ? handleUnstage(selectedFile.file)
+                      : handleStage(selectedFile.file)
+                  }
+                >
+                  {selectedFile.file.staged ? (
+                    <>
+                      <Minus className="w-4 h-4 mr-1" />
+                      Unstage
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Stage
+                    </>
+                  )}
+                </Button>
+              </div>
+              {/* Diff content */}
+              <div className="flex-1 overflow-auto p-3">
+                <DiffView diff={selectedFile.diff} fileName={selectedFile.file.path} />
+              </div>
+            </>
           ) : (
-            <div className="py-2">
-              {/* Staged section */}
-              {status.staged.length > 0 && (
-                <FileChanges
-                  files={status.staged}
-                  title="Staged Changes"
-                  emptyMessage="No staged changes"
-                  selectedPath={selectedFile?.file.path}
-                  onFileClick={handleFileClick}
-                  onUnstage={handleUnstage}
-                  onUnstageAll={handleUnstageAll}
-                  isStaged={true}
-                />
-              )}
-
-              {/* Unstaged section */}
-              {status.unstaged.length > 0 && (
-                <FileChanges
-                  files={status.unstaged}
-                  title="Changes"
-                  emptyMessage="No changes"
-                  selectedPath={selectedFile?.file.path}
-                  onFileClick={handleFileClick}
-                  onStage={handleStage}
-                  onStageAll={handleStageAll}
-                  isStaged={false}
-                />
-              )}
-
-              {/* Untracked section */}
-              {status.untracked.length > 0 && (
-                <FileChanges
-                  files={status.untracked}
-                  title="Untracked Files"
-                  emptyMessage="No untracked files"
-                  selectedPath={selectedFile?.file.path}
-                  onFileClick={handleFileClick}
-                  onStage={handleStage}
-                  isStaged={false}
-                />
-              )}
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+              <FileCode className="w-12 h-12 mb-4 opacity-50" />
+              <p className="text-sm">Select a file to view diff</p>
             </div>
           )}
         </div>
-
-        {/* Commit form */}
-        <CommitForm
-          workingDirectory={workingDirectory}
-          stagedCount={status.staged.length}
-          isOnMainBranch={status.branch === "main" || status.branch === "master"}
-          branch={status.branch}
-          onCommit={fetchStatus}
-          onCreatePR={() => setShowPRModal(true)}
-        />
-      </div>
-
-      {/* Resize handle */}
-      <div
-        className="w-1 cursor-col-resize bg-muted/50 hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
-        onMouseDown={handleMouseDown}
-      />
-
-      {/* Right panel - diff viewer */}
-      <div className="flex-1 h-full flex flex-col min-w-0 bg-muted/20">
-        {loadingDiff ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : selectedFile ? (
-          <>
-            {/* Diff header with stage/unstage */}
-            <div className="flex items-center gap-2 p-3 bg-background/50">
-              <FileCode className="w-4 h-4 text-muted-foreground" />
-              <span className="flex-1 text-sm font-medium truncate">
-                {selectedFile.file.path}
-              </span>
-              <Button
-                variant={selectedFile.file.staged ? "outline" : "default"}
-                size="sm"
-                onClick={() =>
-                  selectedFile.file.staged
-                    ? handleUnstage(selectedFile.file)
-                    : handleStage(selectedFile.file)
-                }
-              >
-                {selectedFile.file.staged ? (
-                  <>
-                    <Minus className="w-4 h-4 mr-1" />
-                    Unstage
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4 mr-1" />
-                    Stage
-                  </>
-                )}
-              </Button>
-            </div>
-            {/* Diff content */}
-            <div className="flex-1 overflow-auto p-3">
-              <DiffView diff={selectedFile.diff} fileName={selectedFile.file.path} />
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-            <FileCode className="w-12 h-12 mb-4 opacity-50" />
-            <p className="text-sm">Select a file to view diff</p>
-          </div>
-        )}
       </div>
 
       {/* PR Creation Modal */}
@@ -409,6 +434,8 @@ interface MobileGitPanelProps {
   refreshing: boolean;
   showPRModal: boolean;
   workingDirectory: string;
+  activeTab: GitTab;
+  onTabChange: (tab: GitTab) => void;
   onRefresh: () => void;
   onFileClick: (file: GitFile) => void;
   onStage: (file: GitFile) => void;
@@ -429,6 +456,8 @@ function MobileGitPanel({
   refreshing,
   showPRModal,
   workingDirectory,
+  activeTab,
+  onTabChange,
   onRefresh,
   onFileClick,
   onStage,
@@ -440,6 +469,23 @@ function MobileGitPanel({
   onShowPRModal,
   onClosePRModal,
 }: MobileGitPanelProps) {
+  // History tab
+  if (activeTab === "history") {
+    return (
+      <div className="h-full w-full flex flex-col bg-background">
+        <Header
+          branch={status.branch}
+          ahead={status.ahead}
+          behind={status.behind}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
+        />
+        <GitPanelTabs activeTab={activeTab} onTabChange={onTabChange} />
+        <CommitHistory workingDirectory={workingDirectory} />
+      </div>
+    );
+  }
+
   // Show diff view when file is selected
   if (selectedFile) {
     return (
@@ -479,7 +525,7 @@ function MobileGitPanel({
     );
   }
 
-  // Show file list
+  // Show file list (Changes tab)
   return (
     <div className="h-full w-full flex flex-col bg-background">
       <Header
@@ -489,6 +535,7 @@ function MobileGitPanel({
         onRefresh={onRefresh}
         refreshing={refreshing}
       />
+      <GitPanelTabs activeTab={activeTab} onTabChange={onTabChange} />
 
       <div className="flex-1 overflow-y-auto">
         {!hasChanges ? (
