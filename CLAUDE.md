@@ -47,7 +47,7 @@ See `master.md` for full transformation plan.
 
 ## Architecture
 
-- Next.js 15 + React 19 + TypeScript
+- Next.js 16 + React 19 + TypeScript
 - Custom server.ts with WebSocket endpoint for terminal PTY
 - SQLite via better-sqlite3 for persistence
 - tmux for session management
@@ -137,6 +137,7 @@ Conductors can spawn worker sessions with isolated worktrees:
 - In `useEffect` dependencies, be mindful that object references change on re-render; prefer primitives or memoized objects to avoid duplicate runs
 - Do not add unnecessary comments - if code is self-explanatory, don't add a comment
 - Use absolute imports: `import { X } from "@/lib/x"` not relative `../lib/x`
+- Do not use strong borders, instead rely more on subtle shadows/spacing for UI/UX components
 
 ### Component Organization
 - Components go in `components/` with subdirectories for features (e.g., `components/FileExplorer/`)
