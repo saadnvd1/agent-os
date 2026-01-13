@@ -39,6 +39,7 @@ export function DesktopView({
   handleMoveSession,
   handleForkSession,
   handleSummarize,
+  summarizingSessionId,
   handleDeleteSession,
   handleRenameSession,
   handleCreatePR,
@@ -74,6 +75,7 @@ export function DesktopView({
               onMoveSession={handleMoveSession}
               onForkSession={handleForkSession}
               onSummarize={handleSummarize}
+              summarizingSessionId={summarizingSessionId}
               onDeleteSession={handleDeleteSession}
               onRenameSession={handleRenameSession}
               onCreatePR={handleCreatePR}

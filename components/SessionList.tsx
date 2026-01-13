@@ -35,6 +35,7 @@ interface SessionListProps {
   groups: Group[];
   activeSessionId?: string;
   sessionStatuses?: Record<string, SessionStatus>;
+  summarizingSessionId?: string | null;
   onSelect: (id: string) => void;
   onRefresh: () => void;
   onToggleGroup?: (path: string, expanded: boolean) => void;
@@ -53,6 +54,7 @@ export function SessionList({
   groups = [],
   activeSessionId,
   sessionStatuses,
+  summarizingSessionId,
   onSelect,
   onRefresh,
   onToggleGroup,
@@ -260,6 +262,7 @@ export function SessionList({
                       <SessionCard
                         session={session}
                         isActive={session.id === activeSessionId}
+                        isSummarizing={summarizingSessionId === session.id}
                         tmuxStatus={sessionStatuses?.[session.id]?.status}
                         groups={groups}
                         onClick={() => onSelect(session.id)}
