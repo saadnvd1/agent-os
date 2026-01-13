@@ -133,14 +133,14 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
       style={{
         position: 'fixed',
         left: position.x + 16,
-        top: Math.max(16, Math.min(position.y - 150, typeof window !== 'undefined' ? window.innerHeight - 580 : 400)),
+        top: Math.max(16, Math.min(position.y - 200, typeof window !== 'undefined' ? window.innerHeight - 720 : 400)),
         zIndex: 100,
       }}
       className="pointer-events-none animate-in fade-in slide-in-from-left-2 duration-150"
     >
       <div
         className={cn(
-          'w-[540px] overflow-hidden rounded-xl',
+          'w-[720px] overflow-hidden rounded-xl',
           'bg-zinc-900/95 backdrop-blur-xl',
           'border border-zinc-700/50',
           'shadow-2xl shadow-black/50'
@@ -184,9 +184,9 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
         <div className="p-2">
           <div
             className={cn(
-              'h-96 overflow-hidden rounded-lg',
+              'h-[480px] rounded-lg',
               'bg-zinc-950 font-mono text-[13px] leading-relaxed',
-              'overflow-y-auto p-3',
+              'overflow-auto p-3',
               'border border-zinc-800'
             )}
           >
@@ -202,7 +202,7 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
                 {snapshot.lines.map((line, i) => (
                   <div
                     key={i}
-                    className="overflow-hidden text-ellipsis whitespace-pre text-zinc-300"
+                    className="whitespace-pre text-zinc-300"
                     dangerouslySetInnerHTML={{
                       __html: parseAnsiToHtml(line),
                     }}
