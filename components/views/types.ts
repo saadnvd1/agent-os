@@ -42,6 +42,7 @@ export interface ViewProps {
   handleDeleteGroup: (path: string) => Promise<void>;
   handleMoveSession: (sessionId: string, groupPath: string) => Promise<void>;
   handleForkSession: (sessionId: string) => Promise<void>;
+  handleSummarize: (sessionId: string) => Promise<void>;
   handleDeleteSession: (sessionId: string) => Promise<void>;
   handleRenameSession: (sessionId: string, newName: string) => Promise<void>;
   handleCreatePR: (sessionId: string) => Promise<void>;
