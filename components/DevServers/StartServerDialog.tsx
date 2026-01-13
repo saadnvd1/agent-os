@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Server, Container, Loader2, Play, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Session, ProjectDevServer } from "@/lib/db";
+import type { Project, ProjectDevServer } from "@/lib/db";
 
 interface DetectedServer {
   type: "node" | "docker";
@@ -13,10 +13,10 @@ interface DetectedServer {
 }
 
 interface StartServerDialogProps {
-  session: Session;
+  project: Project;
   projectDevServers?: ProjectDevServer[];
   onStart: (opts: {
-    sessionId: string;
+    projectId: string;
     type: "node" | "docker";
     name: string;
     command: string;
@@ -27,7 +27,7 @@ interface StartServerDialogProps {
 }
 
 export function StartServerDialog({
-  session,
+  project,
   projectDevServers = [],
   onStart,
   onClose,
@@ -48,7 +48,7 @@ export function StartServerDialog({
   useEffect(() => {
     async function detect() {
       try {
-        const res = await fetch(`/api/dev-servers/detect?sessionId=${session.id}`);
+        const res = await fetch(`/api/dev-servers/detect?projectId=${project.id}`);
         if (res.ok) {
           const data = await res.json();
           setDetected(data.servers || []);
@@ -60,18 +60,18 @@ export function StartServerDialog({
       }
     }
     detect();
-  }, [session.id]);
+  }, [project.id]);
 
   const handleStartProjectServer = async (server: ProjectDevServer) => {
     setStarting(true);
     setError(null);
     try {
       await onStart({
-        sessionId: session.id,
+        projectId: project.id,
         type: server.type,
         name: server.name,
         command: server.command,
-        workingDirectory: session.worktree_path || session.working_directory,
+        workingDirectory: project.working_directory,
         ports: server.port ? [server.port] : undefined,
       });
       onClose();
@@ -87,11 +87,11 @@ export function StartServerDialog({
     setError(null);
     try {
       await onStart({
-        sessionId: session.id,
+        projectId: project.id,
         type: server.type,
         name: server.name,
         command: server.command,
-        workingDirectory: session.worktree_path || session.working_directory,
+        workingDirectory: project.working_directory,
         ports: server.ports,
       });
       onClose();
@@ -113,11 +113,11 @@ export function StartServerDialog({
     try {
       const port = parseInt(customPort, 10);
       await onStart({
-        sessionId: session.id,
+        projectId: project.id,
         type: customType,
         name: customName,
         command: customCommand,
-        workingDirectory: session.worktree_path || session.working_directory,
+        workingDirectory: project.working_directory,
         ports: isNaN(port) ? undefined : [port],
       });
       onClose();
@@ -150,9 +150,9 @@ export function StartServerDialog({
 
         {/* Content */}
         <div className="p-4 space-y-4">
-          {/* Session info */}
+          {/* Project info */}
           <div className="text-sm text-muted-foreground">
-            For: <span className="font-medium text-foreground">{session.name}</span>
+            Project: <span className="font-medium text-foreground">{project.name}</span>
           </div>
 
           {/* Project dev servers */}

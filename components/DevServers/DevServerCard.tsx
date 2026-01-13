@@ -17,7 +17,7 @@ import type { DevServer, DevServerStatus } from "@/lib/db";
 
 interface DevServerCardProps {
   server: DevServer;
-  sessionName?: string;
+  projectName?: string;
   onStart: (id: string) => Promise<void>;
   onStop: (id: string) => Promise<void>;
   onRestart: (id: string) => Promise<void>;
@@ -37,7 +37,7 @@ const statusConfig: Record<
 
 export function DevServerCard({
   server,
-  sessionName,
+  projectName,
   onStart,
   onStop,
   onRestart,
@@ -103,9 +103,9 @@ export function DevServerCard({
         </span>
       </div>
 
-      {/* Session name (if provided) */}
-      {sessionName && (
-        <div className="mt-1 text-xs text-muted-foreground truncate">{sessionName}</div>
+      {/* Project name (if provided) */}
+      {projectName && (
+        <div className="mt-1 text-xs text-muted-foreground truncate">{projectName}</div>
       )}
 
       {/* Port badge */}
