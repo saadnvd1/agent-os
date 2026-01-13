@@ -109,7 +109,7 @@ export const PROVIDERS: ProviderDefinition[] = [
     description: "Cursor's AI agent",
     cli: 'cursor-agent',
     configDir: '~/.cursor',
-    autoApproveFlag: '-p', // Print mode - non-interactive with full tool access
+    autoApproveFlag: undefined, // -p requires a prompt, not auto-approve
     supportsResume: false,
     supportsFork: false,
     modelFlag: '--model',
