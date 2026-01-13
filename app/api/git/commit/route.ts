@@ -5,24 +5,27 @@ import {
   isMainBranch,
   createBranch,
   getGitStatus,
+  expandPath,
 } from "@/lib/git-status";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { path, message, branchName } = body as {
+    const { path: rawPath, message, branchName } = body as {
       path: string;
       message: string;
       branchName?: string;
     };
 
-    if (!path) {
+    if (!rawPath) {
       return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
 
     if (!message) {
       return NextResponse.json({ error: "Commit message is required" }, { status: 400 });
     }
+
+    const path = expandPath(rawPath);
 
     if (!isGitRepo(path)) {
       return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
