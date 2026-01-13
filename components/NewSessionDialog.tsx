@@ -143,12 +143,18 @@ export function NewSessionDialog({
     }
   }, []);
 
-  // Initialize projectId when dialog opens with selectedProjectId
+  // Initialize project settings when dialog opens with selectedProjectId
   useEffect(() => {
     if (open && selectedProjectId) {
       setProjectId(selectedProjectId);
+      // Also apply the project's working directory and agent type
+      const project = projects.find((p) => p.id === selectedProjectId);
+      if (project && !project.is_uncategorized) {
+        setWorkingDirectory(project.working_directory);
+        setAgentType(project.agent_type);
+      }
     }
-  }, [open, selectedProjectId]);
+  }, [open, selectedProjectId, projects]);
 
   // Apply project settings when project changes
   const handleProjectChange = useCallback((newProjectId: string | null) => {
