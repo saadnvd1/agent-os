@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SwipeSidebarProps {
@@ -111,18 +110,6 @@ export function SwipeSidebar({ isOpen, onClose, children }: SwipeSidebarProps) {
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="font-semibold text-lg">Sessions</h2>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-accent transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Close sidebar"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {children}
