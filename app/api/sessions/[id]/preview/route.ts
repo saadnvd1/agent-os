@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { queries, getDb, type Session } from "@/lib/db";
 
 const execAsync = promisify(exec);
 
@@ -11,7 +12,12 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const sessionName = `claude-${id}`;
+    const db = getDb();
+
+    // Look up session to get the correct agent type
+    const session = queries.getSession(db).get(id) as Session | undefined;
+    const agentType = session?.agent_type || "claude";
+    const sessionName = `${agentType}-${id}`;
 
     // Capture visible pane content plus scrollback, take last 50 lines
     const { stdout } = await execAsync(
