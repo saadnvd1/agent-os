@@ -36,6 +36,7 @@ function HomeContent() {
   const { focusedPaneId, attachSession, getActiveTab } = usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
+  const [summarizingSessionId, setSummarizingSessionId] = useState<string | null>(null);
   const { isMobile } = useViewport();
 
   // Helper to get init script command from API
@@ -419,7 +420,11 @@ function HomeContent() {
   };
 
   // Summarize and create fresh session
+  // Track pending summary to send after attach
+  const pendingSummaryRef = useRef<{ sessionId: string; summary: string } | null>(null);
+
   const handleSummarize = async (sessionId: string) => {
+    setSummarizingSessionId(sessionId);
     try {
       const res = await fetch(`/api/sessions/${sessionId}/summarize`, {
         method: "POST",
@@ -429,16 +434,44 @@ function HomeContent() {
       const data = await res.json();
       if (data.error) {
         console.error("Summarize failed:", data.error);
+        setSummarizingSessionId(null);
         return;
       }
-      if (data.newSession) {
+      if (data.newSession && data.summary) {
+        // Store summary to send after Claude starts
+        pendingSummaryRef.current = {
+          sessionId: data.newSession.id,
+          summary: data.summary,
+        };
         await fetchSessions();
         attachToSession(data.newSession);
       }
     } catch (error) {
       console.error("Failed to summarize session:", error);
+    } finally {
+      setSummarizingSessionId(null);
     }
   };
+
+  // Send pending summary after session is attached
+  useEffect(() => {
+    if (!pendingSummaryRef.current) return;
+
+    const pending = pendingSummaryRef.current;
+    const terminal = getFocusedTerminal();
+
+    if (terminal) {
+      // Wait for Claude to start, then send the summary as context
+      const timeout = setTimeout(() => {
+        const contextMessage = `Here's a summary of the previous session to continue from:\n\n${pending.summary}\n\nPlease acknowledge you've received this context and are ready to continue.`;
+        terminal.sendInput(contextMessage);
+        terminal.sendInput("\r");
+        pendingSummaryRef.current = null;
+      }, 3000); // Wait 3s for Claude to initialize
+
+      return () => clearTimeout(timeout);
+    }
+  }, [getFocusedTerminal]);
 
   // Delete session
   const handleDeleteSession = async (sessionId: string) => {
@@ -515,6 +548,7 @@ function HomeContent() {
     sessions,
     groups,
     sessionStatuses,
+    summarizingSessionId,
     sidebarOpen,
     setSidebarOpen,
     activeSession,
