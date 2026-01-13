@@ -42,6 +42,7 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasSnapshotRef = useRef(false);
+  const terminalRef = useRef<HTMLDivElement>(null);
 
   const fetchPreview = useCallback(
     async (sessionId: string, isRefresh = false) => {
@@ -82,6 +83,13 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
     },
     []
   );
+
+  // Scroll to bottom when snapshot updates
+  useEffect(() => {
+    if (terminalRef.current && snapshot?.lines.length) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [snapshot]);
 
   useEffect(() => {
     if (!session) {
@@ -183,6 +191,7 @@ export function SessionPreviewPopover({ session, status = 'idle', position }: Se
         {/* Terminal Preview */}
         <div className="p-2">
           <div
+            ref={terminalRef}
             className={cn(
               'h-[480px] rounded-lg',
               'bg-zinc-950 font-mono text-[13px] leading-relaxed',
