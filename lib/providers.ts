@@ -3,9 +3,19 @@
  *
  * Defines interfaces and implementations for different AI coding CLI tools
  * (Claude Code, Codex, OpenCode, etc.)
+ *
+ * Uses centralized provider registry from lib/providers/registry.ts
  */
 
-export type AgentType = "claude" | "codex" | "opencode" | "gemini" | "aider" | "cursor";
+import {
+  type ProviderId,
+  type ProviderDefinition,
+  getProviderDefinition,
+  getAllProviderDefinitions,
+  isValidProviderId,
+} from "./providers/registry";
+
+export type AgentType = ProviderId;
 
 export interface AgentProvider {
   // Metadata
@@ -37,6 +47,7 @@ export interface BuildFlagsOptions {
   sessionId?: string | null; // For resume
   parentSessionId?: string | null; // For fork
   skipPermissions?: boolean;
+  autoApprove?: boolean; // Use auto-approve flag from registry
   model?: string;
 }
 
@@ -58,16 +69,19 @@ export const claudeProvider: AgentProvider = {
   supportsFork: true,
 
   buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition('claude');
     const flags: string[] = [];
 
-    if (options.skipPermissions) {
-      flags.push("--dangerously-skip-permissions");
+    // Auto-approve flag from registry
+    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+      flags.push(def.autoApproveFlag);
     }
 
-    if (options.sessionId) {
-      flags.push(`--resume ${options.sessionId}`);
-    } else if (options.parentSessionId) {
-      flags.push(`--resume ${options.parentSessionId}`);
+    // Resume/fork
+    if (options.sessionId && def.resumeFlag) {
+      flags.push(`${def.resumeFlag} ${options.sessionId}`);
+    } else if (options.parentSessionId && def.resumeFlag) {
+      flags.push(`${def.resumeFlag} ${options.parentSessionId}`);
       flags.push("--fork-session");
     }
 
@@ -125,15 +139,16 @@ export const codexProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition('codex');
     const flags: string[] = [];
 
-    // Codex uses approval-mode instead of skip-permissions
-    if (options.skipPermissions) {
-      flags.push("--approval-mode full-auto");
+    // Auto-approve flag from registry
+    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+      flags.push(def.autoApproveFlag);
     }
 
-    if (options.model) {
-      flags.push(`--model ${options.model}`);
+    if (options.model && def.modelFlag) {
+      flags.push(`${def.modelFlag} ${options.model}`);
     }
 
     return flags;
@@ -209,14 +224,17 @@ export const geminiProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition('gemini');
     const flags: string[] = [];
 
-    if (options.model) {
-      flags.push(`-m ${options.model}`);
+    // Auto-approve flag from registry
+    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+      flags.push(def.autoApproveFlag);
     }
 
-    // Gemini CLI doesn't have a skip-permissions flag
-    // It may use a different approval mechanism
+    if (options.model && def.modelFlag) {
+      flags.push(`${def.modelFlag} ${options.model}`);
+    }
 
     return flags;
   },
@@ -257,15 +275,16 @@ export const aiderProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition('aider');
     const flags: string[] = [];
 
-    if (options.model) {
-      flags.push(`--model ${options.model}`);
+    // Auto-approve flag from registry
+    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+      flags.push(def.autoApproveFlag);
     }
 
-    // Aider uses --yes to auto-confirm prompts
-    if (options.skipPermissions) {
-      flags.push("--yes");
+    if (options.model && def.modelFlag) {
+      flags.push(`${def.modelFlag} ${options.model}`);
     }
 
     return flags;
@@ -305,10 +324,16 @@ export const cursorProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
-    const flags: string[] = ["chat"]; // cursor-agent chat is the main command
+    const def = getProviderDefinition('cursor');
+    const flags: string[] = [...(def.defaultArgs || [])];
 
-    if (options.model) {
-      flags.push(`--model ${options.model}`);
+    // Auto-approve flag from registry
+    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+      flags.push(def.autoApproveFlag);
+    }
+
+    if (options.model && def.modelFlag) {
+      flags.push(`${def.modelFlag} ${options.model}`);
     }
 
     return flags;
@@ -354,7 +379,10 @@ export function getAllProviders(): AgentProvider[] {
   return Object.values(providers);
 }
 
-// Type guard
+// Type guard (use registry)
 export function isValidAgentType(value: string): value is AgentType {
-  return value in providers;
+  return isValidProviderId(value);
 }
+
+// Export registry functions for convenience
+export { getProviderDefinition, getAllProviderDefinitions } from "./providers/registry";

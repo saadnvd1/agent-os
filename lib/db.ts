@@ -19,6 +19,7 @@ export interface Session {
   system_prompt: string | null;
   group_path: string;
   agent_type: AgentType;
+  auto_approve: boolean;
   // Worktree fields (optional)
   worktree_path: string | null;
   branch_name: string | null;
@@ -60,6 +61,17 @@ export interface ToolCall {
   tool_result: string | null; // JSON
   status: "pending" | "running" | "completed" | "error";
   timestamp: string;
+}
+
+export interface DevServer {
+  id: string;
+  session_id: string;
+  status: "building" | "starting" | "ready" | "stopped" | "failed";
+  container_id: string | null;
+  ports: string; // JSON array of port mappings
+  preview_url: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Initialize database with schema
@@ -125,11 +137,25 @@ export function initDb(): Database.Database {
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
 
+    -- Dev servers table (for Phase 9: Container & Development Server Management)
+    CREATE TABLE IF NOT EXISTS dev_servers (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'stopped',
+      container_id TEXT,
+      ports TEXT NOT NULL DEFAULT '[]',
+      preview_url TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+
     -- Indexes for common queries
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
     CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
     CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
+    CREATE INDEX IF NOT EXISTS idx_dev_servers_session ON dev_servers(session_id);
   `);
 
   // Migration: Add group_path column if it doesn't exist (for existing databases)
@@ -208,6 +234,13 @@ export function initDb(): Database.Database {
   // Index for finding workers by conductor
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_conductor ON sessions(conductor_session_id)`);
 
+  // Migration: Add auto_approve column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN auto_approve INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // Column already exists, ignore
+  }
+
   return db;
 }
 
@@ -243,8 +276,8 @@ export const queries = {
   createSession: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO sessions (id, name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sessions (id, name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type, auto_approve)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
 
   getSession: (db: Database.Database) =>
@@ -403,4 +436,36 @@ export const queries = {
       `INSERT INTO sessions (id, name, working_directory, conductor_session_id, worker_task, worker_status, model, group_path, agent_type)
        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
     ),
+
+  // Dev servers (for Phase 9: Container & Development Server Management)
+  createDevServer: (db: Database.Database) =>
+    getStmt(
+      db,
+      `INSERT INTO dev_servers (id, session_id, status, container_id, ports, preview_url)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ),
+
+  getDevServer: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM dev_servers WHERE id = ?`),
+
+  getDevServerBySession: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM dev_servers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1`),
+
+  updateDevServerStatus: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE dev_servers SET status = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
+
+  updateDevServer: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE dev_servers SET status = ?, container_id = ?, ports = ?, preview_url = ?, updated_at = datetime('now') WHERE id = ?`
+    ),
+
+  deleteDevServer: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM dev_servers WHERE id = ?`),
+
+  deleteDevServersBySession: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM dev_servers WHERE session_id = ?`),
 };
