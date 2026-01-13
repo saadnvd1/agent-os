@@ -360,12 +360,12 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
 
       {/* Resize handle */}
       <div
-        className="w-1 cursor-col-resize bg-border hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
+        className="w-1 cursor-col-resize bg-muted/50 hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
         onMouseDown={handleMouseDown}
       />
 
       {/* Right panel - diff viewer */}
-      <div className="flex-1 h-full flex flex-col min-w-0 border-l border-border">
+      <div className="flex-1 h-full flex flex-col min-w-0 bg-muted/20">
         {loadingDiff ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -373,7 +373,7 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
         ) : selectedFile ? (
           <>
             {/* Diff header with stage/unstage */}
-            <div className="flex items-center gap-2 p-3 border-b border-border">
+            <div className="flex items-center gap-2 p-3 bg-background/50">
               <FileCode className="w-4 h-4 text-muted-foreground" />
               <span className="flex-1 text-sm font-medium truncate">
                 {selectedFile.file.path}
@@ -469,7 +469,7 @@ function MobileGitPanel({
     return (
       <div className="h-full w-full flex flex-col bg-background">
         {/* Header */}
-        <div className="flex items-center gap-2 p-2 border-b border-border">
+        <div className="flex items-center gap-2 p-2 bg-muted/30">
           <Button variant="ghost" size="icon-sm" onClick={onBack}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -626,7 +626,7 @@ interface HeaderProps {
 
 function Header({ branch, ahead, behind, onRefresh, refreshing }: HeaderProps) {
   return (
-    <div className="flex items-center gap-2 p-3 border-b border-border">
+    <div className="flex items-center gap-2 p-3">
       <GitBranch className="w-4 h-4 text-muted-foreground flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{branch || "Git Status"}</p>
