@@ -35,7 +35,7 @@ function HomeContent() {
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [devServers, setDevServers] = useState<DevServer[]>([]);
-  const [startDevServerSessionId, setStartDevServerSessionId] = useState<string | null>(null);
+  const [startDevServerProjectId, setStartDevServerProjectId] = useState<string | null>(null);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const updatedSessionIds = useRef<Set<string>>(new Set());
 
@@ -667,8 +667,8 @@ function HomeContent() {
   };
 
   // Dev server handlers
-  const handleStartDevServer = useCallback((sessionId: string) => {
-    setStartDevServerSessionId(sessionId);
+  const handleStartDevServer = useCallback((projectId: string) => {
+    setStartDevServerProjectId(projectId);
   }, []);
 
   const handleStopDevServer = useCallback(async (serverId: string) => {
@@ -687,7 +687,7 @@ function HomeContent() {
   }, [fetchDevServers]);
 
   const handleCreateDevServer = useCallback(async (opts: {
-    sessionId: string;
+    projectId: string;
     type: "node" | "docker";
     name: string;
     command: string;
@@ -700,15 +700,15 @@ function HomeContent() {
       body: JSON.stringify(opts),
     });
     await fetchDevServers();
-    setStartDevServerSessionId(null);
+    setStartDevServerProjectId(null);
   }, [fetchDevServers]);
 
   // Get active session from focused pane's active tab
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
 
-  // Session for starting dev server dialog
-  const startDevServerSession = startDevServerSessionId
-    ? sessions.find((s) => s.id === startDevServerSessionId) ?? null
+  // Project for starting dev server dialog
+  const startDevServerProject = startDevServerProjectId
+    ? projects.find((p) => p.id === startDevServerProjectId) ?? null
     : null;
 
   // Shared props for views
@@ -762,8 +762,8 @@ function HomeContent() {
     handleRestartDevServer,
     handleRemoveDevServer,
     handleCreateDevServer,
-    startDevServerSession,
-    setStartDevServerSessionId,
+    startDevServerProject,
+    setStartDevServerProjectId,
     renderPane,
   };
 

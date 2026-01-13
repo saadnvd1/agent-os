@@ -49,8 +49,8 @@ export function MobileView({
   handleRestartDevServer,
   handleRemoveDevServer,
   handleCreateDevServer,
-  startDevServerSession,
-  setStartDevServerSessionId,
+  startDevServerProject,
+  setStartDevServerProjectId,
   renderPane,
 }: ViewProps) {
   const { theme, setTheme } = useTheme();
@@ -157,16 +157,12 @@ export function MobileView({
           if (session) attachToSession(session);
         }}
       />
-      {startDevServerSession && (
+      {startDevServerProject && (
         <StartServerDialog
-          session={startDevServerSession}
-          projectDevServers={
-            startDevServerSession.project_id
-              ? projects.find((p) => p.id === startDevServerSession.project_id)?.devServers
-              : undefined
-          }
+          project={startDevServerProject}
+          projectDevServers={startDevServerProject.devServers}
           onStart={handleCreateDevServer}
-          onClose={() => setStartDevServerSessionId(null)}
+          onClose={() => setStartDevServerProjectId(null)}
         />
       )}
     </main>

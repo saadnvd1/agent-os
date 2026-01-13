@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles, Server } from "lucide-react";
+import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -45,7 +45,6 @@ interface SessionCardProps {
   onDelete?: () => void;
   onRename?: (newName: string) => void;
   onCreatePR?: () => void;
-  onStartDevServer?: () => void;
   onHoverStart?: (rect: DOMRect) => void;
   onHoverEnd?: () => void;
 }
@@ -78,7 +77,7 @@ const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: Rea
   },
 };
 
-export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], onClick, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onStartDevServer, onHoverStart, onHoverEnd }: SessionCardProps) {
+export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], onClick, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
@@ -133,7 +132,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
     setIsEditing(false);
   };
 
-  const hasActions = onMove || onMoveToProject || onFork || onDelete || onRename || onCreatePR || onStartDevServer;
+  const hasActions = onMove || onMoveToProject || onFork || onDelete || onRename || onCreatePR;
 
   // Shared menu items renderer for both context menu and dropdown
   const renderMenuItems = (isContextMenu: boolean) => {
@@ -179,12 +178,6 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
           >
             <GitPullRequest className="w-3 h-3 mr-2" />
             {session.pr_url ? "Open PR" : "Create PR"}
-          </MenuItem>
-        )}
-        {onStartDevServer && (
-          <MenuItem onClick={() => onStartDevServer()}>
-            <Server className="w-3 h-3 mr-2" />
-            Start Dev Server
           </MenuItem>
         )}
         {onMoveToProject && projects.length > 0 && (
