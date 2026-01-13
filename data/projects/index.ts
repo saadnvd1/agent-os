@@ -4,4 +4,5 @@ export {
   useToggleProject,
   useDeleteProject,
   useRenameProject,
+  useUpdateProject,
 } from "./queries";

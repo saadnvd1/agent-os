@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Loader2, RefreshCw, Server } from "lucide-react";
+import { useUpdateProject } from "@/data/projects";
 import type { AgentType } from "@/lib/providers";
 import type { ProjectWithDevServers, DetectedDevServer } from "@/lib/projects";
 
@@ -68,6 +69,8 @@ export function ProjectSettingsDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const updateProject = useUpdateProject();
 
   // Initialize form when project changes
   useEffect(() => {
@@ -174,23 +177,14 @@ export function ProjectSettingsDialog({
 
     setIsLoading(true);
     try {
-      // Update project settings
-      const updateRes = await fetch(`/api/projects/${project.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          workingDirectory,
-          agentType,
-          defaultModel,
-        }),
+      // Update project settings using mutation (properly invalidates cache)
+      await updateProject.mutateAsync({
+        projectId: project.id,
+        name: name.trim(),
+        workingDirectory,
+        agentType,
+        defaultModel,
       });
-
-      if (!updateRes.ok) {
-        const data = await updateRes.json();
-        setError(data.error || "Failed to update project");
-        return;
-      }
 
       // Handle dev server changes
       for (const ds of devServers) {
