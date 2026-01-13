@@ -43,7 +43,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       parent.model,
       parent.system_prompt,
       parent.group_path || "sessions",
-      parent.agent_type || "claude"
+      parent.agent_type || "claude",
+      parent.auto_approve ? 1 : 0,
+      parent.project_id || "uncategorized"
     );
 
     // NOTE: We do NOT copy claude_session_id here.

@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       claudeSessionId = null,
       agentType: rawAgentType = "claude",
       autoApprove = false,
+      projectId = "uncategorized",
       // Worktree options
       useWorktree = false,
       featureName = null,
@@ -125,7 +126,8 @@ export async function POST(request: NextRequest) {
       systemPrompt,
       groupPath,
       agentType,
-      autoApprove ? 1 : 0 // SQLite stores booleans as integers
+      autoApprove ? 1 : 0, // SQLite stores booleans as integers
+      projectId
     );
 
     // Set worktree info if created

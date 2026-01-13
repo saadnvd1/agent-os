@@ -4,16 +4,20 @@ import { useState } from "react";
 import { SessionCard } from "./SessionCard";
 import { SessionPreviewPopover } from "./SessionPreviewPopover";
 import { NewSessionDialog } from "./NewSessionDialog";
+import { DevServersSection, ServerLogsModal } from "./DevServers";
+import { ProjectsSection, NewProjectDialog, ProjectSettingsDialog } from "./Projects";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Plus, RefreshCw, Bot, ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Session, Group } from "@/lib/db";
+import type { Session, Group, DevServer } from "@/lib/db";
+import type { ProjectWithDevServers } from "@/lib/projects";
 import { useViewport } from "@/hooks/useViewport";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import {
@@ -33,41 +37,72 @@ interface SessionStatus {
 interface SessionListProps {
   sessions: Session[];
   groups: Group[];
+  projects?: ProjectWithDevServers[];
   activeSessionId?: string;
   sessionStatuses?: Record<string, SessionStatus>;
   summarizingSessionId?: string | null;
+  devServers?: DevServer[];
   onSelect: (id: string) => void;
   onRefresh: () => void;
+  onRefreshProjects?: () => void;
+  // Group handlers (deprecated, for backward compat)
   onToggleGroup?: (path: string, expanded: boolean) => void;
   onCreateGroup?: (name: string, parentPath?: string) => void;
   onDeleteGroup?: (path: string) => void;
+  // Project handlers
+  onToggleProject?: (projectId: string, expanded: boolean) => void;
+  onEditProject?: (projectId: string) => void;
+  onDeleteProject?: (projectId: string) => void;
+  onRenameProject?: (projectId: string, newName: string) => void;
+  onNewSessionInProject?: (projectId: string) => void;
+  // Session handlers
   onMoveSession?: (sessionId: string, groupPath: string) => void;
+  onMoveSessionToProject?: (sessionId: string, projectId: string) => void;
   onForkSession?: (sessionId: string) => void;
   onSummarize?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newName: string) => void;
   onCreatePR?: (sessionId: string) => void;
+  onStartDevServer?: (sessionId: string) => void;
+  onStopDevServer?: (serverId: string) => Promise<void>;
+  onRestartDevServer?: (serverId: string) => Promise<void>;
+  onRemoveDevServer?: (serverId: string) => Promise<void>;
 }
 
 export function SessionList({
   sessions,
   groups = [],
+  projects = [],
   activeSessionId,
   sessionStatuses,
   summarizingSessionId,
+  devServers = [],
   onSelect,
   onRefresh,
+  onRefreshProjects,
   onToggleGroup,
   onCreateGroup,
   onDeleteGroup,
+  onToggleProject,
+  onEditProject,
+  onDeleteProject,
+  onRenameProject,
+  onNewSessionInProject,
   onMoveSession,
+  onMoveSessionToProject,
   onForkSession,
   onSummarize,
   onDeleteSession,
   onRenameSession,
   onCreatePR,
+  onStartDevServer,
+  onStopDevServer,
+  onRestartDevServer,
+  onRemoveDevServer,
 }: SessionListProps) {
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [editingProject, setEditingProject] = useState<ProjectWithDevServers | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [showNewGroupInput, setShowNewGroupInput] = useState<string | null>(null);
@@ -75,7 +110,16 @@ export function SessionList({
   const [killingAll, setKillingAll] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<Session | null>(null);
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+  const [logsServerId, setLogsServerId] = useState<string | null>(null);
   const { isMobile } = useViewport();
+
+  // Use projects if available
+  const useProjects = projects.length > 0;
+
+  // Find server for logs modal
+  const logsServer = logsServerId
+    ? devServers.find((s) => s.id === logsServerId)
+    : null;
 
   // Handle hover on session card (desktop only)
   const handleHoverStart = (session: Session, rect: DOMRect) => {
@@ -272,6 +316,7 @@ export function SessionList({
                         onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
                         onRename={onRenameSession ? (newName) => onRenameSession(session.id, newName) : undefined}
                         onCreatePR={onCreatePR ? () => onCreatePR(session.id) : undefined}
+                        onStartDevServer={onStartDevServer ? () => onStartDevServer(session.id) : undefined}
                         onHoverStart={(rect) => handleHoverStart(session, rect)}
                         onHoverEnd={handleHoverEnd}
                       />
@@ -360,6 +405,11 @@ export function SessionList({
               <TooltipContent>More options</TooltipContent>
             </Tooltip>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowNewProjectDialog(true)}>
+                <FolderPlus className="w-3 h-3 mr-2" />
+                New project
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setShowKillAllConfirm(true)}
                 className="text-red-500 focus:text-red-500"
@@ -405,16 +455,72 @@ export function SessionList({
         </div>
       )}
 
+      {/* Dev Servers Section */}
+      {devServers.length > 0 && onStopDevServer && onRestartDevServer && onRemoveDevServer && (
+        <DevServersSection
+          servers={devServers}
+          sessions={sessions}
+          onStart={async (id) => {
+            const server = devServers.find((s) => s.id === id);
+            if (server) {
+              await onRestartDevServer(id);
+            }
+          }}
+          onStop={onStopDevServer}
+          onRestart={onRestartDevServer}
+          onRemove={onRemoveDevServer}
+          onViewLogs={setLogsServerId}
+        />
+      )}
+
       {/* Session list */}
       <ScrollArea className="flex-1 w-full">
         <div className="p-2 space-y-1 max-w-full">
-          {sessions.length === 0 ? (
-            <p className="text-center text-muted-foreground text-sm py-8">
-              No sessions yet. Create one to get started.
-            </p>
+          {sessions.length === 0 && projects.length <= 1 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4">
+              <FolderPlus className="w-10 h-10 text-muted-foreground/50 mb-3" />
+              <p className="text-muted-foreground text-sm mb-4 text-center">
+                Create a project to organize your sessions
+              </p>
+              <Button
+                onClick={() => setShowNewProjectDialog(true)}
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                New Project
+              </Button>
+            </div>
+          ) : useProjects ? (
+            <ProjectsSection
+              projects={projects}
+              sessions={sessions}
+              groups={groups}
+              activeSessionId={activeSessionId}
+              sessionStatuses={sessionStatuses}
+              summarizingSessionId={summarizingSessionId}
+              devServers={devServers}
+              onToggleProject={onToggleProject}
+              onEditProject={onEditProject ? (projectId) => {
+                const project = projects.find((p) => p.id === projectId);
+                if (project) setEditingProject(project);
+              } : undefined}
+              onDeleteProject={onDeleteProject}
+              onRenameProject={onRenameProject}
+              onNewSession={onNewSessionInProject}
+              onSelectSession={onSelect}
+              onMoveSession={onMoveSessionToProject}
+              onForkSession={onForkSession}
+              onSummarize={onSummarize}
+              onDeleteSession={onDeleteSession}
+              onRenameSession={onRenameSession}
+              onCreatePR={onCreatePR}
+              onStartDevServer={onStartDevServer}
+              onHoverStart={(session, rect) => handleHoverStart(session, rect)}
+              onHoverEnd={handleHoverEnd}
+            />
           ) : (
             <>
-              {/* Grouped sessions */}
+              {/* Grouped sessions (legacy) */}
               {rootGroups.map(group => renderGroup(group))}
             </>
           )}
@@ -425,6 +531,7 @@ export function SessionList({
       <NewSessionDialog
         open={showNewDialog}
         groups={groups}
+        projects={projects}
         onClose={() => setShowNewDialog(false)}
         onCreated={(id) => {
           setShowNewDialog(false);
@@ -445,6 +552,38 @@ export function SessionList({
           position={hoverPosition}
         />
       )}
+
+      {/* Server Logs Modal */}
+      {logsServer && (
+        <ServerLogsModal
+          serverId={logsServer.id}
+          serverName={logsServer.name}
+          onClose={() => setLogsServerId(null)}
+        />
+      )}
+
+      {/* New Project Dialog */}
+      <NewProjectDialog
+        open={showNewProjectDialog}
+        onClose={() => setShowNewProjectDialog(false)}
+        onCreated={() => {
+          setShowNewProjectDialog(false);
+          onRefreshProjects?.();
+          onRefresh();
+        }}
+      />
+
+      {/* Project Settings Dialog */}
+      <ProjectSettingsDialog
+        project={editingProject}
+        open={editingProject !== null}
+        onClose={() => setEditingProject(null)}
+        onSave={() => {
+          setEditingProject(null);
+          onRefreshProjects?.();
+          onRefresh();
+        }}
+      />
     </div>
   );
 }
