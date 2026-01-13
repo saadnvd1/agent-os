@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from "react";
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
@@ -15,7 +14,6 @@ import type { ViewProps } from "./types";
 
 export function DesktopView({
   sessions,
-  groups,
   projects,
   sessionStatuses,
   sidebarOpen,
@@ -38,27 +36,8 @@ export function DesktopView({
   attachToSession,
   fetchSessions,
   fetchProjects,
-  handleToggleGroup,
-  handleCreateGroup,
-  handleDeleteGroup,
-  handleMoveSession,
-  handleToggleProject,
-  handleEditProject,
-  handleDeleteProject,
-  handleRenameProject,
-  handleMoveSessionToProject,
   handleNewSessionInProject,
-  handleForkSession,
-  handleSummarize,
-  summarizingSessionId,
-  handleDeleteSession,
-  handleRenameSession,
-  handleCreatePR,
-  devServers,
   handleStartDevServer,
-  handleStopDevServer,
-  handleRestartDevServer,
-  handleRemoveDevServer,
   handleCreateDevServer,
   startDevServerProject,
   setStartDevServerProjectId,
@@ -77,38 +56,15 @@ export function DesktopView({
           {/* Session list */}
           <div className="flex-1 min-h-0 overflow-hidden">
             <SessionList
-              sessions={sessions}
-              groups={groups}
-              projects={projects}
               activeSessionId={focusedActiveTab?.sessionId || undefined}
               sessionStatuses={sessionStatuses}
-              summarizingSessionId={summarizingSessionId}
-              devServers={devServers}
               onSelect={(id) => {
                 const session = sessions.find((s) => s.id === id);
                 if (session) attachToSession(session);
               }}
-              onRefresh={fetchSessions}
-              onRefreshProjects={fetchProjects}
-              onToggleGroup={handleToggleGroup}
-              onCreateGroup={handleCreateGroup}
-              onDeleteGroup={handleDeleteGroup}
-              onMoveSession={handleMoveSession}
-              onToggleProject={handleToggleProject}
-              onEditProject={handleEditProject}
-              onDeleteProject={handleDeleteProject}
-              onRenameProject={handleRenameProject}
-              onMoveSessionToProject={handleMoveSessionToProject}
               onNewSessionInProject={handleNewSessionInProject}
-              onForkSession={handleForkSession}
-              onSummarize={handleSummarize}
-              onDeleteSession={handleDeleteSession}
-              onRenameSession={handleRenameSession}
-              onCreatePR={handleCreatePR}
               onStartDevServer={handleStartDevServer}
-              onStopDevServer={handleStopDevServer}
-              onRestartDevServer={handleRestartDevServer}
-              onRemoveDevServer={handleRemoveDevServer}
+              onCreateDevServer={handleCreateDevServer}
             />
           </div>
 
