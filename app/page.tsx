@@ -10,10 +10,15 @@ import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { PaneLayout } from "@/components/PaneLayout";
 import { Pane } from "@/components/Pane";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useViewport } from "@/hooks/useViewport";
 import type { Session, Group } from "@/lib/db";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
+import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
+import { BottomNav } from "@/components/mobile/BottomNav";
+import { FloatingActionButton } from "@/components/mobile/FloatingActionButton";
+import { cn } from "@/lib/utils";
 
 interface SessionStatus {
   sessionName: string;
@@ -34,7 +39,6 @@ function HomeContent() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [otherTmuxSessions, setOtherTmuxSessions] = useState<OtherTmuxSession[]>([]);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
@@ -45,6 +49,7 @@ function HomeContent() {
   const { focusedPaneId, attachSession, getActiveTab } = usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
+  const { isMobile } = useViewport();
 
   // Callback for notification clicks - needs to be defined before useNotifications
   const handleNotificationClick = useCallback((sessionId: string) => {
@@ -154,17 +159,10 @@ function HomeContent() {
     }
   }, [sessions, checkStateChanges]);
 
-  // Detect mobile and set initial sidebar state
+  // Set initial sidebar state based on viewport
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (!mobile) setSidebarOpen(true);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+    if (!isMobile) setSidebarOpen(true);
+  }, [isMobile]);
 
   // Initial load
   useEffect(() => {
@@ -478,52 +476,53 @@ function HomeContent() {
   // Get active session from focused pane's active tab
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
 
+  // Shared session list content
+  const sessionListContent = (
+    <SessionList
+      sessions={sessions}
+      groups={groups}
+      activeSessionId={focusedActiveTab?.sessionId || undefined}
+      sessionStatuses={sessionStatuses}
+      otherTmuxSessions={otherTmuxSessions}
+      attachedTmux={focusedActiveTab?.attachedTmux}
+      onSelect={(id) => {
+        const session = sessions.find((s) => s.id === id);
+        if (session) attachToSession(session);
+        if (isMobile) setSidebarOpen(false);
+      }}
+      onRefresh={fetchSessions}
+      onTmuxAttach={handleTmuxAttach}
+      onToggleGroup={handleToggleGroup}
+      onCreateGroup={handleCreateGroup}
+      onDeleteGroup={handleDeleteGroup}
+      onMoveSession={handleMoveSession}
+      onForkSession={handleForkSession}
+      onDeleteSession={handleDeleteSession}
+      onRenameSession={handleRenameSession}
+      onRenameTmuxSession={handleRenameTmuxSession}
+      onImportTmuxSession={handleImportTmuxSession}
+      onCreatePR={handleCreatePR}
+    />
+  );
+
   return (
     <div className="flex h-[100dvh] bg-background">
-      {/* Mobile overlay */}
-      {isMobile && sidebarOpen && (
+      {/* Mobile Sidebar */}
+      {isMobile ? (
+        <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
+          {sessionListContent}
+        </SwipeSidebar>
+      ) : (
+        /* Desktop Sidebar */
         <div
-          className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setSidebarOpen(false)}
-        />
+          className={`
+            ${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 transition-all duration-200 overflow-hidden
+            shadow-xl shadow-black/30 bg-background
+          `}
+        >
+          {sessionListContent}
+        </div>
       )}
-
-      {/* Sidebar */}
-      <div
-        className={`
-        ${isMobile
-          ? `fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`
-          : `${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 transition-all duration-200 overflow-hidden`
-        }
-        shadow-xl shadow-black/30 bg-background
-      `}
-      >
-        <SessionList
-          sessions={sessions}
-          groups={groups}
-          activeSessionId={focusedActiveTab?.sessionId || undefined}
-          sessionStatuses={sessionStatuses}
-          otherTmuxSessions={otherTmuxSessions}
-          attachedTmux={focusedActiveTab?.attachedTmux}
-          onSelect={(id) => {
-            const session = sessions.find((s) => s.id === id);
-            if (session) attachToSession(session);
-            if (isMobile) setSidebarOpen(false);
-          }}
-          onRefresh={fetchSessions}
-          onTmuxAttach={handleTmuxAttach}
-          onToggleGroup={handleToggleGroup}
-          onCreateGroup={handleCreateGroup}
-          onDeleteGroup={handleDeleteGroup}
-          onMoveSession={handleMoveSession}
-          onForkSession={handleForkSession}
-          onDeleteSession={handleDeleteSession}
-          onRenameSession={handleRenameSession}
-          onRenameTmuxSession={handleRenameTmuxSession}
-          onImportTmuxSession={handleImportTmuxSession}
-          onCreatePR={handleCreatePR}
-        />
-      </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -629,12 +628,35 @@ function HomeContent() {
         />
 
         {/* Pane Layout */}
-        <div className="flex-1 min-h-0 p-2">
+        <div className={cn(
+          "flex-1 min-h-0 p-2",
+          isMobile && "pb-20" // Extra padding for bottom nav on mobile
+        )}>
           <PaneLayout
             renderPane={renderPane}
           />
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      {isMobile && (
+        <BottomNav
+          sessions={sessions}
+          activeSessionId={focusedActiveTab?.sessionId || null}
+          onSessionClick={(id) => {
+            const session = sessions.find(s => s.id === id);
+            if (session) attachToSession(session);
+          }}
+          onNewSession={() => setShowNewSessionDialog(true)}
+        />
+      )}
+
+      {/* Mobile Floating Action Button (alternative to bottom nav new button) */}
+      {/* Commented out - using bottom nav new button instead
+      {isMobile && (
+        <FloatingActionButton onClick={() => setShowNewSessionDialog(true)} />
+      )}
+      */}
     </div>
   );
 }

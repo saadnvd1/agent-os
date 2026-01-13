@@ -47,7 +47,18 @@ export function PaneLayout({
 }: {
   renderPane: (paneId: string) => React.ReactNode;
 }) {
-  const { state } = usePanes();
+  const { state, isMobile, focusedPaneId } = usePanes();
+
+  // On mobile: only render the focused pane (single pane mode)
+  if (isMobile) {
+    return (
+      <div className="h-full w-full">
+        {renderPane(focusedPaneId)}
+      </div>
+    );
+  }
+
+  // On desktop: render full layout tree with splits
   return (
     <div className="h-full w-full">
       <LayoutRenderer layout={state.layout} renderPane={renderPane} />
