@@ -137,8 +137,8 @@ async function getLastLine(sessionName: string): Promise<string> {
   }
 }
 
-// UUID pattern for agent-os managed sessions
-const UUID_PATTERN = /^(claude|codex|opencode)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// UUID pattern for agent-os managed sessions (all supported providers)
+const UUID_PATTERN = /^(claude|codex|opencode|gemini|aider|cursor)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Track previous statuses to detect changes
 const previousStatuses = new Map<string, SessionStatus>();
@@ -146,11 +146,14 @@ const previousStatuses = new Map<string, SessionStatus>();
 function getAgentTypeFromSessionName(sessionName: string): AgentType {
   if (sessionName.startsWith("codex-")) return "codex";
   if (sessionName.startsWith("opencode-")) return "opencode";
+  if (sessionName.startsWith("gemini-")) return "gemini";
+  if (sessionName.startsWith("aider-")) return "aider";
+  if (sessionName.startsWith("cursor-")) return "cursor";
   return "claude";
 }
 
 function getSessionIdFromName(sessionName: string): string {
-  return sessionName.replace(/^(claude|codex|opencode)-/, "");
+  return sessionName.replace(/^(claude|codex|opencode|gemini|aider|cursor)-/, "");
 }
 
 export async function GET() {
