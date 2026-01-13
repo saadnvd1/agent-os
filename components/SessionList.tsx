@@ -515,7 +515,6 @@ export function SessionList({
       {/* New Session Dialog */}
       <NewSessionDialog
         open={showNewDialog}
-        groups={groups}
         projects={projects}
         onClose={() => setShowNewDialog(false)}
         onCreated={(id) => {
@@ -523,10 +522,6 @@ export function SessionList({
           onSelect(id);
           onRefresh();
         }}
-        onCreateGroup={onCreateGroup ? async (name) => {
-          await onCreateGroup(name);
-          await onRefresh();
-        } : undefined}
       />
 
       {/* Session Preview Popover (desktop only) */}
