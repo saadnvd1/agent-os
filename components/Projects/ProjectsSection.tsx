@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useCallback } from "react";
+import { useSnapshot } from "valtio";
 import { ProjectCard } from "./ProjectCard";
 import { SessionCard } from "@/components/SessionCard";
 import { DevServerCard } from "@/components/DevServers/DevServerCard";
-import { useSessionMultiSelectSafe } from "@/contexts/SessionMultiSelectContext";
+import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import type { Session, Group, DevServer } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 
@@ -73,8 +74,8 @@ export function ProjectsSection({
   onHoverStart,
   onHoverEnd,
 }: ProjectsSectionProps) {
-  const multiSelect = useSessionMultiSelectSafe();
-  const isInSelectMode = multiSelect.getSelectedCount() > 0;
+  const { selectedIds } = useSnapshot(selectionStore);
+  const isInSelectMode = selectedIds.size > 0;
 
   // Flatten all session IDs for range selection (respecting render order)
   const allSessionIds = useMemo(() => {
@@ -98,9 +99,9 @@ export function ProjectsSection({
   // Handler for toggling session selection
   const handleToggleSelect = useCallback(
     (sessionId: string, shiftKey: boolean) => {
-      multiSelect.toggleSessionSelection(sessionId, shiftKey, allSessionIds);
+      selectionActions.toggle(sessionId, shiftKey, allSessionIds);
     },
-    [multiSelect, allSessionIds]
+    [allSessionIds]
   );
 
   // Group sessions by project_id
@@ -225,7 +226,7 @@ export function ProjectsSection({
                               tmuxStatus={sessionStatuses?.[session.id]?.status}
                               groups={groups}
                               projects={projects}
-                              isSelected={multiSelect.isSessionSelected(session.id)}
+                              isSelected={selectedIds.has(session.id)}
                               isInSelectMode={isInSelectMode}
                               onToggleSelect={(shiftKey) => handleToggleSelect(session.id, shiftKey)}
                               onClick={() => onSelectSession(session.id)}
@@ -291,7 +292,7 @@ export function ProjectsSection({
                                 }
                                 groups={groups}
                                 projects={projects}
-                                isSelected={multiSelect.isSessionSelected(worker.id)}
+                                isSelected={selectedIds.has(worker.id)}
                                 isInSelectMode={isInSelectMode}
                                 onToggleSelect={(shiftKey) => handleToggleSelect(worker.id, shiftKey)}
                                 onClick={() => onSelectSession(worker.id)}

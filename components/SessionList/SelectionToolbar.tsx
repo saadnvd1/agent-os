@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useCallback, useState } from "react";
+import { useSnapshot } from "valtio";
 import { Button } from "@/components/ui/button";
-import { Trash2, X, CheckSquare } from "lucide-react";
-import { useSessionMultiSelect } from "@/contexts/SessionMultiSelectContext";
+import { Trash2, X } from "lucide-react";
+import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import {
   Dialog,
   DialogContent,
@@ -19,28 +20,28 @@ interface SelectionToolbarProps {
 }
 
 export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionToolbarProps) {
-  const multiSelect = useSessionMultiSelect();
-  const selectedCount = multiSelect.getSelectedCount();
+  const { selectedIds } = useSnapshot(selectionStore);
+  const selectedCount = selectedIds.size;
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSelectAll = useCallback(() => {
-    multiSelect.selectAll(allSessionIds);
-  }, [multiSelect, allSessionIds]);
+    selectionActions.selectAll(allSessionIds);
+  }, [allSessionIds]);
 
   const handleDelete = useCallback(async () => {
-    const selectedIds = multiSelect.getSelectedSessionIds();
-    if (selectedIds.length === 0) return;
+    const ids = selectionActions.getSelectedIds();
+    if (ids.length === 0) return;
 
     setIsDeleting(true);
     try {
-      await onDeleteSessions(selectedIds);
-      multiSelect.clearSelection();
+      await onDeleteSessions(ids);
+      selectionActions.clear();
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
     }
-  }, [multiSelect, onDeleteSessions]);
+  }, [onDeleteSessions]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -60,13 +61,13 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
       // Escape - clear selection
       if (e.key === "Escape") {
         e.preventDefault();
-        multiSelect.clearSelection();
+        selectionActions.clear();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedCount, multiSelect]);
+  }, [selectedCount]);
 
   if (selectedCount === 0) return null;
 
@@ -102,7 +103,7 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
             variant="ghost"
             size="icon-sm"
             className="h-6 w-6"
-            onClick={multiSelect.clearSelection}
+            onClick={selectionActions.clear}
           >
             <X className="w-3 h-3" />
           </Button>
