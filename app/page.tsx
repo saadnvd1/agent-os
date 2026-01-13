@@ -128,6 +128,9 @@ function HomeContent() {
       setSessions(data.sessions || []);
       setGroups(data.groups || []);
     } catch (error) {
+      // Ignore abort/network errors on initial load
+      if (error instanceof Error && error.name === 'AbortError') return;
+      if (error instanceof TypeError && error.message === 'Failed to fetch') return;
       console.error("Failed to fetch sessions:", error);
     }
   }, []);
@@ -208,6 +211,10 @@ function HomeContent() {
         setSessions(sessData.sessions || []);
       }
     } catch (error) {
+      // Ignore abort errors (happens during React Strict Mode remounting)
+      if (error instanceof Error && error.name === 'AbortError') return;
+      // Ignore network errors on initial load
+      if (error instanceof TypeError && error.message === 'Failed to fetch') return;
       console.error("Failed to fetch statuses:", error);
     }
   }, [sessions, checkStateChanges]);
@@ -434,19 +441,10 @@ function HomeContent() {
         setSummarizingSessionId(null);
         return;
       }
-      if (data.newSession && data.summary) {
+      if (data.newSession) {
         await fetchSessions();
+        // Server already started tmux and sent the context, just attach
         attachToSession(data.newSession);
-
-        // Wait for Claude to start, then send the summary
-        setTimeout(() => {
-          const terminal = getFocusedTerminal();
-          if (terminal) {
-            const contextMessage = `Here's a summary of the previous session to continue from:\n\n${data.summary}\n\nPlease acknowledge you've received this context and are ready to continue.`;
-            terminal.sendInput(contextMessage);
-            terminal.sendInput("\r");
-          }
-        }, 4000); // Wait 4s for Claude to initialize
       }
     } catch (error) {
       console.error("Failed to summarize session:", error);

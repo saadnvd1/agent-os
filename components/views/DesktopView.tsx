@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
@@ -46,6 +47,11 @@ export function DesktopView({
   renderPane,
 }: ViewProps) {
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -90,11 +96,11 @@ export function DesktopView({
               size="icon-sm"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
-              {theme === "dark" ? (
+              {mounted && (theme === "dark" ? (
                 <Sun className="w-4 h-4" />
               ) : (
                 <Moon className="w-4 h-4" />
-              )}
+              ))}
             </Button>
           </div>
         </div>
