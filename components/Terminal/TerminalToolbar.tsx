@@ -291,46 +291,31 @@ export function TerminalToolbar({
   const [shiftActive, setShiftActive] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
 
-  // Speech recognition - send transcript directly to terminal
-  const handleTranscript = useCallback((text: string) => {
-    for (const char of text) {
-      onKeyPress(char);
-    }
-  }, [onKeyPress]);
+  // Send text character-by-character to terminal
+  const sendText = useCallback(
+    (text: string) => {
+      for (const char of text) {
+        onKeyPress(char);
+      }
+    },
+    [onKeyPress]
+  );
 
-  const { isListening, isSupported: isMicSupported, toggle: toggleMic } = useSpeechRecognition(handleTranscript);
+  const { isListening, isSupported: isMicSupported, toggle: toggleMic } = useSpeechRecognition(sendText);
 
   // Handle paste - try clipboard API first, fall back to modal
   const handlePaste = useCallback(async () => {
     try {
-      if (navigator.clipboard?.readText) {
-        const text = await navigator.clipboard.readText();
-        if (text) {
-          for (const char of text) {
-            onKeyPress(char);
-          }
-          return;
-        }
+      const text = await navigator.clipboard?.readText?.();
+      if (text) {
+        sendText(text);
+        return;
       }
     } catch {
-      // Clipboard API failed
+      // Clipboard API failed or unavailable
     }
     setShowPasteModal(true);
-  }, [onKeyPress]);
-
-  // Handle paste from modal
-  const handleModalPaste = useCallback((text: string) => {
-    for (const char of text) {
-      onKeyPress(char);
-    }
-  }, [onKeyPress]);
-
-  // Handle snippet insertion
-  const handleSnippetInsert = useCallback((content: string) => {
-    for (const char of content) {
-      onKeyPress(char);
-    }
-  }, [onKeyPress]);
+  }, [sendText]);
 
   // Handle copy with visual feedback
   const handleCopy = useCallback(() => {
@@ -358,12 +343,12 @@ export function TerminalToolbar({
       <PasteModal
         open={showPasteModal}
         onClose={() => setShowPasteModal(false)}
-        onPaste={handleModalPaste}
+        onPaste={sendText}
       />
       <SnippetsModal
         open={showSnippetsModal}
         onClose={() => setShowSnippetsModal(false)}
-        onInsert={handleSnippetInsert}
+        onInsert={sendText}
       />
       <div
         className="flex items-center gap-1 px-2 py-1.5 bg-background/95 backdrop-blur border-t border-border overflow-x-auto scrollbar-none"

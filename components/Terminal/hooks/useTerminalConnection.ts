@@ -230,80 +230,70 @@ export function useTerminalConnection({
             (canvas as HTMLElement).style.touchAction = 'none';
           });
 
-          let lastTouchY: number | null = null;
-          let initialTouchX: number | null = null;
-          let initialTouchY: number | null = null;
-          let isHorizontalSwipe: boolean | null = null;
+          // Touch state for scroll handling
+          let touchState = {
+            lastY: null as number | null,
+            initialX: null as number | null,
+            initialY: null as number | null,
+            isHorizontal: null as boolean | null,
+          };
+
+          const resetTouchState = () => {
+            touchState = { lastY: null, initialX: null, initialY: null, isHorizontal: null };
+          };
 
           handleTouchStart = (e: TouchEvent) => {
-            // Skip custom handling in select mode to allow native text selection
-            if (selectModeRef.current) return;
-            if (e.touches.length > 0) {
-              lastTouchY = e.touches[0].clientY;
-              initialTouchX = e.touches[0].clientX;
-              initialTouchY = e.touches[0].clientY;
-              isHorizontalSwipe = null; // Reset swipe direction detection
-            }
+            if (selectModeRef.current || e.touches.length === 0) return;
+            const touch = e.touches[0];
+            touchState = {
+              lastY: touch.clientY,
+              initialX: touch.clientX,
+              initialY: touch.clientY,
+              isHorizontal: null,
+            };
           };
 
           handleTouchMove = (e: TouchEvent) => {
-            // Skip custom handling in select mode to allow native text selection
-            if (selectModeRef.current) return;
-            if (lastTouchY === null || initialTouchX === null || initialTouchY === null || e.touches.length === 0) return;
+            if (selectModeRef.current || e.touches.length === 0) return;
+            const { lastY, initialX, initialY, isHorizontal } = touchState;
+            if (lastY === null || initialX === null || initialY === null) return;
 
-            const currentX = e.touches[0].clientX;
-            const currentY = e.touches[0].clientY;
-            const deltaX = Math.abs(currentX - initialTouchX);
-            const deltaY = Math.abs(currentY - initialTouchY);
+            const touch = e.touches[0];
+            const deltaX = Math.abs(touch.clientX - initialX);
+            const deltaY = Math.abs(touch.clientY - initialY);
 
             // Determine swipe direction on first significant movement
-            if (isHorizontalSwipe === null && (deltaX > 15 || deltaY > 15)) {
-              isHorizontalSwipe = deltaX > deltaY;
+            if (isHorizontal === null && (deltaX > 15 || deltaY > 15)) {
+              touchState.isHorizontal = deltaX > deltaY;
             }
 
-            // Ignore horizontal swipes - let parent handle for tab switching
-            if (isHorizontalSwipe) return;
+            // Let parent handle horizontal swipes for session switching
+            if (touchState.isHorizontal) return;
 
             e.preventDefault();
             e.stopPropagation();
 
-            const moveDeltaY = currentY - lastTouchY;
-
+            const moveDeltaY = touch.clientY - lastY;
             if (Math.abs(moveDeltaY) < 25) return;
 
             const buffer = currentTermForTouch.buffer.active;
-            const isAlternateBuffer = buffer.type === 'alternate';
 
-            if (isAlternateBuffer && wsRef.current?.readyState === WebSocket.OPEN) {
-              const wheelEvent = moveDeltaY < 0
-                ? '\x1b[<65;1;1M'
-                : '\x1b[<64;1;1M';
+            if (buffer.type === 'alternate' && wsRef.current?.readyState === WebSocket.OPEN) {
+              // Send mouse wheel events for alternate buffer (e.g., less, vim)
+              const wheelEvent = moveDeltaY < 0 ? '\x1b[<65;1;1M' : '\x1b[<64;1;1M';
               wsRef.current.send(JSON.stringify({ type: 'input', data: wheelEvent }));
-              lastTouchY = currentY;
-            } else if (!isAlternateBuffer) {
+              touchState.lastY = touch.clientY;
+            } else if (buffer.type !== 'alternate') {
               const scrollAmount = Math.round(moveDeltaY / 15);
               if (scrollAmount !== 0) {
                 currentTermForTouch.scrollLines(scrollAmount);
-                lastTouchY = currentY;
+                touchState.lastY = touch.clientY;
               }
             }
           };
 
-          handleTouchEnd = () => {
-            // Don't focus on tap - use the virtual MobileKeybar instead
-            // This prevents the iOS keyboard from popping up
-            lastTouchY = null;
-            initialTouchX = null;
-            initialTouchY = null;
-            isHorizontalSwipe = null;
-          };
-
-          handleTouchCancel = () => {
-            lastTouchY = null;
-            initialTouchX = null;
-            initialTouchY = null;
-            isHorizontalSwipe = null;
-          };
+          handleTouchEnd = resetTouchState;
+          handleTouchCancel = resetTouchState;
 
           xtermScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
           xtermScreen.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -397,33 +387,27 @@ export function useTerminalConnection({
 
       // Handle page visibility change (iOS Safari suspends JS when backgrounded)
       handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          // Page is now visible - check if we need to reconnect
-          const ws = wsRef.current;
-          const needsReconnect = !ws ||
-            ws.readyState === WebSocket.CLOSED ||
-            ws.readyState === WebSocket.CLOSING;
+        if (document.visibilityState !== 'visible' || intentionalCloseRef.current) return;
 
-          // Also check for stale CONNECTING state (stuck connection)
-          const isStaleConnection = ws?.readyState === WebSocket.CONNECTING;
+        const ws = wsRef.current;
+        const isDisconnected = !ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING;
+        const isStaleConnection = ws?.readyState === WebSocket.CONNECTING;
 
-          if ((needsReconnect || isStaleConnection) && !intentionalCloseRef.current) {
-            // Force close any stale connection
-            if (isStaleConnection && ws) {
-              try { ws.close(); } catch { /* ignore */ }
-              wsRef.current = null;
-            }
+        if (!isDisconnected && !isStaleConnection) return;
 
-            // Clear any pending reconnect timeout
-            if (reconnectTimeoutRef.current) {
-              clearTimeout(reconnectTimeoutRef.current);
-              reconnectTimeoutRef.current = null;
-            }
-            // Reset delay and reconnect immediately
-            reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
-            attemptReconnect();
-          }
+        // Force close any stale connection
+        if (isStaleConnection && ws) {
+          try { ws.close(); } catch { /* ignore */ }
+          wsRef.current = null;
         }
+
+        // Clear pending reconnect and reconnect immediately
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+        reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
+        attemptReconnect();
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
 

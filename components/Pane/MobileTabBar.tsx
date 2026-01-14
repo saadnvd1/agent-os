@@ -63,7 +63,7 @@ interface MobileTabBarProps {
   workerCount: number;
   onMenuClick?: () => void;
   onViewModeChange: (mode: ViewMode) => void;
-  onSelectSession: (sessionId: string) => void;
+  onSelectSession?: (sessionId: string) => void;
 }
 
 export function MobileTabBar({
@@ -92,7 +92,7 @@ export function MobileTabBar({
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleNavigate = useCallback((sessionId: string) => {
-    if (isNavigating) return;
+    if (isNavigating || !onSelectSession) return;
 
     setIsNavigating(true);
     onSelectSession(sessionId);
@@ -180,7 +180,7 @@ export function MobileTabBar({
               return (
                 <DropdownMenuItem
                   key={s.id}
-                  onSelect={() => onSelectSession(s.id)}
+                  onSelect={() => onSelectSession?.(s.id)}
                   className={cn(
                     "flex items-center gap-2",
                     isActive && "bg-accent"
