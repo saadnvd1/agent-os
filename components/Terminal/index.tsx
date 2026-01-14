@@ -3,7 +3,7 @@
 import { useRef, forwardRef, useImperativeHandle, useCallback, useState, useMemo, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import '@xterm/xterm/css/xterm.css';
-import { ImagePlus } from 'lucide-react';
+import { ImagePlus, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SearchBar } from './SearchBar';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
@@ -62,6 +62,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     focus,
     getScrollState,
     restoreScrollState,
+    reconnect,
   } = useTerminalConnection({
     terminalRef,
     onConnected,
@@ -250,12 +251,26 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         />
       )}
 
-      {/* Connection status indicator (subtle) */}
+      {/* Connection status overlays */}
       {connectionState === 'reconnecting' && (
         <div className="absolute left-4 top-4 flex items-center gap-2 rounded bg-amber-500/20 px-2 py-1 text-xs text-amber-400">
           <div className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
           Reconnecting...
         </div>
+      )}
+
+      {/* Disconnected overlay - shows tap to reconnect button */}
+      {connectionState === 'disconnected' && (
+        <button
+          onClick={reconnect}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm transition-all active:bg-background/90"
+        >
+          <WifiOff className="h-8 w-8 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Connection lost</span>
+          <span className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+            Tap to reconnect
+          </span>
+        </button>
       )}
     </div>
   );

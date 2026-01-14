@@ -35,4 +35,5 @@ export interface UseTerminalConnectionReturn {
   getScrollState: () => TerminalScrollState | null;
   restoreScrollState: (state: TerminalScrollState) => void;
   triggerResize: () => void;
+  reconnect: () => void;
 }
