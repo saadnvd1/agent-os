@@ -190,7 +190,7 @@ export const Pane = memo(function Pane({
 
     const touchEndX = e.changedTouches[0].clientX;
     const diff = touchEndX - touchStartX.current;
-    const threshold = 75; // Minimum swipe distance
+    const threshold = 120; // Minimum swipe distance (increased to reduce sensitivity)
 
     if (Math.abs(diff) > threshold) {
       if (diff > 0 && currentIndex > 0) {
