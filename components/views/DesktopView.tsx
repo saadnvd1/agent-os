@@ -101,9 +101,9 @@ export function DesktopView({
             {activeSession && (
               <div className="flex items-center gap-2">
                 <span className="font-medium">{activeSession.name}</span>
-                {focusedActiveTab?.attachedTmux && (
+                {activeSession.tmux_name && (
                   <span className="text-xs text-muted-foreground">
-                    {focusedActiveTab.attachedTmux}
+                    {activeSession.tmux_name}
                   </span>
                 )}
                 <Tooltip>
