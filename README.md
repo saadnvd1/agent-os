@@ -115,6 +115,7 @@ agent-os status   # Shows URLs
 ### CLI Commands
 
 ```bash
+agent-os run       # Start server and open in browser
 agent-os start     # Start server in background
 agent-os stop      # Stop server
 agent-os restart   # Restart server

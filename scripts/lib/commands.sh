@@ -186,6 +186,30 @@ cmd_restart() {
     cmd_start
 }
 
+cmd_run() {
+    # Start if not running
+    if ! is_running; then
+        cmd_start
+    fi
+
+    # Wait a moment for server to be ready
+    sleep 1
+
+    local url="http://localhost:$PORT"
+    log_info "Opening $url..."
+
+    # Open in browser
+    if [[ "$OS" == "macos" ]]; then
+        open "$url"
+    elif command -v xdg-open &> /dev/null; then
+        xdg-open "$url"
+    elif command -v wslview &> /dev/null; then
+        wslview "$url"
+    else
+        log_warn "Could not detect browser. Open manually: $url"
+    fi
+}
+
 cmd_status() {
     echo ""
     if is_running; then
@@ -426,6 +450,7 @@ cmd_help() {
     echo ""
     echo "Commands:"
     echo "  install     Install AgentOS (auto-installs dependencies)"
+    echo "  run         Start server and open in browser"
     echo "  start       Start the server in background"
     echo "  stop        Stop the server"
     echo "  restart     Restart the server"
