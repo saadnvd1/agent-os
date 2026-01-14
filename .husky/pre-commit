@@ -1,6 +1,8 @@
 echo "🔍 Running pre-commit checks..."
 
-# Run type checking
+echo "💅 Formatting..."
+npx prettier --write .
+
 echo "📝 Type checking..."
 npm run typecheck
 
