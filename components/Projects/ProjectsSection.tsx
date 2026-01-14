@@ -28,6 +28,7 @@ interface ProjectsSectionProps {
   onDeleteProject?: (projectId: string) => void;
   onRenameProject?: (projectId: string, newName: string) => void;
   onNewSession?: (projectId: string) => void;
+  onOpenTerminal?: (projectId: string) => void;
   onSelectSession: (sessionId: string) => void;
   onOpenSessionInTab?: (sessionId: string) => void;
   onMoveSession?: (sessionId: string, projectId: string) => void;
@@ -58,6 +59,7 @@ export function ProjectsSection({
   onDeleteProject,
   onRenameProject,
   onNewSession,
+  onOpenTerminal,
   onSelectSession,
   onOpenSessionInTab,
   onMoveSession,
@@ -159,6 +161,9 @@ export function ProjectsSection({
               }
               onNewSession={
                 onNewSession ? () => onNewSession(project.id) : undefined
+              }
+              onOpenTerminal={
+                onOpenTerminal ? () => onOpenTerminal(project.id) : undefined
               }
               onStartDevServer={
                 !project.is_uncategorized && onStartDevServer

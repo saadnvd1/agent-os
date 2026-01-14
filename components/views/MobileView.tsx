@@ -23,9 +23,10 @@ export function MobileView({
   setShowQuickSwitcher,
   attachToSession,
   openSessionInNewTab,
-  fetchSessions,
-  fetchProjects,
   handleNewSessionInProject,
+  handleOpenTerminal,
+  handleSessionCreated,
+  handleCreateProject,
   handleStartDevServer,
   handleCreateDevServer,
   startDevServerProject,
@@ -53,6 +54,7 @@ export function MobileView({
                 setSidebarOpen(false);
               }}
               onNewSessionInProject={handleNewSessionInProject}
+              onOpenTerminal={handleOpenTerminal}
               onStartDevServer={handleStartDevServer}
               onCreateDevServer={handleCreateDevServer}
             />
@@ -77,33 +79,8 @@ export function MobileView({
         projects={projects}
         selectedProjectId={newSessionProjectId ?? undefined}
         onClose={() => setShowNewSessionDialog(false)}
-        onCreated={async (id) => {
-          setShowNewSessionDialog(false);
-
-          // Fetch the new session data
-          await fetchSessions();
-          const res = await fetch(`/api/sessions/${id}`);
-          const data = await res.json();
-          if (!data.session) return;
-
-          // Small delay to ensure terminal is ready after state updates
-          setTimeout(() => {
-            attachToSession(data.session);
-          }, 100);
-        }}
-        onCreateProject={async (name, workingDirectory, agentType) => {
-          const res = await fetch("/api/projects", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, workingDirectory, agentType }),
-          });
-          const data = await res.json();
-          if (data.project) {
-            await fetchProjects();
-            return data.project.id;
-          }
-          return null;
-        }}
+        onCreated={handleSessionCreated}
+        onCreateProject={handleCreateProject}
       />
       <QuickSwitcher
         sessions={sessions}

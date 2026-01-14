@@ -12,6 +12,7 @@ import {
   Trash2,
   Pencil,
   FolderOpen,
+  Terminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,7 @@ interface ProjectCardProps {
   onToggleExpanded?: (expanded: boolean) => void;
   onEdit?: () => void;
   onNewSession?: () => void;
+  onOpenTerminal?: () => void;
   onStartDevServer?: () => void;
   onOpenInEditor?: () => void;
   onDelete?: () => void;
@@ -53,6 +55,7 @@ export function ProjectCard({
   onToggleExpanded,
   onEdit,
   onNewSession,
+  onOpenTerminal,
   onStartDevServer,
   onOpenInEditor,
   onDelete,
@@ -64,10 +67,10 @@ export function ProjectCard({
   const justStartedEditingRef = useRef(false);
 
   const hasRunningServers = runningDevServers.length > 0;
-  // Uncategorized can have New Session and Rename, but not Edit/Delete/DevServer
+  // Uncategorized can have New Session, Open Terminal, and Rename, but not Edit/Delete/DevServer
   const hasActions = project.is_uncategorized
-    ? (onNewSession || onRename)
-    : (onEdit || onNewSession || onStartDevServer || onDelete || onRename);
+    ? (onNewSession || onOpenTerminal || onRename)
+    : (onEdit || onNewSession || onOpenTerminal || onStartDevServer || onDelete || onRename);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -112,6 +115,12 @@ export function ProjectCard({
           <MenuItem onClick={() => onNewSession()}>
             <Plus className="w-3 h-3 mr-2" />
             New session
+          </MenuItem>
+        )}
+        {onOpenTerminal && (
+          <MenuItem onClick={() => onOpenTerminal()}>
+            <Terminal className="w-3 h-3 mr-2" />
+            Open terminal
           </MenuItem>
         )}
         {onEdit && (

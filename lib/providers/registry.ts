@@ -11,6 +11,7 @@ export const PROVIDER_IDS = [
   'gemini',
   'aider',
   'cursor',
+  'shell',
 ] as const;
 
 export type ProviderId = (typeof PROVIDER_IDS)[number];
@@ -113,6 +114,16 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsResume: false,
     supportsFork: false,
     modelFlag: '--model',
+  },
+  {
+    id: 'shell',
+    name: 'Terminal',
+    description: 'Plain shell terminal',
+    cli: '', // No CLI command - just shell
+    configDir: '',
+    autoApproveFlag: undefined,
+    supportsResume: false,
+    supportsFork: false,
   },
 ];
 

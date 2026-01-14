@@ -12,6 +12,7 @@ export interface SessionListProps {
   onSelect: (sessionId: string) => void;
   onOpenInTab?: (sessionId: string) => void;
   onNewSessionInProject?: (projectId: string) => void;
+  onOpenTerminal?: (projectId: string) => void;
   onStartDevServer?: (projectId: string) => void;
   onCreateDevServer?: (opts: {
     projectId: string;

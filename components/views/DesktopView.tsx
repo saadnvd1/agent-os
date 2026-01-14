@@ -35,9 +35,10 @@ export function DesktopView({
   requestPermission,
   attachToSession,
   openSessionInNewTab,
-  fetchSessions,
-  fetchProjects,
   handleNewSessionInProject,
+  handleOpenTerminal,
+  handleSessionCreated,
+  handleCreateProject,
   handleStartDevServer,
   handleCreateDevServer,
   startDevServerProject,
@@ -68,6 +69,7 @@ export function DesktopView({
                 if (session) openSessionInNewTab(session);
               }}
               onNewSessionInProject={handleNewSessionInProject}
+              onOpenTerminal={handleOpenTerminal}
               onStartDevServer={handleStartDevServer}
               onCreateDevServer={handleCreateDevServer}
             />
@@ -200,42 +202,8 @@ export function DesktopView({
         projects={projects}
         selectedProjectId={newSessionProjectId ?? undefined}
         onClose={() => setShowNewSessionDialog(false)}
-        onCreated={async (id) => {
-          console.log(`[AgentOS] onCreated called for session: ${id}`);
-          setShowNewSessionDialog(false);
-
-          // Fetch the new session data
-          console.log(`[AgentOS] Fetching sessions...`);
-          await fetchSessions();
-          console.log(`[AgentOS] Sessions fetched, now fetching session data...`);
-          const res = await fetch(`/api/sessions/${id}`);
-          const data = await res.json();
-          if (!data.session) {
-            console.log(`[AgentOS] No session data returned for id: ${id}`);
-            return;
-          }
-          console.log(`[AgentOS] Session data fetched: ${data.session.name}`);
-
-          // Small delay to ensure terminal is ready after state updates
-          console.log(`[AgentOS] Starting 100ms delay before attachToSession...`);
-          setTimeout(() => {
-            console.log(`[AgentOS] Delay complete, calling attachToSession...`);
-            attachToSession(data.session);
-          }, 100);
-        }}
-        onCreateProject={async (name, workingDirectory, agentType) => {
-          const res = await fetch("/api/projects", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, workingDirectory, agentType }),
-          });
-          const data = await res.json();
-          if (data.project) {
-            await fetchProjects();
-            return data.project.id;
-          }
-          return null;
-        }}
+        onCreated={handleSessionCreated}
+        onCreateProject={handleCreateProject}
       />
       <QuickSwitcher
         sessions={sessions}

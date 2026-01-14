@@ -128,6 +128,11 @@ function HomeContent() {
     const sessionName = session.tmux_name || `${provider.id}-${session.id}`;
     const cwd = session.working_directory?.replace("~", "$HOME") || "$HOME";
 
+    // Shell sessions just open a terminal - no agent command
+    if (provider.id === "shell") {
+      return { sessionName, cwd, command: "" };
+    }
+
     // Ensure MCP config exists for orchestration
     fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
 
@@ -160,7 +165,11 @@ function HomeContent() {
     sessionInfo: { sessionName: string; cwd: string; command: string }
   ) => {
     const { sessionName, cwd, command } = sessionInfo;
-    terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || tmux new -s ${sessionName} -c "${cwd}" "${command}"`);
+    // For shell sessions (empty command), just start tmux without a command so it opens the default shell
+    const tmuxNew = command
+      ? `tmux new -s ${sessionName} -c "${cwd}" "${command}"`
+      : `tmux new -s ${sessionName} -c "${cwd}"`;
+    terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || ${tmuxNew}`);
     attachSession(paneId, session.id, sessionName);
     terminal.focus();
   }, [attachSession]);
@@ -296,6 +305,66 @@ function HomeContent() {
     setShowNewSessionDialog(true);
   }, []);
 
+  // Session created handler (shared between desktop/mobile)
+  const handleSessionCreated = useCallback(async (sessionId: string) => {
+    setShowNewSessionDialog(false);
+    setNewSessionProjectId(null);
+    await fetchSessions();
+
+    const res = await fetch(`/api/sessions/${sessionId}`);
+    const data = await res.json();
+    if (!data.session) return;
+
+    setTimeout(() => attachToSession(data.session), 100);
+  }, [fetchSessions, attachToSession]);
+
+  // Project created handler (shared between desktop/mobile)
+  const handleCreateProject = useCallback(async (
+    name: string,
+    workingDirectory: string,
+    agentType?: string
+  ): Promise<string | null> => {
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, workingDirectory, agentType }),
+    });
+    const data = await res.json();
+    if (data.project) {
+      await fetchProjects();
+      return data.project.id;
+    }
+    return null;
+  }, [fetchProjects]);
+
+  // Open terminal in project handler (shell session, not AI agent)
+  const handleOpenTerminal = useCallback(async (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    // Create a shell session with the project's working directory
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `${project.name} Terminal`,
+        workingDirectory: project.working_directory || "~",
+        agentType: "shell",
+        projectId,
+      }),
+    });
+
+    const data = await res.json();
+    if (!data.session) return;
+
+    await fetchSessions();
+
+    // Small delay to ensure state updates, then attach
+    setTimeout(() => {
+      attachToSession(data.session);
+    }, 100);
+  }, [projects, fetchSessions, attachToSession]);
+
   // Active session and dev server project
   const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
   const startDevServerProject = startDevServerProjectId
@@ -314,10 +383,7 @@ function HomeContent() {
     copiedSessionId,
     setCopiedSessionId,
     showNewSessionDialog,
-    setShowNewSessionDialog: (show: boolean) => {
-      setShowNewSessionDialog(show);
-      if (!show) setNewSessionProjectId(null);
-    },
+    setShowNewSessionDialog,
     newSessionProjectId,
     showNotificationSettings,
     setShowNotificationSettings,
@@ -329,9 +395,10 @@ function HomeContent() {
     requestPermission,
     attachToSession,
     openSessionInNewTab,
-    fetchSessions,
-    fetchProjects,
     handleNewSessionInProject,
+    handleOpenTerminal,
+    handleSessionCreated,
+    handleCreateProject,
     handleStartDevServer: startDevServer,
     handleCreateDevServer: createDevServer,
     startDevServerProject,
