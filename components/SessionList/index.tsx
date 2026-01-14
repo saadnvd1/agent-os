@@ -12,7 +12,8 @@ import { KillAllConfirm } from "./KillAllConfirm";
 import { useSessionListMutations } from "./hooks/useSessionListMutations";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Plus, FolderPlus, Loader2 } from "lucide-react";
+import { ProjectSectionSkeleton } from "@/components/ui/skeleton";
+import { Plus, FolderPlus, Loader2, AlertCircle } from "lucide-react";
 import type { Session } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import { useViewport } from "@/hooks/useViewport";
@@ -38,10 +39,23 @@ export function SessionList({
 }: SessionListProps) {
   const { isMobile } = useViewport();
 
-  // Fetch data directly
-  const { data: sessionsData } = useSessionsQuery();
-  const { data: projects = [] } = useProjectsQuery();
+  // Fetch data directly with loading states
+  const {
+    data: sessionsData,
+    isPending: isSessionsPending,
+    isError: isSessionsError,
+    error: sessionsError,
+  } = useSessionsQuery();
+  const {
+    data: projects = [],
+    isPending: isProjectsPending,
+    isError: isProjectsError,
+  } = useProjectsQuery();
   const { data: devServers = [] } = useDevServersQuery();
+
+  // Combined loading state for initial load
+  const isInitialLoading = isSessionsPending || isProjectsPending;
+  const hasError = isSessionsError || isProjectsError;
 
   const sessions = sessionsData?.sessions ?? [];
   const groups = sessionsData?.groups ?? [];
@@ -138,7 +152,25 @@ export function SessionList({
         {/* Session list */}
         <ScrollArea className="flex-1 w-full">
           <div className="p-2 space-y-1 max-w-full">
-            {sessions.length === 0 && projects.length <= 1 ? (
+            {/* Loading state */}
+            {isInitialLoading && <ProjectSectionSkeleton count={2} />}
+
+            {/* Error state */}
+            {hasError && !isInitialLoading && (
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <AlertCircle className="w-10 h-10 text-destructive/50 mb-3" />
+                <p className="text-destructive text-sm mb-2">Failed to load sessions</p>
+                <p className="text-muted-foreground text-xs mb-4">
+                  {sessionsError?.message || "Unknown error"}
+                </p>
+                <Button variant="outline" onClick={mutations.handleRefresh} className="gap-2">
+                  Retry
+                </Button>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!isInitialLoading && !hasError && sessions.length === 0 && projects.length <= 1 && (
               <div className="flex flex-col items-center justify-center py-12 px-4">
                 <FolderPlus className="w-10 h-10 text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground text-sm mb-4 text-center">Create a project to organize your sessions</p>
@@ -147,7 +179,10 @@ export function SessionList({
                   New Project
                 </Button>
               </div>
-            ) : useProjectsView ? (
+            )}
+
+            {/* Content - Projects view */}
+            {!isInitialLoading && !hasError && useProjectsView && (
               <ProjectsSection
                 projects={projects}
                 sessions={sessions}
@@ -180,7 +215,10 @@ export function SessionList({
                 onHoverStart={(session, rect) => hoverHandlers.onHoverStart(session, rect)}
                 onHoverEnd={hoverHandlers.onHoverEnd}
               />
-            ) : (
+            )}
+
+            {/* Content - Group view (fallback when no projects) */}
+            {!isInitialLoading && !hasError && !useProjectsView && sessions.length > 0 && (
               <GroupSection
                 groups={groups}
                 sessions={sessions}
