@@ -4,6 +4,7 @@ import { useRef, forwardRef, useImperativeHandle, useCallback, useState, useMemo
 import { useTheme } from 'next-themes';
 import '@xterm/xterm/css/xterm.css';
 import { ImagePlus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { SearchBar } from './SearchBar';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
 import { TerminalToolbar } from './TerminalToolbar';
@@ -38,6 +39,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const { isMobile } = useViewport();
   const { theme: currentTheme, resolvedTheme } = useTheme();
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
 
   // Use the full theme string (e.g., "dark-purple") for terminal theming
   const terminalTheme = useMemo(() => {
@@ -54,6 +56,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     xtermRef,
     searchAddonRef,
     scrollToBottom,
+    copySelection,
     sendInput,
     sendCommand,
     focus,
@@ -132,6 +135,28 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     };
   }, [isMobile]);
 
+  // Toggle text selection mode for copying
+  useEffect(() => {
+    if (!terminalRef.current) return;
+
+    const xtermScreen = terminalRef.current.querySelector('.xterm-screen') as HTMLElement;
+    if (!xtermScreen) return;
+
+    if (selectMode) {
+      // Enable text selection
+      xtermScreen.style.touchAction = 'auto';
+      xtermScreen.style.userSelect = 'text';
+      (xtermScreen.style as unknown as { webkitUserSelect: string }).webkitUserSelect = 'text';
+    } else {
+      // Disable text selection (restore defaults)
+      xtermScreen.style.touchAction = 'none';
+      xtermScreen.style.userSelect = 'none';
+      (xtermScreen.style as unknown as { webkitUserSelect: string }).webkitUserSelect = 'none';
+      // Clear any selection when exiting select mode
+      xtermRef.current?.clearSelection();
+    }
+  }, [selectMode, xtermRef]);
+
   return (
     <div
       ref={containerRef}
@@ -158,7 +183,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {/* Terminal container - NO padding! FitAddon reads offsetHeight which includes padding */}
       <div
         ref={terminalRef}
-        className="terminal-container min-h-0 w-full flex-1 overflow-hidden"
+        className={cn(
+          "terminal-container min-h-0 w-full flex-1 overflow-hidden",
+          selectMode && "select-mode"
+        )}
         onClick={focus}
       />
 
@@ -190,6 +218,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         <TerminalToolbar
           onKeyPress={handleKeyboardInput}
           onImagePicker={() => setShowImagePicker(true)}
+          onCopy={copySelection}
+          selectMode={selectMode}
+          onSelectModeChange={setSelectMode}
           visible={true}
         />
       )}
