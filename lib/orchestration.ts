@@ -110,9 +110,11 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
   }
 
   // Create session in database
+  const tmuxName = `${provider.id}-${sessionId}`;
   queries.createWorkerSession(db).run(
     sessionId,
     sessionName,
+    tmuxName,
     actualWorkingDir,
     conductorSessionId,
     task,
@@ -223,7 +225,7 @@ export async function getWorkers(conductorSessionId: string): Promise<WorkerInfo
 
   for (const worker of workers) {
     const provider = getProvider(worker.agent_type || "claude");
-    const tmuxSessionName = `${provider.id}-${worker.id}`;
+    const tmuxSessionName = worker.tmux_name || `${provider.id}-${worker.id}`;
 
     // Get live status from tmux
     let liveStatus: string;
@@ -267,7 +269,7 @@ export async function getWorkerOutput(workerId: string, lines: number = 50): Pro
   }
 
   const provider = getProvider(session.agent_type || "claude");
-  const tmuxSessionName = `${provider.id}-${workerId}`;
+  const tmuxSessionName = session.tmux_name || `${provider.id}-${workerId}`;
 
   try {
     const { stdout } = await execAsync(
@@ -289,7 +291,7 @@ export async function sendToWorker(workerId: string, message: string): Promise<b
   }
 
   const provider = getProvider(session.agent_type || "claude");
-  const tmuxSessionName = `${provider.id}-${workerId}`;
+  const tmuxSessionName = session.tmux_name || `${provider.id}-${workerId}`;
 
   try {
     const escapedMessage = message.replace(/"/g, '\\"').replace(/\$/g, '\\$');
@@ -324,7 +326,7 @@ export async function killWorker(workerId: string, cleanupWorktree: boolean = fa
   }
 
   const provider = getProvider(session.agent_type || "claude");
-  const tmuxSessionName = `${provider.id}-${workerId}`;
+  const tmuxSessionName = session.tmux_name || `${provider.id}-${workerId}`;
 
   // Kill tmux session
   try {

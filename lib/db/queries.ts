@@ -18,8 +18,8 @@ export const queries = {
   createSession: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO sessions (id, name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type, auto_approve, project_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type, auto_approve, project_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
 
   getSession: (db: Database.Database) =>
@@ -43,7 +43,7 @@ export const queries = {
   updateSessionName: (db: Database.Database) =>
     getStmt(
       db,
-      `UPDATE sessions SET name = ?, updated_at = datetime('now') WHERE id = ?`
+      `UPDATE sessions SET name = ?, tmux_name = ?, updated_at = datetime('now') WHERE id = ?`
     ),
 
   deleteSession: (db: Database.Database) =>
@@ -107,8 +107,8 @@ export const queries = {
   createWorkerSession: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO sessions (id, name, working_directory, conductor_session_id, worker_task, worker_status, model, group_path, agent_type, project_id)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, conductor_session_id, worker_task, worker_status, model, group_path, agent_type, project_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`
     ),
 
   // Messages

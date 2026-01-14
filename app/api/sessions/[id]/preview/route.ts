@@ -14,10 +14,10 @@ export async function GET(
     const { id } = await params;
     const db = getDb();
 
-    // Look up session to get the correct agent type
+    // Look up session to get the tmux name
     const session = queries.getSession(db).get(id) as Session | undefined;
     const agentType = session?.agent_type || "claude";
-    const sessionName = `${agentType}-${id}`;
+    const sessionName = session?.tmux_name || `${agentType}-${id}`;
 
     // Capture visible pane content plus scrollback, take last 50 lines
     const { stdout } = await execAsync(

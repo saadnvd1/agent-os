@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { getDb, queries, type Session } from "@/lib/db";
 import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
 import { killWorker } from "@/lib/orchestration";
+
+const execAsync = promisify(exec);
+
+// Sanitize a name for use as tmux session name
+function sanitizeTmuxName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-") // Replace non-alphanumeric with dashes
+    .replace(/-+/g, "-")         // Collapse multiple dashes
+    .replace(/^-|-$/g, "")       // Remove leading/trailing dashes
+    .slice(0, 50);               // Limit length
+}
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -36,7 +50,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const db = getDb();
 
-    const existing = queries.getSession(db).get(id);
+    const existing = queries.getSession(db).get(id) as Session | undefined;
     if (!existing) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
@@ -45,7 +59,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const updates: string[] = [];
     const values: unknown[] = [];
 
-    if (body.name !== undefined) {
+    // Handle name change - also rename tmux session
+    if (body.name !== undefined && body.name !== existing.name) {
+      const newTmuxName = sanitizeTmuxName(body.name);
+      const oldTmuxName = existing.tmux_name;
+
+      // Try to rename the tmux session
+      if (oldTmuxName && newTmuxName) {
+        try {
+          await execAsync(`tmux rename-session -t "${oldTmuxName}" "${newTmuxName}"`);
+          updates.push("tmux_name = ?");
+          values.push(newTmuxName);
+        } catch {
+          // tmux session might not exist or rename failed - that's ok, just update the name
+          // Still update tmux_name in DB so future attachments use the new name
+          updates.push("tmux_name = ?");
+          values.push(newTmuxName);
+        }
+      }
+
       updates.push("name = ?");
       values.push(body.name);
     }

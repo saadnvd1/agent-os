@@ -111,6 +111,15 @@ const migrations: Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS idx_dev_servers_project ON dev_servers(project_id)`);
     },
   },
+  {
+    id: 11,
+    name: "add_tmux_name_to_sessions",
+    up: (db) => {
+      db.exec(`ALTER TABLE sessions ADD COLUMN tmux_name TEXT`);
+      // Backfill existing sessions with computed tmux name
+      db.exec(`UPDATE sessions SET tmux_name = agent_type || '-' || id WHERE tmux_name IS NULL`);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
