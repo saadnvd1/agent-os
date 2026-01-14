@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Loader2, RefreshCw, Server } from "lucide-react";
 import { useUpdateProject } from "@/data/projects";
+import { useQueryClient } from "@tanstack/react-query";
+import { devServerKeys } from "@/data/dev-servers";
 import type { AgentType } from "@/lib/providers";
 import type { ProjectWithDevServers, DetectedDevServer } from "@/lib/projects";
 
@@ -71,6 +73,7 @@ export function ProjectSettingsDialog({
   const [error, setError] = useState<string | null>(null);
 
   const updateProject = useUpdateProject();
+  const queryClient = useQueryClient();
 
   // Initialize form when project changes
   useEffect(() => {
@@ -221,6 +224,9 @@ export function ProjectSettingsDialog({
           });
         }
       }
+
+      // Invalidate dev servers cache so list updates
+      queryClient.invalidateQueries({ queryKey: devServerKeys.list() });
 
       handleClose();
       onSave();
