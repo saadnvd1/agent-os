@@ -137,19 +137,23 @@ export function runMigrations(db: Database.Database): void {
     (db.prepare(`SELECT id FROM _migrations`).all() as { id: number }[]).map((r) => r.id)
   );
 
-  // Run pending migrations in order
-  const insertMigration = db.prepare(`INSERT INTO _migrations (id, name) VALUES (?, ?)`);
+  // Use INSERT OR IGNORE to handle concurrent workers
+  const insertMigration = db.prepare(`INSERT OR IGNORE INTO _migrations (id, name) VALUES (?, ?)`);
 
   for (const migration of migrations) {
     if (applied.has(migration.id)) continue;
 
     try {
       migration.up(db);
-      insertMigration.run(migration.id, migration.name);
-      console.log(`Migration ${migration.id}: ${migration.name} applied`);
+      const result = insertMigration.run(migration.id, migration.name);
+      if (result.changes > 0) {
+        console.log(`Migration ${migration.id}: ${migration.name} applied`);
+      } else {
+        console.log(`Migration ${migration.id}: ${migration.name} skipped (concurrent apply)`);
+      }
     } catch (error) {
-      // Some migrations may fail if columns already exist (from old system)
-      // Record them as applied anyway to prevent re-running
+      // Some migrations may fail if columns already exist (from old system or concurrent worker)
+      // Try to record as applied anyway to prevent re-running
       const errorMsg = error instanceof Error ? error.message : String(error);
       if (errorMsg.includes("duplicate column") || errorMsg.includes("already exists")) {
         insertMigration.run(migration.id, migration.name);
