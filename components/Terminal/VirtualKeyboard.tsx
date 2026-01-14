@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, Mic, MicOff } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, Mic, MicOff, Clipboard, X, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useKeyRepeat } from '@/hooks/useKeyRepeat';
@@ -41,35 +41,162 @@ interface VirtualKeyboardProps {
   visible?: boolean;
 }
 
-interface KeyProps {
-  char: string;
-  onPress: () => void;
-  className?: string;
+
+// Track last touch time globally to prevent duplicate events from touch->mouse emulation
+let lastTouchTime = 0;
+
+// Event delegation handler - finds the key from data attribute and fires callback
+function createKeyboardHandler(onKey: (key: string) => void) {
+  const handleEvent = (e: TouchEvent | MouseEvent) => {
+    // Find the button with data-key attribute
+    const target = e.target as HTMLElement;
+    const button = target.closest('[data-key]') as HTMLElement | null;
+    if (!button) return;
+
+    const key = button.getAttribute('data-key');
+    if (!key) return;
+
+    e.preventDefault();
+
+    // Prevent duplicate from touch->mouse emulation
+    if (e.type === 'touchstart') {
+      lastTouchTime = Date.now();
+    } else if (e.type === 'mousedown' && Date.now() - lastTouchTime < 500) {
+      return;
+    }
+
+    onKey(key);
+  };
+
+  return handleEvent;
 }
 
-// Trigger haptic feedback if available
-function haptic() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    navigator.vibrate(5);
-  }
-}
-
-function Key({ char, onPress, className }: KeyProps) {
+// Simple key button - no individual handlers, uses event delegation
+// Memoized to prevent re-renders when parent state changes (like shift)
+const Key = memo(function Key({ char, dataKey, className }: { char: string; dataKey?: string; className?: string }) {
   return (
     <button
-      onClick={() => { haptic(); onPress(); }}
-      onContextMenu={(e) => e.preventDefault()}
+      data-key={dataKey ?? char}
       className={cn(
         'flex h-[44px] flex-1 touch-manipulation items-center justify-center rounded-md text-sm font-medium',
         'bg-secondary text-secondary-foreground',
-        'active:bg-primary active:text-primary-foreground active:scale-110 active:z-10',
-        'transition-transform duration-75',
+        'active:bg-primary active:text-primary-foreground',
         'select-none min-w-[32px]',
         className
       )}
     >
       {char}
     </button>
+  );
+});
+
+// Fast button for special keys (uses event delegation via data-key)
+function FastKey({ dataKey, className, children }: { dataKey: string; className?: string; children: React.ReactNode }) {
+  return (
+    <button
+      data-key={dataKey}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Fast button with direct handler (for shortcuts bar which is outside main keyboard delegation)
+function FastButton({ onPress, className, children }: { onPress: () => void; className?: string; children: React.ReactNode }) {
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    lastTouchTime = Date.now();
+    onPress();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (Date.now() - lastTouchTime < 500) return;
+    e.preventDefault();
+    onPress();
+  };
+
+  return (
+    <button
+      onTouchStart={handleTouchStart}
+      onMouseDown={handleMouseDown}
+      onContextMenu={(e) => e.preventDefault()}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Paste modal for when clipboard API isn't available
+function PasteModal({
+  open,
+  onClose,
+  onPaste
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPaste: (text: string) => void;
+}) {
+  const [text, setText] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus input when modal opens
+  useCallback(() => {
+    if (open && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [open]);
+
+  const handleSend = () => {
+    if (text) {
+      onPaste(text);
+      setText('');
+      onClose();
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="w-full max-w-lg bg-background rounded-t-xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium">Paste text</span>
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <textarea
+          ref={inputRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            // Handle paste event directly
+            const pasted = e.clipboardData?.getData('text');
+            if (pasted) {
+              e.preventDefault();
+              setText(prev => prev + pasted);
+            }
+          }}
+          placeholder="Tap here, then long-press to paste..."
+          autoFocus
+          inputMode="text"
+          className="w-full h-24 px-3 py-2 rounded-lg bg-muted text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        <button
+          onClick={handleSend}
+          disabled={!text}
+          className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+          Send to Terminal
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -85,6 +212,8 @@ function TerminalShortcutsBar({
   onMicToggle?: () => void;
   isMicSupported?: boolean;
 }) {
+  const [showPasteModal, setShowPasteModal] = useState(false);
+
   const shortcuts = [
     { label: 'Esc', key: SPECIAL_KEYS.ESC },
     { label: '^C', key: SPECIAL_KEYS.CTRL_C, highlight: true },
@@ -96,39 +225,78 @@ function TerminalShortcutsBar({
     { label: '↓', key: SPECIAL_KEYS.DOWN },
   ];
 
+  // Handle paste - try clipboard API first, fall back to modal
+  const handlePaste = useCallback(async () => {
+    try {
+      if (navigator.clipboard?.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          for (const char of text) {
+            onKeyPress(char);
+          }
+          return;
+        }
+      }
+    } catch {
+      // Clipboard API failed, show modal
+    }
+    // Fall back to modal
+    setShowPasteModal(true);
+  }, [onKeyPress]);
+
+  // Handle paste from modal
+  const handleModalPaste = useCallback((text: string) => {
+    for (const char of text) {
+      onKeyPress(char);
+    }
+  }, [onKeyPress]);
+
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none">
-      {/* Mic button - always visible when supported */}
-      {isMicSupported && onMicToggle && (
-        <button
-          onClick={() => { haptic(); onMicToggle(); }}
-          className={cn(
-            "flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-            "active:scale-105",
-            isListening
-              ? "bg-red-500 text-white animate-pulse"
-              : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
-          )}
+    <>
+      <PasteModal
+        open={showPasteModal}
+        onClose={() => setShowPasteModal(false)}
+        onPaste={handleModalPaste}
+      />
+      <div className="flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-none">
+        {/* Paste button */}
+        <FastButton
+          onPress={handlePaste}
+          className="flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium touch-manipulation select-none bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
         >
-          {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-        </button>
-      )}
-      {shortcuts.map((shortcut) => (
-        <button
-          key={shortcut.label}
-          onClick={() => { haptic(); onKeyPress(shortcut.key); }}
-          className={cn(
-            "flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-            "active:bg-primary active:text-primary-foreground active:scale-105",
-            shortcut.highlight
-              ? "bg-red-500/20 text-red-500"
-              : "bg-secondary text-secondary-foreground"
-          )}
-        >
-          {shortcut.label}
-        </button>
-      ))}
-    </div>
+          <Clipboard className="h-4 w-4" />
+        </FastButton>
+        {/* Mic button - always visible when supported */}
+        {isMicSupported && onMicToggle && (
+          <FastButton
+            onPress={onMicToggle}
+            className={cn(
+              "flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium touch-manipulation select-none",
+              isListening
+                ? "bg-red-500 text-white animate-pulse"
+                : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+            )}
+          >
+            {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </FastButton>
+        )}
+        {shortcuts.map((shortcut) => (
+          <FastButton
+            key={shortcut.label}
+            onPress={() => onKeyPress(shortcut.key)}
+            className={cn(
+              "flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium touch-manipulation select-none",
+              "active:bg-primary active:text-primary-foreground",
+              shortcut.highlight
+                ? "bg-red-500/20 text-red-500"
+                : "bg-secondary text-secondary-foreground"
+            )}
+          >
+            {shortcut.label}
+          </FastButton>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -139,10 +307,10 @@ export function VirtualKeyboard({
 }: VirtualKeyboardProps) {
   const [mode, setMode] = useState<KeyboardMode>('abc');
   const [shifted, setShifted] = useState(false);
+  const keyboardRef = useRef<HTMLDivElement>(null);
 
   // Speech recognition - send transcript directly to terminal
   const handleTranscript = useCallback((text: string) => {
-    // Send each character individually to the terminal
     for (const char of text) {
       onKeyPress(char);
     }
@@ -156,19 +324,84 @@ export function VirtualKeyboard({
   }, [onKeyPress]);
   const { startRepeat: startBackspace, stopRepeat: stopBackspace } = useKeyRepeat(handleBackspace);
 
-  if (!visible) return null;
+  // Event delegation - attach once, handle all keys
+  useEffect(() => {
+    const el = keyboardRef.current;
+    if (!el) return;
 
-  const handleKey = (key: string) => {
-    onKeyPress(shifted ? key.toUpperCase() : key);
-    if (shifted) setShifted(false);
-  };
+    const handleKey = (key: string) => {
+      // Handle special keys
+      if (key === 'SHIFT') {
+        setShifted(s => !s);
+        return;
+      }
+      if (key === 'MODE_ABC') {
+        setMode('abc');
+        return;
+      }
+      if (key === 'MODE_NUM') {
+        setMode('num');
+        return;
+      }
+      if (key === 'MODE_QUICK') {
+        setMode('quick');
+        return;
+      }
+      if (key === 'SPACE') {
+        onKeyPress(' ');
+        return;
+      }
+      if (key === 'ENTER') {
+        onKeyPress(SPECIAL_KEYS.ENTER);
+        return;
+      }
+      if (key === 'LEFT') {
+        onKeyPress(SPECIAL_KEYS.LEFT);
+        return;
+      }
+      if (key === 'RIGHT') {
+        onKeyPress(SPECIAL_KEYS.RIGHT);
+        return;
+      }
+      if (key === 'UP') {
+        onKeyPress(SPECIAL_KEYS.UP);
+        return;
+      }
+      if (key === 'DOWN') {
+        onKeyPress(SPECIAL_KEYS.DOWN);
+        return;
+      }
+      if (key === 'IMAGE' && onImagePick) {
+        onImagePick();
+        return;
+      }
+
+      // Regular character - apply shift if needed
+      const char = shifted ? key.toUpperCase() : key;
+      onKeyPress(char);
+      if (shifted) setShifted(false);
+    };
+
+    const handler = createKeyboardHandler(handleKey);
+
+    el.addEventListener('touchstart', handler, { passive: false });
+    el.addEventListener('mousedown', handler);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    return () => {
+      el.removeEventListener('touchstart', handler);
+      el.removeEventListener('mousedown', handler);
+    };
+  }, [onKeyPress, shifted, onImagePick]);
+
+  if (!visible) return null;
 
   // Quick mode - just essential terminal keys
   if (mode === 'quick') {
     return (
       <div
+        ref={keyboardRef}
         className="flex flex-col bg-background select-none"
-        onContextMenu={(e) => e.preventDefault()}
       >
         {/* Terminal shortcuts */}
         <TerminalShortcutsBar onKeyPress={onKeyPress} isListening={isListening} onMicToggle={toggleMic} isMicSupported={isMicSupported} />
@@ -176,25 +409,25 @@ export function VirtualKeyboard({
         <div className="flex flex-col gap-1.5 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {/* Mode tabs + common keys */}
           <div className="flex gap-1.5">
-            <button
-              onClick={() => { haptic(); setMode('abc'); }}
-              className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            <FastKey
+              dataKey="MODE_ABC"
+              className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               ABC
-            </button>
-            <button
-              onClick={() => { haptic(); setMode('num'); }}
-              className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            </FastKey>
+            <FastKey
+              dataKey="MODE_NUM"
+              className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               123
-            </button>
+            </FastKey>
             {onImagePick && (
-              <button
-                onClick={() => { haptic(); onImagePick(); }}
-                className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+              <FastKey
+                dataKey="IMAGE"
+                className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
               >
                 <ImagePlus className="h-5 w-5" />
-              </button>
+              </FastKey>
             )}
             <div className="flex-1" />
             <button
@@ -204,7 +437,7 @@ export function VirtualKeyboard({
               onMouseDown={startBackspace}
               onMouseUp={stopBackspace}
               onMouseLeave={stopBackspace}
-              className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground transition-transform duration-75"
+              className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               ⌫
             </button>
@@ -212,34 +445,34 @@ export function VirtualKeyboard({
 
           {/* Arrow keys + Enter */}
           <div className="flex gap-1.5">
-            <button
-              onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.LEFT); }}
-              className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            <FastKey
+              dataKey="LEFT"
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               <ChevronLeft className="h-6 w-6" />
-            </button>
+            </FastKey>
             <div className="flex flex-col gap-1">
-              <button
-                onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.UP); }}
-                className="flex h-[20px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground transition-colors duration-75"
+              <FastKey
+                dataKey="UP"
+                className="flex h-[20px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
               >
                 <ChevronUp className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.DOWN); }}
-                className="flex h-[20px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground transition-colors duration-75"
+              </FastKey>
+              <FastKey
+                dataKey="DOWN"
+                className="flex h-[20px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
               >
                 <ChevronDown className="h-4 w-4" />
-              </button>
+              </FastKey>
             </div>
-            <button
-              onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.RIGHT); }}
-              className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            <FastKey
+              dataKey="RIGHT"
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               <ChevronRight className="h-6 w-6" />
-            </button>
+            </FastKey>
             <div className="flex-1" />
-            <Key char="⏎" onPress={() => onKeyPress(SPECIAL_KEYS.ENTER)} className="bg-primary/30 text-primary w-[68px]" />
+            <Key char="⏎" dataKey="ENTER" className="bg-primary/30 text-primary w-[68px]" />
           </div>
         </div>
       </div>
@@ -250,8 +483,8 @@ export function VirtualKeyboard({
   if (mode === 'abc') {
     return (
       <div
+        ref={keyboardRef}
         className="flex flex-col bg-background select-none"
-        onContextMenu={(e) => e.preventDefault()}
       >
         {/* Terminal shortcuts */}
         <TerminalShortcutsBar onKeyPress={onKeyPress} isListening={isListening} onMicToggle={toggleMic} isMicSupported={isMicSupported} />
@@ -260,26 +493,26 @@ export function VirtualKeyboard({
           {/* QWERTY rows */}
           <div className="flex gap-1">
             {ROWS.row1.map((char) => (
-              <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
+              <Key key={char} char={shifted ? char.toUpperCase() : char} dataKey={char} />
             ))}
           </div>
           <div className="flex gap-1 px-4">
             {ROWS.row2.map((char) => (
-              <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
+              <Key key={char} char={shifted ? char.toUpperCase() : char} dataKey={char} />
             ))}
           </div>
           <div className="flex gap-1">
-            <button
-              onClick={() => { haptic(); setShifted(!shifted); }}
+            <FastKey
+              dataKey="SHIFT"
               className={cn(
-                'flex h-[44px] w-[48px] items-center justify-center rounded-md text-sm font-medium active:scale-105 transition-transform duration-75',
+                'flex h-[44px] w-[48px] items-center justify-center rounded-md text-sm font-medium touch-manipulation select-none',
                 shifted ? 'bg-primary/30 text-primary active:bg-primary active:text-primary-foreground' : 'bg-muted text-muted-foreground active:bg-primary active:text-primary-foreground'
               )}
             >
               ⇧
-            </button>
+            </FastKey>
             {ROWS.row3.map((char) => (
-              <Key key={char} char={shifted ? char.toUpperCase() : char} onPress={() => handleKey(char)} />
+              <Key key={char} char={shifted ? char.toUpperCase() : char} dataKey={char} />
             ))}
             <button
               onTouchStart={startBackspace}
@@ -288,7 +521,7 @@ export function VirtualKeyboard({
               onMouseDown={startBackspace}
               onMouseUp={stopBackspace}
               onMouseLeave={stopBackspace}
-              className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground transition-transform duration-75"
+              className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               ⌫
             </button>
@@ -296,30 +529,30 @@ export function VirtualKeyboard({
 
           {/* Bottom row */}
           <div className="flex gap-1">
-            <button
-              onClick={() => { haptic(); setMode('quick'); }}
-              className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            <FastKey
+              dataKey="MODE_QUICK"
+              className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               ^C
-            </button>
-            <button
-              onClick={() => { haptic(); setMode('num'); }}
-              className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            </FastKey>
+            <FastKey
+              dataKey="MODE_NUM"
+              className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               123
-            </button>
-            <button
-              onClick={() => { haptic(); onKeyPress(' '); }}
-              className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-secondary text-sm text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-[1.02] transition-transform duration-75"
+            </FastKey>
+            <FastKey
+              dataKey="SPACE"
+              className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-secondary text-sm text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               space
-            </button>
-            <button
-              onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.ENTER); }}
-              className="flex h-[44px] w-[68px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+            </FastKey>
+            <FastKey
+              dataKey="ENTER"
+              className="flex h-[44px] w-[68px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary active:text-primary-foreground touch-manipulation select-none"
             >
               ⏎
-            </button>
+            </FastKey>
           </div>
         </div>
       </div>
@@ -329,8 +562,8 @@ export function VirtualKeyboard({
   // Num mode - numbers and symbols
   return (
     <div
+      ref={keyboardRef}
       className="flex flex-col bg-background select-none"
-      onContextMenu={(e) => e.preventDefault()}
     >
       {/* Terminal shortcuts */}
       <TerminalShortcutsBar onKeyPress={onKeyPress} isListening={isListening} onMicToggle={toggleMic} isMicSupported={isMicSupported} />
@@ -339,42 +572,42 @@ export function VirtualKeyboard({
         {/* Number row */}
         <div className="flex gap-1">
           {ROWS.numbers.map((char) => (
-            <Key key={char} char={char} onPress={() => onKeyPress(char)} />
+            <Key key={char} char={char} />
           ))}
         </div>
 
         {/* Symbols rows */}
         <div className="flex gap-1">
           {ROWS.symbols.map((char) => (
-            <Key key={char} char={char} onPress={() => onKeyPress(char)} />
+            <Key key={char} char={char} />
           ))}
         </div>
         <div className="flex gap-1">
           {ROWS.symbolsMore.map((char) => (
-            <Key key={char} char={char} onPress={() => onKeyPress(char)} />
+            <Key key={char} char={char} />
           ))}
         </div>
 
         {/* Bottom row */}
         <div className="flex gap-1">
-          <button
-            onClick={() => { haptic(); setMode('quick'); }}
-            className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+          <FastKey
+            dataKey="MODE_QUICK"
+            className="flex h-[44px] w-[56px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
           >
             ^C
-          </button>
-          <button
-            onClick={() => { haptic(); setMode('abc'); }}
-            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+          </FastKey>
+          <FastKey
+            dataKey="MODE_ABC"
+            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
           >
             ABC
-          </button>
-          <button
-            onClick={() => { haptic(); onKeyPress(' '); }}
-            className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-secondary text-sm text-muted-foreground active:bg-primary active:text-primary-foreground active:scale-[1.02] transition-transform duration-75"
+          </FastKey>
+          <FastKey
+            dataKey="SPACE"
+            className="flex h-[44px] flex-1 items-center justify-center rounded-md bg-secondary text-sm text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
           >
             space
-          </button>
+          </FastKey>
           <button
             onTouchStart={startBackspace}
             onTouchEnd={stopBackspace}
@@ -382,16 +615,16 @@ export function VirtualKeyboard({
             onMouseDown={startBackspace}
             onMouseUp={stopBackspace}
             onMouseLeave={stopBackspace}
-            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground transition-transform duration-75"
+            className="flex h-[44px] w-[48px] items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground active:bg-primary active:text-primary-foreground touch-manipulation select-none"
           >
             ⌫
           </button>
-          <button
-            onClick={() => { haptic(); onKeyPress(SPECIAL_KEYS.ENTER); }}
-            className="flex h-[44px] w-[68px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary active:text-primary-foreground active:scale-105 transition-transform duration-75"
+          <FastKey
+            dataKey="ENTER"
+            className="flex h-[44px] w-[68px] items-center justify-center rounded-md bg-primary/30 text-sm font-medium text-primary active:bg-primary active:text-primary-foreground touch-manipulation select-none"
           >
             ⏎
-          </button>
+          </FastKey>
         </div>
       </div>
     </div>

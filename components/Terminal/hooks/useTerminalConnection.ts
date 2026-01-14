@@ -375,7 +375,21 @@ export function useTerminalConnection({
       handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
           // Page is now visible - check if we need to reconnect
-          if (wsRef.current?.readyState !== WebSocket.OPEN && !intentionalCloseRef.current) {
+          const ws = wsRef.current;
+          const needsReconnect = !ws ||
+            ws.readyState === WebSocket.CLOSED ||
+            ws.readyState === WebSocket.CLOSING;
+
+          // Also check for stale CONNECTING state (stuck connection)
+          const isStaleConnection = ws?.readyState === WebSocket.CONNECTING;
+
+          if ((needsReconnect || isStaleConnection) && !intentionalCloseRef.current) {
+            // Force close any stale connection
+            if (isStaleConnection && ws) {
+              try { ws.close(); } catch { /* ignore */ }
+              wsRef.current = null;
+            }
+
             // Clear any pending reconnect timeout
             if (reconnectTimeoutRef.current) {
               clearTimeout(reconnectTimeoutRef.current);

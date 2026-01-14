@@ -112,3 +112,37 @@ export function useUpdateProject() {
     },
   });
 }
+
+export function useCreateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      name: string;
+      workingDirectory: string;
+      agentType?: string;
+      defaultModel?: string;
+      devServers?: Array<{
+        name: string;
+        type: string;
+        command: string;
+        port?: number;
+        portEnvVar?: string;
+      }>;
+    }) => {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create project");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.list() });
+    },
+  });
+}
