@@ -112,10 +112,26 @@ export function DesktopView({
                       variant="ghost"
                       size="icon-sm"
                       className="h-6 w-6"
-                      onClick={() => {
-                        navigator.clipboard.writeText(activeSession.id);
-                        setCopiedSessionId(true);
-                        setTimeout(() => setCopiedSessionId(false), 2000);
+                      onClick={async () => {
+                        try {
+                          if (navigator.clipboard) {
+                            await navigator.clipboard.writeText(activeSession.id);
+                          } else {
+                            // Fallback for non-HTTPS contexts
+                            const textarea = document.createElement('textarea');
+                            textarea.value = activeSession.id;
+                            textarea.style.position = 'fixed';
+                            textarea.style.opacity = '0';
+                            document.body.appendChild(textarea);
+                            textarea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textarea);
+                          }
+                          setCopiedSessionId(true);
+                          setTimeout(() => setCopiedSessionId(false), 2000);
+                        } catch {
+                          console.error('Failed to copy to clipboard');
+                        }
                       }}
                     >
                       {copiedSessionId ? (
