@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { SessionPreviewPopover } from "@/components/SessionPreviewPopover";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { ServerLogsModal } from "@/components/DevServers";
@@ -76,14 +76,34 @@ export function SessionList({
   // Find server for logs modal
   const logsServer = logsServerId ? devServers.find((s) => s.id === logsServerId) : null;
 
-  // Handle hover on session card (desktop only)
+  // Handle hover on session card (desktop only) with delay
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingHoverRef = useRef<{ session: Session; rect: DOMRect } | null>(null);
+
   const hoverHandlers = {
-    onHoverStart: (session: Session, rect: DOMRect) => {
+    onHoverStart: useCallback((session: Session, rect: DOMRect) => {
       if (isMobile) return;
-      setHoveredSession(session);
-      setHoverPosition({ x: rect.right, y: rect.top });
-    },
-    onHoverEnd: () => setHoveredSession(null),
+      // Clear any pending hover
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+      // Store pending hover data and start delay
+      pendingHoverRef.current = { session, rect };
+      hoverTimeoutRef.current = setTimeout(() => {
+        if (pendingHoverRef.current) {
+          setHoveredSession(pendingHoverRef.current.session);
+          setHoverPosition({ x: pendingHoverRef.current.rect.right, y: pendingHoverRef.current.rect.top });
+        }
+      }, 400);
+    }, [isMobile]),
+    onHoverEnd: useCallback(() => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+      pendingHoverRef.current = null;
+      setHoveredSession(null);
+    }, []),
   };
 
   return (
