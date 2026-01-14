@@ -6,7 +6,7 @@ import { WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from '../constants';
 export interface WebSocketCallbacks {
   onConnected?: () => void;
   onDisconnected?: () => void;
-  onConnectionStateChange: (state: 'connected' | 'disconnected' | 'reconnecting') => void;
+  onConnectionStateChange: (state: 'connecting' | 'connected' | 'disconnected' | 'reconnecting') => void;
   onSetConnected: (connected: boolean) => void;
 }
 
