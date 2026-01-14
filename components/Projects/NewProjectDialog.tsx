@@ -20,6 +20,7 @@ import {
 import { Plus, Trash2, Loader2, GitBranch, RefreshCw, Server } from "lucide-react";
 import type { AgentType } from "@/lib/providers";
 import type { DetectedDevServer } from "@/lib/projects";
+import { useCreateProject } from "@/data/projects";
 
 const RECENT_DIRS_KEY = "agentOS:recentDirectories";
 const MAX_RECENT_DIRS = 5;
@@ -64,12 +65,13 @@ export function NewProjectDialog({
   const [agentType, setAgentType] = useState<AgentType>("claude");
   const [defaultModel, setDefaultModel] = useState("sonnet");
   const [devServers, setDevServers] = useState<DevServerConfig[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [checkingDir, setCheckingDir] = useState(false);
+
+  const createProject = useCreateProject();
 
   // Load recent directories
   useEffect(() => {
@@ -209,43 +211,31 @@ export function NewProjectDialog({
       (ds) => ds.name.trim() && ds.command.trim()
     );
 
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          workingDirectory,
-          agentType,
-          defaultModel,
-          devServers: validDevServers.map((ds) => ({
-            name: ds.name.trim(),
-            type: ds.type,
-            command: ds.command.trim(),
-            port: ds.port || undefined,
-            portEnvVar: ds.portEnvVar || undefined,
-          })),
-        }),
-      });
-
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-        return;
+    createProject.mutate(
+      {
+        name: name.trim(),
+        workingDirectory,
+        agentType,
+        defaultModel,
+        devServers: validDevServers.map((ds) => ({
+          name: ds.name.trim(),
+          type: ds.type,
+          command: ds.command.trim(),
+          port: ds.port || undefined,
+          portEnvVar: ds.portEnvVar || undefined,
+        })),
+      },
+      {
+        onSuccess: (data) => {
+          addRecentDirectory(workingDirectory);
+          handleClose();
+          onCreated(data.project.id);
+        },
+        onError: (err) => {
+          setError(err.message || "Failed to create project");
+        },
       }
-
-      if (data.project) {
-        addRecentDirectory(workingDirectory);
-        handleClose();
-        onCreated(data.project.id);
-      }
-    } catch (err) {
-      console.error("Failed to create project:", err);
-      setError("Failed to create project");
-    } finally {
-      setIsLoading(false);
-    }
+    );
   };
 
   const handleClose = () => {
@@ -463,8 +453,8 @@ export function NewProjectDialog({
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Creating..." : "Create Project"}
+            <Button type="submit" disabled={createProject.isPending}>
+              {createProject.isPending ? "Creating..." : "Create Project"}
             </Button>
           </DialogFooter>
         </form>

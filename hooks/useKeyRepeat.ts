@@ -27,16 +27,16 @@ export function useKeyRepeat(onKeyPress: () => void) {
         onKeyPress();
         repeatCountRef.current++;
 
-        // Accelerate after several repeats
-        if (repeatCountRef.current === 8 && intervalRef.current) {
+        // Accelerate after many repeats (more gradual than before)
+        if (repeatCountRef.current === 15 && intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = setInterval(() => {
             haptic();
             onKeyPress();
-          }, 50); // Fast repeat
+          }, 80); // Fast repeat (was 50, now slower)
         }
-      }, 120); // Initial repeat speed
-    }, 400); // Initial delay before repeat starts
+      }, 150); // Initial repeat speed (was 120, now slower)
+    }, 500); // Initial delay before repeat starts (was 400, now longer)
   }, [onKeyPress]);
 
   const stopRepeat = useCallback(() => {
