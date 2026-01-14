@@ -26,6 +26,7 @@ interface UseTerminalConnectionProps {
   initialScrollState?: TerminalScrollState;
   isMobile?: boolean;
   theme?: string; // Full theme string (e.g., "dark", "dark-purple", "light-mint")
+  selectMode?: boolean; // When true, allow native text selection instead of custom scroll
 }
 
 export function useTerminalConnection({
@@ -36,6 +37,7 @@ export function useTerminalConnection({
   initialScrollState,
   isMobile = false,
   theme = 'dark',
+  selectMode = false,
 }: UseTerminalConnectionProps) {
   const [connected, setConnected] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -60,6 +62,10 @@ export function useTerminalConnection({
 
   // Store initial scroll state
   const initialScrollStateRef = useRef(initialScrollState);
+
+  // Track select mode for touch handlers
+  const selectModeRef = useRef(selectMode);
+  selectModeRef.current = selectMode;
 
   const scrollToBottom = useCallback(() => {
     xtermRef.current?.scrollToBottom();
@@ -228,6 +234,8 @@ export function useTerminalConnection({
           let initialTouchY: number | null = null;
 
           handleTouchStart = (e: TouchEvent) => {
+            // Skip custom handling in select mode to allow native text selection
+            if (selectModeRef.current) return;
             if (e.touches.length > 0) {
               lastTouchY = e.touches[0].clientY;
               initialTouchY = e.touches[0].clientY;
@@ -235,6 +243,8 @@ export function useTerminalConnection({
           };
 
           handleTouchMove = (e: TouchEvent) => {
+            // Skip custom handling in select mode to allow native text selection
+            if (selectModeRef.current) return;
             if (lastTouchY === null || e.touches.length === 0) return;
 
             e.preventDefault();
