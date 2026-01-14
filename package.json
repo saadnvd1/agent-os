@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "setup": "bash scripts/setup.sh",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true"
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -81,6 +82,7 @@
     "@types/ws": "^8.18.1",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.0.8",
+    "husky": "^9.1.7",
     "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwindcss": "^4.1.18",

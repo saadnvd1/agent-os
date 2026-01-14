@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -8,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, RefreshCw, Bot, FolderPlus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, FolderPlus, MoreHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SessionListHeaderProps {
@@ -35,7 +36,7 @@ export function SessionListHeader({
   return (
     <div className="flex items-center justify-between p-4 pb-3">
       <div className="flex items-center gap-2">
-        <Bot className="w-5 h-5 text-primary" />
+        <Image src="/icon.svg" alt="AgentOS" width={20} height={20} />
         <h2 className="font-semibold">AgentOS</h2>
       </div>
       <div className="flex gap-1">
