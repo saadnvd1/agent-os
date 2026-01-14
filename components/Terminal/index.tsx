@@ -136,25 +136,28 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     };
   }, [isMobile]);
 
-  // Toggle text selection mode for copying
+  // Get terminal text content for select mode overlay
+  const [terminalText, setTerminalText] = useState('');
+
   useEffect(() => {
-    if (!terminalRef.current) return;
+    if (selectMode && xtermRef.current) {
+      // Get all visible text from the terminal buffer
+      const term = xtermRef.current;
+      const buffer = term.buffer.active;
+      const lines: string[] = [];
 
-    const xtermScreen = terminalRef.current.querySelector('.xterm-screen') as HTMLElement;
-    if (!xtermScreen) return;
+      // Get lines from scrollback + visible area
+      const startRow = Math.max(0, buffer.baseY - 500); // Last 500 lines max
+      const endRow = buffer.baseY + term.rows;
 
-    if (selectMode) {
-      // Enable text selection
-      xtermScreen.style.touchAction = 'auto';
-      xtermScreen.style.userSelect = 'text';
-      (xtermScreen.style as unknown as { webkitUserSelect: string }).webkitUserSelect = 'text';
-    } else {
-      // Disable text selection (restore defaults)
-      xtermScreen.style.touchAction = 'none';
-      xtermScreen.style.userSelect = 'none';
-      (xtermScreen.style as unknown as { webkitUserSelect: string }).webkitUserSelect = 'none';
-      // Clear any selection when exiting select mode
-      xtermRef.current?.clearSelection();
+      for (let i = startRow; i < endRow; i++) {
+        const line = buffer.getLine(i);
+        if (line) {
+          lines.push(line.translateToString(true));
+        }
+      }
+
+      setTerminalText(lines.join('\n'));
     }
   }, [selectMode, xtermRef]);
 
@@ -186,10 +189,40 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         ref={terminalRef}
         className={cn(
           "terminal-container min-h-0 w-full flex-1 overflow-hidden",
-          selectMode && "select-mode"
+          selectMode && "ring-2 ring-primary ring-inset"
         )}
         onClick={focus}
+        onTouchStart={selectMode ? (e) => e.stopPropagation() : undefined}
+        onTouchEnd={selectMode ? (e) => e.stopPropagation() : undefined}
       />
+
+      {/* Select mode overlay - shows terminal text in a selectable format */}
+      {selectMode && (
+        <div
+          className="absolute inset-0 z-40 bg-background flex flex-col"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 bg-primary text-primary-foreground text-xs font-medium flex items-center justify-between">
+            <span>Select text below, then tap Copy</span>
+            <button
+              onClick={() => setSelectMode(false)}
+              className="px-2 py-0.5 bg-primary-foreground/20 rounded text-xs"
+            >
+              Done
+            </button>
+          </div>
+          <pre
+            className="flex-1 overflow-auto p-3 text-xs font-mono whitespace-pre-wrap break-all select-text"
+            style={{
+              userSelect: 'text',
+              WebkitUserSelect: 'text',
+            }}
+          >
+            {terminalText}
+          </pre>
+        </div>
+      )}
 
       {/* Image picker button - desktop only (mobile uses virtual keyboard) */}
       {!isMobile && (
