@@ -231,41 +231,57 @@ export function useTerminalConnection({
           });
 
           let lastTouchY: number | null = null;
+          let initialTouchX: number | null = null;
           let initialTouchY: number | null = null;
+          let isHorizontalSwipe: boolean | null = null;
 
           handleTouchStart = (e: TouchEvent) => {
             // Skip custom handling in select mode to allow native text selection
             if (selectModeRef.current) return;
             if (e.touches.length > 0) {
               lastTouchY = e.touches[0].clientY;
+              initialTouchX = e.touches[0].clientX;
               initialTouchY = e.touches[0].clientY;
+              isHorizontalSwipe = null; // Reset swipe direction detection
             }
           };
 
           handleTouchMove = (e: TouchEvent) => {
             // Skip custom handling in select mode to allow native text selection
             if (selectModeRef.current) return;
-            if (lastTouchY === null || e.touches.length === 0) return;
+            if (lastTouchY === null || initialTouchX === null || initialTouchY === null || e.touches.length === 0) return;
+
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            const deltaX = Math.abs(currentX - initialTouchX);
+            const deltaY = Math.abs(currentY - initialTouchY);
+
+            // Determine swipe direction on first significant movement
+            if (isHorizontalSwipe === null && (deltaX > 15 || deltaY > 15)) {
+              isHorizontalSwipe = deltaX > deltaY;
+            }
+
+            // Ignore horizontal swipes - let parent handle for tab switching
+            if (isHorizontalSwipe) return;
 
             e.preventDefault();
             e.stopPropagation();
 
-            const currentY = e.touches[0].clientY;
-            const deltaY = currentY - lastTouchY;
+            const moveDeltaY = currentY - lastTouchY;
 
-            if (Math.abs(deltaY) < 25) return;
+            if (Math.abs(moveDeltaY) < 25) return;
 
             const buffer = currentTermForTouch.buffer.active;
             const isAlternateBuffer = buffer.type === 'alternate';
 
             if (isAlternateBuffer && wsRef.current?.readyState === WebSocket.OPEN) {
-              const wheelEvent = deltaY < 0
+              const wheelEvent = moveDeltaY < 0
                 ? '\x1b[<65;1;1M'
                 : '\x1b[<64;1;1M';
               wsRef.current.send(JSON.stringify({ type: 'input', data: wheelEvent }));
               lastTouchY = currentY;
             } else if (!isAlternateBuffer) {
-              const scrollAmount = Math.round(deltaY / 15);
+              const scrollAmount = Math.round(moveDeltaY / 15);
               if (scrollAmount !== 0) {
                 currentTermForTouch.scrollLines(scrollAmount);
                 lastTouchY = currentY;
@@ -277,12 +293,16 @@ export function useTerminalConnection({
             // Don't focus on tap - use the virtual MobileKeybar instead
             // This prevents the iOS keyboard from popping up
             lastTouchY = null;
+            initialTouchX = null;
             initialTouchY = null;
+            isHorizontalSwipe = null;
           };
 
           handleTouchCancel = () => {
             lastTouchY = null;
+            initialTouchX = null;
             initialTouchY = null;
+            isHorizontalSwipe = null;
           };
 
           xtermScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
