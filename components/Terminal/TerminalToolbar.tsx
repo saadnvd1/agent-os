@@ -11,6 +11,8 @@ import {
   FileText,
   Plus,
   Trash2,
+  MousePointer2,
+  Copy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
@@ -32,6 +34,9 @@ const SPECIAL_KEYS = {
 interface TerminalToolbarProps {
   onKeyPress: (key: string) => void;
   onImagePicker?: () => void;
+  onCopy?: () => boolean; // Returns true if selection was copied
+  selectMode?: boolean;
+  onSelectModeChange?: (enabled: boolean) => void;
   visible?: boolean;
 }
 
@@ -276,11 +281,15 @@ function PasteModal({
 export function TerminalToolbar({
   onKeyPress,
   onImagePicker,
+  onCopy,
+  selectMode = false,
+  onSelectModeChange,
   visible = true,
 }: TerminalToolbarProps) {
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [showSnippetsModal, setShowSnippetsModal] = useState(false);
   const [shiftActive, setShiftActive] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   // Speech recognition - send transcript directly to terminal
   const handleTranscript = useCallback((text: string) => {
@@ -322,6 +331,14 @@ export function TerminalToolbar({
       onKeyPress(char);
     }
   }, [onKeyPress]);
+
+  // Handle copy with visual feedback
+  const handleCopy = useCallback(() => {
+    if (onCopy?.()) {
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 1000);
+    }
+  }, [onCopy]);
 
   if (!visible) return null;
 
@@ -385,6 +402,46 @@ export function TerminalToolbar({
         >
           <Clipboard className="h-4 w-4" />
         </button>
+
+        {/* Select mode toggle */}
+        {onSelectModeChange && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectModeChange(!selectMode);
+            }}
+            className={cn(
+              "flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium",
+              selectMode
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+            )}
+          >
+            <MousePointer2 className="h-4 w-4" />
+          </button>
+        )}
+
+        {/* Copy button - shown when in select mode */}
+        {selectMode && onCopy && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
+            className={cn(
+              "flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium",
+              copyFeedback
+                ? "bg-green-500 text-white"
+                : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+            )}
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+        )}
 
         {/* Image picker button */}
         {onImagePicker && (
