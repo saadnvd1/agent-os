@@ -8,8 +8,7 @@ import { runMigrations } from "./migrations";
 export * from "./types";
 export { queries } from "./queries";
 
-const DB_PATH =
-  process.env.DB_PATH || path.join(process.cwd(), "agent-os.db");
+const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "agent-os.db");
 const LOCK_PATH = DB_PATH + ".init-lock";
 
 // Simple file-based lock for initialization
@@ -21,7 +20,9 @@ function withInitLock<T>(fn: () => T): T {
   while (fs.existsSync(LOCK_PATH)) {
     if (Date.now() - start > maxWait) {
       // Stale lock, remove it
-      try { fs.unlinkSync(LOCK_PATH); } catch {}
+      try {
+        fs.unlinkSync(LOCK_PATH);
+      } catch {}
       break;
     }
     // Busy wait (sync is fine here, this is initialization)
@@ -41,7 +42,9 @@ function withInitLock<T>(fn: () => T): T {
     return fn();
   } finally {
     // Release lock
-    try { fs.unlinkSync(LOCK_PATH); } catch {}
+    try {
+      fs.unlinkSync(LOCK_PATH);
+    } catch {}
   }
 }
 

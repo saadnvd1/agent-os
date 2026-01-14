@@ -20,8 +20,14 @@ interface SelectedFileDiff {
 
 export function CommitHistory({ workingDirectory }: CommitHistoryProps) {
   const { isMobile } = useViewport();
-  const { data: commits, isLoading, error } = useCommitHistory(workingDirectory);
-  const [selectedFile, setSelectedFile] = useState<SelectedFileDiff | null>(null);
+  const {
+    data: commits,
+    isLoading,
+    error,
+  } = useCommitHistory(workingDirectory);
+  const [selectedFile, setSelectedFile] = useState<SelectedFileDiff | null>(
+    null
+  );
 
   // Fetch diff when file is selected
   const { data: diff, isLoading: loadingDiff } = useCommitFileDiff(
@@ -36,25 +42,25 @@ export function CommitHistory({ workingDirectory }: CommitHistoryProps) {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-4 text-muted-foreground">
-        <History className="w-8 h-8 mb-2 opacity-50" />
-        <p className="text-sm text-center">Failed to load commit history</p>
+      <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center p-4">
+        <History className="mb-2 h-8 w-8 opacity-50" />
+        <p className="text-center text-sm">Failed to load commit history</p>
       </div>
     );
   }
 
   if (!commits?.length) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-4 text-muted-foreground">
-        <History className="w-8 h-8 mb-2 opacity-50" />
+      <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center p-4">
+        <History className="mb-2 h-8 w-8 opacity-50" />
         <p className="text-sm">No commits yet</p>
       </div>
     );
@@ -63,28 +69,28 @@ export function CommitHistory({ workingDirectory }: CommitHistoryProps) {
   // Mobile: full-screen diff view when file selected
   if (isMobile && selectedFile) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex items-center gap-2 p-2 bg-muted/30">
+      <div className="flex h-full flex-col">
+        <div className="bg-muted/30 flex items-center gap-2 p-2">
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={() => setSelectedFile(null)}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">
               {selectedFile.file.path}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               {selectedFile.hash.slice(0, 7)}
             </p>
           </div>
         </div>
         <div className="flex-1 overflow-auto p-3">
           {loadingDiff ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
           ) : (
             <DiffView diff={diff || ""} fileName={selectedFile.file.path} />
@@ -117,9 +123,9 @@ export function CommitHistory({ workingDirectory }: CommitHistoryProps) {
 
   // Desktop: side-by-side layout
   return (
-    <div className="flex-1 flex min-h-0">
+    <div className="flex min-h-0 flex-1">
       {/* Commit list */}
-      <div className="w-[300px] flex-shrink-0 overflow-y-auto border-r border-border/50">
+      <div className="border-border/50 w-[300px] flex-shrink-0 overflow-y-auto border-r">
         {commits.map((commit) => (
           <CommitItem
             key={commit.hash}
@@ -136,19 +142,19 @@ export function CommitHistory({ workingDirectory }: CommitHistoryProps) {
       </div>
 
       {/* Diff view */}
-      <div className="flex-1 flex flex-col min-w-0 bg-muted/20">
+      <div className="bg-muted/20 flex min-w-0 flex-1 flex-col">
         {loadingDiff ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
           </div>
         ) : selectedFile && diff !== undefined ? (
           <>
-            <div className="flex items-center gap-2 p-3 bg-background/50">
-              <FileCode className="w-4 h-4 text-muted-foreground" />
-              <span className="flex-1 text-sm font-medium truncate">
+            <div className="bg-background/50 flex items-center gap-2 p-3">
+              <FileCode className="text-muted-foreground h-4 w-4" />
+              <span className="flex-1 truncate text-sm font-medium">
                 {selectedFile.file.path}
               </span>
-              <span className="text-xs text-muted-foreground font-mono">
+              <span className="text-muted-foreground font-mono text-xs">
                 {selectedFile.hash.slice(0, 7)}
               </span>
             </div>
@@ -157,8 +163,8 @@ export function CommitHistory({ workingDirectory }: CommitHistoryProps) {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-            <FileCode className="w-12 h-12 mb-4 opacity-50" />
+          <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center">
+            <FileCode className="mb-4 h-12 w-12 opacity-50" />
             <p className="text-sm">Select a file to view diff</p>
           </div>
         )}

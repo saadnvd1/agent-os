@@ -12,7 +12,11 @@ import {
   GitBranch,
   Users,
 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { Session } from "@/lib/db";
 
@@ -77,12 +81,14 @@ export function DesktopTabBar({
   };
 
   return (
-    <div className={cn(
-      "flex items-center overflow-x-auto px-1 pt-1 gap-1 transition-colors",
-      isFocused ? "bg-muted" : "bg-muted/50"
-    )}>
+    <div
+      className={cn(
+        "flex items-center gap-1 overflow-x-auto px-1 pt-1 transition-colors",
+        isFocused ? "bg-muted" : "bg-muted/50"
+      )}
+    >
       {/* Tabs */}
-      <div className="flex items-center flex-1 min-w-0 gap-0.5">
+      <div className="flex min-w-0 flex-1 items-center gap-0.5">
         {tabs.map((tab) => (
           <div
             key={tab.id}
@@ -91,22 +97,22 @@ export function DesktopTabBar({
               onTabSwitch(tab.id);
             }}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer group rounded-t-md transition-colors",
+              "group flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition-colors",
               tab.id === activeTabId
                 ? "bg-background text-foreground"
                 : "text-muted-foreground hover:text-foreground/80 hover:bg-accent/50"
             )}
           >
-            <span className="truncate max-w-[120px]">{getTabName(tab)}</span>
+            <span className="max-w-[120px] truncate">{getTabName(tab)}</span>
             {tabs.length > 1 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onTabClose(tab.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 hover:text-foreground ml-1"
+                className="hover:text-foreground ml-1 opacity-0 group-hover:opacity-100"
               >
-                <X className="w-3 h-3" />
+                <X className="h-3 w-3" />
               </button>
             )}
           </div>
@@ -120,9 +126,9 @@ export function DesktopTabBar({
                 e.stopPropagation();
                 onTabAdd();
               }}
-              className="h-6 w-6 mx-1"
+              className="mx-1 h-6 w-6"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>New tab</TooltipContent>
@@ -131,7 +137,7 @@ export function DesktopTabBar({
 
       {/* View Toggle */}
       {session?.working_directory && (
-        <div className="flex items-center bg-accent/50 rounded-md p-0.5 mx-2">
+        <div className="bg-accent/50 mx-2 flex items-center rounded-md p-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -140,13 +146,13 @@ export function DesktopTabBar({
                   onViewModeChange("terminal");
                 }}
                 className={cn(
-                  "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                  "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
                   viewMode === "terminal"
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <TerminalIcon className="w-3 h-3" />
+                <TerminalIcon className="h-3 w-3" />
                 <span>Term</span>
               </button>
             </TooltipTrigger>
@@ -160,13 +166,13 @@ export function DesktopTabBar({
                   onViewModeChange("files");
                 }}
                 className={cn(
-                  "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                  "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
                   viewMode === "files"
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <FolderOpen className="w-3 h-3" />
+                <FolderOpen className="h-3 w-3" />
                 <span>Files</span>
               </button>
             </TooltipTrigger>
@@ -180,13 +186,13 @@ export function DesktopTabBar({
                   onViewModeChange("git");
                 }}
                 className={cn(
-                  "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                  "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
                   viewMode === "git"
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <GitBranch className="w-3 h-3" />
+                <GitBranch className="h-3 w-3" />
                 <span>Git</span>
               </button>
             </TooltipTrigger>
@@ -201,15 +207,15 @@ export function DesktopTabBar({
                     onViewModeChange("workers");
                   }}
                   className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                    "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
                     viewMode === "workers"
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Users className="w-3 h-3" />
+                  <Users className="h-3 w-3" />
                   <span>Workers</span>
-                  <span className="text-[10px] bg-primary/20 text-primary px-1 rounded">
+                  <span className="bg-primary/20 text-primary rounded px-1 text-[10px]">
                     {workerCount}
                   </span>
                 </button>
@@ -221,7 +227,7 @@ export function DesktopTabBar({
       )}
 
       {/* Pane Controls */}
-      <div className="flex items-center gap-0.5 px-2 ml-auto">
+      <div className="ml-auto flex items-center gap-0.5 px-2">
         {hasAttachedTmux && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -234,7 +240,7 @@ export function DesktopTabBar({
                 }}
                 className="h-6 w-6"
               >
-                <Unplug className="w-3 h-3" />
+                <Unplug className="h-3 w-3" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Detach from tmux</TooltipContent>
@@ -252,7 +258,7 @@ export function DesktopTabBar({
               disabled={!canSplit}
               className="h-6 w-6"
             >
-              <SplitSquareHorizontal className="w-3 h-3" />
+              <SplitSquareHorizontal className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Split horizontal</TooltipContent>
@@ -269,7 +275,7 @@ export function DesktopTabBar({
               disabled={!canSplit}
               className="h-6 w-6"
             >
-              <SplitSquareVertical className="w-3 h-3" />
+              <SplitSquareVertical className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Split vertical</TooltipContent>
@@ -286,7 +292,7 @@ export function DesktopTabBar({
               disabled={!canClose}
               className="h-6 w-6"
             >
-              <X className="w-3 h-3" />
+              <X className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Close pane</TooltipContent>

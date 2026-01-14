@@ -48,7 +48,9 @@ export function StartServerDialog({
   useEffect(() => {
     async function detect() {
       try {
-        const res = await fetch(`/api/dev-servers/detect?projectId=${project.id}`);
+        const res = await fetch(
+          `/api/dev-servers/detect?projectId=${project.id}`
+        );
         if (res.ok) {
           const data = await res.json();
           setDetected(data.servers || []);
@@ -133,32 +135,33 @@ export function StartServerDialog({
       <div
         className={cn(
           "w-full max-w-md rounded-xl",
-          "bg-background border border-border",
+          "bg-background border-border border",
           "shadow-2xl"
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-lg font-semibold">Start Dev Server</h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 hover:bg-muted transition-colors"
+            className="hover:bg-muted rounded-md p-1 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4">
           {/* Project info */}
-          <div className="text-sm text-muted-foreground">
-            Project: <span className="font-medium text-foreground">{project.name}</span>
+          <div className="text-muted-foreground text-sm">
+            Project:{" "}
+            <span className="text-foreground font-medium">{project.name}</span>
           </div>
 
           {/* Project dev servers */}
           {projectDevServers.length > 0 && (
             <div className="space-y-2">
-              <div className="text-sm font-medium flex items-center gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
                 <FolderOpen className="h-4 w-4" />
                 Project servers
               </div>
@@ -168,9 +171,9 @@ export function StartServerDialog({
                   onClick={() => handleStartProjectServer(server)}
                   disabled={starting}
                   className={cn(
-                    "w-full flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3",
-                    "hover:bg-primary/10 transition-colors text-left",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                    "border-primary/30 bg-primary/5 flex w-full items-center gap-3 rounded-lg border p-3",
+                    "hover:bg-primary/10 text-left transition-colors",
+                    "disabled:cursor-not-allowed disabled:opacity-50"
                   )}
                 >
                   {server.type === "docker" ? (
@@ -178,14 +181,14 @@ export function StartServerDialog({
                   ) : (
                     <Server className="h-5 w-5 text-green-500" />
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{server.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{server.name}</div>
+                    <div className="text-muted-foreground truncate text-xs">
                       {server.command}
                       {server.port && ` (port ${server.port})`}
                     </div>
                   </div>
-                  <Play className="h-4 w-4 text-primary" />
+                  <Play className="text-primary h-4 w-4" />
                 </button>
               ))}
             </div>
@@ -194,8 +197,8 @@ export function StartServerDialog({
           {/* Detected servers */}
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-sm text-muted-foreground">
+              <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+              <span className="text-muted-foreground ml-2 text-sm">
                 Detecting dev servers...
               </span>
             </div>
@@ -208,9 +211,9 @@ export function StartServerDialog({
                   onClick={() => handleStartDetected(server)}
                   disabled={starting}
                   className={cn(
-                    "w-full flex items-center gap-3 rounded-lg border border-border p-3",
-                    "hover:bg-muted/50 transition-colors text-left",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                    "border-border flex w-full items-center gap-3 rounded-lg border p-3",
+                    "hover:bg-muted/50 text-left transition-colors",
+                    "disabled:cursor-not-allowed disabled:opacity-50"
                   )}
                 >
                   {server.type === "docker" ? (
@@ -218,19 +221,19 @@ export function StartServerDialog({
                   ) : (
                     <Server className="h-5 w-5 text-green-500" />
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{server.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{server.name}</div>
+                    <div className="text-muted-foreground truncate text-xs">
                       {server.command}
                       {server.ports.length > 0 && ` (port ${server.ports[0]})`}
                     </div>
                   </div>
-                  <Play className="h-4 w-4 text-primary" />
+                  <Play className="text-primary h-4 w-4" />
                 </button>
               ))}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground text-center py-4">
+            <div className="text-muted-foreground py-4 text-center text-sm">
               No dev servers detected automatically
             </div>
           )}
@@ -239,12 +242,12 @@ export function StartServerDialog({
           {!showCustom ? (
             <button
               onClick={() => setShowCustom(true)}
-              className="w-full text-sm text-primary hover:underline"
+              className="text-primary w-full text-sm hover:underline"
             >
               + Add custom server
             </button>
           ) : (
-            <div className="space-y-3 border-t border-border pt-4">
+            <div className="border-border space-y-3 border-t pt-4">
               <div className="text-sm font-medium">Custom server</div>
 
               {/* Type selector */}
@@ -252,7 +255,7 @@ export function StartServerDialog({
                 <button
                   onClick={() => setCustomType("node")}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-2 rounded-md py-2",
+                    "flex flex-1 items-center justify-center gap-2 rounded-md py-2",
                     "border transition-colors",
                     customType === "node"
                       ? "border-primary bg-primary/10 text-primary"
@@ -265,7 +268,7 @@ export function StartServerDialog({
                 <button
                   onClick={() => setCustomType("docker")}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-2 rounded-md py-2",
+                    "flex flex-1 items-center justify-center gap-2 rounded-md py-2",
                     "border transition-colors",
                     customType === "docker"
                       ? "border-primary bg-primary/10 text-primary"
@@ -284,9 +287,9 @@ export function StartServerDialog({
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
                 className={cn(
-                  "w-full rounded-md border border-border bg-background px-3 py-2",
-                  "text-sm placeholder:text-muted-foreground",
-                  "focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  "border-border bg-background w-full rounded-md border px-3 py-2",
+                  "placeholder:text-muted-foreground text-sm",
+                  "focus:ring-primary/50 focus:ring-2 focus:outline-none"
                 )}
               />
 
@@ -301,9 +304,9 @@ export function StartServerDialog({
                 value={customCommand}
                 onChange={(e) => setCustomCommand(e.target.value)}
                 className={cn(
-                  "w-full rounded-md border border-border bg-background px-3 py-2",
-                  "text-sm font-mono placeholder:text-muted-foreground",
-                  "focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  "border-border bg-background w-full rounded-md border px-3 py-2",
+                  "placeholder:text-muted-foreground font-mono text-sm",
+                  "focus:ring-primary/50 focus:ring-2 focus:outline-none"
                 )}
               />
 
@@ -315,9 +318,9 @@ export function StartServerDialog({
                   value={customPort}
                   onChange={(e) => setCustomPort(e.target.value)}
                   className={cn(
-                    "w-full rounded-md border border-border bg-background px-3 py-2",
-                    "text-sm placeholder:text-muted-foreground",
-                    "focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    "border-border bg-background w-full rounded-md border px-3 py-2",
+                    "placeholder:text-muted-foreground text-sm",
+                    "focus:ring-primary/50 focus:ring-2 focus:outline-none"
                   )}
                 />
               )}
@@ -327,10 +330,10 @@ export function StartServerDialog({
                 onClick={handleStartCustom}
                 disabled={starting || !customName || !customCommand}
                 className={cn(
-                  "w-full flex items-center justify-center gap-2 rounded-md py-2",
+                  "flex w-full items-center justify-center gap-2 rounded-md py-2",
                   "bg-primary text-primary-foreground font-medium",
                   "hover:bg-primary/90 transition-colors",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                  "disabled:cursor-not-allowed disabled:opacity-50"
                 )}
               >
                 {starting ? (
@@ -345,7 +348,7 @@ export function StartServerDialog({
 
           {/* Error message */}
           {error && (
-            <div className="text-sm text-red-500 bg-red-500/10 rounded-md p-2">
+            <div className="rounded-md bg-red-500/10 p-2 text-sm text-red-500">
               {error}
             </div>
           )}

@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Loader2 } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  File,
+  Folder,
+  FolderOpen,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FileNode } from "@/lib/file-utils";
 
@@ -17,50 +24,65 @@ interface FileTreeProps {
  * Mobile-optimized with larger touch targets
  * Lazily loads directory contents when expanded
  */
-export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreeProps) {
+export function FileTree({
+  nodes,
+  basePath,
+  onFileClick,
+  depth = 0,
+}: FileTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [loadedChildren, setLoadedChildren] = useState<Map<string, FileNode[]>>(new Map());
+  const [loadedChildren, setLoadedChildren] = useState<Map<string, FileNode[]>>(
+    new Map()
+  );
   const [loadingDirs, setLoadingDirs] = useState<Set<string>>(new Set());
 
-  const fetchChildren = useCallback(async (dirPath: string) => {
-    if (loadedChildren.has(dirPath)) return;
+  const fetchChildren = useCallback(
+    async (dirPath: string) => {
+      if (loadedChildren.has(dirPath)) return;
 
-    setLoadingDirs(prev => new Set(prev).add(dirPath));
-    try {
-      const res = await fetch(`/api/files?path=${encodeURIComponent(dirPath)}`);
-      const data = await res.json();
-      if (data.files) {
-        setLoadedChildren(prev => new Map(prev).set(dirPath, data.files));
+      setLoadingDirs((prev) => new Set(prev).add(dirPath));
+      try {
+        const res = await fetch(
+          `/api/files?path=${encodeURIComponent(dirPath)}`
+        );
+        const data = await res.json();
+        if (data.files) {
+          setLoadedChildren((prev) => new Map(prev).set(dirPath, data.files));
+        }
+      } catch (err) {
+        console.error("Failed to load directory:", err);
+      } finally {
+        setLoadingDirs((prev) => {
+          const next = new Set(prev);
+          next.delete(dirPath);
+          return next;
+        });
       }
-    } catch (err) {
-      console.error("Failed to load directory:", err);
-    } finally {
-      setLoadingDirs(prev => {
+    },
+    [loadedChildren]
+  );
+
+  const toggleExpand = useCallback(
+    async (path: string) => {
+      const isCurrentlyExpanded = expanded.has(path);
+
+      setExpanded((prev) => {
         const next = new Set(prev);
-        next.delete(dirPath);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
         return next;
       });
-    }
-  }, [loadedChildren]);
 
-  const toggleExpand = useCallback(async (path: string) => {
-    const isCurrentlyExpanded = expanded.has(path);
-
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
+      // Fetch children if expanding and not already loaded
+      if (!isCurrentlyExpanded && !loadedChildren.has(path)) {
+        await fetchChildren(path);
       }
-      return next;
-    });
-
-    // Fetch children if expanding and not already loaded
-    if (!isCurrentlyExpanded && !loadedChildren.has(path)) {
-      await fetchChildren(path);
-    }
-  }, [expanded, loadedChildren, fetchChildren]);
+    },
+    [expanded, loadedChildren, fetchChildren]
+  );
 
   return (
     <div className="w-full">
@@ -82,7 +104,7 @@ export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreePr
                 }
               }}
               className={cn(
-                "w-full flex items-center gap-2 px-2 py-2 hover:bg-accent transition-colors text-left",
+                "hover:bg-accent flex w-full items-center gap-2 px-2 py-2 text-left transition-colors",
                 "min-h-[40px] md:min-h-[32px]", // Touch target
                 "text-sm"
               )}
@@ -90,13 +112,13 @@ export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreePr
             >
               {/* Expand/collapse icon */}
               {isDirectory && (
-                <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
                   {isLoading ? (
-                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                    <Loader2 className="text-muted-foreground h-3 w-3 animate-spin" />
                   ) : isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                    <ChevronDown className="text-muted-foreground h-4 w-4" />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    <ChevronRight className="text-muted-foreground h-4 w-4" />
                   )}
                 </span>
               )}
@@ -105,9 +127,9 @@ export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreePr
               <span className="flex-shrink-0">
                 {isDirectory ? (
                   isExpanded ? (
-                    <FolderOpen className="w-4 h-4 text-blue-400" />
+                    <FolderOpen className="h-4 w-4 text-blue-400" />
                   ) : (
-                    <Folder className="w-4 h-4 text-blue-400" />
+                    <Folder className="h-4 w-4 text-blue-400" />
                   )
                 ) : (
                   <FileIcon extension={node.extension || ""} />
@@ -115,16 +137,18 @@ export function FileTree({ nodes, basePath, onFileClick, depth = 0 }: FileTreePr
               </span>
 
               {/* Name */}
-              <span className={cn(
-                "flex-1 truncate",
-                isDirectory ? "font-medium" : "text-muted-foreground"
-              )}>
+              <span
+                className={cn(
+                  "flex-1 truncate",
+                  isDirectory ? "font-medium" : "text-muted-foreground"
+                )}
+              >
                 {node.name}
               </span>
 
               {/* Size (files only, on desktop) */}
               {!isDirectory && node.size !== undefined && (
-                <span className="hidden md:block text-xs text-muted-foreground flex-shrink-0">
+                <span className="text-muted-foreground hidden flex-shrink-0 text-xs md:block">
                   {formatFileSize(node.size)}
                 </span>
               )}
@@ -177,7 +201,7 @@ function FileIcon({ extension }: { extension: string }) {
 
   const color = colorMap[ext] || "text-muted-foreground";
 
-  return <File className={cn("w-4 h-4", color)} />;
+  return <File className={cn("h-4 w-4", color)} />;
 }
 
 /**

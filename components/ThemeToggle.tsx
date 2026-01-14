@@ -42,11 +42,11 @@ export function ThemeToggle() {
             <Sun className="mr-2 h-4 w-4" />
             <span>Light</span>
             {mode === "light" && (
-              <Check className="ml-auto h-4 w-4 text-primary" />
+              <Check className="text-primary ml-auto h-4 w-4" />
             )}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-56 max-h-[50vh] overflow-y-auto">
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
+          <DropdownMenuSubContent className="max-h-[50vh] w-56 overflow-y-auto">
+            <DropdownMenuLabel className="text-muted-foreground text-xs">
               Choose your light theme
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -57,7 +57,9 @@ export function ThemeToggle() {
                 <DropdownMenuItem
                   key={lightTheme.id}
                   onClick={() =>
-                    setTheme(buildTheme("light", lightTheme.id as LightThemeVariant))
+                    setTheme(
+                      buildTheme("light", lightTheme.id as LightThemeVariant)
+                    )
                   }
                   className="cursor-pointer"
                 >
@@ -67,19 +69,21 @@ export function ThemeToggle() {
                       <span className="text-sm font-medium">
                         {lightTheme.label}
                       </span>
-                      {isActive && <Check className="h-4 w-4 text-primary" />}
+                      {isActive && <Check className="text-primary h-4 w-4" />}
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-muted-foreground text-xs">
                       {lightTheme.description}
                     </span>
                     {/* Color preview */}
                     <div className="mt-1 flex gap-1">
                       <div
-                        className="h-3 w-8 rounded-sm border border-border/50"
-                        style={{ backgroundColor: lightTheme.preview.background }}
+                        className="border-border/50 h-3 w-8 rounded-sm border"
+                        style={{
+                          backgroundColor: lightTheme.preview.background,
+                        }}
                       />
                       <div
-                        className="h-3 w-8 rounded-sm border border-border/50"
+                        className="border-border/50 h-3 w-8 rounded-sm border"
                         style={{ backgroundColor: lightTheme.preview.accent }}
                       />
                     </div>
@@ -96,11 +100,11 @@ export function ThemeToggle() {
             <Moon className="mr-2 h-4 w-4" />
             <span>Dark</span>
             {mode === "dark" && (
-              <Check className="ml-auto h-4 w-4 text-primary" />
+              <Check className="text-primary ml-auto h-4 w-4" />
             )}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-56 max-h-[50vh] overflow-y-auto">
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
+          <DropdownMenuSubContent className="max-h-[50vh] w-56 overflow-y-auto">
+            <DropdownMenuLabel className="text-muted-foreground text-xs">
               Choose your dark theme
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -111,7 +115,9 @@ export function ThemeToggle() {
                 <DropdownMenuItem
                   key={darkTheme.id}
                   onClick={() =>
-                    setTheme(buildTheme("dark", darkTheme.id as DarkThemeVariant))
+                    setTheme(
+                      buildTheme("dark", darkTheme.id as DarkThemeVariant)
+                    )
                   }
                   className="cursor-pointer"
                 >
@@ -121,19 +127,21 @@ export function ThemeToggle() {
                       <span className="text-sm font-medium">
                         {darkTheme.label}
                       </span>
-                      {isActive && <Check className="h-4 w-4 text-primary" />}
+                      {isActive && <Check className="text-primary h-4 w-4" />}
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-muted-foreground text-xs">
                       {darkTheme.description}
                     </span>
                     {/* Color preview */}
                     <div className="mt-1 flex gap-1">
                       <div
-                        className="h-3 w-8 rounded-sm border border-border/50"
-                        style={{ backgroundColor: darkTheme.preview.background }}
+                        className="border-border/50 h-3 w-8 rounded-sm border"
+                        style={{
+                          backgroundColor: darkTheme.preview.background,
+                        }}
                       />
                       <div
-                        className="h-3 w-8 rounded-sm border border-border/50"
+                        className="border-border/50 h-3 w-8 rounded-sm border"
                         style={{ backgroundColor: darkTheme.preview.accent }}
                       />
                     </div>
@@ -151,7 +159,7 @@ export function ThemeToggle() {
           <Monitor className="mr-2 h-4 w-4" />
           <span>System</span>
           {mode === "system" && (
-            <Check className="ml-auto h-4 w-4 text-primary" />
+            <Check className="text-primary ml-auto h-4 w-4" />
           )}
         </DropdownMenuItem>
       </DropdownMenuContent>

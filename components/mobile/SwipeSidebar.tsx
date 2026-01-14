@@ -67,7 +67,9 @@ export function SwipeSidebar({ isOpen, onClose, children }: SwipeSidebarProps) {
       touchCurrentX.current = null;
     };
 
-    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+    });
     document.addEventListener("touchmove", handleTouchMove, { passive: true });
     document.addEventListener("touchend", handleTouchEnd);
 
@@ -95,8 +97,8 @@ export function SwipeSidebar({ isOpen, onClose, children }: SwipeSidebarProps) {
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 bg-black/50 z-40 transition-opacity md:hidden",
-          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          "fixed inset-0 z-40 bg-black/50 transition-opacity md:hidden",
+          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
       />
@@ -105,15 +107,13 @@ export function SwipeSidebar({ isOpen, onClose, children }: SwipeSidebarProps) {
       <aside
         ref={sidebarRef}
         className={cn(
-          "fixed top-0 left-0 bottom-0 w-[280px] bg-background z-50 transition-transform duration-300 md:hidden",
+          "bg-background fixed top-0 bottom-0 left-0 z-50 w-[280px] transition-transform duration-300 md:hidden",
           "flex flex-col",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
 
         {/* Safe area spacer */}
         <div className="h-[env(safe-area-inset-bottom)]" />

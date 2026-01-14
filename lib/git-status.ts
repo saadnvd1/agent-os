@@ -181,11 +181,14 @@ export function getUntrackedFileDiff(
   filePath: string
 ): string {
   try {
-    const output = execSync(`git diff --no-index /dev/null "${filePath}" 2>/dev/null || true`, {
-      cwd: workingDir,
-      encoding: "utf-8",
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    const output = execSync(
+      `git diff --no-index /dev/null "${filePath}" 2>/dev/null || true`,
+      {
+        cwd: workingDir,
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024,
+      }
+    );
     return output;
   } catch {
     return "";
@@ -365,7 +368,9 @@ export function getDefaultBranch(workingDir: string): string {
       "git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo 'refs/heads/main'",
       { cwd: workingDir, encoding: "utf-8" }
     ).trim();
-    return output.replace("refs/remotes/origin/", "").replace("refs/heads/", "");
+    return output
+      .replace("refs/remotes/origin/", "")
+      .replace("refs/heads/", "");
   } catch {
     return "main";
   }

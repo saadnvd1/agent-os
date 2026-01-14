@@ -51,12 +51,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const result = queries.createMessage(db).run(
-      id,
-      role,
-      JSON.stringify([{ type: "text", text: content }]),
-      null
-    );
+    const result = queries
+      .createMessage(db)
+      .run(id, role, JSON.stringify([{ type: "text", text: content }]), null);
 
     return NextResponse.json(
       {

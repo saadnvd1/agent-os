@@ -36,7 +36,7 @@ export function DevServersSection({
   const projectMap = new Map(projects.map((p) => [p.id, p]));
 
   return (
-    <div className="border-b border-border/50">
+    <div className="border-border/50 border-b">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -47,12 +47,14 @@ export function DevServersSection({
       >
         <ChevronDown
           className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform",
+            "text-muted-foreground h-4 w-4 transition-transform",
             !expanded && "-rotate-90"
           )}
         />
-        <Server className="h-4 w-4 text-muted-foreground" />
-        <span className="flex-1 text-left text-sm font-medium">Dev Servers</span>
+        <Server className="text-muted-foreground h-4 w-4" />
+        <span className="flex-1 text-left text-sm font-medium">
+          Dev Servers
+        </span>
         {runningCount > 0 && (
           <span
             className={cn(
@@ -64,7 +66,7 @@ export function DevServersSection({
             {runningCount} running
           </span>
         )}
-        <span className="text-xs text-muted-foreground">{servers.length}</span>
+        <span className="text-muted-foreground text-xs">{servers.length}</span>
       </button>
 
       {/* Server list */}

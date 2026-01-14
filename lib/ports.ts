@@ -36,7 +36,9 @@ export async function isPortInUse(port: number): Promise<boolean> {
 export function getAssignedPorts(): number[] {
   const db = getDb();
   const sessions = db
-    .prepare("SELECT dev_server_port FROM sessions WHERE dev_server_port IS NOT NULL")
+    .prepare(
+      "SELECT dev_server_port FROM sessions WHERE dev_server_port IS NOT NULL"
+    )
     .all() as Array<{ dev_server_port: number }>;
   return sessions.map((s) => s.dev_server_port);
 }
@@ -69,7 +71,10 @@ export async function findAvailablePort(): Promise<number> {
 export async function assignPort(sessionId: string): Promise<number> {
   const port = await findAvailablePort();
   const db = getDb();
-  db.prepare("UPDATE sessions SET dev_server_port = ? WHERE id = ?").run(port, sessionId);
+  db.prepare("UPDATE sessions SET dev_server_port = ? WHERE id = ?").run(
+    port,
+    sessionId
+  );
   return port;
 }
 
@@ -78,7 +83,9 @@ export async function assignPort(sessionId: string): Promise<number> {
  */
 export function releasePort(sessionId: string): void {
   const db = getDb();
-  db.prepare("UPDATE sessions SET dev_server_port = NULL WHERE id = ?").run(sessionId);
+  db.prepare("UPDATE sessions SET dev_server_port = NULL WHERE id = ?").run(
+    sessionId
+  );
 }
 
 /**

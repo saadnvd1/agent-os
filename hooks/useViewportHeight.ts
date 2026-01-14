@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
+import { useEffect } from "react";
 
 /**
  * Hook to set CSS custom property for actual viewport height.
@@ -16,34 +16,34 @@ export function useViewportHeight() {
     const setAppHeight = () => {
       // Use visualViewport if available (more accurate on mobile with keyboard)
       const vh = window.visualViewport?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty('--app-height', `${vh}px`);
+      document.documentElement.style.setProperty("--app-height", `${vh}px`);
     };
 
     // Set initial value
     setAppHeight();
 
     // Update on window resize
-    window.addEventListener('resize', setAppHeight);
+    window.addEventListener("resize", setAppHeight);
 
     // Visual viewport resize handles keyboard appearance on mobile
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', setAppHeight);
-      window.visualViewport.addEventListener('scroll', setAppHeight);
+      window.visualViewport.addEventListener("resize", setAppHeight);
+      window.visualViewport.addEventListener("scroll", setAppHeight);
     }
 
     // Handle orientation changes
-    if ('orientation' in screen) {
-      screen.orientation.addEventListener('change', setAppHeight);
+    if ("orientation" in screen) {
+      screen.orientation.addEventListener("change", setAppHeight);
     }
 
     return () => {
-      window.removeEventListener('resize', setAppHeight);
+      window.removeEventListener("resize", setAppHeight);
       if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', setAppHeight);
-        window.visualViewport.removeEventListener('scroll', setAppHeight);
+        window.visualViewport.removeEventListener("resize", setAppHeight);
+        window.visualViewport.removeEventListener("scroll", setAppHeight);
       }
-      if ('orientation' in screen) {
-        screen.orientation.removeEventListener('change', setAppHeight);
+      if ("orientation" in screen) {
+        screen.orientation.removeEventListener("change", setAppHeight);
       }
     };
   }, []);

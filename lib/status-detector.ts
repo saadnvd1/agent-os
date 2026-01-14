@@ -21,11 +21,11 @@ const execAsync = promisify(exec);
 
 // Configuration constants
 const CONFIG = {
-  ACTIVITY_COOLDOWN_MS: 2000,        // Grace period after activity
-  SPIKE_WINDOW_MS: 1000,             // Window to detect sustained activity
-  SUSTAINED_THRESHOLD: 2,            // Changes needed to confirm activity
-  CACHE_VALIDITY_MS: 2000,           // How long tmux cache is valid
-  RECENT_ACTIVITY_MS: 120000,        // Window for "recent" activity (2 min, tmux updates slowly)
+  ACTIVITY_COOLDOWN_MS: 2000, // Grace period after activity
+  SPIKE_WINDOW_MS: 1000, // Window to detect sustained activity
+  SUSTAINED_THRESHOLD: 2, // Changes needed to confirm activity
+  CACHE_VALIDITY_MS: 2000, // How long tmux cache is valid
+  RECENT_ACTIVITY_MS: 120000, // Window for "recent" activity (2 min, tmux updates slowly)
 } as const;
 
 // Detection patterns
@@ -38,24 +38,96 @@ const BUSY_INDICATORS = [
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const WHIMSICAL_WORDS = [
-  "accomplishing", "actioning", "actualizing", "baking", "booping",
-  "brewing", "calculating", "cerebrating", "channelling", "churning",
-  "clauding", "coalescing", "cogitating", "combobulating", "computing",
-  "concocting", "conjuring", "considering", "contemplating", "cooking",
-  "crafting", "creating", "crunching", "deciphering", "deliberating",
-  "determining", "discombobulating", "divining", "doing", "effecting",
-  "elucidating", "enchanting", "envisioning", "finagling", "flibbertigibbeting",
-  "forging", "forming", "frolicking", "generating", "germinating",
-  "hatching", "herding", "honking", "hustling", "ideating",
-  "imagining", "incubating", "inferring", "jiving", "manifesting",
-  "marinating", "meandering", "moseying", "mulling", "mustering",
-  "musing", "noodling", "percolating", "perusing", "philosophising",
-  "pondering", "pontificating", "processing", "puttering", "puzzling",
-  "reticulating", "ruminating", "scheming", "schlepping", "shimmying",
-  "shucking", "simmering", "smooshing", "spelunking", "spinning",
-  "stewing", "sussing", "synthesizing", "thinking", "tinkering",
-  "transmuting", "unfurling", "unravelling", "vibing", "wandering",
-  "whirring", "wibbling", "wizarding", "working", "wrangling",
+  "accomplishing",
+  "actioning",
+  "actualizing",
+  "baking",
+  "booping",
+  "brewing",
+  "calculating",
+  "cerebrating",
+  "channelling",
+  "churning",
+  "clauding",
+  "coalescing",
+  "cogitating",
+  "combobulating",
+  "computing",
+  "concocting",
+  "conjuring",
+  "considering",
+  "contemplating",
+  "cooking",
+  "crafting",
+  "creating",
+  "crunching",
+  "deciphering",
+  "deliberating",
+  "determining",
+  "discombobulating",
+  "divining",
+  "doing",
+  "effecting",
+  "elucidating",
+  "enchanting",
+  "envisioning",
+  "finagling",
+  "flibbertigibbeting",
+  "forging",
+  "forming",
+  "frolicking",
+  "generating",
+  "germinating",
+  "hatching",
+  "herding",
+  "honking",
+  "hustling",
+  "ideating",
+  "imagining",
+  "incubating",
+  "inferring",
+  "jiving",
+  "manifesting",
+  "marinating",
+  "meandering",
+  "moseying",
+  "mulling",
+  "mustering",
+  "musing",
+  "noodling",
+  "percolating",
+  "perusing",
+  "philosophising",
+  "pondering",
+  "pontificating",
+  "processing",
+  "puttering",
+  "puzzling",
+  "reticulating",
+  "ruminating",
+  "scheming",
+  "schlepping",
+  "shimmying",
+  "shucking",
+  "simmering",
+  "smooshing",
+  "spelunking",
+  "spinning",
+  "stewing",
+  "sussing",
+  "synthesizing",
+  "thinking",
+  "tinkering",
+  "transmuting",
+  "unfurling",
+  "unravelling",
+  "vibing",
+  "wandering",
+  "whirring",
+  "wibbling",
+  "wizarding",
+  "working",
+  "wrangling",
 ];
 
 const WAITING_PATTERNS = [
@@ -97,21 +169,25 @@ function checkBusyIndicators(content: string): boolean {
   const recentContent = lines.slice(-10).join("\n").toLowerCase();
 
   // Check text indicators in recent lines
-  if (BUSY_INDICATORS.some(ind => recentContent.includes(ind))) return true;
+  if (BUSY_INDICATORS.some((ind) => recentContent.includes(ind))) return true;
 
   // Check whimsical words + "tokens" pattern in recent lines
-  if (recentContent.includes("tokens") && WHIMSICAL_WORDS.some(w => recentContent.includes(w))) return true;
+  if (
+    recentContent.includes("tokens") &&
+    WHIMSICAL_WORDS.some((w) => recentContent.includes(w))
+  )
+    return true;
 
   // Check spinners in last 5 lines
   const last5 = lines.slice(-5).join("");
-  if (SPINNER_CHARS.some(s => last5.includes(s))) return true;
+  if (SPINNER_CHARS.some((s) => last5.includes(s))) return true;
 
   return false;
 }
 
 function checkWaitingPatterns(content: string): boolean {
   const recentLines = content.split("\n").slice(-5).join("\n");
-  return WAITING_PATTERNS.some(p => p.test(recentLines));
+  return WAITING_PATTERNS.some((p) => p.test(recentLines));
 }
 
 class SessionStatusDetector {
@@ -150,7 +226,9 @@ class SessionStatusDetector {
 
   async capturePane(name: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(`tmux capture-pane -t "${name}" -p 2>/dev/null || echo ""`);
+      const { stdout } = await execAsync(
+        `tmux capture-pane -t "${name}" -p 2>/dev/null || echo ""`
+      );
       return stdout.trim();
     } catch {
       return "";
@@ -173,15 +251,19 @@ class SessionStatusDetector {
   }
 
   // Spike detection: filters single activity spikes from sustained activity
-  private processSpikeDetection(tracker: StateTracker, currentTimestamp: number): "running" | null {
+  private processSpikeDetection(
+    tracker: StateTracker,
+    currentTimestamp: number
+  ): "running" | null {
     const now = Date.now();
     const timestampChanged = tracker.lastActivityTimestamp !== currentTimestamp;
 
     if (timestampChanged) {
       tracker.lastActivityTimestamp = currentTimestamp;
 
-      const windowExpired = tracker.spikeWindowStart === null ||
-        (now - tracker.spikeWindowStart) > CONFIG.SPIKE_WINDOW_MS;
+      const windowExpired =
+        tracker.spikeWindowStart === null ||
+        now - tracker.spikeWindowStart > CONFIG.SPIKE_WINDOW_MS;
 
       if (windowExpired) {
         // Start new detection window
@@ -199,9 +281,12 @@ class SessionStatusDetector {
           return "running";
         }
       }
-    } else if (tracker.spikeChangeCount === 1 && tracker.spikeWindowStart !== null) {
+    } else if (
+      tracker.spikeChangeCount === 1 &&
+      tracker.spikeWindowStart !== null
+    ) {
       // Check if single spike should be filtered
-      if ((now - tracker.spikeWindowStart) > CONFIG.SPIKE_WINDOW_MS) {
+      if (now - tracker.spikeWindowStart > CONFIG.SPIKE_WINDOW_MS) {
         tracker.spikeWindowStart = null;
         tracker.spikeChangeCount = 0;
       }
@@ -211,12 +296,14 @@ class SessionStatusDetector {
   }
 
   private isInSpikeWindow(tracker: StateTracker): boolean {
-    return tracker.spikeWindowStart !== null &&
-      (Date.now() - tracker.spikeWindowStart) < CONFIG.SPIKE_WINDOW_MS;
+    return (
+      tracker.spikeWindowStart !== null &&
+      Date.now() - tracker.spikeWindowStart < CONFIG.SPIKE_WINDOW_MS
+    );
   }
 
   private isInCooldown(tracker: StateTracker): boolean {
-    return (Date.now() - tracker.lastChangeTime) < CONFIG.ACTIVITY_COOLDOWN_MS;
+    return Date.now() - tracker.lastChangeTime < CONFIG.ACTIVITY_COOLDOWN_MS;
   }
 
   private getIdleOrWaiting(tracker: StateTracker): SessionStatus {
@@ -253,7 +340,9 @@ class SessionStatusDetector {
 
     // 4. During spike window, maintain stable status
     if (this.isInSpikeWindow(tracker)) {
-      return this.isInCooldown(tracker) ? "running" : this.getIdleOrWaiting(tracker);
+      return this.isInCooldown(tracker)
+        ? "running"
+        : this.getIdleOrWaiting(tracker);
     }
 
     // 5. Cooldown check
@@ -270,8 +359,10 @@ class SessionStatusDetector {
 
   async getAllStatuses(names: string[]): Promise<Map<string, SessionStatus>> {
     await this.refreshCache();
-    const results = await Promise.all(names.map(async name => ({ name, status: await this.getStatus(name) })));
-    return new Map(results.map(r => [r.name, r.status]));
+    const results = await Promise.all(
+      names.map(async (name) => ({ name, status: await this.getStatus(name) }))
+    );
+    return new Map(results.map((r) => [r.name, r.status]));
   }
 
   cleanup(): void {

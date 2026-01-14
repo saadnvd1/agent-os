@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Terminal, GitBranch, Clock, Check } from "lucide-react";
@@ -102,13 +107,13 @@ export function QuickSwitcher({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
         <DialogHeader className="sr-only">
           <DialogTitle>Switch Session</DialogTitle>
         </DialogHeader>
 
         {/* Search Input */}
-        <div className="border-b border-border p-3">
+        <div className="border-border border-b p-3">
           <Input
             ref={inputRef}
             placeholder="Search sessions..."
@@ -122,7 +127,7 @@ export function QuickSwitcher({
         {/* Session List */}
         <div className="max-h-[300px] overflow-y-auto py-2">
           {filteredSessions.length === 0 ? (
-            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+            <div className="text-muted-foreground px-4 py-8 text-center text-sm">
               No sessions found
             </div>
           ) : (
@@ -136,7 +141,7 @@ export function QuickSwitcher({
                     onOpenChange(false);
                   }}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                    "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
                     index === selectedIndex
                       ? "bg-accent"
                       : "hover:bg-accent/50",
@@ -146,41 +151,43 @@ export function QuickSwitcher({
                   {/* Icon */}
                   <div
                     className={cn(
-                      "w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0",
+                      "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md",
                       session.worktree_path
                         ? "bg-purple-500/20 text-purple-400"
                         : "bg-emerald-500/20 text-emerald-400"
                     )}
                   >
                     {session.worktree_path ? (
-                      <GitBranch className="w-4 h-4" />
+                      <GitBranch className="h-4 w-4" />
                     ) : (
-                      <Terminal className="w-4 h-4" />
+                      <Terminal className="h-4 w-4" />
                     )}
                   </div>
 
                   {/* Content */}
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">
+                      <span className="truncate font-medium">
                         {session.name || "Unnamed Session"}
                       </span>
                       {isCurrent && (
-                        <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                        <Check className="text-primary h-3.5 w-3.5 flex-shrink-0" />
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="text-muted-foreground flex items-center gap-2 text-xs">
                       <span className="truncate">
                         {session.working_directory?.split("/").pop() || "~"}
                       </span>
                       <span>•</span>
-                      <span className="capitalize">{session.agent_type || "claude"}</span>
+                      <span className="capitalize">
+                        {session.agent_type || "claude"}
+                      </span>
                     </div>
                   </div>
 
                   {/* Time */}
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-                    <Clock className="w-3 h-3" />
+                  <div className="text-muted-foreground flex flex-shrink-0 items-center gap-1 text-xs">
+                    <Clock className="h-3 w-3" />
                     <span>{formatTime(session.updated_at)}</span>
                   </div>
                 </button>
@@ -190,15 +197,15 @@ export function QuickSwitcher({
         </div>
 
         {/* Footer Hint */}
-        <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground flex items-center gap-4">
+        <div className="border-border text-muted-foreground flex items-center gap-4 border-t px-4 py-2 text-xs">
           <span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted">↑↓</kbd> navigate
+            <kbd className="bg-muted rounded px-1.5 py-0.5">↑↓</kbd> navigate
           </span>
           <span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted">↵</kbd> select
+            <kbd className="bg-muted rounded px-1.5 py-0.5">↵</kbd> select
           </span>
           <span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted">esc</kbd> close
+            <kbd className="bg-muted rounded px-1.5 py-0.5">esc</kbd> close
           </span>
         </div>
       </DialogContent>

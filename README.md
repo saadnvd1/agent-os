@@ -8,8 +8,6 @@ https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
 
 ![AgentOS Screenshot](docs/screenshot.png)
 
-
-
 ## Why AgentOS?
 
 Most AI coding tools assume you're at a desktop. AgentOS is designed for developers who need **full functionality from their mobile device** - not just a dumbed-down "responsive" version.
@@ -34,12 +32,14 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 ## Features
 
 ### Mobile-First Terminal
+
 - **Virtual Keyboard** - 3 modes: Quick keys (common shortcuts), ABC, Numbers
 - **Touch-Optimized Scrolling** - Smooth scrolling in both normal and alternate buffers
 - **Shift+Enter Support** - Multi-line input in Claude Code CLI
 - **Image Picker** - Browse server filesystem to select images for Claude Code
 
 ### Session Management
+
 - **Multi-Agent Support** - Switch between Claude, Codex, OpenCode, Gemini, Aider, and Cursor per session
 - **Session Preview on Hover** - Quick preview of session terminal state
 - **Status Detection** - Real-time running/waiting/idle status with spike filtering
@@ -48,11 +48,13 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 - **Mobile Session Switcher** - Tap tab bar to quickly switch between sessions
 
 ### Multi-Pane Layout
+
 - **Multi-Pane View** - Run up to 4 sessions side-by-side with resizable panes
 - **Session Groups** - Organize sessions in collapsible folder hierarchy
 - **Tabbed Terminals** - Multiple tabs per pane for quick switching
 
 ### Project Organization
+
 - **Projects** - Group sessions by project with shared settings
 - **Working Directory** - Each project has a default working directory
 - **Directory Picker** - Browse filesystem to select directories visually
@@ -60,6 +62,7 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 - **Dev Server Integration** - Each project can have configured dev servers
 
 ### Dev Server Management
+
 - **Node.js Servers** - Start/stop/restart npm/yarn/pnpm dev servers
 - **Docker Compose** - Support for Docker-based development environments
 - **Port Management** - Automatic port assignment and tracking
@@ -67,6 +70,7 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 - **Stop Confirmation** - Safety confirmation before stopping servers
 
 ### Git Integration
+
 - **Git Status Panel** - View staged/unstaged/untracked files
 - **Commit History** - Browse last 30 commits with expandable details
 - **Historical Diffs** - Click any commit to see files changed, click file to view diff
@@ -76,15 +80,18 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 - **PR Integration** - Create PRs and track status (requires `gh` CLI)
 
 ### Git Worktrees
+
 - **Isolated Branches** - Each worktree gets its own feature branch
 - **Auto Environment Setup** - Copies `.env*` files, installs dependencies
 - **Unique Dev Ports** - Each worktree gets assigned a port (3100, 3110...)
 
 ### Session Orchestration
+
 - **Conductor/Worker Model** - Spawn worker sessions with isolated worktrees via MCP
 - **Worker Status Tracking** - Monitor worker progress from conductor view
 
 ### Developer Experience
+
 - **ASCII Banner** - Custom AgentOS branding on session start
 - **Custom tmux Status Bar** - AgentOS-themed status bar with session info
 - **File Explorer** - Browse project files with syntax highlighting
@@ -100,6 +107,7 @@ curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/inst
 ```
 
 This will:
+
 - Install prerequisites (Node.js, git, tmux) if missing
 - Prompt to install an AI CLI if none detected
 - Build and configure AgentOS
@@ -157,11 +165,13 @@ AgentOS runs on your dev machine, but you want to access it from your phone. [Ta
 ### Step 1: Install Tailscale on Your Dev Machine
 
 **macOS:**
+
 1. Download from [tailscale.com/download](https://tailscale.com/download)
 2. Sign in with Google/GitHub/etc
 3. Note the IP assigned (visible in menu bar) - it looks like `100.x.x.x`
 
 **Linux:**
+
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
@@ -177,9 +187,11 @@ tailscale ip  # Note your IP
 ### Step 3: Access AgentOS
 
 On your phone's browser, go to:
+
 ```
 http://100.x.x.x:3011
 ```
+
 Replace `100.x.x.x` with your dev machine's Tailscale IP.
 
 That's it! The connection is encrypted end-to-end and works from anywhere - home, coffee shop, or mobile data.

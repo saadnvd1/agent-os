@@ -21,42 +21,42 @@ export function ChatMessage({
   return (
     <div
       className={cn(
-        "flex gap-3 p-4 rounded-lg",
+        "flex gap-3 rounded-lg p-4",
         isUser ? "bg-muted/50" : "bg-card"
       )}
     >
       <div
         className={cn(
-          "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
+          "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full",
           isUser ? "bg-primary" : "bg-muted"
         )}
       >
         {isUser ? (
-          <User className="w-4 h-4 text-primary-foreground" />
+          <User className="text-primary-foreground h-4 w-4" />
         ) : (
-          <Bot className="w-4 h-4 text-muted-foreground" />
+          <Bot className="text-muted-foreground h-4 w-4" />
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="font-medium text-sm">
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-sm font-medium">
             {isUser ? "You" : "Claude"}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {new Date(timestamp).toLocaleTimeString()}
           </span>
           {isStreaming && (
-            <span className="text-xs text-primary animate-pulse">
+            <span className="text-primary animate-pulse text-xs">
               streaming...
             </span>
           )}
         </div>
 
-        <div className="text-sm whitespace-pre-wrap break-words">
+        <div className="text-sm break-words whitespace-pre-wrap">
           {content}
           {isStreaming && (
-            <span className="inline-block w-2 h-4 ml-0.5 bg-primary animate-pulse" />
+            <span className="bg-primary ml-0.5 inline-block h-4 w-2 animate-pulse" />
           )}
         </div>
       </div>

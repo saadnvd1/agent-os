@@ -7,9 +7,9 @@ export async function GET() {
     const groups = queries.getAllGroups(db).all() as Group[];
 
     // Convert expanded from 0/1 to boolean
-    const formattedGroups = groups.map(g => ({
+    const formattedGroups = groups.map((g) => ({
       ...g,
-      expanded: Boolean(g.expanded)
+      expanded: Boolean(g.expanded),
     }));
 
     return NextResponse.json({ groups: formattedGroups });
@@ -29,10 +29,7 @@ export async function POST(request: Request) {
     const { name, parentPath } = body;
 
     if (!name || typeof name !== "string") {
-      return NextResponse.json(
-        { error: "Name is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
     // Sanitize name to create path
@@ -82,7 +79,7 @@ export async function POST(request: Request) {
     const newGroup = queries.getGroup(db).get(path) as Group;
     return NextResponse.json(
       {
-        group: { ...newGroup, expanded: Boolean(newGroup.expanded) }
+        group: { ...newGroup, expanded: Boolean(newGroup.expanded) },
       },
       { status: 201 }
     );

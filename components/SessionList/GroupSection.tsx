@@ -15,7 +15,13 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { ChevronRight, ChevronDown, FolderPlus, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  FolderPlus,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react";
 import type { Session, Group } from "@/lib/db";
 import type { SessionStatus, SessionHoverHandlers } from "./SessionList.types";
 
@@ -55,17 +61,22 @@ export function GroupSection({
   hoverHandlers,
 }: GroupSectionProps) {
   const [newGroupName, setNewGroupName] = useState("");
-  const [showNewGroupInput, setShowNewGroupInput] = useState<string | null>(null);
+  const [showNewGroupInput, setShowNewGroupInput] = useState<string | null>(
+    null
+  );
 
   // Group non-worker sessions by group_path
   const sessionsByGroup = sessions
     .filter((s) => !s.conductor_session_id)
-    .reduce((acc, session) => {
-      const path = session.group_path || "sessions";
-      if (!acc[path]) acc[path] = [];
-      acc[path].push(session);
-      return acc;
-    }, {} as Record<string, Session[]>);
+    .reduce(
+      (acc, session) => {
+        const path = session.group_path || "sessions";
+        if (!acc[path]) acc[path] = [];
+        acc[path].push(session);
+        return acc;
+      },
+      {} as Record<string, Session[]>
+    );
 
   // Build group hierarchy
   const rootGroups = groups.filter((g) => !g.path.includes("/"));
@@ -87,24 +98,32 @@ export function GroupSection({
 
     const groupHeader = (
       <div
-        className="flex items-center gap-1 py-1.5 px-2 rounded hover:bg-accent/50 cursor-pointer group"
+        className="hover:bg-accent/50 group flex cursor-pointer items-center gap-1 rounded px-2 py-1.5"
         style={{ marginLeft: indent }}
         onClick={() => onToggleGroup(group.path, !group.expanded)}
       >
         <button className="p-0.5">
           {group.expanded ? (
-            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            <ChevronDown className="text-muted-foreground h-3 w-3" />
           ) : (
-            <ChevronRight className="w-3 h-3 text-muted-foreground" />
+            <ChevronRight className="text-muted-foreground h-3 w-3" />
           )}
         </button>
-        <span className="text-sm font-medium flex-1 truncate">{group.name}</span>
-        <span className="text-xs text-muted-foreground">{groupSessions.length}</span>
+        <span className="flex-1 truncate text-sm font-medium">
+          {group.name}
+        </span>
+        <span className="text-muted-foreground text-xs">
+          {groupSessions.length}
+        </span>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-6 w-6">
-              <MoreHorizontal className="w-3 h-3" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6 opacity-0 group-hover:opacity-100"
+            >
+              <MoreHorizontal className="h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -114,7 +133,7 @@ export function GroupSection({
                 setShowNewGroupInput(group.path);
               }}
             >
-              <FolderPlus className="w-3 h-3 mr-2" />
+              <FolderPlus className="mr-2 h-3 w-3" />
               Add subgroup
             </DropdownMenuItem>
             {group.path !== "sessions" && (
@@ -139,12 +158,15 @@ export function GroupSection({
           <ContextMenuTrigger asChild>{groupHeader}</ContextMenuTrigger>
           <ContextMenuContent>
             <ContextMenuItem onClick={() => setShowNewGroupInput(group.path)}>
-              <FolderPlus className="w-3 h-3 mr-2" />
+              <FolderPlus className="mr-2 h-3 w-3" />
               Add subgroup
             </ContextMenuItem>
             {group.path !== "sessions" && (
-              <ContextMenuItem onClick={() => onDeleteGroup(group.path)} className="text-red-500 focus:text-red-500">
-                <Trash2 className="w-3 h-3 mr-2" />
+              <ContextMenuItem
+                onClick={() => onDeleteGroup(group.path)}
+                className="text-red-500 focus:text-red-500"
+              >
+                <Trash2 className="mr-2 h-3 w-3" />
                 Delete group
               </ContextMenuItem>
             )}
@@ -168,14 +190,17 @@ export function GroupSection({
                   setShowNewGroupInput(null);
                 }
               }}
-              className="flex-1 text-sm px-2 py-1 rounded bg-muted/50 focus:bg-muted focus:outline-none focus:ring-1 focus:ring-primary/50"
+              className="bg-muted/50 focus:bg-muted focus:ring-primary/50 flex-1 rounded px-2 py-1 text-sm focus:ring-1 focus:outline-none"
               autoFocus
             />
           </div>
         )}
 
         {group.expanded && (
-          <div className="border-l border-border/50 ml-3" style={{ marginLeft: indent + 12, paddingLeft: 8 }}>
+          <div
+            className="border-border/50 ml-3 border-l"
+            style={{ marginLeft: indent + 12, paddingLeft: 8 }}
+          >
             {childGroups.map((child) => renderGroup(child, level + 1))}
 
             {groupSessions.map((session) => {
@@ -185,7 +210,7 @@ export function GroupSection({
               return (
                 <div key={session.id} className="space-y-0.5">
                   <div className="flex items-center gap-1">
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <SessionCard
                         session={session}
                         isActive={session.id === activeSessionId}
@@ -196,20 +221,24 @@ export function GroupSection({
                         onFork={() => onForkSession(session.id)}
                         onSummarize={() => onSummarize(session.id)}
                         onDelete={() => onDeleteSession(session.id)}
-                        onRename={(newName) => onRenameSession(session.id, newName)}
-                        onHoverStart={(rect) => hoverHandlers.onHoverStart(session, rect)}
+                        onRename={(newName) =>
+                          onRenameSession(session.id, newName)
+                        }
+                        onHoverStart={(rect) =>
+                          hoverHandlers.onHoverStart(session, rect)
+                        }
                         onHoverEnd={hoverHandlers.onHoverEnd}
                       />
                     </div>
                     {hasWorkers && (
-                      <span className="flex-shrink-0 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                      <span className="bg-primary/20 text-primary flex-shrink-0 rounded-full px-1.5 py-0.5 text-xs">
                         {workers.length}
                       </span>
                     )}
                   </div>
 
                   {hasWorkers && (
-                    <div className="ml-4 pl-2 border-l border-border/30 space-y-0.5">
+                    <div className="border-border/30 ml-4 space-y-0.5 border-l pl-2">
                       {workers.map((worker) => (
                         <SessionCard
                           key={worker.id}
@@ -219,8 +248,12 @@ export function GroupSection({
                           groups={groups}
                           onClick={() => onSelectSession(worker.id)}
                           onDelete={() => onDeleteSession(worker.id)}
-                          onRename={(newName) => onRenameSession(worker.id, newName)}
-                          onHoverStart={(rect) => hoverHandlers.onHoverStart(worker, rect)}
+                          onRename={(newName) =>
+                            onRenameSession(worker.id, newName)
+                          }
+                          onHoverStart={(rect) =>
+                            hoverHandlers.onHoverStart(worker, rect)
+                          }
                           onHoverEnd={hoverHandlers.onHoverEnd}
                         />
                       ))}

@@ -43,7 +43,7 @@ const DEFAULT_EXCLUDES = [
  * Check if a file/directory should be excluded
  */
 function shouldExclude(name: string, excludePatterns: string[]): boolean {
-  return excludePatterns.some(pattern => {
+  return excludePatterns.some((pattern) => {
     if (pattern.includes("*")) {
       // Simple glob pattern matching
       const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");
@@ -169,7 +169,9 @@ export function readFileContent(
       size: stat.size,
     };
   } catch (error) {
-    throw new Error(`Failed to read file: ${error instanceof Error ? error.message : "Unknown error"}`);
+    throw new Error(
+      `Failed to read file: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
 
@@ -198,7 +200,8 @@ export function writeFileContent(
       size: contentBuffer.length,
     };
   } catch (error) {
-    throw new Error(`Failed to write file: ${error instanceof Error ? error.message : "Unknown error"}`);
+    throw new Error(
+      `Failed to write file: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
-

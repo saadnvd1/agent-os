@@ -26,10 +26,15 @@ export function KillAllConfirm({ onCancel, onComplete }: KillAllConfirmProps) {
   };
 
   return (
-    <div className="mx-4 mb-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-      <p className="text-sm text-red-400 mb-2">Kill all tmux sessions?</p>
+    <div className="mx-4 mb-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+      <p className="mb-2 text-sm text-red-400">Kill all tmux sessions?</p>
       <div className="flex gap-2">
-        <Button size="sm" variant="destructive" onClick={handleKillAll} disabled={killing}>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleKillAll}
+          disabled={killing}
+        >
           {killing ? "Killing..." : "Yes, kill all"}
         </Button>
         <Button size="sm" variant="ghost" onClick={onCancel} disabled={killing}>

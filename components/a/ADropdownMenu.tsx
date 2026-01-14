@@ -92,7 +92,9 @@ export interface ADropdownMenuProps {
   className?: string;
 }
 
-function filterVisibleItems(items: (DropdownItemConfig | FalsyItem)[]): DropdownItemConfig[] {
+function filterVisibleItems(
+  items: (DropdownItemConfig | FalsyItem)[]
+): DropdownItemConfig[] {
   return items.filter(
     (item): item is DropdownItemConfig => !!item && item.visible !== false
   );
@@ -105,7 +107,7 @@ function ToggleItem({ item }: { item: ToggleItemConfig }) {
   return (
     <div className="flex min-h-[32px] items-center justify-between px-2 py-1.5">
       <div className="flex items-center gap-2">
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+        {Icon && <Icon className="text-muted-foreground h-4 w-4" />}
         <span className="text-sm">{item.label}</span>
       </div>
       <Switch
@@ -125,7 +127,8 @@ function MenuItem({ item }: { item: MenuItemConfig }) {
       onClick={item.onClick}
       disabled={item.disabled}
       className={cn(
-        item.variant === "destructive" && "text-destructive focus:text-destructive"
+        item.variant === "destructive" &&
+          "text-destructive focus:text-destructive"
       )}
     >
       {Icon && <Icon className="mr-2 h-4 w-4" />}
@@ -149,7 +152,10 @@ function SubmenuItem({ item }: { item: SubmenuItemConfig }) {
       <DropdownMenuPortal>
         <DropdownMenuSubContent>
           {visibleItems.map((subItem, index) => (
-            <DropdownItemRenderer key={subItem.key ?? `sub-${index}`} item={subItem} />
+            <DropdownItemRenderer
+              key={subItem.key ?? `sub-${index}`}
+              item={subItem}
+            />
           ))}
         </DropdownMenuSubContent>
       </DropdownMenuPortal>
@@ -188,7 +194,11 @@ export function ADropdownMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className={className} style={{ minWidth }}>
+      <DropdownMenuContent
+        align={align}
+        className={className}
+        style={{ minWidth }}
+      >
         {visibleItems.map((item, index) => (
           <DropdownItemRenderer key={item.key ?? index} item={item} />
         ))}
@@ -211,7 +221,9 @@ export function toggleItem(
   label: string,
   checked: boolean,
   onChange: () => void,
-  options?: Partial<Omit<ToggleItemConfig, "type" | "label" | "checked" | "onChange">>
+  options?: Partial<
+    Omit<ToggleItemConfig, "type" | "label" | "checked" | "onChange">
+  >
 ): ToggleItemConfig {
   return { type: "toggle", label, checked, onChange, ...options };
 }

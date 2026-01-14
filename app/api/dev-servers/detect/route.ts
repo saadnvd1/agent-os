@@ -15,12 +15,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const project = queries.getProject(db).get(projectId) as Project | undefined;
+    const project = queries.getProject(db).get(projectId) as
+      | Project
+      | undefined;
     if (!project) {
-      return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     // Expand ~ to home directory

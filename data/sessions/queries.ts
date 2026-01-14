@@ -27,7 +27,9 @@ export function useDeleteSession() {
 
   return useMutation({
     mutationFn: async (sessionId: string) => {
-      const res = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
+      const res = await fetch(`/api/sessions/${sessionId}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Failed to delete session");
       return res.json();
     },
@@ -41,7 +43,13 @@ export function useRenameSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ sessionId, newName }: { sessionId: string; newName: string }) => {
+    mutationFn: async ({
+      sessionId,
+      newName,
+    }: {
+      sessionId: string;
+      newName: string;
+    }) => {
       const res = await fetch(`/api/sessions/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +60,9 @@ export function useRenameSession() {
     },
     onMutate: async ({ sessionId, newName }) => {
       await queryClient.cancelQueries({ queryKey: sessionKeys.list() });
-      const previous = queryClient.getQueryData<SessionsResponse>(sessionKeys.list());
+      const previous = queryClient.getQueryData<SessionsResponse>(
+        sessionKeys.list()
+      );
       queryClient.setQueryData<SessionsResponse>(sessionKeys.list(), (old) =>
         old
           ? {
@@ -81,7 +91,9 @@ export function useForkSession() {
 
   return useMutation({
     mutationFn: async (sessionId: string): Promise<Session | null> => {
-      const res = await fetch(`/api/sessions/${sessionId}/fork`, { method: "POST" });
+      const res = await fetch(`/api/sessions/${sessionId}/fork`, {
+        method: "POST",
+      });
       const data = await res.json();
       return data.session || null;
     },
@@ -115,7 +127,13 @@ export function useMoveSessionToGroup() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ sessionId, groupPath }: { sessionId: string; groupPath: string }) => {
+    mutationFn: async ({
+      sessionId,
+      groupPath,
+    }: {
+      sessionId: string;
+      groupPath: string;
+    }) => {
       const res = await fetch(`/api/sessions/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -134,7 +152,13 @@ export function useMoveSessionToProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ sessionId, projectId }: { sessionId: string; projectId: string }) => {
+    mutationFn: async ({
+      sessionId,
+      projectId,
+    }: {
+      sessionId: string;
+      projectId: string;
+    }) => {
       const res = await fetch(`/api/sessions/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

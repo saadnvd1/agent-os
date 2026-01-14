@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import type { Terminal as XTerm } from '@xterm/xterm';
-import type { RefObject } from 'react';
+import type { Terminal as XTerm } from "@xterm/xterm";
+import type { RefObject } from "react";
 
 interface TouchScrollConfig {
   term: XTerm;
@@ -22,21 +22,25 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
   let setupTimeout: NodeJS.Timeout | null = null;
 
   const setupTouchScrollInner = () => {
-    const xtermScreen = term.element?.querySelector('.xterm-screen') as HTMLElement | null;
+    const xtermScreen = term.element?.querySelector(
+      ".xterm-screen"
+    ) as HTMLElement | null;
     if (!xtermScreen) {
       setupTimeout = setTimeout(setupTouchScrollInner, 50);
       return;
     }
 
     // Apply touch-action to prevent browser handling
-    xtermScreen.style.touchAction = 'none';
-    xtermScreen.style.userSelect = 'none';
-    (xtermScreen.style as CSSStyleDeclaration & { webkitUserSelect?: string }).webkitUserSelect = 'none';
+    xtermScreen.style.touchAction = "none";
+    xtermScreen.style.userSelect = "none";
+    (
+      xtermScreen.style as CSSStyleDeclaration & { webkitUserSelect?: string }
+    ).webkitUserSelect = "none";
 
     // Also apply to canvas children
-    const canvases = xtermScreen.querySelectorAll('canvas');
+    const canvases = xtermScreen.querySelectorAll("canvas");
     canvases.forEach((canvas) => {
-      (canvas as HTMLElement).style.touchAction = 'none';
+      (canvas as HTMLElement).style.touchAction = "none";
     });
 
     // Touch state for scroll handling
@@ -48,7 +52,12 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
     };
 
     const resetTouchState = () => {
-      touchState = { lastY: null, initialX: null, initialY: null, isHorizontal: null };
+      touchState = {
+        lastY: null,
+        initialX: null,
+        initialY: null,
+        isHorizontal: null,
+      };
     };
 
     handleTouchStart = (e: TouchEvent) => {
@@ -87,12 +96,15 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
 
       const buffer = term.buffer.active;
 
-      if (buffer.type === 'alternate' && wsRef.current?.readyState === WebSocket.OPEN) {
+      if (
+        buffer.type === "alternate" &&
+        wsRef.current?.readyState === WebSocket.OPEN
+      ) {
         // Send mouse wheel events for alternate buffer (e.g., less, vim)
-        const wheelEvent = moveDeltaY < 0 ? '\x1b[<65;1;1M' : '\x1b[<64;1;1M';
-        wsRef.current.send(JSON.stringify({ type: 'input', data: wheelEvent }));
+        const wheelEvent = moveDeltaY < 0 ? "\x1b[<65;1;1M" : "\x1b[<64;1;1M";
+        wsRef.current.send(JSON.stringify({ type: "input", data: wheelEvent }));
         touchState.lastY = touch.clientY;
-      } else if (buffer.type !== 'alternate') {
+      } else if (buffer.type !== "alternate") {
         const scrollAmount = Math.round(moveDeltaY / 15);
         if (scrollAmount !== 0) {
           term.scrollLines(scrollAmount);
@@ -104,10 +116,14 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
     handleTouchEnd = resetTouchState;
     handleTouchCancel = resetTouchState;
 
-    xtermScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
-    xtermScreen.addEventListener('touchmove', handleTouchMove, { passive: false });
-    xtermScreen.addEventListener('touchend', handleTouchEnd);
-    xtermScreen.addEventListener('touchcancel', handleTouchCancel);
+    xtermScreen.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+    });
+    xtermScreen.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+    });
+    xtermScreen.addEventListener("touchend", handleTouchEnd);
+    xtermScreen.addEventListener("touchcancel", handleTouchCancel);
 
     touchElement = xtermScreen;
   };
@@ -118,10 +134,14 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
   return () => {
     if (setupTimeout) clearTimeout(setupTimeout);
     if (touchElement) {
-      if (handleTouchStart) touchElement.removeEventListener('touchstart', handleTouchStart);
-      if (handleTouchMove) touchElement.removeEventListener('touchmove', handleTouchMove);
-      if (handleTouchEnd) touchElement.removeEventListener('touchend', handleTouchEnd);
-      if (handleTouchCancel) touchElement.removeEventListener('touchcancel', handleTouchCancel);
+      if (handleTouchStart)
+        touchElement.removeEventListener("touchstart", handleTouchStart);
+      if (handleTouchMove)
+        touchElement.removeEventListener("touchmove", handleTouchMove);
+      if (handleTouchEnd)
+        touchElement.removeEventListener("touchend", handleTouchEnd);
+      if (handleTouchCancel)
+        touchElement.removeEventListener("touchcancel", handleTouchCancel);
     }
   };
 }

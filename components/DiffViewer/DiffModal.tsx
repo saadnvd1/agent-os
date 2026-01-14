@@ -28,21 +28,21 @@ export function DiffModal({
   const summary = getDiffSummary(parsedDiff);
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="bg-background fixed inset-0 z-50 flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-2 p-3 border-b border-border bg-background/95 backdrop-blur-sm">
+      <div className="border-border bg-background/95 flex items-center gap-2 border-b p-3 backdrop-blur-sm">
         <Button
           variant="ghost"
           size="icon-sm"
           onClick={onClose}
           className="h-9 w-9"
         >
-          <ChevronLeft className="w-5 h-5" />
+          <ChevronLeft className="h-5 w-5" />
         </Button>
 
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium truncate">{displayName}</h3>
-          <p className="text-xs text-muted-foreground">{summary}</p>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-medium">{displayName}</h3>
+          <p className="text-muted-foreground text-xs">{summary}</p>
         </div>
 
         {/* Stage/Unstage button */}
@@ -55,12 +55,12 @@ export function DiffModal({
           >
             {isStaged ? (
               <>
-                <Minus className="w-4 h-4 mr-1" />
+                <Minus className="mr-1 h-4 w-4" />
                 Unstage
               </>
             ) : (
               <>
-                <Plus className="w-4 h-4 mr-1" />
+                <Plus className="mr-1 h-4 w-4" />
                 Stage
               </>
             )}
@@ -73,33 +73,37 @@ export function DiffModal({
           onClick={onClose}
           className="h-9 w-9 md:hidden"
         >
-          <X className="w-4 h-4" />
+          <X className="h-4 w-4" />
         </Button>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-3">
         {diff ? (
-          <UnifiedDiff diff={parsedDiff} fileName={displayName} expanded={true} />
+          <UnifiedDiff
+            diff={parsedDiff}
+            fileName={displayName}
+            expanded={true}
+          />
         ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center">
             <p className="text-sm">No changes to display</p>
           </div>
         )}
       </div>
 
       {/* Mobile action bar */}
-      <div className="md:hidden flex items-center justify-between p-3 border-t border-border bg-background/95 backdrop-blur-sm safe-area-bottom">
+      <div className="border-border bg-background/95 safe-area-bottom flex items-center justify-between border-t p-3 backdrop-blur-sm md:hidden">
         <div className="flex items-center gap-4">
           {parsedDiff.additions > 0 && (
             <span className="flex items-center gap-1 text-sm text-green-500">
-              <Plus className="w-4 h-4" />
+              <Plus className="h-4 w-4" />
               {parsedDiff.additions}
             </span>
           )}
           {parsedDiff.deletions > 0 && (
             <span className="flex items-center gap-1 text-sm text-red-500">
-              <Minus className="w-4 h-4" />
+              <Minus className="h-4 w-4" />
               {parsedDiff.deletions}
             </span>
           )}
@@ -135,11 +139,13 @@ export function DiffView({ diff, fileName }: DiffViewProps) {
 
   if (!diff) {
     return (
-      <div className="p-4 text-center text-muted-foreground">
+      <div className="text-muted-foreground p-4 text-center">
         <p className="text-sm">No changes to display</p>
       </div>
     );
   }
 
-  return <UnifiedDiff diff={parsedDiff} fileName={displayName} expanded={true} />;
+  return (
+    <UnifiedDiff diff={parsedDiff} fileName={displayName} expanded={true} />
+  );
 }

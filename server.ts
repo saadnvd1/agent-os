@@ -56,7 +56,9 @@ app.prepare().then(() => {
       });
     } catch (err) {
       console.error("Failed to spawn pty:", err);
-      ws.send(JSON.stringify({ type: "error", message: "Failed to start terminal" }));
+      ws.send(
+        JSON.stringify({ type: "error", message: "Failed to start terminal" })
+      );
       ws.close();
       return;
     }

@@ -53,17 +53,17 @@ export function FileChanges({
       <div className="flex items-center gap-2 px-3 py-2">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm font-medium transition-colors"
         >
           <ChevronRight
             className={cn(
-              "w-4 h-4 transition-transform",
+              "h-4 w-4 transition-transform",
               expanded && "rotate-90"
             )}
           />
           <span>{title}</span>
         </button>
-        <span className="ml-auto text-xs bg-muted px-2 py-0.5 rounded-full">
+        <span className="bg-muted ml-auto rounded-full px-2 py-0.5 text-xs">
           {files.length}
         </span>
         {showAllButton && (
@@ -72,9 +72,13 @@ export function FileChanges({
               e.stopPropagation();
               isStaged ? onUnstageAll?.() : onStageAll?.();
             }}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
           >
-            {isStaged ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+            {isStaged ? (
+              <Minus className="h-3 w-3" />
+            ) : (
+              <Plus className="h-3 w-3" />
+            )}
             All
           </button>
         )}
@@ -140,9 +144,7 @@ function FileItem({
       // Add resistance at the edges
       const maxSwipe = 100;
       const resistedDiff =
-        diff > 0
-          ? Math.min(diff, maxSwipe)
-          : Math.max(diff, -maxSwipe);
+        diff > 0 ? Math.min(diff, maxSwipe) : Math.max(diff, -maxSwipe);
 
       setSwipeOffset(resistedDiff);
     },
@@ -184,13 +186,13 @@ function FileItem({
         {onSwipeRight && (
           <div
             className={cn(
-              "flex items-center justify-start pl-4 bg-green-500/20",
+              "flex items-center justify-start bg-green-500/20 pl-4",
               swipeOffset > 0 ? "flex-1" : "w-0"
             )}
             style={{ width: swipeOffset > 0 ? `${swipeOffset}px` : 0 }}
           >
             {swipeOffset > SWIPE_THRESHOLD / 2 && (
-              <Plus className="w-5 h-5 text-green-500" />
+              <Plus className="h-5 w-5 text-green-500" />
             )}
           </div>
         )}
@@ -202,7 +204,7 @@ function FileItem({
         {onSwipeLeft && (
           <div
             className={cn(
-              "flex items-center justify-end pr-4 bg-yellow-500/20",
+              "flex items-center justify-end bg-yellow-500/20 pr-4",
               swipeOffset < 0 ? "flex-1" : "w-0"
             )}
             style={{
@@ -210,7 +212,7 @@ function FileItem({
             }}
           >
             {swipeOffset < -SWIPE_THRESHOLD / 2 && (
-              <Minus className="w-5 h-5 text-yellow-500" />
+              <Minus className="h-5 w-5 text-yellow-500" />
             )}
           </div>
         )}
@@ -220,8 +222,8 @@ function FileItem({
       <button
         onClick={onClick}
         className={cn(
-          "relative w-full flex items-center gap-2 px-3 py-2.5 text-sm",
-          "transition-colors text-left",
+          "relative flex w-full items-center gap-2 px-3 py-2.5 text-sm",
+          "text-left transition-colors",
           "min-h-[44px]", // Mobile touch target
           isSelected ? "bg-accent" : "bg-background hover:bg-accent/50"
         )}
@@ -234,22 +236,20 @@ function FileItem({
         <span className={cn("flex-shrink-0", statusColor)}>{statusIcon}</span>
 
         {/* File info */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <span className="block truncate">{fileName}</span>
           {filePath && (
-            <span className="block text-xs text-muted-foreground truncate">
+            <span className="text-muted-foreground block truncate text-xs">
               {filePath}
             </span>
           )}
         </div>
 
         {/* Staged indicator */}
-        {isStaged && (
-          <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-        )}
+        {isStaged && <Check className="h-4 w-4 flex-shrink-0 text-green-500" />}
 
         {/* Arrow */}
-        <ArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <ArrowRight className="text-muted-foreground h-4 w-4 flex-shrink-0" />
       </button>
     </div>
   );
@@ -258,16 +258,16 @@ function FileItem({
 function getStatusIcon(status: GitFile["status"]) {
   switch (status) {
     case "modified":
-      return <Edit3 className="w-4 h-4" />;
+      return <Edit3 className="h-4 w-4" />;
     case "added":
     case "untracked":
-      return <Plus className="w-4 h-4" />;
+      return <Plus className="h-4 w-4" />;
     case "deleted":
-      return <Minus className="w-4 h-4" />;
+      return <Minus className="h-4 w-4" />;
     case "renamed":
-      return <ArrowRight className="w-4 h-4" />;
+      return <ArrowRight className="h-4 w-4" />;
     default:
-      return <File className="w-4 h-4" />;
+      return <File className="h-4 w-4" />;
   }
 }
 

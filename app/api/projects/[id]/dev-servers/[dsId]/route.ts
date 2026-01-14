@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  updateProjectDevServer,
-  deleteProjectDevServer,
-} from "@/lib/projects";
+import { updateProjectDevServer, deleteProjectDevServer } from "@/lib/projects";
 import { queries, db, type ProjectDevServer } from "@/lib/db";
 
 interface RouteParams {
@@ -14,7 +11,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { dsId } = await params;
 
-    const existing = queries.getProjectDevServer(db).get(dsId) as ProjectDevServer | undefined;
+    const existing = queries.getProjectDevServer(db).get(dsId) as
+      | ProjectDevServer
+      | undefined;
     if (!existing) {
       return NextResponse.json(
         { error: "Dev server config not found" },
@@ -49,7 +48,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { dsId } = await params;
 
-    const existing = queries.getProjectDevServer(db).get(dsId) as ProjectDevServer | undefined;
+    const existing = queries.getProjectDevServer(db).get(dsId) as
+      | ProjectDevServer
+      | undefined;
     if (!existing) {
       return NextResponse.json(
         { error: "Dev server config not found" },

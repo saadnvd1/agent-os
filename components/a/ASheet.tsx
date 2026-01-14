@@ -29,7 +29,7 @@ const ASheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60",
       className
     )}
     {...props}
@@ -58,7 +58,8 @@ const aSheetVariants = cva(
 );
 
 interface ASheetContentProps
-  extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
+  extends
+    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof aSheetVariants> {
   /** Hide the default close button */
   hideCloseButton?: boolean;
@@ -67,34 +68,36 @@ interface ASheetContentProps
 const ASheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   ASheetContentProps
->(({ side = "right", className, children, hideCloseButton = false, ...props }, ref) => (
-  <ASheetPortal>
-    <ASheetOverlay />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(aSheetVariants({ side }), className)}
-      {...props}
-    >
-      {children}
-      {!hideCloseButton && (
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
-      )}
-    </SheetPrimitive.Content>
-  </ASheetPortal>
-));
+>(
+  (
+    { side = "right", className, children, hideCloseButton = false, ...props },
+    ref
+  ) => (
+    <ASheetPortal>
+      <ASheetOverlay />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(aSheetVariants({ side }), className)}
+        {...props}
+      >
+        {children}
+        {!hideCloseButton && (
+          <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        )}
+      </SheetPrimitive.Content>
+    </ASheetPortal>
+  )
+);
 ASheetContent.displayName = "ASheetContent";
 
 const ASheetHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn("flex flex-col space-y-1.5 p-4", className)}
-    {...props}
-  />
+  <div className={cn("flex flex-col space-y-1.5 p-4", className)} {...props} />
 );
 ASheetHeader.displayName = "ASheetHeader";
 
@@ -115,7 +118,7 @@ const ASheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Title
     ref={ref}
-    className={cn("text-base font-semibold text-foreground", className)}
+    className={cn("text-foreground text-base font-semibold", className)}
     {...props}
   />
 ));
@@ -127,7 +130,7 @@ const ASheetDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-muted-foreground text-sm", className)}
     {...props}
   />
 ));

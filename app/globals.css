@@ -67,13 +67,15 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* Prevent iOS bounce/overscroll on mobile */
-html, body {
+html,
+body {
   overscroll-behavior: none;
 }
 
 /* Prevent all scrolling on mobile - we control scroll via xterm only */
 @media (max-width: 767px) {
-  html, body {
+  html,
+  body {
     overflow: hidden;
     position: fixed;
     width: 100%;

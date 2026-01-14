@@ -12,10 +12,25 @@
 
 // Core components
 export { ATooltip, type ATooltipProps } from "./ATooltip";
-export { AButton, type AButtonProps, type AButtonSize, type AButtonVariant } from "./AButton";
-export { AIconButton, type AIconButtonProps, type AIconButtonSize, type AIconButtonHighlight } from "./AIconButton";
+export {
+  AButton,
+  type AButtonProps,
+  type AButtonSize,
+  type AButtonVariant,
+} from "./AButton";
+export {
+  AIconButton,
+  type AIconButtonProps,
+  type AIconButtonSize,
+  type AIconButtonHighlight,
+} from "./AIconButton";
 export { ADialog, type ADialogProps } from "./ADialog";
-export { ABadge, type ABadgeProps, type ABadgeSize, type ABadgeVariant } from "./ABadge";
+export {
+  ABadge,
+  type ABadgeProps,
+  type ABadgeSize,
+  type ABadgeVariant,
+} from "./ABadge";
 
 // Dropdown menu with factory functions
 export {

@@ -42,7 +42,11 @@ export interface ViewProps {
   handleNewSessionInProject: (projectId: string) => void;
   handleOpenTerminal: (projectId: string) => void;
   handleSessionCreated: (sessionId: string) => Promise<void>;
-  handleCreateProject: (name: string, workingDirectory: string, agentType?: string) => Promise<string | null>;
+  handleCreateProject: (
+    name: string,
+    workingDirectory: string,
+    agentType?: string
+  ) => Promise<string | null>;
 
   // Dev server (for StartServerDialog)
   handleStartDevServer: (projectId: string) => void;

@@ -65,22 +65,20 @@ export function ServerLogsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         className={cn(
-          "w-full max-w-3xl h-[80vh] flex flex-col rounded-xl",
-          "bg-background border border-border",
+          "flex h-[80vh] w-full max-w-3xl flex-col rounded-xl",
+          "bg-background border-border border",
           "shadow-2xl"
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-lg font-semibold truncate">
-            Logs: {serverName}
-          </h2>
+        <div className="border-border flex items-center justify-between border-b px-4 py-3">
+          <h2 className="truncate text-lg font-semibold">Logs: {serverName}</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => fetchLogs(true)}
               disabled={refreshing}
               className={cn(
-                "rounded-md p-1.5 hover:bg-muted transition-colors",
+                "hover:bg-muted rounded-md p-1.5 transition-colors",
                 "disabled:opacity-50"
               )}
               title="Refresh"
@@ -91,7 +89,7 @@ export function ServerLogsModal({
             </button>
             <button
               onClick={onClose}
-              className="rounded-md p-1.5 hover:bg-muted transition-colors"
+              className="hover:bg-muted rounded-md p-1.5 transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -108,11 +106,13 @@ export function ServerLogsModal({
         >
           {loading ? (
             <div className="flex h-full items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Loading logs...</span>
+              <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+              <span className="text-muted-foreground ml-2">
+                Loading logs...
+              </span>
             </div>
           ) : logs.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
+            <div className="text-muted-foreground flex h-full items-center justify-center">
               No logs available
             </div>
           ) : (
@@ -121,12 +121,12 @@ export function ServerLogsModal({
                 <div
                   key={i}
                   className={cn(
-                    "whitespace-pre-wrap break-all",
+                    "break-all whitespace-pre-wrap",
                     line.includes("error") || line.includes("Error")
                       ? "text-red-400"
                       : line.includes("warn") || line.includes("Warning")
-                      ? "text-yellow-400"
-                      : "text-zinc-300"
+                        ? "text-yellow-400"
+                        : "text-zinc-300"
                   )}
                 >
                   {line || " "}
@@ -137,7 +137,7 @@ export function ServerLogsModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+        <div className="border-border text-muted-foreground border-t px-4 py-2 text-xs">
           Auto-refreshing every 3 seconds
           {refreshing && (
             <span className="ml-2">

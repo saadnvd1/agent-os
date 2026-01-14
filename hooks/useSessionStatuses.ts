@@ -6,7 +6,11 @@ interface UseSessionStatusesOptions {
   sessions: Session[];
   activeSessionId?: string | null;
   checkStateChanges: (
-    states: Array<{ id: string; name: string; status: SessionStatus["status"] }>,
+    states: Array<{
+      id: string;
+      name: string;
+      status: SessionStatus["status"];
+    }>,
     activeSessionId?: string | null
   ) => void;
 }

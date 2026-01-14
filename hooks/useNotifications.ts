@@ -31,7 +31,8 @@ interface UseNotificationsOptions {
 
 export function useNotifications(options: UseNotificationsOptions = {}) {
   const { onSessionClick } = options;
-  const [settings, setSettings] = useState<NotificationSettings>(defaultSettings);
+  const [settings, setSettings] =
+    useState<NotificationSettings>(defaultSettings);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const previousStates = useRef<Map<string, SessionStatus>>(new Map());
   const waitingCount = useRef(0);
@@ -52,29 +53,40 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   }, []);
 
   // Update settings
-  const updateSettings = useCallback((newSettings: Partial<NotificationSettings>) => {
-    setSettings((prev) => {
-      const updated = { ...prev, ...newSettings };
-      saveSettings(updated);
-      return updated;
-    });
-  }, []);
+  const updateSettings = useCallback(
+    (newSettings: Partial<NotificationSettings>) => {
+      setSettings((prev) => {
+        const updated = { ...prev, ...newSettings };
+        saveSettings(updated);
+        return updated;
+      });
+    },
+    []
+  );
 
   // Toggle a specific event
-  const toggleEvent = useCallback((event: NotificationEvent, enabled: boolean) => {
-    setSettings((prev) => {
-      const updated = {
-        ...prev,
-        events: { ...prev.events, [event]: enabled },
-      };
-      saveSettings(updated);
-      return updated;
-    });
-  }, []);
+  const toggleEvent = useCallback(
+    (event: NotificationEvent, enabled: boolean) => {
+      setSettings((prev) => {
+        const updated = {
+          ...prev,
+          events: { ...prev.events, [event]: enabled },
+        };
+        saveSettings(updated);
+        return updated;
+      });
+    },
+    []
+  );
 
   // Send notification for an event
   const notify = useCallback(
-    (event: NotificationEvent, sessionId: string, sessionName: string, message?: string) => {
+    (
+      event: NotificationEvent,
+      sessionId: string,
+      sessionName: string,
+      message?: string
+    ) => {
       if (!settings.enabled || !settings.events[event]) return;
 
       const titles: Record<NotificationEvent, string> = {
@@ -87,7 +99,10 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       const body = message || getDefaultMessage(event);
 
       // In-app toast with click action
-      const toastTypes: Record<NotificationEvent, "warning" | "error" | "success"> = {
+      const toastTypes: Record<
+        NotificationEvent,
+        "warning" | "error" | "success"
+      > = {
         waiting: "warning",
         error: "error",
         completed: "success",

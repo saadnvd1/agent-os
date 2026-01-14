@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { forwardRef } from 'react';
-import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { forwardRef } from "react";
+import { Search, ChevronUp, ChevronDown, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SearchBarProps {
   visible: boolean;
@@ -14,15 +14,18 @@ interface SearchBarProps {
 }
 
 export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
-  ({ visible, query, onQueryChange, onFindNext, onFindPrevious, onClose }, ref) => {
+  (
+    { visible, query, onQueryChange, onFindNext, onFindPrevious, onClose },
+    ref
+  ) => {
     if (!visible) return null;
 
     return (
       <div
         className={cn(
-          'flex items-center gap-2 px-4 py-2',
-          'bg-zinc-900/90 backdrop-blur-sm',
-          'border-b border-zinc-800'
+          "flex items-center gap-2 px-4 py-2",
+          "bg-zinc-900/90 backdrop-blur-sm",
+          "border-b border-zinc-800"
         )}
       >
         <Search className="h-4 w-4 text-zinc-500" />
@@ -33,8 +36,8 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search in terminal..."
           className={cn(
-            'flex-1 bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500',
-            'focus:outline-none'
+            "flex-1 bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500",
+            "focus:outline-none"
           )}
         />
         <div className="flex items-center gap-1">
@@ -65,4 +68,4 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
   }
 );
 
-SearchBar.displayName = 'SearchBar';
+SearchBar.displayName = "SearchBar";

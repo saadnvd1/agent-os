@@ -3,7 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { WorkerCard, type WorkerInfo, type WorkerStatus } from "./WorkerCard";
 import { Button } from "./ui/button";
-import { RefreshCw, Users, CheckCircle, Loader2, AlertCircle, XCircle } from "lucide-react";
+import {
+  RefreshCw,
+  Users,
+  CheckCircle,
+  Loader2,
+  AlertCircle,
+  XCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface WorkersSummary {
@@ -20,17 +27,26 @@ interface ConductorPanelProps {
   onAttachToWorker?: (workerId: string) => void;
 }
 
-export function ConductorPanel({ conductorSessionId, onAttachToWorker }: ConductorPanelProps) {
+export function ConductorPanel({
+  conductorSessionId,
+  onAttachToWorker,
+}: ConductorPanelProps) {
   const [workers, setWorkers] = useState<WorkerInfo[]>([]);
   const [summary, setSummary] = useState<WorkersSummary | null>(null);
-  const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
-  const [workerOutputs, setWorkerOutputs] = useState<Record<string, string>>({});
+  const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(
+    new Set()
+  );
+  const [workerOutputs, setWorkerOutputs] = useState<Record<string, string>>(
+    {}
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchWorkers = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orchestrate/workers?conductorId=${conductorSessionId}`);
+      const res = await fetch(
+        `/api/orchestrate/workers?conductorId=${conductorSessionId}`
+      );
       const data = await res.json();
       if (data.workers) {
         setWorkers(data.workers);
@@ -42,7 +58,9 @@ export function ConductorPanel({ conductorSessionId, onAttachToWorker }: Conduct
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orchestrate/workers?conductorId=${conductorSessionId}&summary=true`);
+      const res = await fetch(
+        `/api/orchestrate/workers?conductorId=${conductorSessionId}&summary=true`
+      );
       const data = await res.json();
       if (data.summary) {
         setSummary(data.summary);
@@ -57,7 +75,7 @@ export function ConductorPanel({ conductorSessionId, onAttachToWorker }: Conduct
       const res = await fetch(`/api/orchestrate/workers/${workerId}?lines=30`);
       const data = await res.json();
       if (data.output) {
-        setWorkerOutputs(prev => ({ ...prev, [workerId]: data.output }));
+        setWorkerOutputs((prev) => ({ ...prev, [workerId]: data.output }));
       }
     } catch (error) {
       console.error("Failed to fetch worker output:", error);
@@ -88,7 +106,7 @@ export function ConductorPanel({ conductorSessionId, onAttachToWorker }: Conduct
 
   // Fetch output for expanded workers
   useEffect(() => {
-    expandedWorkers.forEach(workerId => {
+    expandedWorkers.forEach((workerId) => {
       if (!workerOutputs[workerId]) {
         fetchWorkerOutput(workerId);
       }
@@ -96,7 +114,7 @@ export function ConductorPanel({ conductorSessionId, onAttachToWorker }: Conduct
   }, [expandedWorkers, workerOutputs, fetchWorkerOutput]);
 
   const toggleExpand = (workerId: string) => {
-    setExpandedWorkers(prev => {
+    setExpandedWorkers((prev) => {
       const next = new Set(prev);
       if (next.has(workerId)) {
         next.delete(workerId);
@@ -137,59 +155,62 @@ export function ConductorPanel({ conductorSessionId, onAttachToWorker }: Conduct
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
       </div>
     );
   }
 
   if (workers.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <Users className="w-12 h-12 mb-4 opacity-50" />
+      <div className="text-muted-foreground flex h-full flex-col items-center justify-center">
+        <Users className="mb-4 h-12 w-12 opacity-50" />
         <p className="text-lg font-medium">No workers yet</p>
         <p className="text-sm">This conductor hasn't spawned any workers.</p>
-        <p className="text-xs mt-4 max-w-md text-center">
-          Use the MCP tools or API to spawn workers. The conductor can delegate tasks to parallel worker sessions.
+        <p className="mt-4 max-w-md text-center text-xs">
+          Use the MCP tools or API to spawn workers. The conductor can delegate
+          tasks to parallel worker sessions.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Header with summary */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between border-b p-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" />
+            <Users className="text-primary h-5 w-5" />
             <span className="font-semibold">Workers</span>
-            <span className="text-muted-foreground">({summary?.total || workers.length})</span>
+            <span className="text-muted-foreground">
+              ({summary?.total || workers.length})
+            </span>
           </div>
 
           {summary && (
             <div className="flex items-center gap-3 text-sm">
               {summary.running > 0 && (
                 <div className="flex items-center gap-1 text-green-500">
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="h-3 w-3 animate-spin" />
                   <span>{summary.running} running</span>
                 </div>
               )}
               {summary.waiting > 0 && (
                 <div className="flex items-center gap-1 text-yellow-500">
-                  <AlertCircle className="w-3 h-3" />
+                  <AlertCircle className="h-3 w-3" />
                   <span>{summary.waiting} waiting</span>
                 </div>
               )}
               {summary.completed > 0 && (
                 <div className="flex items-center gap-1 text-green-500">
-                  <CheckCircle className="w-3 h-3" />
+                  <CheckCircle className="h-3 w-3" />
                   <span>{summary.completed} done</span>
                 </div>
               )}
               {summary.failed > 0 && (
                 <div className="flex items-center gap-1 text-red-500">
-                  <XCircle className="w-3 h-3" />
+                  <XCircle className="h-3 w-3" />
                   <span>{summary.failed} failed</span>
                 </div>
               )}
@@ -203,13 +224,13 @@ export function ConductorPanel({ conductorSessionId, onAttachToWorker }: Conduct
           onClick={refresh}
           disabled={refreshing}
         >
-          <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
         </Button>
       </div>
 
       {/* Workers grid */}
       <div className="flex-1 overflow-auto p-4">
-        <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {workers.map((worker) => (
             <WorkerCard
               key={worker.id}
@@ -223,7 +244,9 @@ export function ConductorPanel({ conductorSessionId, onAttachToWorker }: Conduct
               }}
               onSendMessage={(msg) => handleSendMessage(worker.id, msg)}
               onKill={() => handleKillWorker(worker.id)}
-              onAttach={onAttachToWorker ? () => onAttachToWorker(worker.id) : undefined}
+              onAttach={
+                onAttachToWorker ? () => onAttachToWorker(worker.id) : undefined
+              }
             />
           ))}
         </div>

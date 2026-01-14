@@ -71,7 +71,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             conductorId: {
               type: "string",
-              description: "Your session ID (the conductor). Required unless CONDUCTOR_SESSION_ID env var is set.",
+              description:
+                "Your session ID (the conductor). Required unless CONDUCTOR_SESSION_ID env var is set.",
             },
             task: {
               type: "string",
@@ -79,15 +80,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             workingDirectory: {
               type: "string",
-              description: "The git repository path for the worker to operate in",
+              description:
+                "The git repository path for the worker to operate in",
             },
             branchName: {
               type: "string",
-              description: "Optional branch name for the worktree (auto-generated if not provided)",
+              description:
+                "Optional branch name for the worktree (auto-generated if not provided)",
             },
             useWorktree: {
               type: "boolean",
-              description: "Whether to create an isolated worktree (default: true)",
+              description:
+                "Whether to create an isolated worktree (default: true)",
               default: true,
             },
             model: {
@@ -107,7 +111,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             conductorId: {
               type: "string",
-              description: "The conductor session ID. Required unless CONDUCTOR_SESSION_ID env var is set.",
+              description:
+                "The conductor session ID. Required unless CONDUCTOR_SESSION_ID env var is set.",
             },
           },
         },
@@ -165,7 +170,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "kill_worker",
-        description: "Kill a worker session and optionally clean up its worktree",
+        description:
+          "Kill a worker session and optionally clean up its worktree",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -190,7 +196,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             conductorId: {
               type: "string",
-              description: "The conductor session ID. Required unless CONDUCTOR_SESSION_ID env var is set.",
+              description:
+                "The conductor session ID. Required unless CONDUCTOR_SESSION_ID env var is set.",
             },
           },
         },
@@ -200,7 +207,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 // Helper to get conductor ID from args or env
-function getConductorId(args: Record<string, unknown> | undefined): string | null {
+function getConductorId(
+  args: Record<string, unknown> | undefined
+): string | null {
   return (args?.conductorId as string) || DEFAULT_CONDUCTOR_ID || null;
 }
 
@@ -214,7 +223,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const conductorId = getConductorId(args);
         if (!conductorId) {
           return {
-            content: [{ type: "text" as const, text: "Error: conductorId is required. Pass it as a parameter or set CONDUCTOR_SESSION_ID env var." }],
+            content: [
+              {
+                type: "text" as const,
+                text: "Error: conductorId is required. Pass it as a parameter or set CONDUCTOR_SESSION_ID env var.",
+              },
+            ],
           };
         }
         const result = await apiCall("/api/orchestrate/spawn", {
@@ -244,7 +258,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const conductorId = getConductorId(args);
         if (!conductorId) {
           return {
-            content: [{ type: "text" as const, text: "Error: conductorId is required. Pass it as a parameter or set CONDUCTOR_SESSION_ID env var." }],
+            content: [
+              {
+                type: "text" as const,
+                text: "Error: conductorId is required. Pass it as a parameter or set CONDUCTOR_SESSION_ID env var.",
+              },
+            ],
           };
         }
         const result = await apiCall(
@@ -252,18 +271,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
         if (result.error) {
           return {
-            content: [{ type: "text" as const, text: `Error: ${result.error}` }],
+            content: [
+              { type: "text" as const, text: `Error: ${result.error}` },
+            ],
           };
         }
         const workers = result.workers || [];
         if (workers.length === 0) {
           return {
-            content: [{ type: "text" as const, text: "No workers spawned yet." }],
+            content: [
+              { type: "text" as const, text: "No workers spawned yet." },
+            ],
           };
         }
         const list = workers
           .map(
-            (w: { id: string; name: string; status: string; task: string; branchName: string | null }) =>
+            (w: {
+              id: string;
+              name: string;
+              status: string;
+              task: string;
+              branchName: string | null;
+            }) =>
               `- [${w.status.toUpperCase()}] ${w.name} (${w.id.slice(0, 8)})\n  Task: ${w.task}\n  Branch: ${w.branchName || "none"}`
           )
           .join("\n\n");
@@ -353,7 +382,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const conductorId = getConductorId(args);
         if (!conductorId) {
           return {
-            content: [{ type: "text" as const, text: "Error: conductorId is required. Pass it as a parameter or set CONDUCTOR_SESSION_ID env var." }],
+            content: [
+              {
+                type: "text" as const,
+                text: "Error: conductorId is required. Pass it as a parameter or set CONDUCTOR_SESSION_ID env var.",
+              },
+            ],
           };
         }
         const result = await apiCall(
@@ -361,7 +395,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
         if (result.error) {
           return {
-            content: [{ type: "text" as const, text: `Error: ${result.error}` }],
+            content: [
+              { type: "text" as const, text: `Error: ${result.error}` },
+            ],
           };
         }
         const s = result.summary;

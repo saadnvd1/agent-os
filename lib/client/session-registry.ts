@@ -56,11 +56,7 @@ class SessionRegistry {
   /**
    * Save terminal state (scroll position, cursor, etc.)
    */
-  saveTerminalState(
-    paneId: string,
-    tabId: string,
-    state: TerminalState
-  ): void {
+  saveTerminalState(paneId: string, tabId: string, state: TerminalState): void {
     const key = this.getKey(paneId, tabId);
     const existing = this.sessions.get(key);
 

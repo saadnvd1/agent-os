@@ -50,9 +50,10 @@ const editorTheme = EditorView.theme({
   ".cm-activeLine": {
     backgroundColor: "hsl(var(--accent) / 0.5)",
   },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-    backgroundColor: "hsl(var(--primary) / 0.3) !important",
-  },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+    {
+      backgroundColor: "hsl(var(--primary) / 0.3) !important",
+    },
   "&.cm-focused .cm-cursor": {
     borderLeftColor: "hsl(var(--primary))",
     borderLeftWidth: "2px",
@@ -89,14 +90,43 @@ const editorTheme = EditorView.theme({
 // Syntax highlighting that adapts to both light and dark themes
 const highlightStyle = HighlightStyle.define([
   { tag: t.keyword, color: "hsl(var(--primary))" },
-  { tag: [t.name, t.deleted, t.character, t.macroName], color: "hsl(var(--foreground))" },
+  {
+    tag: [t.name, t.deleted, t.character, t.macroName],
+    color: "hsl(var(--foreground))",
+  },
   { tag: [t.propertyName], color: "#7dd3fc" }, // sky-300
   { tag: [t.function(t.variableName), t.labelName], color: "#c4b5fd" }, // violet-300
   { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: "#fcd34d" }, // amber-300
   { tag: [t.definition(t.name), t.separator], color: "hsl(var(--foreground))" },
-  { tag: [t.typeName, t.className, t.number, t.changed, t.annotation, t.modifier, t.self, t.namespace], color: "#f9a8d4" }, // pink-300
-  { tag: [t.operator, t.operatorKeyword, t.url, t.escape, t.regexp, t.special(t.string)], color: "#67e8f9" }, // cyan-300
-  { tag: [t.meta, t.comment], color: "hsl(var(--muted-foreground))", fontStyle: "italic" },
+  {
+    tag: [
+      t.typeName,
+      t.className,
+      t.number,
+      t.changed,
+      t.annotation,
+      t.modifier,
+      t.self,
+      t.namespace,
+    ],
+    color: "#f9a8d4",
+  }, // pink-300
+  {
+    tag: [
+      t.operator,
+      t.operatorKeyword,
+      t.url,
+      t.escape,
+      t.regexp,
+      t.special(t.string),
+    ],
+    color: "#67e8f9",
+  }, // cyan-300
+  {
+    tag: [t.meta, t.comment],
+    color: "hsl(var(--muted-foreground))",
+    fontStyle: "italic",
+  },
   { tag: t.strong, fontWeight: "bold" },
   { tag: t.emphasis, fontStyle: "italic" },
   { tag: t.strikethrough, textDecoration: "line-through" },
@@ -171,15 +201,15 @@ export function FileEditor({
 
   if (isBinary) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
-        <FileCode className="w-12 h-12 mb-4 opacity-50" />
-        <p className="text-sm text-center">Binary file cannot be displayed</p>
+      <div className="text-muted-foreground flex h-full flex-col items-center justify-center p-8">
+        <FileCode className="mb-4 h-12 w-12 opacity-50" />
+        <p className="text-center text-sm">Binary file cannot be displayed</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full overflow-hidden bg-background">
+    <div className="bg-background h-full w-full overflow-hidden">
       <CodeMirror
         value={content}
         height="100%"

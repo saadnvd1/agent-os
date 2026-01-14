@@ -72,7 +72,9 @@ export function useSessions() {
   return {
     sessions,
     groups,
-    summarizingSessionId: summarizeMutation.isPending ? (summarizeMutation.variables as string) : null,
+    summarizingSessionId: summarizeMutation.isPending
+      ? (summarizeMutation.variables as string)
+      : null,
     fetchSessions,
     deleteSession,
     renameSession,

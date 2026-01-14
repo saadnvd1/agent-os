@@ -21,7 +21,12 @@ export function useProjects() {
 
   const deleteProject = useCallback(
     async (projectId: string) => {
-      if (!confirm("Delete this project? Sessions will be moved to Uncategorized.")) return;
+      if (
+        !confirm(
+          "Delete this project? Sessions will be moved to Uncategorized."
+        )
+      )
+        return;
       await deleteMutation.mutateAsync(projectId);
     },
     [deleteMutation]

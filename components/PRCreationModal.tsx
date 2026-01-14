@@ -114,13 +114,13 @@ export function PRCreationModal({
   // Show existing PR
   if (prData?.existingPR) {
     return (
-      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      <div className="bg-background fixed inset-0 z-50 flex flex-col">
         <Header onClose={onClose} />
 
-        <div className="flex-1 flex flex-col items-center justify-center p-4">
-          <GitPullRequest className="w-12 h-12 text-primary mb-4" />
-          <h2 className="text-lg font-medium mb-2">PR Already Exists</h2>
-          <p className="text-sm text-muted-foreground mb-4 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center p-4">
+          <GitPullRequest className="text-primary mb-4 h-12 w-12" />
+          <h2 className="mb-2 text-lg font-medium">PR Already Exists</h2>
+          <p className="text-muted-foreground mb-4 text-center text-sm">
             #{prData.existingPR.number} - {prData.existingPR.title}
           </p>
           <Button
@@ -128,7 +128,7 @@ export function PRCreationModal({
             onClick={() => window.open(prData.existingPR!.url, "_blank")}
             className="min-h-[44px]"
           >
-            <ExternalLink className="w-4 h-4 mr-2" />
+            <ExternalLink className="mr-2 h-4 w-4" />
             View Pull Request
           </Button>
         </div>
@@ -137,26 +137,26 @@ export function PRCreationModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="bg-background fixed inset-0 z-50 flex flex-col">
       <Header onClose={onClose} />
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
         </div>
       ) : error && !prData ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-4">
-          <p className="text-sm text-red-500 mb-4">{error}</p>
+        <div className="flex flex-1 flex-col items-center justify-center p-4">
+          <p className="mb-4 text-sm text-red-500">{error}</p>
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
         </div>
       ) : (
         <>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {/* Branch info */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <GitBranch className="w-4 h-4" />
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <GitBranch className="h-4 w-4" />
               <span>{prData?.branch}</span>
               <span>→</span>
               <span>{prData?.baseBranch}</span>
@@ -171,9 +171,9 @@ export function PRCreationModal({
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="PR title..."
                 className={cn(
-                  "w-full px-3 py-2 text-sm rounded-md",
-                  "bg-muted/50 border border-border",
-                  "focus:outline-none focus:ring-2 focus:ring-primary/50",
+                  "w-full rounded-md px-3 py-2 text-sm",
+                  "bg-muted/50 border-border border",
+                  "focus:ring-primary/50 focus:ring-2 focus:outline-none",
                   "min-h-[44px]"
                 )}
               />
@@ -188,9 +188,9 @@ export function PRCreationModal({
                 placeholder="Describe your changes..."
                 rows={12}
                 className={cn(
-                  "w-full px-3 py-2 text-sm rounded-md resize-none font-mono",
-                  "bg-muted/50 border border-border",
-                  "focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  "w-full resize-none rounded-md px-3 py-2 font-mono text-sm",
+                  "bg-muted/50 border-border border",
+                  "focus:ring-primary/50 focus:ring-2 focus:outline-none"
                 )}
               />
             </div>
@@ -198,10 +198,10 @@ export function PRCreationModal({
             {/* Commits list */}
             {prData && prData.commits.length > 0 && (
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-muted-foreground">
+                <label className="text-muted-foreground text-sm font-medium">
                   Commits ({prData.commits.length})
                 </label>
-                <div className="text-xs text-muted-foreground space-y-1">
+                <div className="text-muted-foreground space-y-1 text-xs">
                   {prData.commits.slice(0, 10).map((commit) => (
                     <div key={commit.hash} className="truncate">
                       <code className="text-primary/70">
@@ -224,17 +224,17 @@ export function PRCreationModal({
           </div>
 
           {/* Footer */}
-          <div className="p-4 border-t border-border safe-area-bottom">
+          <div className="border-border safe-area-bottom border-t p-4">
             <Button
               variant="default"
               onClick={handleCreate}
               disabled={creating || !title.trim()}
-              className="w-full min-h-[44px]"
+              className="min-h-[44px] w-full"
             >
               {creating ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <GitPullRequest className="w-4 h-4 mr-2" />
+                <GitPullRequest className="mr-2 h-4 w-4" />
               )}
               Create Pull Request
             </Button>
@@ -247,14 +247,14 @@ export function PRCreationModal({
 
 function Header({ onClose }: { onClose: () => void }) {
   return (
-    <div className="flex items-center gap-2 p-3 border-b border-border">
+    <div className="border-border flex items-center gap-2 border-b p-3">
       <Button
         variant="ghost"
         size="icon-sm"
         onClick={onClose}
         className="h-9 w-9"
       >
-        <ChevronLeft className="w-5 h-5" />
+        <ChevronLeft className="h-5 w-5" />
       </Button>
       <div className="flex-1">
         <h2 className="text-sm font-medium">Create Pull Request</h2>
@@ -265,7 +265,7 @@ function Header({ onClose }: { onClose: () => void }) {
         onClick={onClose}
         className="h-9 w-9 md:hidden"
       >
-        <X className="w-4 h-4" />
+        <X className="h-4 w-4" />
       </Button>
     </div>
   );

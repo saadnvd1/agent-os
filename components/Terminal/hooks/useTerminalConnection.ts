@@ -1,21 +1,25 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Terminal as XTerm } from '@xterm/xterm';
-import type { FitAddon } from '@xterm/addon-fit';
-import type { SearchAddon } from '@xterm/addon-search';
-import { WS_RECONNECT_BASE_DELAY } from '../constants';
+import { useEffect, useRef, useState, useCallback } from "react";
+import type { Terminal as XTerm } from "@xterm/xterm";
+import type { FitAddon } from "@xterm/addon-fit";
+import type { SearchAddon } from "@xterm/addon-search";
+import { WS_RECONNECT_BASE_DELAY } from "../constants";
 import type {
   TerminalScrollState,
   UseTerminalConnectionProps,
   UseTerminalConnectionReturn,
-} from './useTerminalConnection.types';
-import { createTerminal, updateTerminalForMobile, updateTerminalTheme } from './terminal-init';
-import { setupTouchScroll } from './touch-scroll';
-import { createWebSocketConnection } from './websocket-connection';
-import { setupResizeHandlers } from './resize-handlers';
+} from "./useTerminalConnection.types";
+import {
+  createTerminal,
+  updateTerminalForMobile,
+  updateTerminalTheme,
+} from "./terminal-init";
+import { setupTouchScroll } from "./touch-scroll";
+import { createWebSocketConnection } from "./websocket-connection";
+import { setupResizeHandlers } from "./resize-handlers";
 
-export type { TerminalScrollState } from './useTerminalConnection.types';
+export type { TerminalScrollState } from "./useTerminalConnection.types";
 
 export function useTerminalConnection({
   terminalRef,
@@ -24,12 +28,14 @@ export function useTerminalConnection({
   onBeforeUnmount,
   initialScrollState,
   isMobile = false,
-  theme = 'dark',
+  theme = "dark",
   selectMode = false,
 }: UseTerminalConnectionProps): UseTerminalConnectionReturn {
   const [connected, setConnected] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting');
+  const [connectionState, setConnectionState] = useState<
+    "connecting" | "connected" | "disconnected" | "reconnecting"
+  >("connecting");
 
   const wsRef = useRef<WebSocket | null>(null);
   const xtermRef = useRef<XTerm | null>(null);
@@ -50,7 +56,10 @@ export function useTerminalConnection({
   selectModeRef.current = selectMode;
 
   // Simple callbacks
-  const scrollToBottom = useCallback(() => xtermRef.current?.scrollToBottom(), []);
+  const scrollToBottom = useCallback(
+    () => xtermRef.current?.scrollToBottom(),
+    []
+  );
 
   const copySelection = useCallback(() => {
     const selection = xtermRef.current?.getSelection();
@@ -63,13 +72,13 @@ export function useTerminalConnection({
 
   const sendInput = useCallback((data: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'input', data }));
+      wsRef.current.send(JSON.stringify({ type: "input", data }));
     }
   }, []);
 
   const sendCommand = useCallback((command: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'command', data: command }));
+      wsRef.current.send(JSON.stringify({ type: "command", data: command }));
     }
   }, []);
 
@@ -78,7 +87,9 @@ export function useTerminalConnection({
   const getScrollState = useCallback((): TerminalScrollState | null => {
     if (!xtermRef.current || !terminalRef.current) return null;
     const buffer = xtermRef.current.buffer.active;
-    const viewport = terminalRef.current.querySelector('.xterm-viewport') as HTMLElement;
+    const viewport = terminalRef.current.querySelector(
+      ".xterm-viewport"
+    ) as HTMLElement;
     return {
       scrollTop: viewport?.scrollTop ?? 0,
       cursorY: buffer.cursorY,
@@ -86,12 +97,19 @@ export function useTerminalConnection({
     };
   }, [terminalRef]);
 
-  const restoreScrollState = useCallback((state: TerminalScrollState) => {
-    const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement;
-    if (viewport) {
-      requestAnimationFrame(() => { viewport.scrollTop = state.scrollTop; });
-    }
-  }, [terminalRef]);
+  const restoreScrollState = useCallback(
+    (state: TerminalScrollState) => {
+      const viewport = terminalRef.current?.querySelector(
+        ".xterm-viewport"
+      ) as HTMLElement;
+      if (viewport) {
+        requestAnimationFrame(() => {
+          viewport.scrollTop = state.scrollTop;
+        });
+      }
+    },
+    [terminalRef]
+  );
 
   const triggerResize = useCallback(() => {
     const fitAddon = fitAddonRef.current;
@@ -99,7 +117,9 @@ export function useTerminalConnection({
     if (!fitAddon || !term) return;
     fitAddon.fit();
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      wsRef.current.send(
+        JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })
+      );
     }
   }, []);
 
@@ -122,7 +142,11 @@ export function useTerminalConnection({
       if (cancelled || !terminalRef.current) return;
 
       // Initialize terminal
-      const { term, fitAddon, searchAddon } = createTerminal(terminalRef.current, isMobile, theme);
+      const { term, fitAddon, searchAddon } = createTerminal(
+        terminalRef.current,
+        isMobile,
+        theme
+      );
       xtermRef.current = term;
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
@@ -145,8 +169,11 @@ export function useTerminalConnection({
             // Restore scroll state after connection
             if (initialScrollStateRef.current && terminalRef.current) {
               setTimeout(() => {
-                const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement;
-                if (viewport) viewport.scrollTop = initialScrollStateRef.current!.scrollTop;
+                const viewport = terminalRef.current?.querySelector(
+                  ".xterm-viewport"
+                ) as HTMLElement;
+                if (viewport)
+                  viewport.scrollTop = initialScrollStateRef.current!.scrollTop;
               }, 200);
             }
           },
@@ -181,7 +208,9 @@ export function useTerminalConnection({
       const term = xtermRef.current;
       if (term && callbacksRef.current.onBeforeUnmount && terminalRef.current) {
         const buffer = term.buffer.active;
-        const viewport = terminalRef.current.querySelector('.xterm-viewport') as HTMLElement;
+        const viewport = terminalRef.current.querySelector(
+          ".xterm-viewport"
+        ) as HTMLElement;
         callbacksRef.current.onBeforeUnmount({
           scrollTop: viewport?.scrollTop ?? 0,
           cursorY: buffer.cursorY,
@@ -199,7 +228,11 @@ export function useTerminalConnection({
 
       if (wsRef.current) wsRef.current = null;
       if (xtermRef.current) {
-        try { xtermRef.current.dispose(); } catch { /* ignore */ }
+        try {
+          xtermRef.current.dispose();
+        } catch {
+          /* ignore */
+        }
         xtermRef.current = null;
       }
       fitAddonRef.current = null;
@@ -215,7 +248,7 @@ export function useTerminalConnection({
 
     updateTerminalForMobile(term, fitAddon, isMobile, (cols, rows) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+        wsRef.current.send(JSON.stringify({ type: "resize", cols, rows }));
       }
     });
   }, [isMobile]);

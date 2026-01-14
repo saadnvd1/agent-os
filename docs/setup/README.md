@@ -11,6 +11,7 @@ curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/inst
 ```
 
 The installer will:
+
 1. Download the `agent-os` CLI to your PATH
 2. Check for prerequisites (Node.js 20+, git, tmux) and offer to install any missing ones
 3. Detect installed AI CLIs or prompt you to install one (Claude Code recommended)
@@ -40,17 +41,17 @@ npm start
 
 After installation, use the `agent-os` command to manage the server:
 
-| Command | Description |
-|---------|-------------|
-| `agent-os start` | Start the server in background |
-| `agent-os stop` | Stop the server |
-| `agent-os restart` | Restart the server |
-| `agent-os status` | Show status, PID, and URLs |
-| `agent-os logs` | Tail server logs |
-| `agent-os update` | Pull latest version and rebuild |
-| `agent-os enable` | Enable auto-start on boot |
-| `agent-os disable` | Disable auto-start |
-| `agent-os uninstall` | Remove AgentOS completely |
+| Command              | Description                     |
+| -------------------- | ------------------------------- |
+| `agent-os start`     | Start the server in background  |
+| `agent-os stop`      | Stop the server                 |
+| `agent-os restart`   | Restart the server              |
+| `agent-os status`    | Show status, PID, and URLs      |
+| `agent-os logs`      | Tail server logs                |
+| `agent-os update`    | Pull latest version and rebuild |
+| `agent-os enable`    | Enable auto-start on boot       |
+| `agent-os disable`   | Disable auto-start              |
+| `agent-os uninstall` | Remove AgentOS completely       |
 
 ## Prerequisites
 
@@ -65,22 +66,22 @@ The installer can automatically install these on macOS and Linux:
 
 You need at least one AI coding CLI installed. The installer will prompt you to choose:
 
-| CLI | Provider | Install Command |
-|-----|----------|-----------------|
+| CLI         | Provider  | Install Command                            |
+| ----------- | --------- | ------------------------------------------ |
 | Claude Code | Anthropic | `npm install -g @anthropic-ai/claude-code` |
-| Codex | OpenAI | `npm install -g @openai/codex` |
-| Aider | Multi-LLM | `pip install aider-chat` |
-| Gemini CLI | Google | `npm install -g gemini-cli` |
+| Codex       | OpenAI    | `npm install -g @openai/codex`             |
+| Aider       | Multi-LLM | `pip install aider-chat`                   |
+| Gemini CLI  | Google    | `npm install -g gemini-cli`                |
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AGENT_OS_HOME` | `~/.agent-os` | Installation directory |
-| `AGENT_OS_PORT` | `3011` | Server port |
-| `DB_PATH` | `./agent-os.db` | SQLite database path |
+| Variable        | Default         | Description            |
+| --------------- | --------------- | ---------------------- |
+| `AGENT_OS_HOME` | `~/.agent-os`   | Installation directory |
+| `AGENT_OS_PORT` | `3011`          | Server port            |
+| `DB_PATH`       | `./agent-os.db` | SQLite database path   |
 
 ### Custom Port
 
@@ -103,6 +104,7 @@ agent-os enable
 This creates a Launch Agent at `~/Library/LaunchAgents/com.agent-os.plist`.
 
 To disable:
+
 ```bash
 agent-os disable
 ```
@@ -116,6 +118,7 @@ agent-os enable
 This creates a user service at `~/.config/systemd/user/agent-os.service`.
 
 To disable:
+
 ```bash
 agent-os disable
 ```
@@ -125,6 +128,7 @@ agent-os disable
 AgentOS is designed for mobile access. The easiest way to access it from your phone is with [Tailscale](https://tailscale.com):
 
 1. **Install Tailscale on your machine:**
+
    ```bash
    # macOS
    brew install tailscale
@@ -134,11 +138,13 @@ AgentOS is designed for mobile access. The easiest way to access it from your ph
    ```
 
 2. **Start Tailscale and authenticate:**
+
    ```bash
    sudo tailscale up
    ```
 
 3. **Get your Tailscale IP:**
+
    ```bash
    tailscale ip -4
    # Example: 100.64.0.1
@@ -172,6 +178,7 @@ agent-os update
 ```
 
 This will:
+
 1. Stop the server if running
 2. Pull the latest changes from git
 3. Install any new dependencies
@@ -183,11 +190,13 @@ This will:
 ### Server won't start
 
 Check the logs:
+
 ```bash
 agent-os logs
 ```
 
 Common issues:
+
 - Port already in use: Change `AGENT_OS_PORT`
 - Missing dependencies: Run `agent-os install` again
 - Node.js version: Ensure Node.js 20+ is installed
@@ -202,6 +211,7 @@ Common issues:
 ### Build fails
 
 Try a clean reinstall:
+
 ```bash
 agent-os stop
 rm -rf ~/.agent-os/repo/node_modules
@@ -216,10 +226,12 @@ agent-os uninstall
 ```
 
 This removes:
+
 - The `~/.agent-os` directory
 - Auto-start configuration (launchd/systemd)
 
 The `agent-os` CLI script itself is not removed. Delete it manually:
+
 ```bash
 rm $(which agent-os)
 ```

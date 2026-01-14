@@ -11,19 +11,29 @@ import path from "path";
 const AGENTOS_URL = process.env.AGENTOS_URL || "http://localhost:3011";
 
 interface McpConfig {
-  mcpServers: Record<string, {
-    command: string;
-    args: string[];
-    env?: Record<string, string>;
-  }>;
+  mcpServers: Record<
+    string,
+    {
+      command: string;
+      args: string[];
+      env?: Record<string, string>;
+    }
+  >;
 }
 
 /**
  * Write or update .mcp.json in the working directory with orchestration server config
  */
-export function ensureMcpConfig(workingDirectory: string, sessionId: string): void {
+export function ensureMcpConfig(
+  workingDirectory: string,
+  sessionId: string
+): void {
   const configPath = path.join(workingDirectory, ".mcp.json");
-  const orchestrationServerPath = path.join(process.cwd(), "mcp", "orchestration-server.ts");
+  const orchestrationServerPath = path.join(
+    process.cwd(),
+    "mcp",
+    "orchestration-server.ts"
+  );
 
   let config: McpConfig = { mcpServers: {} };
 

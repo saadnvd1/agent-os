@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
@@ -34,12 +34,12 @@ export function MobileView({
   renderPane,
 }: ViewProps) {
   return (
-    <main className="h-dvh flex flex-col overflow-hidden bg-background">
+    <main className="bg-background flex h-dvh flex-col overflow-hidden">
       {/* Swipe sidebar */}
       <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
         <div className="flex h-full flex-col">
           {/* Session list */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <SessionList
               activeSessionId={focusedActiveTab?.sessionId || undefined}
               sessionStatuses={sessionStatuses}
@@ -61,15 +61,15 @@ export function MobileView({
           </div>
 
           {/* Sidebar footer with theme toggle */}
-          <div className="flex items-center justify-between px-4 py-2 mt-auto">
-            <span className="text-xs text-muted-foreground">Theme</span>
+          <div className="mt-auto flex items-center justify-between px-4 py-2">
+            <span className="text-muted-foreground text-xs">Theme</span>
             <ThemeToggle />
           </div>
         </div>
       </SwipeSidebar>
 
       {/* Terminal fills the screen */}
-      <div className="flex-1 min-h-0">
+      <div className="min-h-0 flex-1">
         <PaneLayout renderPane={renderPane} />
       </div>
 

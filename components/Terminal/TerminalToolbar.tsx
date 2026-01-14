@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState } from "react";
 import {
   Clipboard,
   X,
@@ -13,22 +13,22 @@ import {
   Trash2,
   MousePointer2,
   Copy,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 // ANSI escape sequences
 const SPECIAL_KEYS = {
-  UP: '\x1b[A',
-  DOWN: '\x1b[B',
-  LEFT: '\x1b[D',
-  RIGHT: '\x1b[C',
-  ESC: '\x1b',
-  TAB: '\t',
-  CTRL_C: '\x03',
-  CTRL_D: '\x04',
-  CTRL_Z: '\x1a',
-  CTRL_L: '\x0c',
+  UP: "\x1b[A",
+  DOWN: "\x1b[B",
+  LEFT: "\x1b[D",
+  RIGHT: "\x1b[C",
+  ESC: "\x1b",
+  TAB: "\t",
+  CTRL_C: "\x03",
+  CTRL_D: "\x04",
+  CTRL_Z: "\x1a",
+  CTRL_L: "\x0c",
 } as const;
 
 interface TerminalToolbarProps {
@@ -46,32 +46,44 @@ interface Snippet {
   content: string;
 }
 
-const SNIPPETS_STORAGE_KEY = 'terminal-snippets';
+const SNIPPETS_STORAGE_KEY = "terminal-snippets";
 
 const DEFAULT_SNIPPETS: Snippet[] = [
   // Git shortcuts
-  { id: 'default-1', name: 'Git status', content: 'git status' },
-  { id: 'default-2', name: 'Git diff', content: 'git diff' },
-  { id: 'default-3', name: 'Git add all', content: 'git add -A' },
-  { id: 'default-4', name: 'Git commit', content: 'git commit -m ""' },
-  { id: 'default-5', name: 'Git push', content: 'git push' },
-  { id: 'default-6', name: 'Git pull', content: 'git pull' },
+  { id: "default-1", name: "Git status", content: "git status" },
+  { id: "default-2", name: "Git diff", content: "git diff" },
+  { id: "default-3", name: "Git add all", content: "git add -A" },
+  { id: "default-4", name: "Git commit", content: 'git commit -m ""' },
+  { id: "default-5", name: "Git push", content: "git push" },
+  { id: "default-6", name: "Git pull", content: "git pull" },
   // Claude Code prompts
-  { id: 'default-7', name: 'Continue', content: 'continue' },
-  { id: 'default-8', name: 'Yes', content: 'yes' },
-  { id: 'default-9', name: 'No', content: 'no' },
-  { id: 'default-10', name: 'Explain this', content: 'explain what this code does' },
-  { id: 'default-11', name: 'Fix errors', content: 'fix the errors' },
-  { id: 'default-12', name: 'Run tests', content: 'run the tests and fix any failures' },
-  { id: 'default-13', name: 'Commit changes', content: 'commit these changes with a descriptive message' },
+  { id: "default-7", name: "Continue", content: "continue" },
+  { id: "default-8", name: "Yes", content: "yes" },
+  { id: "default-9", name: "No", content: "no" },
+  {
+    id: "default-10",
+    name: "Explain this",
+    content: "explain what this code does",
+  },
+  { id: "default-11", name: "Fix errors", content: "fix the errors" },
+  {
+    id: "default-12",
+    name: "Run tests",
+    content: "run the tests and fix any failures",
+  },
+  {
+    id: "default-13",
+    name: "Commit changes",
+    content: "commit these changes with a descriptive message",
+  },
   // Common commands
-  { id: 'default-14', name: 'List files', content: 'ls -la' },
-  { id: 'default-15', name: 'NPM dev', content: 'npm run dev' },
-  { id: 'default-16', name: 'NPM install', content: 'npm install' },
+  { id: "default-14", name: "List files", content: "ls -la" },
+  { id: "default-15", name: "NPM dev", content: "npm run dev" },
+  { id: "default-16", name: "NPM install", content: "npm install" },
 ];
 
 function getStoredSnippets(): Snippet[] {
-  if (typeof window === 'undefined') return DEFAULT_SNIPPETS;
+  if (typeof window === "undefined") return DEFAULT_SNIPPETS;
   try {
     const stored = localStorage.getItem(SNIPPETS_STORAGE_KEY);
     if (!stored) {
@@ -99,10 +111,12 @@ function SnippetsModal({
   onClose: () => void;
   onInsert: (content: string) => void;
 }) {
-  const [snippets, setSnippets] = useState<Snippet[]>(() => getStoredSnippets());
+  const [snippets, setSnippets] = useState<Snippet[]>(() =>
+    getStoredSnippets()
+  );
   const [isAdding, setIsAdding] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newContent, setNewContent] = useState('');
+  const [newName, setNewName] = useState("");
+  const [newContent, setNewContent] = useState("");
 
   const handleAdd = () => {
     if (newName.trim() && newContent.trim()) {
@@ -114,14 +128,14 @@ function SnippetsModal({
       const updated = [...snippets, newSnippet];
       setSnippets(updated);
       saveSnippets(updated);
-      setNewName('');
-      setNewContent('');
+      setNewName("");
+      setNewContent("");
       setIsAdding(false);
     }
   };
 
   const handleDelete = (id: string) => {
-    const updated = snippets.filter(s => s.id !== id);
+    const updated = snippets.filter((s) => s.id !== id);
     setSnippets(updated);
     saveSnippets(updated);
   };
@@ -134,22 +148,28 @@ function SnippetsModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-h-[70vh] bg-background rounded-t-xl flex flex-col"
+        className="bg-background flex max-h-[70vh] w-full flex-col rounded-t-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <span className="text-sm font-medium">Snippets</span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsAdding(!isAdding)}
-              className="p-1.5 rounded-md hover:bg-muted"
+              className="hover:bg-muted rounded-md p-1.5"
             >
               <Plus className="h-5 w-5" />
             </button>
-            <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
+            <button
+              onClick={onClose}
+              className="hover:bg-muted rounded-md p-1.5"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -157,24 +177,24 @@ function SnippetsModal({
 
         {/* Add new snippet form */}
         {isAdding && (
-          <div className="px-4 py-3 border-b border-border bg-muted/50">
+          <div className="border-border bg-muted/50 border-b px-4 py-3">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Snippet name..."
-              className="w-full px-3 py-2 mb-2 rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="bg-background focus:ring-primary mb-2 w-full rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none"
             />
             <textarea
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
               placeholder="Command or text..."
-              className="w-full h-20 px-3 py-2 rounded-lg bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+              className="bg-background focus:ring-primary h-20 w-full resize-none rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:outline-none"
             />
             <button
               onClick={handleAdd}
               disabled={!newName.trim() || !newContent.trim()}
-              className="mt-2 w-full py-2 rounded-lg bg-primary text-primary-foreground font-medium disabled:opacity-50"
+              className="bg-primary text-primary-foreground mt-2 w-full rounded-lg py-2 font-medium disabled:opacity-50"
             >
               Save Snippet
             </button>
@@ -184,27 +204,29 @@ function SnippetsModal({
         {/* Snippets list */}
         <div className="flex-1 overflow-y-auto">
           {snippets.length === 0 ? (
-            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+            <div className="text-muted-foreground px-4 py-8 text-center text-sm">
               No snippets yet. Tap + to add one.
             </div>
           ) : (
             snippets.map((snippet) => (
               <div
                 key={snippet.id}
-                className="flex items-center gap-2 px-4 py-3 border-b border-border active:bg-muted"
+                className="border-border active:bg-muted flex items-center gap-2 border-b px-4 py-3"
               >
                 <button
                   onClick={() => handleInsert(snippet.content)}
-                  className="flex-1 text-left min-w-0"
+                  className="min-w-0 flex-1 text-left"
                 >
-                  <div className="text-sm font-medium truncate">{snippet.name}</div>
-                  <div className="text-xs text-muted-foreground truncate font-mono">
+                  <div className="truncate text-sm font-medium">
+                    {snippet.name}
+                  </div>
+                  <div className="text-muted-foreground truncate font-mono text-xs">
                     {snippet.content}
                   </div>
                 </button>
                 <button
                   onClick={() => handleDelete(snippet.id)}
-                  className="p-2 rounded-md hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                  className="hover:bg-destructive/20 text-muted-foreground hover:text-destructive rounded-md p-2"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -221,18 +243,18 @@ function SnippetsModal({
 function PasteModal({
   open,
   onClose,
-  onPaste
+  onPaste,
 }: {
   open: boolean;
   onClose: () => void;
   onPaste: (text: string) => void;
 }) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState("");
 
   const handleSend = () => {
     if (text) {
       onPaste(text);
-      setText('');
+      setText("");
       onClose();
     }
   };
@@ -240,14 +262,17 @@ function PasteModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
       <div
-        className="w-[90%] max-w-md bg-background rounded-xl p-4"
+        className="bg-background w-[90%] max-w-md rounded-xl p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3 flex items-center justify-between">
           <span className="text-sm font-medium">Paste text</span>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted">
+          <button onClick={onClose} className="hover:bg-muted rounded-md p-1">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -255,20 +280,20 @@ function PasteModal({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
-            const pasted = e.clipboardData?.getData('text');
+            const pasted = e.clipboardData?.getData("text");
             if (pasted) {
               e.preventDefault();
-              setText(prev => prev + pasted);
+              setText((prev) => prev + pasted);
             }
           }}
           placeholder="Tap here, then long-press to paste..."
           autoFocus
-          className="w-full h-24 px-3 py-2 rounded-lg bg-muted text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+          className="bg-muted focus:ring-primary h-24 w-full resize-none rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none"
         />
         <button
           onClick={handleSend}
           disabled={!text}
-          className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium disabled:opacity-50"
+          className="bg-primary text-primary-foreground mt-3 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 font-medium disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
           Send to Terminal
@@ -301,7 +326,11 @@ export function TerminalToolbar({
     [onKeyPress]
   );
 
-  const { isListening, isSupported: isMicSupported, toggle: toggleMic } = useSpeechRecognition(sendText);
+  const {
+    isListening,
+    isSupported: isMicSupported,
+    toggle: toggleMic,
+  } = useSpeechRecognition(sendText);
 
   // Handle paste - try clipboard API first, fall back to modal
   const handlePaste = useCallback(async () => {
@@ -328,14 +357,14 @@ export function TerminalToolbar({
   if (!visible) return null;
 
   const buttons = [
-    { label: 'Esc', key: SPECIAL_KEYS.ESC },
-    { label: '^C', key: SPECIAL_KEYS.CTRL_C, highlight: true },
-    { label: 'Tab', key: SPECIAL_KEYS.TAB },
-    { label: '^D', key: SPECIAL_KEYS.CTRL_D },
-    { label: '←', key: SPECIAL_KEYS.LEFT },
-    { label: '→', key: SPECIAL_KEYS.RIGHT },
-    { label: '↑', key: SPECIAL_KEYS.UP },
-    { label: '↓', key: SPECIAL_KEYS.DOWN },
+    { label: "Esc", key: SPECIAL_KEYS.ESC },
+    { label: "^C", key: SPECIAL_KEYS.CTRL_C, highlight: true },
+    { label: "Tab", key: SPECIAL_KEYS.TAB },
+    { label: "^D", key: SPECIAL_KEYS.CTRL_D },
+    { label: "←", key: SPECIAL_KEYS.LEFT },
+    { label: "→", key: SPECIAL_KEYS.RIGHT },
+    { label: "↑", key: SPECIAL_KEYS.UP },
+    { label: "↓", key: SPECIAL_KEYS.DOWN },
   ];
 
   return (
@@ -351,7 +380,7 @@ export function TerminalToolbar({
         onInsert={sendText}
       />
       <div
-        className="flex items-center gap-1 px-2 py-1.5 bg-background/95 backdrop-blur border-t border-border overflow-x-auto scrollbar-none"
+        className="bg-background/95 border-border scrollbar-none flex items-center gap-1 overflow-x-auto border-t px-2 py-1.5 backdrop-blur"
         onTouchEnd={(e) => e.stopPropagation()}
       >
         {/* Mic button */}
@@ -365,13 +394,17 @@ export function TerminalToolbar({
               toggleMic();
             }}
             className={cn(
-              "flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium",
+              "flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium",
               isListening
-                ? "bg-red-500 text-white animate-pulse"
+                ? "animate-pulse bg-red-500 text-white"
                 : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
             )}
           >
-            {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            {isListening ? (
+              <MicOff className="h-4 w-4" />
+            ) : (
+              <Mic className="h-4 w-4" />
+            )}
           </button>
         )}
 
@@ -383,7 +416,7 @@ export function TerminalToolbar({
             e.stopPropagation();
             handlePaste();
           }}
-          className="flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+          className="bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium"
         >
           <Clipboard className="h-4 w-4" />
         </button>
@@ -398,7 +431,7 @@ export function TerminalToolbar({
               onSelectModeChange(!selectMode);
             }}
             className={cn(
-              "flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium",
+              "flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium",
               selectMode
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
@@ -418,7 +451,7 @@ export function TerminalToolbar({
               handleCopy();
             }}
             className={cn(
-              "flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium",
+              "flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium",
               copyFeedback
                 ? "bg-green-500 text-white"
                 : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
@@ -437,7 +470,7 @@ export function TerminalToolbar({
               e.stopPropagation();
               onImagePicker();
             }}
-            className="flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+            className="bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium"
           >
             <ImagePlus className="h-4 w-4" />
           </button>
@@ -451,13 +484,13 @@ export function TerminalToolbar({
             e.stopPropagation();
             setShowSnippetsModal(true);
           }}
-          className="flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+          className="bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium"
         >
           <FileText className="h-4 w-4" />
         </button>
 
         {/* Divider */}
-        <div className="w-px h-6 bg-border mx-1" />
+        <div className="bg-border mx-1 h-6 w-px" />
 
         {/* Shift toggle */}
         <button
@@ -468,7 +501,7 @@ export function TerminalToolbar({
             setShiftActive(!shiftActive);
           }}
           className={cn(
-            "flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium",
+            "flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium",
             shiftActive
               ? "bg-primary text-primary-foreground"
               : "bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
@@ -483,10 +516,10 @@ export function TerminalToolbar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation();
-            onKeyPress(shiftActive ? '\n' : '\r');
+            onKeyPress(shiftActive ? "\n" : "\r");
             setShiftActive(false);
           }}
-          className="flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground"
+          className="bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium"
         >
           ↵
         </button>
@@ -502,7 +535,7 @@ export function TerminalToolbar({
               onKeyPress(btn.key);
             }}
             className={cn(
-              "flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium",
+              "flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium",
               "active:bg-primary active:text-primary-foreground",
               btn.highlight
                 ? "bg-red-500/20 text-red-500"

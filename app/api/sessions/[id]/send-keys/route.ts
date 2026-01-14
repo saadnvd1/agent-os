@@ -73,14 +73,18 @@ export async function POST(
       const loadCmd = `tmux load-buffer -b "${bufferName}" "${tempFile}"`;
       log(`Running: ${loadCmd}`);
       const loadResult = await execAsync(loadCmd);
-      log(`Load stdout: "${loadResult.stdout}", stderr: "${loadResult.stderr}"`);
+      log(
+        `Load stdout: "${loadResult.stdout}", stderr: "${loadResult.stderr}"`
+      );
 
       // Paste the named buffer to the session
       log(`Pasting buffer "${bufferName}" to ${tmuxSessionName}`);
       const pasteCmd = `tmux paste-buffer -b "${bufferName}" -t "${tmuxSessionName}"`;
       log(`Running: ${pasteCmd}`);
       const pasteResult = await execAsync(pasteCmd);
-      log(`Paste stdout: "${pasteResult.stdout}", stderr: "${pasteResult.stderr}"`);
+      log(
+        `Paste stdout: "${pasteResult.stdout}", stderr: "${pasteResult.stderr}"`
+      );
 
       // Delete the buffer after use
       await execAsync(`tmux delete-buffer -b "${bufferName}"`).catch(() => {});
@@ -91,13 +95,16 @@ export async function POST(
         const enterCmd = `tmux send-keys -t "${tmuxSessionName}" Enter`;
         log(`Running: ${enterCmd}`);
         const enterResult = await execAsync(enterCmd);
-        log(`Enter stdout: "${enterResult.stdout}", stderr: "${enterResult.stderr}"`);
+        log(
+          `Enter stdout: "${enterResult.stdout}", stderr: "${enterResult.stderr}"`
+        );
       }
 
       log(`=== SUCCESS ===`);
       return NextResponse.json({ success: true });
     } catch (cmdError) {
-      const msg = cmdError instanceof Error ? cmdError.message : String(cmdError);
+      const msg =
+        cmdError instanceof Error ? cmdError.message : String(cmdError);
       log(`ERROR in commands: ${msg}`);
       throw cmdError;
     } finally {

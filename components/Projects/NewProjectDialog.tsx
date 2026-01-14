@@ -17,7 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Loader2, GitBranch, RefreshCw, Server } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Loader2,
+  GitBranch,
+  RefreshCw,
+  Server,
+} from "lucide-react";
 import type { AgentType } from "@/lib/providers";
 import type { DetectedDevServer } from "@/lib/projects";
 import { useCreateProject } from "@/data/projects";
@@ -250,7 +257,7 @@ export function NewProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Project</DialogTitle>
         </DialogHeader>
@@ -277,14 +284,14 @@ export function NewProjectDialog({
                 placeholder="~/projects/my-app"
               />
               {checkingDir && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <div className="absolute top-1/2 right-3 -translate-y-1/2">
+                  <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
                 </div>
               )}
             </div>
             {isGitRepo && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <GitBranch className="w-3 h-3" />
+              <p className="text-muted-foreground flex items-center gap-1 text-xs">
+                <GitBranch className="h-3 w-3" />
                 Git repository
               </p>
             )}
@@ -295,7 +302,7 @@ export function NewProjectDialog({
                     key={dir}
                     type="button"
                     onClick={() => setWorkingDirectory(dir)}
-                    className="text-xs px-2 py-0.5 rounded-full bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors truncate max-w-[200px]"
+                    className="bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground max-w-[200px] truncate rounded-full px-2 py-0.5 text-xs transition-colors"
                     title={dir}
                   >
                     {dir.replace(/^~\//, "").split("/").pop() || dir}
@@ -308,7 +315,10 @@ export function NewProjectDialog({
           {/* Agent Type */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Default Agent</label>
-            <Select value={agentType} onValueChange={(v) => setAgentType(v as AgentType)}>
+            <Select
+              value={agentType}
+              onValueChange={(v) => setAgentType(v as AgentType)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -342,8 +352,8 @@ export function NewProjectDialog({
           {/* Dev Servers */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Server className="w-4 h-4" />
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Server className="h-4 w-4" />
                 Dev Servers
               </label>
               <div className="flex gap-1">
@@ -352,32 +362,40 @@ export function NewProjectDialog({
                   variant="outline"
                   size="sm"
                   onClick={detectDevServers}
-                  disabled={isDetecting || !workingDirectory || workingDirectory === "~"}
+                  disabled={
+                    isDetecting || !workingDirectory || workingDirectory === "~"
+                  }
                 >
                   {isDetecting ? (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                   ) : (
-                    <RefreshCw className="w-3 h-3 mr-1" />
+                    <RefreshCw className="mr-1 h-3 w-3" />
                   )}
                   Detect
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={addDevServer}>
-                  <Plus className="w-3 h-3 mr-1" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addDevServer}
+                >
+                  <Plus className="mr-1 h-3 w-3" />
                   Add
                 </Button>
               </div>
             </div>
 
             {devServers.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">
-                No dev servers configured. Click Detect to auto-find or Add to configure manually.
+              <p className="text-muted-foreground py-2 text-sm">
+                No dev servers configured. Click Detect to auto-find or Add to
+                configure manually.
               </p>
             ) : (
               <div className="space-y-2">
                 {devServers.map((ds) => (
                   <div
                     key={ds.id}
-                    className="p-3 rounded-lg bg-accent/30 space-y-2"
+                    className="bg-accent/30 space-y-2 rounded-lg p-3"
                   >
                     <div className="flex items-center gap-2">
                       <Input
@@ -391,7 +409,9 @@ export function NewProjectDialog({
                       <Select
                         value={ds.type}
                         onValueChange={(v) =>
-                          updateDevServer(ds.id, { type: v as "node" | "docker" })
+                          updateDevServer(ds.id, {
+                            type: v as "node" | "docker",
+                          })
                         }
                       >
                         <SelectTrigger className="h-8 w-24">
@@ -409,7 +429,7 @@ export function NewProjectDialog({
                         onClick={() => removeDevServer(ds.id)}
                         className="text-red-500 hover:text-red-600"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                     <Input
@@ -417,7 +437,9 @@ export function NewProjectDialog({
                       onChange={(e) =>
                         updateDevServer(ds.id, { command: e.target.value })
                       }
-                      placeholder={ds.type === "docker" ? "Service name" : "npm run dev"}
+                      placeholder={
+                        ds.type === "docker" ? "Service name" : "npm run dev"
+                      }
                       className="h-8"
                     />
                     <div className="flex gap-2">
@@ -426,7 +448,9 @@ export function NewProjectDialog({
                         value={ds.port || ""}
                         onChange={(e) =>
                           updateDevServer(ds.id, {
-                            port: e.target.value ? parseInt(e.target.value) : undefined,
+                            port: e.target.value
+                              ? parseInt(e.target.value)
+                              : undefined,
                           })
                         }
                         placeholder="Port (e.g., 3000)"

@@ -62,12 +62,15 @@ export function PaneProvider({ children }: { children: ReactNode }) {
       // Migrate old pane data format if needed
       const migratedPanes: Record<string, PaneData> = {};
       for (const [paneId, paneData] of Object.entries(saved.panes)) {
-        if ('tabs' in paneData && Array.isArray(paneData.tabs)) {
+        if ("tabs" in paneData && Array.isArray(paneData.tabs)) {
           // New format
           migratedPanes[paneId] = paneData as PaneData;
         } else {
           // Old format - migrate to new
-          const oldData = paneData as { sessionId?: string | null; attachedTmux?: string | null };
+          const oldData = paneData as {
+            sessionId?: string | null;
+            attachedTmux?: string | null;
+          };
           const tab = createTab();
           tab.sessionId = oldData.sessionId || null;
           tab.attachedTmux = oldData.attachedTmux || null;
@@ -140,9 +143,8 @@ export function PaneProvider({ children }: { children: ReactNode }) {
       if (!pane || pane.tabs.length <= 1) return prev; // Keep at least one tab
 
       const newTabs = pane.tabs.filter((t) => t.id !== tabId);
-      const newActiveTabId = pane.activeTabId === tabId
-        ? newTabs[0].id
-        : pane.activeTabId;
+      const newActiveTabId =
+        pane.activeTabId === tabId ? newTabs[0].id : pane.activeTabId;
 
       return {
         ...prev,

@@ -30,35 +30,35 @@ export function UnifiedDiff({
   };
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="border-border overflow-hidden rounded-lg border">
       {/* File header */}
       <button
         onClick={handleToggle}
         className={cn(
-          "w-full flex items-center gap-2 px-3 py-2.5 text-sm",
-          "bg-muted/50 hover:bg-muted transition-colors text-left",
+          "flex w-full items-center gap-2 px-3 py-2.5 text-sm",
+          "bg-muted/50 hover:bg-muted text-left transition-colors",
           "min-h-[44px]" // Mobile touch target
         )}
       >
         {isExpanded ? (
-          <ChevronDown className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+          <ChevronDown className="text-muted-foreground h-4 w-4 flex-shrink-0" />
         ) : (
-          <ChevronRight className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+          <ChevronRight className="text-muted-foreground h-4 w-4 flex-shrink-0" />
         )}
 
         <span className="flex-1 truncate font-mono text-xs">{fileName}</span>
 
         {/* Stats */}
-        <span className="flex items-center gap-2 text-xs flex-shrink-0">
+        <span className="flex flex-shrink-0 items-center gap-2 text-xs">
           {diff.additions > 0 && (
             <span className="flex items-center gap-0.5 text-green-500">
-              <Plus className="w-3 h-3" />
+              <Plus className="h-3 w-3" />
               {diff.additions}
             </span>
           )}
           {diff.deletions > 0 && (
             <span className="flex items-center gap-0.5 text-red-500">
-              <Minus className="w-3 h-3" />
+              <Minus className="h-3 w-3" />
               {diff.deletions}
             </span>
           )}
@@ -69,11 +69,11 @@ export function UnifiedDiff({
       {isExpanded && (
         <div className="overflow-x-auto">
           {diff.isBinary ? (
-            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+            <div className="text-muted-foreground px-4 py-8 text-center text-sm">
               Binary file not shown
             </div>
           ) : diff.hunks.length === 0 ? (
-            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+            <div className="text-muted-foreground px-4 py-8 text-center text-sm">
               No changes
             </div>
           ) : (
@@ -97,7 +97,7 @@ function Hunk({ hunk }: HunkProps) {
   return (
     <div>
       {/* Hunk header */}
-      <div className="px-3 py-1 bg-blue-500/10 text-blue-400 border-y border-border text-xs">
+      <div className="border-border border-y bg-blue-500/10 px-3 py-1 text-xs text-blue-400">
         {hunk.header}
       </div>
 
@@ -129,22 +129,17 @@ function DiffLineRow({ line }: DiffLineRowProps) {
   return (
     <tr className={cn("hover:bg-muted/30", bgColor)}>
       {/* Old line number */}
-      <td className="w-12 px-2 py-0.5 text-right text-muted-foreground select-none border-r border-border/50 tabular-nums">
+      <td className="text-muted-foreground border-border/50 w-12 border-r px-2 py-0.5 text-right tabular-nums select-none">
         {line.oldLineNumber || ""}
       </td>
 
       {/* New line number */}
-      <td className="w-12 px-2 py-0.5 text-right text-muted-foreground select-none border-r border-border/50 tabular-nums">
+      <td className="text-muted-foreground border-border/50 w-12 border-r px-2 py-0.5 text-right tabular-nums select-none">
         {line.newLineNumber || ""}
       </td>
 
       {/* Line marker */}
-      <td
-        className={cn(
-          "w-6 px-1 py-0.5 text-center select-none",
-          textColor
-        )}
-      >
+      <td className={cn("w-6 px-1 py-0.5 text-center select-none", textColor)}>
         {getLineMarker(line.type)}
       </td>
 

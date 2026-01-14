@@ -84,12 +84,16 @@ export function ProjectsSection({
     const ids: string[] = [];
     for (const project of projects) {
       const projectSessions = sessions.filter(
-        (s) => !s.conductor_session_id && (s.project_id || "uncategorized") === project.id
+        (s) =>
+          !s.conductor_session_id &&
+          (s.project_id || "uncategorized") === project.id
       );
       for (const session of projectSessions) {
         ids.push(session.id);
         // Include workers under this session
-        const workers = sessions.filter((s) => s.conductor_session_id === session.id);
+        const workers = sessions.filter(
+          (s) => s.conductor_session_id === session.id
+        );
         for (const worker of workers) {
           ids.push(worker.id);
         }
@@ -109,21 +113,28 @@ export function ProjectsSection({
   // Group sessions by project_id
   const sessionsByProject = sessions
     .filter((s) => !s.conductor_session_id) // Exclude workers
-    .reduce((acc, session) => {
-      const projectId = session.project_id || "uncategorized";
-      if (!acc[projectId]) acc[projectId] = [];
-      acc[projectId].push(session);
-      return acc;
-    }, {} as Record<string, Session[]>);
+    .reduce(
+      (acc, session) => {
+        const projectId = session.project_id || "uncategorized";
+        if (!acc[projectId]) acc[projectId] = [];
+        acc[projectId].push(session);
+        return acc;
+      },
+      {} as Record<string, Session[]>
+    );
 
   // Group workers by conductor
-  const workersByConduct = sessions.reduce((acc, session) => {
-    if (session.conductor_session_id) {
-      if (!acc[session.conductor_session_id]) acc[session.conductor_session_id] = [];
-      acc[session.conductor_session_id].push(session);
-    }
-    return acc;
-  }, {} as Record<string, Session[]>);
+  const workersByConduct = sessions.reduce(
+    (acc, session) => {
+      if (session.conductor_session_id) {
+        if (!acc[session.conductor_session_id])
+          acc[session.conductor_session_id] = [];
+        acc[session.conductor_session_id].push(session);
+      }
+      return acc;
+    },
+    {} as Record<string, Session[]>
+  );
 
   // Get running dev servers for a project (for ProjectCard badge)
   const getProjectRunningServers = (projectId: string): DevServer[] => {
@@ -184,7 +195,7 @@ export function ProjectsSection({
 
             {/* Project contents when expanded */}
             {project.expanded && (
-              <div className="ml-4 pl-2 border-l border-border/30 space-y-0.5">
+              <div className="border-border/30 ml-4 space-y-0.5 border-l pl-2">
                 {/* Dev servers for this project */}
                 {projectDevServers.length > 0 && (
                   <div className="space-y-1 pb-1">
@@ -211,8 +222,9 @@ export function ProjectsSection({
                 )}
 
                 {/* Project sessions */}
-                {projectSessions.length === 0 && projectDevServers.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2 px-2">
+                {projectSessions.length === 0 &&
+                projectDevServers.length === 0 ? (
+                  <p className="text-muted-foreground px-2 py-2 text-xs">
                     No sessions yet
                   </p>
                 ) : projectSessions.length === 0 ? null : (
@@ -223,19 +235,27 @@ export function ProjectsSection({
                     return (
                       <div key={session.id} className="space-y-0.5">
                         <div className="flex items-center gap-1">
-                          <div className="flex-1 min-w-0">
+                          <div className="min-w-0 flex-1">
                             <SessionCard
                               session={session}
                               isActive={session.id === activeSessionId}
-                              isSummarizing={summarizingSessionId === session.id}
+                              isSummarizing={
+                                summarizingSessionId === session.id
+                              }
                               tmuxStatus={sessionStatuses?.[session.id]?.status}
                               groups={groups}
                               projects={projects}
                               isSelected={selectedIds.has(session.id)}
                               isInSelectMode={isInSelectMode}
-                              onToggleSelect={(shiftKey) => handleToggleSelect(session.id, shiftKey)}
+                              onToggleSelect={(shiftKey) =>
+                                handleToggleSelect(session.id, shiftKey)
+                              }
                               onClick={() => onSelectSession(session.id)}
-                              onOpenInTab={onOpenSessionInTab ? () => onOpenSessionInTab(session.id) : undefined}
+                              onOpenInTab={
+                                onOpenSessionInTab
+                                  ? () => onOpenSessionInTab(session.id)
+                                  : undefined
+                              }
                               onMoveToProject={
                                 onMoveSession
                                   ? (projectId) =>
@@ -278,7 +298,7 @@ export function ProjectsSection({
                           </div>
                           {/* Workers badge */}
                           {hasWorkers && (
-                            <span className="flex-shrink-0 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                            <span className="bg-primary/20 text-primary flex-shrink-0 rounded-full px-1.5 py-0.5 text-xs">
                               {workers.length}
                             </span>
                           )}
@@ -286,7 +306,7 @@ export function ProjectsSection({
 
                         {/* Nested workers */}
                         {hasWorkers && (
-                          <div className="ml-4 pl-2 border-l border-border/30 space-y-0.5">
+                          <div className="border-border/30 ml-4 space-y-0.5 border-l pl-2">
                             {workers.map((worker) => (
                               <SessionCard
                                 key={worker.id}
@@ -299,9 +319,15 @@ export function ProjectsSection({
                                 projects={projects}
                                 isSelected={selectedIds.has(worker.id)}
                                 isInSelectMode={isInSelectMode}
-                                onToggleSelect={(shiftKey) => handleToggleSelect(worker.id, shiftKey)}
+                                onToggleSelect={(shiftKey) =>
+                                  handleToggleSelect(worker.id, shiftKey)
+                                }
                                 onClick={() => onSelectSession(worker.id)}
-                                onOpenInTab={onOpenSessionInTab ? () => onOpenSessionInTab(worker.id) : undefined}
+                                onOpenInTab={
+                                  onOpenSessionInTab
+                                    ? () => onOpenSessionInTab(worker.id)
+                                    : undefined
+                                }
                                 onDelete={
                                   onDeleteSession
                                     ? () => onDeleteSession(worker.id)

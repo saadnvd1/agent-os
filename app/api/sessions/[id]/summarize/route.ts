@@ -31,7 +31,10 @@ function encodeProjectPath(cwd: string): string {
 }
 
 // Read and parse Claude session JSONL file
-function readClaudeSessionHistory(cwd: string, claudeSessionId: string): string | null {
+function readClaudeSessionHistory(
+  cwd: string,
+  claudeSessionId: string
+): string | null {
   const projectPath = encodeProjectPath(cwd);
   const jsonlPath = `${homedir()}/.claude/projects/${projectPath}/${claudeSessionId}.jsonl`;
 
@@ -51,9 +54,10 @@ function readClaudeSessionHistory(cwd: string, claudeSessionId: string): string 
 
         // Extract user messages
         if (entry.type === "user" && entry.message?.content) {
-          const content = typeof entry.message.content === "string"
-            ? entry.message.content
-            : JSON.stringify(entry.message.content);
+          const content =
+            typeof entry.message.content === "string"
+              ? entry.message.content
+              : JSON.stringify(entry.message.content);
           messages.push(`User: ${content}`);
         }
 
@@ -143,7 +147,10 @@ async function generateSummary(conversation: string): Promise<string> {
 }
 
 // Wait for Claude prompt to appear in tmux session
-async function waitForClaudeReady(sessionName: string, maxAttempts = 30): Promise<boolean> {
+async function waitForClaudeReady(
+  sessionName: string,
+  maxAttempts = 30
+): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const { stdout } = await execAsync(
@@ -156,13 +163,17 @@ async function waitForClaudeReady(sessionName: string, maxAttempts = 30): Promis
     } catch {
       // Ignore errors, keep polling
     }
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
   }
   return false;
 }
 
 // Send text to tmux session using load-buffer + paste-buffer
-async function sendToTmux(sessionName: string, text: string, pressEnter = true): Promise<void> {
+async function sendToTmux(
+  sessionName: string,
+  text: string,
+  pressEnter = true
+): Promise<void> {
   const tempFile = `/tmp/agent-os-send-${Date.now()}.txt`;
   const bufferName = `send-${Date.now()}`;
 
@@ -174,11 +185,13 @@ async function sendToTmux(sessionName: string, text: string, pressEnter = true):
 
     if (pressEnter) {
       // Wait for Claude to process pasted text before sending Enter
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
       await execAsync(`tmux send-keys -t "${sessionName}" Enter`);
     }
   } finally {
-    try { unlinkSync(tempFile); } catch {}
+    try {
+      unlinkSync(tempFile);
+    } catch {}
   }
 }
 
@@ -203,8 +216,10 @@ export async function POST(
     const tmuxSessionName = `${session.agent_type}-${id}`;
 
     // Get actual working directory from tmux
-    const cwd = await getTmuxCwd(tmuxSessionName) || session.working_directory;
-    const cwdExpanded = cwd?.replace(/^~/, process.env.HOME || "~") || process.env.HOME || "~";
+    const cwd =
+      (await getTmuxCwd(tmuxSessionName)) || session.working_directory;
+    const cwdExpanded =
+      cwd?.replace(/^~/, process.env.HOME || "~") || process.env.HOME || "~";
 
     // Try to get full conversation from Claude's JSONL (only for Claude sessions)
     let conversation: string | null = null;
@@ -214,14 +229,18 @@ export async function POST(
         console.log(`[summarize] Found Claude session ID: ${claudeSessionId}`);
         conversation = readClaudeSessionHistory(cwdExpanded, claudeSessionId);
         if (conversation) {
-          console.log(`[summarize] Read ${conversation.length} chars from JSONL`);
+          console.log(
+            `[summarize] Read ${conversation.length} chars from JSONL`
+          );
         }
       }
     }
 
     // Fallback to terminal scrollback for non-Claude or if JSONL not available
     if (!conversation) {
-      console.log(`[summarize] Using terminal scrollback for ${session.agent_type}`);
+      console.log(
+        `[summarize] Using terminal scrollback for ${session.agent_type}`
+      );
       conversation = await captureScrollback(tmuxSessionName);
     }
 
@@ -272,7 +291,7 @@ export async function POST(
       console.log(`[summarize] Tmux session created: ${newTmuxSession}`);
 
       // Give Claude a moment to start up before polling
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 2000));
 
       // Wait for Claude to be ready and send context
       if (sendContext) {
@@ -281,11 +300,15 @@ export async function POST(
         console.log(`[summarize] Claude ready: ${ready}`);
         if (ready) {
           const contextMessage = `Here's a summary of the previous session to continue from:\n\n${summary}\n\nPlease acknowledge you've received this context and are ready to continue.`;
-          console.log(`[summarize] Sending context message (${contextMessage.length} chars)`);
+          console.log(
+            `[summarize] Sending context message (${contextMessage.length} chars)`
+          );
           await sendToTmux(newTmuxSession, contextMessage, true);
           console.log(`[summarize] Context sent!`);
         } else {
-          console.log(`[summarize] WARNING: Claude not ready, skipping context send`);
+          console.log(
+            `[summarize] WARNING: Claude not ready, skipping context send`
+          );
         }
       }
     }

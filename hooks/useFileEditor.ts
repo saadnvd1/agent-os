@@ -49,43 +49,46 @@ export function useFileEditor(): UseFileEditorReturn {
     (f) => f.content !== f.currentContent
   );
 
-  const openFile = useCallback(async (path: string) => {
-    // Check if file is already open
-    const existing = openFiles.find((f) => f.path === path);
-    if (existing) {
-      setActiveFilePath(path);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/files/content?path=${encodeURIComponent(path)}`
-      );
-      const data = await res.json();
-
-      if (data.error) {
-        console.error("Failed to open file:", data.error);
+  const openFile = useCallback(
+    async (path: string) => {
+      // Check if file is already open
+      const existing = openFiles.find((f) => f.path === path);
+      if (existing) {
+        setActiveFilePath(path);
         return;
       }
 
-      const ext = path.split(".").pop() || "";
-      const newFile: OpenFile = {
-        path: data.path,
-        content: data.content,
-        currentContent: data.content,
-        isBinary: data.isBinary,
-        language: getLanguageFromExtension(ext),
-      };
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/files/content?path=${encodeURIComponent(path)}`
+        );
+        const data = await res.json();
 
-      setOpenFiles((prev) => [...prev, newFile]);
-      setActiveFilePath(data.path);
-    } catch (error) {
-      console.error("Failed to open file:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [openFiles]);
+        if (data.error) {
+          console.error("Failed to open file:", data.error);
+          return;
+        }
+
+        const ext = path.split(".").pop() || "";
+        const newFile: OpenFile = {
+          path: data.path,
+          content: data.content,
+          currentContent: data.content,
+          isBinary: data.isBinary,
+          language: getLanguageFromExtension(ext),
+        };
+
+        setOpenFiles((prev) => [...prev, newFile]);
+        setActiveFilePath(data.path);
+      } catch (error) {
+        console.error("Failed to open file:", error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [openFiles]
+  );
 
   const closeFile = useCallback((path: string) => {
     setOpenFiles((prev) => {
@@ -96,7 +99,8 @@ export function useFileEditor(): UseFileEditorReturn {
         // Select the next file, or previous, or null
         const closedIndex = prev.findIndex((f) => f.path === path);
         if (newFiles.length === 0) return null;
-        if (closedIndex >= newFiles.length) return newFiles[newFiles.length - 1].path;
+        if (closedIndex >= newFiles.length)
+          return newFiles[newFiles.length - 1].path;
         return newFiles[closedIndex].path;
       });
       return newFiles;
@@ -113,7 +117,8 @@ export function useFileEditor(): UseFileEditorReturn {
     async (path: string): Promise<{ success: boolean; error?: string }> => {
       const file = openFiles.find((f) => f.path === path);
       if (!file) return { success: false, error: "File not found" };
-      if (file.isBinary) return { success: false, error: "Cannot save binary files" };
+      if (file.isBinary)
+        return { success: false, error: "Cannot save binary files" };
 
       setSaving(true);
       try {
