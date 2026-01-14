@@ -112,6 +112,8 @@ export function useTerminalConnection({
     if (!terminalRef.current) return;
 
     let cancelled = false;
+    // Reset intentional close flag (may be true from previous cleanup)
+    intentionalCloseRef.current = false;
     let cleanupTouchScroll: (() => void) | null = null;
     let cleanupResizeHandlers: (() => void) | null = null;
     let cleanupWebSocket: (() => void) | null = null;
