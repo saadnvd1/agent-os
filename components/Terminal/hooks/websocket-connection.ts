@@ -50,6 +50,14 @@ export function createWebSocketConnection(
   };
 
   // Force reconnect - kills any existing connection and creates fresh one
+  // Note: savedHandlers is populated after handlers are defined below
+  let savedHandlers: {
+    onopen: typeof ws.onopen;
+    onmessage: typeof ws.onmessage;
+    onclose: typeof ws.onclose;
+    onerror: typeof ws.onerror;
+  };
+
   const forceReconnect = () => {
     if (intentionalCloseRef.current) return;
 
@@ -74,13 +82,13 @@ export function createWebSocketConnection(
     callbacks.onConnectionStateChange('reconnecting');
     reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
 
-    // Create fresh connection
+    // Create fresh connection with saved handlers
     const newWs = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
     wsRef.current = newWs;
-    newWs.onopen = ws.onopen;
-    newWs.onmessage = ws.onmessage;
-    newWs.onclose = ws.onclose;
-    newWs.onerror = ws.onerror;
+    newWs.onopen = savedHandlers.onopen;
+    newWs.onmessage = savedHandlers.onmessage;
+    newWs.onclose = savedHandlers.onclose;
+    newWs.onerror = savedHandlers.onerror;
   };
 
   // Soft reconnect - only if not already connected
@@ -130,6 +138,14 @@ export function createWebSocketConnection(
 
   ws.onerror = () => {
     // Errors are handled by onclose
+  };
+
+  // Save handlers now that they're defined (for reconnection)
+  savedHandlers = {
+    onopen: ws.onopen,
+    onmessage: ws.onmessage,
+    onclose: ws.onclose,
+    onerror: ws.onerror,
   };
 
   // Handle terminal input
