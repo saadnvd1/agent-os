@@ -21,14 +21,17 @@ install_claude_code() {
     fi
 
     log_info "Installing Claude Code..."
-    npm install -g @anthropic-ai/claude-code
+    curl -fsSL https://claude.ai/install.sh | bash
 
-    log_info "Authenticating Claude Code..."
-    echo ""
-    echo "Please complete the authentication in your browser."
-    echo "Press Enter when ready to continue..."
-    read -r
-    claude auth login
+    if is_interactive; then
+        log_info "Authenticating Claude Code..."
+        echo ""
+        echo "Please complete the authentication in your browser."
+        read -p "Press Enter when ready to continue..." -r
+        claude auth login
+    else
+        log_info "Run 'claude' to authenticate when ready"
+    fi
 }
 
 install_codex() {
