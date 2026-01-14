@@ -48,9 +48,10 @@ agent-os.db-shm
 # Vercel
 .vercel
 
-# Local docs/plans (but allow docs/setup for public docs)
+# Local docs/plans (but allow docs/setup and docs/issues for public docs)
 docs/*
 !docs/setup/
+!docs/issues/
 .mcp.json
 .git-evening
 
