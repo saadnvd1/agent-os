@@ -35,6 +35,7 @@ export function useTerminalConnection({
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
+  const reconnectFnRef = useRef<(() => void) | null>(null);
 
   // Reconnection tracking
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -102,6 +103,10 @@ export function useTerminalConnection({
     }
   }, []);
 
+  const reconnect = useCallback(() => {
+    reconnectFnRef.current?.();
+  }, []);
+
   // Main setup effect
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -153,6 +158,7 @@ export function useTerminalConnection({
         intentionalCloseRef
       );
       cleanupWebSocket = wsManager.cleanup;
+      reconnectFnRef.current = wsManager.reconnect;
 
       // Setup resize handlers
       cleanupResizeHandlers = setupResizeHandlers({
@@ -233,5 +239,6 @@ export function useTerminalConnection({
     getScrollState,
     restoreScrollState,
     triggerResize,
+    reconnect,
   };
 }

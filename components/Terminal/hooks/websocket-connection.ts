@@ -15,6 +15,7 @@ export interface WebSocketManager {
   sendInput: (data: string) => void;
   sendCommand: (command: string) => void;
   sendResize: (cols: number, rows: number) => void;
+  reconnect: () => void;
   cleanup: () => void;
 }
 
@@ -156,5 +157,5 @@ export function createWebSocketConnection(
     }
   };
 
-  return { ws, sendInput, sendCommand, sendResize, cleanup };
+  return { ws, sendInput, sendCommand, sendResize, reconnect: attemptReconnect, cleanup };
 }
