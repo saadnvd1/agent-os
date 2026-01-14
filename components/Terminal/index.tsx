@@ -252,6 +252,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       )}
 
       {/* Connection status overlays */}
+      {connectionState === 'connecting' && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background">
+          <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+          <span className="text-sm text-muted-foreground">Connecting...</span>
+        </div>
+      )}
+
       {connectionState === 'reconnecting' && (
         <div className="absolute left-4 top-4 flex items-center gap-2 rounded bg-amber-500/20 px-2 py-1 text-xs text-amber-400">
           <div className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />

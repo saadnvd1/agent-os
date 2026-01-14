@@ -29,7 +29,7 @@ export function useTerminalConnection({
 }: UseTerminalConnectionProps): UseTerminalConnectionReturn {
   const [connected, setConnected] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [connectionState, setConnectionState] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting');
 
   const wsRef = useRef<WebSocket | null>(null);
   const xtermRef = useRef<XTerm | null>(null);

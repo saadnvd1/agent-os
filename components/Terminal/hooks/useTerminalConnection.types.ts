@@ -23,7 +23,7 @@ export interface UseTerminalConnectionProps {
 
 export interface UseTerminalConnectionReturn {
   connected: boolean;
-  connectionState: 'connected' | 'disconnected' | 'reconnecting';
+  connectionState: 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
   isAtBottom: boolean;
   xtermRef: RefObject<XTerm | null>;
   searchAddonRef: RefObject<SearchAddon | null>;

@@ -11,21 +11,22 @@ import { ConductorPanel } from "@/components/ConductorPanel";
 import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
 import { DesktopTabBar } from "./DesktopTabBar";
+import { TerminalSkeleton, FileExplorerSkeleton, GitPanelSkeleton } from "./PaneSkeletons";
 
-// Dynamic imports for client-only components
+// Dynamic imports for client-only components with loading states
 const Terminal = dynamic(
   () => import("@/components/Terminal").then((mod) => mod.Terminal),
-  { ssr: false }
+  { ssr: false, loading: () => <TerminalSkeleton /> }
 );
 
 const FileExplorer = dynamic(
   () => import("@/components/FileExplorer").then((mod) => mod.FileExplorer),
-  { ssr: false }
+  { ssr: false, loading: () => <FileExplorerSkeleton /> }
 );
 
 const GitPanel = dynamic(
   () => import("@/components/GitPanel").then((mod) => mod.GitPanel),
-  { ssr: false }
+  { ssr: false, loading: () => <GitPanelSkeleton /> }
 );
 
 interface PaneProps {
