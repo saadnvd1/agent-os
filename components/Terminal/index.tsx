@@ -70,6 +70,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     initialScrollState,
     isMobile,
     theme: terminalTheme,
+    selectMode,
   });
 
   const {
