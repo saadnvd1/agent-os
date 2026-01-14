@@ -93,6 +93,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const justStartedEditingRef = useRef(false);
 
   const handleMouseEnter = () => {
     if (!onHoverStart || !cardRef.current || menuOpen) return;
@@ -127,15 +128,24 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
   useEffect(() => {
     if (isEditing && inputRef.current) {
       const input = inputRef.current;
+      // Mark that we just started editing to ignore immediate blur
+      justStartedEditingRef.current = true;
       // Small timeout to ensure input is fully mounted
       setTimeout(() => {
         input.focus();
         input.select();
+        // Clear the flag after focus is established
+        setTimeout(() => {
+          justStartedEditingRef.current = false;
+        }, 100);
       }, 0);
     }
   }, [isEditing]);
 
   const handleRename = () => {
+    // Ignore blur events that happen immediately after starting to edit
+    if (justStartedEditingRef.current) return;
+
     if (editName.trim() && editName !== session.name && onRename) {
       onRename(editName.trim());
     }

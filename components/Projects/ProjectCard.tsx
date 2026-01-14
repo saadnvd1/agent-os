@@ -61,6 +61,7 @@ export function ProjectCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  const justStartedEditingRef = useRef(false);
 
   const hasRunningServers = runningDevServers.length > 0;
   // Uncategorized can have New Session and Rename, but not Edit/Delete/DevServer
@@ -71,15 +72,24 @@ export function ProjectCard({
   useEffect(() => {
     if (isEditing && inputRef.current) {
       const input = inputRef.current;
+      // Mark that we just started editing to ignore immediate blur
+      justStartedEditingRef.current = true;
       // Small timeout to ensure input is fully mounted
       setTimeout(() => {
         input.focus();
         input.select();
+        // Clear the flag after focus is established
+        setTimeout(() => {
+          justStartedEditingRef.current = false;
+        }, 100);
       }, 0);
     }
   }, [isEditing]);
 
   const handleRename = () => {
+    // Ignore blur events that happen immediately after starting to edit
+    if (justStartedEditingRef.current) return;
+
     if (editName.trim() && editName !== project.name && onRename) {
       onRename(editName.trim());
     }
