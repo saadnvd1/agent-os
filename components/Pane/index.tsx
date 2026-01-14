@@ -173,15 +173,19 @@ export const Pane = memo(function Pane({
     [onSelectSession]
   );
 
-  // Swipe gesture handling for mobile session switching
+  // Swipe gesture handling for mobile session switching (terminal view only)
   const touchStartX = useRef<number | null>(null);
   const currentIndex = session ? sessions.findIndex(s => s.id === session.id) : -1;
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Only enable swipe on terminal view
+    if (viewMode !== "terminal") return;
     touchStartX.current = e.touches[0].clientX;
-  }, []);
+  }, [viewMode]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    // Only enable swipe on terminal view
+    if (viewMode !== "terminal") return;
     if (touchStartX.current === null) return;
 
     const touchEndX = e.changedTouches[0].clientX;
@@ -199,7 +203,7 @@ export const Pane = memo(function Pane({
     }
 
     touchStartX.current = null;
-  }, [currentIndex, sessions, handleSelectSession]);
+  }, [viewMode, currentIndex, sessions, handleSelectSession]);
 
   return (
     <div
