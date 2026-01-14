@@ -49,18 +49,45 @@ export function createWebSocketConnection(
     }
   };
 
-  const attemptReconnect = () => {
+  // Force reconnect - kills any existing connection and creates fresh one
+  const forceReconnect = () => {
     if (intentionalCloseRef.current) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    // Clear any pending reconnect
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    // Force close existing socket regardless of state (handles hung sockets)
+    const oldWs = wsRef.current;
+    if (oldWs) {
+      // Remove handlers to prevent callbacks
+      oldWs.onopen = null;
+      oldWs.onmessage = null;
+      oldWs.onclose = null;
+      oldWs.onerror = null;
+      try { oldWs.close(); } catch { /* ignore */ }
+      wsRef.current = null;
+    }
 
     callbacks.onConnectionStateChange('reconnecting');
+    reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
 
+    // Create fresh connection
     const newWs = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
     wsRef.current = newWs;
     newWs.onopen = ws.onopen;
     newWs.onmessage = ws.onmessage;
     newWs.onclose = ws.onclose;
     newWs.onerror = ws.onerror;
+  };
+
+  // Soft reconnect - only if not already connected
+  const attemptReconnect = () => {
+    if (intentionalCloseRef.current) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    forceReconnect();
   };
 
   ws.onopen = () => {
@@ -119,29 +146,39 @@ export function createWebSocketConnection(
     return true;
   });
 
+  // Track when page was last hidden (for detecting long sleeps)
+  let hiddenAt: number | null = null;
+
   // Handle visibility change for reconnection
   const handleVisibilityChange = () => {
-    if (document.visibilityState !== 'visible' || intentionalCloseRef.current) return;
+    if (intentionalCloseRef.current) return;
 
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+      return;
+    }
+
+    // Page became visible
+    if (document.visibilityState !== 'visible') return;
+
+    const wasHiddenFor = hiddenAt ? Date.now() - hiddenAt : 0;
+    hiddenAt = null;
+
+    // If hidden for more than 5 seconds, force reconnect (iOS Safari kills sockets)
+    // This handles the "hung socket" problem where readyState says OPEN but it's dead
+    if (wasHiddenFor > 5000) {
+      forceReconnect();
+      return;
+    }
+
+    // Otherwise only reconnect if actually disconnected
     const currentWs = wsRef.current;
     const isDisconnected = !currentWs || currentWs.readyState === WebSocket.CLOSED || currentWs.readyState === WebSocket.CLOSING;
     const isStaleConnection = currentWs?.readyState === WebSocket.CONNECTING;
 
-    if (!isDisconnected && !isStaleConnection) return;
-
-    // Force close any stale connection
-    if (isStaleConnection && currentWs) {
-      try { currentWs.close(); } catch { /* ignore */ }
-      wsRef.current = null;
+    if (isDisconnected || isStaleConnection) {
+      forceReconnect();
     }
-
-    // Clear pending reconnect and reconnect immediately
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
-    attemptReconnect();
   };
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -157,5 +194,5 @@ export function createWebSocketConnection(
     }
   };
 
-  return { ws, sendInput, sendCommand, sendResize, reconnect: attemptReconnect, cleanup };
+  return { ws, sendInput, sendCommand, sendResize, reconnect: forceReconnect, cleanup };
 }
