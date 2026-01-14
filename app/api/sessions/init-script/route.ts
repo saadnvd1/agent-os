@@ -43,6 +43,9 @@ printf "\\n"
 # Brief pause to show banner
 sleep 0.8
 
+# Source bashrc to get PATH (includes ~/.local/bin for claude)
+[[ -f ~/.bashrc ]] && source ~/.bashrc
+
 # Start the agent
 exec ${agentCommand}
 `;
