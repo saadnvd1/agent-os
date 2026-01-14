@@ -107,11 +107,31 @@ export function createWebSocketConnection(
     term.focus();
   };
 
+  // Fight against Claude Code's forced top-scrolling bug
+  // See: https://github.com/anthropics/claude-code/issues/826
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === 'output') {
+        const buffer = term.buffer.active;
+        const scrollYBefore = buffer.viewportY;
+        const wasAtTop = scrollYBefore <= 0;
+        const wasAtBottom = scrollYBefore >= buffer.baseY;
+
         term.write(msg.data);
+
+        // After write, check if scroll jumped to top unexpectedly
+        // Give it a moment for the write to complete
+        requestAnimationFrame(() => {
+          const scrollYAfter = term.buffer.active.viewportY;
+          const isNowAtTop = scrollYAfter <= 0;
+
+          // If we jumped to top but weren't at top before, and weren't at bottom
+          // (at bottom means we want to follow output), restore position
+          if (isNowAtTop && !wasAtTop && !wasAtBottom && scrollYBefore > 5) {
+            term.scrollToLine(scrollYBefore);
+          }
+        });
       } else if (msg.type === 'exit') {
         term.write('\r\n\x1b[33m[Session ended]\x1b[0m\r\n');
       }

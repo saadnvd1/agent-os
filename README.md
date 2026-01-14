@@ -91,35 +91,63 @@ AgentOS includes a File Explorer with syntax highlighting and a Git Panel with i
 - **Session Forking** - Fork conversations to explore different approaches (Claude)
 - **Session Resume** - Auto-detects session IDs for seamless resume (Claude)
 
-## Prerequisites
+## Installation
+
+### One-Line Install (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/install.sh | bash
+```
+
+This will:
+- Install prerequisites (Node.js, git, tmux) if missing
+- Prompt to install an AI CLI if none detected
+- Build and configure AgentOS
+- Add `agent-os` command to your PATH
+
+Then start the server:
+
+```bash
+agent-os start
+agent-os status   # Shows URLs
+```
+
+### CLI Commands
+
+```bash
+agent-os start     # Start server in background
+agent-os stop      # Stop server
+agent-os restart   # Restart server
+agent-os status    # Show status and URLs
+agent-os logs      # Tail server logs
+agent-os update    # Update to latest version
+agent-os enable    # Auto-start on boot
+agent-os disable   # Disable auto-start
+agent-os uninstall # Remove completely
+```
+
+### Manual Install (Development)
+
+```bash
+git clone https://github.com/saadnvd1/agent-os
+cd agent-os
+npm install
+npm run dev        # Development mode on http://localhost:3011
+```
+
+### Prerequisites
 
 - Node.js 20+
 - tmux
-- At least one of:
-  - [Claude Code CLI](https://github.com/anthropics/claude-code) installed and authenticated
-  - [Codex CLI](https://github.com/openai/codex) installed and authenticated
-  - [OpenCode CLI](https://github.com/opencode-ai/opencode) installed and configured
-  - [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed and authenticated
-  - [Aider](https://aider.chat/) installed and configured
-  - [Cursor CLI](https://cursor.com/cli) installed (requires Cursor subscription)
+- At least one AI coding CLI:
+  - [Claude Code](https://github.com/anthropics/claude-code) - Recommended
+  - [Codex](https://github.com/openai/codex)
+  - [OpenCode](https://github.com/opencode-ai/opencode)
+  - [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+  - [Aider](https://aider.chat/)
+  - [Cursor CLI](https://cursor.com/cli)
 - [GitHub CLI](https://cli.github.com/) (`gh`) - Optional, for PR integration
 - macOS or Linux
-
-## Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/saadnvd1/agent-os
-cd agent-os
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Open http://localhost:3011
-```
 
 ## Mobile Access with Tailscale
 
