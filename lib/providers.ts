@@ -359,6 +359,29 @@ export const cursorProvider: AgentProvider = {
   idlePatterns: [/^>\s*$/m, /cursor.*>\s*$/im, /\$\s*$/m],
 };
 
+/**
+ * Shell Provider
+ * Plain terminal without any AI CLI
+ */
+export const shellProvider: AgentProvider = {
+  id: "shell",
+  name: "Terminal",
+  description: "Plain shell terminal",
+  command: "", // No command - just shell
+  configDir: "",
+
+  supportsResume: false,
+  supportsFork: false,
+
+  buildFlags(): string[] {
+    return []; // No flags for shell
+  },
+
+  waitingPatterns: [],
+  runningPatterns: [],
+  idlePatterns: [/\$\s*$/m, />\s*$/m, /%\s*$/m],
+};
+
 // Provider registry
 export const providers: Record<AgentType, AgentProvider> = {
   claude: claudeProvider,
@@ -367,6 +390,7 @@ export const providers: Record<AgentType, AgentProvider> = {
   gemini: geminiProvider,
   aider: aiderProvider,
   cursor: cursorProvider,
+  shell: shellProvider,
 };
 
 // Get provider by ID

@@ -32,6 +32,7 @@ export function SessionList({
   onSelect,
   onOpenInTab,
   onNewSessionInProject,
+  onOpenTerminal,
   onStartDevServer,
   onCreateDevServer,
 }: SessionListProps) {
@@ -143,6 +144,7 @@ export function SessionList({
                 onDeleteProject={mutations.handleDeleteProject}
                 onRenameProject={mutations.handleRenameProject}
                 onNewSession={onNewSessionInProject}
+                onOpenTerminal={onOpenTerminal}
                 onSelectSession={onSelect}
                 onOpenSessionInTab={onOpenInTab}
                 onMoveSession={mutations.handleMoveSessionToProject}
