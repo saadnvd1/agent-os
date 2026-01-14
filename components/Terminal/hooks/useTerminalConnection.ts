@@ -186,15 +186,9 @@ export function useTerminalConnection({
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
 
-      // On mobile, prevent iOS keyboard from appearing by setting inputMode="none"
-      // on xterm's hidden textarea. We use the virtual MobileKeybar instead.
-      if (isMobile && term.element) {
-        const textarea = term.element.querySelector('textarea');
-        if (textarea) {
-          textarea.setAttribute('inputmode', 'none');
-          textarea.setAttribute('readonly', 'true');
-        }
-      }
+      // On mobile with hybrid mode: allow native keyboard (don't block it)
+      // The toolbar provides special keys, native keyboard provides text input
+      // Note: We no longer set inputmode="none" - native keyboard is preferred
 
       // Scroll tracking
       term.onScroll(() => {
@@ -436,9 +430,19 @@ export function useTerminalConnection({
         fitTimeouts.forEach(clearTimeout);
         fitTimeouts = [];
 
+        // On mobile, save scroll position before fit to prevent keyboard open/close scroll
+        const savedScrollLine = isMobile ? currentTerm.buffer.active.viewportY : null;
+
+        const restoreScroll = () => {
+          if (savedScrollLine !== null) {
+            currentTerm.scrollToLine(savedScrollLine);
+          }
+        };
+
         requestAnimationFrame(() => {
           // First fit - immediate
           fitAddon.fit();
+          restoreScroll();
 
           const sendResize = () => {
             const activeWs = wsRef.current;
@@ -454,12 +458,14 @@ export function useTerminalConnection({
           // Second fit - after 100ms (handles most delayed layout updates)
           fitTimeouts.push(setTimeout(() => {
             fitAddon.fit();
+            restoreScroll();
             sendResize();
           }, 100));
 
           // Third fit - after 250ms (handles slow layout updates, e.g., DevTools toggle)
           fitTimeouts.push(setTimeout(() => {
             fitAddon.fit();
+            restoreScroll();
             sendResize();
           }, 250));
         });

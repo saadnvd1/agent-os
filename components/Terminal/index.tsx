@@ -1,18 +1,15 @@
 'use client';
 
-import { useRef, forwardRef, useImperativeHandle, useCallback, useState, useMemo } from 'react';
+import { useRef, forwardRef, useImperativeHandle, useCallback, useState, useMemo, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import '@xterm/xterm/css/xterm.css';
 import { ImagePlus } from 'lucide-react';
 import { SearchBar } from './SearchBar';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
-import { VirtualKeyboard } from './VirtualKeyboard';
-import { KeybarToggleButton } from './KeybarToggleButton';
+import { TerminalToolbar } from './TerminalToolbar';
 import { useTerminalConnection, useTerminalSearch } from './hooks';
 import type { TerminalScrollState } from './hooks';
-import { useKeybarVisibility } from '@/hooks/useKeybarVisibility';
 import { useViewport } from '@/hooks/useViewport';
-import { cn } from '@/lib/utils';
 import { ImagePicker } from '@/components/ImagePicker';
 
 export type { TerminalScrollState };
@@ -37,7 +34,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   ref
 ) {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const { isVisible: keybarVisible, toggle: toggleKeybar, show: showKeybar } = useKeybarVisibility();
+  const containerRef = useRef<HTMLDivElement>(null);
   const { isMobile } = useViewport();
   const { theme: currentTheme, resolvedTheme } = useTheme();
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -103,12 +100,50 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     restoreScrollState,
   }));
 
-  // NOTE: We intentionally do NOT resize the terminal when keybar visibility changes.
-  // Resizing causes xterm to recalculate rows which scrolls the viewport.
-  // The flex container handles the visual shrink/grow - xterm just clips at the bottom.
+  // Track visual viewport for iOS keyboard
+  // We use explicit height instead of fixed positioning to stay in document flow
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (!isMobile || typeof window === 'undefined') return;
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    // Track the initial full height to detect keyboard
+    const fullHeight = window.innerHeight;
+
+    const updateViewport = () => {
+      // Calculate how much space the keyboard is taking
+      const currentHeight = viewport.height;
+      const kbHeight = Math.max(0, fullHeight - currentHeight - viewport.offsetTop);
+      setKeyboardHeight(kbHeight);
+    };
+
+    // Initial measurement
+    updateViewport();
+
+    viewport.addEventListener('resize', updateViewport);
+    viewport.addEventListener('scroll', updateViewport);
+
+    return () => {
+      viewport.removeEventListener('resize', updateViewport);
+      viewport.removeEventListener('scroll', updateViewport);
+    };
+  }, [isMobile]);
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden">
+    <div
+      ref={containerRef}
+      className="flex flex-col overflow-hidden bg-background"
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        // On mobile, shrink container when keyboard is open
+        paddingBottom: isMobile && keyboardHeight > 0 ? keyboardHeight : undefined,
+      }}
+    >
       {/* Search Bar */}
       <SearchBar
         ref={searchInputRef}
@@ -121,12 +156,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       />
 
       {/* Terminal container - NO padding! FitAddon reads offsetHeight which includes padding */}
-      {/* touch-action: none is CRITICAL for mobile - prevents browser from intercepting touch events */}
       <div
         ref={terminalRef}
         className="terminal-container min-h-0 w-full flex-1 overflow-hidden"
-        style={isMobile ? { touchAction: 'none' } : undefined}
-        onClick={isMobile ? showKeybar : undefined}
+        onClick={focus}
       />
 
       {/* Image picker button - desktop only (mobile uses virtual keyboard) */}
@@ -152,16 +185,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {/* Scroll to bottom button */}
       <ScrollToBottomButton visible={!isAtBottom} onClick={scrollToBottom} />
 
-      {/* Mobile: Keybar toggle button and virtual keyboard */}
+      {/* Mobile: Toolbar with special keys (native keyboard handles text) */}
       {isMobile && (
-        <>
-          <KeybarToggleButton isVisible={keybarVisible} onToggle={toggleKeybar} />
-          <VirtualKeyboard
-            onKeyPress={handleKeyboardInput}
-            onImagePick={() => setShowImagePicker(true)}
-            visible={keybarVisible}
-          />
-        </>
+        <TerminalToolbar
+          onKeyPress={handleKeyboardInput}
+          onImagePicker={() => setShowImagePicker(true)}
+          visible={true}
+        />
       )}
 
       {/* Connection status indicator (subtle) */}
