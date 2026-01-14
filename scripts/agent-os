@@ -1,0 +1,831 @@
+#!/usr/bin/env bash
+#
+# agent-os - Wrapper script for managing AgentOS server
+#
+# Usage:
+#   agent-os install     Install AgentOS
+#   agent-os start       Start the server
+#   agent-os stop        Stop the server
+#   agent-os restart     Restart the server
+#   agent-os status      Show server status
+#   agent-os logs        Tail server logs
+#   agent-os update      Update to latest version
+#   agent-os enable      Enable auto-start on boot
+#   agent-os disable     Disable auto-start
+#   agent-os uninstall   Remove AgentOS
+
+set -e
+
+# Configuration
+AGENT_OS_HOME="${AGENT_OS_HOME:-$HOME/.agent-os}"
+REPO_DIR="$AGENT_OS_HOME/repo"
+PID_FILE="$AGENT_OS_HOME/agent-os.pid"
+LOG_FILE="$AGENT_OS_HOME/agent-os.log"
+PORT="${AGENT_OS_PORT:-3011}"
+REPO_URL="https://github.com/saadnvd1/agent-os.git"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Helpers
+log_info() { echo -e "${BLUE}==>${NC} $1"; }
+log_success() { echo -e "${GREEN}==>${NC} $1"; }
+log_warn() { echo -e "${YELLOW}==>${NC} $1"; }
+log_error() { echo -e "${RED}==>${NC} $1"; }
+
+# Detect OS
+detect_os() {
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "macos"
+    elif [[ -f /etc/debian_version ]]; then
+        echo "debian"
+    elif [[ -f /etc/redhat-release ]]; then
+        echo "redhat"
+    else
+        echo "linux"
+    fi
+}
+
+OS=$(detect_os)
+
+# Check if running interactively
+is_interactive() {
+    [[ -t 0 ]]
+}
+
+# Prompt yes/no with default
+prompt_yn() {
+    local prompt="$1"
+    local default="${2:-y}"
+
+    if ! is_interactive; then
+        [[ "$default" == "y" ]]
+        return
+    fi
+
+    if [[ "$default" == "y" ]]; then
+        read -p "$prompt [Y/n] " -n 1 -r
+    else
+        read -p "$prompt [y/N] " -n 1 -r
+    fi
+    echo ""
+
+    if [[ -z "$REPLY" ]]; then
+        [[ "$default" == "y" ]]
+    else
+        [[ $REPLY =~ ^[Yy]$ ]]
+    fi
+}
+
+# ============================================================================
+# Dependency Installation
+# ============================================================================
+
+install_homebrew() {
+    if command -v brew &> /dev/null; then
+        return 0
+    fi
+
+    log_info "Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+    # Add to path for current session
+    if [[ -f /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -f /usr/local/bin/brew ]]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+}
+
+install_node() {
+    if command -v node &> /dev/null; then
+        local version
+        version=$(node -v | sed 's/v//' | cut -d. -f1)
+        if [[ "$version" -ge 20 ]]; then
+            return 0
+        fi
+        log_warn "Node.js $version found, but 20+ required"
+    fi
+
+    log_info "Installing Node.js..."
+
+    case "$OS" in
+        macos)
+            install_homebrew
+            brew install node
+            ;;
+        debian)
+            # Use NodeSource for latest Node
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+            ;;
+        redhat)
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+            sudo yum install -y nodejs
+            ;;
+        *)
+            log_error "Please install Node.js 20+ manually: https://nodejs.org"
+            exit 1
+            ;;
+    esac
+}
+
+install_git() {
+    if command -v git &> /dev/null; then
+        return 0
+    fi
+
+    log_info "Installing git..."
+
+    case "$OS" in
+        macos)
+            # xcode-select installs git
+            xcode-select --install 2>/dev/null || true
+            # Wait for installation
+            until command -v git &> /dev/null; do
+                sleep 5
+            done
+            ;;
+        debian)
+            sudo apt-get update
+            sudo apt-get install -y git
+            ;;
+        redhat)
+            sudo yum install -y git
+            ;;
+    esac
+}
+
+install_tmux() {
+    if command -v tmux &> /dev/null; then
+        return 0
+    fi
+
+    log_info "Installing tmux..."
+
+    case "$OS" in
+        macos)
+            install_homebrew
+            brew install tmux
+            ;;
+        debian)
+            sudo apt-get update
+            sudo apt-get install -y tmux
+            ;;
+        redhat)
+            sudo yum install -y tmux
+            ;;
+    esac
+}
+
+# ============================================================================
+# AI CLI Installation
+# ============================================================================
+
+detect_ai_clis() {
+    local installed=()
+
+    command -v claude &> /dev/null && installed+=("claude")
+    command -v codex &> /dev/null && installed+=("codex")
+    command -v opencode &> /dev/null && installed+=("opencode")
+    command -v gemini &> /dev/null && installed+=("gemini")
+    command -v aider &> /dev/null && installed+=("aider")
+    command -v cursor &> /dev/null && installed+=("cursor")
+
+    echo "${installed[*]}"
+}
+
+install_claude_code() {
+    if command -v claude &> /dev/null; then
+        log_success "Claude Code already installed"
+        return 0
+    fi
+
+    log_info "Installing Claude Code..."
+    npm install -g @anthropic-ai/claude-code
+
+    log_info "Authenticating Claude Code..."
+    echo ""
+    echo "Please complete the authentication in your browser."
+    echo "Press Enter when ready to continue..."
+    read -r
+    claude auth login
+}
+
+install_codex() {
+    if command -v codex &> /dev/null; then
+        log_success "Codex already installed"
+        return 0
+    fi
+
+    log_info "Installing Codex..."
+    npm install -g @openai/codex
+
+    log_info "Authenticating Codex..."
+    echo ""
+    echo "Please set your OPENAI_API_KEY environment variable."
+    echo "Get your key at: https://platform.openai.com/api-keys"
+}
+
+install_aider() {
+    if command -v aider &> /dev/null; then
+        log_success "Aider already installed"
+        return 0
+    fi
+
+    log_info "Installing Aider..."
+
+    if command -v pipx &> /dev/null; then
+        pipx install aider-chat
+    elif command -v pip3 &> /dev/null; then
+        pip3 install aider-chat
+    else
+        log_error "Please install Python/pip first, then run: pip install aider-chat"
+        return 1
+    fi
+}
+
+install_gemini_cli() {
+    if command -v gemini &> /dev/null; then
+        log_success "Gemini CLI already installed"
+        return 0
+    fi
+
+    log_info "Installing Gemini CLI..."
+    npm install -g @anthropic-ai/gemini-cli 2>/dev/null || npm install -g gemini-cli
+
+    log_info "Authenticating Gemini CLI..."
+    echo ""
+    echo "Please complete the authentication."
+    gemini auth login 2>/dev/null || true
+}
+
+prompt_ai_cli_install() {
+    local installed
+    installed=$(detect_ai_clis)
+
+    if [[ -n "$installed" ]]; then
+        log_success "Found AI CLI(s): $installed"
+        return 0
+    fi
+
+    echo ""
+    log_warn "No AI coding CLI detected"
+    echo ""
+    echo "AgentOS supports these AI coding assistants:"
+    echo ""
+    echo "  1) Claude Code (Anthropic) - Recommended"
+    echo "  2) Codex (OpenAI)"
+    echo "  3) Aider (Multi-LLM)"
+    echo "  4) Gemini CLI (Google)"
+    echo "  5) Skip - I'll install one myself"
+    echo ""
+
+    if ! is_interactive; then
+        log_info "Non-interactive mode: Installing Claude Code by default"
+        install_claude_code
+        return
+    fi
+
+    read -p "Which would you like to install? [1-5, default: 1] " -r choice
+    echo ""
+
+    case "${choice:-1}" in
+        1)
+            install_claude_code
+            ;;
+        2)
+            install_codex
+            ;;
+        3)
+            install_aider
+            ;;
+        4)
+            install_gemini_cli
+            ;;
+        5)
+            log_info "Skipping AI CLI installation"
+            echo ""
+            echo "Install one of these before using AgentOS:"
+            echo "  Claude Code: npm install -g @anthropic-ai/claude-code"
+            echo "  Codex:       npm install -g @openai/codex"
+            echo "  Aider:       pip install aider-chat"
+            echo "  Gemini:      npm install -g gemini-cli"
+            echo ""
+            ;;
+        *)
+            log_warn "Invalid choice, skipping"
+            ;;
+    esac
+}
+
+# ============================================================================
+# Prerequisites Check & Install
+# ============================================================================
+
+check_and_install_prerequisites() {
+    log_info "Checking prerequisites..."
+
+    local missing=()
+
+    # Check each prerequisite
+    if ! command -v git &> /dev/null; then
+        missing+=("git")
+    fi
+
+    if ! command -v tmux &> /dev/null; then
+        missing+=("tmux")
+    fi
+
+    if ! command -v node &> /dev/null; then
+        missing+=("node")
+    else
+        local version
+        version=$(node -v | sed 's/v//' | cut -d. -f1)
+        if [[ "$version" -lt 20 ]]; then
+            missing+=("node (need 20+, found $version)")
+        fi
+    fi
+
+    if ! command -v npm &> /dev/null; then
+        missing+=("npm")
+    fi
+
+    # If nothing missing, we're good
+    if [[ ${#missing[@]} -eq 0 ]]; then
+        log_success "All prerequisites met"
+        return 0
+    fi
+
+    # Show what's missing
+    echo ""
+    log_warn "Missing prerequisites:"
+    for dep in "${missing[@]}"; do
+        echo "  - $dep"
+    done
+    echo ""
+
+    # Offer to install
+    if prompt_yn "Would you like to install missing dependencies?"; then
+        [[ " ${missing[*]} " =~ " git " ]] && install_git
+        [[ " ${missing[*]} " =~ " tmux " ]] && install_tmux
+        [[ " ${missing[*]} " =~ " node" ]] && install_node
+
+        # Verify installation
+        log_info "Verifying installation..."
+        local still_missing=()
+        command -v git &> /dev/null || still_missing+=("git")
+        command -v tmux &> /dev/null || still_missing+=("tmux")
+        command -v node &> /dev/null || still_missing+=("node")
+        command -v npm &> /dev/null || still_missing+=("npm")
+
+        if [[ ${#still_missing[@]} -gt 0 ]]; then
+            log_error "Failed to install: ${still_missing[*]}"
+            log_error "Please install manually and try again"
+            exit 1
+        fi
+
+        log_success "All prerequisites installed"
+    else
+        log_error "Cannot continue without prerequisites"
+        exit 1
+    fi
+}
+
+# ============================================================================
+# Process Management
+# ============================================================================
+
+get_pid() {
+    if [[ -f "$PID_FILE" ]]; then
+        local pid
+        pid=$(cat "$PID_FILE")
+        if ps -p "$pid" &> /dev/null; then
+            echo "$pid"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+is_running() {
+    get_pid &> /dev/null
+}
+
+get_tailscale_ip() {
+    if command -v tailscale &> /dev/null; then
+        tailscale ip -4 2>/dev/null | head -1
+    fi
+}
+
+# ============================================================================
+# Commands
+# ============================================================================
+
+cmd_install() {
+    log_info "Installing AgentOS..."
+    echo ""
+
+    # Check and install prerequisites
+    check_and_install_prerequisites
+
+    # Prompt for AI CLI installation
+    prompt_ai_cli_install
+
+    # Create directory structure
+    mkdir -p "$AGENT_OS_HOME"
+
+    # Clone or update repo
+    if [[ -d "$REPO_DIR" ]]; then
+        log_info "Repository already exists, pulling latest..."
+        cd "$REPO_DIR"
+        git pull --ff-only
+    else
+        log_info "Cloning repository..."
+        git clone "$REPO_URL" "$REPO_DIR"
+        cd "$REPO_DIR"
+    fi
+
+    # Install dependencies
+    log_info "Installing dependencies..."
+    npm install
+
+    # Build for production
+    log_info "Building for production..."
+    npm run build
+
+    echo ""
+    log_success "AgentOS installed successfully!"
+    echo ""
+    echo "Next steps:"
+    echo "  agent-os start     Start the server"
+    echo "  agent-os enable    Auto-start on boot"
+    echo "  agent-os status    Show URLs"
+}
+
+cmd_start() {
+    if is_running; then
+        local pid
+        pid=$(get_pid)
+        log_warn "AgentOS is already running (PID: $pid)"
+        return 0
+    fi
+
+    if [[ ! -d "$REPO_DIR" ]]; then
+        log_error "AgentOS is not installed. Run 'agent-os install' first."
+        exit 1
+    fi
+
+    log_info "Starting AgentOS..."
+
+    cd "$REPO_DIR"
+
+    # Rotate log if too big (> 10MB)
+    if [[ -f "$LOG_FILE" ]]; then
+        local size
+        size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
+        if [[ "$size" -gt 10485760 ]]; then
+            mv "$LOG_FILE" "$LOG_FILE.old"
+        fi
+    fi
+
+    # Start server in background
+    nohup npm start >> "$LOG_FILE" 2>&1 &
+    local pid=$!
+    echo "$pid" > "$PID_FILE"
+
+    # Wait and verify
+    sleep 2
+    if ! ps -p "$pid" &> /dev/null; then
+        log_error "Failed to start AgentOS. Check logs: agent-os logs"
+        rm -f "$PID_FILE"
+        exit 1
+    fi
+
+    log_success "AgentOS started (PID: $pid)"
+    echo ""
+    echo "  Local:     http://localhost:$PORT"
+
+    local ts_ip
+    ts_ip=$(get_tailscale_ip)
+    if [[ -n "$ts_ip" ]]; then
+        echo "  Tailscale: http://$ts_ip:$PORT"
+    fi
+    echo ""
+    echo "Run 'agent-os logs' to view logs"
+}
+
+cmd_stop() {
+    if ! is_running; then
+        log_warn "AgentOS is not running"
+        return 0
+    fi
+
+    local pid
+    pid=$(get_pid)
+    log_info "Stopping AgentOS (PID: $pid)..."
+
+    kill "$pid" 2>/dev/null || true
+
+    # Wait for graceful shutdown
+    local count=0
+    while ps -p "$pid" &> /dev/null && [[ $count -lt 10 ]]; do
+        sleep 1
+        ((count++))
+    done
+
+    # Force kill if still running
+    if ps -p "$pid" &> /dev/null; then
+        log_warn "Force killing..."
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+
+    rm -f "$PID_FILE"
+    log_success "AgentOS stopped"
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 1
+    cmd_start
+}
+
+cmd_status() {
+    echo ""
+    if is_running; then
+        local pid
+        pid=$(get_pid)
+        echo -e "  Status:    ${GREEN}Running${NC} (PID: $pid)"
+        echo "  Port:      $PORT"
+        echo "  Local:     http://localhost:$PORT"
+
+        local ts_ip
+        ts_ip=$(get_tailscale_ip)
+        if [[ -n "$ts_ip" ]]; then
+            echo "  Tailscale: http://$ts_ip:$PORT"
+        fi
+
+        echo "  Logs:      $LOG_FILE"
+        echo "  Install:   $REPO_DIR"
+    else
+        echo -e "  Status:    ${RED}Stopped${NC}"
+
+        if [[ -d "$REPO_DIR" ]]; then
+            echo "  Install:   $REPO_DIR"
+            echo ""
+            echo "  Run 'agent-os start' to start the server"
+        else
+            echo "  Install:   Not installed"
+            echo ""
+            echo "  Run 'agent-os install' to install"
+        fi
+    fi
+    echo ""
+}
+
+cmd_logs() {
+    if [[ ! -f "$LOG_FILE" ]]; then
+        log_warn "No log file found"
+        exit 1
+    fi
+
+    tail -f "$LOG_FILE"
+}
+
+cmd_update() {
+    if [[ ! -d "$REPO_DIR" ]]; then
+        log_error "AgentOS is not installed. Run 'agent-os install' first."
+        exit 1
+    fi
+
+    local was_running=false
+    if is_running; then
+        was_running=true
+        cmd_stop
+    fi
+
+    log_info "Updating AgentOS..."
+
+    cd "$REPO_DIR"
+
+    # Fetch and check
+    git fetch
+    local local_hash remote_hash
+    local_hash=$(git rev-parse HEAD)
+    remote_hash=$(git rev-parse @{u})
+
+    if [[ "$local_hash" == "$remote_hash" ]]; then
+        log_success "Already up to date"
+    else
+        log_info "Pulling latest changes..."
+        git pull --ff-only
+
+        log_info "Installing dependencies..."
+        npm install
+
+        log_info "Rebuilding..."
+        npm run build
+
+        log_success "Update complete!"
+    fi
+
+    if [[ "$was_running" == true ]]; then
+        cmd_start
+    fi
+}
+
+cmd_enable() {
+    if [[ ! -d "$REPO_DIR" ]]; then
+        log_error "AgentOS is not installed. Run 'agent-os install' first."
+        exit 1
+    fi
+
+    local script_path
+    script_path=$(realpath "$0")
+
+    if [[ "$OS" == "macos" ]]; then
+        local plist_path="$HOME/Library/LaunchAgents/com.agent-os.plist"
+
+        cat > "$plist_path" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.agent-os</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$script_path</string>
+        <string>start</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>$LOG_FILE</string>
+    <key>StandardErrorPath</key>
+    <string>$LOG_FILE</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+EOF
+
+        launchctl load "$plist_path" 2>/dev/null || true
+        log_success "Auto-start enabled (launchd)"
+        echo "  Plist: $plist_path"
+
+    elif [[ -d /etc/systemd ]]; then
+        local service_dir="$HOME/.config/systemd/user"
+        local service_path="$service_dir/agent-os.service"
+
+        mkdir -p "$service_dir"
+
+        cat > "$service_path" << EOF
+[Unit]
+Description=AgentOS - AI Coding Session Manager
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$script_path start-foreground
+Restart=on-failure
+RestartSec=10
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
+EOF
+
+        systemctl --user daemon-reload
+        systemctl --user enable agent-os
+        log_success "Auto-start enabled (systemd)"
+        echo "  Service: $service_path"
+
+    else
+        log_error "Could not detect init system (launchd/systemd)"
+        exit 1
+    fi
+}
+
+cmd_disable() {
+    if [[ "$OS" == "macos" ]]; then
+        local plist_path="$HOME/Library/LaunchAgents/com.agent-os.plist"
+
+        if [[ -f "$plist_path" ]]; then
+            launchctl unload "$plist_path" 2>/dev/null || true
+            rm -f "$plist_path"
+            log_success "Auto-start disabled"
+        else
+            log_warn "Auto-start was not enabled"
+        fi
+
+    elif [[ -d /etc/systemd ]]; then
+        systemctl --user disable agent-os 2>/dev/null || true
+        rm -f "$HOME/.config/systemd/user/agent-os.service"
+        systemctl --user daemon-reload
+        log_success "Auto-start disabled"
+
+    else
+        log_error "Could not detect init system"
+        exit 1
+    fi
+}
+
+cmd_uninstall() {
+    echo ""
+    log_warn "This will remove AgentOS and all its data."
+
+    if ! prompt_yn "Are you sure?" "n"; then
+        log_info "Cancelled"
+        exit 0
+    fi
+
+    # Stop if running
+    if is_running; then
+        cmd_stop
+    fi
+
+    # Disable auto-start
+    cmd_disable 2>/dev/null || true
+
+    # Remove installation
+    if [[ -d "$AGENT_OS_HOME" ]]; then
+        log_info "Removing $AGENT_OS_HOME..."
+        rm -rf "$AGENT_OS_HOME"
+    fi
+
+    log_success "AgentOS uninstalled"
+    echo ""
+    echo "Note: This script ($0) was not removed."
+    echo "You can delete it manually if needed."
+}
+
+cmd_start_foreground() {
+    if [[ ! -d "$REPO_DIR" ]]; then
+        log_error "AgentOS is not installed."
+        exit 1
+    fi
+
+    cd "$REPO_DIR"
+    exec npm start
+}
+
+cmd_help() {
+    echo ""
+    echo -e "${BOLD}AgentOS${NC} - Self-hosted AI coding session manager"
+    echo ""
+    echo "Usage: agent-os <command>"
+    echo ""
+    echo "Commands:"
+    echo "  install     Install AgentOS (auto-installs dependencies)"
+    echo "  start       Start the server in background"
+    echo "  stop        Stop the server"
+    echo "  restart     Restart the server"
+    echo "  status      Show server status and URLs"
+    echo "  logs        Tail server logs"
+    echo "  update      Update to latest version"
+    echo "  enable      Enable auto-start on boot"
+    echo "  disable     Disable auto-start"
+    echo "  uninstall   Remove AgentOS completely"
+    echo ""
+    echo "Environment variables:"
+    echo "  AGENT_OS_HOME   Installation directory (default: ~/.agent-os)"
+    echo "  AGENT_OS_PORT   Server port (default: 3011)"
+    echo ""
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+case "${1:-}" in
+    install)          cmd_install ;;
+    start)            cmd_start ;;
+    stop)             cmd_stop ;;
+    restart)          cmd_restart ;;
+    status)           cmd_status ;;
+    logs)             cmd_logs ;;
+    update)           cmd_update ;;
+    enable)           cmd_enable ;;
+    disable)          cmd_disable ;;
+    uninstall)        cmd_uninstall ;;
+    start-foreground) cmd_start_foreground ;;
+    help|--help|-h)   cmd_help ;;
+    *)
+        if [[ -n "${1:-}" ]]; then
+            log_error "Unknown command: $1"
+        fi
+        cmd_help
+        exit 1
+        ;;
+esac
