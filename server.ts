@@ -38,10 +38,8 @@ app.prepare().then(() => {
     // Let HMR and other WebSocket connections pass through to Next.js
   });
 
-  // Terminal connections (reused from saadbase)
+  // Terminal connections
   terminalWss.on("connection", (ws: WebSocket) => {
-    console.log("Terminal connection established");
-
     let ptyProcess: pty.IPty;
     try {
       const shell = process.env.SHELL || "/bin/zsh";
@@ -70,7 +68,6 @@ app.prepare().then(() => {
     });
 
     ptyProcess.onExit(({ exitCode }) => {
-      console.log("PTY exited with code:", exitCode);
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "exit", code: exitCode }));
         ws.close();
@@ -97,7 +94,6 @@ app.prepare().then(() => {
     });
 
     ws.on("close", () => {
-      console.log("Terminal connection closed");
       ptyProcess.kill();
     });
 
