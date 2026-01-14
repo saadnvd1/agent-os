@@ -126,8 +126,12 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+      const input = inputRef.current;
+      // Small timeout to ensure input is fully mounted
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 0);
     }
   }, [isEditing]);
 
