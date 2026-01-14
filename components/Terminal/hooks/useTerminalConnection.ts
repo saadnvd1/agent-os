@@ -1,33 +1,21 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import { SearchAddon } from '@xterm/addon-search';
-import { CanvasAddon } from '@xterm/addon-canvas';
-import {
-  getTerminalThemeForApp,
-  WS_RECONNECT_BASE_DELAY,
-  WS_RECONNECT_MAX_DELAY,
-} from '../constants';
+import type { Terminal as XTerm } from '@xterm/xterm';
+import type { FitAddon } from '@xterm/addon-fit';
+import type { SearchAddon } from '@xterm/addon-search';
+import { WS_RECONNECT_BASE_DELAY } from '../constants';
+import type {
+  TerminalScrollState,
+  UseTerminalConnectionProps,
+  UseTerminalConnectionReturn,
+} from './useTerminalConnection.types';
+import { createTerminal, updateTerminalForMobile, updateTerminalTheme } from './terminal-init';
+import { setupTouchScroll } from './touch-scroll';
+import { createWebSocketConnection } from './websocket-connection';
+import { setupResizeHandlers } from './resize-handlers';
 
-export interface TerminalScrollState {
-  scrollTop: number;
-  cursorY: number;
-  baseY: number;
-}
-
-interface UseTerminalConnectionProps {
-  terminalRef: React.RefObject<HTMLDivElement | null>;
-  onConnected?: () => void;
-  onDisconnected?: () => void;
-  onBeforeUnmount?: (scrollState: TerminalScrollState) => void;
-  initialScrollState?: TerminalScrollState;
-  isMobile?: boolean;
-  theme?: string; // Full theme string (e.g., "dark", "dark-purple", "light-mint")
-  selectMode?: boolean; // When true, allow native text selection instead of custom scroll
-}
+export type { TerminalScrollState } from './useTerminalConnection.types';
 
 export function useTerminalConnection({
   terminalRef,
@@ -38,12 +26,10 @@ export function useTerminalConnection({
   isMobile = false,
   theme = 'dark',
   selectMode = false,
-}: UseTerminalConnectionProps) {
+}: UseTerminalConnectionProps): UseTerminalConnectionReturn {
   const [connected, setConnected] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [connectionState, setConnectionState] = useState<
-    'connected' | 'disconnected' | 'reconnecting'
-  >('disconnected');
+  const [connectionState, setConnectionState] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
 
   const wsRef = useRef<WebSocket | null>(null);
   const xtermRef = useRef<XTerm | null>(null);
@@ -54,54 +40,40 @@ export function useTerminalConnection({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectDelayRef = useRef<number>(WS_RECONNECT_BASE_DELAY);
   const intentionalCloseRef = useRef<boolean>(false);
-  const isReconnectRef = useRef<boolean>(false);
 
-  // Store callbacks in refs
+  // Store callbacks and state in refs
   const callbacksRef = useRef({ onConnected, onDisconnected, onBeforeUnmount });
   callbacksRef.current = { onConnected, onDisconnected, onBeforeUnmount };
-
-  // Store initial scroll state
   const initialScrollStateRef = useRef(initialScrollState);
-
-  // Track select mode for touch handlers
   const selectModeRef = useRef(selectMode);
   selectModeRef.current = selectMode;
 
-  const scrollToBottom = useCallback(() => {
-    xtermRef.current?.scrollToBottom();
-  }, []);
+  // Simple callbacks
+  const scrollToBottom = useCallback(() => xtermRef.current?.scrollToBottom(), []);
 
   const copySelection = useCallback(() => {
-    if (xtermRef.current) {
-      const selection = xtermRef.current.getSelection();
-      if (selection) {
-        navigator.clipboard.writeText(selection);
-        return true;
-      }
+    const selection = xtermRef.current?.getSelection();
+    if (selection) {
+      navigator.clipboard.writeText(selection);
+      return true;
     }
     return false;
   }, []);
 
-  // Send input to terminal
   const sendInput = useCallback((data: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'input', data }));
     }
   }, []);
 
-  // Send command (same as sendInput but adds newline)
   const sendCommand = useCallback((command: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'command', data: command }));
     }
   }, []);
 
-  // Focus terminal
-  const focus = useCallback(() => {
-    xtermRef.current?.focus();
-  }, []);
+  const focus = useCallback(() => xtermRef.current?.focus(), []);
 
-  // Get scroll state
   const getScrollState = useCallback((): TerminalScrollState | null => {
     if (!xtermRef.current || !terminalRef.current) return null;
     const buffer = xtermRef.current.buffer.active;
@@ -113,413 +85,83 @@ export function useTerminalConnection({
     };
   }, [terminalRef]);
 
-  // Restore scroll state
   const restoreScrollState = useCallback((state: TerminalScrollState) => {
-    if (!terminalRef.current) return;
-    const viewport = terminalRef.current.querySelector('.xterm-viewport') as HTMLElement;
+    const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement;
     if (viewport) {
-      requestAnimationFrame(() => {
-        viewport.scrollTop = state.scrollTop;
-      });
+      requestAnimationFrame(() => { viewport.scrollTop = state.scrollTop; });
     }
   }, [terminalRef]);
 
-  // Trigger terminal resize
   const triggerResize = useCallback(() => {
     const fitAddon = fitAddonRef.current;
     const term = xtermRef.current;
     if (!fitAddon || !term) return;
-
     fitAddon.fit();
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
     }
   }, []);
 
-
+  // Main setup effect
   useEffect(() => {
     if (!terminalRef.current) return;
 
     let cancelled = false;
-    let term: XTerm | null = null;
-    let ws: WebSocket | null = null;
-    let handleResize: (() => void) | null = null;
-    let handleVisibilityChange: (() => void) | null = null;
-    let handleTouchStart: ((e: TouchEvent) => void) | null = null;
-    let handleTouchMove: ((e: TouchEvent) => void) | null = null;
-    let handleTouchEnd: ((e: TouchEvent) => void) | null = null;
-    let handleTouchCancel: (() => void) | null = null;
-    let touchElement: HTMLElement | null = null;
-    let resizeObserver: ResizeObserver | null = null;
-    let mqListeners: { mq: MediaQueryList; handler: () => void }[] = [];
-    let fitTimeouts: NodeJS.Timeout[] = [];
+    let cleanupTouchScroll: (() => void) | null = null;
+    let cleanupResizeHandlers: (() => void) | null = null;
+    let cleanupWebSocket: (() => void) | null = null;
 
     const connectTimeout = setTimeout(() => {
       if (cancelled || !terminalRef.current) return;
 
-      // Initialize xterm.js - smaller font for mobile
-      const fontSize = isMobile ? 11 : 14;
-      const terminalTheme = getTerminalThemeForApp(theme || 'dark');
-      term = new XTerm({
-        cursorBlink: true,
-        fontSize,
-        fontFamily: '"JetBrains Mono", "Fira Code", Menlo, Monaco, "Courier New", monospace',
-        fontWeight: '400',
-        fontWeightBold: '600',
-        letterSpacing: 0,
-        lineHeight: isMobile ? 1.15 : 1.2,
-        scrollback: 15000,
-        scrollSensitivity: isMobile ? 3 : 1,
-        fastScrollSensitivity: 5,
-        smoothScrollDuration: 100,
-        cursorStyle: 'bar',
-        cursorWidth: 2,
-        allowProposedApi: true,
-        theme: terminalTheme,
-      });
-
-      const fitAddon = new FitAddon();
-      const searchAddon = new SearchAddon();
-
-      term.loadAddon(fitAddon);
-      term.loadAddon(new WebLinksAddon());
-      term.loadAddon(searchAddon);
-      term.open(terminalRef.current);
-      term.loadAddon(new CanvasAddon());
-      fitAddon.fit();
-
+      // Initialize terminal
+      const { term, fitAddon, searchAddon } = createTerminal(terminalRef.current, isMobile, theme);
       xtermRef.current = term;
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
 
-      // On mobile with hybrid mode: allow native keyboard (don't block it)
-      // The toolbar provides special keys, native keyboard provides text input
-      // Note: We no longer set inputmode="none" - native keyboard is preferred
-
       // Scroll tracking
       term.onScroll(() => {
-        if (!term) return;
         const buffer = term.buffer.active;
         setIsAtBottom(buffer.viewportY >= buffer.baseY);
       });
 
-      // Touch scroll handler - xterm.js canvas doesn't support native touch scroll
-      if (term.element) {
-        const currentTermForTouch = term;
+      // Setup touch scroll
+      cleanupTouchScroll = setupTouchScroll({ term, selectModeRef, wsRef });
 
-        // Wait for .xterm-screen to be available
-        const setupTouchScroll = () => {
-          if (cancelled) return;
-
-          const xtermScreen = currentTermForTouch.element?.querySelector(
-            '.xterm-screen'
-          ) as HTMLElement | null;
-          if (!xtermScreen) {
-            setTimeout(setupTouchScroll, 50);
-            return;
-          }
-
-          // CRITICAL: Apply touch-action directly to the target element
-          xtermScreen.style.touchAction = 'none';
-          xtermScreen.style.userSelect = 'none';
-          (xtermScreen.style as CSSStyleDeclaration & { webkitUserSelect?: string }).webkitUserSelect = 'none';
-
-          // Also apply to canvas children
-          const canvases = xtermScreen.querySelectorAll('canvas');
-          canvases.forEach((canvas) => {
-            (canvas as HTMLElement).style.touchAction = 'none';
-          });
-
-          // Touch state for scroll handling
-          let touchState = {
-            lastY: null as number | null,
-            initialX: null as number | null,
-            initialY: null as number | null,
-            isHorizontal: null as boolean | null,
-          };
-
-          const resetTouchState = () => {
-            touchState = { lastY: null, initialX: null, initialY: null, isHorizontal: null };
-          };
-
-          handleTouchStart = (e: TouchEvent) => {
-            if (selectModeRef.current || e.touches.length === 0) return;
-            const touch = e.touches[0];
-            touchState = {
-              lastY: touch.clientY,
-              initialX: touch.clientX,
-              initialY: touch.clientY,
-              isHorizontal: null,
-            };
-          };
-
-          handleTouchMove = (e: TouchEvent) => {
-            if (selectModeRef.current || e.touches.length === 0) return;
-            const { lastY, initialX, initialY, isHorizontal } = touchState;
-            if (lastY === null || initialX === null || initialY === null) return;
-
-            const touch = e.touches[0];
-            const deltaX = Math.abs(touch.clientX - initialX);
-            const deltaY = Math.abs(touch.clientY - initialY);
-
-            // Determine swipe direction on first significant movement
-            if (isHorizontal === null && (deltaX > 15 || deltaY > 15)) {
-              touchState.isHorizontal = deltaX > deltaY;
+      // Setup WebSocket
+      const wsManager = createWebSocketConnection(
+        term,
+        {
+          onConnected: () => {
+            callbacksRef.current.onConnected?.();
+            // Restore scroll state after connection
+            if (initialScrollStateRef.current && terminalRef.current) {
+              setTimeout(() => {
+                const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement;
+                if (viewport) viewport.scrollTop = initialScrollStateRef.current!.scrollTop;
+              }, 200);
             }
+          },
+          onDisconnected: () => callbacksRef.current.onDisconnected?.(),
+          onConnectionStateChange: setConnectionState,
+          onSetConnected: setConnected,
+        },
+        wsRef,
+        reconnectTimeoutRef,
+        reconnectDelayRef,
+        intentionalCloseRef
+      );
+      cleanupWebSocket = wsManager.cleanup;
 
-            // Let parent handle horizontal swipes for session switching
-            if (touchState.isHorizontal) return;
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const moveDeltaY = touch.clientY - lastY;
-            if (Math.abs(moveDeltaY) < 25) return;
-
-            const buffer = currentTermForTouch.buffer.active;
-
-            if (buffer.type === 'alternate' && wsRef.current?.readyState === WebSocket.OPEN) {
-              // Send mouse wheel events for alternate buffer (e.g., less, vim)
-              const wheelEvent = moveDeltaY < 0 ? '\x1b[<65;1;1M' : '\x1b[<64;1;1M';
-              wsRef.current.send(JSON.stringify({ type: 'input', data: wheelEvent }));
-              touchState.lastY = touch.clientY;
-            } else if (buffer.type !== 'alternate') {
-              const scrollAmount = Math.round(moveDeltaY / 15);
-              if (scrollAmount !== 0) {
-                currentTermForTouch.scrollLines(scrollAmount);
-                touchState.lastY = touch.clientY;
-              }
-            }
-          };
-
-          handleTouchEnd = resetTouchState;
-          handleTouchCancel = resetTouchState;
-
-          xtermScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
-          xtermScreen.addEventListener('touchmove', handleTouchMove, { passive: false });
-          xtermScreen.addEventListener('touchend', handleTouchEnd);
-          xtermScreen.addEventListener('touchcancel', handleTouchCancel);
-
-          touchElement = xtermScreen;
-        };
-
-        setupTouchScroll();
-      }
-
-      // WebSocket connection
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
-      wsRef.current = ws;
-      const currentTerm = term;
-      const currentWs = ws;
-
-      currentWs.onopen = () => {
-        if (cancelled) return;
-        setConnected(true);
-        setConnectionState('connected');
-        reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
-
-        callbacksRef.current.onConnected?.();
-        currentWs.send(
-          JSON.stringify({ type: 'resize', cols: currentTerm.cols, rows: currentTerm.rows })
-        );
-        currentTerm.focus();
-
-        // Restore scroll state if provided
-        if (initialScrollStateRef.current && terminalRef.current) {
-          setTimeout(() => {
-            const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement;
-            if (viewport) {
-              viewport.scrollTop = initialScrollStateRef.current!.scrollTop;
-            }
-          }, 200);
-        }
-      };
-
-      currentWs.onmessage = (event) => {
-        if (cancelled) return;
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'output') {
-            currentTerm.write(msg.data);
-          } else if (msg.type === 'exit') {
-            currentTerm.write('\r\n\x1b[33m[Session ended]\x1b[0m\r\n');
-          }
-        } catch {
-          currentTerm.write(event.data);
-        }
-      };
-
-      // Reconnection function - extracted so it can be called from visibilitychange
-      const attemptReconnect = () => {
-        if (cancelled || intentionalCloseRef.current) return;
-        if (wsRef.current?.readyState === WebSocket.OPEN) return; // Already connected
-
-        setConnectionState('reconnecting');
-        isReconnectRef.current = true;
-
-        const newWs = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
-        ws = newWs;
-        wsRef.current = newWs;
-        newWs.onopen = currentWs.onopen;
-        newWs.onmessage = currentWs.onmessage;
-        newWs.onclose = currentWs.onclose;
-        newWs.onerror = currentWs.onerror;
-      };
-
-      currentWs.onclose = () => {
-        if (cancelled) return;
-        setConnected(false);
-        callbacksRef.current.onDisconnected?.();
-
-        if (intentionalCloseRef.current) {
-          setConnectionState('disconnected');
-          return;
-        }
-
-        setConnectionState('disconnected');
-
-        const currentDelay = reconnectDelayRef.current;
-        reconnectDelayRef.current = Math.min(currentDelay * 2, WS_RECONNECT_MAX_DELAY);
-
-        reconnectTimeoutRef.current = setTimeout(attemptReconnect, currentDelay);
-      };
-
-      // Handle page visibility change (iOS Safari suspends JS when backgrounded)
-      handleVisibilityChange = () => {
-        if (document.visibilityState !== 'visible' || intentionalCloseRef.current) return;
-
-        const ws = wsRef.current;
-        const isDisconnected = !ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING;
-        const isStaleConnection = ws?.readyState === WebSocket.CONNECTING;
-
-        if (!isDisconnected && !isStaleConnection) return;
-
-        // Force close any stale connection
-        if (isStaleConnection && ws) {
-          try { ws.close(); } catch { /* ignore */ }
-          wsRef.current = null;
-        }
-
-        // Clear pending reconnect and reconnect immediately
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
-        reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
-        attemptReconnect();
-      };
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      currentWs.onerror = () => {
-        if (cancelled) return;
-      };
-
-      currentTerm.onData((data) => {
-        const activeWs = wsRef.current;
-        if (activeWs?.readyState === WebSocket.OPEN) {
-          activeWs.send(JSON.stringify({ type: 'input', data }));
-        }
+      // Setup resize handlers
+      cleanupResizeHandlers = setupResizeHandlers({
+        term,
+        fitAddon,
+        containerRef: terminalRef,
+        isMobile,
+        sendResize: wsManager.sendResize,
       });
-
-      // Handle Shift+Enter to send newline without carriage return
-      // This allows multi-line input in Claude Code CLI
-      currentTerm.attachCustomKeyEventHandler((event) => {
-        if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
-          // Send soft newline (just \n, not \r)
-          const activeWs = wsRef.current;
-          if (activeWs?.readyState === WebSocket.OPEN) {
-            activeWs.send(JSON.stringify({ type: 'input', data: '\n' }));
-          }
-          return false; // Prevent default Enter handling
-        }
-        return true; // Allow all other keys
-      });
-
-      // Debounced resize handler with triple-fit pattern for reliability
-      let resizeTimeout: NodeJS.Timeout | null = null;
-
-      const doFit = () => {
-        // Clear any pending fit timeouts
-        fitTimeouts.forEach(clearTimeout);
-        fitTimeouts = [];
-
-        // On mobile, save scroll position before fit to prevent keyboard open/close scroll
-        const savedScrollLine = isMobile ? currentTerm.buffer.active.viewportY : null;
-
-        const restoreScroll = () => {
-          if (savedScrollLine !== null) {
-            currentTerm.scrollToLine(savedScrollLine);
-          }
-        };
-
-        requestAnimationFrame(() => {
-          // First fit - immediate
-          fitAddon.fit();
-          restoreScroll();
-
-          const sendResize = () => {
-            const activeWs = wsRef.current;
-            if (activeWs?.readyState === WebSocket.OPEN) {
-              activeWs.send(
-                JSON.stringify({ type: 'resize', cols: currentTerm.cols, rows: currentTerm.rows })
-              );
-            }
-          };
-
-          sendResize();
-
-          // Second fit - after 100ms (handles most delayed layout updates)
-          fitTimeouts.push(setTimeout(() => {
-            fitAddon.fit();
-            restoreScroll();
-            sendResize();
-          }, 100));
-
-          // Third fit - after 250ms (handles slow layout updates, e.g., DevTools toggle)
-          fitTimeouts.push(setTimeout(() => {
-            fitAddon.fit();
-            restoreScroll();
-            sendResize();
-          }, 250));
-        });
-      };
-
-      handleResize = () => {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(doFit, isMobile ? 100 : 50);
-      };
-      window.addEventListener('resize', handleResize);
-
-      // Media query listeners for Chrome DevTools mobile toggle
-      // DevTools doesn't trigger window.resize but DOES trigger matchMedia
-      const mediaQueries = [
-        '(max-width: 640px)',
-        '(max-width: 768px)',
-        '(max-width: 1024px)',
-      ];
-      mediaQueries.forEach(query => {
-        const mq = window.matchMedia(query);
-        const handler = () => handleResize?.();
-        mq.addEventListener('change', handler);
-        mqListeners.push({ mq, handler });
-      });
-
-      // Handle orientation change on mobile
-      if (isMobile && 'orientation' in screen) {
-        screen.orientation.addEventListener('change', handleResize);
-      }
-
-      // Handle visual viewport changes (for mobile keyboard)
-      if (isMobile && window.visualViewport) {
-        window.visualViewport.addEventListener('resize', handleResize);
-      }
-
-      // Use ResizeObserver
-      resizeObserver = new ResizeObserver(() => {
-        handleResize?.();
-      });
-      resizeObserver.observe(terminalRef.current);
     }, 150);
 
     return () => {
@@ -527,50 +169,8 @@ export function useTerminalConnection({
       clearTimeout(connectTimeout);
       intentionalCloseRef.current = true;
 
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-
-      reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
-      isReconnectRef.current = false;
-
-      if (handleResize) {
-        window.removeEventListener('resize', handleResize);
-        if (isMobile && 'orientation' in screen) {
-          screen.orientation.removeEventListener('change', handleResize);
-        }
-        if (isMobile && window.visualViewport) {
-          window.visualViewport.removeEventListener('resize', handleResize);
-        }
-      }
-
-      // Clean up visibility change listener
-      if (handleVisibilityChange) {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      }
-
-      // Clean up media query listeners
-      mqListeners.forEach(({ mq, handler }) => {
-        mq.removeEventListener('change', handler);
-      });
-
-      // Clean up pending fit timeouts
-      fitTimeouts.forEach(clearTimeout);
-
-      if (touchElement) {
-        if (handleTouchStart) touchElement.removeEventListener('touchstart', handleTouchStart);
-        if (handleTouchMove) touchElement.removeEventListener('touchmove', handleTouchMove);
-        if (handleTouchEnd) touchElement.removeEventListener('touchend', handleTouchEnd);
-        if (handleTouchCancel) touchElement.removeEventListener('touchcancel', handleTouchCancel);
-      }
-
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-        resizeObserver = null;
-      }
-
       // Save scroll state before unmount
+      const term = xtermRef.current;
       if (term && callbacksRef.current.onBeforeUnmount && terminalRef.current) {
         const buffer = term.buffer.active;
         const viewport = terminalRef.current.querySelector('.xterm-viewport') as HTMLElement;
@@ -581,21 +181,23 @@ export function useTerminalConnection({
         });
       }
 
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        ws.close(1000, 'Component unmounting');
-      }
+      // Cleanup in reverse order
+      cleanupResizeHandlers?.();
+      cleanupWebSocket?.();
+      cleanupTouchScroll?.();
 
-      if (wsRef.current === ws) wsRef.current = null;
-      if (term) {
-        try {
-          term.dispose();
-        } catch { /* ignore */ }
+      // Reset refs
+      reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
+
+      if (wsRef.current) wsRef.current = null;
+      if (xtermRef.current) {
+        try { xtermRef.current.dispose(); } catch { /* ignore */ }
+        xtermRef.current = null;
       }
-      if (xtermRef.current === term) xtermRef.current = null;
-      if (fitAddonRef.current) fitAddonRef.current = null;
-      if (searchAddonRef.current) searchAddonRef.current = null;
+      fitAddonRef.current = null;
+      searchAddonRef.current = null;
     };
-  }, [isMobile, terminalRef]);
+  }, [isMobile, terminalRef, theme]);
 
   // Handle isMobile changes dynamically
   useEffect(() => {
@@ -603,28 +205,18 @@ export function useTerminalConnection({
     const fitAddon = fitAddonRef.current;
     if (!term || !fitAddon) return;
 
-    const newFontSize = isMobile ? 11 : 14;
-    const newLineHeight = isMobile ? 1.15 : 1.2;
-
-    if (term.options.fontSize !== newFontSize) {
-      term.options.fontSize = newFontSize;
-      term.options.lineHeight = newLineHeight;
-      term.refresh(0, term.rows - 1);
-      fitAddon.fit();
-
+    updateTerminalForMobile(term, fitAddon, isMobile, (cols, rows) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+        wsRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
       }
-    }
+    });
   }, [isMobile]);
 
   // Handle theme changes dynamically
   useEffect(() => {
-    const term = xtermRef.current;
-    if (!term) return;
-
-    const terminalTheme = getTerminalThemeForApp(theme || 'dark');
-    term.options.theme = terminalTheme;
+    if (xtermRef.current) {
+      updateTerminalTheme(xtermRef.current, theme);
+    }
   }, [theme]);
 
   return {
