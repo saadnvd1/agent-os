@@ -10,7 +10,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "setup": "bash scripts/setup.sh",
-    "postinstall": "node -e \"try{require('node-pty')}catch(e){process.exit(1)}\" || npm rebuild node-pty"
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true"
   },
   "repository": {
     "type": "git",
@@ -63,7 +63,7 @@
     "lucide-react": "^0.556.0",
     "next": "^16.1.1",
     "next-themes": "^0.4.6",
-    "node-pty": "^1.1.0",
+    "node-pty": "^1.2.0-beta.6",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-resizable-panels": "^4.3.0",
