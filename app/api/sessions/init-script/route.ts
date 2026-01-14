@@ -43,8 +43,8 @@ printf "\\n"
 # Brief pause to show banner
 sleep 0.8
 
-# Source bashrc to get PATH (includes ~/.local/bin for claude)
-[[ -f ~/.bashrc ]] && source ~/.bashrc
+# Ensure ~/.local/bin is in PATH (where claude is installed)
+export PATH="$HOME/.local/bin:$PATH"
 
 # Start the agent
 exec ${agentCommand}
