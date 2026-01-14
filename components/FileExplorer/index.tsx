@@ -31,7 +31,10 @@ interface FileExplorerProps {
   fileEditor: UseFileEditorReturn;
 }
 
-export function FileExplorer({ workingDirectory, fileEditor }: FileExplorerProps) {
+export function FileExplorer({
+  workingDirectory,
+  fileEditor,
+}: FileExplorerProps) {
   const { isMobile, isHydrated } = useViewport();
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,8 +121,8 @@ export function FileExplorer({ workingDirectory, fileEditor }: FileExplorerProps
   // Loading state before hydration
   if (!isHydrated) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-background">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="bg-background flex h-full w-full items-center justify-center">
+        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
       </div>
     );
   }
@@ -252,25 +255,25 @@ function DesktopFileExplorer({
   }, []);
 
   return (
-    <div ref={containerRef} className="h-full w-full bg-background flex">
+    <div ref={containerRef} className="bg-background flex h-full w-full">
       {/* File tree panel */}
-      <div className="h-full flex flex-col" style={{ width: treeWidth }}>
+      <div className="flex h-full flex-col" style={{ width: treeWidth }}>
         <div className="flex items-center gap-2 p-3">
-          <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <p className="text-sm font-medium truncate flex-1">Files</p>
+          <FolderOpen className="text-muted-foreground h-4 w-4 flex-shrink-0" />
+          <p className="flex-1 truncate text-sm font-medium">Files</p>
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center h-32 text-muted-foreground p-4">
-              <AlertCircle className="w-8 h-8 mb-2" />
-              <p className="text-sm text-center">{error}</p>
+            <div className="text-muted-foreground flex h-32 flex-col items-center justify-center p-4">
+              <AlertCircle className="mb-2 h-8 w-8" />
+              <p className="text-center text-sm">{error}</p>
             </div>
           ) : files.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-muted-foreground">
+            <div className="text-muted-foreground flex h-32 items-center justify-center">
               <p className="text-sm">Empty directory</p>
             </div>
           ) : (
@@ -285,12 +288,12 @@ function DesktopFileExplorer({
 
       {/* Resize handle */}
       <div
-        className="w-1 cursor-col-resize bg-muted/50 hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
+        className="bg-muted/50 hover:bg-primary/50 active:bg-primary w-1 flex-shrink-0 cursor-col-resize transition-colors"
         onMouseDown={handleMouseDown}
       />
 
       {/* Editor panel */}
-      <div className="h-full flex-1 flex flex-col min-w-0 bg-muted/20">
+      <div className="bg-muted/20 flex h-full min-w-0 flex-1 flex-col">
         {/* Tabs */}
         {openFiles.length > 0 && (
           <div className="bg-background/50">
@@ -307,22 +310,20 @@ function DesktopFileExplorer({
         {/* Editor or empty state */}
         <div className="flex-1 overflow-hidden">
           {fileLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
           ) : activeFile ? (
             <FileEditor
               content={activeFile.currentContent}
               language={activeFile.language}
               isBinary={activeFile.isBinary}
-              onChange={(content) =>
-                updateContent(activeFile.path, content)
-              }
+              onChange={(content) => updateContent(activeFile.path, content)}
               onSave={onSave}
             />
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-              <Folder className="w-12 h-12 mb-4 opacity-50" />
+            <div className="text-muted-foreground flex h-full flex-col items-center justify-center">
+              <Folder className="mb-4 h-12 w-12 opacity-50" />
               <p className="text-sm">Select a file to edit</p>
             </div>
           )}
@@ -373,13 +374,13 @@ function MobileFileExplorer({
     const isCurrentDirty = activeFilePath ? isDirty(activeFilePath) : false;
 
     return (
-      <div className="h-full w-full flex flex-col bg-background">
+      <div className="bg-background flex h-full w-full flex-col">
         {/* Header */}
-        <div className="flex items-center gap-2 p-2 bg-muted/30">
+        <div className="bg-muted/30 flex items-center gap-2 p-2">
           <Button variant="ghost" size="icon-sm" onClick={onBack}>
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <FileTabs
               files={openFiles}
               activeFilePath={activeFilePath}
@@ -396,7 +397,7 @@ function MobileFileExplorer({
               disabled={saving}
               className="flex-shrink-0"
             >
-              <Save className="w-4 h-4 mr-1" />
+              <Save className="mr-1 h-4 w-4" />
               Save
             </Button>
           )}
@@ -405,8 +406,8 @@ function MobileFileExplorer({
         {/* Editor */}
         <div className="flex-1 overflow-hidden">
           {fileLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
           ) : (
             <FileEditor
@@ -433,12 +434,12 @@ function MobileFileExplorer({
 
   // Show file tree
   return (
-    <div className="h-full w-full flex flex-col bg-background">
+    <div className="bg-background flex h-full w-full flex-col">
       <div className="flex items-center gap-2 p-3">
-        <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">Files</p>
-          <p className="text-xs text-muted-foreground truncate">
+        <Folder className="text-muted-foreground h-4 w-4 flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">Files</p>
+          <p className="text-muted-foreground truncate text-xs">
             {workingDirectory}
           </p>
         </div>
@@ -446,16 +447,16 @@ function MobileFileExplorer({
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <div className="flex h-32 items-center justify-center">
+            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground p-4">
-            <AlertCircle className="w-8 h-8 mb-2" />
-            <p className="text-sm text-center">{error}</p>
+          <div className="text-muted-foreground flex h-32 flex-col items-center justify-center p-4">
+            <AlertCircle className="mb-2 h-8 w-8" />
+            <p className="text-center text-sm">{error}</p>
           </div>
         ) : files.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-muted-foreground">
+          <div className="text-muted-foreground flex h-32 items-center justify-center">
             <p className="text-sm">Empty directory</p>
           </div>
         ) : (
@@ -468,8 +469,8 @@ function MobileFileExplorer({
       </div>
 
       {fileLoading && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+          <Loader2 className="text-primary h-8 w-8 animate-spin" />
         </div>
       )}
     </div>
@@ -493,7 +494,10 @@ function UnsavedChangesDialog({
   onSave,
 }: UnsavedChangesDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={(isOpen: boolean) => !isOpen && onCancel()}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen: boolean) => !isOpen && onCancel()}
+    >
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Unsaved changes</DialogTitle>
@@ -505,10 +509,7 @@ function UnsavedChangesDialog({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            variant="destructive"
-            onClick={onDiscard}
-          >
+          <Button variant="destructive" onClick={onDiscard}>
             Discard
           </Button>
           <Button onClick={onSave}>Save</Button>

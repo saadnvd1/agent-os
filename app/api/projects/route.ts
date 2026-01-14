@@ -23,7 +23,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, workingDirectory, agentType, defaultModel, devServers } = body;
+    const { name, workingDirectory, agentType, defaultModel, devServers } =
+      body;
 
     if (!name || !workingDirectory) {
       return NextResponse.json(

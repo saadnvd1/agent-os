@@ -5,7 +5,13 @@ export function useToggleGroup() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ path, expanded }: { path: string; expanded: boolean }) => {
+    mutationFn: async ({
+      path,
+      expanded,
+    }: {
+      path: string;
+      expanded: boolean;
+    }) => {
       const res = await fetch(`/api/groups/${encodeURIComponent(path)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -17,13 +23,24 @@ export function useToggleGroup() {
     onMutate: async ({ path, expanded }) => {
       await queryClient.cancelQueries({ queryKey: sessionKeys.list() });
       const previous = queryClient.getQueryData(sessionKeys.list());
-      queryClient.setQueryData(sessionKeys.list(), (old: { sessions: unknown[]; groups: Array<{ path: string; expanded: boolean }> } | undefined) =>
-        old
-          ? {
-              ...old,
-              groups: old.groups.map((g) => (g.path === path ? { ...g, expanded } : g)),
-            }
-          : old
+      queryClient.setQueryData(
+        sessionKeys.list(),
+        (
+          old:
+            | {
+                sessions: unknown[];
+                groups: Array<{ path: string; expanded: boolean }>;
+              }
+            | undefined
+        ) =>
+          old
+            ? {
+                ...old,
+                groups: old.groups.map((g) =>
+                  g.path === path ? { ...g, expanded } : g
+                ),
+              }
+            : old
       );
       return { previous };
     },
@@ -39,7 +56,13 @@ export function useCreateGroup() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ name, parentPath }: { name: string; parentPath?: string }) => {
+    mutationFn: async ({
+      name,
+      parentPath,
+    }: {
+      name: string;
+      parentPath?: string;
+    }) => {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,7 +82,9 @@ export function useDeleteGroup() {
 
   return useMutation({
     mutationFn: async (path: string) => {
-      const res = await fetch(`/api/groups/${encodeURIComponent(path)}`, { method: "DELETE" });
+      const res = await fetch(`/api/groups/${encodeURIComponent(path)}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Failed to delete group");
       return res.json();
     },

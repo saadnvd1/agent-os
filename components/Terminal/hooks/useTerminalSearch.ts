@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import type { SearchAddon } from '@xterm/addon-search';
-import type { Terminal as XTerm } from '@xterm/xterm';
+import { useState, useCallback, useEffect, useRef } from "react";
+import type { SearchAddon } from "@xterm/addon-search";
+import type { Terminal as XTerm } from "@xterm/xterm";
 
 export function useTerminalSearch(
   searchAddonRef: React.RefObject<SearchAddon | null>,
   xtermRef: React.RefObject<XTerm | null>
 ) {
   const [searchVisible, setSearchVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const findNext = useCallback(() => {
@@ -33,7 +33,7 @@ export function useTerminalSearch(
 
   const closeSearch = useCallback(() => {
     setSearchVisible(false);
-    setSearchQuery('');
+    setSearchQuery("");
     if (searchAddonRef.current) {
       searchAddonRef.current.clearDecorations();
     }
@@ -49,16 +49,20 @@ export function useTerminalSearch(
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl/Cmd + Shift + F = Open search
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "f") {
         e.preventDefault();
         openSearch();
       }
       // Escape = Close search
-      if (e.key === 'Escape' && searchVisible) {
+      if (e.key === "Escape" && searchVisible) {
         closeSearch();
       }
       // Enter in search = Find next
-      if (e.key === 'Enter' && searchVisible && document.activeElement === searchInputRef.current) {
+      if (
+        e.key === "Enter" &&
+        searchVisible &&
+        document.activeElement === searchInputRef.current
+      ) {
         e.preventDefault();
         if (e.shiftKey) {
           findPrevious();
@@ -68,8 +72,8 @@ export function useTerminalSearch(
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [searchVisible, findNext, findPrevious, closeSearch, openSearch]);
 
   // Auto-search when query changes

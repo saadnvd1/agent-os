@@ -96,7 +96,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Check gh CLI
     if (!(await checkGhCli())) {
       return NextResponse.json(
-        { error: "GitHub CLI not installed or not authenticated. Run 'gh auth login' first." },
+        {
+          error:
+            "GitHub CLI not installed or not authenticated. Run 'gh auth login' first.",
+        },
         { status: 400 }
       );
     }
@@ -142,13 +145,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Check gh CLI
     if (!(await checkGhCli())) {
       return NextResponse.json(
-        { error: "GitHub CLI not installed or not authenticated. Run 'gh auth login' first." },
+        {
+          error:
+            "GitHub CLI not installed or not authenticated. Run 'gh auth login' first.",
+        },
         { status: 400 }
       );
     }
 
     // Check if PR already exists
-    const existingPR = await getPRForBranch(session.worktree_path, session.branch_name);
+    const existingPR = await getPRForBranch(
+      session.worktree_path,
+      session.branch_name
+    );
     if (existingPR) {
       return NextResponse.json(
         { error: "PR already exists for this branch", pr: existingPR },

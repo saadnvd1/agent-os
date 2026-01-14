@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import type { Terminal as XTerm } from '@xterm/xterm';
-import type { FitAddon } from '@xterm/addon-fit';
+import type { Terminal as XTerm } from "@xterm/xterm";
+import type { FitAddon } from "@xterm/addon-fit";
 
 interface ResizeHandlersConfig {
   term: XTerm;
@@ -40,18 +40,22 @@ export function setupResizeHandlers(config: ResizeHandlersConfig): () => void {
       sendResize(term.cols, term.rows);
 
       // Second fit - after 100ms (handles most delayed layout updates)
-      fitTimeouts.push(setTimeout(() => {
-        fitAddon.fit();
-        restoreScroll();
-        sendResize(term.cols, term.rows);
-      }, 100));
+      fitTimeouts.push(
+        setTimeout(() => {
+          fitAddon.fit();
+          restoreScroll();
+          sendResize(term.cols, term.rows);
+        }, 100)
+      );
 
       // Third fit - after 250ms (handles slow layout updates, e.g., DevTools toggle)
-      fitTimeouts.push(setTimeout(() => {
-        fitAddon.fit();
-        restoreScroll();
-        sendResize(term.cols, term.rows);
-      }, 250));
+      fitTimeouts.push(
+        setTimeout(() => {
+          fitAddon.fit();
+          restoreScroll();
+          sendResize(term.cols, term.rows);
+        }, 250)
+      );
     });
   };
 
@@ -61,25 +65,29 @@ export function setupResizeHandlers(config: ResizeHandlersConfig): () => void {
   };
 
   // Window resize
-  window.addEventListener('resize', handleResize);
+  window.addEventListener("resize", handleResize);
 
   // Media query listeners for Chrome DevTools mobile toggle
-  const mediaQueries = ['(max-width: 640px)', '(max-width: 768px)', '(max-width: 1024px)'];
-  mediaQueries.forEach(query => {
+  const mediaQueries = [
+    "(max-width: 640px)",
+    "(max-width: 768px)",
+    "(max-width: 1024px)",
+  ];
+  mediaQueries.forEach((query) => {
     const mq = window.matchMedia(query);
     const handler = () => handleResize();
-    mq.addEventListener('change', handler);
+    mq.addEventListener("change", handler);
     mqListeners.push({ mq, handler });
   });
 
   // Handle orientation change on mobile
-  if (isMobile && 'orientation' in screen) {
-    screen.orientation.addEventListener('change', handleResize);
+  if (isMobile && "orientation" in screen) {
+    screen.orientation.addEventListener("change", handleResize);
   }
 
   // Handle visual viewport changes (for mobile keyboard)
   if (isMobile && window.visualViewport) {
-    window.visualViewport.addEventListener('resize', handleResize);
+    window.visualViewport.addEventListener("resize", handleResize);
   }
 
   // ResizeObserver for container changes
@@ -93,18 +101,18 @@ export function setupResizeHandlers(config: ResizeHandlersConfig): () => void {
     if (resizeTimeout) clearTimeout(resizeTimeout);
     fitTimeouts.forEach(clearTimeout);
 
-    window.removeEventListener('resize', handleResize);
+    window.removeEventListener("resize", handleResize);
 
     mqListeners.forEach(({ mq, handler }) => {
-      mq.removeEventListener('change', handler);
+      mq.removeEventListener("change", handler);
     });
 
-    if (isMobile && 'orientation' in screen) {
-      screen.orientation.removeEventListener('change', handleResize);
+    if (isMobile && "orientation" in screen) {
+      screen.orientation.removeEventListener("change", handleResize);
     }
 
     if (isMobile && window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', handleResize);
+      window.visualViewport.removeEventListener("resize", handleResize);
     }
 
     if (resizeObserver) {

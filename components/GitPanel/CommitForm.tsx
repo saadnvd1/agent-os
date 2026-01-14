@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { GitCommit, GitBranch, Send, Loader2, ExternalLink } from "lucide-react";
+import {
+  GitCommit,
+  GitBranch,
+  Send,
+  Loader2,
+  ExternalLink,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -121,12 +127,12 @@ export function CommitForm({
   }
 
   return (
-    <div className="p-3 space-y-3 bg-muted/20">
+    <div className="bg-muted/20 space-y-3 p-3">
       {/* Branch name input (if on main) */}
       {isOnMainBranch && (
         <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground flex items-center gap-1">
-            <GitBranch className="w-3 h-3" />
+          <label className="text-muted-foreground flex items-center gap-1 text-xs">
+            <GitBranch className="h-3 w-3" />
             New branch name
           </label>
           <input
@@ -135,9 +141,9 @@ export function CommitForm({
             onChange={(e) => setBranchName(e.target.value)}
             placeholder="feature/my-feature"
             className={cn(
-              "w-full px-3 py-2 text-sm rounded-md",
+              "w-full rounded-md px-3 py-2 text-sm",
               "bg-muted/50",
-              "focus:outline-none focus:ring-2 focus:ring-primary/50",
+              "focus:ring-primary/50 focus:ring-2 focus:outline-none",
               "placeholder:text-muted-foreground/50",
               "min-h-[44px]" // Mobile touch target
             )}
@@ -147,8 +153,8 @@ export function CommitForm({
 
       {/* Commit message input */}
       <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground flex items-center gap-1">
-          <GitCommit className="w-3 h-3" />
+        <label className="text-muted-foreground flex items-center gap-1 text-xs">
+          <GitCommit className="h-3 w-3" />
           Commit message
         </label>
         <textarea
@@ -157,23 +163,19 @@ export function CommitForm({
           placeholder="Describe your changes..."
           rows={3}
           className={cn(
-            "w-full px-3 py-2 text-sm rounded-md resize-none",
+            "w-full resize-none rounded-md px-3 py-2 text-sm",
             "bg-muted/50",
-            "focus:outline-none focus:ring-2 focus:ring-primary/50",
+            "focus:ring-primary/50 focus:ring-2 focus:outline-none",
             "placeholder:text-muted-foreground/50"
           )}
         />
       </div>
 
       {/* Error message */}
-      {error && (
-        <p className="text-xs text-red-500 px-1">{error}</p>
-      )}
+      {error && <p className="px-1 text-xs text-red-500">{error}</p>}
 
       {/* Success message */}
-      {success && (
-        <p className="text-xs text-green-500 px-1">{success}</p>
-      )}
+      {success && <p className="px-1 text-xs text-green-500">{success}</p>}
 
       {/* Buttons */}
       <div className="flex gap-2">
@@ -182,12 +184,12 @@ export function CommitForm({
           size="default"
           onClick={handleCommit}
           disabled={!canCommit || needsBranch || committing || pushing}
-          className="flex-1 min-h-[44px]"
+          className="min-h-[44px] flex-1"
         >
           {committing ? (
-            <Loader2 className="w-4 h-4 animate-spin mr-1" />
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
           ) : (
-            <GitCommit className="w-4 h-4 mr-1" />
+            <GitCommit className="mr-1 h-4 w-4" />
           )}
           Commit
         </Button>
@@ -197,12 +199,12 @@ export function CommitForm({
           size="default"
           onClick={handleCommitAndPush}
           disabled={!canCommit || needsBranch || committing || pushing}
-          className="flex-1 min-h-[44px]"
+          className="min-h-[44px] flex-1"
         >
           {pushing ? (
-            <Loader2 className="w-4 h-4 animate-spin mr-1" />
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
           ) : (
-            <Send className="w-4 h-4 mr-1" />
+            <Send className="mr-1 h-4 w-4" />
           )}
           Commit & Push
         </Button>
@@ -213,13 +215,13 @@ export function CommitForm({
         <Button
           variant="outline"
           size="default"
-          className="w-full min-h-[44px] text-primary"
+          className="text-primary min-h-[44px] w-full"
           onClick={() => {
             setShowCreatePR(false);
             onCreatePR();
           }}
         >
-          <ExternalLink className="w-4 h-4 mr-1" />
+          <ExternalLink className="mr-1 h-4 w-4" />
           Create Pull Request
         </Button>
       )}

@@ -89,7 +89,9 @@ export class StreamParser extends EventEmitter {
             data: {
               role: msg.role || "assistant",
               text: textBlocks.join(""),
-              content: msg.content.filter((c): c is TextContent => c.type === "text" && !!c.text),
+              content: msg.content.filter(
+                (c): c is TextContent => c.type === "text" && !!c.text
+              ),
             },
           };
         }

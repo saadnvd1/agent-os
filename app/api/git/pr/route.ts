@@ -21,12 +21,18 @@ export async function GET(request: NextRequest) {
   }
 
   if (!isGitRepo(path)) {
-    return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Not a git repository" },
+      { status: 400 }
+    );
   }
 
   if (!checkGhCli()) {
     return NextResponse.json(
-      { error: "GitHub CLI not installed or not authenticated. Run 'gh auth login' first." },
+      {
+        error:
+          "GitHub CLI not installed or not authenticated. Run 'gh auth login' first.",
+      },
       { status: 400 }
     );
   }
@@ -61,7 +67,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to get PR info" },
+      {
+        error: error instanceof Error ? error.message : "Failed to get PR info",
+      },
       { status: 500 }
     );
   }
@@ -71,7 +79,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { path, title, description, baseBranch: customBase } = body as {
+    const {
+      path,
+      title,
+      description,
+      baseBranch: customBase,
+    } = body as {
       path: string;
       title: string;
       description: string;
@@ -87,7 +100,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isGitRepo(path)) {
-      return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Not a git repository" },
+        { status: 400 }
+      );
     }
 
     if (!checkGhCli()) {

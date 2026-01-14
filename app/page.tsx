@@ -7,7 +7,7 @@ const debugLogs: string[] = [];
 const MAX_DEBUG_LOGS = 100;
 
 function debugLog(message: string) {
-  const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+  const timestamp = new Date().toISOString().split("T")[1].slice(0, 12);
   const entry = `[${timestamp}] ${message}`;
   debugLogs.push(entry);
   if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.shift();
@@ -15,11 +15,11 @@ function debugLog(message: string) {
 }
 
 // Expose to window for debugging
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   (window as unknown as { agentOSLogs: () => void }).agentOSLogs = () => {
-    console.log('=== AgentOS Debug Logs ===');
-    debugLogs.forEach(log => console.log(log));
-    console.log('=== End Logs ===');
+    console.log("=== AgentOS Debug Logs ===");
+    debugLogs.forEach((log) => console.log(log));
+    console.log("=== End Logs ===");
   };
 }
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
@@ -41,8 +41,11 @@ function HomeContent() {
   // UI State
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
-  const [newSessionProjectId, setNewSessionProjectId] = useState<string | null>(null);
-  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [newSessionProjectId, setNewSessionProjectId] = useState<string | null>(
+    null
+  );
+  const [showNotificationSettings, setShowNotificationSettings] =
+    useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
@@ -63,47 +66,63 @@ function HomeContent() {
   } = useDevServersManager();
 
   // Helper to get init script command from API
-  const getInitScriptCommand = useCallback(async (agentCommand: string): Promise<string> => {
-    try {
-      const res = await fetch("/api/sessions/init-script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentCommand }),
-      });
-      const data = await res.json();
-      return data.command || agentCommand;
-    } catch {
-      return agentCommand;
-    }
-  }, []);
+  const getInitScriptCommand = useCallback(
+    async (agentCommand: string): Promise<string> => {
+      try {
+        const res = await fetch("/api/sessions/init-script", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentCommand }),
+        });
+        const data = await res.json();
+        return data.command || agentCommand;
+      } catch {
+        return agentCommand;
+      }
+    },
+    []
+  );
 
   // Set CSS variable for viewport height (handles mobile keyboard)
   useViewportHeight();
 
   // Terminal ref management
-  const registerTerminalRef = useCallback((paneId: string, tabId: string, ref: TerminalHandle | null) => {
-    const key = `${paneId}:${tabId}`;
-    if (ref) {
-      terminalRefs.current.set(key, ref);
-      debugLog(`Terminal registered: ${key}, total refs: ${terminalRefs.current.size}`);
-    } else {
-      terminalRefs.current.delete(key);
-      debugLog(`Terminal unregistered: ${key}, total refs: ${terminalRefs.current.size}`);
-    }
-  }, []);
+  const registerTerminalRef = useCallback(
+    (paneId: string, tabId: string, ref: TerminalHandle | null) => {
+      const key = `${paneId}:${tabId}`;
+      if (ref) {
+        terminalRefs.current.set(key, ref);
+        debugLog(
+          `Terminal registered: ${key}, total refs: ${terminalRefs.current.size}`
+        );
+      } else {
+        terminalRefs.current.delete(key);
+        debugLog(
+          `Terminal unregistered: ${key}, total refs: ${terminalRefs.current.size}`
+        );
+      }
+    },
+    []
+  );
 
   // Get terminal for a pane, with fallback to first available
-  const getTerminalWithFallback = useCallback((): { terminal: TerminalHandle; paneId: string; tabId: string } | undefined => {
-    debugLog(`getTerminalWithFallback called, total refs: ${terminalRefs.current.size}, focusedPaneId: ${focusedPaneId}`);
+  const getTerminalWithFallback = useCallback(():
+    | { terminal: TerminalHandle; paneId: string; tabId: string }
+    | undefined => {
+    debugLog(
+      `getTerminalWithFallback called, total refs: ${terminalRefs.current.size}, focusedPaneId: ${focusedPaneId}`
+    );
 
     // Try focused pane first
     const activeTab = getActiveTab(focusedPaneId);
-    debugLog(`activeTab for focused pane: ${activeTab?.id || 'null'}`);
+    debugLog(`activeTab for focused pane: ${activeTab?.id || "null"}`);
 
     if (activeTab) {
       const key = `${focusedPaneId}:${activeTab.id}`;
       const terminal = terminalRefs.current.get(key);
-      debugLog(`Looking for terminal at key "${key}": ${terminal ? 'found' : 'not found'}`);
+      debugLog(
+        `Looking for terminal at key "${key}": ${terminal ? "found" : "not found"}`
+      );
       if (terminal) {
         return { terminal, paneId: focusedPaneId, tabId: activeTab.id };
       }
@@ -118,128 +137,170 @@ function HomeContent() {
       return { terminal, paneId, tabId };
     }
 
-    debugLog(`NO TERMINAL FOUND. Available keys: ${Array.from(terminalRefs.current.keys()).join(', ') || 'none'}`);
+    debugLog(
+      `NO TERMINAL FOUND. Available keys: ${Array.from(terminalRefs.current.keys()).join(", ") || "none"}`
+    );
     return undefined;
   }, [focusedPaneId, getActiveTab]);
 
   // Build tmux command for a session
-  const buildSessionCommand = useCallback(async (session: Session): Promise<{ sessionName: string; cwd: string; command: string }> => {
-    const provider = getProvider(session.agent_type || "claude");
-    const sessionName = session.tmux_name || `${provider.id}-${session.id}`;
-    const cwd = session.working_directory?.replace("~", "$HOME") || "$HOME";
+  const buildSessionCommand = useCallback(
+    async (
+      session: Session
+    ): Promise<{ sessionName: string; cwd: string; command: string }> => {
+      const provider = getProvider(session.agent_type || "claude");
+      const sessionName = session.tmux_name || `${provider.id}-${session.id}`;
+      const cwd = session.working_directory?.replace("~", "$HOME") || "$HOME";
 
-    // Shell sessions just open a terminal - no agent command
-    if (provider.id === "shell") {
-      return { sessionName, cwd, command: "" };
-    }
+      // Shell sessions just open a terminal - no agent command
+      if (provider.id === "shell") {
+        return { sessionName, cwd, command: "" };
+      }
 
-    // Ensure MCP config exists for orchestration
-    fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(() => {});
+      // Ensure MCP config exists for orchestration
+      fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(
+        () => {}
+      );
 
-    // Get parent session ID for forking
-    let parentSessionId: string | null = null;
-    if (!session.claude_session_id && session.parent_session_id) {
-      const parentSession = sessions.find(s => s.id === session.parent_session_id);
-      parentSessionId = parentSession?.claude_session_id || null;
-    }
+      // Get parent session ID for forking
+      let parentSessionId: string | null = null;
+      if (!session.claude_session_id && session.parent_session_id) {
+        const parentSession = sessions.find(
+          (s) => s.id === session.parent_session_id
+        );
+        parentSessionId = parentSession?.claude_session_id || null;
+      }
 
-    const flags = provider.buildFlags({
-      sessionId: session.claude_session_id,
-      parentSessionId,
-      autoApprove: session.auto_approve,
-      model: session.model,
-    });
-    const flagsStr = flags.join(" ");
+      const flags = provider.buildFlags({
+        sessionId: session.claude_session_id,
+        parentSessionId,
+        autoApprove: session.auto_approve,
+        model: session.model,
+      });
+      const flagsStr = flags.join(" ");
 
-    const agentCmd = `${provider.command} ${flagsStr}`;
-    const command = await getInitScriptCommand(agentCmd);
+      const agentCmd = `${provider.command} ${flagsStr}`;
+      const command = await getInitScriptCommand(agentCmd);
 
-    return { sessionName, cwd, command };
-  }, [sessions, getInitScriptCommand]);
+      return { sessionName, cwd, command };
+    },
+    [sessions, getInitScriptCommand]
+  );
 
   // Attach a session to a terminal
-  const runSessionInTerminal = useCallback((
-    terminal: TerminalHandle,
-    paneId: string,
-    session: Session,
-    sessionInfo: { sessionName: string; cwd: string; command: string }
-  ) => {
-    const { sessionName, cwd, command } = sessionInfo;
-    // For shell sessions (empty command), just start tmux without a command so it opens the default shell
-    const tmuxNew = command
-      ? `tmux new -s ${sessionName} -c "${cwd}" "${command}"`
-      : `tmux new -s ${sessionName} -c "${cwd}"`;
-    terminal.sendCommand(`tmux attach -t ${sessionName} 2>/dev/null || ${tmuxNew}`);
-    attachSession(paneId, session.id, sessionName);
-    terminal.focus();
-  }, [attachSession]);
+  const runSessionInTerminal = useCallback(
+    (
+      terminal: TerminalHandle,
+      paneId: string,
+      session: Session,
+      sessionInfo: { sessionName: string; cwd: string; command: string }
+    ) => {
+      const { sessionName, cwd, command } = sessionInfo;
+      // For shell sessions (empty command), just start tmux without a command so it opens the default shell
+      const tmuxNew = command
+        ? `tmux new -s ${sessionName} -c "${cwd}" "${command}"`
+        : `tmux new -s ${sessionName} -c "${cwd}"`;
+      terminal.sendCommand(
+        `tmux attach -t ${sessionName} 2>/dev/null || ${tmuxNew}`
+      );
+      attachSession(paneId, session.id, sessionName);
+      terminal.focus();
+    },
+    [attachSession]
+  );
 
   // Attach session to terminal
-  const attachToSession = useCallback(async (session: Session) => {
-    const terminalInfo = getTerminalWithFallback();
-    if (!terminalInfo) {
-      debugLog(`ERROR: No terminal available to attach session: ${session.name}`);
-      alert(`[AgentOS Debug] No terminal available!\n\nRun agentOSLogs() in console to see debug logs.`);
-      return;
-    }
+  const attachToSession = useCallback(
+    async (session: Session) => {
+      const terminalInfo = getTerminalWithFallback();
+      if (!terminalInfo) {
+        debugLog(
+          `ERROR: No terminal available to attach session: ${session.name}`
+        );
+        alert(
+          `[AgentOS Debug] No terminal available!\n\nRun agentOSLogs() in console to see debug logs.`
+        );
+        return;
+      }
 
-    const { terminal, paneId } = terminalInfo;
-    const activeTab = getActiveTab(paneId);
-    const isInTmux = !!activeTab?.attachedTmux;
+      const { terminal, paneId } = terminalInfo;
+      const activeTab = getActiveTab(paneId);
+      const isInTmux = !!activeTab?.attachedTmux;
 
-    if (isInTmux) {
-      terminal.sendInput("\x02d");
-    }
+      if (isInTmux) {
+        terminal.sendInput("\x02d");
+      }
 
-    setTimeout(() => {
-      terminal.sendInput("\x03");
-      setTimeout(async () => {
-        const sessionInfo = await buildSessionCommand(session);
-        runSessionInTerminal(terminal, paneId, session, sessionInfo);
-      }, 50);
-    }, isInTmux ? 100 : 0);
-  }, [getTerminalWithFallback, getActiveTab, buildSessionCommand, runSessionInTerminal]);
+      setTimeout(
+        () => {
+          terminal.sendInput("\x03");
+          setTimeout(async () => {
+            const sessionInfo = await buildSessionCommand(session);
+            runSessionInTerminal(terminal, paneId, session, sessionInfo);
+          }, 50);
+        },
+        isInTmux ? 100 : 0
+      );
+    },
+    [
+      getTerminalWithFallback,
+      getActiveTab,
+      buildSessionCommand,
+      runSessionInTerminal,
+    ]
+  );
 
   // Open session in new tab
-  const openSessionInNewTab = useCallback((session: Session) => {
-    const existingKeys = new Set(terminalRefs.current.keys());
-    addTab(focusedPaneId);
+  const openSessionInNewTab = useCallback(
+    (session: Session) => {
+      const existingKeys = new Set(terminalRefs.current.keys());
+      addTab(focusedPaneId);
 
-    let attempts = 0;
-    const maxAttempts = 20;
+      let attempts = 0;
+      const maxAttempts = 20;
 
-    const waitForNewTerminal = () => {
-      attempts++;
+      const waitForNewTerminal = () => {
+        attempts++;
 
-      for (const key of terminalRefs.current.keys()) {
-        if (!existingKeys.has(key) && key.startsWith(`${focusedPaneId}:`)) {
-          const terminal = terminalRefs.current.get(key);
-          if (terminal) {
-            buildSessionCommand(session).then(sessionInfo => {
-              runSessionInTerminal(terminal, focusedPaneId, session, sessionInfo);
-            });
-            return;
+        for (const key of terminalRefs.current.keys()) {
+          if (!existingKeys.has(key) && key.startsWith(`${focusedPaneId}:`)) {
+            const terminal = terminalRefs.current.get(key);
+            if (terminal) {
+              buildSessionCommand(session).then((sessionInfo) => {
+                runSessionInTerminal(
+                  terminal,
+                  focusedPaneId,
+                  session,
+                  sessionInfo
+                );
+              });
+              return;
+            }
           }
         }
-      }
 
-      if (attempts < maxAttempts) {
-        setTimeout(waitForNewTerminal, 50);
-      } else {
-        debugLog(`Failed to find new terminal after ${maxAttempts} attempts`);
-      }
-    };
+        if (attempts < maxAttempts) {
+          setTimeout(waitForNewTerminal, 50);
+        } else {
+          debugLog(`Failed to find new terminal after ${maxAttempts} attempts`);
+        }
+      };
 
-    setTimeout(waitForNewTerminal, 50);
-  }, [addTab, focusedPaneId, buildSessionCommand, runSessionInTerminal]);
+      setTimeout(waitForNewTerminal, 50);
+    },
+    [addTab, focusedPaneId, buildSessionCommand, runSessionInTerminal]
+  );
 
   // Notification click handler
-  const handleNotificationClick = useCallback((sessionId: string) => {
-    const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      attachToSession(session);
-    }
-  }, [sessions, attachToSession]);
+  const handleNotificationClick = useCallback(
+    (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (session) {
+        attachToSession(session);
+      }
+    },
+    [sessions, attachToSession]
+  );
 
   // Notifications
   const {
@@ -275,29 +336,37 @@ function HomeContent() {
   }, []);
 
   // Session selection handler
-  const handleSelectSession = useCallback((sessionId: string) => {
-    debugLog(`handleSelectSession called for: ${sessionId}`);
-    const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      debugLog(`Found session: ${session.name}, calling attachToSession`);
-      attachToSession(session);
-    } else {
-      debugLog(`Session not found in sessions array (length: ${sessions.length})`);
-    }
-  }, [sessions, attachToSession]);
+  const handleSelectSession = useCallback(
+    (sessionId: string) => {
+      debugLog(`handleSelectSession called for: ${sessionId}`);
+      const session = sessions.find((s) => s.id === sessionId);
+      if (session) {
+        debugLog(`Found session: ${session.name}, calling attachToSession`);
+        attachToSession(session);
+      } else {
+        debugLog(
+          `Session not found in sessions array (length: ${sessions.length})`
+        );
+      }
+    },
+    [sessions, attachToSession]
+  );
 
   // Pane renderer
-  const renderPane = useCallback((paneId: string) => (
-    <Pane
-      key={paneId}
-      paneId={paneId}
-      sessions={sessions}
-      projects={projects}
-      onRegisterTerminal={registerTerminalRef}
-      onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined}
-      onSelectSession={handleSelectSession}
-    />
-  ), [sessions, projects, registerTerminalRef, isMobile, handleSelectSession]);
+  const renderPane = useCallback(
+    (paneId: string) => (
+      <Pane
+        key={paneId}
+        paneId={paneId}
+        sessions={sessions}
+        projects={projects}
+        onRegisterTerminal={registerTerminalRef}
+        onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined}
+        onSelectSession={handleSelectSession}
+      />
+    ),
+    [sessions, projects, registerTerminalRef, isMobile, handleSelectSession]
+  );
 
   // New session in project handler
   const handleNewSessionInProject = useCallback((projectId: string) => {
@@ -306,69 +375,80 @@ function HomeContent() {
   }, []);
 
   // Session created handler (shared between desktop/mobile)
-  const handleSessionCreated = useCallback(async (sessionId: string) => {
-    setShowNewSessionDialog(false);
-    setNewSessionProjectId(null);
-    await fetchSessions();
+  const handleSessionCreated = useCallback(
+    async (sessionId: string) => {
+      setShowNewSessionDialog(false);
+      setNewSessionProjectId(null);
+      await fetchSessions();
 
-    const res = await fetch(`/api/sessions/${sessionId}`);
-    const data = await res.json();
-    if (!data.session) return;
+      const res = await fetch(`/api/sessions/${sessionId}`);
+      const data = await res.json();
+      if (!data.session) return;
 
-    setTimeout(() => attachToSession(data.session), 100);
-  }, [fetchSessions, attachToSession]);
+      setTimeout(() => attachToSession(data.session), 100);
+    },
+    [fetchSessions, attachToSession]
+  );
 
   // Project created handler (shared between desktop/mobile)
-  const handleCreateProject = useCallback(async (
-    name: string,
-    workingDirectory: string,
-    agentType?: string
-  ): Promise<string | null> => {
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, workingDirectory, agentType }),
-    });
-    const data = await res.json();
-    if (data.project) {
-      await fetchProjects();
-      return data.project.id;
-    }
-    return null;
-  }, [fetchProjects]);
+  const handleCreateProject = useCallback(
+    async (
+      name: string,
+      workingDirectory: string,
+      agentType?: string
+    ): Promise<string | null> => {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, workingDirectory, agentType }),
+      });
+      const data = await res.json();
+      if (data.project) {
+        await fetchProjects();
+        return data.project.id;
+      }
+      return null;
+    },
+    [fetchProjects]
+  );
 
   // Open terminal in project handler (shell session, not AI agent)
-  const handleOpenTerminal = useCallback(async (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return;
+  const handleOpenTerminal = useCallback(
+    async (projectId: string) => {
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) return;
 
-    // Create a shell session with the project's working directory
-    const res = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: `${project.name} Terminal`,
-        workingDirectory: project.working_directory || "~",
-        agentType: "shell",
-        projectId,
-      }),
-    });
+      // Create a shell session with the project's working directory
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${project.name} Terminal`,
+          workingDirectory: project.working_directory || "~",
+          agentType: "shell",
+          projectId,
+        }),
+      });
 
-    const data = await res.json();
-    if (!data.session) return;
+      const data = await res.json();
+      if (!data.session) return;
 
-    await fetchSessions();
+      await fetchSessions();
 
-    // Small delay to ensure state updates, then attach
-    setTimeout(() => {
-      attachToSession(data.session);
-    }, 100);
-  }, [projects, fetchSessions, attachToSession]);
+      // Small delay to ensure state updates, then attach
+      setTimeout(() => {
+        attachToSession(data.session);
+      }, 100);
+    },
+    [projects, fetchSessions, attachToSession]
+  );
 
   // Active session and dev server project
-  const activeSession = sessions.find(s => s.id === focusedActiveTab?.sessionId);
+  const activeSession = sessions.find(
+    (s) => s.id === focusedActiveTab?.sessionId
+  );
   const startDevServerProject = startDevServerProjectId
-    ? projects.find(p => p.id === startDevServerProjectId) ?? null
+    ? (projects.find((p) => p.id === startDevServerProjectId) ?? null)
     : null;
 
   // View props

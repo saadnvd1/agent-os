@@ -46,7 +46,9 @@ declare global {
   }
 }
 
-export function useSpeechRecognition(onTranscript: (text: string, isFinal: boolean) => void) {
+export function useSpeechRecognition(
+  onTranscript: (text: string, isFinal: boolean) => void
+) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -54,7 +56,8 @@ export function useSpeechRecognition(onTranscript: (text: string, isFinal: boole
 
   useEffect(() => {
     // Check for browser support
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognitionAPI =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognitionAPI);
 
     if (SpeechRecognitionAPI) {

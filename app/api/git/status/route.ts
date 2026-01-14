@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGitStatus, isGitRepo, getFileDiff, getUntrackedFileDiff, expandPath } from "@/lib/git-status";
+import {
+  getGitStatus,
+  isGitRepo,
+  getFileDiff,
+  getUntrackedFileDiff,
+  expandPath,
+} from "@/lib/git-status";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -14,7 +20,10 @@ export async function GET(request: NextRequest) {
   const path = expandPath(rawPath);
 
   if (!isGitRepo(path)) {
-    return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Not a git repository" },
+      { status: 400 }
+    );
   }
 
   try {
@@ -32,7 +41,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(status);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to get git status" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to get git status",
+      },
       { status: 500 }
     );
   }

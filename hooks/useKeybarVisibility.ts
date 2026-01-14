@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from "react";
 
-const STORAGE_KEY = 'agentOS-keybar-visible';
+const STORAGE_KEY = "agentOS-keybar-visible";
 
 /**
  * Hook to manage mobile keybar visibility with localStorage persistence.
@@ -13,9 +13,9 @@ export function useKeybarVisibility() {
 
   // Load persisted state on mount
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'true') {
+    if (stored === "true") {
       setIsVisible(true);
     }
   }, []);
@@ -30,12 +30,12 @@ export function useKeybarVisibility() {
 
   const show = useCallback(() => {
     setIsVisible(true);
-    localStorage.setItem(STORAGE_KEY, 'true');
+    localStorage.setItem(STORAGE_KEY, "true");
   }, []);
 
   const hide = useCallback(() => {
     setIsVisible(false);
-    localStorage.setItem(STORAGE_KEY, 'false');
+    localStorage.setItem(STORAGE_KEY, "false");
   }, []);
 
   return { isVisible, toggle, show, hide };

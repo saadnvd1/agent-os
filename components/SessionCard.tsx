@@ -2,7 +2,23 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { GitFork, GitBranch, GitPullRequest, Circle, AlertCircle, Loader2, MoreHorizontal, FolderInput, Trash2, Copy, Pencil, Sparkles, Square, CheckSquare, ExternalLink } from "lucide-react";
+import {
+  GitFork,
+  GitBranch,
+  GitPullRequest,
+  Circle,
+  AlertCircle,
+  Loader2,
+  MoreHorizontal,
+  FolderInput,
+  Trash2,
+  Copy,
+  Pencil,
+  Sparkles,
+  Square,
+  CheckSquare,
+  ExternalLink,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -55,35 +71,59 @@ interface SessionCardProps {
   onHoverEnd?: () => void;
 }
 
-const statusConfig: Record<TmuxStatus, { color: string; label: string; icon: React.ReactNode }> = {
+const statusConfig: Record<
+  TmuxStatus,
+  { color: string; label: string; icon: React.ReactNode }
+> = {
   idle: {
     color: "text-muted-foreground",
     label: "idle",
-    icon: <Circle className="w-2 h-2 fill-current" />
+    icon: <Circle className="h-2 w-2 fill-current" />,
   },
   running: {
     color: "text-blue-500",
     label: "running",
-    icon: <Loader2 className="w-3 h-3 animate-spin" />
+    icon: <Loader2 className="h-3 w-3 animate-spin" />,
   },
   waiting: {
     color: "text-yellow-500 animate-pulse",
     label: "waiting",
-    icon: <AlertCircle className="w-3 h-3" />
+    icon: <AlertCircle className="h-3 w-3" />,
   },
   error: {
     color: "text-red-500",
     label: "error",
-    icon: <Circle className="w-2 h-2 fill-current" />
+    icon: <Circle className="h-2 w-2 fill-current" />,
   },
   dead: {
     color: "text-muted-foreground/50",
     label: "stopped",
-    icon: <Circle className="w-2 h-2" />
+    icon: <Circle className="h-2 w-2" />,
   },
 };
 
-export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, groups = [], projects = [], isSelected, isInSelectMode, onToggleSelect, onClick, onOpenInTab, onMove, onMoveToProject, onFork, onSummarize, onDelete, onRename, onCreatePR, onHoverStart, onHoverEnd }: SessionCardProps) {
+export function SessionCard({
+  session,
+  isActive,
+  isSummarizing,
+  tmuxStatus,
+  groups = [],
+  projects = [],
+  isSelected,
+  isInSelectMode,
+  onToggleSelect,
+  onClick,
+  onOpenInTab,
+  onMove,
+  onMoveToProject,
+  onFork,
+  onSummarize,
+  onDelete,
+  onRename,
+  onCreatePR,
+  onHoverStart,
+  onHoverEnd,
+}: SessionCardProps) {
   const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
   const config = statusConfig[status];
@@ -152,7 +192,14 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
     setIsEditing(false);
   };
 
-  const hasActions = onMove || onMoveToProject || onFork || onDelete || onRename || onCreatePR || onOpenInTab;
+  const hasActions =
+    onMove ||
+    onMoveToProject ||
+    onFork ||
+    onDelete ||
+    onRename ||
+    onCreatePR ||
+    onOpenInTab;
 
   // Handle card click - coordinates selection with navigation
   const handleCardClick = (e: React.MouseEvent) => {
@@ -187,37 +234,43 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
   // Shared menu items renderer for both context menu and dropdown
   const renderMenuItems = (isContextMenu: boolean) => {
     const MenuItem = isContextMenu ? ContextMenuItem : DropdownMenuItem;
-    const MenuSeparator = isContextMenu ? ContextMenuSeparator : DropdownMenuSeparator;
+    const MenuSeparator = isContextMenu
+      ? ContextMenuSeparator
+      : DropdownMenuSeparator;
     const MenuSub = isContextMenu ? ContextMenuSub : DropdownMenuSub;
-    const MenuSubTrigger = isContextMenu ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
-    const MenuSubContent = isContextMenu ? ContextMenuSubContent : DropdownMenuSubContent;
+    const MenuSubTrigger = isContextMenu
+      ? ContextMenuSubTrigger
+      : DropdownMenuSubTrigger;
+    const MenuSubContent = isContextMenu
+      ? ContextMenuSubContent
+      : DropdownMenuSubContent;
 
     return (
       <>
         {onOpenInTab && (
           <MenuItem onClick={() => onOpenInTab()}>
-            <ExternalLink className="w-3 h-3 mr-2" />
+            <ExternalLink className="mr-2 h-3 w-3" />
             Open in new tab
           </MenuItem>
         )}
         {onRename && (
           <MenuItem onClick={() => setIsEditing(true)}>
-            <Pencil className="w-3 h-3 mr-2" />
+            <Pencil className="mr-2 h-3 w-3" />
             Rename
           </MenuItem>
         )}
         {onFork && session.agent_type === "claude" && (
           <MenuItem onClick={() => onFork()}>
-            <Copy className="w-3 h-3 mr-2" />
+            <Copy className="mr-2 h-3 w-3" />
             Fork session
           </MenuItem>
         )}
         {onSummarize && (
           <MenuItem onClick={() => onSummarize()} disabled={isSummarizing}>
             {isSummarizing ? (
-              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
             ) : (
-              <Sparkles className="w-3 h-3 mr-2" />
+              <Sparkles className="mr-2 h-3 w-3" />
             )}
             {isSummarizing ? "Summarizing..." : "Fresh start"}
           </MenuItem>
@@ -232,21 +285,24 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
               }
             }}
           >
-            <GitPullRequest className="w-3 h-3 mr-2" />
+            <GitPullRequest className="mr-2 h-3 w-3" />
             {session.pr_url ? "Open PR" : "Create PR"}
           </MenuItem>
         )}
         {onMoveToProject && projects.length > 0 && (
           <MenuSub>
             <MenuSubTrigger>
-              <FolderInput className="w-3 h-3 mr-2" />
+              <FolderInput className="mr-2 h-3 w-3" />
               Move to project...
             </MenuSubTrigger>
             <MenuSubContent>
               {projects
                 .filter((p) => p.id !== session.project_id)
                 .map((project) => (
-                  <MenuItem key={project.id} onClick={() => onMoveToProject(project.id)}>
+                  <MenuItem
+                    key={project.id}
+                    onClick={() => onMoveToProject(project.id)}
+                  >
                     {project.name}
                   </MenuItem>
                 ))}
@@ -256,7 +312,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
         {onMove && groups.length > 0 && (
           <MenuSub>
             <MenuSubTrigger>
-              <FolderInput className="w-3 h-3 mr-2" />
+              <FolderInput className="mr-2 h-3 w-3" />
               Move to group...
             </MenuSubTrigger>
             <MenuSubContent>
@@ -273,8 +329,11 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
         {onDelete && (
           <>
             <MenuSeparator />
-            <MenuItem onClick={() => onDelete()} className="text-red-500 focus:text-red-500">
-              <Trash2 className="w-3 h-3 mr-2" />
+            <MenuItem
+              onClick={() => onDelete()}
+              className="text-red-500 focus:text-red-500"
+            >
+              <Trash2 className="mr-2 h-3 w-3" />
               Delete session
             </MenuItem>
           </>
@@ -290,7 +349,7 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
-        "w-full text-left px-3 py-2.5 md:px-2 md:py-1.5 rounded-md transition-colors overflow-hidden cursor-pointer group flex items-center gap-2",
+        "group flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-3 py-2.5 text-left transition-colors md:px-2 md:py-1.5",
         "min-h-[44px] md:min-h-0", // Touch target size on mobile
         isSelected
           ? "bg-primary/20"
@@ -304,12 +363,12 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
       {isInSelectMode && onToggleSelect && (
         <button
           onClick={handleCheckboxClick}
-          className="flex-shrink-0 text-primary hover:text-primary/80"
+          className="text-primary hover:text-primary/80 flex-shrink-0"
         >
           {isSelected ? (
-            <CheckSquare className="w-4 h-4" />
+            <CheckSquare className="h-4 w-4" />
           ) : (
-            <Square className="w-4 h-4" />
+            <Square className="h-4 w-4" />
           )}
         </button>
       )}
@@ -344,30 +403,36 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
             }
           }}
           onClick={(e) => e.stopPropagation()}
-          className="flex-1 text-sm bg-transparent border-b border-primary outline-none min-w-0"
+          className="border-primary min-w-0 flex-1 border-b bg-transparent text-sm outline-none"
         />
       ) : (
-        <span className="flex-1 text-sm truncate min-w-0">
-          {session.name}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-sm">{session.name}</span>
       )}
 
       {/* Fork indicator */}
       {session.parent_session_id && (
-        <GitFork className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+        <GitFork className="text-muted-foreground h-3 w-3 flex-shrink-0" />
       )}
 
       {/* Branch indicator for worktree sessions */}
       {session.branch_name && (
-        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground flex-shrink-0" title={session.branch_name}>
-          <GitBranch className="w-3 h-3" />
-          <span className="max-w-[60px] truncate">{session.branch_name.replace("feature/", "")}</span>
+        <span
+          className="text-muted-foreground flex flex-shrink-0 items-center gap-0.5 text-[10px]"
+          title={session.branch_name}
+        >
+          <GitBranch className="h-3 w-3" />
+          <span className="max-w-[60px] truncate">
+            {session.branch_name.replace("feature/", "")}
+          </span>
         </span>
       )}
 
       {/* Port indicator for worktree sessions */}
       {session.dev_server_port && (
-        <span className="text-[10px] text-muted-foreground flex-shrink-0" title={`Dev server port: ${session.dev_server_port}`}>
+        <span
+          className="text-muted-foreground flex-shrink-0 text-[10px]"
+          title={`Dev server port: ${session.dev_server_port}`}
+        >
           :{session.dev_server_port}
         </span>
       )}
@@ -380,20 +445,27 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            "flex items-center gap-0.5 text-[10px] px-1 rounded flex-shrink-0",
+            "flex flex-shrink-0 items-center gap-0.5 rounded px-1 text-[10px]",
             session.pr_status === "open" && "bg-green-500/20 text-green-400",
-            session.pr_status === "merged" && "bg-purple-500/20 text-purple-400",
+            session.pr_status === "merged" &&
+              "bg-purple-500/20 text-purple-400",
             session.pr_status === "closed" && "bg-red-500/20 text-red-400"
           )}
           title={`PR #${session.pr_number}: ${session.pr_status}`}
         >
-          <GitPullRequest className="w-2.5 h-2.5" />
-          <span>{session.pr_status === "merged" ? "M" : session.pr_status === "closed" ? "X" : "O"}</span>
+          <GitPullRequest className="h-2.5 w-2.5" />
+          <span>
+            {session.pr_status === "merged"
+              ? "M"
+              : session.pr_status === "closed"
+                ? "X"
+                : "O"}
+          </span>
         </a>
       )}
 
       {/* Time ago */}
-      <span className="text-[10px] text-muted-foreground flex-shrink-0 hidden group-hover:hidden sm:block">
+      <span className="text-muted-foreground hidden flex-shrink-0 text-[10px] group-hover:hidden sm:block">
         {timeAgo}
       </span>
 
@@ -401,8 +473,12 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
       {hasActions && (
         <DropdownMenu onOpenChange={handleMenuOpenChange}>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="icon-sm" className="opacity-100 md:opacity-0 md:group-hover:opacity-100 h-6 w-6 md:h-5 md:w-5 flex-shrink-0">
-              <MoreHorizontal className="w-3 h-3" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6 flex-shrink-0 opacity-100 md:h-5 md:w-5 md:opacity-0 md:group-hover:opacity-100"
+            >
+              <MoreHorizontal className="h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
@@ -417,12 +493,8 @@ export function SessionCard({ session, isActive, isSummarizing, tmuxStatus, grou
   if (hasActions) {
     return (
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {cardContent}
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          {renderMenuItems(true)}
-        </ContextMenuContent>
+        <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
+        <ContextMenuContent>{renderMenuItems(true)}</ContextMenuContent>
       </ContextMenu>
     );
   }

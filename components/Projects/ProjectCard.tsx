@@ -29,7 +29,11 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Project, DevServer } from "@/lib/db";
 
 interface ProjectCardProps {
@@ -69,8 +73,13 @@ export function ProjectCard({
   const hasRunningServers = runningDevServers.length > 0;
   // Uncategorized can have New Session, Open Terminal, and Rename, but not Edit/Delete/DevServer
   const hasActions = project.is_uncategorized
-    ? (onNewSession || onOpenTerminal || onRename)
-    : (onEdit || onNewSession || onOpenTerminal || onStartDevServer || onDelete || onRename);
+    ? onNewSession || onOpenTerminal || onRename
+    : onEdit ||
+      onNewSession ||
+      onOpenTerminal ||
+      onStartDevServer ||
+      onDelete ||
+      onRename;
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -107,37 +116,39 @@ export function ProjectCard({
 
   const renderMenuItems = (isContextMenu: boolean) => {
     const MenuItem = isContextMenu ? ContextMenuItem : DropdownMenuItem;
-    const MenuSeparator = isContextMenu ? ContextMenuSeparator : DropdownMenuSeparator;
+    const MenuSeparator = isContextMenu
+      ? ContextMenuSeparator
+      : DropdownMenuSeparator;
 
     return (
       <>
         {onNewSession && (
           <MenuItem onClick={() => onNewSession()}>
-            <Plus className="w-3 h-3 mr-2" />
+            <Plus className="mr-2 h-3 w-3" />
             New session
           </MenuItem>
         )}
         {onOpenTerminal && (
           <MenuItem onClick={() => onOpenTerminal()}>
-            <Terminal className="w-3 h-3 mr-2" />
+            <Terminal className="mr-2 h-3 w-3" />
             Open terminal
           </MenuItem>
         )}
         {onEdit && (
           <MenuItem onClick={() => onEdit()}>
-            <Settings className="w-3 h-3 mr-2" />
+            <Settings className="mr-2 h-3 w-3" />
             Project settings
           </MenuItem>
         )}
         {onRename && (
           <MenuItem onClick={() => setIsEditing(true)}>
-            <Pencil className="w-3 h-3 mr-2" />
+            <Pencil className="mr-2 h-3 w-3" />
             Rename
           </MenuItem>
         )}
         {onOpenInEditor && (
           <MenuItem onClick={() => onOpenInEditor()}>
-            <FolderOpen className="w-3 h-3 mr-2" />
+            <FolderOpen className="mr-2 h-3 w-3" />
             Open in editor
           </MenuItem>
         )}
@@ -145,7 +156,7 @@ export function ProjectCard({
           <>
             <MenuSeparator />
             <MenuItem onClick={() => onStartDevServer()}>
-              <Server className="w-3 h-3 mr-2" />
+              <Server className="mr-2 h-3 w-3" />
               Start dev server
             </MenuItem>
           </>
@@ -153,8 +164,11 @@ export function ProjectCard({
         {onDelete && (
           <>
             <MenuSeparator />
-            <MenuItem onClick={() => onDelete()} className="text-red-500 focus:text-red-500">
-              <Trash2 className="w-3 h-3 mr-2" />
+            <MenuItem
+              onClick={() => onDelete()}
+              className="text-red-500 focus:text-red-500"
+            >
+              <Trash2 className="mr-2 h-3 w-3" />
               Delete project
             </MenuItem>
           </>
@@ -167,17 +181,17 @@ export function ProjectCard({
     <div
       onClick={handleClick}
       className={cn(
-        "flex items-center gap-1 py-2 px-2 rounded-md cursor-pointer group",
+        "group flex cursor-pointer items-center gap-1 rounded-md px-2 py-2",
         "min-h-[44px] md:min-h-[32px]",
         "hover:bg-accent/50"
       )}
     >
       {/* Expand/collapse toggle */}
-      <button className="p-0.5 flex-shrink-0">
+      <button className="flex-shrink-0 p-0.5">
         {project.expanded ? (
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          <ChevronDown className="text-muted-foreground h-4 w-4" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          <ChevronRight className="text-muted-foreground h-4 w-4" />
         )}
       </button>
 
@@ -197,10 +211,10 @@ export function ProjectCard({
             }
           }}
           onClick={(e) => e.stopPropagation()}
-          className="flex-1 text-sm font-medium bg-transparent border-b border-primary outline-none min-w-0"
+          className="border-primary min-w-0 flex-1 border-b bg-transparent text-sm font-medium outline-none"
         />
       ) : (
-        <span className="flex-1 text-sm font-medium truncate min-w-0">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {project.name}
         </span>
       )}
@@ -209,19 +223,22 @@ export function ProjectCard({
       {hasRunningServers && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex items-center gap-1 text-green-500 flex-shrink-0">
-              <Server className="w-3 h-3" />
+            <div className="flex flex-shrink-0 items-center gap-1 text-green-500">
+              <Server className="h-3 w-3" />
               <span className="text-xs">{runningDevServers.length}</span>
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{runningDevServers.length} dev server{runningDevServers.length > 1 ? "s" : ""} running</p>
+            <p>
+              {runningDevServers.length} dev server
+              {runningDevServers.length > 1 ? "s" : ""} running
+            </p>
           </TooltipContent>
         </Tooltip>
       )}
 
       {/* Session count */}
-      <span className="text-xs text-muted-foreground flex-shrink-0">
+      <span className="text-muted-foreground flex-shrink-0 text-xs">
         {sessionCount}
       </span>
 
@@ -232,9 +249,9 @@ export function ProjectCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="opacity-100 md:opacity-0 md:group-hover:opacity-100 h-7 w-7 md:h-6 md:w-6 flex-shrink-0"
+              className="h-7 w-7 flex-shrink-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
             >
-              <MoreHorizontal className="w-4 h-4" />
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
@@ -249,12 +266,8 @@ export function ProjectCard({
   if (hasActions) {
     return (
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {cardContent}
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          {renderMenuItems(true)}
-        </ContextMenuContent>
+        <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
+        <ContextMenuContent>{renderMenuItems(true)}</ContextMenuContent>
       </ContextMenu>
     );
   }

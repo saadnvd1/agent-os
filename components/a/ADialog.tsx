@@ -77,9 +77,7 @@ export function ADialog({
             )}
             <DialogTitle>{title}</DialogTitle>
           </div>
-          {description && (
-            <DialogDescription>{description}</DialogDescription>
-          )}
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
 
         <div className={cn("py-4", contentClassName)}>{children}</div>

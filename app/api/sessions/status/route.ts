@@ -25,7 +25,9 @@ interface SessionStatusResponse {
 
 async function getTmuxSessions(): Promise<string[]> {
   try {
-    const { stdout } = await execAsync("tmux list-sessions -F '#{session_name}' 2>/dev/null || true");
+    const { stdout } = await execAsync(
+      "tmux list-sessions -F '#{session_name}' 2>/dev/null || true"
+    );
     return stdout.trim().split("\n").filter(Boolean);
   } catch {
     return [];
@@ -45,7 +47,9 @@ async function getTmuxSessionCwd(sessionName: string): Promise<string | null> {
 }
 
 // Get Claude session ID from tmux environment variable
-async function getClaudeSessionIdFromEnv(sessionName: string): Promise<string | null> {
+async function getClaudeSessionIdFromEnv(
+  sessionName: string
+): Promise<string | null> {
   try {
     const { stdout } = await execAsync(
       `tmux show-environment -t "${sessionName}" CLAUDE_SESSION_ID 2>/dev/null || echo ""`
@@ -74,7 +78,8 @@ function getClaudeSessionIdFromFiles(projectPath: string): string | null {
     return null;
   }
 
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/;
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/;
 
   try {
     const files = fs.readdirSync(projectDir);
@@ -157,7 +162,7 @@ export async function GET() {
     const sessions = await getTmuxSessions();
 
     // Get status for agent-os managed sessions
-    const managedSessions = sessions.filter(s => UUID_PATTERN.test(s));
+    const managedSessions = sessions.filter((s) => UUID_PATTERN.test(s));
 
     // Use the new status detector
     const statusMap: Record<string, SessionStatusResponse> = {};
@@ -192,7 +197,9 @@ export async function GET() {
 
     // Batch update sessions that became active (updates updated_at for sorting)
     if (sessionsToUpdate.length > 0) {
-      const updateStmt = db.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ?");
+      const updateStmt = db.prepare(
+        "UPDATE sessions SET updated_at = datetime('now') WHERE id = ?"
+      );
       for (const id of sessionsToUpdate) {
         updateStmt.run(id);
       }

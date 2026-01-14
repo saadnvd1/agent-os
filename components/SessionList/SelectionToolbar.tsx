@@ -19,7 +19,10 @@ interface SelectionToolbarProps {
   onDeleteSessions: (sessionIds: string[]) => Promise<void>;
 }
 
-export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionToolbarProps) {
+export function SelectionToolbar({
+  allSessionIds,
+  onDeleteSessions,
+}: SelectionToolbarProps) {
   const { selectedIds } = useSnapshot(selectionStore);
   const selectedCount = selectedIds.size;
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -51,7 +54,10 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
       // Delete key - show delete confirmation
       if (e.key === "Delete" || e.key === "Backspace") {
         // Don't trigger if typing in an input
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement
+        ) {
           return;
         }
         e.preventDefault();
@@ -75,11 +81,11 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
 
   return (
     <>
-      <div className="flex items-center gap-3 px-4 py-2 bg-primary/10 border-b border-primary/20">
+      <div className="bg-primary/10 border-primary/20 flex items-center gap-3 border-b px-4 py-2">
         <span className="text-sm font-medium whitespace-nowrap">
           {selectedCount} selected
         </span>
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="ml-auto flex items-center gap-1">
           {!allSelected && (
             <Button
               variant="ghost"
@@ -93,10 +99,10 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 text-xs"
             onClick={() => setShowDeleteDialog(true)}
           >
-            <Trash2 className="w-3 h-3 mr-1" />
+            <Trash2 className="mr-1 h-3 w-3" />
             Delete
           </Button>
           <Button
@@ -105,7 +111,7 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
             className="h-6 w-6"
             onClick={selectionActions.clear}
           >
-            <X className="w-3 h-3" />
+            <X className="h-3 w-3" />
           </Button>
         </div>
       </div>
@@ -113,14 +119,20 @@ export function SelectionToolbar({ allSessionIds, onDeleteSessions }: SelectionT
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Delete {selectedCount} session{selectedCount > 1 ? "s" : ""}?</DialogTitle>
+            <DialogTitle>
+              Delete {selectedCount} session{selectedCount > 1 ? "s" : ""}?
+            </DialogTitle>
             <DialogDescription>
-              This will permanently delete the selected sessions and their tmux sessions.
-              This action cannot be undone.
+              This will permanently delete the selected sessions and their tmux
+              sessions. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)} disabled={isDeleting}>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={isDeleting}
+            >
               Cancel
             </Button>
             <Button

@@ -83,8 +83,15 @@ export function getCommitHistory(
         continue;
       }
 
-      const [hash, shortHash, subject, body, author, authorEmail, timestampStr] =
-        parts;
+      const [
+        hash,
+        shortHash,
+        subject,
+        body,
+        author,
+        authorEmail,
+        timestampStr,
+      ] = parts;
       const timestamp = parseInt(timestampStr, 10);
 
       // Look for shortstat line (next non-empty line)
@@ -152,10 +159,13 @@ export function getCommitDetail(
   try {
     // Get commit info
     const format = "%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%at";
-    const infoOutput = execSync(`git show --format="${format}" -s ${commitHash}`, {
-      cwd,
-      encoding: "utf-8",
-    }).trim();
+    const infoOutput = execSync(
+      `git show --format="${format}" -s ${commitHash}`,
+      {
+        cwd,
+        encoding: "utf-8",
+      }
+    ).trim();
 
     const parts = infoOutput.split("\x00");
     if (parts.length < 7) return null;

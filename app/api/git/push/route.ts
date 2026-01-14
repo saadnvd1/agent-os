@@ -20,13 +20,19 @@ export async function POST(request: NextRequest) {
     const path = expandPath(rawPath);
 
     if (!isGitRepo(path)) {
-      return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Not a git repository" },
+        { status: 400 }
+      );
     }
 
     // Check if remote exists
     const remoteUrl = getRemoteUrl(path);
     if (!remoteUrl) {
-      return NextResponse.json({ error: "No remote origin configured" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No remote origin configured" },
+        { status: 400 }
+      );
     }
 
     // Check if there are commits to push

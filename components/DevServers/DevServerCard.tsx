@@ -31,9 +31,21 @@ const statusConfig: Record<
   DevServerStatus,
   { color: string; bgColor: string; label: string }
 > = {
-  running: { color: "bg-green-500", bgColor: "bg-green-500/10", label: "Running" },
-  stopped: { color: "bg-zinc-500", bgColor: "bg-zinc-500/10", label: "Stopped" },
-  starting: { color: "bg-yellow-500", bgColor: "bg-yellow-500/10", label: "Starting" },
+  running: {
+    color: "bg-green-500",
+    bgColor: "bg-green-500/10",
+    label: "Running",
+  },
+  stopped: {
+    color: "bg-zinc-500",
+    bgColor: "bg-zinc-500/10",
+    label: "Stopped",
+  },
+  starting: {
+    color: "bg-yellow-500",
+    bgColor: "bg-yellow-500/10",
+    label: "Starting",
+  },
   failed: { color: "bg-red-500", bgColor: "bg-red-500/10", label: "Failed" },
 };
 
@@ -77,7 +89,7 @@ export function DevServerCard({
   return (
     <div
       className={cn(
-        "rounded-lg border border-border/50 p-3",
+        "border-border/50 rounded-lg border p-3",
         "bg-card/50 hover:bg-card/80 transition-colors"
       )}
     >
@@ -87,13 +99,15 @@ export function DevServerCard({
         <div className={cn("h-2 w-2 rounded-full", status.color)} />
 
         {/* Name */}
-        <span className="flex-1 truncate text-sm font-medium">{server.name}</span>
+        <span className="flex-1 truncate text-sm font-medium">
+          {server.name}
+        </span>
 
         {/* Type badge */}
         <span
           className={cn(
             "flex items-center gap-1 rounded px-1.5 py-0.5",
-            "text-[10px] font-medium text-muted-foreground",
+            "text-muted-foreground text-[10px] font-medium",
             "bg-muted/50"
           )}
         >
@@ -108,7 +122,9 @@ export function DevServerCard({
 
       {/* Project name (if provided) */}
       {projectName && (
-        <div className="mt-1 text-xs text-muted-foreground truncate">{projectName}</div>
+        <div className="text-muted-foreground mt-1 truncate text-xs">
+          {projectName}
+        </div>
       )}
 
       {/* Port badge */}
@@ -121,7 +137,7 @@ export function DevServerCard({
               rel="noopener noreferrer"
               className={cn(
                 "flex items-center gap-1 rounded px-2 py-1",
-                "text-xs font-mono transition-colors",
+                "font-mono text-xs transition-colors",
                 "bg-primary/10 text-primary hover:bg-primary/20"
               )}
             >
@@ -132,7 +148,7 @@ export function DevServerCard({
             <span
               className={cn(
                 "flex items-center gap-1 rounded px-2 py-1",
-                "text-xs font-mono",
+                "font-mono text-xs",
                 "bg-muted/30 text-muted-foreground"
               )}
             >
@@ -254,7 +270,7 @@ export function DevServerCard({
         )}
 
         {server.status === "starting" && (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span className="text-muted-foreground flex items-center gap-1 text-xs">
             <RefreshCw className="h-3 w-3 animate-spin" />
             Starting...
           </span>
@@ -287,9 +303,11 @@ function ActionButton({
       className={cn(
         "flex h-8 items-center gap-1.5 rounded-md px-2",
         "text-xs font-medium transition-colors",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-        variant === "primary" && "bg-primary/10 text-primary hover:bg-primary/20",
-        variant === "danger" && "bg-red-500/10 text-red-500 hover:bg-red-500/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        variant === "primary" &&
+          "bg-primary/10 text-primary hover:bg-primary/20",
+        variant === "danger" &&
+          "bg-red-500/10 text-red-500 hover:bg-red-500/20",
         variant === "default" && "bg-muted/50 text-foreground hover:bg-muted"
       )}
     >

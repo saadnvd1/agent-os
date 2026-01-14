@@ -9,7 +9,11 @@ export const selectionStore = proxy({
 
 // Actions - can be called from anywhere
 export const selectionActions = {
-  toggle: (sessionId: string, shiftKey = false, allSessionIds: string[] = []) => {
+  toggle: (
+    sessionId: string,
+    shiftKey = false,
+    allSessionIds: string[] = []
+  ) => {
     const newSet = updateSelection(
       selectionStore.selectedIds,
       sessionId,

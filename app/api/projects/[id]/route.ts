@@ -17,10 +17,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const project = getProjectWithDevServers(id);
 
     if (!project) {
-      return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     return NextResponse.json({ project });

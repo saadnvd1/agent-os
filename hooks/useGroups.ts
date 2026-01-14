@@ -22,7 +22,8 @@ export function useGroups() {
 
   const deleteGroup = useCallback(
     async (path: string) => {
-      if (!confirm("Delete this group? Sessions will be moved to parent.")) return;
+      if (!confirm("Delete this group? Sessions will be moved to parent."))
+        return;
       await deleteMutation.mutateAsync(path);
     },
     [deleteMutation]

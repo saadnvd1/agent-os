@@ -28,7 +28,10 @@ export function checkGhCli(): boolean {
 /**
  * Get commits between current branch and base branch
  */
-export function getCommitsSinceBase(workingDir: string, baseBranch = "main"): CommitInfo[] {
+export function getCommitsSinceBase(
+  workingDir: string,
+  baseBranch = "main"
+): CommitInfo[] {
   try {
     // Get the merge base
     const mergeBase = execSync(`git merge-base ${baseBranch} HEAD`, {
@@ -69,7 +72,10 @@ export function getCommitsSinceBase(workingDir: string, baseBranch = "main"): Co
 /**
  * Generate PR title from commits
  */
-export function generatePRTitle(commits: CommitInfo[], branchName: string): string {
+export function generatePRTitle(
+  commits: CommitInfo[],
+  branchName: string
+): string {
   if (commits.length === 0) {
     // Fallback to branch name
     return branchName
@@ -125,7 +131,10 @@ export function generatePRBody(commits: CommitInfo[]): string {
 /**
  * Get PR for a branch
  */
-export function getPRForBranch(workingDir: string, branchName: string): PRInfo | null {
+export function getPRForBranch(
+  workingDir: string,
+  branchName: string
+): PRInfo | null {
   try {
     const output = execSync(
       `gh pr list --head "${branchName}" --json number,url,state,title --limit 1`,
@@ -200,7 +209,9 @@ export function getBaseBranch(workingDir: string): string {
         encoding: "utf-8",
       }
     ).trim();
-    return output.replace("refs/remotes/origin/", "").replace("refs/heads/", "");
+    return output
+      .replace("refs/remotes/origin/", "")
+      .replace("refs/heads/", "");
   } catch {
     return "main";
   }

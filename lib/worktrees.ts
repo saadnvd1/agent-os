@@ -51,7 +51,10 @@ function resolvePath(p: string): string {
 /**
  * Generate a unique worktree directory name
  */
-function generateWorktreeDirName(projectName: string, featureName: string): string {
+function generateWorktreeDirName(
+  projectName: string,
+  featureName: string
+): string {
   const featureSlug = slugify(featureName);
   return `${projectName}-${featureSlug}`;
 }
@@ -146,7 +149,10 @@ export async function deleteWorktree(
   } catch {
     // If git worktree remove fails, try manual cleanup
     if (fs.existsSync(resolvedWorktreePath)) {
-      await fs.promises.rm(resolvedWorktreePath, { recursive: true, force: true });
+      await fs.promises.rm(resolvedWorktreePath, {
+        recursive: true,
+        force: true,
+      });
     }
     // Prune worktree references
     try {
@@ -159,7 +165,12 @@ export async function deleteWorktree(
   }
 
   // Optionally delete the branch
-  if (deleteBranch && branchName && branchName !== "main" && branchName !== "master") {
+  if (
+    deleteBranch &&
+    branchName &&
+    branchName !== "main" &&
+    branchName !== "master"
+  ) {
     try {
       await execAsync(
         `git -C "${resolvedProjectPath}" branch -D "${branchName}"`,
@@ -174,9 +185,7 @@ export async function deleteWorktree(
 /**
  * List all worktrees for a project
  */
-export async function listWorktrees(
-  projectPath: string
-): Promise<
+export async function listWorktrees(projectPath: string): Promise<
   Array<{
     path: string;
     branch: string;

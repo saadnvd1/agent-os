@@ -100,7 +100,9 @@ export function sendBrowserNotification(
 // Audio notification
 let audioContext: AudioContext | null = null;
 
-export function playNotificationSound(type: NotificationEvent = "waiting"): void {
+export function playNotificationSound(
+  type: NotificationEvent = "waiting"
+): void {
   if (typeof window === "undefined") return;
 
   try {
@@ -117,7 +119,7 @@ export function playNotificationSound(type: NotificationEvent = "waiting"): void
     // Different tones for different events
     const frequencies: Record<NotificationEvent, number[]> = {
       waiting: [800, 600], // Two-tone descending (needs attention)
-      error: [300, 200],   // Low tones (error)
+      error: [300, 200], // Low tones (error)
       completed: [600, 800], // Two-tone ascending (success)
     };
 
@@ -182,9 +184,10 @@ export function flashTabTitle(message: string): void {
     if (document.hasFocus()) {
       // Stop flashing when focused
       if (titleInterval) clearInterval(titleInterval);
-      document.title = notificationCount > 0
-        ? `(${notificationCount}) ${originalTitle}`
-        : originalTitle;
+      document.title =
+        notificationCount > 0
+          ? `(${notificationCount}) ${originalTitle}`
+          : originalTitle;
       return;
     }
 
@@ -196,9 +199,10 @@ export function flashTabTitle(message: string): void {
   setTimeout(() => {
     if (titleInterval) {
       clearInterval(titleInterval);
-      document.title = notificationCount > 0
-        ? `(${notificationCount}) ${originalTitle}`
-        : originalTitle;
+      document.title =
+        notificationCount > 0
+          ? `(${notificationCount}) ${originalTitle}`
+          : originalTitle;
     }
   }, 30000);
 }

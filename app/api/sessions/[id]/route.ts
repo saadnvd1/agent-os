@@ -13,9 +13,9 @@ function sanitizeTmuxName(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-") // Replace non-alphanumeric with dashes
-    .replace(/-+/g, "-")         // Collapse multiple dashes
-    .replace(/^-|-$/g, "")       // Remove leading/trailing dashes
-    .slice(0, 50);               // Limit length
+    .replace(/-+/g, "-") // Collapse multiple dashes
+    .replace(/^-|-$/g, "") // Remove leading/trailing dashes
+    .slice(0, 50); // Limit length
 }
 
 interface RouteParams {
@@ -67,7 +67,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       // Try to rename the tmux session
       if (oldTmuxName && newTmuxName) {
         try {
-          await execAsync(`tmux rename-session -t "${oldTmuxName}" "${newTmuxName}"`);
+          await execAsync(
+            `tmux rename-session -t "${oldTmuxName}" "${newTmuxName}"`
+          );
           updates.push("tmux_name = ?");
           values.push(newTmuxName);
         } catch {
@@ -102,9 +104,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updates.push("updated_at = datetime('now')");
       values.push(id);
 
-      db.prepare(
-        `UPDATE sessions SET ${updates.join(", ")} WHERE id = ?`
-      ).run(...values);
+      db.prepare(`UPDATE sessions SET ${updates.join(", ")} WHERE id = ?`).run(
+        ...values
+      );
     }
 
     const session = queries.getSession(db).get(id) as Session;

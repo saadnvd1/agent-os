@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unstageFile, unstageAll, isGitRepo, expandPath } from "@/lib/git-status";
+import {
+  unstageFile,
+  unstageAll,
+  isGitRepo,
+  expandPath,
+} from "@/lib/git-status";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +18,10 @@ export async function POST(request: NextRequest) {
     const path = expandPath(rawPath);
 
     if (!isGitRepo(path)) {
-      return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Not a git repository" },
+        { status: 400 }
+      );
     }
 
     // Unstage specific files or all
@@ -28,7 +36,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to unstage files" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to unstage files",
+      },
       { status: 500 }
     );
   }

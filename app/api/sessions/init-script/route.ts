@@ -57,7 +57,10 @@ export async function POST(request: NextRequest) {
     const { agentCommand } = await request.json();
 
     if (!agentCommand) {
-      return NextResponse.json({ error: "agentCommand is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "agentCommand is required" },
+        { status: 400 }
+      );
     }
 
     const scriptContent = generateInitScript(agentCommand);
@@ -68,6 +71,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ scriptPath, command: `bash ${scriptPath}` });
   } catch (error) {
     console.error("Error creating init script:", error);
-    return NextResponse.json({ error: "Failed to create init script" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create init script" },
+      { status: 500 }
+    );
   }
 }

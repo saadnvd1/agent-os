@@ -30,10 +30,7 @@ function LayoutRenderer({ layout, renderPane }: PaneLayoutProps) {
           </Panel>
           {index < layout.children.length - 1 && (
             <Separator
-              className={`
-                ${orientation === "horizontal" ? "w-0.5 cursor-col-resize" : "h-0.5 cursor-row-resize"}
-                bg-border hover:bg-primary/40 active:bg-primary/60 transition-colors rounded-full
-              `}
+              className={` ${orientation === "horizontal" ? "w-0.5 cursor-col-resize" : "h-0.5 cursor-row-resize"} bg-border hover:bg-primary/40 active:bg-primary/60 rounded-full transition-colors`}
             />
           )}
         </Fragment>
@@ -51,11 +48,7 @@ export function PaneLayout({
 
   // On mobile: only render the focused pane (single pane mode)
   if (isMobile) {
-    return (
-      <div className="h-full w-full">
-        {renderPane(focusedPaneId)}
-      </div>
-    );
+    return <div className="h-full w-full">{renderPane(focusedPaneId)}</div>;
   }
 
   // On desktop: render full layout tree with splits

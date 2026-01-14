@@ -14,9 +14,9 @@ export async function GET() {
     const groups = queries.getAllGroups(db).all() as Group[];
 
     // Convert expanded from 0/1 to boolean
-    const formattedGroups = groups.map(g => ({
+    const formattedGroups = groups.map((g) => ({
       ...g,
-      expanded: Boolean(g.expanded)
+      expanded: Boolean(g.expanded),
     }));
 
     return NextResponse.json({ sessions, groups: formattedGroups });
@@ -33,13 +33,14 @@ export async function GET() {
 function generateSessionName(db: ReturnType<typeof getDb>): string {
   const sessions = queries.getAllSessions(db).all() as Session[];
   const existingNumbers = sessions
-    .map(s => {
+    .map((s) => {
       const match = s.name.match(/^Session (\d+)$/);
       return match ? parseInt(match[1], 10) : 0;
     })
-    .filter(n => n > 0);
+    .filter((n) => n > 0);
 
-  const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+  const nextNumber =
+    existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
   return `Session ${nextNumber}`;
 }
 
@@ -67,10 +68,14 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate agent type
-    const agentType: AgentType = isValidAgentType(rawAgentType) ? rawAgentType : "claude";
+    const agentType: AgentType = isValidAgentType(rawAgentType)
+      ? rawAgentType
+      : "claude";
 
     // Auto-generate name if not provided
-    const name = providedName?.trim() || (featureName ? featureName : generateSessionName(db));
+    const name =
+      providedName?.trim() ||
+      (featureName ? featureName : generateSessionName(db));
 
     const id = randomUUID();
 
@@ -109,7 +114,8 @@ export async function POST(request: NextRequest) {
           success: setupResult.success,
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
         return NextResponse.json(
           { error: `Failed to create worktree: ${message}` },
           { status: 400 }
@@ -134,29 +140,32 @@ export async function POST(request: NextRequest) {
 
     // Set worktree info if created
     if (worktreePath) {
-      queries.updateSessionWorktree(db).run(
-        worktreePath,
-        branchName,
-        baseBranch,
-        port,
-        id
-      );
+      queries
+        .updateSessionWorktree(db)
+        .run(worktreePath, branchName, baseBranch, port, id);
     }
 
     // Set claude_session_id if provided (for importing external sessions)
     if (claudeSessionId) {
-      db.prepare("UPDATE sessions SET claude_session_id = ? WHERE id = ?").run(claudeSessionId, id);
+      db.prepare("UPDATE sessions SET claude_session_id = ? WHERE id = ?").run(
+        claudeSessionId,
+        id
+      );
     }
 
     // If forking, copy messages from parent
     if (parentSessionId) {
-      const parentMessages = queries.getSessionMessages(db).all(parentSessionId);
+      const parentMessages = queries
+        .getSessionMessages(db)
+        .all(parentSessionId);
       for (const msg of parentMessages as Array<{
         role: string;
         content: string;
         duration_ms: number | null;
       }>) {
-        queries.createMessage(db).run(id, msg.role, msg.content, msg.duration_ms);
+        queries
+          .createMessage(db)
+          .run(id, msg.role, msg.content, msg.duration_ms);
       }
     }
 

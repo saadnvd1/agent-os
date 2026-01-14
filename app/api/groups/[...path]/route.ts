@@ -13,14 +13,11 @@ export async function GET(
     const group = queries.getGroup(db).get(path) as Group | undefined;
 
     if (!group) {
-      return NextResponse.json(
-        { error: "Group not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
     return NextResponse.json({
-      group: { ...group, expanded: Boolean(group.expanded) }
+      group: { ...group, expanded: Boolean(group.expanded) },
     });
   } catch (error) {
     console.error("Error fetching group:", error);
@@ -46,10 +43,7 @@ export async function PATCH(
     // Check if group exists
     const group = queries.getGroup(db).get(path) as Group | undefined;
     if (!group) {
-      return NextResponse.json(
-        { error: "Group not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
     // Protect default group from being renamed
@@ -77,7 +71,7 @@ export async function PATCH(
 
     const updatedGroup = queries.getGroup(db).get(path) as Group;
     return NextResponse.json({
-      group: { ...updatedGroup, expanded: Boolean(updatedGroup.expanded) }
+      group: { ...updatedGroup, expanded: Boolean(updatedGroup.expanded) },
     });
   } catch (error) {
     console.error("Error updating group:", error);
@@ -108,23 +102,21 @@ export async function DELETE(
     // Check if group exists
     const group = queries.getGroup(db).get(path) as Group | undefined;
     if (!group) {
-      return NextResponse.json(
-        { error: "Group not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
     // Find parent group or use default
     const pathParts2 = path.split("/");
     pathParts2.pop();
-    const parentPath = pathParts2.length > 0 ? pathParts2.join("/") : "sessions";
+    const parentPath =
+      pathParts2.length > 0 ? pathParts2.join("/") : "sessions";
 
     // Move all sessions in this group to parent
     queries.moveSessionsToGroup(db).run(parentPath, path);
 
     // Also move sessions from any subgroups
     const allGroups = queries.getAllGroups(db).all() as Group[];
-    const subgroups = allGroups.filter(g => g.path.startsWith(path + "/"));
+    const subgroups = allGroups.filter((g) => g.path.startsWith(path + "/"));
     for (const subgroup of subgroups) {
       queries.moveSessionsToGroup(db).run(parentPath, subgroup.path);
       queries.deleteGroup(db).run(subgroup.path);

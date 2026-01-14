@@ -35,6 +35,7 @@ const forceReconnect = () => {
 Since `oldWs` and `ws` referenced the **same WebSocket object**, setting `oldWs.onopen = null` also cleared `ws.onopen`. When we then tried to copy `ws.onopen` to the new socket, we copied `null`.
 
 This meant the `onopen` handler never fired on the new connection, so:
+
 - `callbacks.onConnected?.()` was never called
 - The `tmux attach -t {session}` command was never sent
 - The PTY shell had nothing to do and exited with code 1
@@ -70,6 +71,7 @@ newWs.onmessage = savedHandlers.onmessage;
 ## How to Debug Similar Issues
 
 1. **Add server-side logging** to `server.ts`:
+
    ```typescript
    terminalWss.on("connection", (ws) => {
      const connId = `conn-${++counter}`;
@@ -77,7 +79,7 @@ newWs.onmessage = savedHandlers.onmessage;
 
      ws.on("message", (msg) => {
        const parsed = JSON.parse(msg);
-       if (parsed.type === 'command') {
+       if (parsed.type === "command") {
          console.log(`[${connId}] COMMAND: ${parsed.data}`);
        }
      });
@@ -89,6 +91,7 @@ newWs.onmessage = savedHandlers.onmessage;
    ```
 
 2. **Run server with visible logs**:
+
    ```bash
    npx tsx server.ts 2>&1 | tee /tmp/agent-os.log
    ```
