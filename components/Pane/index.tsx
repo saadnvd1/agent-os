@@ -65,9 +65,12 @@ export const Pane = memo(function Pane({
   } = usePanes();
 
   const [viewMode, setViewMode] = useState<ViewMode>("terminal");
-  const terminalRef = useRef<TerminalHandle>(null);
+  const terminalRefs = useRef<Map<string, TerminalHandle | null>>(new Map());
   const paneData = getPaneData(paneId);
   const activeTab = getActiveTab(paneId);
+
+  // Get ref for active terminal
+  const terminalRef = activeTab ? terminalRefs.current.get(activeTab.id) ?? null : null;
   const isFocused = focusedPaneId === paneId;
   const session = activeTab ? sessions.find((s) => s.id === activeTab.sessionId) : null;
 
@@ -82,32 +85,6 @@ export const Pane = memo(function Pane({
 
   const isConductor = workerCount > 0;
 
-  // Get saved scroll state for current tab
-  const initialScrollState = useMemo(() => {
-    if (!activeTab?.id) return undefined;
-    const saved = sessionRegistry.getTerminalState(paneId, activeTab.id);
-    if (saved) {
-      return {
-        scrollTop: saved.scrollTop,
-        cursorY: saved.cursorY,
-        baseY: 0,
-      } as TerminalScrollState;
-    }
-    return undefined;
-  }, [paneId, activeTab?.id]);
-
-  // Save scroll state when terminal unmounts
-  const handleBeforeUnmount = useCallback((scrollState: TerminalScrollState) => {
-    if (activeTab?.id) {
-      sessionRegistry.saveTerminalState(paneId, activeTab.id, {
-        scrollTop: scrollState.scrollTop,
-        scrollHeight: 0,
-        lastActivity: Date.now(),
-        cursorY: scrollState.cursorY,
-      });
-    }
-  }, [paneId, activeTab?.id]);
-
   // Reset view mode and file editor when session changes
   useEffect(() => {
     setViewMode("terminal");
@@ -119,38 +96,44 @@ export const Pane = memo(function Pane({
   }, [focusPane, paneId]);
 
   const handleDetach = useCallback(() => {
-    if (terminalRef.current) {
-      terminalRef.current.sendInput("\x02d"); // Ctrl+B d to detach
+    if (terminalRef) {
+      terminalRef.sendInput("\x02d"); // Ctrl+B d to detach
     }
     detachSession(paneId);
-  }, [detachSession, paneId]);
+  }, [detachSession, paneId, terminalRef]);
 
-  // Register terminal when connected
-  const handleTerminalConnected = useCallback(() => {
-    console.log(`[AgentOS] Terminal connected for pane: ${paneId}, activeTab: ${activeTab?.id || 'null'}`);
-    if (terminalRef.current && activeTab) {
-      onRegisterTerminal(paneId, activeTab.id, terminalRef.current);
-
-      // Use fresh session tmux_name from database, not cached attachedTmux
-      // This ensures renamed sessions attach correctly
-      if (activeTab.sessionId) {
-        const currentSession = sessions.find(s => s.id === activeTab.sessionId);
-        const tmuxName = currentSession?.tmux_name || activeTab.attachedTmux;
-        if (tmuxName) {
-          setTimeout(() => {
-            terminalRef.current?.sendCommand(`tmux attach -t ${tmuxName}`);
-          }, 100);
-        }
-      } else if (activeTab.attachedTmux) {
-        // Fallback for tabs without sessionId (e.g., manually attached)
-        setTimeout(() => {
-          terminalRef.current?.sendCommand(`tmux attach -t ${activeTab.attachedTmux}`);
-        }, 100);
+  // Create ref callback for a specific tab
+  const getTerminalRef = useCallback(
+    (tabId: string) => (handle: TerminalHandle | null) => {
+      if (handle) {
+        terminalRefs.current.set(tabId, handle);
+      } else {
+        terminalRefs.current.delete(tabId);
       }
-    } else {
-      console.log(`[AgentOS] Cannot register terminal - ref: ${!!terminalRef.current}, activeTab: ${!!activeTab}`);
-    }
-  }, [paneId, activeTab, sessions, onRegisterTerminal]);
+    },
+    []
+  );
+
+  // Create onConnected callback for a specific tab
+  const getTerminalConnectedHandler = useCallback(
+    (tab: typeof paneData.tabs[0]) => () => {
+      console.log(`[AgentOS] Terminal connected for pane: ${paneId}, tab: ${tab.id}`);
+      const handle = terminalRefs.current.get(tab.id);
+      if (!handle) return;
+
+      onRegisterTerminal(paneId, tab.id, handle);
+
+      // Determine tmux session name to attach
+      const tmuxName = tab.sessionId
+        ? sessions.find((s) => s.id === tab.sessionId)?.tmux_name || tab.attachedTmux
+        : tab.attachedTmux;
+
+      if (tmuxName) {
+        setTimeout(() => handle.sendCommand(`tmux attach -t ${tmuxName}`), 100);
+      }
+    },
+    [paneId, sessions, onRegisterTerminal]
+  );
 
   // Track current tab ID for cleanup
   const activeTabIdRef = useRef<string | null>(null);
@@ -168,42 +151,35 @@ export const Pane = memo(function Pane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, onRegisterTerminal]);
 
-  const handleSelectSession = useCallback(
-    (sessionId: string) => onSelectSession?.(sessionId),
-    [onSelectSession]
-  );
-
   // Swipe gesture handling for mobile session switching (terminal view only)
   const touchStartX = useRef<number | null>(null);
-  const currentIndex = session ? sessions.findIndex(s => s.id === session.id) : -1;
+  const currentIndex = session ? sessions.findIndex((s) => s.id === session.id) : -1;
+  const SWIPE_THRESHOLD = 120;
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Only enable swipe on terminal view
-    if (viewMode !== "terminal") return;
-    touchStartX.current = e.touches[0].clientX;
-  }, [viewMode]);
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (viewMode !== "terminal") return;
+      touchStartX.current = e.touches[0].clientX;
+    },
+    [viewMode]
+  );
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    // Only enable swipe on terminal view
-    if (viewMode !== "terminal") return;
-    if (touchStartX.current === null) return;
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (viewMode !== "terminal" || touchStartX.current === null) return;
 
-    const touchEndX = e.changedTouches[0].clientX;
-    const diff = touchEndX - touchStartX.current;
-    const threshold = 120; // Minimum swipe distance (increased to reduce sensitivity)
+      const diff = e.changedTouches[0].clientX - touchStartX.current;
+      touchStartX.current = null;
 
-    if (Math.abs(diff) > threshold) {
-      if (diff > 0 && currentIndex > 0) {
-        // Swipe right -> previous session
-        handleSelectSession(sessions[currentIndex - 1].id);
-      } else if (diff < 0 && currentIndex < sessions.length - 1) {
-        // Swipe left -> next session
-        handleSelectSession(sessions[currentIndex + 1].id);
+      if (Math.abs(diff) <= SWIPE_THRESHOLD) return;
+
+      const nextIndex = diff > 0 ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex >= 0 && nextIndex < sessions.length) {
+        onSelectSession?.(sessions[nextIndex].id);
       }
-    }
-
-    touchStartX.current = null;
-  }, [viewMode, currentIndex, sessions, handleSelectSession]);
+    },
+    [viewMode, currentIndex, sessions, onSelectSession]
+  );
 
   return (
     <div
@@ -221,7 +197,7 @@ export const Pane = memo(function Pane({
           workerCount={workerCount}
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
-          onSelectSession={handleSelectSession}
+          onSelectSession={onSelectSession}
         />
       ) : (
         <DesktopTabBar
@@ -253,17 +229,36 @@ export const Pane = memo(function Pane({
         onTouchStart={isMobile ? handleTouchStart : undefined}
         onTouchEnd={isMobile ? handleTouchEnd : undefined}
       >
-        {/* Terminal - always mounted to maintain WebSocket connection */}
-        <div className={viewMode === "terminal" ? "h-full" : "hidden"}>
-          <Terminal
-            key={activeTab?.id}
-            ref={terminalRef}
-            onConnected={handleTerminalConnected}
-            onDisconnected={() => {}}
-            onBeforeUnmount={handleBeforeUnmount}
-            initialScrollState={initialScrollState}
-          />
-        </div>
+        {/* Terminals - one per tab, kept mounted for instant switching */}
+        {paneData.tabs.map((tab) => {
+          const isActive = tab.id === activeTab?.id;
+          const savedState = sessionRegistry.getTerminalState(paneId, tab.id);
+
+          return (
+            <div
+              key={tab.id}
+              className={viewMode === "terminal" && isActive ? "h-full" : "hidden"}
+            >
+              <Terminal
+                ref={getTerminalRef(tab.id)}
+                onConnected={getTerminalConnectedHandler(tab)}
+                onBeforeUnmount={(scrollState) => {
+                  sessionRegistry.saveTerminalState(paneId, tab.id, {
+                    scrollTop: scrollState.scrollTop,
+                    scrollHeight: 0,
+                    lastActivity: Date.now(),
+                    cursorY: scrollState.cursorY,
+                  });
+                }}
+                initialScrollState={
+                  savedState
+                    ? { scrollTop: savedState.scrollTop, cursorY: savedState.cursorY, baseY: 0 }
+                    : undefined
+                }
+              />
+            </div>
+          );
+        })}
 
         {/* Files - mounted once accessed, stays mounted */}
         {session?.working_directory && (
@@ -289,13 +284,13 @@ export const Pane = memo(function Pane({
             onAttachToWorker={(workerId) => {
               setViewMode("terminal");
               const worker = sessions.find(s => s.id === workerId);
-              if (worker && terminalRef.current) {
+              if (worker && terminalRef) {
                 const sessionName = `claude-${workerId}`;
-                terminalRef.current.sendInput("\x02d");
+                terminalRef.sendInput("\x02d");
                 setTimeout(() => {
-                  terminalRef.current?.sendInput("\x15");
+                  terminalRef?.sendInput("\x15");
                   setTimeout(() => {
-                    terminalRef.current?.sendCommand(`tmux attach -t ${sessionName}`);
+                    terminalRef?.sendCommand(`tmux attach -t ${sessionName}`);
                   }, 50);
                 }, 100);
               }

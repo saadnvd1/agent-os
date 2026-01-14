@@ -84,16 +84,14 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   } = useTerminalSearch(searchAddonRef, xtermRef);
 
   // Handle image selection - paste file path into terminal
-  const handleImageSelect = useCallback((filePath: string) => {
-    sendInput(filePath);
-    setShowImagePicker(false);
-    focus();
-  }, [sendInput, focus]);
-
-  // Handle keyboard input from virtual keyboard
-  const handleKeyboardInput = useCallback((key: string) => {
-    sendInput(key);
-  }, [sendInput]);
+  const handleImageSelect = useCallback(
+    (filePath: string) => {
+      sendInput(filePath);
+      setShowImagePicker(false);
+      focus();
+    },
+    [sendInput, focus]
+  );
 
   // Expose imperative methods
   useImperativeHandle(ref, () => ({
@@ -136,29 +134,22 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     };
   }, [isMobile]);
 
-  // Get terminal text content for select mode overlay
-  const [terminalText, setTerminalText] = useState('');
+  // Extract terminal text for select mode overlay
+  const terminalText = useMemo(() => {
+    if (!selectMode || !xtermRef.current) return '';
 
-  useEffect(() => {
-    if (selectMode && xtermRef.current) {
-      // Get all visible text from the terminal buffer
-      const term = xtermRef.current;
-      const buffer = term.buffer.active;
-      const lines: string[] = [];
+    const term = xtermRef.current;
+    const buffer = term.buffer.active;
+    const startRow = Math.max(0, buffer.baseY - 500);
+    const endRow = buffer.baseY + term.rows;
+    const lines: string[] = [];
 
-      // Get lines from scrollback + visible area
-      const startRow = Math.max(0, buffer.baseY - 500); // Last 500 lines max
-      const endRow = buffer.baseY + term.rows;
-
-      for (let i = startRow; i < endRow; i++) {
-        const line = buffer.getLine(i);
-        if (line) {
-          lines.push(line.translateToString(true));
-        }
-      }
-
-      setTerminalText(lines.join('\n'));
+    for (let i = startRow; i < endRow; i++) {
+      const line = buffer.getLine(i);
+      if (line) lines.push(line.translateToString(true));
     }
+
+    return lines.join('\n');
   }, [selectMode, xtermRef]);
 
   return (
@@ -250,7 +241,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {/* Mobile: Toolbar with special keys (native keyboard handles text) */}
       {isMobile && (
         <TerminalToolbar
-          onKeyPress={handleKeyboardInput}
+          onKeyPress={sendInput}
           onImagePicker={() => setShowImagePicker(true)}
           onCopy={copySelection}
           selectMode={selectMode}
