@@ -439,6 +439,10 @@ cmd_start_foreground() {
     fi
 
     cd "$REPO_DIR"
+
+    # Create PID file before exec (PID stays the same after exec)
+    echo "$$" > "$PID_FILE"
+
     exec npm start
 }
 
