@@ -6,11 +6,7 @@ import { db, queries, DevServer, DevServerType, DevServerStatus } from "./db";
 
 const execAsync = promisify(exec);
 
-const LOGS_DIR = path.join(
-  process.env.HOME || "~",
-  ".agent-os",
-  "logs"
-);
+const LOGS_DIR = path.join(process.env.HOME || "~", ".agent-os", "logs");
 
 // Ensure logs directory exists
 if (!fs.existsSync(LOGS_DIR)) {
@@ -56,7 +52,9 @@ async function isPidRunning(pid: number): Promise<boolean> {
 // Check if a port is in use
 async function isPortInUse(port: number): Promise<boolean> {
   try {
-    const { stdout } = await execAsync(`lsof -i :${port} -t 2>/dev/null || true`);
+    const { stdout } = await execAsync(
+      `lsof -i :${port} -t 2>/dev/null || true`
+    );
     return stdout.trim().length > 0;
   } catch {
     return false;
@@ -66,7 +64,9 @@ async function isPortInUse(port: number): Promise<boolean> {
 // Get PID using a port
 async function getPidOnPort(port: number): Promise<number | null> {
   try {
-    const { stdout } = await execAsync(`lsof -i :${port} -t 2>/dev/null | head -1`);
+    const { stdout } = await execAsync(
+      `lsof -i :${port} -t 2>/dev/null | head -1`
+    );
     const pid = parseInt(stdout.trim(), 10);
     return isNaN(pid) ? null : pid;
   } catch {
@@ -116,7 +116,9 @@ async function checkDockerStatus(server: DevServer): Promise<DevServerStatus> {
 }
 
 // Get live status for a server
-export async function getServerStatus(server: DevServer): Promise<DevServerStatus> {
+export async function getServerStatus(
+  server: DevServer
+): Promise<DevServerStatus> {
   if (server.type === "docker") {
     return checkDockerStatus(server);
   }
@@ -140,8 +142,12 @@ export async function getAllServers(): Promise<DevServer[]> {
 }
 
 // Get servers for a project
-export async function getServersByProject(projectId: string): Promise<DevServer[]> {
-  const servers = queries.getDevServersByProject(db).all(projectId) as DevServer[];
+export async function getServersByProject(
+  projectId: string
+): Promise<DevServer[]> {
+  const servers = queries
+    .getDevServersByProject(db)
+    .all(projectId) as DevServer[];
 
   for (const server of servers) {
     const liveStatus = await getServerStatus(server);
@@ -183,8 +189,8 @@ async function spawnNodeServer(
     HOME: process.env.HOME,
     USER: process.env.USER,
     SHELL: process.env.SHELL,
-    TERM: process.env.TERM || 'xterm-256color',
-    LANG: process.env.LANG || 'en_US.UTF-8',
+    TERM: process.env.TERM || "xterm-256color",
+    LANG: process.env.LANG || "en_US.UTF-8",
   };
 
   // Add port if specified
@@ -220,7 +226,9 @@ async function spawnDockerService(
 ): Promise<{ containerId: string | null }> {
   try {
     // command is expected to be the service name
-    await execAsync(`docker compose up -d ${command}`, { cwd: workingDirectory });
+    await execAsync(`docker compose up -d ${command}`, {
+      cwd: workingDirectory,
+    });
 
     // Get container ID
     const { stdout } = await execAsync(
@@ -237,7 +245,9 @@ async function spawnDockerService(
 }
 
 // Start a server
-export async function startServer(opts: StartServerOptions): Promise<DevServer> {
+export async function startServer(
+  opts: StartServerOptions
+): Promise<DevServer> {
   const id = generateId();
   const ports = opts.ports || [];
 
@@ -257,11 +267,23 @@ export async function startServer(opts: StartServerOptions): Promise<DevServer> 
 
   try {
     if (opts.type === "docker") {
-      const { containerId } = await spawnDockerService(opts.command, opts.workingDirectory);
-      queries.updateDevServer(db).run("running", null, containerId, JSON.stringify(ports), id);
+      const { containerId } = await spawnDockerService(
+        opts.command,
+        opts.workingDirectory
+      );
+      queries
+        .updateDevServer(db)
+        .run("running", null, containerId, JSON.stringify(ports), id);
     } else {
-      const { pid } = await spawnNodeServer(id, opts.command, opts.workingDirectory, ports);
-      queries.updateDevServer(db).run("running", pid, null, JSON.stringify(ports), id);
+      const { pid } = await spawnNodeServer(
+        id,
+        opts.command,
+        opts.workingDirectory,
+        ports
+      );
+      queries
+        .updateDevServer(db)
+        .run("running", pid, null, JSON.stringify(ports), id);
     }
   } catch (error) {
     queries.updateDevServerStatus(db).run("failed", id);
@@ -325,11 +347,21 @@ export async function restartServer(id: string): Promise<DevServer> {
 
   // Re-start with same config
   if (server.type === "docker") {
-    const { containerId } = await spawnDockerService(server.command, server.working_directory);
-    queries.updateDevServer(db).run("running", null, containerId, server.ports, id);
+    const { containerId } = await spawnDockerService(
+      server.command,
+      server.working_directory
+    );
+    queries
+      .updateDevServer(db)
+      .run("running", null, containerId, server.ports, id);
   } else {
     const ports: number[] = JSON.parse(server.ports || "[]");
-    const { pid } = await spawnNodeServer(id, server.command, server.working_directory, ports);
+    const { pid } = await spawnNodeServer(
+      id,
+      server.command,
+      server.working_directory,
+      ports
+    );
     queries.updateDevServer(db).run("running", pid, null, server.ports, id);
   }
 
@@ -349,7 +381,10 @@ export async function removeServer(id: string): Promise<void> {
 }
 
 // Get logs for a server
-export async function getServerLogs(id: string, lines = 100): Promise<string[]> {
+export async function getServerLogs(
+  id: string,
+  lines = 100
+): Promise<string[]> {
   const server = queries.getDevServer(db).get(id) as DevServer | undefined;
   if (!server) return [];
 
@@ -378,7 +413,9 @@ export async function getServerLogs(id: string, lines = 100): Promise<string[]> 
 }
 
 // Detect available Node.js dev server in a directory
-export async function detectNodeServer(workingDir: string): Promise<DetectedServer | null> {
+export async function detectNodeServer(
+  workingDir: string
+): Promise<DetectedServer | null> {
   const packageJsonPath = path.join(workingDir, "package.json");
   if (!fs.existsSync(packageJsonPath)) return null;
 
@@ -414,8 +451,15 @@ export async function detectNodeServer(workingDir: string): Promise<DetectedServ
 }
 
 // Detect Docker Compose services in a directory
-export async function detectDockerServices(workingDir: string): Promise<DetectedServer[]> {
-  const composeFiles = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"];
+export async function detectDockerServices(
+  workingDir: string
+): Promise<DetectedServer[]> {
+  const composeFiles = [
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+  ];
 
   for (const file of composeFiles) {
     const composePath = path.join(workingDir, file);
@@ -443,7 +487,9 @@ export async function detectDockerServices(workingDir: string): Promise<Detected
 }
 
 // Detect all available servers in a directory
-export async function detectServers(workingDir: string): Promise<DetectedServer[]> {
+export async function detectServers(
+  workingDir: string
+): Promise<DetectedServer[]> {
   const servers: DetectedServer[] = [];
 
   const nodeServer = await detectNodeServer(workingDir);

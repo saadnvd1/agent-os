@@ -37,7 +37,9 @@ export interface SetupResult {
 /**
  * Read worktree config from project
  */
-export async function readWorktreeConfig(projectPath: string): Promise<WorktreeConfig | null> {
+export async function readWorktreeConfig(
+  projectPath: string
+): Promise<WorktreeConfig | null> {
   const configPaths = [
     path.join(projectPath, ".agent-os", "worktrees.json"),
     path.join(projectPath, ".agent-os.json"),
@@ -91,10 +93,11 @@ export function detectPackageManager(projectPath: string): {
 export function findEnvFiles(projectPath: string): string[] {
   try {
     const files = fs.readdirSync(projectPath);
-    return files.filter(f =>
-      f.startsWith(".env") &&
-      !f.endsWith(".example") &&
-      fs.statSync(path.join(projectPath, f)).isFile()
+    return files.filter(
+      (f) =>
+        f.startsWith(".env") &&
+        !f.endsWith(".example") &&
+        fs.statSync(path.join(projectPath, f)).isFile()
     );
   } catch {
     return [];
@@ -221,7 +224,11 @@ export async function setupWorktree(options: {
     const pm = detectPackageManager(sourcePath);
     if (pm) {
       result.packageManager = pm.name;
-      const installResult = await runCommand(pm.installCommand, worktreePath, envVars);
+      const installResult = await runCommand(
+        pm.installCommand,
+        worktreePath,
+        envVars
+      );
       result.steps.push({
         name: `Install dependencies (${pm.name})`,
         command: pm.installCommand,

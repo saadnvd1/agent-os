@@ -11,13 +11,13 @@ interface GitPanelTabsProps {
 
 export function GitPanelTabs({ activeTab, onTabChange }: GitPanelTabsProps) {
   return (
-    <div className="flex border-b border-border/50">
+    <div className="border-border/50 flex border-b">
       <button
         onClick={() => onTabChange("changes")}
         className={cn(
           "flex-1 px-4 py-2 text-sm font-medium transition-colors",
           activeTab === "changes"
-            ? "text-foreground border-b-2 border-primary"
+            ? "text-foreground border-primary border-b-2"
             : "text-muted-foreground hover:text-foreground"
         )}
       >
@@ -28,7 +28,7 @@ export function GitPanelTabs({ activeTab, onTabChange }: GitPanelTabsProps) {
         className={cn(
           "flex-1 px-4 py-2 text-sm font-medium transition-colors",
           activeTab === "history"
-            ? "text-foreground border-b-2 border-primary"
+            ? "text-foreground border-primary border-b-2"
             : "text-muted-foreground hover:text-foreground"
         )}
       >

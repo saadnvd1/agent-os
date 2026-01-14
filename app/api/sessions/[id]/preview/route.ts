@@ -30,7 +30,10 @@ export async function GET(
     while (lastNonEmpty > 0 && allLines[lastNonEmpty].trim() === "") {
       lastNonEmpty--;
     }
-    const lines = allLines.slice(Math.max(0, lastNonEmpty - 49), lastNonEmpty + 1);
+    const lines = allLines.slice(
+      Math.max(0, lastNonEmpty - 49),
+      lastNonEmpty + 1
+    );
 
     return NextResponse.json({ lines });
   } catch (error) {

@@ -45,8 +45,8 @@ export function MessageInput({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-border p-4">
-      <div className="flex gap-2 items-end">
+    <form onSubmit={handleSubmit} className="border-border border-t p-4">
+      <div className="flex items-end gap-2">
         <textarea
           ref={textareaRef}
           value={text}
@@ -55,21 +55,26 @@ export function MessageInput({
           placeholder={placeholder}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none bg-muted border border-input rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+          className="bg-muted border-input placeholder:text-muted-foreground focus:ring-ring flex-1 resize-none rounded-lg border px-3 py-2 text-sm focus:ring-1 focus:outline-none disabled:opacity-50"
         />
 
         {disabled && onCancel ? (
-          <Button type="button" variant="destructive" size="icon" onClick={onCancel}>
-            <Square className="w-4 h-4" />
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon"
+            onClick={onCancel}
+          >
+            <Square className="h-4 w-4" />
           </Button>
         ) : (
           <Button type="submit" disabled={!text.trim() || disabled}>
-            <Send className="w-4 h-4" />
+            <Send className="h-4 w-4" />
           </Button>
         )}
       </div>
 
-      <p className="text-xs text-muted-foreground mt-2">
+      <p className="text-muted-foreground mt-2 text-xs">
         Press Enter to send, Shift+Enter for new line
       </p>
     </form>

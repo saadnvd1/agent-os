@@ -93,7 +93,9 @@ export function parseDiff(diffText: string): ParsedDiff {
     }
 
     // Hunk header: @@ -start,count +start,count @@
-    const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
+    const hunkMatch = line.match(
+      /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
+    );
     if (hunkMatch) {
       if (currentHunk) {
         hunks.push(currentHunk);

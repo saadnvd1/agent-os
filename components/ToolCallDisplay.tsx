@@ -24,7 +24,7 @@ export function ToolCallDisplay({
   }[status];
 
   return (
-    <div className="ml-11 my-2 border border-border rounded-lg overflow-hidden">
+    <div className="border-border my-2 ml-11 overflow-hidden rounded-lg border">
       {/* Header */}
       <div
         className={cn(
@@ -32,13 +32,13 @@ export function ToolCallDisplay({
           status === "error" ? "bg-destructive/10" : "bg-muted/50"
         )}
       >
-        <Wrench className="w-4 h-4 text-muted-foreground" />
+        <Wrench className="text-muted-foreground h-4 w-4" />
         <span className="font-mono text-sm">{name}</span>
         <StatusIcon
           className={cn(
-            "w-4 h-4 ml-auto",
+            "ml-auto h-4 w-4",
             status === "running" && "animate-spin text-yellow-400",
-            status === "pending" && "animate-spin text-muted-foreground",
+            status === "pending" && "text-muted-foreground animate-spin",
             status === "completed" && "text-primary",
             status === "error" && "text-destructive"
           )}
@@ -47,10 +47,10 @@ export function ToolCallDisplay({
 
       {/* Input */}
       <details className="group">
-        <summary className="px-3 py-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+        <summary className="text-muted-foreground hover:text-foreground cursor-pointer px-3 py-1 text-xs">
           Input
         </summary>
-        <pre className="px-3 py-2 text-xs text-muted-foreground bg-background overflow-x-auto">
+        <pre className="text-muted-foreground bg-background overflow-x-auto px-3 py-2 text-xs">
           {JSON.stringify(input, null, 2)}
         </pre>
       </details>
@@ -58,10 +58,10 @@ export function ToolCallDisplay({
       {/* Output */}
       {output && (
         <details className="group" open={status === "completed"}>
-          <summary className="px-3 py-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+          <summary className="text-muted-foreground hover:text-foreground cursor-pointer px-3 py-1 text-xs">
             Output
           </summary>
-          <pre className="px-3 py-2 text-xs text-muted-foreground bg-background overflow-x-auto max-h-48">
+          <pre className="text-muted-foreground bg-background max-h-48 overflow-x-auto px-3 py-2 text-xs">
             {output.length > 1000 ? output.slice(0, 1000) + "..." : output}
           </pre>
         </details>

@@ -69,11 +69,14 @@ export const claudeProvider: AgentProvider = {
   supportsFork: true,
 
   buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition('claude');
+    const def = getProviderDefinition("claude");
     const flags: string[] = [];
 
     // Auto-approve flag from registry
-    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+    if (
+      (options.skipPermissions || options.autoApprove) &&
+      def.autoApproveFlag
+    ) {
       flags.push(def.autoApproveFlag);
     }
 
@@ -139,11 +142,14 @@ export const codexProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition('codex');
+    const def = getProviderDefinition("codex");
     const flags: string[] = [];
 
     // Auto-approve flag from registry
-    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+    if (
+      (options.skipPermissions || options.autoApprove) &&
+      def.autoApproveFlag
+    ) {
       flags.push(def.autoApproveFlag);
     }
 
@@ -224,11 +230,14 @@ export const geminiProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition('gemini');
+    const def = getProviderDefinition("gemini");
     const flags: string[] = [];
 
     // Auto-approve flag from registry
-    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+    if (
+      (options.skipPermissions || options.autoApprove) &&
+      def.autoApproveFlag
+    ) {
       flags.push(def.autoApproveFlag);
     }
 
@@ -275,11 +284,14 @@ export const aiderProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition('aider');
+    const def = getProviderDefinition("aider");
     const flags: string[] = [];
 
     // Auto-approve flag from registry
-    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+    if (
+      (options.skipPermissions || options.autoApprove) &&
+      def.autoApproveFlag
+    ) {
       flags.push(def.autoApproveFlag);
     }
 
@@ -324,11 +336,14 @@ export const cursorProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition('cursor');
+    const def = getProviderDefinition("cursor");
     const flags: string[] = [...(def.defaultArgs || [])];
 
     // Auto-approve flag from registry
-    if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag) {
+    if (
+      (options.skipPermissions || options.autoApprove) &&
+      def.autoApproveFlag
+    ) {
       flags.push(def.autoApproveFlag);
     }
 
@@ -409,4 +424,7 @@ export function isValidAgentType(value: string): value is AgentType {
 }
 
 // Export registry functions for convenience
-export { getProviderDefinition, getAllProviderDefinitions } from "./providers/registry";
+export {
+  getProviderDefinition,
+  getAllProviderDefinitions,
+} from "./providers/registry";

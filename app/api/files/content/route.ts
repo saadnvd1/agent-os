@@ -45,10 +45,7 @@ export async function POST(request: NextRequest) {
     const { path, content } = body;
 
     if (!path) {
-      return NextResponse.json(
-        { error: "Path is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
 
     if (content === undefined) {
@@ -70,7 +67,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error writing file:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to write file" },
+      {
+        error: error instanceof Error ? error.message : "Failed to write file",
+      },
       { status: 500 }
     );
   }

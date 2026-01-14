@@ -1,7 +1,11 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +13,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, RefreshCw, FolderPlus, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  Plus,
+  RefreshCw,
+  FolderPlus,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SessionListHeaderProps {
@@ -42,8 +52,15 @@ export function SessionListHeader({
       <div className="flex gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={handleRefresh} disabled={refreshing}>
-              <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", refreshing && "animate-spin")}
+              />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Refresh</TooltipContent>
@@ -51,7 +68,7 @@ export function SessionListHeader({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-sm" onClick={onNewSession}>
-              <Plus className="w-4 h-4" />
+              <Plus className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>New session</TooltipContent>
@@ -61,7 +78,7 @@ export function SessionListHeader({
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-sm">
-                  <MoreHorizontal className="w-4 h-4" />
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -69,12 +86,15 @@ export function SessionListHeader({
           </Tooltip>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onNewProject}>
-              <FolderPlus className="w-3 h-3 mr-2" />
+              <FolderPlus className="mr-2 h-3 w-3" />
               New project
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onKillAll} className="text-red-500 focus:text-red-500">
-              <Trash2 className="w-3 h-3 mr-2" />
+            <DropdownMenuItem
+              onClick={onKillAll}
+              className="text-red-500 focus:text-red-500"
+            >
+              <Trash2 className="mr-2 h-3 w-3" />
               Kill all sessions
             </DropdownMenuItem>
           </DropdownMenuContent>

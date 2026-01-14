@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isGitRepo, getBranches, getDefaultBranch, getCurrentBranch } from "@/lib/git";
+import {
+  isGitRepo,
+  getBranches,
+  getDefaultBranch,
+  getCurrentBranch,
+} from "@/lib/git";
 
 /**
  * POST /api/git/check
@@ -11,10 +16,7 @@ export async function POST(request: NextRequest) {
     const { path: dirPath } = body;
 
     if (!dirPath) {
-      return NextResponse.json(
-        { error: "Path is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
 
     // Check if it's a git repo

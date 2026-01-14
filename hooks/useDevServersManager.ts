@@ -18,7 +18,9 @@ interface CreateDevServerOptions {
 
 export function useDevServersManager() {
   const { data: devServers = [] } = useDevServersQuery();
-  const [startDevServerProjectId, setStartDevServerProjectId] = useState<string | null>(null);
+  const [startDevServerProjectId, setStartDevServerProjectId] = useState<
+    string | null
+  >(null);
 
   const stopMutation = useStopDevServer();
   const restartMutation = useRestartDevServer();

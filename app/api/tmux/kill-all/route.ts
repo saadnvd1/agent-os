@@ -19,7 +19,9 @@ export async function POST() {
     const tmuxSessions = stdout
       .trim()
       .split("\n")
-      .filter((s) => s && /^(claude|codex|opencode|gemini|aider|cursor)-/.test(s));
+      .filter(
+        (s) => s && /^(claude|codex|opencode|gemini|aider|cursor)-/.test(s)
+      );
 
     // Kill each tmux session
     const killed: string[] = [];
@@ -45,7 +47,7 @@ export async function POST() {
     return NextResponse.json({
       killed: killed.length,
       sessions: killed,
-      deletedFromDb: dbSessions.length
+      deletedFromDb: dbSessions.length,
     });
   } catch (error) {
     console.error("Error killing tmux sessions:", error);

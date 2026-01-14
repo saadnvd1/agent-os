@@ -13,7 +13,10 @@ export async function POST(request: NextRequest) {
     const path = expandPath(rawPath);
 
     if (!isGitRepo(path)) {
-      return NextResponse.json({ error: "Not a git repository" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Not a git repository" },
+        { status: 400 }
+      );
     }
 
     // Stage specific files or all
@@ -28,7 +31,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to stage files" },
+      {
+        error: error instanceof Error ? error.message : "Failed to stage files",
+      },
       { status: 500 }
     );
   }

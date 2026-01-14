@@ -171,10 +171,7 @@ export const queries = {
     getStmt(db, `SELECT * FROM groups WHERE path = ?`),
 
   createGroup: (db: Database.Database) =>
-    getStmt(
-      db,
-      `INSERT INTO groups (path, name, sort_order) VALUES (?, ?, ?)`
-    ),
+    getStmt(db, `INSERT INTO groups (path, name, sort_order) VALUES (?, ?, ?)`),
 
   updateGroupName: (db: Database.Database) =>
     getStmt(db, `UPDATE groups SET name = ? WHERE path = ?`),
@@ -200,7 +197,10 @@ export const queries = {
     getStmt(db, `SELECT * FROM projects WHERE id = ?`),
 
   getAllProjects: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM projects ORDER BY is_uncategorized ASC, sort_order ASC, name ASC`),
+    getStmt(
+      db,
+      `SELECT * FROM projects ORDER BY is_uncategorized ASC, sort_order ASC, name ASC`
+    ),
 
   updateProject: (db: Database.Database) =>
     getStmt(
@@ -229,7 +229,10 @@ export const queries = {
     getStmt(db, `SELECT * FROM project_dev_servers WHERE id = ?`),
 
   getProjectDevServers: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM project_dev_servers WHERE project_id = ? ORDER BY sort_order ASC`),
+    getStmt(
+      db,
+      `SELECT * FROM project_dev_servers WHERE project_id = ? ORDER BY sort_order ASC`
+    ),
 
   updateProjectDevServer: (db: Database.Database) =>
     getStmt(
@@ -258,7 +261,10 @@ export const queries = {
     getStmt(db, `SELECT * FROM dev_servers ORDER BY created_at DESC`),
 
   getDevServersByProject: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM dev_servers WHERE project_id = ? ORDER BY created_at DESC`),
+    getStmt(
+      db,
+      `SELECT * FROM dev_servers WHERE project_id = ? ORDER BY created_at DESC`
+    ),
 
   updateDevServerStatus: (db: Database.Database) =>
     getStmt(

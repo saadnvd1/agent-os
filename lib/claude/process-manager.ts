@@ -87,12 +87,14 @@ export class ClaudeProcessManager {
 
     // Store user message in database
     const db = getDb();
-    queries.createMessage(db).run(
-      sessionId,
-      "user",
-      JSON.stringify([{ type: "text", text: prompt }]),
-      null
-    );
+    queries
+      .createMessage(db)
+      .run(
+        sessionId,
+        "user",
+        JSON.stringify([{ type: "text", text: prompt }]),
+        null
+      );
 
     // Build Claude CLI command
     const args = ["-p", "--output-format", "stream-json", "--verbose"];
@@ -133,13 +135,18 @@ export class ClaudeProcessManager {
     // Reset parser for new conversation turn
     session.parser = new StreamParser(sessionId);
     session.parser.on("event", (event: ClientEvent) => {
-      console.log(`Parser event [${sessionId}]:`, event.type, JSON.stringify(event.data).substring(0, 100));
+      console.log(
+        `Parser event [${sessionId}]:`,
+        event.type,
+        JSON.stringify(event.data).substring(0, 100)
+      );
       this.broadcastToSession(sessionId, event);
       this.handleEvent(sessionId, event);
     });
 
     // Find claude binary path
-    const claudePath = process.env.HOME + "/.nvm/versions/node/v20.19.0/bin/claude";
+    const claudePath =
+      process.env.HOME + "/.nvm/versions/node/v20.19.0/bin/claude";
 
     const claudeProcess = spawn(claudePath, args, {
       cwd,
@@ -238,7 +245,9 @@ export class ClaudeProcessManager {
       return;
     }
 
-    console.log(`Broadcasting to ${session.clients.size} clients for session ${sessionId}`);
+    console.log(
+      `Broadcasting to ${session.clients.size} clients for session ${sessionId}`
+    );
     const message = JSON.stringify(event);
     for (const client of session.clients) {
       if (client.readyState === WebSocket.OPEN) {
@@ -267,12 +276,14 @@ export class ClaudeProcessManager {
       case "text": {
         // Store assistant message
         if (event.data.role === "assistant") {
-          queries.createMessage(db).run(
-            sessionId,
-            "assistant",
-            JSON.stringify(event.data.content),
-            null
-          );
+          queries
+            .createMessage(db)
+            .run(
+              sessionId,
+              "assistant",
+              JSON.stringify(event.data.content),
+              null
+            );
         }
         break;
       }

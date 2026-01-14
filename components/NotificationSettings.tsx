@@ -45,9 +45,14 @@ export function NotificationSettings({
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" className="relative">
-          <Bell className={cn("w-4 h-4", !settings.sound && "text-muted-foreground")} />
+          <Bell
+            className={cn(
+              "h-4 w-4",
+              !settings.sound && "text-muted-foreground"
+            )}
+          />
           {waitingCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 text-yellow-950 text-[10px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[10px] font-bold text-yellow-950">
               {waitingCount}
             </span>
           )}
@@ -57,8 +62,8 @@ export function NotificationSettings({
         {/* Waiting sessions section */}
         {waitingCount > 0 && (
           <>
-            <DropdownMenuLabel className="flex items-center gap-2 text-yellow-500 text-xs">
-              <AlertCircle className="w-3 h-3" />
+            <DropdownMenuLabel className="flex items-center gap-2 text-xs text-yellow-500">
+              <AlertCircle className="h-3 w-3" />
               Waiting for input
             </DropdownMenuLabel>
             {waitingSessions.map((session) => (
@@ -83,18 +88,22 @@ export function NotificationSettings({
           className="flex items-center justify-between"
         >
           <span className="flex items-center gap-2">
-            {settings.sound ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3 text-muted-foreground" />}
+            {settings.sound ? (
+              <Volume2 className="h-3 w-3" />
+            ) : (
+              <VolumeX className="text-muted-foreground h-3 w-3" />
+            )}
             Sound
           </span>
           <span
             className={cn(
-              "w-8 h-4 rounded-full transition-colors relative",
+              "relative h-4 w-8 rounded-full transition-colors",
               settings.sound ? "bg-primary" : "bg-muted"
             )}
           >
             <span
               className={cn(
-                "absolute top-0.5 w-3 h-3 rounded-full bg-background transition-transform",
+                "bg-background absolute top-0.5 h-3 w-3 rounded-full transition-transform",
                 settings.sound ? "translate-x-4" : "translate-x-0.5"
               )}
             />
@@ -108,7 +117,7 @@ export function NotificationSettings({
               await onRequestPermission();
             }}
           >
-            <Bell className="w-3 h-3 mr-2" />
+            <Bell className="mr-2 h-3 w-3" />
             <span className="text-xs">Enable browser alerts</span>
           </DropdownMenuItem>
         )}

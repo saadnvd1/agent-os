@@ -18,7 +18,11 @@ interface UseSessionStatusesOptions {
   sessions: Session[];
   activeSessionId?: string | null;
   checkStateChanges: (
-    states: Array<{ id: string; name: string; status: SessionStatus["status"] }>,
+    states: Array<{
+      id: string;
+      name: string;
+      status: SessionStatus["status"];
+    }>,
     activeSessionId?: string | null
   ) => void;
 }
@@ -61,8 +65,14 @@ export function useSessionStatusesQuery({
 
     (async () => {
       let needsRefresh = false;
-      for (const [sessionId, status] of Object.entries(statuses) as [string, SessionStatus][]) {
-        if (status.claudeSessionId && !updatedSessionIds.current.has(sessionId)) {
+      for (const [sessionId, status] of Object.entries(statuses) as [
+        string,
+        SessionStatus,
+      ][]) {
+        if (
+          status.claudeSessionId &&
+          !updatedSessionIds.current.has(sessionId)
+        ) {
           updatedSessionIds.current.add(sessionId);
           await fetch(`/api/sessions/${sessionId}/claude-session`);
           needsRefresh = true;

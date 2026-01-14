@@ -32,10 +32,18 @@ import { ATooltip } from "@/components/a/ATooltip";
 import { cn } from "@/lib/utils";
 
 export type AButtonSize = "sm" | "md" | "lg";
-export type AButtonVariant = "default" | "ghost" | "outline" | "secondary" | "destructive" | "link";
+export type AButtonVariant =
+  | "default"
+  | "ghost"
+  | "outline"
+  | "secondary"
+  | "destructive"
+  | "link";
 
-export interface AButtonProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+export interface AButtonProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "children"
+> {
   /** Button content */
   children?: React.ReactNode;
   /** Optional Lucide icon component (shown before text) */
@@ -68,7 +76,10 @@ const SIZE_CLASSES: Record<AButtonSize, { button: string; icon: string }> = {
   lg: { button: "h-10 px-4 text-base", icon: "h-5 w-5" },
 };
 
-const VARIANT_MAP: Record<AButtonVariant, "default" | "ghost" | "outline" | "secondary" | "destructive" | "link"> = {
+const VARIANT_MAP: Record<
+  AButtonVariant,
+  "default" | "ghost" | "outline" | "secondary" | "destructive" | "link"
+> = {
   default: "default",
   ghost: "ghost",
   outline: "outline",
@@ -108,7 +119,8 @@ export const AButton = forwardRef<HTMLButtonElement, AButtonProps>(
         className={cn(
           sizeClasses.button,
           fullWidth && "w-full",
-          variant === "ghost" && "border-0 shadow-none ring-0 focus:ring-0 focus-visible:ring-0",
+          variant === "ghost" &&
+            "border-0 shadow-none ring-0 focus:ring-0 focus-visible:ring-0",
           className
         )}
         {...props}
@@ -116,13 +128,17 @@ export const AButton = forwardRef<HTMLButtonElement, AButtonProps>(
         {loading ? (
           <Loader2 className={cn(sizeClasses.icon, "mr-2 animate-spin")} />
         ) : Icon ? (
-          <Icon className={cn(sizeClasses.icon, children && "mr-2", iconClassName)} />
+          <Icon
+            className={cn(sizeClasses.icon, children && "mr-2", iconClassName)}
+          />
         ) : null}
 
         {children}
 
         {IconRight && !loading && (
-          <IconRight className={cn(sizeClasses.icon, children && "ml-2", iconClassName)} />
+          <IconRight
+            className={cn(sizeClasses.icon, children && "ml-2", iconClassName)}
+          />
         )}
       </Button>
     );

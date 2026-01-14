@@ -75,11 +75,11 @@ export function TmuxSessions({ onAttach }: TmuxSessionsProps) {
   }
 
   return (
-    <div className="border-b border-border">
+    <div className="border-border border-b">
       <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <Terminal className="text-muted-foreground h-4 w-4" />
+          <span className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
             Tmux Sessions
           </span>
         </div>
@@ -90,38 +90,36 @@ export function TmuxSessions({ onAttach }: TmuxSessionsProps) {
           disabled={loading}
           className="h-6 w-6"
         >
-          <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+          <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
         </Button>
       </div>
 
-      <div className="px-4 pb-3 space-y-1">
-        {error && (
-          <p className="text-xs text-destructive">{error}</p>
-        )}
+      <div className="space-y-1 px-4 pb-3">
+        {error && <p className="text-destructive text-xs">{error}</p>}
         {sessions.map((session) => (
           <button
             key={session.name}
             onClick={() => onAttach(session.name)}
             className={cn(
-              "w-full flex items-center justify-between p-2 rounded-md text-left transition-colors",
+              "flex w-full items-center justify-between rounded-md p-2 text-left transition-colors",
               "hover:bg-primary/10 border",
               session.attached
                 ? "border-primary/50 bg-primary/5"
                 : "border-transparent"
             )}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <MonitorUp className="w-4 h-4 text-primary flex-shrink-0" />
-              <span className="text-sm font-medium truncate">
+            <div className="flex min-w-0 items-center gap-2">
+              <MonitorUp className="text-primary h-4 w-4 flex-shrink-0" />
+              <span className="truncate text-sm font-medium">
                 {session.name}
               </span>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-xs text-muted-foreground">
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <span className="text-muted-foreground text-xs">
                 {session.windows}w
               </span>
               {session.attached && (
-                <Badge variant="success" className="text-[10px] px-1 py-0">
+                <Badge variant="success" className="px-1 py-0 text-[10px]">
                   attached
                 </Badge>
               )}

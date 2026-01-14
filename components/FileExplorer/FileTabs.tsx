@@ -41,7 +41,7 @@ export function FileTabs({
   return (
     <div
       ref={scrollRef}
-      className="flex items-center gap-0.5 overflow-x-auto bg-muted/30 px-1 scrollbar-none"
+      className="bg-muted/30 scrollbar-none flex items-center gap-0.5 overflow-x-auto px-1"
     >
       {files.map((file) => {
         const isActive = file.path === activeFilePath;
@@ -63,7 +63,7 @@ export function FileTabs({
               }
             }}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap transition-colors cursor-pointer",
+              "flex cursor-pointer items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap transition-colors",
               "min-h-[40px] md:min-h-[36px]",
               "hover:bg-accent/50",
               isActive
@@ -74,7 +74,7 @@ export function FileTabs({
             <FileIcon extension={ext} />
             <span className="max-w-[120px] truncate">{fileName}</span>
             {dirty && (
-              <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+              <span className="bg-primary h-2 w-2 flex-shrink-0 rounded-full" />
             )}
             <button
               onClick={(e) => {
@@ -82,12 +82,12 @@ export function FileTabs({
                 onClose(file.path);
               }}
               className={cn(
-                "p-0.5 rounded hover:bg-accent ml-1 flex-shrink-0",
+                "hover:bg-accent ml-1 flex-shrink-0 rounded p-0.5",
                 "opacity-0 group-hover:opacity-100",
                 isActive && "opacity-100"
               )}
             >
-              <X className="w-3 h-3" />
+              <X className="h-3 w-3" />
             </button>
           </div>
         );
@@ -114,5 +114,5 @@ function FileIcon({ extension }: { extension: string }) {
   };
 
   const color = colorMap[extension] || "text-muted-foreground";
-  return <File className={cn("w-3.5 h-3.5 flex-shrink-0", color)} />;
+  return <File className={cn("h-3.5 w-3.5 flex-shrink-0", color)} />;
 }

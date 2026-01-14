@@ -12,10 +12,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const project = getProject(id);
 
     if (!project) {
-      return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     const detected = await detectDevServers(project.working_directory);

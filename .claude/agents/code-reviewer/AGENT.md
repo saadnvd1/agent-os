@@ -6,6 +6,7 @@ model: sonnet
 ---
 
 Review changed files for:
+
 - Security issues
 - Error handling
 - Code clarity

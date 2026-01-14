@@ -31,7 +31,14 @@ export interface WorkerInfo {
   id: string;
   name: string;
   task: string;
-  status: "pending" | "running" | "waiting" | "idle" | "completed" | "failed" | "dead";
+  status:
+    | "pending"
+    | "running"
+    | "waiting"
+    | "idle"
+    | "completed"
+    | "failed"
+    | "dead";
   worktreePath: string | null;
   branchName: string | null;
   createdAt: string;
@@ -41,13 +48,14 @@ export interface WorkerInfo {
  * Generate a unique branch name from a task description
  */
 function taskToBranchName(task: string): string {
-  const base = task
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .split(/\s+/)
-    .slice(0, 4)
-    .join("-")
-    .slice(0, 30) || "worker";
+  const base =
+    task
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .slice(0, 4)
+      .join("-")
+      .slice(0, 30) || "worker";
 
   // Add short unique suffix to avoid conflicts
   const suffix = Date.now().toString(36).slice(-4);
@@ -67,7 +75,9 @@ function taskToSessionName(task: string): string {
 /**
  * Spawn a new worker session
  */
-export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session> {
+export async function spawnWorker(
+  options: SpawnWorkerOptions
+): Promise<Session> {
   const {
     conductorSessionId,
     task,
@@ -130,7 +140,7 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
       worktreePath,
       branchName,
       "main", // base_branch
-      null,   // dev_server_port
+      null, // dev_server_port
       sessionId
     );
   }
@@ -158,29 +168,41 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
     let waited = 0;
     let ready = false;
 
-    console.log(`[orchestration] Waiting for Claude to initialize in ${tmuxSessionName}...`);
+    console.log(
+      `[orchestration] Waiting for Claude to initialize in ${tmuxSessionName}...`
+    );
 
     while (waited < maxWaitMs && !ready) {
-      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       waited += pollIntervalMs;
 
       try {
-        const { stdout } = await execAsync(`tmux capture-pane -t '${tmuxSessionName}' -p -S -10 2>/dev/null`);
+        const { stdout } = await execAsync(
+          `tmux capture-pane -t '${tmuxSessionName}' -p -S -10 2>/dev/null`
+        );
         const content = stdout.toLowerCase();
 
         // Check for trust/permissions prompt and auto-accept
         // Claude shows "Ready to code here?" with "Yes, continue" option - just press Enter
-        if (content.includes('ready to code here') || content.includes('yes, continue') ||
-            content.includes('need permission to work')) {
-          console.log(`[orchestration] Trust prompt detected, pressing Enter to accept`);
+        if (
+          content.includes("ready to code here") ||
+          content.includes("yes, continue") ||
+          content.includes("need permission to work")
+        ) {
+          console.log(
+            `[orchestration] Trust prompt detected, pressing Enter to accept`
+          );
           await execAsync(`tmux send-keys -t '${tmuxSessionName}' Enter`);
           continue; // Keep waiting for the real prompt
         }
 
         // Look for Claude's ready state - the "? for shortcuts" line indicates fully loaded
-        const lines = stdout.trim().split('\n');
-        const lastFewLines = lines.slice(-3).join('\n');
-        if (lastFewLines.includes('? for shortcuts') || lastFewLines.includes('?>')) {
+        const lines = stdout.trim().split("\n");
+        const lastFewLines = lines.slice(-3).join("\n");
+        if (
+          lastFewLines.includes("? for shortcuts") ||
+          lastFewLines.includes("?>")
+        ) {
           ready = true;
           console.log(`[orchestration] Claude ready after ${waited}ms`);
         }
@@ -190,18 +212,29 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
     }
 
     if (!ready) {
-      console.log(`[orchestration] Timed out waiting for Claude, sending task anyway after ${waited}ms`);
+      console.log(
+        `[orchestration] Timed out waiting for Claude, sending task anyway after ${waited}ms`
+      );
     }
 
     // Send the task as input, then press Enter
     const escapedTask = task.replace(/'/g, "'\\''"); // Escape single quotes for shell
-    console.log(`[orchestration] Sending task to ${tmuxSessionName}: "${task}"`);
+    console.log(
+      `[orchestration] Sending task to ${tmuxSessionName}: "${task}"`
+    );
     try {
-      await execAsync(`tmux send-keys -t '${tmuxSessionName}' -l '${escapedTask}'`);
+      await execAsync(
+        `tmux send-keys -t '${tmuxSessionName}' -l '${escapedTask}'`
+      );
       await execAsync(`tmux send-keys -t '${tmuxSessionName}' Enter`);
-      console.log(`[orchestration] Task sent successfully to ${tmuxSessionName}`);
+      console.log(
+        `[orchestration] Task sent successfully to ${tmuxSessionName}`
+      );
     } catch (sendError) {
-      console.error(`[orchestration] Failed to send task to ${tmuxSessionName}:`, sendError);
+      console.error(
+        `[orchestration] Failed to send task to ${tmuxSessionName}:`,
+        sendError
+      );
     }
 
     // Update worker status to running
@@ -217,8 +250,12 @@ export async function spawnWorker(options: SpawnWorkerOptions): Promise<Session>
 /**
  * Get all workers for a conductor session
  */
-export async function getWorkers(conductorSessionId: string): Promise<WorkerInfo[]> {
-  const workers = queries.getWorkersByConductor(db).all(conductorSessionId) as Session[];
+export async function getWorkers(
+  conductorSessionId: string
+): Promise<WorkerInfo[]> {
+  const workers = queries
+    .getWorkersByConductor(db)
+    .all(conductorSessionId) as Session[];
 
   // Get live status for each worker
   const workerInfos: WorkerInfo[] = [];
@@ -237,7 +274,10 @@ export async function getWorkers(conductorSessionId: string): Promise<WorkerInfo
 
     // Combine DB status with live status
     let status: WorkerInfo["status"];
-    if (worker.worker_status === "completed" || worker.worker_status === "failed") {
+    if (
+      worker.worker_status === "completed" ||
+      worker.worker_status === "failed"
+    ) {
       status = worker.worker_status;
     } else if (liveStatus === "dead") {
       status = "dead";
@@ -262,7 +302,10 @@ export async function getWorkers(conductorSessionId: string): Promise<WorkerInfo
 /**
  * Get recent output from a worker's terminal
  */
-export async function getWorkerOutput(workerId: string, lines: number = 50): Promise<string> {
+export async function getWorkerOutput(
+  workerId: string,
+  lines: number = 50
+): Promise<string> {
   const session = queries.getSession(db).get(workerId) as Session | undefined;
   if (!session) {
     throw new Error(`Worker ${workerId} not found`);
@@ -284,7 +327,10 @@ export async function getWorkerOutput(workerId: string, lines: number = 50): Pro
 /**
  * Send a message/command to a worker
  */
-export async function sendToWorker(workerId: string, message: string): Promise<boolean> {
+export async function sendToWorker(
+  workerId: string,
+  message: string
+): Promise<boolean> {
   const session = queries.getSession(db).get(workerId) as Session | undefined;
   if (!session) {
     throw new Error(`Worker ${workerId} not found`);
@@ -294,8 +340,10 @@ export async function sendToWorker(workerId: string, message: string): Promise<b
   const tmuxSessionName = session.tmux_name || `${provider.id}-${workerId}`;
 
   try {
-    const escapedMessage = message.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-    await execAsync(`tmux send-keys -t "${tmuxSessionName}" "${escapedMessage}" Enter`);
+    const escapedMessage = message.replace(/"/g, '\\"').replace(/\$/g, "\\$");
+    await execAsync(
+      `tmux send-keys -t "${tmuxSessionName}" "${escapedMessage}" Enter`
+    );
     return true;
   } catch {
     return false;
@@ -319,7 +367,10 @@ export function failWorker(workerId: string): void {
 /**
  * Kill a worker session and optionally clean up its worktree
  */
-export async function killWorker(workerId: string, cleanupWorktree: boolean = false): Promise<void> {
+export async function killWorker(
+  workerId: string,
+  cleanupWorktree: boolean = false
+): Promise<void> {
   const session = queries.getSession(db).get(workerId) as Session | undefined;
   if (!session) {
     return;
@@ -330,7 +381,9 @@ export async function killWorker(workerId: string, cleanupWorktree: boolean = fa
 
   // Kill tmux session
   try {
-    await execAsync(`tmux kill-session -t "${tmuxSessionName}" 2>/dev/null || true`);
+    await execAsync(
+      `tmux kill-session -t "${tmuxSessionName}" 2>/dev/null || true`
+    );
   } catch {
     // Ignore errors
   }
@@ -376,10 +429,11 @@ export async function getWorkersSummary(conductorSessionId: string): Promise<{
 
   return {
     total: workers.length,
-    pending: workers.filter(w => w.status === "pending").length,
-    running: workers.filter(w => w.status === "running").length,
-    waiting: workers.filter(w => w.status === "waiting").length,
-    completed: workers.filter(w => w.status === "completed").length,
-    failed: workers.filter(w => w.status === "failed" || w.status === "dead").length,
+    pending: workers.filter((w) => w.status === "pending").length,
+    running: workers.filter((w) => w.status === "running").length,
+    waiting: workers.filter((w) => w.status === "waiting").length,
+    completed: workers.filter((w) => w.status === "completed").length,
+    failed: workers.filter((w) => w.status === "failed" || w.status === "dead")
+      .length,
   };
 }

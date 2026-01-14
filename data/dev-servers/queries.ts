@@ -29,7 +29,9 @@ export function useStopDevServer() {
 
   return useMutation({
     mutationFn: async (serverId: string) => {
-      const res = await fetch(`/api/dev-servers/${serverId}/stop`, { method: "POST" });
+      const res = await fetch(`/api/dev-servers/${serverId}/stop`, {
+        method: "POST",
+      });
       if (!res.ok) throw new Error("Failed to stop dev server");
       return res.json();
     },
@@ -44,7 +46,9 @@ export function useRestartDevServer() {
 
   return useMutation({
     mutationFn: async (serverId: string) => {
-      const res = await fetch(`/api/dev-servers/${serverId}/restart`, { method: "POST" });
+      const res = await fetch(`/api/dev-servers/${serverId}/restart`, {
+        method: "POST",
+      });
       if (!res.ok) throw new Error("Failed to restart dev server");
       return res.json();
     },
@@ -59,7 +63,9 @@ export function useRemoveDevServer() {
 
   return useMutation({
     mutationFn: async (serverId: string) => {
-      const res = await fetch(`/api/dev-servers/${serverId}`, { method: "DELETE" });
+      const res = await fetch(`/api/dev-servers/${serverId}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Failed to remove dev server");
       return res.json();
     },

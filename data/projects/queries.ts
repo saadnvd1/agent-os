@@ -22,7 +22,13 @@ export function useToggleProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, expanded }: { projectId: string; expanded: boolean }) => {
+    mutationFn: async ({
+      projectId,
+      expanded,
+    }: {
+      projectId: string;
+      expanded: boolean;
+    }) => {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -33,9 +39,12 @@ export function useToggleProject() {
     },
     onMutate: async ({ projectId, expanded }) => {
       await queryClient.cancelQueries({ queryKey: projectKeys.list() });
-      const previous = queryClient.getQueryData<ProjectWithDevServers[]>(projectKeys.list());
-      queryClient.setQueryData<ProjectWithDevServers[]>(projectKeys.list(), (old) =>
-        old?.map((p) => (p.id === projectId ? { ...p, expanded } : p))
+      const previous = queryClient.getQueryData<ProjectWithDevServers[]>(
+        projectKeys.list()
+      );
+      queryClient.setQueryData<ProjectWithDevServers[]>(
+        projectKeys.list(),
+        (old) => old?.map((p) => (p.id === projectId ? { ...p, expanded } : p))
       );
       return { previous };
     },
@@ -52,7 +61,9 @@ export function useDeleteProject() {
 
   return useMutation({
     mutationFn: async (projectId: string) => {
-      const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Failed to delete project");
       return res.json();
     },
@@ -67,7 +78,13 @@ export function useRenameProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, newName }: { projectId: string; newName: string }) => {
+    mutationFn: async ({
+      projectId,
+      newName,
+    }: {
+      projectId: string;
+      newName: string;
+    }) => {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -102,7 +119,12 @@ export function useUpdateProject() {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, workingDirectory, agentType, defaultModel }),
+        body: JSON.stringify({
+          name,
+          workingDirectory,
+          agentType,
+          defaultModel,
+        }),
       });
       if (!res.ok) throw new Error("Failed to update project");
       return res.json();

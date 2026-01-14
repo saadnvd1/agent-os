@@ -4,14 +4,21 @@ import { useRef, useCallback, useEffect, memo, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { usePanes } from "@/contexts/PaneContext";
 import { useViewport } from "@/hooks/useViewport";
-import type { TerminalHandle, TerminalScrollState } from "@/components/Terminal";
+import type {
+  TerminalHandle,
+  TerminalScrollState,
+} from "@/components/Terminal";
 import type { Session, Project } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
 import { ConductorPanel } from "@/components/ConductorPanel";
 import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
 import { DesktopTabBar } from "./DesktopTabBar";
-import { TerminalSkeleton, FileExplorerSkeleton, GitPanelSkeleton } from "./PaneSkeletons";
+import {
+  TerminalSkeleton,
+  FileExplorerSkeleton,
+  GitPanelSkeleton,
+} from "./PaneSkeletons";
 
 // Dynamic imports for client-only components with loading states
 const Terminal = dynamic(
@@ -33,7 +40,11 @@ interface PaneProps {
   paneId: string;
   sessions: Session[];
   projects: Project[];
-  onRegisterTerminal: (paneId: string, tabId: string, ref: TerminalHandle | null) => void;
+  onRegisterTerminal: (
+    paneId: string,
+    tabId: string,
+    ref: TerminalHandle | null
+  ) => void;
   onMenuClick?: () => void;
   onSelectSession?: (sessionId: string) => void;
 }
@@ -71,9 +82,13 @@ export const Pane = memo(function Pane({
   const activeTab = getActiveTab(paneId);
 
   // Get ref for active terminal
-  const terminalRef = activeTab ? terminalRefs.current.get(activeTab.id) ?? null : null;
+  const terminalRef = activeTab
+    ? (terminalRefs.current.get(activeTab.id) ?? null)
+    : null;
   const isFocused = focusedPaneId === paneId;
-  const session = activeTab ? sessions.find((s) => s.id === activeTab.sessionId) : null;
+  const session = activeTab
+    ? sessions.find((s) => s.id === activeTab.sessionId)
+    : null;
 
   // File editor state - lifted here so it persists across view switches
   const fileEditor = useFileEditor();
@@ -81,7 +96,7 @@ export const Pane = memo(function Pane({
   // Check if this session is a conductor (has workers)
   const workerCount = useMemo(() => {
     if (!session) return 0;
-    return sessions.filter(s => s.conductor_session_id === session.id).length;
+    return sessions.filter((s) => s.conductor_session_id === session.id).length;
   }, [session, sessions]);
 
   const isConductor = workerCount > 0;
@@ -117,8 +132,10 @@ export const Pane = memo(function Pane({
 
   // Create onConnected callback for a specific tab
   const getTerminalConnectedHandler = useCallback(
-    (tab: typeof paneData.tabs[0]) => () => {
-      console.log(`[AgentOS] Terminal connected for pane: ${paneId}, tab: ${tab.id}`);
+    (tab: (typeof paneData.tabs)[0]) => () => {
+      console.log(
+        `[AgentOS] Terminal connected for pane: ${paneId}, tab: ${tab.id}`
+      );
       const handle = terminalRefs.current.get(tab.id);
       if (!handle) return;
 
@@ -126,7 +143,8 @@ export const Pane = memo(function Pane({
 
       // Determine tmux session name to attach
       const tmuxName = tab.sessionId
-        ? sessions.find((s) => s.id === tab.sessionId)?.tmux_name || tab.attachedTmux
+        ? sessions.find((s) => s.id === tab.sessionId)?.tmux_name ||
+          tab.attachedTmux
         : tab.attachedTmux;
 
       if (tmuxName) {
@@ -142,9 +160,13 @@ export const Pane = memo(function Pane({
 
   // Cleanup on unmount only
   useEffect(() => {
-    console.log(`[AgentOS] Pane ${paneId} mounted, activeTab: ${activeTab?.id || 'null'}`);
+    console.log(
+      `[AgentOS] Pane ${paneId} mounted, activeTab: ${activeTab?.id || "null"}`
+    );
     return () => {
-      console.log(`[AgentOS] Pane ${paneId} unmounting, clearing terminal ref for tab: ${activeTabIdRef.current}`);
+      console.log(
+        `[AgentOS] Pane ${paneId} unmounting, clearing terminal ref for tab: ${activeTabIdRef.current}`
+      );
       if (activeTabIdRef.current) {
         onRegisterTerminal(paneId, activeTabIdRef.current, null);
       }
@@ -154,7 +176,9 @@ export const Pane = memo(function Pane({
 
   // Swipe gesture handling for mobile session switching (terminal view only)
   const touchStartX = useRef<number | null>(null);
-  const currentIndex = session ? sessions.findIndex((s) => s.id === session.id) : -1;
+  const currentIndex = session
+    ? sessions.findIndex((s) => s.id === session.id)
+    : -1;
   const SWIPE_THRESHOLD = 120;
 
   const handleTouchStart = useCallback(
@@ -184,7 +208,7 @@ export const Pane = memo(function Pane({
 
   return (
     <div
-      className="flex flex-col h-full rounded-lg overflow-hidden shadow-lg shadow-black/10 dark:shadow-black/30"
+      className="flex h-full flex-col overflow-hidden rounded-lg shadow-lg shadow-black/10 dark:shadow-black/30"
       onClick={handleFocus}
     >
       {/* Tab Bar - Mobile vs Desktop */}
@@ -226,7 +250,7 @@ export const Pane = memo(function Pane({
 
       {/* Content Area - components stay mounted but hidden for instant switching */}
       <div
-        className="flex-1 min-h-0 relative"
+        className="relative min-h-0 flex-1"
         onTouchStart={isMobile ? handleTouchStart : undefined}
         onTouchEnd={isMobile ? handleTouchEnd : undefined}
       >
@@ -238,7 +262,9 @@ export const Pane = memo(function Pane({
           return (
             <div
               key={tab.id}
-              className={viewMode === "terminal" && isActive ? "h-full" : "hidden"}
+              className={
+                viewMode === "terminal" && isActive ? "h-full" : "hidden"
+              }
             >
               <Terminal
                 ref={getTerminalRef(tab.id)}
@@ -253,7 +279,11 @@ export const Pane = memo(function Pane({
                 }}
                 initialScrollState={
                   savedState
-                    ? { scrollTop: savedState.scrollTop, cursorY: savedState.cursorY, baseY: 0 }
+                    ? {
+                        scrollTop: savedState.scrollTop,
+                        cursorY: savedState.cursorY,
+                        baseY: 0,
+                      }
                     : undefined
                 }
               />
@@ -284,7 +314,7 @@ export const Pane = memo(function Pane({
             conductorSessionId={session.id}
             onAttachToWorker={(workerId) => {
               setViewMode("terminal");
-              const worker = sessions.find(s => s.id === workerId);
+              const worker = sessions.find((s) => s.id === workerId);
               if (worker && terminalRef) {
                 const sessionName = `claude-${workerId}`;
                 terminalRef.sendInput("\x02d");

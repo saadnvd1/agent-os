@@ -150,14 +150,17 @@ export function ProjectSettingsDialog({
 
   // Remove dev server config
   const removeDevServer = (id: string) => {
-    setDevServers((prev) =>
-      prev.map((ds) =>
-        ds.id === id
-          ? ds.isNew
-            ? null // Remove new items completely
-            : { ...ds, isDeleted: true } // Mark existing for deletion
-          : ds
-      ).filter(Boolean) as DevServerConfig[]
+    setDevServers(
+      (prev) =>
+        prev
+          .map((ds) =>
+            ds.id === id
+              ? ds.isNew
+                ? null // Remove new items completely
+                : { ...ds, isDeleted: true } // Mark existing for deletion
+              : ds
+          )
+          .filter(Boolean) as DevServerConfig[]
     );
   };
 
@@ -196,7 +199,12 @@ export function ProjectSettingsDialog({
           await fetch(`/api/projects/${project.id}/dev-servers/${ds.id}`, {
             method: "DELETE",
           });
-        } else if (ds.isNew && !ds.isDeleted && ds.name.trim() && ds.command.trim()) {
+        } else if (
+          ds.isNew &&
+          !ds.isDeleted &&
+          ds.name.trim() &&
+          ds.command.trim()
+        ) {
           // Create new dev server
           await fetch(`/api/projects/${project.id}/dev-servers`, {
             method: "POST",
@@ -249,7 +257,7 @@ export function ProjectSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Project Settings</DialogTitle>
         </DialogHeader>
@@ -278,7 +286,10 @@ export function ProjectSettingsDialog({
           {/* Agent Type */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Default Agent</label>
-            <Select value={agentType} onValueChange={(v) => setAgentType(v as AgentType)}>
+            <Select
+              value={agentType}
+              onValueChange={(v) => setAgentType(v as AgentType)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -312,8 +323,8 @@ export function ProjectSettingsDialog({
           {/* Dev Servers */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Server className="w-4 h-4" />
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Server className="h-4 w-4" />
                 Dev Servers
               </label>
               <div className="flex gap-1">
@@ -325,21 +336,26 @@ export function ProjectSettingsDialog({
                   disabled={isDetecting || !workingDirectory}
                 >
                   {isDetecting ? (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                   ) : (
-                    <RefreshCw className="w-3 h-3 mr-1" />
+                    <RefreshCw className="mr-1 h-3 w-3" />
                   )}
                   Detect
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={addDevServer}>
-                  <Plus className="w-3 h-3 mr-1" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addDevServer}
+                >
+                  <Plus className="mr-1 h-3 w-3" />
                   Add
                 </Button>
               </div>
             </div>
 
             {visibleDevServers.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">
+              <p className="text-muted-foreground py-2 text-sm">
                 No dev servers configured.
               </p>
             ) : (
@@ -347,7 +363,7 @@ export function ProjectSettingsDialog({
                 {visibleDevServers.map((ds) => (
                   <div
                     key={ds.id}
-                    className="p-3 rounded-lg bg-accent/30 space-y-2"
+                    className="bg-accent/30 space-y-2 rounded-lg p-3"
                   >
                     <div className="flex items-center gap-2">
                       <Input
@@ -361,7 +377,9 @@ export function ProjectSettingsDialog({
                       <Select
                         value={ds.type}
                         onValueChange={(v) =>
-                          updateDevServer(ds.id, { type: v as "node" | "docker" })
+                          updateDevServer(ds.id, {
+                            type: v as "node" | "docker",
+                          })
                         }
                       >
                         <SelectTrigger className="h-8 w-24">
@@ -379,7 +397,7 @@ export function ProjectSettingsDialog({
                         onClick={() => removeDevServer(ds.id)}
                         className="text-red-500 hover:text-red-600"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                     <Input
@@ -387,7 +405,9 @@ export function ProjectSettingsDialog({
                       onChange={(e) =>
                         updateDevServer(ds.id, { command: e.target.value })
                       }
-                      placeholder={ds.type === "docker" ? "Service name" : "npm run dev"}
+                      placeholder={
+                        ds.type === "docker" ? "Service name" : "npm run dev"
+                      }
                       className="h-8"
                     />
                     <div className="flex gap-2">
@@ -396,7 +416,9 @@ export function ProjectSettingsDialog({
                         value={ds.port || ""}
                         onChange={(e) =>
                           updateDevServer(ds.id, {
-                            port: e.target.value ? parseInt(e.target.value) : undefined,
+                            port: e.target.value
+                              ? parseInt(e.target.value)
+                              : undefined,
                           })
                         }
                         placeholder="Port"

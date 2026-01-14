@@ -195,7 +195,7 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
 
   if (loading) {
     return (
-      <div className="h-full w-full flex flex-col bg-background">
+      <div className="bg-background flex h-full w-full flex-col">
         <Header
           branch=""
           ahead={0}
@@ -203,8 +203,8 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
           onRefresh={handleRefresh}
           refreshing={false}
         />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
         </div>
       </div>
     );
@@ -212,7 +212,7 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
 
   if (error) {
     return (
-      <div className="h-full w-full flex flex-col bg-background">
+      <div className="bg-background flex h-full w-full flex-col">
         <Header
           branch=""
           ahead={0}
@@ -220,9 +220,9 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
           onRefresh={handleRefresh}
           refreshing={refreshing}
         />
-        <div className="flex-1 flex flex-col items-center justify-center p-4">
-          <AlertCircle className="w-8 h-8 text-muted-foreground mb-2" />
-          <p className="text-sm text-muted-foreground text-center">{error}</p>
+        <div className="flex flex-1 flex-col items-center justify-center p-4">
+          <AlertCircle className="text-muted-foreground mb-2 h-8 w-8" />
+          <p className="text-muted-foreground text-center text-sm">{error}</p>
         </div>
       </div>
     );
@@ -267,7 +267,7 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
   // Desktop layout: side-by-side for Changes, or CommitHistory for History
   if (activeTab === "history") {
     return (
-      <div className="h-full w-full flex flex-col bg-background">
+      <div className="bg-background flex h-full w-full flex-col">
         <Header
           branch={status.branch}
           ahead={status.ahead}
@@ -283,10 +283,13 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
 
   // Desktop layout: side-by-side (Changes tab)
   return (
-    <div ref={containerRef} className="h-full w-full flex flex-col bg-background">
-      <div className="flex-1 flex min-h-0">
+    <div
+      ref={containerRef}
+      className="bg-background flex h-full w-full flex-col"
+    >
+      <div className="flex min-h-0 flex-1">
         {/* Left panel - file list */}
-        <div className="h-full flex flex-col" style={{ width: listWidth }}>
+        <div className="flex h-full flex-col" style={{ width: listWidth }}>
           <Header
             branch={status.branch}
             ahead={status.ahead}
@@ -298,7 +301,7 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
 
           <div className="flex-1 overflow-y-auto">
             {!hasChanges ? (
-              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+              <div className="text-muted-foreground flex h-32 flex-col items-center justify-center">
                 <p className="text-sm">No changes</p>
               </div>
             ) : (
@@ -351,7 +354,9 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
           <CommitForm
             workingDirectory={workingDirectory}
             stagedCount={status.staged.length}
-            isOnMainBranch={status.branch === "main" || status.branch === "master"}
+            isOnMainBranch={
+              status.branch === "main" || status.branch === "master"
+            }
             branch={status.branch}
             onCommit={fetchStatus}
             onCreatePR={() => setShowPRModal(true)}
@@ -360,22 +365,22 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
 
         {/* Resize handle */}
         <div
-          className="w-1 cursor-col-resize bg-muted/50 hover:bg-primary/50 active:bg-primary transition-colors flex-shrink-0"
+          className="bg-muted/50 hover:bg-primary/50 active:bg-primary w-1 flex-shrink-0 cursor-col-resize transition-colors"
           onMouseDown={handleMouseDown}
         />
 
         {/* Right panel - diff viewer */}
-        <div className="flex-1 h-full flex flex-col min-w-0 bg-muted/20">
+        <div className="bg-muted/20 flex h-full min-w-0 flex-1 flex-col">
           {loadingDiff ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex flex-1 items-center justify-center">
+              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
           ) : selectedFile ? (
             <>
               {/* Diff header with stage/unstage */}
-              <div className="flex items-center gap-2 p-3 bg-background/50">
-                <FileCode className="w-4 h-4 text-muted-foreground" />
-                <span className="flex-1 text-sm font-medium truncate">
+              <div className="bg-background/50 flex items-center gap-2 p-3">
+                <FileCode className="text-muted-foreground h-4 w-4" />
+                <span className="flex-1 truncate text-sm font-medium">
                   {selectedFile.file.path}
                 </span>
                 <Button
@@ -389,12 +394,12 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
                 >
                   {selectedFile.file.staged ? (
                     <>
-                      <Minus className="w-4 h-4 mr-1" />
+                      <Minus className="mr-1 h-4 w-4" />
                       Unstage
                     </>
                   ) : (
                     <>
-                      <Plus className="w-4 h-4 mr-1" />
+                      <Plus className="mr-1 h-4 w-4" />
                       Stage
                     </>
                   )}
@@ -402,12 +407,15 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
               </div>
               {/* Diff content */}
               <div className="flex-1 overflow-auto p-3">
-                <DiffView diff={selectedFile.diff} fileName={selectedFile.file.path} />
+                <DiffView
+                  diff={selectedFile.diff}
+                  fileName={selectedFile.file.path}
+                />
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-              <FileCode className="w-12 h-12 mb-4 opacity-50" />
+            <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center">
+              <FileCode className="mb-4 h-12 w-12 opacity-50" />
               <p className="text-sm">Select a file to view diff</p>
             </div>
           )}
@@ -472,7 +480,7 @@ function MobileGitPanel({
   // History tab
   if (activeTab === "history") {
     return (
-      <div className="h-full w-full flex flex-col bg-background">
+      <div className="bg-background flex h-full w-full flex-col">
         <Header
           branch={status.branch}
           ahead={status.ahead}
@@ -489,14 +497,16 @@ function MobileGitPanel({
   // Show diff view when file is selected
   if (selectedFile) {
     return (
-      <div className="h-full w-full flex flex-col bg-background">
+      <div className="bg-background flex h-full w-full flex-col">
         {/* Header */}
-        <div className="flex items-center gap-2 p-2 bg-muted/30">
+        <div className="bg-muted/30 flex items-center gap-2 p-2">
           <Button variant="ghost" size="icon-sm" onClick={onBack}>
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{selectedFile.file.path}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">
+              {selectedFile.file.path}
+            </p>
           </div>
           <Button
             variant={selectedFile.file.staged ? "outline" : "default"}
@@ -514,11 +524,14 @@ function MobileGitPanel({
         {/* Diff content */}
         <div className="flex-1 overflow-auto p-3">
           {loadingDiff ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
           ) : (
-            <DiffView diff={selectedFile.diff} fileName={selectedFile.file.path} />
+            <DiffView
+              diff={selectedFile.diff}
+              fileName={selectedFile.file.path}
+            />
           )}
         </div>
       </div>
@@ -527,7 +540,7 @@ function MobileGitPanel({
 
   // Show file list (Changes tab)
   return (
-    <div className="h-full w-full flex flex-col bg-background">
+    <div className="bg-background flex h-full w-full flex-col">
       <Header
         branch={status.branch}
         ahead={status.ahead}
@@ -539,7 +552,7 @@ function MobileGitPanel({
 
       <div className="flex-1 overflow-y-auto">
         {!hasChanges ? (
-          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+          <div className="text-muted-foreground flex h-32 flex-col items-center justify-center">
             <p className="text-sm">No changes</p>
           </div>
         ) : (
@@ -598,7 +611,7 @@ function MobileGitPanel({
       {/* Mobile hint */}
       {hasChanges && status.staged.length === 0 && (
         <div className="px-3 py-2">
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-muted-foreground text-center text-xs">
             Swipe right to stage, left to unstage
           </p>
         </div>
@@ -626,20 +639,20 @@ interface HeaderProps {
 function Header({ branch, ahead, behind, onRefresh, refreshing }: HeaderProps) {
   return (
     <div className="flex items-center gap-2 p-3">
-      <GitBranch className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{branch || "Git Status"}</p>
+      <GitBranch className="text-muted-foreground h-4 w-4 flex-shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{branch || "Git Status"}</p>
         {(ahead > 0 || behind > 0) && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex items-center gap-2 text-xs">
             {ahead > 0 && (
               <span className="flex items-center gap-0.5">
-                <ArrowUp className="w-3 h-3" />
+                <ArrowUp className="h-3 w-3" />
                 {ahead}
               </span>
             )}
             {behind > 0 && (
               <span className="flex items-center gap-0.5">
-                <ArrowDown className="w-3 h-3" />
+                <ArrowDown className="h-3 w-3" />
                 {behind}
               </span>
             )}
@@ -653,9 +666,7 @@ function Header({ branch, ahead, behind, onRefresh, refreshing }: HeaderProps) {
         disabled={refreshing}
         className="h-8 w-8"
       >
-        <RefreshCw
-          className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
-        />
+        <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
       </Button>
     </div>
   );

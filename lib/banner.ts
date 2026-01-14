@@ -1,9 +1,9 @@
 // AgentOS session initialization
 // Writes an init script that shows the banner, configures tmux, then runs the agent
 
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 /**
  * Generate an init script that shows the AgentOS banner and configures tmux

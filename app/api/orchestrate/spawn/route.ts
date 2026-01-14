@@ -16,7 +16,10 @@ export async function POST(request: Request) {
 
     if (!conductorSessionId || !task || !workingDirectory) {
       return NextResponse.json(
-        { error: "Missing required fields: conductorSessionId, task, workingDirectory" },
+        {
+          error:
+            "Missing required fields: conductorSessionId, task, workingDirectory",
+        },
         { status: 400 }
       );
     }

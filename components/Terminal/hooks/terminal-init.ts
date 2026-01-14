@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import { SearchAddon } from '@xterm/addon-search';
-import { CanvasAddon } from '@xterm/addon-canvas';
-import { getTerminalThemeForApp } from '../constants';
+import { Terminal as XTerm } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { SearchAddon } from "@xterm/addon-search";
+import { CanvasAddon } from "@xterm/addon-canvas";
+import { getTerminalThemeForApp } from "../constants";
 
 export interface TerminalInstance {
   term: XTerm;
@@ -19,21 +19,22 @@ export function createTerminal(
   theme: string
 ): TerminalInstance {
   const fontSize = isMobile ? 11 : 14;
-  const terminalTheme = getTerminalThemeForApp(theme || 'dark');
+  const terminalTheme = getTerminalThemeForApp(theme || "dark");
 
   const term = new XTerm({
     cursorBlink: true,
     fontSize,
-    fontFamily: '"JetBrains Mono", "Fira Code", Menlo, Monaco, "Courier New", monospace',
-    fontWeight: '400',
-    fontWeightBold: '600',
+    fontFamily:
+      '"JetBrains Mono", "Fira Code", Menlo, Monaco, "Courier New", monospace',
+    fontWeight: "400",
+    fontWeightBold: "600",
     letterSpacing: 0,
     lineHeight: isMobile ? 1.15 : 1.2,
     scrollback: 15000,
     scrollSensitivity: isMobile ? 3 : 1,
     fastScrollSensitivity: 5,
     smoothScrollDuration: 100,
-    cursorStyle: 'bar',
+    cursorStyle: "bar",
     cursorWidth: 2,
     allowProposedApi: true,
     theme: terminalTheme,
@@ -71,6 +72,6 @@ export function updateTerminalForMobile(
 }
 
 export function updateTerminalTheme(term: XTerm, theme: string): void {
-  const terminalTheme = getTerminalThemeForApp(theme || 'dark');
+  const terminalTheme = getTerminalThemeForApp(theme || "dark");
   term.options.theme = terminalTheme;
 }
