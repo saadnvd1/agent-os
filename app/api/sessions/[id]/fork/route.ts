@@ -34,16 +34,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Create new session
     const newId = randomUUID();
     const newName = name || `${parent.name} (fork)`;
+    const agentType = parent.agent_type || "claude";
+    const tmuxName = `${agentType}-${newId}`;
 
     queries.createSession(db).run(
       newId,
       newName,
+      tmuxName,
       parent.working_directory,
       parentId,
       parent.model,
       parent.system_prompt,
       parent.group_path || "sessions",
-      parent.agent_type || "claude",
+      agentType,
       parent.auto_approve ? 1 : 0,
       parent.project_id || "uncategorized"
     );

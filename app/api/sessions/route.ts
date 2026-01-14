@@ -117,9 +117,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const tmuxName = `${agentType}-${id}`;
     queries.createSession(db).run(
       id,
       name,
+      tmuxName,
       actualWorkingDirectory,
       parentSessionId,
       model,

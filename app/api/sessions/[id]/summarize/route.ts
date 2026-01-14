@@ -240,23 +240,26 @@ export async function POST(
     if (createFork) {
       const newId = randomUUID();
       const newName = `${session.name} (fresh)`;
+      const agentType = session.agent_type || "claude";
+      const tmuxName = `${agentType}-${newId}`;
 
       // Create new session in DB (using cwd already fetched above)
       queries.createSession(db).run(
         newId,
         newName,
+        tmuxName,
         cwd,
         null, // no parent - fresh start
         session.model,
         `Continue from previous session. Here's a summary of the work so far:\n\n${summary}`,
         session.group_path,
-        session.agent_type,
+        agentType,
         session.auto_approve ? 1 : 0,
         session.project_id || "uncategorized"
       );
 
       newSession = queries.getSession(db).get(newId) as Session;
-      const newTmuxSession = `claude-${newId}`;
+      const newTmuxSession = tmuxName;
 
       // Start new tmux session with Claude directly
       const claudeCmd = session.auto_approve

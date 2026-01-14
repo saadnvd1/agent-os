@@ -3,6 +3,7 @@ import type { AgentType } from "../providers";
 export interface Session {
   id: string;
   name: string;
+  tmux_name: string;
   created_at: string;
   updated_at: string;
   status: "idle" | "running" | "waiting" | "error";

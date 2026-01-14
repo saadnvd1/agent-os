@@ -125,7 +125,7 @@ function HomeContent() {
   // Build tmux command for a session
   const buildSessionCommand = useCallback(async (session: Session): Promise<{ sessionName: string; cwd: string; command: string }> => {
     const provider = getProvider(session.agent_type || "claude");
-    const sessionName = `${provider.id}-${session.id}`;
+    const sessionName = session.tmux_name || `${provider.id}-${session.id}`;
     const cwd = session.working_directory?.replace("~", "$HOME") || "$HOME";
 
     // Ensure MCP config exists for orchestration
