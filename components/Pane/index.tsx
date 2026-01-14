@@ -131,7 +131,18 @@ export const Pane = memo(function Pane({
     if (terminalRef.current && activeTab) {
       onRegisterTerminal(paneId, activeTab.id, terminalRef.current);
 
-      if (activeTab.attachedTmux) {
+      // Use fresh session tmux_name from database, not cached attachedTmux
+      // This ensures renamed sessions attach correctly
+      if (activeTab.sessionId) {
+        const currentSession = sessions.find(s => s.id === activeTab.sessionId);
+        const tmuxName = currentSession?.tmux_name || activeTab.attachedTmux;
+        if (tmuxName) {
+          setTimeout(() => {
+            terminalRef.current?.sendCommand(`tmux attach -t ${tmuxName}`);
+          }, 100);
+        }
+      } else if (activeTab.attachedTmux) {
+        // Fallback for tabs without sessionId (e.g., manually attached)
         setTimeout(() => {
           terminalRef.current?.sendCommand(`tmux attach -t ${activeTab.attachedTmux}`);
         }, 100);
@@ -139,7 +150,7 @@ export const Pane = memo(function Pane({
     } else {
       console.log(`[AgentOS] Cannot register terminal - ref: ${!!terminalRef.current}, activeTab: ${!!activeTab}`);
     }
-  }, [paneId, activeTab, onRegisterTerminal]);
+  }, [paneId, activeTab, sessions, onRegisterTerminal]);
 
   // Track current tab ID for cleanup
   const activeTabIdRef = useRef<string | null>(null);
