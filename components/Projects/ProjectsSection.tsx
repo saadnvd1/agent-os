@@ -195,10 +195,10 @@ export function ProjectsSection({
 
             {/* Project contents when expanded */}
             {project.expanded && (
-              <div className="border-border/30 ml-4 space-y-0.5 border-l pl-2">
+              <div className="border-border/30 ml-3 space-y-px border-l pl-1.5">
                 {/* Dev servers for this project */}
                 {projectDevServers.length > 0 && (
-                  <div className="space-y-1 pb-1">
+                  <div className="space-y-px pb-0.5">
                     {projectDevServers.map((server) => (
                       <DevServerCard
                         key={server.id}
@@ -306,7 +306,7 @@ export function ProjectsSection({
 
                         {/* Nested workers */}
                         {hasWorkers && (
-                          <div className="border-border/30 ml-4 space-y-0.5 border-l pl-2">
+                          <div className="border-border/30 ml-3 space-y-px border-l pl-1.5">
                             {workers.map((worker) => (
                               <SessionCard
                                 key={worker.id}
