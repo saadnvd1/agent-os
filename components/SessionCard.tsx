@@ -247,6 +247,16 @@ export function SessionCard({
 
     return (
       <>
+        {/* Branch info for worktree sessions */}
+        {session.branch_name && (
+          <>
+            <div className="text-muted-foreground flex items-center gap-2 px-2 py-1.5 text-xs">
+              <GitBranch className="h-3 w-3" />
+              <span className="truncate">{session.branch_name}</span>
+            </div>
+            <MenuSeparator />
+          </>
+        )}
         {onOpenInTab && (
           <MenuItem onClick={() => onOpenInTab()}>
             <ExternalLink className="mr-2 h-3 w-3" />
@@ -412,19 +422,6 @@ export function SessionCard({
       {/* Fork indicator */}
       {session.parent_session_id && (
         <GitFork className="text-muted-foreground h-3 w-3 flex-shrink-0" />
-      )}
-
-      {/* Branch indicator for worktree sessions */}
-      {session.branch_name && (
-        <span
-          className="text-muted-foreground flex flex-shrink-0 items-center gap-0.5 text-[10px]"
-          title={session.branch_name}
-        >
-          <GitBranch className="h-3 w-3" />
-          <span className="max-w-[60px] truncate">
-            {session.branch_name.replace("feature/", "")}
-          </span>
-        </span>
       )}
 
       {/* TODO: Show port indicator once auto dev server management is implemented.
