@@ -36,11 +36,19 @@ interface TerminalProps {
   onDisconnected?: () => void;
   onBeforeUnmount?: (scrollState: TerminalScrollState) => void;
   initialScrollState?: TerminalScrollState;
+  /** Show image picker button (default: true) */
+  showImageButton?: boolean;
 }
 
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
   function Terminal(
-    { onConnected, onDisconnected, onBeforeUnmount, initialScrollState },
+    {
+      onConnected,
+      onDisconnected,
+      onBeforeUnmount,
+      initialScrollState,
+      showImageButton = true,
+    },
     ref
   ) {
     const terminalRef = useRef<HTMLDivElement>(null);
@@ -229,8 +237,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           </div>
         )}
 
-        {/* Image picker button - desktop only (mobile uses virtual keyboard) */}
-        {!isMobile && (
+        {/* Image picker button - desktop only, for agent terminals */}
+        {!isMobile && showImageButton && (
           <button
             onClick={() => setShowImagePicker(true)}
             className="bg-secondary hover:bg-accent absolute top-3 right-3 z-40 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all"

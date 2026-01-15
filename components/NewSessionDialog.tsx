@@ -407,7 +407,7 @@ export function NewSessionDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Session</DialogTitle>
           </DialogHeader>
