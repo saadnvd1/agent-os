@@ -163,6 +163,16 @@ export function FileEditDialog({
   }, []);
 
   const handleBeforeMount = useCallback((monaco: Monaco) => {
+    // Disable TypeScript/JavaScript diagnostics - we don't have project context
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: true,
+    });
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: true,
+    });
+
     monaco.editor.defineTheme("agentOsDiff", {
       base: "vs-dark",
       inherit: true,
