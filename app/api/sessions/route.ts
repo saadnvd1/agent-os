@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
       useWorktree = false,
       featureName = null,
       baseBranch = "main",
+      // Tmux option
+      useTmux = true,
     } = body;
 
     // Validate agent type
@@ -123,7 +125,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const tmuxName = `${agentType}-${id}`;
+    const tmuxName = useTmux ? `${agentType}-${id}` : null;
     queries.createSession(db).run(
       id,
       name,
