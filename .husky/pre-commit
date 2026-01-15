@@ -1,7 +1,11 @@
 echo "🔍 Running pre-commit checks..."
 
-echo "💅 Formatting..."
-npx prettier --write .
+echo "💅 Formatting staged files..."
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(js|jsx|ts|tsx|json|css|md)$' || true)
+if [ -n "$STAGED_FILES" ]; then
+  echo "$STAGED_FILES" | xargs npx prettier --write
+  echo "$STAGED_FILES" | xargs git add
+fi
 
 echo "📝 Type checking..."
 npm run typecheck
