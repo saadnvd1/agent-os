@@ -2,7 +2,7 @@
 
 A mobile-first web UI for managing AI coding sessions.
 
-[![Discord](https://img.shields.io/discord/1379529488498049024?color=5865F2&logo=discord&logoColor=white)](https://discord.gg/cSjutkCGAh)
+[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/cSjutkCGAh)
 
 https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
 
