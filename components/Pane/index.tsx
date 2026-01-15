@@ -19,6 +19,7 @@ import {
   FileExplorerSkeleton,
   GitPanelSkeleton,
 } from "./PaneSkeletons";
+import { GitDrawer } from "@/components/GitDrawer";
 
 // Dynamic imports for client-only components with loading states
 const Terminal = dynamic(
@@ -77,6 +78,11 @@ export const Pane = memo(function Pane({
   } = usePanes();
 
   const [viewMode, setViewMode] = useState<ViewMode>("terminal");
+  const [gitDrawerOpen, setGitDrawerOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = localStorage.getItem("gitDrawerOpen");
+    return stored === null ? true : stored === "true";
+  });
   const terminalRefs = useRef<Map<string, TerminalHandle | null>>(new Map());
   const paneData = getPaneData(paneId);
   const activeTab = getActiveTab(paneId);
@@ -106,6 +112,11 @@ export const Pane = memo(function Pane({
     setViewMode("terminal");
     fileEditor.reset();
   }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist git drawer state
+  useEffect(() => {
+    localStorage.setItem("gitDrawerOpen", String(gitDrawerOpen));
+  }, [gitDrawerOpen]);
 
   const handleFocus = useCallback(() => {
     focusPane(paneId);
@@ -237,10 +248,12 @@ export const Pane = memo(function Pane({
           canSplit={canSplit}
           canClose={canClose}
           hasAttachedTmux={!!activeTab?.attachedTmux}
+          gitDrawerOpen={gitDrawerOpen}
           onTabSwitch={(tabId) => switchTab(paneId, tabId)}
           onTabClose={(tabId) => closeTab(paneId, tabId)}
           onTabAdd={() => addTab(paneId)}
           onViewModeChange={setViewMode}
+          onGitDrawerToggle={() => setGitDrawerOpen((prev) => !prev)}
           onSplitHorizontal={() => splitHorizontal(paneId)}
           onSplitVertical={() => splitVertical(paneId)}
           onClose={() => close(paneId)}
@@ -248,84 +261,96 @@ export const Pane = memo(function Pane({
         />
       )}
 
-      {/* Content Area - components stay mounted but hidden for instant switching */}
-      <div
-        className="relative min-h-0 flex-1"
-        onTouchStart={isMobile ? handleTouchStart : undefined}
-        onTouchEnd={isMobile ? handleTouchEnd : undefined}
-      >
-        {/* Terminals - one per tab, kept mounted for instant switching */}
-        {paneData.tabs.map((tab) => {
-          const isActive = tab.id === activeTab?.id;
-          const savedState = sessionRegistry.getTerminalState(paneId, tab.id);
+      {/* Content Area + Git Drawer in flex row */}
+      <div className="flex min-h-0 flex-1">
+        {/* Main Content */}
+        <div
+          className="relative min-h-0 min-w-0 flex-1"
+          onTouchStart={isMobile ? handleTouchStart : undefined}
+          onTouchEnd={isMobile ? handleTouchEnd : undefined}
+        >
+          {/* Terminals - one per tab, kept mounted for instant switching */}
+          {paneData.tabs.map((tab) => {
+            const isActive = tab.id === activeTab?.id;
+            const savedState = sessionRegistry.getTerminalState(paneId, tab.id);
 
-          return (
-            <div
-              key={tab.id}
-              className={
-                viewMode === "terminal" && isActive ? "h-full" : "hidden"
-              }
-            >
-              <Terminal
-                ref={getTerminalRef(tab.id)}
-                onConnected={getTerminalConnectedHandler(tab)}
-                onBeforeUnmount={(scrollState) => {
-                  sessionRegistry.saveTerminalState(paneId, tab.id, {
-                    scrollTop: scrollState.scrollTop,
-                    scrollHeight: 0,
-                    lastActivity: Date.now(),
-                    cursorY: scrollState.cursorY,
-                  });
-                }}
-                initialScrollState={
-                  savedState
-                    ? {
-                        scrollTop: savedState.scrollTop,
-                        cursorY: savedState.cursorY,
-                        baseY: 0,
-                      }
-                    : undefined
+            return (
+              <div
+                key={tab.id}
+                className={
+                  viewMode === "terminal" && isActive ? "h-full" : "hidden"
                 }
+              >
+                <Terminal
+                  ref={getTerminalRef(tab.id)}
+                  onConnected={getTerminalConnectedHandler(tab)}
+                  onBeforeUnmount={(scrollState) => {
+                    sessionRegistry.saveTerminalState(paneId, tab.id, {
+                      scrollTop: scrollState.scrollTop,
+                      scrollHeight: 0,
+                      lastActivity: Date.now(),
+                      cursorY: scrollState.cursorY,
+                    });
+                  }}
+                  initialScrollState={
+                    savedState
+                      ? {
+                          scrollTop: savedState.scrollTop,
+                          cursorY: savedState.cursorY,
+                          baseY: 0,
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            );
+          })}
+
+          {/* Files - mounted once accessed, stays mounted */}
+          {session?.working_directory && (
+            <div className={viewMode === "files" ? "h-full" : "hidden"}>
+              <FileExplorer
+                workingDirectory={session.working_directory}
+                fileEditor={fileEditor}
               />
             </div>
-          );
-        })}
+          )}
 
-        {/* Files - mounted once accessed, stays mounted */}
-        {session?.working_directory && (
-          <div className={viewMode === "files" ? "h-full" : "hidden"}>
-            <FileExplorer
-              workingDirectory={session.working_directory}
-              fileEditor={fileEditor}
-            />
-          </div>
-        )}
+          {/* Git - mobile only (desktop uses GitDrawer) */}
+          {isMobile && session?.working_directory && (
+            <div className={viewMode === "git" ? "h-full" : "hidden"}>
+              <GitPanel workingDirectory={session.working_directory} />
+            </div>
+          )}
 
-        {/* Git - mounted once accessed, stays mounted */}
-        {session?.working_directory && (
-          <div className={viewMode === "git" ? "h-full" : "hidden"}>
-            <GitPanel workingDirectory={session.working_directory} />
-          </div>
-        )}
-
-        {/* Workers - only for conductor sessions */}
-        {viewMode === "workers" && session && (
-          <ConductorPanel
-            conductorSessionId={session.id}
-            onAttachToWorker={(workerId) => {
-              setViewMode("terminal");
-              const worker = sessions.find((s) => s.id === workerId);
-              if (worker && terminalRef) {
-                const sessionName = `claude-${workerId}`;
-                terminalRef.sendInput("\x02d");
-                setTimeout(() => {
-                  terminalRef?.sendInput("\x15");
+          {/* Workers - only for conductor sessions */}
+          {viewMode === "workers" && session && (
+            <ConductorPanel
+              conductorSessionId={session.id}
+              onAttachToWorker={(workerId) => {
+                setViewMode("terminal");
+                const worker = sessions.find((s) => s.id === workerId);
+                if (worker && terminalRef) {
+                  const sessionName = `claude-${workerId}`;
+                  terminalRef.sendInput("\x02d");
                   setTimeout(() => {
-                    terminalRef?.sendCommand(`tmux attach -t ${sessionName}`);
-                  }, 50);
-                }, 100);
-              }
-            }}
+                    terminalRef?.sendInput("\x15");
+                    setTimeout(() => {
+                      terminalRef?.sendCommand(`tmux attach -t ${sessionName}`);
+                    }, 50);
+                  }, 100);
+                }
+              }}
+            />
+          )}
+        </div>
+
+        {/* Git Drawer - desktop only, pushes content */}
+        {!isMobile && session?.working_directory && (
+          <GitDrawer
+            open={gitDrawerOpen}
+            onOpenChange={setGitDrawerOpen}
+            workingDirectory={session.working_directory}
           />
         )}
       </div>

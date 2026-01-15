@@ -40,10 +40,12 @@ interface DesktopTabBarProps {
   canSplit: boolean;
   canClose: boolean;
   hasAttachedTmux: boolean;
+  gitDrawerOpen: boolean;
   onTabSwitch: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onTabAdd: () => void;
   onViewModeChange: (mode: ViewMode) => void;
+  onGitDrawerToggle: () => void;
   onSplitHorizontal: () => void;
   onSplitVertical: () => void;
   onClose: () => void;
@@ -62,10 +64,12 @@ export function DesktopTabBar({
   canSplit,
   canClose,
   hasAttachedTmux,
+  gitDrawerOpen,
   onTabSwitch,
   onTabClose,
   onTabAdd,
   onViewModeChange,
+  onGitDrawerToggle,
   onSplitHorizontal,
   onSplitVertical,
   onClose,
@@ -183,11 +187,11 @@ export function DesktopTabBar({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onViewModeChange("git");
+                  onGitDrawerToggle();
                 }}
                 className={cn(
                   "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
-                  viewMode === "git"
+                  gitDrawerOpen
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
@@ -196,7 +200,7 @@ export function DesktopTabBar({
                 <span>Git</span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>Git status</TooltipContent>
+            <TooltipContent>Git changes</TooltipContent>
           </Tooltip>
           {isConductor && (
             <Tooltip>
