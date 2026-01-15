@@ -4,7 +4,7 @@ A mobile-first web UI for managing AI coding sessions.
 
 https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
 
-![AgentOS Screenshot](screenshot.png?v=2)
+![AgentOS Screenshot](screenshot-v2.png)
 
 ## Installation
 
