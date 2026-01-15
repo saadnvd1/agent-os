@@ -170,13 +170,29 @@ export async function GET() {
     const db = getDb();
     const sessionsToUpdate: string[] = [];
 
-    for (const sessionName of managedSessions) {
-      const status = await statusDetector.getStatus(sessionName);
-      const claudeSessionId = await getClaudeSessionId(sessionName);
-      const lastLine = await getLastLine(sessionName);
+    // Process all sessions in parallel for speed
+    const sessionPromises = managedSessions.map(async (sessionName) => {
+      const [status, claudeSessionId, lastLine] = await Promise.all([
+        statusDetector.getStatus(sessionName),
+        getClaudeSessionId(sessionName),
+        getLastLine(sessionName),
+      ]);
       const id = getSessionIdFromName(sessionName);
       const agentType = getAgentTypeFromSessionName(sessionName);
 
+      return { sessionName, id, status, claudeSessionId, lastLine, agentType };
+    });
+
+    const results = await Promise.all(sessionPromises);
+
+    for (const {
+      sessionName,
+      id,
+      status,
+      claudeSessionId,
+      lastLine,
+      agentType,
+    } of results) {
       // Track status changes - update DB when session becomes active
       const prevStatus = previousStatuses.get(id);
       if (status === "running" || status === "waiting") {
@@ -195,13 +211,22 @@ export async function GET() {
       };
     }
 
-    // Batch update sessions that became active (updates updated_at for sorting)
-    if (sessionsToUpdate.length > 0) {
-      const updateStmt = db.prepare(
-        "UPDATE sessions SET updated_at = datetime('now') WHERE id = ?"
-      );
-      for (const id of sessionsToUpdate) {
-        updateStmt.run(id);
+    // Batch update sessions and claude_session_id in a single transaction
+    const updateStatusStmt = db.prepare(
+      "UPDATE sessions SET updated_at = datetime('now') WHERE id = ?"
+    );
+    const updateClaudeIdStmt = db.prepare(
+      "UPDATE sessions SET claude_session_id = ? WHERE id = ? AND (claude_session_id IS NULL OR claude_session_id != ?)"
+    );
+
+    for (const id of sessionsToUpdate) {
+      updateStatusStmt.run(id);
+    }
+
+    // Update claude_session_id directly here instead of requiring separate API calls
+    for (const { id, claudeSessionId } of results) {
+      if (claudeSessionId) {
+        updateClaudeIdStmt.run(claudeSessionId, id, claudeSessionId);
       }
     }
 

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   GitBranch,
+  GitPullRequest,
   RefreshCw,
   Loader2,
   AlertCircle,
@@ -12,6 +14,7 @@ import {
   Minus,
   ArrowLeft,
   FileCode,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FileChanges } from "./FileChanges";
@@ -21,6 +24,14 @@ import { GitPanelTabs, type GitTab } from "./GitPanelTabs";
 import { CommitHistory } from "./CommitHistory";
 import { DiffView } from "@/components/DiffViewer/DiffModal";
 import { useViewport } from "@/hooks/useViewport";
+import {
+  useGitStatus,
+  usePRStatus,
+  useCreatePR,
+  useStageFiles,
+  useUnstageFiles,
+  gitKeys,
+} from "@/data/git/queries";
 import type { GitStatus, GitFile } from "@/lib/git-status";
 
 interface GitPanelProps {
@@ -35,12 +46,26 @@ interface SelectedFile {
 
 export function GitPanel({ workingDirectory }: GitPanelProps) {
   const { isMobile } = useViewport();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<GitTab>("changes");
-  const [status, setStatus] = useState<GitStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [showPRModal, setShowPRModal] = useState(false);
+
+  // React Query hooks
+  const {
+    data: status,
+    isPending: loading,
+    isError,
+    error,
+    refetch: refetchStatus,
+    isRefetching,
+  } = useGitStatus(workingDirectory);
+
+  const { data: prData } = usePRStatus(workingDirectory);
+  const existingPR = prData?.existingPR ?? null;
+
+  const createPRMutation = useCreatePR(workingDirectory);
+  const stageMutation = useStageFiles(workingDirectory);
+  const unstageMutation = useUnstageFiles(workingDirectory);
 
   // Selected file for diff view
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
@@ -51,36 +76,8 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const res = await fetch(
-        `/api/git/status?path=${encodeURIComponent(workingDirectory)}`
-      );
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-        setStatus(null);
-      } else {
-        setStatus(data);
-        setError(null);
-      }
-    } catch {
-      setError("Failed to fetch git status");
-      setStatus(null);
-    }
-  }, [workingDirectory]);
-
-  useEffect(() => {
-    setLoading(true);
-    setSelectedFile(null);
-    fetchStatus().finally(() => setLoading(false));
-  }, [fetchStatus]);
-
   const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchStatus();
-    setRefreshing(false);
+    await refetchStatus();
   };
 
   const handleFileClick = async (file: GitFile) => {
@@ -107,64 +104,37 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
     }
   };
 
-  const handleStage = async (file: GitFile) => {
-    try {
-      await fetch("/api/git/stage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory, files: [file.path] }),
-      });
-      await fetchStatus();
-      // Update selected file's staged status if it's the same file
-      if (selectedFile?.file.path === file.path) {
-        setSelectedFile({ ...selectedFile, file: { ...file, staged: true } });
-      }
-    } catch {
-      // Ignore errors
-    }
+  const handleStage = (file: GitFile) => {
+    stageMutation.mutate([file.path], {
+      onSuccess: () => {
+        // Update selected file's staged status if it's the same file
+        if (selectedFile?.file.path === file.path) {
+          setSelectedFile({ ...selectedFile, file: { ...file, staged: true } });
+        }
+      },
+    });
   };
 
-  const handleUnstage = async (file: GitFile) => {
-    try {
-      await fetch("/api/git/unstage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory, files: [file.path] }),
-      });
-      await fetchStatus();
-      // Update selected file's staged status if it's the same file
-      if (selectedFile?.file.path === file.path) {
-        setSelectedFile({ ...selectedFile, file: { ...file, staged: false } });
-      }
-    } catch {
-      // Ignore errors
-    }
+  const handleUnstage = (file: GitFile) => {
+    unstageMutation.mutate([file.path], {
+      onSuccess: () => {
+        // Update selected file's staged status if it's the same file
+        if (selectedFile?.file.path === file.path) {
+          setSelectedFile({
+            ...selectedFile,
+            file: { ...file, staged: false },
+          });
+        }
+      },
+    });
   };
 
-  const handleStageAll = async () => {
-    try {
-      await fetch("/api/git/stage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory }),
-      });
-      await fetchStatus();
-    } catch {
-      // Ignore errors
-    }
+  const handleStageAll = () => {
+    stageMutation.mutate(undefined);
   };
 
-  const handleUnstageAll = async () => {
-    try {
-      await fetch("/api/git/unstage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory }),
-      });
-      await fetchStatus();
-    } catch {
-      // Ignore errors
-    }
+  const handleUnstageAll = () => {
+    unstageMutation.mutate(undefined);
   };
 
   // Resize handle for desktop
@@ -210,7 +180,7 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
     );
   }
 
-  if (error) {
+  if (isError) {
     return (
       <div className="bg-background flex h-full w-full flex-col">
         <Header
@@ -218,11 +188,14 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
           ahead={0}
           behind={0}
           onRefresh={handleRefresh}
-          refreshing={refreshing}
+          refreshing={isRefetching}
+          existingPR={existingPR}
         />
         <div className="flex flex-1 flex-col items-center justify-center p-4">
           <AlertCircle className="text-muted-foreground mb-2 h-8 w-8" />
-          <p className="text-muted-foreground text-center text-sm">{error}</p>
+          <p className="text-muted-foreground text-center text-sm">
+            {error?.message ?? "Failed to load git status"}
+          </p>
         </div>
       </div>
     );
@@ -245,10 +218,12 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
         hasChanges={hasChanges}
         selectedFile={selectedFile}
         loadingDiff={loadingDiff}
-        refreshing={refreshing}
+        refreshing={isRefetching}
         showPRModal={showPRModal}
         workingDirectory={workingDirectory}
         activeTab={activeTab}
+        existingPR={existingPR}
+        creatingPR={createPRMutation.isPending}
         onTabChange={setActiveTab}
         onRefresh={handleRefresh}
         onFileClick={handleFileClick}
@@ -257,9 +232,17 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
         onStageAll={handleStageAll}
         onUnstageAll={handleUnstageAll}
         onBack={() => setSelectedFile(null)}
-        onCommit={fetchStatus}
+        onCommit={() => {
+          queryClient.invalidateQueries({
+            queryKey: gitKeys.status(workingDirectory),
+          });
+          queryClient.invalidateQueries({
+            queryKey: gitKeys.pr(workingDirectory),
+          });
+        }}
         onShowPRModal={() => setShowPRModal(true)}
         onClosePRModal={() => setShowPRModal(false)}
+        onCreatePR={() => createPRMutation.mutate()}
       />
     );
   }
@@ -273,7 +256,8 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
           ahead={status.ahead}
           behind={status.behind}
           onRefresh={handleRefresh}
-          refreshing={refreshing}
+          refreshing={isRefetching}
+          existingPR={existingPR}
         />
         <GitPanelTabs activeTab={activeTab} onTabChange={setActiveTab} />
         <CommitHistory workingDirectory={workingDirectory} />
@@ -295,14 +279,32 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
             ahead={status.ahead}
             behind={status.behind}
             onRefresh={handleRefresh}
-            refreshing={refreshing}
+            refreshing={isRefetching}
           />
           <GitPanelTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
           <div className="flex-1 overflow-y-auto">
             {!hasChanges ? (
-              <div className="text-muted-foreground flex h-32 flex-col items-center justify-center">
-                <p className="text-sm">No changes</p>
+              <div className="flex h-32 flex-col items-center justify-center gap-3">
+                <p className="text-muted-foreground text-sm">No changes</p>
+                {status.branch !== "main" &&
+                  status.branch !== "master" &&
+                  !existingPR && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => createPRMutation.mutate()}
+                      disabled={createPRMutation.isPending}
+                      className="gap-1.5"
+                    >
+                      {createPRMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <GitPullRequest className="h-3.5 w-3.5" />
+                      )}
+                      Create PR
+                    </Button>
+                  )}
               </div>
             ) : (
               <div className="py-2">
@@ -358,8 +360,14 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
               status.branch === "main" || status.branch === "master"
             }
             branch={status.branch}
-            onCommit={fetchStatus}
-            onCreatePR={() => setShowPRModal(true)}
+            onCommit={() => {
+              queryClient.invalidateQueries({
+                queryKey: gitKeys.status(workingDirectory),
+              });
+              queryClient.invalidateQueries({
+                queryKey: gitKeys.pr(workingDirectory),
+              });
+            }}
           />
         </div>
 
@@ -443,6 +451,13 @@ interface MobileGitPanelProps {
   showPRModal: boolean;
   workingDirectory: string;
   activeTab: GitTab;
+  existingPR: {
+    number: number;
+    url: string;
+    state: string;
+    title: string;
+  } | null;
+  creatingPR: boolean;
   onTabChange: (tab: GitTab) => void;
   onRefresh: () => void;
   onFileClick: (file: GitFile) => void;
@@ -454,6 +469,7 @@ interface MobileGitPanelProps {
   onCommit: () => void;
   onShowPRModal: () => void;
   onClosePRModal: () => void;
+  onCreatePR: () => void;
 }
 
 function MobileGitPanel({
@@ -465,6 +481,8 @@ function MobileGitPanel({
   showPRModal,
   workingDirectory,
   activeTab,
+  existingPR,
+  creatingPR,
   onTabChange,
   onRefresh,
   onFileClick,
@@ -476,6 +494,7 @@ function MobileGitPanel({
   onCommit,
   onShowPRModal,
   onClosePRModal,
+  onCreatePR,
 }: MobileGitPanelProps) {
   // History tab
   if (activeTab === "history") {
@@ -487,6 +506,7 @@ function MobileGitPanel({
           behind={status.behind}
           onRefresh={onRefresh}
           refreshing={refreshing}
+          existingPR={existingPR}
         />
         <GitPanelTabs activeTab={activeTab} onTabChange={onTabChange} />
         <CommitHistory workingDirectory={workingDirectory} />
@@ -547,13 +567,32 @@ function MobileGitPanel({
         behind={status.behind}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        existingPR={existingPR}
       />
       <GitPanelTabs activeTab={activeTab} onTabChange={onTabChange} />
 
       <div className="flex-1 overflow-y-auto">
         {!hasChanges ? (
-          <div className="text-muted-foreground flex h-32 flex-col items-center justify-center">
-            <p className="text-sm">No changes</p>
+          <div className="flex h-32 flex-col items-center justify-center gap-3">
+            <p className="text-muted-foreground text-sm">No changes</p>
+            {status.branch !== "main" &&
+              status.branch !== "master" &&
+              !existingPR && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onCreatePR}
+                  disabled={creatingPR}
+                  className="gap-1.5"
+                >
+                  {creatingPR ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <GitPullRequest className="h-3.5 w-3.5" />
+                  )}
+                  Create PR
+                </Button>
+              )}
           </div>
         ) : (
           <div className="py-2">
@@ -605,7 +644,6 @@ function MobileGitPanel({
         isOnMainBranch={status.branch === "main" || status.branch === "master"}
         branch={status.branch}
         onCommit={onCommit}
-        onCreatePR={onShowPRModal}
       />
 
       {/* Mobile hint */}
@@ -634,14 +672,41 @@ interface HeaderProps {
   behind: number;
   onRefresh: () => void;
   refreshing: boolean;
+  existingPR?: {
+    number: number;
+    url: string;
+    title: string;
+  } | null;
 }
 
-function Header({ branch, ahead, behind, onRefresh, refreshing }: HeaderProps) {
+function Header({
+  branch,
+  ahead,
+  behind,
+  onRefresh,
+  refreshing,
+  existingPR,
+}: HeaderProps) {
   return (
     <div className="flex items-center gap-2 p-3">
       <GitBranch className="text-muted-foreground h-4 w-4 flex-shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{branch || "Git Status"}</p>
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium">
+            {branch || "Git Status"}
+          </p>
+          {existingPR && (
+            <button
+              onClick={() => window.open(existingPR.url, "_blank")}
+              className="bg-muted hover:bg-accent inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors"
+              title={`${existingPR.title} (#${existingPR.number})`}
+            >
+              <GitPullRequest className="h-3 w-3" />
+              PR
+              <ExternalLink className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </div>
         {(ahead > 0 || behind > 0) && (
           <div className="text-muted-foreground flex items-center gap-2 text-xs">
             {ahead > 0 && (

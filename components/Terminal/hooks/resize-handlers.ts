@@ -19,6 +19,21 @@ export function setupResizeHandlers(config: ResizeHandlersConfig): () => void {
   const mqListeners: { mq: MediaQueryList; handler: () => void }[] = [];
   let resizeObserver: ResizeObserver | null = null;
 
+  // Workaround for FitAddon bug: it reserves 14px for scrollbar even when hidden
+  // FitAddon uses `overviewRuler?.width || 14` which doesn't work with 0 (falsy)
+  // On mobile we hide the scrollbar via CSS, so manually expand xterm-screen to full width
+  const fixMobileScrollbarWidth = () => {
+    if (!isMobile || !containerRef.current) return;
+
+    const xtermScreen = containerRef.current.querySelector(
+      ".xterm-screen"
+    ) as HTMLElement | null;
+    if (xtermScreen) {
+      const containerWidth = containerRef.current.clientWidth;
+      xtermScreen.style.width = `${containerWidth}px`;
+    }
+  };
+
   const doFit = () => {
     // Clear any pending fit timeouts
     fitTimeouts.forEach(clearTimeout);
@@ -36,6 +51,7 @@ export function setupResizeHandlers(config: ResizeHandlersConfig): () => void {
     requestAnimationFrame(() => {
       // First fit - immediate
       fitAddon.fit();
+      fixMobileScrollbarWidth();
       restoreScroll();
       sendResize(term.cols, term.rows);
 
@@ -43,6 +59,7 @@ export function setupResizeHandlers(config: ResizeHandlersConfig): () => void {
       fitTimeouts.push(
         setTimeout(() => {
           fitAddon.fit();
+          fixMobileScrollbarWidth();
           restoreScroll();
           sendResize(term.cols, term.rows);
         }, 100)
@@ -52,6 +69,7 @@ export function setupResizeHandlers(config: ResizeHandlersConfig): () => void {
       fitTimeouts.push(
         setTimeout(() => {
           fitAddon.fit();
+          fixMobileScrollbarWidth();
           restoreScroll();
           sendResize(term.cols, term.rows);
         }, 250)

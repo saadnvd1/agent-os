@@ -1,8 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import type { Session } from "@/lib/db";
 import type { SessionStatus } from "@/components/views/types";
-import { sessionKeys, statusKeys } from "../sessions/keys";
+import { statusKeys } from "../sessions/keys";
 
 interface StatusResponse {
   statuses: Record<string, SessionStatus>;
@@ -32,9 +32,6 @@ export function useSessionStatusesQuery({
   activeSessionId,
   checkStateChanges,
 }: UseSessionStatusesOptions) {
-  const queryClient = useQueryClient();
-  const updatedSessionIds = useRef<Set<string>>(new Set());
-
   const query = useQuery({
     queryKey: statusKeys.all,
     queryFn: fetchStatuses,
@@ -62,28 +59,8 @@ export function useSessionStatusesQuery({
       status: (statuses[s.id]?.status || "dead") as SessionStatus["status"],
     }));
     checkStateChanges(sessionStates, activeSessionId);
-
-    (async () => {
-      let needsRefresh = false;
-      for (const [sessionId, status] of Object.entries(statuses) as [
-        string,
-        SessionStatus,
-      ][]) {
-        if (
-          status.claudeSessionId &&
-          !updatedSessionIds.current.has(sessionId)
-        ) {
-          updatedSessionIds.current.add(sessionId);
-          await fetch(`/api/sessions/${sessionId}/claude-session`);
-          needsRefresh = true;
-        }
-      }
-
-      if (needsRefresh) {
-        queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
-      }
-    })();
-  }, [query.data, sessions, activeSessionId, checkStateChanges, queryClient]);
+    // Note: claude_session_id is now updated server-side in /api/sessions/status
+  }, [query.data, sessions, activeSessionId, checkStateChanges]);
 
   return {
     sessionStatuses: query.data?.statuses ?? {},

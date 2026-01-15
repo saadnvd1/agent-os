@@ -173,17 +173,33 @@ export function createPR(
   }
 
   // Create PR using gh CLI
-  // Use a temp file for body to handle multiline content safely
+  // gh pr create outputs the PR URL on success
+  const titleEscaped = title.replace(/'/g, "'\\''");
   const bodyEscaped = body.replace(/'/g, "'\\''");
   const output = execSync(
-    `gh pr create --title '${title.replace(/'/g, "'\\''")}' --base "${baseBranch}" --body '${bodyEscaped}' --json number,url,state,title`,
+    `gh pr create --title '${titleEscaped}' --base "${baseBranch}" --body '${bodyEscaped}'`,
     {
       cwd: workingDir,
       encoding: "utf-8",
       timeout: 30000,
     }
   );
-  return JSON.parse(output);
+
+  // Parse URL from output (gh pr create prints the URL)
+  const urlMatch = output.match(/https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/);
+  if (!urlMatch) {
+    throw new Error("Failed to parse PR URL from output");
+  }
+
+  const url = urlMatch[0];
+  const number = parseInt(urlMatch[1], 10);
+
+  return {
+    number,
+    url,
+    state: "open",
+    title,
+  };
 }
 
 /**

@@ -10,11 +10,14 @@ import {
   getCurrentBranch,
   getBaseBranch,
 } from "@/lib/pr";
+import { generatePRContent } from "@/lib/pr-generation";
 
-// GET /api/git/pr - Get PR info and generate draft content
+// GET /api/git/pr - Get PR status (fast - no AI generation)
+// Use ?generate=true to also generate suggested title/body (slow - uses Claude CLI)
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const path = searchParams.get("path");
+  const shouldGenerate = searchParams.get("generate") === "true";
 
   if (!path) {
     return NextResponse.json({ error: "Path is required" }, { status: 400 });
@@ -52,18 +55,32 @@ export async function GET(request: NextRequest) {
     // Check if PR already exists
     const existingPR = getPRForBranch(path, branch);
 
-    // Get commits for generating content
+    // Get commits for listing
     const commits = getCommitsSinceBase(path, baseBranch);
-    const suggestedTitle = generatePRTitle(commits, branch);
-    const suggestedBody = generatePRBody(commits);
+
+    // Only generate suggested content if explicitly requested (for PR creation flow)
+    let suggestedTitle: string | undefined;
+    let suggestedBody: string | undefined;
+
+    if (shouldGenerate) {
+      try {
+        const generated = await generatePRContent(path, baseBranch);
+        suggestedTitle = generated.title;
+        suggestedBody = generated.description;
+      } catch {
+        // Fallback to simple heuristic
+        suggestedTitle = generatePRTitle(commits, branch);
+        suggestedBody = generatePRBody(commits);
+      }
+    }
 
     return NextResponse.json({
       branch,
       baseBranch,
       existingPR,
       commits: commits.map((c) => ({ hash: c.hash, subject: c.subject })),
-      suggestedTitle,
-      suggestedBody,
+      ...(suggestedTitle && { suggestedTitle }),
+      ...(suggestedBody && { suggestedBody }),
     });
   } catch (error) {
     return NextResponse.json(

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   GitBranch,
   RefreshCw,
@@ -10,6 +11,8 @@ import {
   ArrowDown,
   X,
   AlertTriangle,
+  ExternalLink,
+  GitPullRequest,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,11 +25,18 @@ import {
 } from "@/components/ui/dialog";
 import { FileChanges } from "@/components/GitPanel/FileChanges";
 import { CommitForm } from "@/components/GitPanel/CommitForm";
-import { PRCreationModal } from "@/components/PRCreationModal";
 import { FileEditDialog } from "./FileEditDialog";
 import { cn } from "@/lib/utils";
 import { useDrawerAnimation } from "@/hooks/useDrawerAnimation";
-import type { GitStatus, GitFile } from "@/lib/git-status";
+import {
+  useGitStatus,
+  usePRStatus,
+  useCreatePR,
+  useStageFiles,
+  useUnstageFiles,
+  gitKeys,
+} from "@/data/git/queries";
+import type { GitFile } from "@/lib/git-status";
 
 interface GitDrawerProps {
   open: boolean;
@@ -39,116 +49,52 @@ export function GitDrawer({
   onOpenChange,
   workingDirectory,
 }: GitDrawerProps) {
-  const [status, setStatus] = useState<GitStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showPRModal, setShowPRModal] = useState(false);
+  const queryClient = useQueryClient();
 
-  // Selected file for edit dialog
+  // React Query hooks - only poll when drawer is open
+  const {
+    data: status,
+    isPending: loading,
+    isError,
+    error,
+    refetch: refetchStatus,
+    isRefetching,
+  } = useGitStatus(workingDirectory, { enabled: open });
+
+  const { data: prData } = usePRStatus(workingDirectory);
+  const existingPR = prData?.existingPR ?? null;
+
+  const createPRMutation = useCreatePR(workingDirectory);
+  const stageMutation = useStageFiles(workingDirectory);
+  const unstageMutation = useUnstageFiles(workingDirectory);
+
+  // Local UI state
   const [selectedFile, setSelectedFile] = useState<GitFile | null>(null);
-
-  // Discard confirmation
   const [discardFile, setDiscardFile] = useState<GitFile | null>(null);
   const [discarding, setDiscarding] = useState(false);
 
   // Animation
   const isAnimatingIn = useDrawerAnimation(open);
 
-  const fetchStatus = useCallback(async () => {
-    if (!workingDirectory) return;
-
-    try {
-      const res = await fetch(
-        `/api/git/status?path=${encodeURIComponent(workingDirectory)}`
-      );
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-        setStatus(null);
-      } else {
-        setStatus(data);
-        setError(null);
-      }
-    } catch {
-      setError("Failed to fetch git status");
-      setStatus(null);
-    }
-  }, [workingDirectory]);
-
-  useEffect(() => {
-    if (open && workingDirectory) {
-      setLoading(true);
-      setSelectedFile(null);
-      fetchStatus().finally(() => setLoading(false));
-
-      // Poll every 3 seconds while drawer is open
-      const interval = setInterval(() => fetchStatus(), 3000);
-      return () => clearInterval(interval);
-    }
-  }, [open, workingDirectory, fetchStatus]);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchStatus();
-    setRefreshing(false);
-  };
-
+  // Clear selected file when drawer opens
   const handleFileClick = (file: GitFile) => {
     setSelectedFile(file);
   };
 
-  const handleStage = async (file: GitFile) => {
-    try {
-      await fetch("/api/git/stage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory, files: [file.path] }),
-      });
-      await fetchStatus();
-    } catch {
-      // Ignore errors
-    }
+  const handleStage = (file: GitFile) => {
+    stageMutation.mutate([file.path]);
   };
 
-  const handleUnstage = async (file: GitFile) => {
-    try {
-      await fetch("/api/git/unstage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory, files: [file.path] }),
-      });
-      await fetchStatus();
-    } catch {
-      // Ignore errors
-    }
+  const handleUnstage = (file: GitFile) => {
+    unstageMutation.mutate([file.path]);
   };
 
-  const handleStageAll = async () => {
-    try {
-      await fetch("/api/git/stage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory }),
-      });
-      await fetchStatus();
-    } catch {
-      // Ignore errors
-    }
+  const handleStageAll = () => {
+    stageMutation.mutate(undefined);
   };
 
-  const handleUnstageAll = async () => {
-    try {
-      await fetch("/api/git/unstage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workingDirectory }),
-      });
-      await fetchStatus();
-    } catch {
-      // Ignore errors
-    }
+  const handleUnstageAll = () => {
+    unstageMutation.mutate(undefined);
   };
 
   const handleDiscardConfirm = async () => {
@@ -164,7 +110,9 @@ export function GitDrawer({
           file: discardFile.path,
         }),
       });
-      await fetchStatus();
+      queryClient.invalidateQueries({
+        queryKey: gitKeys.status(workingDirectory),
+      });
       setDiscardFile(null);
     } catch {
       // Ignore errors
@@ -203,17 +151,28 @@ export function GitDrawer({
                   {status.branch}
                 </span>
               )}
+              {existingPR && (
+                <button
+                  onClick={() => window.open(existingPR.url, "_blank")}
+                  className="bg-muted hover:bg-accent inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors"
+                  title={`${existingPR.title} (#${existingPR.number})`}
+                >
+                  <GitPullRequest className="h-3 w-3" />
+                  View PR
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleRefresh}
-                disabled={refreshing || loading}
+                onClick={() => refetchStatus()}
+                disabled={isRefetching || loading}
                 className="h-7 w-7"
               >
                 <RefreshCw
-                  className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
+                  className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")}
                 />
               </Button>
               <Button
@@ -252,17 +211,39 @@ export function GitDrawer({
             <div className="flex items-center justify-center py-8">
               <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
-          ) : error ? (
+          ) : isError ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <AlertCircle className="h-8 w-8 text-red-500" />
-              <p className="text-muted-foreground text-sm">{error}</p>
-              <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <p className="text-muted-foreground text-sm">
+                {error?.message ?? "Failed to load git status"}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchStatus()}
+              >
                 Retry
               </Button>
             </div>
           ) : stagedFiles.length === 0 && unstagedFiles.length === 0 ? (
-            <div className="text-muted-foreground py-8 text-center text-sm">
-              No changes
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <span className="text-muted-foreground text-sm">No changes</span>
+              {!isOnMainBranch && !existingPR && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => createPRMutation.mutate()}
+                  disabled={createPRMutation.isPending}
+                  className="gap-1.5"
+                >
+                  {createPRMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <GitPullRequest className="h-3.5 w-3.5" />
+                  )}
+                  Create PR
+                </Button>
+              )}
             </div>
           ) : (
             <>
@@ -299,19 +280,17 @@ export function GitDrawer({
             stagedCount={stagedFiles.length}
             isOnMainBranch={isOnMainBranch}
             branch={status.branch}
-            onCommit={fetchStatus}
-            onCreatePR={() => setShowPRModal(true)}
+            onCommit={() => {
+              queryClient.invalidateQueries({
+                queryKey: gitKeys.status(workingDirectory),
+              });
+              queryClient.invalidateQueries({
+                queryKey: gitKeys.pr(workingDirectory),
+              });
+            }}
           />
         )}
       </div>
-
-      {/* PR Creation Modal */}
-      {showPRModal && (
-        <PRCreationModal
-          workingDirectory={workingDirectory}
-          onClose={() => setShowPRModal(false)}
-        />
-      )}
 
       {/* File Edit Dialog */}
       {selectedFile && (
@@ -324,7 +303,11 @@ export function GitDrawer({
           onFileSelect={setSelectedFile}
           onStage={handleStage}
           onUnstage={handleUnstage}
-          onSave={fetchStatus}
+          onSave={() =>
+            queryClient.invalidateQueries({
+              queryKey: gitKeys.status(workingDirectory),
+            })
+          }
         />
       )}
 

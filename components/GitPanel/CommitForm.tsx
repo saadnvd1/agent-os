@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  GitCommit,
-  GitBranch,
-  Send,
-  Loader2,
-  ExternalLink,
-} from "lucide-react";
+import { GitCommit, GitBranch, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +11,6 @@ interface CommitFormProps {
   isOnMainBranch: boolean;
   branch: string;
   onCommit: () => void;
-  onCreatePR?: () => void;
 }
 
 export function CommitForm({
@@ -26,7 +19,6 @@ export function CommitForm({
   isOnMainBranch,
   branch,
   onCommit,
-  onCreatePR,
 }: CommitFormProps) {
   const [message, setMessage] = useState("");
   const [branchName, setBranchName] = useState("");
@@ -34,16 +26,15 @@ export function CommitForm({
   const [pushing, setPushing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [showCreatePR, setShowCreatePR] = useState(false);
 
   const canCommit = stagedCount > 0 && message.trim().length > 0;
   const needsBranch = isOnMainBranch && !branchName.trim();
 
-  const handleCommit = async () => {
-    if (!canCommit) return;
+  const handleCommit = async (): Promise<boolean> => {
+    if (!canCommit) return false;
     if (isOnMainBranch && !branchName.trim()) {
       setError("Please enter a branch name");
-      return;
+      return false;
     }
 
     setError(null);
@@ -63,9 +54,9 @@ export function CommitForm({
 
       const data = await res.json();
 
-      if (data.error) {
-        setError(data.error);
-        return;
+      if (!res.ok || data.error) {
+        setError(data.error || "Commit failed");
+        return false;
       }
 
       // Clear form
@@ -73,8 +64,10 @@ export function CommitForm({
       setBranchName("");
       setSuccess("Committed successfully!");
       onCommit();
+      return true;
     } catch {
       setError("Failed to commit");
+      return false;
     } finally {
       setCommitting(false);
     }
@@ -101,7 +94,6 @@ export function CommitForm({
 
       if (data.pushed) {
         setSuccess("Pushed successfully!");
-        setShowCreatePR(true);
       } else {
         setSuccess(data.message || "Already up to date");
       }
@@ -115,13 +107,14 @@ export function CommitForm({
   };
 
   const handleCommitAndPush = async () => {
-    await handleCommit();
-    // If commit was successful, push
-    if (!error) {
+    const commitSucceeded = await handleCommit();
+    // Only push if commit was successful
+    if (commitSucceeded) {
       await handlePush();
     }
   };
 
+  // Only show commit form when there are staged files
   if (stagedCount === 0) {
     return null;
   }
@@ -209,22 +202,6 @@ export function CommitForm({
           Commit & Push
         </Button>
       </div>
-
-      {/* Create PR button */}
-      {showCreatePR && onCreatePR && (
-        <Button
-          variant="outline"
-          size="default"
-          className="text-primary min-h-[44px] w-full"
-          onClick={() => {
-            setShowCreatePR(false);
-            onCreatePR();
-          }}
-        >
-          <ExternalLink className="mr-1 h-4 w-4" />
-          Create Pull Request
-        </Button>
-      )}
     </div>
   );
 }
