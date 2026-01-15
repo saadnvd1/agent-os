@@ -185,17 +185,18 @@ export function FolderPicker({
             <p className="text-sm">No subfolders</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="divide-border divide-y">
             {files.map((node) => (
               <button
                 key={node.path}
                 onClick={() => navigateTo(node.path)}
-                className={cn(
-                  "hover:bg-muted/50 hover:border-primary/50 flex flex-col items-center gap-2 rounded-lg border p-3 text-center transition-colors"
-                )}
+                className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
               >
-                <Folder className="text-primary/70 h-10 w-10" />
-                <span className="w-full truncate text-xs">{node.name}</span>
+                <Folder className="text-muted-foreground h-5 w-5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {node.name}
+                </span>
+                <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
               </button>
             ))}
           </div>
