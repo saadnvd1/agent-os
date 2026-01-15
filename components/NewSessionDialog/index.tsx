@@ -17,6 +17,7 @@ import { WorkingDirectoryInput } from "./WorkingDirectoryInput";
 import { WorktreeSection } from "./WorktreeSection";
 import { ProjectSelector } from "./ProjectSelector";
 import { AdvancedSettings } from "./AdvancedSettings";
+import { CreatingOverlay } from "./CreatingOverlay";
 import type { NewSessionDialogProps } from "./NewSessionDialog.types";
 
 export function NewSessionDialog({
@@ -38,8 +39,18 @@ export function NewSessionDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(o) => !o && form.handleClose()}>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => !o && !form.isLoading && form.handleClose()}
+      >
         <DialogContent className="max-h-[85vh] overflow-y-auto">
+          {/* Loading overlay */}
+          {form.isLoading && (
+            <CreatingOverlay
+              isWorktree={form.useWorktree}
+              step={form.creationStep}
+            />
+          )}
           <DialogHeader>
             <DialogTitle>New Session</DialogTitle>
           </DialogHeader>
@@ -119,6 +130,7 @@ export function NewSessionDialog({
                 type="button"
                 variant="outline"
                 onClick={form.handleClose}
+                disabled={form.isLoading}
               >
                 Cancel
               </Button>

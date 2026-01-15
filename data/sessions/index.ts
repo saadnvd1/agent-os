@@ -1,6 +1,7 @@
 export { sessionKeys, statusKeys } from "./keys";
 export {
   useSessionsQuery,
+  useCreateSession,
   useDeleteSession,
   useRenameSession,
   useForkSession,
@@ -8,3 +9,4 @@ export {
   useMoveSessionToGroup,
   useMoveSessionToProject,
 } from "./queries";
+export type { CreateSessionInput } from "./queries";

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Session, Group } from "@/lib/db";
+import type { AgentType } from "@/lib/providers";
 import { sessionKeys } from "./keys";
 
 interface SessionsResponse {
@@ -166,6 +167,49 @@ export function useMoveSessionToProject() {
       });
       if (!res.ok) throw new Error("Failed to move session");
       return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
+    },
+  });
+}
+
+export interface CreateSessionInput {
+  name?: string;
+  workingDirectory: string;
+  projectId: string | null;
+  agentType: AgentType;
+  useWorktree: boolean;
+  featureName: string | null;
+  baseBranch: string | null;
+  autoApprove: boolean;
+  useTmux: boolean;
+  initialPrompt: string | null;
+}
+
+interface CreateSessionResponse {
+  session: Session;
+  initialPrompt?: string;
+  error?: string;
+}
+
+export function useCreateSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      input: CreateSessionInput
+    ): Promise<CreateSessionResponse> => {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sessionKeys.list() });

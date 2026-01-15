@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import type { AgentType } from "@/lib/providers";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import { setPendingPrompt } from "@/stores/initialPrompt";
+import { useCreateSession } from "@/data/sessions";
 import {
   type GitInfo,
-  type NewSessionFormState,
   SKIP_PERMISSIONS_KEY,
   AGENT_TYPE_KEY,
   RECENT_DIRS_KEY,
@@ -35,6 +35,9 @@ export function useNewSessionForm({
   onClose,
   onCreateProject,
 }: UseNewSessionFormOptions) {
+  // React Query mutation
+  const createSession = useCreateSession();
+
   // Form state
   const [name, setName] = useState("");
   const [workingDirectory, setWorkingDirectory] = useState("~");
@@ -58,9 +61,10 @@ export function useNewSessionForm({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showDirectoryPicker, setShowDirectoryPicker] = useState(false);
 
-  // Submission state
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Creation step for loading overlay
+  const [creationStep, setCreationStep] = useState<
+    "creating" | "worktree" | "setup" | "done"
+  >("creating");
 
   // Recent directories
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
@@ -192,57 +196,62 @@ export function useNewSessionForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    createSession.reset(); // Clear any previous errors
 
     if (useWorktree) {
       if (!featureName.trim()) {
-        setError("Feature name is required for worktree");
-        return;
+        return; // Validation handled by button disabled state
       }
       if (!gitInfo?.isGitRepo) {
-        setError("Working directory must be a git repository");
         return;
       }
     }
 
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim() || undefined,
-          workingDirectory,
-          projectId,
-          agentType,
-          useWorktree,
-          featureName: useWorktree ? featureName.trim() : null,
-          baseBranch: useWorktree ? baseBranch : null,
-          autoApprove: skipPermissions,
-          useTmux,
-          initialPrompt: initialPrompt.trim() || null,
-        }),
-      });
+    setCreationStep("creating");
 
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-        return;
-      }
-      if (data.session) {
-        if (data.initialPrompt) {
-          setPendingPrompt(data.session.id, data.initialPrompt);
-        }
-        addRecentDirectory(workingDirectory);
-        resetForm();
-        onCreated(data.session.id);
-      }
-    } catch (err) {
-      console.error("Failed to create session:", err);
-      setError("Failed to create session");
-    } finally {
-      setIsLoading(false);
+    // For worktree sessions, show step progression
+    let stepTimer: NodeJS.Timeout | undefined;
+    if (useWorktree) {
+      setCreationStep("worktree");
+      // Progress to "setup" step after 2s (worktree creation is usually fast)
+      stepTimer = setTimeout(() => {
+        setCreationStep("setup");
+      }, 2000);
     }
+
+    createSession.mutate(
+      {
+        name: name.trim() || undefined,
+        workingDirectory,
+        projectId,
+        agentType,
+        useWorktree,
+        featureName: useWorktree ? featureName.trim() : null,
+        baseBranch: useWorktree ? baseBranch : null,
+        autoApprove: skipPermissions,
+        useTmux,
+        initialPrompt: initialPrompt.trim() || null,
+      },
+      {
+        onSuccess: (data) => {
+          if (stepTimer) clearTimeout(stepTimer);
+          setCreationStep("done");
+          if (data.initialPrompt) {
+            setPendingPrompt(data.session.id, data.initialPrompt);
+          }
+          addRecentDirectory(workingDirectory);
+          // Small delay to show "done" state before closing
+          setTimeout(() => {
+            resetForm();
+            onCreated(data.session.id);
+          }, 300);
+        },
+        onError: () => {
+          if (stepTimer) clearTimeout(stepTimer);
+          setCreationStep("creating");
+        },
+      }
+    );
   };
 
   const handleCreateProject = async () => {
@@ -279,7 +288,8 @@ export function useNewSessionForm({
     setInitialPrompt("");
     setShowNewProject(false);
     setNewProjectName("");
-    setError(null);
+    setCreationStep("creating");
+    createSession.reset();
   };
 
   const handleClose = () => {
@@ -319,8 +329,9 @@ export function useNewSessionForm({
     showDirectoryPicker,
     setShowDirectoryPicker,
     // Submission
-    isLoading,
-    error,
+    isLoading: createSession.isPending,
+    creationStep,
+    error: createSession.error?.message ?? null,
     // Recent
     recentDirs,
     // Handlers
