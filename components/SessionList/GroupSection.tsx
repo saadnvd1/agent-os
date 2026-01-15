@@ -94,11 +94,11 @@ export function GroupSection({
   const renderGroup = (group: Group, level: number = 0) => {
     const groupSessions = sessionsByGroup[group.path] || [];
     const childGroups = getChildGroups(group.path);
-    const indent = level * 12;
+    const indent = level * 10;
 
     const groupHeader = (
       <div
-        className="hover:bg-accent/50 group flex cursor-pointer items-center gap-1 rounded px-2 py-1.5"
+        className="hover:bg-accent/50 group flex cursor-pointer items-center gap-1 rounded px-2 py-1"
         style={{ marginLeft: indent }}
         onClick={() => onToggleGroup(group.path, !group.expanded)}
       >
@@ -198,8 +198,8 @@ export function GroupSection({
 
         {group.expanded && (
           <div
-            className="border-border/50 ml-3 border-l"
-            style={{ marginLeft: indent + 12, paddingLeft: 8 }}
+            className="border-border/50 ml-2 border-l"
+            style={{ marginLeft: indent + 10, paddingLeft: 6 }}
           >
             {childGroups.map((child) => renderGroup(child, level + 1))}
 
@@ -238,7 +238,7 @@ export function GroupSection({
                   </div>
 
                   {hasWorkers && (
-                    <div className="border-border/30 ml-4 space-y-0.5 border-l pl-2">
+                    <div className="border-border/30 ml-3 space-y-px border-l pl-1.5">
                       {workers.map((worker) => (
                         <SessionCard
                           key={worker.id}

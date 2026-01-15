@@ -89,7 +89,7 @@ export function DevServerCard({
   return (
     <div
       className={cn(
-        "border-border/50 rounded-lg border p-3",
+        "border-border/50 rounded-md border px-2 py-1.5",
         "bg-card/50 hover:bg-card/80 transition-colors"
       )}
     >
@@ -129,7 +129,7 @@ export function DevServerCard({
 
       {/* Port badge */}
       {primaryPort && (
-        <div className="mt-2 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1">
           {isRunning ? (
             <a
               href={`http://localhost:${primaryPort}`}
@@ -177,7 +177,7 @@ export function DevServerCard({
       )}
 
       {/* Actions */}
-      <div className="mt-3 flex items-center gap-1">
+      <div className="mt-1.5 flex items-center gap-1">
         {isRunning && (
           <>
             {confirmingStop ? (
@@ -301,7 +301,7 @@ function ActionButton({
       disabled={disabled}
       title={label}
       className={cn(
-        "flex h-8 items-center gap-1.5 rounded-md px-2",
+        "flex h-7 items-center gap-1 rounded px-1.5",
         "text-xs font-medium transition-colors",
         "disabled:cursor-not-allowed disabled:opacity-50",
         variant === "primary" &&

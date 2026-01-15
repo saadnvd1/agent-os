@@ -123,6 +123,23 @@ body {
   display: none;
 }
 
+/* Thin scrollbar for xterm on mobile */
+@media (max-width: 768px) {
+  .xterm-viewport {
+    scrollbar-width: thin;
+  }
+  .xterm-viewport::-webkit-scrollbar {
+    width: 4px;
+  }
+  .xterm-viewport::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .xterm-viewport::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 2px;
+  }
+}
+
 /* Safe area padding utilities */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom);

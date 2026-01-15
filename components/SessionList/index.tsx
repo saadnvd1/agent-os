@@ -179,7 +179,7 @@ export function SessionList({
 
       {/* Session list */}
       <ScrollArea className="w-full flex-1">
-        <div className="max-w-full space-y-1 p-2">
+        <div className="max-w-full space-y-0.5 px-1.5 py-1">
           {/* Loading state */}
           {isInitialLoading && <ProjectSectionSkeleton count={2} />}
 

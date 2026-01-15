@@ -30,7 +30,7 @@ export function SessionListHeader({
   onKillAll,
 }: SessionListHeaderProps) {
   return (
-    <div className="flex items-center justify-between p-4 pb-3">
+    <div className="flex items-center justify-between px-3 py-2">
       <div className="flex items-center gap-2">
         <svg
           xmlns="http://www.w3.org/2000/svg"

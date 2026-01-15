@@ -349,8 +349,8 @@ export function SessionCard({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
-        "group flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-3 py-2.5 text-left transition-colors md:px-2 md:py-1.5",
-        "min-h-[44px] md:min-h-0", // Touch target size on mobile
+        "group flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left transition-colors",
+        "min-h-[36px] md:min-h-0", // Compact touch target
         isSelected
           ? "bg-primary/20"
           : isActive
