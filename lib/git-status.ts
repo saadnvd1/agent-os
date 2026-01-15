@@ -1,4 +1,6 @@
 import { execSync } from "child_process";
+import { unlinkSync } from "fs";
+import { join } from "path";
 import { homedir } from "os";
 
 /**
@@ -236,13 +238,25 @@ export function unstageAll(workingDir: string): void {
 }
 
 /**
- * Discard changes to a file (checkout)
+ * Discard changes to a file (checkout for tracked, delete for untracked)
  */
 export function discardChanges(workingDir: string, filePath: string): void {
-  execSync(`git checkout -- "${filePath}"`, {
-    cwd: workingDir,
-    encoding: "utf-8",
-  });
+  // Check if file is tracked by git
+  try {
+    execSync(`git ls-files --error-unmatch "${filePath}"`, {
+      cwd: workingDir,
+      encoding: "utf-8",
+      stdio: "pipe",
+    });
+    // File is tracked - use checkout
+    execSync(`git checkout -- "${filePath}"`, {
+      cwd: workingDir,
+      encoding: "utf-8",
+    });
+  } catch {
+    // File is untracked - delete it
+    unlinkSync(join(workingDir, filePath));
+  }
 }
 
 /**

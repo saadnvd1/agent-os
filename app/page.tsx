@@ -157,10 +157,10 @@ function HomeContent() {
         return { sessionName, cwd, command: "" };
       }
 
-      // Ensure MCP config exists for orchestration
-      fetch(`/api/sessions/${session.id}/mcp-config`, { method: "POST" }).catch(
-        () => {}
-      );
+      // TODO: Add explicit "Enable Orchestration" toggle that creates .mcp.json
+      // for conductor sessions. Removed auto-creation because it pollutes projects
+      // with .mcp.json files that aren't in their .gitignore.
+      // See: /api/sessions/[id]/mcp-config, lib/mcp-config.ts
 
       // Get parent session ID for forking
       let parentSessionId: string | null = null;
