@@ -3,8 +3,10 @@ import { parse } from "url";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
+import { parse as parseCookie } from "cookie";
 
 const dev = process.env.NODE_ENV !== "production";
+const authEnabled = process.env.AGENTOS_AUTH_ENABLED === "true";
 const hostname = "0.0.0.0";
 const port = parseInt(process.env.PORT || "3011", 10);
 
@@ -31,6 +33,33 @@ app.prepare().then(() => {
     const { pathname } = parse(request.url || "");
 
     if (pathname === "/ws/terminal") {
+      // Check auth if enabled
+      if (authEnabled) {
+        const cookies = parseCookie(request.headers.cookie || "");
+        const sessionId = cookies["agentos_session"];
+
+        if (!sessionId) {
+          socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+
+        // Lazy import to avoid circular deps during startup
+        import("./lib/auth/sessions").then(({ getSession }) => {
+          const session = getSession(sessionId);
+          if (!session) {
+            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+            socket.destroy();
+            return;
+          }
+
+          terminalWss.handleUpgrade(request, socket, head, (ws) => {
+            terminalWss.emit("connection", ws, request);
+          });
+        });
+        return;
+      }
+
       terminalWss.handleUpgrade(request, socket, head, (ws) => {
         terminalWss.emit("connection", ws, request);
       });

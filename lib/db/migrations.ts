@@ -156,6 +156,26 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    id: 12,
+    name: "create_auth_sessions_table",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS auth_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          expires_at TEXT NOT NULL
+        )
+      `);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_auth_sessions_session_id ON auth_sessions(session_id)`
+      );
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)`
+      );
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

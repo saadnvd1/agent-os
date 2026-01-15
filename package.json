@@ -60,6 +60,7 @@
     "better-sqlite3": "^11.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cookie": "^1.1.1",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.556.0",
     "next": "^16.1.1",
@@ -76,6 +77,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/cookie": "^0.6.0",
     "@types/node": "^20.19.27",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
