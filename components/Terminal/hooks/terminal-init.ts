@@ -50,6 +50,35 @@ export function createTerminal(
   term.loadAddon(new CanvasAddon());
   fitAddon.fit();
 
+  // Handle Cmd+A and Cmd+C via container event listener (more reliable than attachCustomKeyEventHandler)
+  const handleKeyDown = (event: KeyboardEvent) => {
+    // Only handle when terminal is focused
+    if (!container.contains(document.activeElement)) return;
+
+    const key = event.key.toLowerCase();
+
+    // Cmd+A (macOS) / Ctrl+A for select all
+    if ((event.metaKey || event.ctrlKey) && key === "a") {
+      event.preventDefault();
+      event.stopPropagation();
+      term.selectAll();
+      return;
+    }
+
+    // Cmd+C (macOS) / Ctrl+C for copy when text is selected
+    if ((event.metaKey || event.ctrlKey) && key === "c") {
+      const selection = term.getSelection();
+      if (selection) {
+        event.preventDefault();
+        event.stopPropagation();
+        navigator.clipboard.writeText(selection);
+      }
+    }
+  };
+
+  // Use capture phase to intercept before browser default
+  document.addEventListener("keydown", handleKeyDown, true);
+
   return { term, fitAddon, searchAddon };
 }
 
