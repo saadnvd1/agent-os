@@ -224,7 +224,10 @@ export function deleteProject(id: string): boolean {
     queries.updateSessionProject(db).run("uncategorized", session.id);
   }
 
-  // Delete dev server configs (cascade)
+  // Delete dev server instances
+  queries.deleteDevServersByProject(db).run(id);
+
+  // Delete dev server configs (templates)
   queries.deleteProjectDevServers(db).run(id);
 
   // Delete project
