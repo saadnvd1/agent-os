@@ -49,6 +49,7 @@ export interface BuildFlagsOptions {
   skipPermissions?: boolean;
   autoApprove?: boolean; // Use auto-approve flag from registry
   model?: string;
+  initialPrompt?: string; // Initial prompt to send to agent
 }
 
 // Common spinner characters used across CLIs
@@ -86,6 +87,14 @@ export const claudeProvider: AgentProvider = {
     } else if (options.parentSessionId && def.resumeFlag) {
       flags.push(`${def.resumeFlag} ${options.parentSessionId}`);
       flags.push("--fork-session");
+    }
+
+    // Initial prompt (positional argument for Claude)
+    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
+      const prompt = options.initialPrompt.trim();
+      // Shell-escape the prompt
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      flags.push(`'${escapedPrompt}'`);
     }
 
     return flags;
@@ -157,6 +166,13 @@ export const codexProvider: AgentProvider = {
       flags.push(`${def.modelFlag} ${options.model}`);
     }
 
+    // Initial prompt (positional argument for Codex)
+    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
+      const prompt = options.initialPrompt.trim();
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      flags.push(`'${escapedPrompt}'`);
+    }
+
     return flags;
   },
 
@@ -189,6 +205,7 @@ export const opencodeProvider: AgentProvider = {
   supportsFork: false,
 
   buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition("opencode");
     const flags: string[] = [];
 
     // OpenCode uses --prompt for non-interactive, but we want interactive mode
@@ -197,6 +214,14 @@ export const opencodeProvider: AgentProvider = {
     if (options.skipPermissions) {
       // OpenCode doesn't have a skip permissions flag
       // It manages this via config
+    }
+
+    // Initial prompt (uses --prompt flag)
+    if (options.initialPrompt?.trim() && def.initialPromptFlag) {
+      const prompt = options.initialPrompt.trim();
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      flags.push(def.initialPromptFlag);
+      flags.push(`'${escapedPrompt}'`);
     }
 
     return flags;
@@ -243,6 +268,14 @@ export const geminiProvider: AgentProvider = {
 
     if (options.model && def.modelFlag) {
       flags.push(`${def.modelFlag} ${options.model}`);
+    }
+
+    // Initial prompt (uses -p flag)
+    if (options.initialPrompt?.trim() && def.initialPromptFlag) {
+      const prompt = options.initialPrompt.trim();
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      flags.push(def.initialPromptFlag);
+      flags.push(`'${escapedPrompt}'`);
     }
 
     return flags;

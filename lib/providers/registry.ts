@@ -40,6 +40,10 @@ export interface ProviderDefinition {
   // Model configuration
   modelFlag?: string; // Flag for specifying model
 
+  // Initial prompt configuration
+  // undefined = no support, '' = positional arg, string = flag (e.g., '--prompt')
+  initialPromptFlag?: string;
+
   // Default arguments
   defaultArgs?: string[]; // Always passed to CLI
 }
@@ -60,6 +64,7 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsFork: true,
     resumeFlag: "--resume",
     modelFlag: undefined, // Claude doesn't expose model flag
+    initialPromptFlag: "", // Positional argument
   },
   {
     id: "codex",
@@ -71,6 +76,7 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsResume: false,
     supportsFork: false,
     modelFlag: "--model",
+    initialPromptFlag: "", // Positional argument
   },
   {
     id: "opencode",
@@ -81,6 +87,7 @@ export const PROVIDERS: ProviderDefinition[] = [
     autoApproveFlag: undefined, // OpenCode manages this via config
     supportsResume: false,
     supportsFork: false,
+    initialPromptFlag: "--prompt",
   },
   {
     id: "gemini",
@@ -92,6 +99,7 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsResume: false,
     supportsFork: false,
     modelFlag: "-m",
+    initialPromptFlag: "-p",
   },
   {
     id: "aider",

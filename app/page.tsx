@@ -36,6 +36,7 @@ import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
 import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
+import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
 
 function HomeContent() {
   // UI State
@@ -171,11 +172,18 @@ function HomeContent() {
         parentSessionId = parentSession?.claude_session_id || null;
       }
 
+      // Check for pending initial prompt
+      const initialPrompt = getPendingPrompt(session.id);
+      if (initialPrompt) {
+        clearPendingPrompt(session.id);
+      }
+
       const flags = provider.buildFlags({
         sessionId: session.claude_session_id,
         parentSessionId,
         autoApprove: session.auto_approve,
         model: session.model,
+        initialPrompt: initialPrompt || undefined,
       });
       const flagsStr = flags.join(" ");
 
