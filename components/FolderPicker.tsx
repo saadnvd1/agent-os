@@ -10,7 +10,9 @@ import {
   ChevronRight,
   Check,
   GitBranch,
+  Search,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { FileNode } from "@/lib/file-utils";
@@ -31,6 +33,7 @@ export function FolderPicker({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isGitRepo, setIsGitRepo] = useState(false);
+  const [search, setSearch] = useState("");
 
   // Load directory contents
   const loadDirectory = useCallback(async (path: string) => {
@@ -76,6 +79,7 @@ export function FolderPicker({
   }, []);
 
   const navigateTo = (path: string) => {
+    setSearch("");
     loadDirectory(path);
   };
 
@@ -103,6 +107,11 @@ export function FolderPicker({
   // Get folder name from path
   const folderName = pathSegments[pathSegments.length - 1] || "root";
 
+  // Filter files by search
+  const filteredFiles = search
+    ? files.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()))
+    : files;
+
   return (
     <div className="bg-background fixed inset-0 z-50 flex flex-col">
       {/* Header */}
@@ -120,6 +129,20 @@ export function FolderPicker({
           <p className="text-muted-foreground truncate text-xs">
             {currentPath}
           </p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="border-border border-b px-3 py-2">
+        <div className="relative">
+          <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
+          <Input
+            type="text"
+            placeholder="Search folders..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-9 pl-9"
+          />
         </div>
       </div>
 
@@ -180,13 +203,15 @@ export function FolderPicker({
               Go back
             </Button>
           </div>
-        ) : files.length === 0 ? (
+        ) : filteredFiles.length === 0 ? (
           <div className="text-muted-foreground flex h-32 items-center justify-center">
-            <p className="text-sm">No subfolders</p>
+            <p className="text-sm">
+              {search ? "No matching folders" : "No subfolders"}
+            </p>
           </div>
         ) : (
           <div className="divide-border divide-y">
-            {files.map((node) => (
+            {filteredFiles.map((node) => (
               <button
                 key={node.path}
                 onClick={() => navigateTo(node.path)}
