@@ -19,7 +19,13 @@ import {
   FileExplorerSkeleton,
   GitPanelSkeleton,
 } from "./PaneSkeletons";
+import {
+  Panel as ResizablePanel,
+  Group as ResizablePanelGroup,
+  Separator as ResizablePanelHandle,
+} from "react-resizable-panels";
 import { GitDrawer } from "@/components/GitDrawer";
+import { ShellDrawer } from "@/components/ShellDrawer";
 
 // Dynamic imports for client-only components with loading states
 const Terminal = dynamic(
@@ -83,6 +89,11 @@ export const Pane = memo(function Pane({
     const stored = localStorage.getItem("gitDrawerOpen");
     return stored === null ? true : stored === "true";
   });
+  const [shellDrawerOpen, setShellDrawerOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const stored = localStorage.getItem("shellDrawerOpen");
+    return stored === "true";
+  });
   const terminalRefs = useRef<Map<string, TerminalHandle | null>>(new Map());
   const paneData = getPaneData(paneId);
   const activeTab = getActiveTab(paneId);
@@ -113,10 +124,14 @@ export const Pane = memo(function Pane({
     fileEditor.reset();
   }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist git drawer state
+  // Persist drawer states
   useEffect(() => {
     localStorage.setItem("gitDrawerOpen", String(gitDrawerOpen));
   }, [gitDrawerOpen]);
+
+  useEffect(() => {
+    localStorage.setItem("shellDrawerOpen", String(shellDrawerOpen));
+  }, [shellDrawerOpen]);
 
   const handleFocus = useCallback(() => {
     focusPane(paneId);
@@ -249,11 +264,13 @@ export const Pane = memo(function Pane({
           canClose={canClose}
           hasAttachedTmux={!!activeTab?.attachedTmux}
           gitDrawerOpen={gitDrawerOpen}
+          shellDrawerOpen={shellDrawerOpen}
           onTabSwitch={(tabId) => switchTab(paneId, tabId)}
           onTabClose={(tabId) => closeTab(paneId, tabId)}
           onTabAdd={() => addTab(paneId)}
           onViewModeChange={setViewMode}
           onGitDrawerToggle={() => setGitDrawerOpen((prev) => !prev)}
+          onShellDrawerToggle={() => setShellDrawerOpen((prev) => !prev)}
           onSplitHorizontal={() => splitHorizontal(paneId)}
           onSplitVertical={() => splitVertical(paneId)}
           onClose={() => close(paneId)}
@@ -261,15 +278,14 @@ export const Pane = memo(function Pane({
         />
       )}
 
-      {/* Content Area + Git Drawer in flex row */}
-      <div className="flex min-h-0 flex-1">
-        {/* Main Content */}
+      {/* Content Area - Mobile: simple flex, Desktop: resizable panels */}
+      {isMobile ? (
         <div
-          className="relative min-h-0 min-w-0 flex-1"
-          onTouchStart={isMobile ? handleTouchStart : undefined}
-          onTouchEnd={isMobile ? handleTouchEnd : undefined}
+          className="relative min-h-0 flex-1"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
-          {/* Terminals - one per tab, kept mounted for instant switching */}
+          {/* Terminals - one per tab */}
           {paneData.tabs.map((tab) => {
             const isActive = tab.id === activeTab?.id;
             const savedState = sessionRegistry.getTerminalState(paneId, tab.id);
@@ -306,7 +322,7 @@ export const Pane = memo(function Pane({
             );
           })}
 
-          {/* Files - mounted once accessed, stays mounted */}
+          {/* Files */}
           {session?.working_directory && (
             <div className={viewMode === "files" ? "h-full" : "hidden"}>
               <FileExplorer
@@ -316,14 +332,14 @@ export const Pane = memo(function Pane({
             </div>
           )}
 
-          {/* Git - mobile only (desktop uses GitDrawer) */}
-          {isMobile && session?.working_directory && (
+          {/* Git - mobile only */}
+          {session?.working_directory && (
             <div className={viewMode === "git" ? "h-full" : "hidden"}>
               <GitPanel workingDirectory={session.working_directory} />
             </div>
           )}
 
-          {/* Workers - only for conductor sessions */}
+          {/* Workers */}
           {viewMode === "workers" && session && (
             <ConductorPanel
               conductorSessionId={session.id}
@@ -344,16 +360,128 @@ export const Pane = memo(function Pane({
             />
           )}
         </div>
+      ) : (
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="min-h-0 flex-1"
+        >
+          {/* Left column: Main content + Shell drawer */}
+          <ResizablePanel defaultSize={gitDrawerOpen ? 70 : 100} minSize={20}>
+            <ResizablePanelGroup orientation="vertical" className="h-full">
+              {/* Main content */}
+              <ResizablePanel
+                defaultSize={shellDrawerOpen ? 70 : 100}
+                minSize={10}
+              >
+                <div className="relative h-full">
+                  {/* Terminals - one per tab */}
+                  {paneData.tabs.map((tab) => {
+                    const isActive = tab.id === activeTab?.id;
+                    const savedState = sessionRegistry.getTerminalState(
+                      paneId,
+                      tab.id
+                    );
 
-        {/* Git Drawer - desktop only, pushes content */}
-        {!isMobile && session?.working_directory && (
-          <GitDrawer
-            open={gitDrawerOpen}
-            onOpenChange={setGitDrawerOpen}
-            workingDirectory={session.working_directory}
-          />
-        )}
-      </div>
+                    return (
+                      <div
+                        key={tab.id}
+                        className={
+                          viewMode === "terminal" && isActive
+                            ? "h-full"
+                            : "hidden"
+                        }
+                      >
+                        <Terminal
+                          ref={getTerminalRef(tab.id)}
+                          onConnected={getTerminalConnectedHandler(tab)}
+                          onBeforeUnmount={(scrollState) => {
+                            sessionRegistry.saveTerminalState(paneId, tab.id, {
+                              scrollTop: scrollState.scrollTop,
+                              scrollHeight: 0,
+                              lastActivity: Date.now(),
+                              cursorY: scrollState.cursorY,
+                            });
+                          }}
+                          initialScrollState={
+                            savedState
+                              ? {
+                                  scrollTop: savedState.scrollTop,
+                                  cursorY: savedState.cursorY,
+                                  baseY: 0,
+                                }
+                              : undefined
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+
+                  {/* Files */}
+                  {session?.working_directory && (
+                    <div className={viewMode === "files" ? "h-full" : "hidden"}>
+                      <FileExplorer
+                        workingDirectory={session.working_directory}
+                        fileEditor={fileEditor}
+                      />
+                    </div>
+                  )}
+
+                  {/* Workers */}
+                  {viewMode === "workers" && session && (
+                    <ConductorPanel
+                      conductorSessionId={session.id}
+                      onAttachToWorker={(workerId) => {
+                        setViewMode("terminal");
+                        const worker = sessions.find((s) => s.id === workerId);
+                        if (worker && terminalRef) {
+                          const sessionName = `claude-${workerId}`;
+                          terminalRef.sendInput("\x02d");
+                          setTimeout(() => {
+                            terminalRef?.sendInput("\x15");
+                            setTimeout(() => {
+                              terminalRef?.sendCommand(
+                                `tmux attach -t ${sessionName}`
+                              );
+                            }, 50);
+                          }, 100);
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+              </ResizablePanel>
+
+              {/* Shell drawer - under main content */}
+              {shellDrawerOpen && session?.working_directory && (
+                <>
+                  <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 h-px cursor-row-resize transition-colors" />
+                  <ResizablePanel defaultSize={30} minSize={10}>
+                    <ShellDrawer
+                      open={true}
+                      onOpenChange={setShellDrawerOpen}
+                      workingDirectory={session.working_directory}
+                    />
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
+          </ResizablePanel>
+
+          {/* Git drawer - right side, full height */}
+          {gitDrawerOpen && session?.working_directory && (
+            <>
+              <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 w-px cursor-col-resize transition-colors" />
+              <ResizablePanel defaultSize={30} minSize={10}>
+                <GitDrawer
+                  open={true}
+                  onOpenChange={setGitDrawerOpen}
+                  workingDirectory={session.working_directory}
+                />
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+      )}
     </div>
   );
 });

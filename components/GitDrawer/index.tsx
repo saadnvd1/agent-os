@@ -16,6 +16,7 @@ import { CommitForm } from "@/components/GitPanel/CommitForm";
 import { PRCreationModal } from "@/components/PRCreationModal";
 import { FileEditDialog } from "./FileEditDialog";
 import { cn } from "@/lib/utils";
+import { useDrawerAnimation } from "@/hooks/useDrawerAnimation";
 import type { GitStatus, GitFile } from "@/lib/git-status";
 
 interface GitDrawerProps {
@@ -37,6 +38,9 @@ export function GitDrawer({
 
   // Selected file for edit dialog
   const [selectedFile, setSelectedFile] = useState<GitFile | null>(null);
+
+  // Animation
+  const isAnimatingIn = useDrawerAnimation(open);
 
   const fetchStatus = useCallback(async () => {
     if (!workingDirectory) return;
@@ -147,12 +151,14 @@ export function GitDrawer({
     <>
       <div
         className={cn(
-          "border-border bg-background flex h-full flex-col border-l",
-          "w-[350px] flex-shrink-0"
+          "bg-muted/30 flex h-full flex-col transition-all duration-200 ease-out",
+          isAnimatingIn
+            ? "translate-x-0 opacity-100"
+            : "translate-x-4 opacity-0"
         )}
       >
         {/* Header */}
-        <div className="border-b px-3 py-2">
+        <div className="px-3 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Git Changes</span>

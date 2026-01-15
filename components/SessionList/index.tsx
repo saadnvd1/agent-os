@@ -2,13 +2,13 @@
 
 import { useState, useMemo, useRef, useCallback } from "react";
 import { SessionPreviewPopover } from "@/components/SessionPreviewPopover";
-import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { ServerLogsModal } from "@/components/DevServers";
 import {
   ProjectsSection,
   NewProjectDialog,
   ProjectSettingsDialog,
 } from "@/components/Projects";
+import { FolderPicker } from "@/components/FolderPicker";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionListHeader } from "./SessionListHeader";
 import { GroupSection } from "./GroupSection";
@@ -24,7 +24,7 @@ import { useViewport } from "@/hooks/useViewport";
 
 // Data hooks
 import { useSessionsQuery } from "@/data/sessions";
-import { useProjectsQuery } from "@/data/projects";
+import { useProjectsQuery, useCreateProject } from "@/data/projects";
 import { useDevServersQuery } from "@/data/dev-servers";
 
 import type { SessionListProps } from "./SessionList.types";
@@ -67,9 +67,12 @@ export function SessionList({
   // All mutations via custom hook
   const mutations = useSessionListMutations({ onSelectSession: onSelect });
 
+  // Project creation mutation for folder picker
+  const createProject = useCreateProject();
+
   // Local UI state
-  const [showNewDialog, setShowNewDialog] = useState(false);
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [editingProject, setEditingProject] =
     useState<ProjectWithDevServers | null>(null);
   const [showKillAllConfirm, setShowKillAllConfirm] = useState(false);
@@ -147,9 +150,8 @@ export function SessionList({
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <SessionListHeader
-        onRefresh={mutations.handleRefresh}
-        onNewSession={() => setShowNewDialog(true)}
         onNewProject={() => setShowNewProjectDialog(true)}
+        onOpenProject={() => setShowFolderPicker(true)}
         onKillAll={() => setShowKillAllConfirm(true)}
       />
 
@@ -285,17 +287,6 @@ export function SessionList({
         </div>
       </ScrollArea>
 
-      {/* New Session Dialog */}
-      <NewSessionDialog
-        open={showNewDialog}
-        projects={projects}
-        onClose={() => setShowNewDialog(false)}
-        onCreated={(id) => {
-          setShowNewDialog(false);
-          onSelect(id);
-        }}
-      />
-
       {/* Session Preview Popover (desktop only) */}
       {!isMobile && (
         <SessionPreviewPopover
@@ -324,6 +315,36 @@ export function SessionList({
         onClose={() => setShowNewProjectDialog(false)}
         onCreated={() => setShowNewProjectDialog(false)}
       />
+
+      {/* Folder Picker for Open Project */}
+      {showFolderPicker && (
+        <FolderPicker
+          initialPath="~"
+          onClose={() => setShowFolderPicker(false)}
+          onSelect={(path) => {
+            // Derive project name from folder path
+            const parts = path.split("/").filter(Boolean);
+            const name = parts[parts.length - 1] || "project";
+
+            createProject.mutate(
+              {
+                name,
+                workingDirectory: path,
+                agentType: "claude",
+                defaultModel: "sonnet",
+                devServers: [],
+              },
+              {
+                onSuccess: () => setShowFolderPicker(false),
+                onError: (err) => {
+                  console.error("Failed to create project:", err);
+                  setShowFolderPicker(false);
+                },
+              }
+            );
+          }}
+        />
+      )}
 
       {/* Project Settings Dialog */}
       <ProjectSettingsDialog
