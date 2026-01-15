@@ -10,6 +10,7 @@ import type {
 } from "@/components/Terminal";
 import type { Session, Project } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
+import { cn } from "@/lib/utils";
 import { ConductorPanel } from "@/components/ConductorPanel";
 import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
@@ -234,7 +235,10 @@ export const Pane = memo(function Pane({
 
   return (
     <div
-      className="flex h-full flex-col overflow-hidden rounded-lg shadow-lg shadow-black/10 dark:shadow-black/30"
+      className={cn(
+        "flex h-full w-full flex-col overflow-hidden",
+        !isMobile && "rounded-lg shadow-lg shadow-black/10 dark:shadow-black/30"
+      )}
       onClick={handleFocus}
     >
       {/* Tab Bar - Mobile vs Desktop */}
@@ -281,7 +285,7 @@ export const Pane = memo(function Pane({
       {/* Content Area - Mobile: simple flex, Desktop: resizable panels */}
       {isMobile ? (
         <div
-          className="relative min-h-0 flex-1"
+          className="relative min-h-0 w-full flex-1"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
@@ -294,7 +298,9 @@ export const Pane = memo(function Pane({
               <div
                 key={tab.id}
                 className={
-                  viewMode === "terminal" && isActive ? "h-full" : "hidden"
+                  viewMode === "terminal" && isActive
+                    ? "h-full w-full"
+                    : "hidden"
                 }
               >
                 <Terminal
