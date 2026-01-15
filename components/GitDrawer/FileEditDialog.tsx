@@ -163,15 +163,31 @@ export function FileEditDialog({
   }, []);
 
   const handleBeforeMount = useCallback((monaco: Monaco) => {
-    // Disable TypeScript/JavaScript diagnostics - we don't have project context
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: true,
-      noSyntaxValidation: true,
-    });
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: true,
-      noSyntaxValidation: true,
-    });
+    // Suppress common "cannot find module" errors while keeping useful syntax validation
+    // These errors occur because we don't have the project's full TypeScript context
+    const diagnosticOptions = {
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+      diagnosticCodesToIgnore: [
+        2307, // Cannot find module
+        2792, // Cannot find module (path aliases)
+        2304, // Cannot find name (global types)
+        1149, // File name differs from already included file
+        1005, // ':' expected (JSX confusion)
+        2365, // Operator '<' cannot be applied (JSX confusion)
+        17004, // Cannot use JSX unless '--jsx' flag provided
+        1161, // Unterminated regular expression literal
+        1003, // Identifier expected
+        1109, // Expression expected
+        1160, // Unterminated template literal
+      ],
+    };
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
+      diagnosticOptions
+    );
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
+      diagnosticOptions
+    );
 
     monaco.editor.defineTheme("agentOsDiff", {
       base: "vs-dark",

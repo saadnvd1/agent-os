@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
       baseBranch = "main",
       // Tmux option
       useTmux = true,
+      // Initial prompt to send when session starts
+      initialPrompt = null,
     } = body;
 
     // Validate agent type
@@ -173,10 +175,17 @@ export async function POST(request: NextRequest) {
 
     const session = queries.getSession(db).get(id) as Session;
 
-    // Include setup result in response if worktree was created
-    const response: { session: Session; setup?: SetupResult } = { session };
+    // Include setup result and initial prompt in response
+    const response: {
+      session: Session;
+      setup?: SetupResult;
+      initialPrompt?: string;
+    } = { session };
     if (setupResult) {
       response.setup = setupResult;
+    }
+    if (initialPrompt?.trim()) {
+      response.initialPrompt = initialPrompt.trim();
     }
 
     return NextResponse.json(response, { status: 201 });
