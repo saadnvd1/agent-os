@@ -17,7 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { GitBranch, Loader2, Plus, FolderOpen } from "lucide-react";
+import {
+  GitBranch,
+  Loader2,
+  Plus,
+  FolderOpen,
+  ChevronRight,
+} from "lucide-react";
 import { DirectoryPicker } from "./DirectoryPicker";
 import type { AgentType } from "@/lib/providers";
 import { getProviderDefinition } from "@/lib/providers";
@@ -26,7 +32,75 @@ import type { ProjectWithDevServers } from "@/lib/projects";
 const SKIP_PERMISSIONS_KEY = "agentOS:skipPermissions";
 const AGENT_TYPE_KEY = "agentOS:defaultAgentType";
 const RECENT_DIRS_KEY = "agentOS:recentDirectories";
+const USE_TMUX_KEY = "agentOS:useTmux";
 const MAX_RECENT_DIRS = 5;
+
+// Random feature name generator
+const ADJECTIVES = [
+  "swift",
+  "blue",
+  "bright",
+  "calm",
+  "cool",
+  "dark",
+  "fast",
+  "gold",
+  "green",
+  "happy",
+  "iron",
+  "jade",
+  "keen",
+  "light",
+  "loud",
+  "mint",
+  "neat",
+  "nice",
+  "pink",
+  "pure",
+  "quick",
+  "red",
+  "sage",
+  "sharp",
+  "slim",
+  "soft",
+  "warm",
+];
+const NOUNS = [
+  "falcon",
+  "river",
+  "storm",
+  "tiger",
+  "wave",
+  "cloud",
+  "flame",
+  "forest",
+  "garden",
+  "harbor",
+  "island",
+  "jungle",
+  "lake",
+  "meadow",
+  "ocean",
+  "peak",
+  "phoenix",
+  "rain",
+  "shadow",
+  "spark",
+  "star",
+  "stone",
+  "sun",
+  "thunder",
+  "tree",
+  "valley",
+  "wind",
+  "wolf",
+];
+
+function generateFeatureName(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  return `${adj}-${noun}`;
+}
 
 interface GitInfo {
   isGitRepo: boolean;
@@ -93,13 +167,21 @@ export function NewSessionDialog({
   const [checkingGit, setCheckingGit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Tmux session option
+  const [useTmux, setUseTmux] = useState(true);
+
   // Recent directories
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
+
+  // Advanced settings collapsed state
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Check if working directory is a git repo
   const checkGitRepo = useCallback(async (path: string) => {
     if (!path || path === "~") {
       setGitInfo(null);
+      setUseWorktree(false);
+      setFeatureName("");
       return;
     }
 
@@ -115,8 +197,18 @@ export function NewSessionDialog({
       if (data.defaultBranch) {
         setBaseBranch(data.defaultBranch);
       }
+      // Auto-enable worktree with random feature name when git repo detected
+      if (data.isGitRepo) {
+        setUseWorktree(true);
+        setFeatureName(generateFeatureName());
+      } else {
+        setUseWorktree(false);
+        setFeatureName("");
+      }
     } catch {
       setGitInfo(null);
+      setUseWorktree(false);
+      setFeatureName("");
     } finally {
       setCheckingGit(false);
     }
@@ -142,6 +234,10 @@ export function NewSessionDialog({
       AGENT_OPTIONS.some((opt) => opt.value === savedAgentType)
     ) {
       setAgentType(savedAgentType as AgentType);
+    }
+    const savedUseTmux = localStorage.getItem(USE_TMUX_KEY);
+    if (savedUseTmux !== null) {
+      setUseTmux(savedUseTmux === "true");
     }
     // Load recent directories
     try {
@@ -205,6 +301,12 @@ export function NewSessionDialog({
     localStorage.setItem(AGENT_TYPE_KEY, value);
   };
 
+  // Save useTmux preference to localStorage
+  const handleUseTmuxChange = (checked: boolean) => {
+    setUseTmux(checked);
+    localStorage.setItem(USE_TMUX_KEY, String(checked));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -236,6 +338,7 @@ export function NewSessionDialog({
           featureName: useWorktree ? featureName.trim() : null,
           baseBranch: useWorktree ? baseBranch : null,
           autoApprove: skipPermissions,
+          useTmux,
         }),
       });
 
@@ -330,6 +433,7 @@ export function NewSessionDialog({
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Name{" "}
@@ -562,30 +666,65 @@ export function NewSessionDialog({
                 })()}
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="skipPermissions"
-                checked={skipPermissions}
-                onChange={(e) => handleSkipPermissionsChange(e.target.checked)}
-                className="border-border bg-background accent-primary h-4 w-4 rounded"
-              />
-              <label
-                htmlFor="skipPermissions"
-                className="cursor-pointer text-sm"
+            {/* Advanced Settings - Collapsible */}
+            <div className="border-border rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setAdvancedOpen(!advancedOpen)}
+                className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors"
               >
-                Auto-approve tool calls
-                <span className="text-muted-foreground ml-1">
-                  {(() => {
-                    const provider = getProviderDefinition(agentType);
-                    if (provider.autoApproveFlag) {
-                      return `(${provider.autoApproveFlag})`;
-                    }
-                    return "(not supported)";
-                  })()}
-                </span>
-              </label>
+                <ChevronRight
+                  className={`h-4 w-4 transition-transform ${advancedOpen ? "rotate-90" : ""}`}
+                />
+                Advanced Settings
+              </button>
+              {advancedOpen && (
+                <div className="space-y-3 border-t px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="useTmux"
+                      checked={useTmux}
+                      onChange={(e) => handleUseTmuxChange(e.target.checked)}
+                      className="border-border bg-background accent-primary h-4 w-4 rounded"
+                    />
+                    <label htmlFor="useTmux" className="cursor-pointer text-sm">
+                      Use tmux session
+                      <span className="text-muted-foreground ml-1">
+                        (enables detach/attach)
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="skipPermissions"
+                      checked={skipPermissions}
+                      onChange={(e) =>
+                        handleSkipPermissionsChange(e.target.checked)
+                      }
+                      className="border-border bg-background accent-primary h-4 w-4 rounded"
+                    />
+                    <label
+                      htmlFor="skipPermissions"
+                      className="cursor-pointer text-sm"
+                    >
+                      Auto-approve tool calls
+                      <span className="text-muted-foreground ml-1">
+                        {(() => {
+                          const provider = getProviderDefinition(agentType);
+                          if (provider.autoApproveFlag) {
+                            return `(${provider.autoApproveFlag})`;
+                          }
+                          return "(not supported)";
+                        })()}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
+
             {error && <p className="text-sm text-red-500">{error}</p>}
 
             <DialogFooter>
