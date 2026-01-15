@@ -2,10 +2,11 @@
 
 import { useRef, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { X } from "lucide-react";
+import { X, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useDrawerAnimation } from "@/hooks/useDrawerAnimation";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import type { TerminalHandle } from "@/components/Terminal";
 
 const Terminal = dynamic(
@@ -26,6 +27,7 @@ export function ShellDrawer({
 }: ShellDrawerProps) {
   const terminalRef = useRef<TerminalHandle | null>(null);
   const hasInitialized = useRef(false);
+  const { copied, copy } = useCopyToClipboard();
 
   // Animation
   const isAnimatingIn = useDrawerAnimation(open);
@@ -69,6 +71,17 @@ export function ShellDrawer({
           <span className="text-muted-foreground truncate text-xs">
             {workingDirectory}
           </span>
+          <button
+            onClick={() => copy(workingDirectory)}
+            className="text-muted-foreground hover:text-foreground flex-shrink-0 p-0.5"
+            title="Copy path"
+          >
+            {copied ? (
+              <Check className="h-3 w-3 text-green-500" />
+            ) : (
+              <Copy className="h-3 w-3" />
+            )}
+          </button>
         </div>
         <Button
           variant="ghost"

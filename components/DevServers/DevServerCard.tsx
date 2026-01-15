@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import type { DevServer, DevServerStatus } from "@/lib/db";
 
 interface DevServerCardProps {
@@ -59,8 +60,8 @@ export function DevServerCard({
   onViewLogs,
 }: DevServerCardProps) {
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [confirmingStop, setConfirmingStop] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   const status = statusConfig[server.status] || statusConfig.stopped;
   const ports: number[] = JSON.parse(server.ports || "[]");
@@ -75,14 +76,6 @@ export function DevServerCard({
       await action();
     } finally {
       setLoading(false);
-    }
-  };
-
-  const copyPort = () => {
-    if (primaryPort) {
-      navigator.clipboard.writeText(`localhost:${primaryPort}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     }
   };
 
@@ -156,7 +149,7 @@ export function DevServerCard({
             </span>
           )}
           <button
-            onClick={copyPort}
+            onClick={() => primaryPort && copy(`localhost:${primaryPort}`)}
             disabled={!isRunning}
             className={cn(
               "flex items-center justify-center rounded p-1",
