@@ -427,15 +427,9 @@ export function SessionCard({
         </span>
       )}
 
-      {/* Port indicator for worktree sessions */}
-      {session.dev_server_port && (
-        <span
-          className="text-muted-foreground flex-shrink-0 text-[10px]"
-          title={`Dev server port: ${session.dev_server_port}`}
-        >
-          :{session.dev_server_port}
-        </span>
-      )}
+      {/* TODO: Show port indicator once auto dev server management is implemented.
+          Each worktree gets a unique port (3100, 3110, etc.) for running dev servers.
+          See lib/ports.ts and ideas.md for the planned feature. */}
 
       {/* PR status badge */}
       {session.pr_status && (
