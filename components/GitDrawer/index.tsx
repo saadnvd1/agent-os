@@ -9,8 +9,17 @@ import {
   ArrowUp,
   ArrowDown,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FileChanges } from "@/components/GitPanel/FileChanges";
 import { CommitForm } from "@/components/GitPanel/CommitForm";
 import { PRCreationModal } from "@/components/PRCreationModal";
@@ -38,6 +47,10 @@ export function GitDrawer({
 
   // Selected file for edit dialog
   const [selectedFile, setSelectedFile] = useState<GitFile | null>(null);
+
+  // Discard confirmation
+  const [discardFile, setDiscardFile] = useState<GitFile | null>(null);
+  const [discarding, setDiscarding] = useState(false);
 
   // Animation
   const isAnimatingIn = useDrawerAnimation(open);
@@ -135,6 +148,28 @@ export function GitDrawer({
       await fetchStatus();
     } catch {
       // Ignore errors
+    }
+  };
+
+  const handleDiscardConfirm = async () => {
+    if (!discardFile) return;
+
+    setDiscarding(true);
+    try {
+      await fetch("/api/git/discard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: workingDirectory,
+          file: discardFile.path,
+        }),
+      });
+      await fetchStatus();
+      setDiscardFile(null);
+    } catch {
+      // Ignore errors
+    } finally {
+      setDiscarding(false);
     }
   };
 
@@ -250,6 +285,7 @@ export function GitDrawer({
                 onFileClick={handleFileClick}
                 onStage={handleStage}
                 onStageAll={handleStageAll}
+                onDiscard={setDiscardFile}
                 isStaged={false}
               />
             </>
@@ -291,6 +327,44 @@ export function GitDrawer({
           onSave={fetchStatus}
         />
       )}
+
+      {/* Discard Confirmation Modal */}
+      <Dialog
+        open={!!discardFile}
+        onOpenChange={(o) => !o && setDiscardFile(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Discard Changes
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to discard changes to{" "}
+              <span className="font-mono font-medium">
+                {discardFile?.path.split("/").pop()}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDiscardFile(null)}
+              disabled={discarding}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDiscardConfirm}
+              disabled={discarding}
+            >
+              {discarding ? "Discarding..." : "Discard"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

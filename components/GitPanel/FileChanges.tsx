@@ -9,7 +9,15 @@ import {
   ArrowRight,
   ChevronRight,
   Check,
+  MoreVertical,
+  Undo2,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { GitFile } from "@/lib/git-status";
 
@@ -23,6 +31,7 @@ interface FileChangesProps {
   onUnstage?: (file: GitFile) => void;
   onStageAll?: () => void;
   onUnstageAll?: () => void;
+  onDiscard?: (file: GitFile) => void;
   isStaged?: boolean;
 }
 
@@ -38,6 +47,7 @@ export function FileChanges({
   onUnstage,
   onStageAll,
   onUnstageAll,
+  onDiscard,
   isStaged = false,
 }: FileChangesProps) {
   const [expanded, setExpanded] = useState(true);
@@ -92,6 +102,9 @@ export function FileChanges({
               file={file}
               isSelected={file.path === selectedPath}
               onClick={() => onFileClick(file)}
+              onStage={onStage ? () => onStage(file) : undefined}
+              onUnstage={onUnstage ? () => onUnstage(file) : undefined}
+              onDiscard={onDiscard ? () => onDiscard(file) : undefined}
               onSwipeLeft={isStaged ? () => onUnstage?.(file) : undefined}
               onSwipeRight={!isStaged ? () => onStage?.(file) : undefined}
               isStaged={isStaged}
@@ -107,6 +120,9 @@ interface FileItemProps {
   file: GitFile;
   isSelected?: boolean;
   onClick: () => void;
+  onStage?: () => void;
+  onUnstage?: () => void;
+  onDiscard?: () => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   isStaged: boolean;
@@ -116,6 +132,9 @@ function FileItem({
   file,
   isSelected = false,
   onClick,
+  onStage,
+  onUnstage,
+  onDiscard,
   onSwipeLeft,
   onSwipeRight,
   isStaged,
@@ -175,7 +194,7 @@ function FileItem({
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden"
+      className="group relative overflow-hidden"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -219,11 +238,10 @@ function FileItem({
       </div>
 
       {/* File item */}
-      <button
-        onClick={onClick}
+      <div
         className={cn(
-          "relative flex w-full items-center gap-2 px-3 py-2.5 text-sm",
-          "text-left transition-colors",
+          "relative flex w-full items-center gap-2 px-3 py-2 text-sm",
+          "transition-colors",
           "min-h-[44px]", // Mobile touch target
           isSelected ? "bg-accent" : "bg-background hover:bg-accent/50"
         )}
@@ -232,25 +250,99 @@ function FileItem({
           transition: isSwiping ? "none" : "transform 0.2s ease-out",
         }}
       >
-        {/* Status icon */}
-        <span className={cn("flex-shrink-0", statusColor)}>{statusIcon}</span>
+        {/* Clickable area for file */}
+        <button
+          onClick={onClick}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          {/* Status icon */}
+          <span className={cn("flex-shrink-0", statusColor)}>{statusIcon}</span>
 
-        {/* File info */}
-        <div className="min-w-0 flex-1">
-          <span className="block truncate">{fileName}</span>
-          {filePath && (
-            <span className="text-muted-foreground block truncate text-xs">
-              {filePath}
-            </span>
-          )}
+          {/* File info */}
+          <div className="min-w-0 flex-1">
+            <span className="block truncate">{fileName}</span>
+            {filePath && (
+              <span className="text-muted-foreground block truncate text-xs">
+                {filePath}
+              </span>
+            )}
+          </div>
+        </button>
+
+        {/* Action buttons - visible on hover (desktop) */}
+        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {/* Stage/Unstage button */}
+          {isStaged
+            ? onUnstage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUnstage();
+                  }}
+                  className="hover:bg-accent flex h-7 w-7 items-center justify-center rounded text-yellow-500 transition-colors"
+                  title="Unstage"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+              )
+            : onStage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStage();
+                  }}
+                  className="hover:bg-accent flex h-7 w-7 items-center justify-center rounded text-green-500 transition-colors"
+                  title="Stage"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              )}
+
+          {/* Context menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-7 w-7 items-center justify-center rounded transition-colors"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isStaged
+                ? onUnstage && (
+                    <DropdownMenuItem onClick={onUnstage}>
+                      <Minus className="mr-2 h-4 w-4" />
+                      Unstage
+                    </DropdownMenuItem>
+                  )
+                : onStage && (
+                    <DropdownMenuItem onClick={onStage}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Stage
+                    </DropdownMenuItem>
+                  )}
+              {onDiscard && !isStaged && (
+                <DropdownMenuItem
+                  onClick={onDiscard}
+                  className="text-red-500 focus:text-red-500"
+                >
+                  <Undo2 className="mr-2 h-4 w-4" />
+                  Discard Changes
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        {/* Staged indicator */}
-        {isStaged && <Check className="h-4 w-4 flex-shrink-0 text-green-500" />}
+        {/* Staged indicator - always visible */}
+        {isStaged && (
+          <Check className="h-4 w-4 flex-shrink-0 text-green-500 group-hover:hidden" />
+        )}
 
-        {/* Arrow */}
-        <ArrowRight className="text-muted-foreground h-4 w-4 flex-shrink-0" />
-      </button>
+        {/* Arrow - visible when not hovering */}
+        <ArrowRight className="text-muted-foreground h-4 w-4 flex-shrink-0 group-hover:hidden" />
+      </div>
     </div>
   );
 }
