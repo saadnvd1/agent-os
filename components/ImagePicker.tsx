@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Folder,
@@ -9,6 +9,8 @@ import {
   Loader2,
   Home,
   ChevronRight,
+  Upload,
+  Clipboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,6 +42,103 @@ export function ImagePicker({
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // Handle dropped/pasted image file
+  const handleImageFile = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith("image/")) return;
+
+      setUploading(true);
+      try {
+        // Convert to base64 and save to temp file
+        const buffer = await file.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(buffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ""
+          )
+        );
+
+        const res = await fetch("/api/files/upload-temp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name || `screenshot-${Date.now()}.png`,
+            base64,
+            mimeType: file.type,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.path) {
+          onSelect(data.path);
+        } else {
+          console.error("Upload failed:", data.error);
+        }
+      } catch (err) {
+        console.error("Failed to upload image:", err);
+      } finally {
+        setUploading(false);
+      }
+    },
+    [onSelect]
+  );
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set to false if we're leaving the drop zone entirely
+    if (!dropZoneRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      const files = Array.from(e.dataTransfer.files);
+      const imageFile = files.find((f) => f.type.startsWith("image/"));
+      if (imageFile) {
+        handleImageFile(imageFile);
+      }
+    },
+    [handleImageFile]
+  );
+
+  // Clipboard paste handler
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleImageFile(file);
+            break;
+          }
+        }
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [handleImageFile]);
 
   // Load directory contents
   const loadDirectory = useCallback(async (path: string) => {
@@ -167,6 +266,44 @@ export function ImagePicker({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Drop Zone */}
+      <div
+        ref={dropZoneRef}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "border-border mx-3 mt-3 flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors",
+          isDragging && "border-primary bg-primary/10",
+          uploading && "opacity-50"
+        )}
+      >
+        {uploading ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Uploading...</span>
+          </div>
+        ) : isDragging ? (
+          <div className="flex items-center gap-2">
+            <Upload className="text-primary h-5 w-5" />
+            <span className="text-primary text-sm font-medium">
+              Drop image here
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-center">
+            <div className="text-muted-foreground flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              <span className="text-sm">Drop screenshot here</span>
+            </div>
+            <div className="text-muted-foreground flex items-center gap-1 text-xs">
+              <Clipboard className="h-3 w-3" />
+              <span>or paste from clipboard (⌘V)</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
