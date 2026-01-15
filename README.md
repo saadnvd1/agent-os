@@ -4,6 +4,9 @@ A **mobile-first** self-hosted web UI for managing multiple AI coding assistant 
 
 > If you find AgentOS useful, please consider giving it a star! It helps the project grow and reach more developers.
 
+
+> **Don't want to self-host?** Try [AgentOS Cloud](https://runagentos.com) - get a pre-configured VM with Claude Code installed, accessible from any device.
+
 https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
 
 ![AgentOS Screenshot](docs/screenshot.png)
