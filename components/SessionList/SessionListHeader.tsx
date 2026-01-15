@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -33,7 +32,23 @@ export function SessionListHeader({
   return (
     <div className="flex items-center justify-between p-4 pb-3">
       <div className="flex items-center gap-2">
-        <Image src="/icon.svg" alt="AgentOS" width={20} height={20} />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </svg>
         <h2 className="font-semibold">AgentOS</h2>
       </div>
       <div className="flex gap-1">
