@@ -43,16 +43,24 @@ app.prepare().then(() => {
     let ptyProcess: pty.IPty;
     try {
       const shell = process.env.SHELL || "/bin/zsh";
-      ptyProcess = pty.spawn(shell, [], {
+      // Use minimal env - only essentials for shell to work
+      // This lets Next.js/Vite/etc load .env.local without interference from parent process env
+      const minimalEnv: { [key: string]: string } = {
+        PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
+        HOME: process.env.HOME || "/",
+        USER: process.env.USER || "",
+        SHELL: shell,
+        TERM: "xterm-256color",
+        COLORTERM: "truecolor",
+        LANG: process.env.LANG || "en_US.UTF-8",
+      };
+
+      ptyProcess = pty.spawn(shell, ["-l"], {
         name: "xterm-256color",
         cols: 80,
         rows: 24,
         cwd: process.env.HOME || "/",
-        env: {
-          ...process.env,
-          TERM: "xterm-256color",
-          COLORTERM: "truecolor",
-        } as { [key: string]: string },
+        env: minimalEnv,
       });
     } catch (err) {
       console.error("Failed to spawn pty:", err);
