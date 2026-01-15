@@ -5,6 +5,7 @@ import { getDb, queries, type Session } from "@/lib/db";
 import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
 import { killWorker } from "@/lib/orchestration";
+import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 
 const execAsync = promisify(exec);
 
@@ -59,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const updates: string[] = [];
     const values: unknown[] = [];
 
-    // Handle name change - also rename tmux session
+    // Handle name change - also rename tmux session and git branch (for worktrees)
     if (body.name !== undefined && body.name !== existing.name) {
       const newTmuxName = sanitizeTmuxName(body.name);
       const oldTmuxName = existing.tmux_name;
@@ -77,6 +78,29 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           // Still update tmux_name in DB so future attachments use the new name
           updates.push("tmux_name = ?");
           values.push(newTmuxName);
+        }
+      }
+
+      // If this is a worktree session, also rename the git branch
+      if (existing.worktree_path && isAgentOSWorktree(existing.worktree_path)) {
+        try {
+          const currentBranch = await getCurrentBranch(existing.worktree_path);
+          const newBranchName = generateBranchName(body.name);
+
+          if (currentBranch !== newBranchName) {
+            const result = await renameBranch(
+              existing.worktree_path,
+              currentBranch,
+              newBranchName
+            );
+            console.log(
+              `Renamed branch ${currentBranch} → ${newBranchName}`,
+              result.remoteRenamed ? "(also on remote)" : "(local only)"
+            );
+          }
+        } catch (error) {
+          console.error("Failed to rename git branch:", error);
+          // Continue with session rename even if branch rename fails
         }
       }
 

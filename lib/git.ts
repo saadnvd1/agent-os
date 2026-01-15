@@ -135,6 +135,76 @@ export function generateBranchName(feature: string): string {
 }
 
 /**
+ * Check if a branch exists on remote
+ */
+export async function remoteBranchExists(
+  dirPath: string,
+  branchName: string
+): Promise<boolean> {
+  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
+  try {
+    const { stdout } = await execAsync(
+      `git -C "${resolvedPath}" ls-remote --heads origin "${branchName}"`,
+      { timeout: 10000 }
+    );
+    return stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Rename a branch locally and optionally on remote
+ * Returns the new branch name or throws on error
+ */
+export async function renameBranch(
+  dirPath: string,
+  oldBranchName: string,
+  newBranchName: string
+): Promise<{ renamed: boolean; remoteRenamed: boolean }> {
+  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
+  let renamed = false;
+  let remoteRenamed = false;
+
+  // Rename local branch
+  try {
+    await execAsync(
+      `git -C "${resolvedPath}" branch -m "${oldBranchName}" "${newBranchName}"`,
+      { timeout: 10000 }
+    );
+    renamed = true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to rename local branch: ${message}`);
+  }
+
+  // Check if old branch exists on remote and rename there too
+  const hasRemote = await remoteBranchExists(dirPath, oldBranchName);
+  if (hasRemote) {
+    try {
+      // Push new branch to remote
+      await execAsync(
+        `git -C "${resolvedPath}" push origin "${newBranchName}" -u`,
+        { timeout: 30000 }
+      );
+      // Delete old branch from remote
+      await execAsync(
+        `git -C "${resolvedPath}" push origin --delete "${oldBranchName}"`,
+        { timeout: 30000 }
+      );
+      remoteRenamed = true;
+    } catch {
+      // Remote rename failed but local succeeded - that's okay
+      console.error(
+        `Warning: Local branch renamed but remote rename failed for ${oldBranchName}`
+      );
+    }
+  }
+
+  return { renamed, remoteRenamed };
+}
+
+/**
  * Get git status summary (files changed, ahead/behind)
  */
 export async function getGitStatus(dirPath: string): Promise<{
