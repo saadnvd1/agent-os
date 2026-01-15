@@ -69,7 +69,7 @@ export function MobileView({
       </SwipeSidebar>
 
       {/* Terminal fills the screen */}
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 w-full flex-1">
         <PaneLayout renderPane={renderPane} />
       </div>
 
