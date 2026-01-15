@@ -4,7 +4,7 @@ A mobile-first web UI for managing AI coding sessions.
 
 https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
 
-![AgentOS Screenshot](docs/screenshot.png)
+![AgentOS Screenshot](screenshot.png)
 
 ## Installation
 
@@ -35,14 +35,14 @@ npm run dev  # http://localhost:3011
 
 ## Supported Agents
 
-| Agent | Resume | Fork | Auto-Approve |
-|-------|--------|------|--------------|
-| Claude Code | ✅ | ✅ | `--dangerously-skip-permissions` |
-| Codex | ❌ | ❌ | `--approval-mode full-auto` |
-| OpenCode | ❌ | ❌ | Config file |
-| Gemini CLI | ❌ | ❌ | `--yolomode` |
-| Aider | ❌ | ❌ | `--yes` |
-| Cursor CLI | ❌ | ❌ | N/A |
+| Agent       | Resume | Fork | Auto-Approve                     |
+| ----------- | ------ | ---- | -------------------------------- |
+| Claude Code | ✅     | ✅   | `--dangerously-skip-permissions` |
+| Codex       | ❌     | ❌   | `--approval-mode full-auto`      |
+| OpenCode    | ❌     | ❌   | Config file                      |
+| Gemini CLI  | ❌     | ❌   | `--yolomode`                     |
+| Aider       | ❌     | ❌   | `--yes`                          |
+| Cursor CLI  | ❌     | ❌   | N/A                              |
 
 ## Features
 
