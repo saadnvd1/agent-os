@@ -42,6 +42,7 @@ npm run dev  # http://localhost:3011
 
 - Node.js 20+
 - tmux
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (for code search - auto-installed by installer script, or run `agent-os update`)
 - At least one AI CLI: [Claude Code](https://github.com/anthropics/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://github.com/anomalyco/opencode), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Aider](https://aider.chat/), or [Cursor CLI](https://cursor.com/cli)
 
 ## Supported Agents
@@ -59,6 +60,7 @@ npm run dev  # http://localhost:3011
 
 - **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
+- **Code search** - Fast codebase search with syntax-highlighted results (Cmd+K)
 - **Git integration** - Status, diffs, commits, PRs from the UI
 - **Git worktrees** - Isolated branches with auto-setup
 - **Dev servers** - Start/stop Node.js and Docker servers

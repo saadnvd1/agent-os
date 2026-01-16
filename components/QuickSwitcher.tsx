@@ -11,13 +11,17 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Terminal, GitBranch, Clock, Check } from "lucide-react";
 import type { Session } from "@/lib/db";
+import { CodeSearchResults } from "@/components/CodeSearch/CodeSearchResults";
+import { useRipgrepAvailable } from "@/data/code-search";
 
 interface QuickSwitcherProps {
   sessions: Session[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectSession: (sessionId: string) => void;
+  onSelectFile?: (file: string, line: number) => void;
   currentSessionId?: string;
+  activeSessionWorkingDir?: string;
 }
 
 /**
@@ -29,11 +33,17 @@ export function QuickSwitcher({
   open,
   onOpenChange,
   onSelectSession,
+  onSelectFile,
   currentSessionId,
+  activeSessionWorkingDir,
 }: QuickSwitcherProps) {
+  const [mode, setMode] = useState<"sessions" | "code">("sessions");
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Check if ripgrep is available
+  const { data: ripgrepAvailable } = useRipgrepAvailable();
 
   // Filter sessions based on search query
   const filteredSessions = sessions.filter((session) => {
@@ -49,12 +59,19 @@ export function QuickSwitcher({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
+      setMode("sessions");
       setQuery("");
       setSelectedIndex(0);
-      // Focus input after a short delay for dialog animation
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
+
+  // Force sessions mode if ripgrep is not available
+  useEffect(() => {
+    if (ripgrepAvailable === false && mode === "code") {
+      setMode("sessions");
+    }
+  }, [ripgrepAvailable, mode]);
 
   // Reset selected index when filtered results change
   useEffect(() => {
@@ -105,94 +122,143 @@ export function QuickSwitcher({
     return `${Math.floor(hours / 24)}d ago`;
   };
 
+  // Handle file selection from code search
+  const handleSelectFile = useCallback(
+    (file: string, line: number) => {
+      onOpenChange(false);
+      onSelectFile?.(file, line);
+    },
+    [onOpenChange, onSelectFile]
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
         <DialogHeader className="sr-only">
-          <DialogTitle>Switch Session</DialogTitle>
+          <DialogTitle>Switch Session / Search Code</DialogTitle>
         </DialogHeader>
+
+        {/* Mode Toggle - only show if ripgrep is available */}
+        {ripgrepAvailable === true && (
+          <div className="border-border flex gap-2 border-b p-2">
+            <button
+              onClick={() => setMode("sessions")}
+              className={cn(
+                "rounded-full px-3 py-1 text-sm transition-colors",
+                mode === "sessions"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-accent"
+              )}
+            >
+              Sessions
+            </button>
+            <button
+              onClick={() => setMode("code")}
+              className={cn(
+                "rounded-full px-3 py-1 text-sm transition-colors",
+                mode === "code"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-accent"
+              )}
+            >
+              Code Search
+            </button>
+          </div>
+        )}
 
         {/* Search Input */}
         <div className="border-border border-b p-3">
           <Input
             ref={inputRef}
-            placeholder="Search sessions..."
+            placeholder={
+              mode === "sessions" || !ripgrepAvailable
+                ? "Search sessions..."
+                : "Search code (min 3 chars)..."
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={mode === "sessions" ? handleKeyDown : undefined}
             className="h-10"
           />
         </div>
 
-        {/* Session List */}
+        {/* Content */}
         <div className="max-h-[300px] overflow-y-auto py-2">
-          {filteredSessions.length === 0 ? (
-            <div className="text-muted-foreground px-4 py-8 text-center text-sm">
-              No sessions found
-            </div>
-          ) : (
-            filteredSessions.map((session, index) => {
-              const isCurrent = session.id === currentSessionId;
-              return (
-                <button
-                  key={session.id}
-                  onClick={() => {
-                    onSelectSession(session.id);
-                    onOpenChange(false);
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
-                    index === selectedIndex
-                      ? "bg-accent"
-                      : "hover:bg-accent/50",
-                    isCurrent && "bg-primary/10"
-                  )}
-                >
-                  {/* Icon */}
-                  <div
+          {mode === "sessions" ? (
+            filteredSessions.length === 0 ? (
+              <div className="text-muted-foreground px-4 py-8 text-center text-sm">
+                No sessions found
+              </div>
+            ) : (
+              filteredSessions.map((session, index) => {
+                const isCurrent = session.id === currentSessionId;
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => {
+                      onSelectSession(session.id);
+                      onOpenChange(false);
+                    }}
                     className={cn(
-                      "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md",
-                      session.worktree_path
-                        ? "bg-purple-500/20 text-purple-400"
-                        : "bg-emerald-500/20 text-emerald-400"
+                      "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                      index === selectedIndex
+                        ? "bg-accent"
+                        : "hover:bg-accent/50",
+                      isCurrent && "bg-primary/10"
                     )}
                   >
-                    {session.worktree_path ? (
-                      <GitBranch className="h-4 w-4" />
-                    ) : (
-                      <Terminal className="h-4 w-4" />
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-medium">
-                        {session.name || "Unnamed Session"}
-                      </span>
-                      {isCurrent && (
-                        <Check className="text-primary h-3.5 w-3.5 flex-shrink-0" />
+                    {/* Icon */}
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md",
+                        session.worktree_path
+                          ? "bg-purple-500/20 text-purple-400"
+                          : "bg-emerald-500/20 text-emerald-400"
+                      )}
+                    >
+                      {session.worktree_path ? (
+                        <GitBranch className="h-4 w-4" />
+                      ) : (
+                        <Terminal className="h-4 w-4" />
                       )}
                     </div>
-                    <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                      <span className="truncate">
-                        {session.working_directory?.split("/").pop() || "~"}
-                      </span>
-                      <span>•</span>
-                      <span className="capitalize">
-                        {session.agent_type || "claude"}
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Time */}
-                  <div className="text-muted-foreground flex flex-shrink-0 items-center gap-1 text-xs">
-                    <Clock className="h-3 w-3" />
-                    <span>{formatTime(session.updated_at)}</span>
-                  </div>
-                </button>
-              );
-            })
+                    {/* Content */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">
+                          {session.name || "Unnamed Session"}
+                        </span>
+                        {isCurrent && (
+                          <Check className="text-primary h-3.5 w-3.5 flex-shrink-0" />
+                        )}
+                      </div>
+                      <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                        <span className="truncate">
+                          {session.working_directory?.split("/").pop() || "~"}
+                        </span>
+                        <span>•</span>
+                        <span className="capitalize">
+                          {session.agent_type || "claude"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Time */}
+                    <div className="text-muted-foreground flex flex-shrink-0 items-center gap-1 text-xs">
+                      <Clock className="h-3 w-3" />
+                      <span>{formatTime(session.updated_at)}</span>
+                    </div>
+                  </button>
+                );
+              })
+            )
+          ) : (
+            <CodeSearchResults
+              workingDirectory={activeSessionWorkingDir || "~"}
+              query={query}
+              onSelectFile={handleSelectFile}
+            />
           )}
         </div>
 

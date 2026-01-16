@@ -27,6 +27,8 @@ import {
 } from "react-resizable-panels";
 import { GitDrawer } from "@/components/GitDrawer";
 import { ShellDrawer } from "@/components/ShellDrawer";
+import { useSnapshot } from "valtio";
+import { fileOpenStore, fileOpenActions } from "@/stores/fileOpen";
 
 // Dynamic imports for client-only components with loading states
 const Terminal = dynamic(
@@ -119,6 +121,9 @@ export const Pane = memo(function Pane({
 
   const isConductor = workerCount > 0;
 
+  // Watch for file open requests
+  const { request: fileOpenRequest } = useSnapshot(fileOpenStore);
+
   // Reset view mode and file editor when session changes
   useEffect(() => {
     setViewMode("terminal");
@@ -133,6 +138,19 @@ export const Pane = memo(function Pane({
   useEffect(() => {
     localStorage.setItem("shellDrawerOpen", String(shellDrawerOpen));
   }, [shellDrawerOpen]);
+
+  // Handle file open requests (only if this pane is focused)
+  useEffect(() => {
+    if (fileOpenRequest && isFocused && session) {
+      // Switch to files view
+      setViewMode("files");
+      // Open the file
+      fileEditor.openFile(fileOpenRequest.path);
+      // Clear the request
+      fileOpenActions.clearRequest();
+      // TODO: Scroll to line (requires FileEditor enhancement)
+    }
+  }, [fileOpenRequest, isFocused, session, fileEditor]);
 
   const handleFocus = useCallback(() => {
     focusPane(paneId);
