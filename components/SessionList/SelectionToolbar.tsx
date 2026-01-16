@@ -13,6 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface SelectionToolbarProps {
   allSessionIds: string[];
@@ -81,7 +86,7 @@ export function SelectionToolbar({
 
   return (
     <>
-      <div className="bg-primary/10 border-primary/20 flex items-center gap-3 border-b px-4 py-2">
+      <div className="bg-primary/10 border-primary/20 flex items-center gap-2 border-b px-3 py-2">
         <span className="text-sm font-medium whitespace-nowrap">
           {selectedCount} selected
         </span>
@@ -96,23 +101,32 @@ export function SelectionToolbar({
               Select all
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 text-xs"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            <Trash2 className="mr-1 h-3 w-3" />
-            Delete
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="h-6 w-6"
-            onClick={selectionActions.clear}
-          >
-            <X className="h-3 w-3" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-6 w-6"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete selected</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-6 w-6"
+                onClick={selectionActions.clear}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear selection</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
