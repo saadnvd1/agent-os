@@ -5,6 +5,7 @@ import { isValidAgentType, type AgentType } from "@/lib/providers";
 import { createWorktree } from "@/lib/worktrees";
 import { setupWorktree, type SetupResult } from "@/lib/env-setup";
 import { findAvailablePort } from "@/lib/ports";
+import { runInBackground } from "@/lib/async-operations";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -104,19 +105,24 @@ export async function POST(request: NextRequest) {
         // Find an available port for the dev server
         port = await findAvailablePort();
 
-        // Run environment setup (copy env files, install dependencies)
-        setupResult = await setupWorktree({
-          worktreePath: worktreeInfo.worktreePath,
-          sourcePath: workingDirectory,
-          port,
-        });
-
-        console.log("Worktree setup completed:", {
-          port,
-          envFilesCopied: setupResult.envFilesCopied,
-          stepsRun: setupResult.steps.length,
-          success: setupResult.success,
-        });
+        // Run environment setup in background (non-blocking)
+        // This allows instant UI feedback while npm install runs async
+        const capturedWorktreePath = worktreeInfo.worktreePath;
+        const capturedSourcePath = workingDirectory;
+        const capturedPort = port;
+        runInBackground(async () => {
+          const result = await setupWorktree({
+            worktreePath: capturedWorktreePath,
+            sourcePath: capturedSourcePath,
+            port: capturedPort,
+          });
+          console.log("Worktree setup completed:", {
+            port: capturedPort,
+            envFilesCopied: result.envFilesCopied,
+            stepsRun: result.steps.length,
+            success: result.success,
+          });
+        }, `setup-worktree-${id}`);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Unknown error";

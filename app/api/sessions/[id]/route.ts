@@ -6,6 +6,7 @@ import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
 import { killWorker } from "@/lib/orchestration";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
+import { runInBackground } from "@/lib/async-operations";
 
 const execAsync = promisify(exec);
 
@@ -159,7 +160,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const workers = queries.getWorkersByConductor(db).all(id) as Session[];
     for (const worker of workers) {
       try {
-        await killWorker(worker.id, true); // true = cleanup worktree
+        await killWorker(worker.id, false); // false = don't cleanup worktree yet
       } catch (error) {
         console.error(`Failed to kill worker ${worker.id}:`, error);
       }
@@ -171,33 +172,53 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       releasePort(id);
     }
 
-    // Clean up worktree if this was a worktree session
+    // Delete from database immediately for instant UI feedback
+    queries.deleteSession(db).run(id);
+
+    // Clean up worktree in background (non-blocking)
     if (existing.worktree_path && isAgentOSWorktree(existing.worktree_path)) {
-      try {
-        // Find the original project path (worktree_path's parent repo)
-        // The working_directory for worktree sessions IS the worktree_path
-        // We need to find where the main repo is
-        // For now, we'll try to get it from the worktree's git config
+      const worktreePath = existing.worktree_path; // Capture for closure
+      runInBackground(async () => {
         const { exec } = await import("child_process");
         const { promisify } = await import("util");
         const execAsync = promisify(exec);
 
         const { stdout } = await execAsync(
-          `git -C "${existing.worktree_path}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo ""`,
+          `git -C "${worktreePath}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo ""`,
           { timeout: 5000 }
         );
         const gitCommonDir = stdout.trim().replace(/\/.git$/, "");
 
         if (gitCommonDir) {
-          await deleteWorktree(existing.worktree_path, gitCommonDir, false);
+          await deleteWorktree(worktreePath, gitCommonDir, false);
         }
-      } catch (error) {
-        console.error("Error cleaning up worktree:", error);
-        // Continue with session deletion even if worktree cleanup fails
-      }
+      }, `cleanup-worktree-${id}`);
     }
 
-    queries.deleteSession(db).run(id);
+    // Also cleanup worker worktrees in background
+    if (workers.length > 0) {
+      for (const worker of workers) {
+        if (worker.worktree_path && isAgentOSWorktree(worker.worktree_path)) {
+          const worktreePath = worker.worktree_path; // Capture for closure
+          const workerId = worker.id; // Capture ID for task name
+          runInBackground(async () => {
+            const { exec } = await import("child_process");
+            const { promisify } = await import("util");
+            const execAsync = promisify(exec);
+
+            const { stdout } = await execAsync(
+              `git -C "${worktreePath}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo ""`,
+              { timeout: 5000 }
+            );
+            const gitCommonDir = stdout.trim().replace(/\/.git$/, "");
+
+            if (gitCommonDir) {
+              await deleteWorktree(worktreePath, gitCommonDir, false);
+            }
+          }, `cleanup-worker-worktree-${workerId}`);
+        }
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

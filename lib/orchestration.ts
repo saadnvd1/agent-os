@@ -14,6 +14,7 @@ import { setupWorktree } from "./env-setup";
 import { getProvider } from "./providers";
 import { statusDetector } from "./status-detector";
 import { wrapWithBanner } from "./banner";
+import { runInBackground } from "./async-operations";
 
 const execAsync = promisify(exec);
 
@@ -108,11 +109,21 @@ export async function spawnWorker(
       worktreePath = worktreeResult.worktreePath;
       actualWorkingDir = worktreePath;
 
-      // Set up environment (copy .env files, install deps)
-      await setupWorktree({
-        worktreePath,
-        sourcePath: workingDirectory,
-      });
+      // Set up environment in background (copy .env files, install deps)
+      const capturedWorktreePath = worktreePath;
+      const capturedSourcePath = workingDirectory;
+      runInBackground(async () => {
+        const result = await setupWorktree({
+          worktreePath: capturedWorktreePath,
+          sourcePath: capturedSourcePath,
+        });
+        console.log("Worker worktree setup completed:", {
+          worktreePath: capturedWorktreePath,
+          envFilesCopied: result.envFilesCopied,
+          stepsRun: result.steps.length,
+          success: result.success,
+        });
+      }, `setup-worker-worktree-${sessionId}`);
     } catch (error) {
       console.error("Failed to create worktree:", error);
       // Fall back to same directory (no isolation)

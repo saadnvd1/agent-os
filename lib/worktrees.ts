@@ -96,14 +96,30 @@ export async function createWorktree(
   await ensureWorktreesDir();
 
   // Create the worktree with a new branch
-  try {
-    await execAsync(
-      `git -C "${resolvedProjectPath}" worktree add -b "${branchName}" "${worktreePath}" "${baseBranch}"`,
-      { timeout: 30000 }
-    );
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to create worktree: ${message}`);
+  // Try multiple ref formats to avoid "ambiguous refname" errors
+  const refFormats = [
+    `origin/${baseBranch}`, // Try remote first (most explicit)
+    `refs/heads/${baseBranch}`, // Then local branch
+    baseBranch, // Finally, bare name as fallback
+  ];
+
+  let lastError: Error | null = null;
+  for (const ref of refFormats) {
+    try {
+      await execAsync(
+        `git -C "${resolvedProjectPath}" worktree add -b "${branchName}" "${worktreePath}" "${ref}"`,
+        { timeout: 30000 }
+      );
+      lastError = null;
+      break; // Success!
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      // Continue to next ref format
+    }
+  }
+
+  if (lastError) {
+    throw new Error(`Failed to create worktree: ${lastError.message}`);
   }
 
   return {
