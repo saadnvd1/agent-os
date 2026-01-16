@@ -15,6 +15,28 @@ install_homebrew() {
     elif [[ -f /usr/local/bin/brew ]]; then
         eval "$(/usr/local/bin/brew shellenv)"
     fi
+
+    # Add to shell profile so it's available in future sessions
+    local shell_profile=""
+    if [[ -n "$ZSH_VERSION" ]] && [[ -f "$HOME/.zshrc" ]]; then
+        shell_profile="$HOME/.zshrc"
+    elif [[ -n "$BASH_VERSION" ]] && [[ -f "$HOME/.bashrc" ]]; then
+        shell_profile="$HOME/.bashrc"
+    elif [[ -f "$HOME/.bash_profile" ]]; then
+        shell_profile="$HOME/.bash_profile"
+    fi
+
+    if [[ -n "$shell_profile" ]]; then
+        if ! grep -q "brew shellenv" "$shell_profile"; then
+            echo '' >> "$shell_profile"
+            echo '# Homebrew' >> "$shell_profile"
+            if [[ -f /opt/homebrew/bin/brew ]]; then
+                echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$shell_profile"
+            elif [[ -f /usr/local/bin/brew ]]; then
+                echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$shell_profile"
+            fi
+        fi
+    fi
 }
 
 install_node() {

@@ -20,6 +20,26 @@ LOG_FILE="$AGENT_OS_HOME/agent-os.log"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 [[ "$OS" == "darwin" ]] && OS="macos"
 
+# Source Homebrew if available (ensures npm/node/etc are in PATH)
+if [[ "$OS" == "macos" ]]; then
+    if [[ -f /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -f /usr/local/bin/brew ]]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+fi
+
+# Source fnm if available (for non-admin users who installed via fnm)
+if [[ -d "$HOME/.local/share/fnm" ]]; then
+    export PATH="$HOME/.local/share/fnm:$PATH"
+    eval "$(fnm env --use-on-cd 2>/dev/null || true)"
+fi
+
+# Add ~/.local/bin to PATH (for ripgrep and other binaries installed for non-admin users)
+if [[ -d "$HOME/.local/bin" ]]; then
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+
 # Styling
 BOLD='\033[1m'
 RED='\033[0;31m'
