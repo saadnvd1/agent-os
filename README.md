@@ -16,7 +16,7 @@ If you already have Node.js 20+ installed:
 
 ```bash
 # Install globally
-npm install -g agent-os
+npm install -g @saadnvd1/agent-os
 
 # Run setup (checks/installs tmux, ripgrep, builds app)
 agent-os install

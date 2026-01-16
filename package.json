@@ -1,5 +1,5 @@
 {
-  "name": "agent-os",
+  "name": "@saadnvd1/agent-os",
   "version": "0.1.0",
   "description": "Self-hosted web UI for managing Claude Code sessions",
   "bin": {
