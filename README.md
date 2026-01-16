@@ -10,11 +10,27 @@ https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
 
 ## Installation
 
-```bash
-# One-liner
-curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/install.sh | bash
+### Via npm (Recommended)
 
-# Then run
+If you already have Node.js 20+ installed:
+
+```bash
+# Install globally
+npm install -g agent-os
+
+# Run setup (checks/installs tmux, ripgrep, builds app)
+agent-os install
+
+# Start the server
+agent-os start
+```
+
+### Via curl (Installs everything)
+
+For fresh installs without Node.js:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/install.sh | bash
 agent-os start
 ```
 

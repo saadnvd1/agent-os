@@ -2,6 +2,30 @@
   "name": "agent-os",
   "version": "0.1.0",
   "description": "Self-hosted web UI for managing Claude Code sessions",
+  "bin": {
+    "agent-os": "./scripts/agent-os"
+  },
+  "files": [
+    "app/",
+    "components/",
+    "contexts/",
+    "data/",
+    "hooks/",
+    "lib/",
+    "mcp/",
+    "public/",
+    "scripts/",
+    "stores/",
+    "styles/",
+    "next.config.js",
+    "postcss.config.mjs",
+    "server.ts",
+    "tailwind.config.ts",
+    "tsconfig.json",
+    "package-lock.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx server.ts",
     "build": "next build",
