@@ -18,6 +18,15 @@ curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/inst
 agent-os start
 ```
 
+### Desktop App
+
+Download native desktop apps from [Releases](https://github.com/saadnvd1/agent-os/releases):
+
+- macOS (Apple Silicon): `.dmg`
+- Linux: `.deb` or `.AppImage`
+
+> **Note:** The desktop app is a native wrapper around the web UI. You still need to install and run AgentOS (via the installer script above) for the backend server. The desktop app just provides a convenient native window instead of using your browser.
+
 > **Don't want to self-host?** Try [AgentOS Cloud](https://runagentos.com) - pre-configured cloud VMs for AI coding.
 
 ### Manual Install
