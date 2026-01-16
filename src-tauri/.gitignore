@@ -1,0 +1,4 @@
+.env.local
+target/
+gen/
+WixTools/

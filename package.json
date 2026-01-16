@@ -11,7 +11,11 @@
     "typecheck": "tsc --noEmit",
     "setup": "bash scripts/setup.sh",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
-    "prepare": "husky"
+    "prepare": "husky",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:linux": "docker build -t agentos-linux -f src-tauri/Dockerfile.linux src-tauri && docker run --rm -v $(pwd)/src-tauri/target:/app/target agentos-linux"
   },
   "repository": {
     "type": "git",
@@ -77,6 +81,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
+    "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/cli": "^2.9.6",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.19.27",
     "@types/react": "^19.2.7",

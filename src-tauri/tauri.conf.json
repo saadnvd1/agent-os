@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AgentOS",
+  "version": "0.1.0",
+  "identifier": "com.agentos.desktop",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:3011",
+    "beforeBuildCommand": "",
+    "frontendDist": "http://localhost:3011"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "AgentOS",
+        "width": 1400,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "focus": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Manage AI coding sessions from anywhere",
+    "longDescription": "AgentOS is a mobile-first web UI for managing multiple AI coding assistant sessions including Claude Code, Codex, OpenCode, Gemini CLI, and more.",
+    "copyright": "© 2025 AgentOS",
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "timestampUrl": "http://timestamp.digicert.com"
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}
