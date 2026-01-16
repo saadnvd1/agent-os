@@ -91,6 +91,6 @@ For configuration and advanced usage, see the [docs](https://www.runagentos.com/
 
 ## License
 
-Business Source License 1.1 (BUSL-1.1) - converts to MIT on January 1, 2029.
+MIT License - Free and open source.
 
 See [LICENSE](LICENSE) for full terms.
