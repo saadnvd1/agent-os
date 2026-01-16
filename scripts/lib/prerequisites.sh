@@ -1,6 +1,156 @@
 #!/usr/bin/env bash
 # Prerequisite installation for agent-os
 
+# Attempt to source common Node.js version managers
+# This ensures we detect Node even if it's not in the current PATH
+source_node_managers() {
+    # nvm
+    if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+        source "$HOME/.nvm/nvm.sh" 2>/dev/null || true
+    fi
+
+    # fnm
+    if [[ -d "$HOME/.local/share/fnm" ]]; then
+        export PATH="$HOME/.local/share/fnm:$PATH"
+        eval "$(fnm env --use-on-cd 2>/dev/null || true)"
+    fi
+
+    # asdf
+    if [[ -f "$HOME/.asdf/asdf.sh" ]]; then
+        source "$HOME/.asdf/asdf.sh" 2>/dev/null || true
+    fi
+
+    # volta
+    if [[ -d "$HOME/.volta" ]]; then
+        export VOLTA_HOME="$HOME/.volta"
+        export PATH="$VOLTA_HOME/bin:$PATH"
+    fi
+
+    # Homebrew (if not already in PATH)
+    if [[ "$OS" == "macos" ]]; then
+        if [[ -f /opt/homebrew/bin/brew ]]; then
+            eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || true)"
+        elif [[ -f /usr/local/bin/brew ]]; then
+            eval "$(/usr/local/bin/brew shellenv 2>/dev/null || true)"
+        fi
+    fi
+
+    # ~/.local/bin (common for user-installed binaries)
+    if [[ -d "$HOME/.local/bin" ]]; then
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+}
+
+# Check if Node.js is available (trying multiple sources)
+check_node() {
+    # Try direct command first
+    if command -v node &> /dev/null; then
+        local version
+        version=$(node -v | sed 's/v//' | cut -d. -f1)
+        if [[ "$version" -ge 20 ]]; then
+            local node_path=$(command -v node)
+            log_success "Found Node.js v$(node -v | sed 's/v//') at $node_path"
+            return 0
+        fi
+    fi
+
+    # Source version managers and try again
+    source_node_managers
+
+    if command -v node &> /dev/null; then
+        local version
+        version=$(node -v | sed 's/v//' | cut -d. -f1)
+        if [[ "$version" -ge 20 ]]; then
+            local node_path=$(command -v node)
+            local manager=""
+
+            # Detect which manager provided it
+            if [[ "$node_path" == *"nvm"* ]]; then
+                manager=" (via nvm)"
+            elif [[ "$node_path" == *"fnm"* ]]; then
+                manager=" (via fnm)"
+            elif [[ "$node_path" == *"asdf"* ]]; then
+                manager=" (via asdf)"
+            elif [[ "$node_path" == *"volta"* ]]; then
+                manager=" (via volta)"
+            elif [[ "$node_path" == *"homebrew"* ]] || [[ "$node_path" == "/opt/homebrew"* ]] || [[ "$node_path" == "/usr/local"* ]]; then
+                manager=" (via Homebrew)"
+            fi
+
+            log_success "Found Node.js v$(node -v | sed 's/v//')$manager at $node_path"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Check if ripgrep is available
+check_ripgrep() {
+    if command -v rg &> /dev/null; then
+        local rg_path=$(command -v rg)
+        local rg_version=$(rg --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "unknown")
+        log_success "Found ripgrep $rg_version at $rg_path"
+        return 0
+    fi
+
+    # Source common paths
+    source_node_managers
+
+    if command -v rg &> /dev/null; then
+        local rg_path=$(command -v rg)
+        local rg_version=$(rg --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "unknown")
+        log_success "Found ripgrep $rg_version at $rg_path"
+        return 0
+    fi
+
+    return 1
+}
+
+# Check if git is available
+check_git() {
+    if command -v git &> /dev/null; then
+        local git_path=$(command -v git)
+        local git_version=$(git --version 2>/dev/null | awk '{print $3}' || echo "unknown")
+        log_success "Found git $git_version at $git_path"
+        return 0
+    fi
+
+    # Check common locations
+    for git_path in /usr/bin/git /usr/local/bin/git /opt/homebrew/bin/git; do
+        if [[ -x "$git_path" ]]; then
+            export PATH="$(dirname "$git_path"):$PATH"
+            local git_version=$(git --version 2>/dev/null | awk '{print $3}' || echo "unknown")
+            log_success "Found git $git_version at $git_path"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# Check if tmux is available
+check_tmux() {
+    if command -v tmux &> /dev/null; then
+        local tmux_path=$(command -v tmux)
+        local tmux_version=$(tmux -V 2>/dev/null | awk '{print $2}' || echo "unknown")
+        log_success "Found tmux $tmux_version at $tmux_path"
+        return 0
+    fi
+
+    # Source common paths and check again
+    source_node_managers
+
+    if command -v tmux &> /dev/null; then
+        local tmux_path=$(command -v tmux)
+        local tmux_version=$(tmux -V 2>/dev/null | awk '{print $2}' || echo "unknown")
+        log_success "Found tmux $tmux_version at $tmux_path"
+        return 0
+    fi
+
+    return 1
+}
+
 install_homebrew() {
     if command -v brew &> /dev/null; then
         return 0
@@ -243,25 +393,25 @@ check_and_install_prerequisites() {
 
     local missing=()
 
-    # Check Node.js
-    if ! command -v node &> /dev/null; then
+    # Check Node.js (with version manager detection)
+    if ! check_node; then
         missing+=("node")
-    else
-        local version
-        version=$(node -v | sed 's/v//' | cut -d. -f1)
-        if [[ "$version" -lt 20 ]]; then
-            missing+=("node")
-        fi
     fi
 
-    # Check git
-    command -v git &> /dev/null || missing+=("git")
+    # Check git (with path detection)
+    if ! check_git; then
+        missing+=("git")
+    fi
 
-    # Check tmux
-    command -v tmux &> /dev/null || missing+=("tmux")
+    # Check tmux (with path detection)
+    if ! check_tmux; then
+        missing+=("tmux")
+    fi
 
-    # Check ripgrep
-    command -v rg &> /dev/null || missing+=("ripgrep")
+    # Check ripgrep (with path detection)
+    if ! check_ripgrep; then
+        missing+=("ripgrep")
+    fi
 
     if [[ ${#missing[@]} -eq 0 ]]; then
         log_success "All prerequisites met"
