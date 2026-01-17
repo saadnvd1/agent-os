@@ -137,7 +137,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     const { isDragging, dragHandlers } = useFileDrop(
       containerRef,
       handleFileDrop,
-      { disabled: isUploading }
+      { disabled: isUploading || showImagePicker }
     );
 
     // Expose imperative methods
