@@ -274,9 +274,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
             <div className="border-primary bg-background/90 rounded-lg border px-6 py-4 text-center shadow-lg">
               <Upload className="text-primary mx-auto mb-2 h-8 w-8" />
               <p className="text-sm font-medium">Drop file to upload</p>
-              <p className="text-muted-foreground mt-1 text-xs">
-                File path will be inserted into terminal
-              </p>
             </div>
           </div>
         )}
