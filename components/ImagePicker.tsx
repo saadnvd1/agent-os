@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { FileNode } from "@/lib/file-utils";
+import { uploadFileToTemp } from "@/lib/file-upload";
+import { useFileDrop } from "@/hooks/useFileDrop";
 
 const IMAGE_EXTENSIONS = [
   "png",
@@ -42,7 +44,6 @@ export function ImagePicker({
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
@@ -53,30 +54,9 @@ export function ImagePicker({
 
       setUploading(true);
       try {
-        // Convert to base64 and save to temp file
-        const buffer = await file.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(buffer).reduce(
-            (data, byte) => data + String.fromCharCode(byte),
-            ""
-          )
-        );
-
-        const res = await fetch("/api/files/upload-temp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: file.name || `screenshot-${Date.now()}.png`,
-            base64,
-            mimeType: file.type,
-          }),
-        });
-
-        const data = await res.json();
-        if (data.path) {
-          onSelect(data.path);
-        } else {
-          console.error("Upload failed:", data.error);
+        const path = await uploadFileToTemp(file);
+        if (path) {
+          onSelect(path);
         }
       } catch (err) {
         console.error("Failed to upload image:", err);
@@ -87,35 +67,15 @@ export function ImagePicker({
     [onSelect]
   );
 
-  // Drag and drop handlers
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only set to false if we're leaving the drop zone entirely
-    if (!dropZoneRef.current?.contains(e.relatedTarget as Node)) {
-      setIsDragging(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
-
-      const files = Array.from(e.dataTransfer.files);
-      const imageFile = files.find((f) => f.type.startsWith("image/"));
-      if (imageFile) {
-        handleImageFile(imageFile);
+  // Drag and drop using shared hook
+  const { isDragging, dragHandlers } = useFileDrop(
+    dropZoneRef,
+    (file) => {
+      if (file.type.startsWith("image/")) {
+        handleImageFile(file);
       }
     },
-    [handleImageFile]
+    { disabled: uploading }
   );
 
   // Clipboard paste handler
@@ -271,9 +231,7 @@ export function ImagePicker({
       {/* Drop Zone */}
       <div
         ref={dropZoneRef}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        {...dragHandlers}
         className={cn(
           "border-border mx-3 mt-3 flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors",
           isDragging && "border-primary bg-primary/10",

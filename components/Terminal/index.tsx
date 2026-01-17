@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useTheme } from "next-themes";
 import "@xterm/xterm/css/xterm.css";
-import { ImagePlus, WifiOff } from "lucide-react";
+import { ImagePlus, WifiOff, Upload, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchBar } from "./SearchBar";
 import { ScrollToBottomButton } from "./ScrollToBottomButton";
@@ -19,6 +19,8 @@ import { TerminalToolbar } from "./TerminalToolbar";
 import { useTerminalConnection, useTerminalSearch } from "./hooks";
 import type { TerminalScrollState } from "./hooks";
 import { useViewport } from "@/hooks/useViewport";
+import { useFileDrop } from "@/hooks/useFileDrop";
+import { uploadFileToTemp } from "@/lib/file-upload";
 import { ImagePicker } from "@/components/ImagePicker";
 
 export type { TerminalScrollState };
@@ -57,6 +59,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     const { theme: currentTheme, resolvedTheme } = useTheme();
     const [showImagePicker, setShowImagePicker] = useState(false);
     const [selectMode, setSelectMode] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     // Use the full theme string (e.g., "dark-purple") for terminal theming
     const terminalTheme = useMemo(() => {
@@ -109,6 +112,32 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         focus();
       },
       [sendInput, focus]
+    );
+
+    // Handle file drop - upload and insert path into terminal
+    const handleFileDrop = useCallback(
+      async (file: File) => {
+        setIsUploading(true);
+        try {
+          const path = await uploadFileToTemp(file);
+          if (path) {
+            sendInput(path);
+            focus();
+          }
+        } catch (err) {
+          console.error("Failed to upload file:", err);
+        } finally {
+          setIsUploading(false);
+        }
+      },
+      [sendInput, focus]
+    );
+
+    // Drag and drop for file uploads
+    const { isDragging, dragHandlers } = useFileDrop(
+      containerRef,
+      handleFileDrop,
+      { disabled: isUploading || showImagePicker }
     );
 
     // Expose imperative methods
@@ -185,6 +214,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           paddingBottom:
             isMobile && keyboardHeight > 0 ? keyboardHeight : undefined,
         }}
+        {...dragHandlers}
       >
         {/* Search Bar */}
         <SearchBar
@@ -202,7 +232,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           ref={terminalRef}
           className={cn(
             "terminal-container min-h-0 w-full flex-1 overflow-hidden",
-            selectMode && "ring-primary ring-2 ring-inset"
+            selectMode && "ring-primary ring-2 ring-inset",
+            isDragging && "ring-primary ring-2 ring-inset"
           )}
           onClick={focus}
           onTouchStart={selectMode ? (e) => e.stopPropagation() : undefined}
@@ -234,6 +265,26 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
             >
               {terminalText}
             </pre>
+          </div>
+        )}
+
+        {/* Drag and drop overlay */}
+        {isDragging && (
+          <div className="bg-primary/10 pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+            <div className="border-primary bg-background/90 rounded-lg border px-6 py-4 text-center shadow-lg">
+              <Upload className="text-primary mx-auto mb-2 h-8 w-8" />
+              <p className="text-sm font-medium">Drop file to upload</p>
+            </div>
+          </div>
+        )}
+
+        {/* Upload in progress overlay */}
+        {isUploading && (
+          <div className="bg-background/50 pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+            <div className="bg-background rounded-lg border px-6 py-4 text-center shadow-lg">
+              <Loader2 className="text-primary mx-auto mb-2 h-6 w-6 animate-spin" />
+              <p className="text-sm">Uploading file...</p>
+            </div>
           </div>
         )}
 
