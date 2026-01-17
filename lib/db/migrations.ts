@@ -156,6 +156,13 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    id: 12,
+    name: "add_initial_prompt_to_projects",
+    up: (db) => {
+      db.exec(`ALTER TABLE projects ADD COLUMN initial_prompt TEXT`);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

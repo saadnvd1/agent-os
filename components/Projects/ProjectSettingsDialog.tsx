@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -67,6 +68,7 @@ export function ProjectSettingsDialog({
   const [workingDirectory, setWorkingDirectory] = useState("");
   const [agentType, setAgentType] = useState<AgentType>("claude");
   const [defaultModel, setDefaultModel] = useState("sonnet");
+  const [initialPrompt, setInitialPrompt] = useState("");
   const [devServers, setDevServers] = useState<DevServerConfig[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -82,6 +84,7 @@ export function ProjectSettingsDialog({
       setWorkingDirectory(project.working_directory);
       setAgentType(project.agent_type);
       setDefaultModel(project.default_model);
+      setInitialPrompt(project.initial_prompt || "");
       setDevServers(
         project.devServers.map((ds) => ({
           id: ds.id,
@@ -190,6 +193,7 @@ export function ProjectSettingsDialog({
         workingDirectory,
         agentType,
         defaultModel,
+        initialPrompt: initialPrompt.trim() || null,
       });
 
       // Handle dev server changes
@@ -318,6 +322,22 @@ export function ProjectSettingsDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Initial Prompt */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Initial Prompt</label>
+            <Textarea
+              value={initialPrompt}
+              onChange={(e) => setInitialPrompt(e.target.value)}
+              placeholder="This prompt will be prepended to all sessions in this project..."
+              rows={3}
+              className="resize-none"
+            />
+            <p className="text-muted-foreground text-xs">
+              This prompt will be automatically prepended to all new sessions
+              created in this project.
+            </p>
           </div>
 
           {/* Dev Servers */}

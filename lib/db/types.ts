@@ -45,6 +45,7 @@ export interface Project {
   working_directory: string;
   agent_type: AgentType;
   default_model: string;
+  initial_prompt: string | null;
   expanded: boolean;
   sort_order: number;
   is_uncategorized: boolean;

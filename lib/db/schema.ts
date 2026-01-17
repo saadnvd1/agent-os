@@ -80,6 +80,7 @@ export function createSchema(db: Database.Database): void {
       working_directory TEXT NOT NULL,
       agent_type TEXT NOT NULL DEFAULT 'claude',
       default_model TEXT NOT NULL DEFAULT 'sonnet',
+      initial_prompt TEXT,
       expanded INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       is_uncategorized INTEGER NOT NULL DEFAULT 0,

@@ -27,6 +27,7 @@ export interface CreateProjectOptions {
   workingDirectory: string;
   agentType?: AgentType;
   defaultModel?: string;
+  initialPrompt?: string;
   devServers?: CreateDevServerOptions[];
 }
 
@@ -80,6 +81,7 @@ export function createProject(
       opts.workingDirectory,
       opts.agentType || "claude",
       opts.defaultModel || "sonnet",
+      opts.initialPrompt || null,
       maxOrder + 1
     );
 
@@ -185,7 +187,14 @@ export function getAllProjectsWithDevServers(): ProjectWithDevServers[] {
 export function updateProject(
   id: string,
   updates: Partial<
-    Pick<Project, "name" | "working_directory" | "agent_type" | "default_model">
+    Pick<
+      Project,
+      | "name"
+      | "working_directory"
+      | "agent_type"
+      | "default_model"
+      | "initial_prompt"
+    >
   >
 ): Project | undefined {
   const project = getProject(id);
@@ -198,6 +207,9 @@ export function updateProject(
       updates.working_directory ?? project.working_directory,
       updates.agent_type ?? project.agent_type,
       updates.default_model ?? project.default_model,
+      updates.initial_prompt !== undefined
+        ? updates.initial_prompt
+        : project.initial_prompt,
       id
     );
 

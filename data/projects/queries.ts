@@ -109,12 +109,14 @@ export function useUpdateProject() {
       workingDirectory,
       agentType,
       defaultModel,
+      initialPrompt,
     }: {
       projectId: string;
       name?: string;
       workingDirectory?: string;
       agentType?: string;
       defaultModel?: string;
+      initialPrompt?: string | null;
     }) => {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
@@ -124,6 +126,7 @@ export function useUpdateProject() {
           workingDirectory,
           agentType,
           defaultModel,
+          initialPrompt,
         }),
       });
       if (!res.ok) throw new Error("Failed to update project");
