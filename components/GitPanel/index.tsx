@@ -439,9 +439,6 @@ export function GitPanel({
           <CommitForm
             workingDirectory={workingDirectory}
             stagedCount={status.staged.length}
-            isOnMainBranch={
-              status.branch === "main" || status.branch === "master"
-            }
             branch={status.branch}
             onCommit={() => {
               queryClient.invalidateQueries({
@@ -724,7 +721,6 @@ function MobileGitPanel({
       <CommitForm
         workingDirectory={workingDirectory}
         stagedCount={status.staged.length}
-        isOnMainBranch={status.branch === "main" || status.branch === "master"}
         branch={status.branch}
         onCommit={onCommit}
       />
