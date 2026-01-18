@@ -44,7 +44,15 @@ export function NewSessionDialog({
         open={open}
         onOpenChange={(o) => !o && !form.isLoading && form.handleClose()}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent
+          className="max-h-[85vh] overflow-y-auto"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.shiftKey && !form.isLoading) {
+              e.preventDefault();
+              form.handleSubmit(e as unknown as React.FormEvent);
+            }
+          }}
+        >
           {/* Loading overlay */}
           {form.isLoading && (
             <CreatingOverlay
@@ -81,7 +89,6 @@ export function NewSessionDialog({
               onChange={form.setWorkingDirectory}
               gitInfo={form.gitInfo}
               checkingGit={form.checkingGit}
-              recentDirs={form.recentDirs}
               onBrowse={() => form.setShowDirectoryPicker(true)}
             />
 
