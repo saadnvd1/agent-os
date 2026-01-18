@@ -113,7 +113,7 @@ export function FolderPicker({
     : files;
 
   return (
-    <div className="bg-background fixed inset-0 z-50 flex flex-col">
+    <div className="bg-background fixed inset-0 z-[100] flex flex-col">
       {/* Header */}
       <div className="border-border bg-background/95 flex items-center gap-2 border-b p-3 backdrop-blur-sm">
         <Button
