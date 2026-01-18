@@ -64,6 +64,15 @@ export interface ProjectDevServer {
   sort_order: number;
 }
 
+export interface ProjectRepository {
+  id: string;
+  project_id: string;
+  name: string;
+  path: string;
+  is_primary: boolean;
+  sort_order: number;
+}
+
 export interface Message {
   id: number;
   session_id: string;

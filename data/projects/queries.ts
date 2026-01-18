@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ProjectWithDevServers } from "@/lib/projects";
+import type { ProjectWithRepositories } from "@/lib/projects";
 import { projectKeys } from "./keys";
 import { sessionKeys } from "../sessions/keys";
 
-async function fetchProjects(): Promise<ProjectWithDevServers[]> {
+async function fetchProjects(): Promise<ProjectWithRepositories[]> {
   const res = await fetch("/api/projects");
   if (!res.ok) throw new Error("Failed to fetch projects");
   const data = await res.json();
@@ -39,10 +39,10 @@ export function useToggleProject() {
     },
     onMutate: async ({ projectId, expanded }) => {
       await queryClient.cancelQueries({ queryKey: projectKeys.list() });
-      const previous = queryClient.getQueryData<ProjectWithDevServers[]>(
+      const previous = queryClient.getQueryData<ProjectWithRepositories[]>(
         projectKeys.list()
       );
-      queryClient.setQueryData<ProjectWithDevServers[]>(
+      queryClient.setQueryData<ProjectWithRepositories[]>(
         projectKeys.list(),
         (old) => old?.map((p) => (p.id === projectId ? { ...p, expanded } : p))
       );
