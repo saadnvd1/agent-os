@@ -6,7 +6,7 @@ import * as pty from "node-pty";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
-const port = parseInt(process.env.PORT || "3011", 10);
+const port = parseInt(process.env.PORT || "30111", 10);
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
