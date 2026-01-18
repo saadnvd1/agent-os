@@ -287,8 +287,8 @@ export function SessionList({
         </div>
       </ScrollArea>
 
-      {/* Session Preview Popover (desktop only) */}
-      {!isMobile && (
+      {/* Session Preview Popover (desktop only) - temporarily disabled */}
+      {/* {!isMobile && (
         <SessionPreviewPopover
           session={hoveredSession}
           status={
@@ -298,7 +298,7 @@ export function SessionList({
           }
           position={hoverPosition}
         />
-      )}
+      )} */}
 
       {/* Server Logs Modal */}
       {logsServer && (
