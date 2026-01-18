@@ -343,6 +343,7 @@ export function GitDrawer({
                 onUnstage={handleUnstage}
                 onUnstageAll={handleUnstageAll}
                 isStaged={true}
+                groupByRepo={isMultiRepo}
               />
 
               {/* Unstaged files */}
@@ -355,6 +356,7 @@ export function GitDrawer({
                 onStageAll={handleStageAll}
                 onDiscard={setDiscardFile}
                 isStaged={false}
+                groupByRepo={isMultiRepo}
               />
             </>
           )}
