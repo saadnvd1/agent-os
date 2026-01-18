@@ -215,6 +215,32 @@ export function GitDrawer({
   ];
   const isOnMainBranch = ["main", "master"].includes(status?.branch || "");
 
+  // In multi-repo mode, determine which repo has staged changes for commit
+  const reposWithStagedChanges =
+    isMultiRepo && multiRepoQuery.data
+      ? multiRepoQuery.data.repositories.filter((repo) =>
+          multiRepoQuery.data!.staged.some((f) => f.repoId === repo.id)
+        )
+      : [];
+
+  // Use the first repo with staged changes, or fall back to primary repo
+  const commitRepoPath =
+    reposWithStagedChanges.length > 0
+      ? reposWithStagedChanges[0].path
+      : primaryRepoPath;
+
+  const commitRepoName =
+    reposWithStagedChanges.length > 0
+      ? reposWithStagedChanges[0].name
+      : undefined;
+
+  const commitRepoBranch =
+    reposWithStagedChanges.length > 0
+      ? reposWithStagedChanges[0].branch
+      : status?.branch || "";
+
+  const multipleReposHaveStagedChanges = reposWithStagedChanges.length > 1;
+
   if (!open) return null;
 
   return (
@@ -365,10 +391,11 @@ export function GitDrawer({
         {/* Commit form at bottom */}
         {status && (
           <CommitForm
-            workingDirectory={primaryRepoPath}
+            workingDirectory={commitRepoPath}
             stagedCount={stagedFiles.length}
-            isOnMainBranch={isOnMainBranch}
-            branch={status.branch}
+            branch={commitRepoBranch}
+            repoName={isMultiRepo ? commitRepoName : undefined}
+            multipleReposWarning={multipleReposHaveStagedChanges}
             onCommit={() => {
               queryClient.invalidateQueries({ queryKey: gitKeys.all });
             }}
