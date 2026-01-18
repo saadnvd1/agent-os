@@ -1,5 +1,4 @@
 import { ChevronRight } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
 import type { AgentType } from "@/lib/providers";
 import { getProviderDefinition } from "@/lib/providers";
 
@@ -11,8 +10,6 @@ interface AdvancedSettingsProps {
   onUseTmuxChange: (checked: boolean) => void;
   skipPermissions: boolean;
   onSkipPermissionsChange: (checked: boolean) => void;
-  initialPrompt: string;
-  onInitialPromptChange: (value: string) => void;
 }
 
 export function AdvancedSettings({
@@ -23,8 +20,6 @@ export function AdvancedSettings({
   onUseTmuxChange,
   skipPermissions,
   onSkipPermissionsChange,
-  initialPrompt,
-  onInitialPromptChange,
 }: AdvancedSettingsProps) {
   const provider = getProviderDefinition(agentType);
 
@@ -73,24 +68,6 @@ export function AdvancedSettings({
                   : "(not supported)"}
               </span>
             </label>
-          </div>
-          <div className="space-y-1.5 pt-2">
-            <label htmlFor="initialPrompt" className="text-sm font-medium">
-              Initial Prompt{" "}
-              <span className="text-muted-foreground font-normal">
-                (optional)
-              </span>
-            </label>
-            <Textarea
-              id="initialPrompt"
-              value={initialPrompt}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                onInitialPromptChange(e.target.value)
-              }
-              placeholder="Enter a prompt to send when the session starts..."
-              className="min-h-[80px] resize-none text-sm"
-              rows={3}
-            />
           </div>
         </div>
       )}
