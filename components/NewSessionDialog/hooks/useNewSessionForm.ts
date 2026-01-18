@@ -141,14 +141,25 @@ export function useNewSessionForm({
     }
   }, []);
 
-  // Initialize from selectedProjectId when dialog opens
+  // Initialize from selectedProjectId or first available project when dialog opens
   useEffect(() => {
-    if (open && selectedProjectId) {
-      setProjectId(selectedProjectId);
-      const project = projects.find((p) => p.id === selectedProjectId);
-      if (project && !project.is_uncategorized) {
-        setWorkingDirectory(project.working_directory);
-        setAgentType(project.agent_type);
+    if (open) {
+      // Use selectedProjectId if provided
+      if (selectedProjectId) {
+        setProjectId(selectedProjectId);
+        const project = projects.find((p) => p.id === selectedProjectId);
+        if (project && !project.is_uncategorized) {
+          setWorkingDirectory(project.working_directory);
+          setAgentType(project.agent_type);
+        }
+      } else {
+        // Otherwise, select first non-uncategorized project
+        const firstProject = projects.find((p) => !p.is_uncategorized);
+        if (firstProject) {
+          setProjectId(firstProject.id);
+          setWorkingDirectory(firstProject.working_directory);
+          setAgentType(firstProject.agent_type);
+        }
       }
     }
   }, [open, selectedProjectId, projects]);
