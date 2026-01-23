@@ -18,8 +18,10 @@ import {
   Square,
   CheckSquare,
   ExternalLink,
+  Globe,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -134,6 +136,12 @@ export function SessionCard({
   const cardRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const justStartedEditingRef = useRef(false);
+
+  // Find the project for this session to check if it's remote
+  const sessionProject = session.project_id
+    ? projects.find((p) => p.id === session.project_id)
+    : undefined;
+  const isRemote = sessionProject?.is_remote ?? false;
 
   const handleMouseEnter = () => {
     if (!onHoverStart || !cardRef.current || menuOpen) return;
@@ -417,6 +425,24 @@ export function SessionCard({
         />
       ) : (
         <span className="min-w-0 flex-1 truncate text-sm">{session.name}</span>
+      )}
+
+      {/* Remote indicator */}
+      {isRemote && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="secondary"
+              className="flex-shrink-0 gap-0.5 px-1 py-0 text-[9px]"
+            >
+              <Globe className="h-2 w-2" />
+              <span className="hidden sm:inline">Remote</span>
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Remote project via SSH</p>
+          </TooltipContent>
+        </Tooltip>
       )}
 
       {/* Fork indicator */}

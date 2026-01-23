@@ -151,6 +151,8 @@ export function useCreateProject() {
         port?: number;
         portEnvVar?: string;
       }>;
+      isRemote?: boolean;
+      sshConnectionId?: string | null;
     }) => {
       const res = await fetch("/api/projects", {
         method: "POST",

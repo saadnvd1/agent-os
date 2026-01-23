@@ -22,6 +22,7 @@ export interface SpawnWorkerOptions {
   conductorSessionId: string;
   task: string;
   workingDirectory: string;
+  projectId?: string;
   branchName?: string;
   useWorktree?: boolean;
   model?: string;
@@ -83,6 +84,7 @@ export async function spawnWorker(
     conductorSessionId,
     task,
     workingDirectory: rawWorkingDir,
+    projectId = "local",
     branchName = taskToBranchName(task),
     useWorktree = true,
     model = "sonnet",
@@ -102,7 +104,7 @@ export async function spawnWorker(
   // Create worktree if requested
   if (useWorktree) {
     try {
-      const worktreeResult = await createWorktree({
+      const worktreeResult = await createWorktree(projectId, {
         projectPath: workingDirectory,
         featureName: branchName,
       });
@@ -403,13 +405,14 @@ export async function killWorker(
   // Note: This requires knowing the original project path, which we derive from git
   if (cleanupWorktree && session.worktree_path) {
     try {
+      const projectId = session.project_id || "local";
       // Get the main worktree (original project) from git
       const { stdout } = await execAsync(
         `git -C "${session.worktree_path}" worktree list --porcelain | head -1 | sed 's/worktree //'`
       );
       const projectPath = stdout.trim();
       if (projectPath && projectPath !== session.worktree_path) {
-        await deleteWorktree(session.worktree_path, projectPath, true);
+        await deleteWorktree(projectId, session.worktree_path, projectPath, true);
       }
     } catch (error) {
       console.error("Failed to delete worktree:", error);

@@ -29,6 +29,9 @@ export interface Session {
   conductor_session_id: string | null;
   worker_task: string | null;
   worker_status: "pending" | "running" | "completed" | "failed" | null;
+  // Remote session fields
+  is_remote: boolean;
+  ssh_connection_id: string | null;
 }
 
 export interface Group {
@@ -48,6 +51,8 @@ export interface Project {
   expanded: boolean;
   sort_order: number;
   is_uncategorized: boolean;
+  is_remote: boolean;
+  ssh_connection_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -97,6 +102,19 @@ export interface DevServer {
   container_id: string | null;
   ports: string; // JSON array of port numbers
   working_directory: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SSHConnection {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  user: string;
+  key_path: string | null;
+  last_connected_at: string | null;
+  status: "connected" | "disconnected" | "error";
   created_at: string;
   updated_at: string;
 }

@@ -56,6 +56,20 @@ export function createSchema(db: Database.Database): void {
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
 
+    -- SSH connections table (must come before projects due to foreign key)
+    CREATE TABLE IF NOT EXISTS ssh_connections (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL DEFAULT 22,
+      user TEXT NOT NULL,
+      key_path TEXT,
+      last_connected_at TEXT,
+      status TEXT NOT NULL DEFAULT 'disconnected',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Dev servers table
     CREATE TABLE IF NOT EXISTS dev_servers (
       id TEXT PRIMARY KEY,

@@ -23,8 +23,15 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, workingDirectory, agentType, defaultModel, devServers } =
-      body;
+    const {
+      name,
+      workingDirectory,
+      agentType,
+      defaultModel,
+      devServers,
+      isRemote,
+      sshConnectionId,
+    } = body;
 
     if (!name || !workingDirectory) {
       return NextResponse.json(
@@ -33,7 +40,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!validateWorkingDirectory(workingDirectory)) {
+    // Validate remote project requirements
+    if (isRemote && !sshConnectionId) {
+      return NextResponse.json(
+        { error: "SSH connection required for remote projects" },
+        { status: 400 }
+      );
+    }
+
+    // For local projects, validate the working directory exists
+    if (!isRemote && !validateWorkingDirectory(workingDirectory)) {
       return NextResponse.json(
         { error: "Working directory does not exist" },
         { status: 400 }
@@ -46,6 +62,8 @@ export async function POST(request: NextRequest) {
       agentType,
       defaultModel,
       devServers,
+      isRemote,
+      sshConnectionId,
     });
 
     return NextResponse.json({ project }, { status: 201 });
