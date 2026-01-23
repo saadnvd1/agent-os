@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { DirectoryPicker } from "@/components/DirectoryPicker";
 
 import { useNewSessionForm } from "./hooks/useNewSessionForm";
@@ -43,7 +44,15 @@ export function NewSessionDialog({
         open={open}
         onOpenChange={(o) => !o && !form.isLoading && form.handleClose()}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent
+          className="max-h-[85vh] overflow-y-auto"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.shiftKey && !form.isLoading) {
+              e.preventDefault();
+              form.handleSubmit(e as unknown as React.FormEvent);
+            }
+          }}
+        >
           {/* Loading overlay */}
           {form.isLoading && (
             <CreatingOverlay
@@ -80,7 +89,6 @@ export function NewSessionDialog({
               onChange={form.setWorkingDirectory}
               gitInfo={form.gitInfo}
               checkingGit={form.checkingGit}
-              recentDirs={form.recentDirs}
               onBrowse={() => form.setShowDirectoryPicker(true)}
             />
 
@@ -111,6 +119,26 @@ export function NewSessionDialog({
               canCreateProject={!!onCreateProject}
             />
 
+            {/* Initial Prompt */}
+            <div className="space-y-2">
+              <label htmlFor="initialPrompt" className="text-sm font-medium">
+                Initial Prompt{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </label>
+              <Textarea
+                id="initialPrompt"
+                value={form.initialPrompt}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  form.setInitialPrompt(e.target.value)
+                }
+                placeholder="Enter a prompt to send when the session starts..."
+                className="min-h-[80px] resize-none text-sm"
+                rows={3}
+              />
+            </div>
+
             <AdvancedSettings
               open={form.advancedOpen}
               onOpenChange={form.setAdvancedOpen}
@@ -119,8 +147,6 @@ export function NewSessionDialog({
               onUseTmuxChange={form.handleUseTmuxChange}
               skipPermissions={form.skipPermissions}
               onSkipPermissionsChange={form.handleSkipPermissionsChange}
-              initialPrompt={form.initialPrompt}
-              onInitialPromptChange={form.setInitialPrompt}
             />
 
             {form.error && <p className="text-sm text-red-500">{form.error}</p>}

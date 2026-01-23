@@ -8,7 +8,6 @@ interface WorkingDirectoryInputProps {
   onChange: (value: string) => void;
   gitInfo: GitInfo | null;
   checkingGit: boolean;
-  recentDirs: string[];
   onBrowse: () => void;
 }
 
@@ -17,7 +16,6 @@ export function WorkingDirectoryInput({
   onChange,
   gitInfo,
   checkingGit,
-  recentDirs,
   onBrowse,
 }: WorkingDirectoryInputProps) {
   return (
@@ -51,21 +49,6 @@ export function WorkingDirectoryInput({
           <GitBranch className="h-3 w-3" />
           Git repo on {gitInfo.currentBranch}
         </p>
-      )}
-      {recentDirs.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-1">
-          {recentDirs.map((dir) => (
-            <button
-              key={dir}
-              type="button"
-              onClick={() => onChange(dir)}
-              className="bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground max-w-[200px] truncate rounded-full px-2 py-0.5 text-xs transition-colors"
-              title={dir}
-            >
-              {dir.replace(/^~\//, "").split("/").pop() || dir}
-            </button>
-          ))}
-        </div>
       )}
     </div>
   );

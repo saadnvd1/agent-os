@@ -24,10 +24,12 @@ import {
   GitBranch,
   RefreshCw,
   Server,
+  FolderOpen,
 } from "lucide-react";
 import type { AgentType } from "@/lib/providers";
 import type { DetectedDevServer } from "@/lib/projects";
 import { useCreateProject } from "@/data/projects";
+import { DirectoryPicker } from "@/components/DirectoryPicker";
 
 const RECENT_DIRS_KEY = "agentOS:recentDirectories";
 const MAX_RECENT_DIRS = 5;
@@ -70,13 +72,14 @@ export function NewProjectDialog({
   const [name, setName] = useState("");
   const [workingDirectory, setWorkingDirectory] = useState("~");
   const [agentType, setAgentType] = useState<AgentType>("claude");
-  const [defaultModel, setDefaultModel] = useState("sonnet");
+  const [defaultModel, setDefaultModel] = useState("opus");
   const [devServers, setDevServers] = useState<DevServerConfig[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [checkingDir, setCheckingDir] = useState(false);
+  const [showDirectoryPicker, setShowDirectoryPicker] = useState(false);
 
   const createProject = useCreateProject();
 
@@ -249,240 +252,264 @@ export function NewProjectDialog({
     setName("");
     setWorkingDirectory("~");
     setAgentType("claude");
-    setDefaultModel("sonnet");
+    setDefaultModel("opus");
     setDevServers([]);
     setError(null);
     onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>New Project</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Project</DialogTitle>
+          </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Project Name */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Project Name</label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="my-awesome-project"
-              autoFocus
-            />
-          </div>
-
-          {/* Working Directory */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Working Directory</label>
-            <div className="relative">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Project Name */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Project Name</label>
               <Input
-                value={workingDirectory}
-                onChange={(e) => setWorkingDirectory(e.target.value)}
-                placeholder="~/projects/my-app"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="my-awesome-project"
+                autoFocus
               />
-              {checkingDir && (
-                <div className="absolute top-1/2 right-3 -translate-y-1/2">
-                  <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+            </div>
+
+            {/* Working Directory */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Working Directory</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    value={workingDirectory}
+                    onChange={(e) => setWorkingDirectory(e.target.value)}
+                    placeholder="~/projects/my-app"
+                  />
+                  {checkingDir && (
+                    <div className="absolute top-1/2 right-3 -translate-y-1/2">
+                      <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowDirectoryPicker(true)}
+                  title="Browse folders"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
+              </div>
+              {isGitRepo && (
+                <p className="text-muted-foreground flex items-center gap-1 text-xs">
+                  <GitBranch className="h-3 w-3" />
+                  Git repository
+                </p>
+              )}
+              {recentDirs.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {recentDirs.map((dir) => (
+                    <button
+                      key={dir}
+                      type="button"
+                      onClick={() => setWorkingDirectory(dir)}
+                      className="bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground max-w-[200px] truncate rounded-full px-2 py-0.5 text-xs transition-colors"
+                      title={dir}
+                    >
+                      {dir.replace(/^~\//, "").split("/").pop() || dir}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
-            {isGitRepo && (
-              <p className="text-muted-foreground flex items-center gap-1 text-xs">
-                <GitBranch className="h-3 w-3" />
-                Git repository
-              </p>
-            )}
-            {recentDirs.length > 0 && (
-              <div className="flex flex-wrap gap-1 pt-1">
-                {recentDirs.map((dir) => (
-                  <button
-                    key={dir}
-                    type="button"
-                    onClick={() => setWorkingDirectory(dir)}
-                    className="bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground max-w-[200px] truncate rounded-full px-2 py-0.5 text-xs transition-colors"
-                    title={dir}
-                  >
-                    {dir.replace(/^~\//, "").split("/").pop() || dir}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* Agent Type */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Default Agent</label>
-            <Select
-              value={agentType}
-              onValueChange={(v) => setAgentType(v as AgentType)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AGENT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Default Model */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Default Model</label>
-            <Select value={defaultModel} onValueChange={setDefaultModel}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODEL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Dev Servers */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <Server className="h-4 w-4" />
-                Dev Servers
-              </label>
-              <div className="flex gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={detectDevServers}
-                  disabled={
-                    isDetecting || !workingDirectory || workingDirectory === "~"
-                  }
-                >
-                  {isDetecting ? (
-                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1 h-3 w-3" />
-                  )}
-                  Detect
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addDevServer}
-                >
-                  <Plus className="mr-1 h-3 w-3" />
-                  Add
-                </Button>
-              </div>
+            {/* Agent Type */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Default Agent</label>
+              <Select
+                value={agentType}
+                onValueChange={(v) => setAgentType(v as AgentType)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AGENT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {devServers.length === 0 ? (
-              <p className="text-muted-foreground py-2 text-sm">
-                No dev servers configured. Click Detect to auto-find or Add to
-                configure manually.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {devServers.map((ds) => (
-                  <div
-                    key={ds.id}
-                    className="bg-accent/30 space-y-2 rounded-lg p-3"
+            {/* Default Model */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Default Model</label>
+              <Select value={defaultModel} onValueChange={setDefaultModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODEL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Dev Servers */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Server className="h-4 w-4" />
+                  Dev Servers
+                </label>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={detectDevServers}
+                    disabled={
+                      isDetecting ||
+                      !workingDirectory ||
+                      workingDirectory === "~"
+                    }
                   >
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={ds.name}
-                        onChange={(e) =>
-                          updateDevServer(ds.id, { name: e.target.value })
-                        }
-                        placeholder="Server name"
-                        className="h-8 flex-1"
-                      />
-                      <Select
-                        value={ds.type}
-                        onValueChange={(v) =>
-                          updateDevServer(ds.id, {
-                            type: v as "node" | "docker",
-                          })
-                        }
-                      >
-                        <SelectTrigger className="h-8 w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="node">Node</SelectItem>
-                          <SelectItem value="docker">Docker</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => removeDevServer(ds.id)}
-                        className="text-red-500 hover:text-red-600"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <Input
-                      value={ds.command}
-                      onChange={(e) =>
-                        updateDevServer(ds.id, { command: e.target.value })
-                      }
-                      placeholder={
-                        ds.type === "docker" ? "Service name" : "npm run dev"
-                      }
-                      className="h-8"
-                    />
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        value={ds.port || ""}
-                        onChange={(e) =>
-                          updateDevServer(ds.id, {
-                            port: e.target.value
-                              ? parseInt(e.target.value)
-                              : undefined,
-                          })
-                        }
-                        placeholder="Port (e.g., 3000)"
-                        className="h-8 w-32"
-                      />
-                      <Input
-                        value={ds.portEnvVar || ""}
-                        onChange={(e) =>
-                          updateDevServer(ds.id, { portEnvVar: e.target.value })
-                        }
-                        placeholder="Port env var (e.g., PORT)"
-                        className="h-8 flex-1"
-                      />
-                    </div>
-                  </div>
-                ))}
+                    {isDetecting ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1 h-3 w-3" />
+                    )}
+                    Detect
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addDevServer}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
+              {devServers.length === 0 ? (
+                <p className="text-muted-foreground py-2 text-sm">
+                  No dev servers configured. Click Detect to auto-find or Add to
+                  configure manually.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {devServers.map((ds) => (
+                    <div
+                      key={ds.id}
+                      className="bg-accent/30 space-y-2 rounded-lg p-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={ds.name}
+                          onChange={(e) =>
+                            updateDevServer(ds.id, { name: e.target.value })
+                          }
+                          placeholder="Server name"
+                          className="h-8 flex-1"
+                        />
+                        <Select
+                          value={ds.type}
+                          onValueChange={(v) =>
+                            updateDevServer(ds.id, {
+                              type: v as "node" | "docker",
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="node">Node</SelectItem>
+                            <SelectItem value="docker">Docker</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => removeDevServer(ds.id)}
+                          className="text-red-500 hover:text-red-600"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Input
+                        value={ds.command}
+                        onChange={(e) =>
+                          updateDevServer(ds.id, { command: e.target.value })
+                        }
+                        placeholder={
+                          ds.type === "docker" ? "Service name" : "npm run dev"
+                        }
+                        className="h-8"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          value={ds.port || ""}
+                          onChange={(e) =>
+                            updateDevServer(ds.id, {
+                              port: e.target.value
+                                ? parseInt(e.target.value)
+                                : undefined,
+                            })
+                          }
+                          placeholder="Port (e.g., 3000)"
+                          className="h-8 w-32"
+                        />
+                        <Input
+                          value={ds.portEnvVar || ""}
+                          onChange={(e) =>
+                            updateDevServer(ds.id, {
+                              portEnvVar: e.target.value,
+                            })
+                          }
+                          placeholder="Port env var (e.g., PORT)"
+                          className="h-8 flex-1"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createProject.isPending}>
-              {createProject.isPending ? "Creating..." : "Create Project"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createProject.isPending}>
+                {createProject.isPending ? "Creating..." : "Create Project"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <DirectoryPicker
+        open={showDirectoryPicker}
+        onClose={() => setShowDirectoryPicker(false)}
+        onSelect={(path) => setWorkingDirectory(path)}
+        initialPath={workingDirectory !== "~" ? workingDirectory : "~"}
+      />
+    </>
   );
 }
