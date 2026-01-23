@@ -2,11 +2,10 @@
  * Git Worktree management for isolated feature development
  */
 
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import { execForProject } from "./exec-wrapper";
 import {
   isGitRepo,
   branchExists,
@@ -14,8 +13,6 @@ import {
   slugify,
   generateBranchName,
 } from "./git";
-
-const execAsync = promisify(exec);
 
 // Base directory for all worktrees
 const WORKTREES_DIR = path.join(os.homedir(), ".agent-os", "worktrees");
@@ -63,6 +60,7 @@ function generateWorktreeDirName(
  * Create a new worktree for a feature branch
  */
 export async function createWorktree(
+  projectId: string,
   options: CreateWorktreeOptions
 ): Promise<WorktreeInfo> {
   const { projectPath, featureName, baseBranch = "main" } = options;
@@ -70,7 +68,7 @@ export async function createWorktree(
   const resolvedProjectPath = resolvePath(projectPath);
 
   // Validate project is a git repo
-  if (!(await isGitRepo(resolvedProjectPath))) {
+  if (!(await isGitRepo(projectId, resolvedProjectPath))) {
     throw new Error(`Not a git repository: ${projectPath}`);
   }
 
@@ -78,7 +76,7 @@ export async function createWorktree(
   const branchName = generateBranchName(featureName);
 
   // Check if branch already exists
-  if (await branchExists(resolvedProjectPath, branchName)) {
+  if (await branchExists(projectId, resolvedProjectPath, branchName)) {
     throw new Error(`Branch already exists: ${branchName}`);
   }
 
@@ -106,9 +104,13 @@ export async function createWorktree(
   let lastError: Error | null = null;
   for (const ref of refFormats) {
     try {
-      await execAsync(
-        `git -C "${resolvedProjectPath}" worktree add -b "${branchName}" "${worktreePath}" "${ref}"`,
-        { timeout: 30000 }
+      await execForProject(
+        projectId,
+        `git worktree add -b "${branchName}" "${worktreePath}" "${ref}"`,
+        {
+          cwd: resolvedProjectPath,
+          timeout: 30000,
+        }
       );
       lastError = null;
       break; // Success!
@@ -135,6 +137,7 @@ export async function createWorktree(
  * Delete a worktree and optionally its branch
  */
 export async function deleteWorktree(
+  projectId: string,
   worktreePath: string,
   projectPath: string,
   deleteBranch = false
@@ -146,9 +149,13 @@ export async function deleteWorktree(
   let branchName: string | null = null;
   if (deleteBranch) {
     try {
-      const { stdout } = await execAsync(
-        `git -C "${resolvedWorktreePath}" rev-parse --abbrev-ref HEAD`,
-        { timeout: 5000 }
+      const { stdout } = await execForProject(
+        projectId,
+        "git rev-parse --abbrev-ref HEAD",
+        {
+          cwd: resolvedWorktreePath,
+          timeout: 5000,
+        }
       );
       branchName = stdout.trim();
     } catch {
@@ -158,9 +165,13 @@ export async function deleteWorktree(
 
   // Remove the worktree
   try {
-    await execAsync(
-      `git -C "${resolvedProjectPath}" worktree remove "${resolvedWorktreePath}" --force`,
-      { timeout: 30000 }
+    await execForProject(
+      projectId,
+      `git worktree remove "${resolvedWorktreePath}" --force`,
+      {
+        cwd: resolvedProjectPath,
+        timeout: 30000,
+      }
     );
   } catch {
     // If git worktree remove fails, try manual cleanup
@@ -172,7 +183,8 @@ export async function deleteWorktree(
     }
     // Prune worktree references
     try {
-      await execAsync(`git -C "${resolvedProjectPath}" worktree prune`, {
+      await execForProject(projectId, "git worktree prune", {
+        cwd: resolvedProjectPath,
         timeout: 10000,
       });
     } catch {
@@ -188,10 +200,10 @@ export async function deleteWorktree(
     branchName !== "master"
   ) {
     try {
-      await execAsync(
-        `git -C "${resolvedProjectPath}" branch -D "${branchName}"`,
-        { timeout: 10000 }
-      );
+      await execForProject(projectId, `git branch -D "${branchName}"`, {
+        cwd: resolvedProjectPath,
+        timeout: 10000,
+      });
     } catch {
       // Ignore branch deletion errors (might be merged or checked out elsewhere)
     }
@@ -201,7 +213,10 @@ export async function deleteWorktree(
 /**
  * List all worktrees for a project
  */
-export async function listWorktrees(projectPath: string): Promise<
+export async function listWorktrees(
+  projectId: string,
+  projectPath: string
+): Promise<
   Array<{
     path: string;
     branch: string;
@@ -211,9 +226,13 @@ export async function listWorktrees(projectPath: string): Promise<
   const resolvedProjectPath = resolvePath(projectPath);
 
   try {
-    const { stdout } = await execAsync(
-      `git -C "${resolvedProjectPath}" worktree list --porcelain`,
-      { timeout: 10000 }
+    const { stdout } = await execForProject(
+      projectId,
+      "git worktree list --porcelain",
+      {
+        cwd: resolvedProjectPath,
+        timeout: 10000,
+      }
     );
 
     const worktrees: Array<{ path: string; branch: string; head: string }> = [];

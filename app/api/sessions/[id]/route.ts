@@ -85,11 +85,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       // If this is a worktree session, also rename the git branch
       if (existing.worktree_path && isAgentOSWorktree(existing.worktree_path)) {
         try {
-          const currentBranch = await getCurrentBranch(existing.worktree_path);
+          const projectId = existing.project_id || "local";
+          const currentBranch = await getCurrentBranch(projectId, existing.worktree_path);
           const newBranchName = generateBranchName(body.name);
 
           if (currentBranch !== newBranchName) {
             const result = await renameBranch(
+              projectId,
               existing.worktree_path,
               currentBranch,
               newBranchName
@@ -178,6 +180,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Clean up worktree in background (non-blocking)
     if (existing.worktree_path && isAgentOSWorktree(existing.worktree_path)) {
       const worktreePath = existing.worktree_path; // Capture for closure
+      const projectId = existing.project_id || "local"; // Capture projectId for closure
       runInBackground(async () => {
         const { exec } = await import("child_process");
         const { promisify } = await import("util");
@@ -190,7 +193,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         const gitCommonDir = stdout.trim().replace(/\/.git$/, "");
 
         if (gitCommonDir) {
-          await deleteWorktree(worktreePath, gitCommonDir, false);
+          await deleteWorktree(projectId, worktreePath, gitCommonDir, false);
         }
       }, `cleanup-worktree-${id}`);
     }
@@ -201,6 +204,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         if (worker.worktree_path && isAgentOSWorktree(worker.worktree_path)) {
           const worktreePath = worker.worktree_path; // Capture for closure
           const workerId = worker.id; // Capture ID for task name
+          const projectId = worker.project_id || "local"; // Capture projectId for closure
           runInBackground(async () => {
             const { exec } = await import("child_process");
             const { promisify } = await import("util");
@@ -213,7 +217,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             const gitCommonDir = stdout.trim().replace(/\/.git$/, "");
 
             if (gitCommonDir) {
-              await deleteWorktree(worktreePath, gitCommonDir, false);
+              await deleteWorktree(projectId, worktreePath, gitCommonDir, false);
             }
           }, `cleanup-worker-worktree-${workerId}`);
         }

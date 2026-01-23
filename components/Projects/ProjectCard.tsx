@@ -13,8 +13,10 @@ import {
   Pencil,
   FolderOpen,
   Terminal,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -219,8 +221,26 @@ export function ProjectCard({
         </span>
       )}
 
-      {/* Running servers indicator */}
-      {hasRunningServers && (
+      {/* Remote indicator */}
+      {project.is_remote && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="secondary"
+              className="flex-shrink-0 gap-1 px-1.5 py-0.5 text-[10px]"
+            >
+              <Globe className="h-2.5 w-2.5" />
+              Remote
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Remote project via SSH</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* Running servers indicator - only show if > 0 */}
+      {runningDevServers.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex flex-shrink-0 items-center gap-1 text-green-500">

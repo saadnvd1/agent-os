@@ -156,6 +156,49 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    id: 13,
+    name: "add_remote_project_support",
+    up: (db) => {
+      // Create ssh_connections table FIRST (before any foreign key references)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ssh_connections (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          host TEXT NOT NULL,
+          port INTEGER NOT NULL DEFAULT 22,
+          user TEXT NOT NULL,
+          key_path TEXT,
+          last_connected_at TEXT,
+          status TEXT NOT NULL DEFAULT 'disconnected',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      // Add remote session fields (no foreign key constraint)
+      const sessionCols = db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[];
+      if (!sessionCols.some((c) => c.name === "is_remote")) {
+        db.exec(`ALTER TABLE sessions ADD COLUMN is_remote INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!sessionCols.some((c) => c.name === "ssh_connection_id")) {
+        db.exec(`ALTER TABLE sessions ADD COLUMN ssh_connection_id TEXT`);
+      }
+
+      // Add remote project fields (with foreign key to ssh_connections)
+      const projectCols = db.prepare(`PRAGMA table_info(projects)`).all() as { name: string }[];
+      if (!projectCols.some((c) => c.name === "is_remote")) {
+        db.exec(`ALTER TABLE projects ADD COLUMN is_remote INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!projectCols.some((c) => c.name === "ssh_connection_id")) {
+        db.exec(`ALTER TABLE projects ADD COLUMN ssh_connection_id TEXT REFERENCES ssh_connections(id)`);
+      }
+
+      // Create indexes for faster lookups
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_ssh_connection ON sessions(ssh_connection_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_ssh_connection ON projects(ssh_connection_id)`);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

@@ -13,14 +13,14 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { path: dirPath } = body;
+    const { path: dirPath, projectId = "local" } = body;
 
     if (!dirPath) {
       return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
 
-    // Check if it's a git repo
-    const isRepo = await isGitRepo(dirPath);
+    // Check if it's a git repo (use "local" as projectId for local-only checks)
+    const isRepo = await isGitRepo(projectId, dirPath);
 
     if (!isRepo) {
       return NextResponse.json({
@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
 
     // Get branch info
     const [branches, defaultBranch, currentBranch] = await Promise.all([
-      getBranches(dirPath),
-      getDefaultBranch(dirPath),
-      getCurrentBranch(dirPath),
+      getBranches(projectId, dirPath),
+      getDefaultBranch(projectId, dirPath),
+      getCurrentBranch(projectId, dirPath),
     ]);
 
     return NextResponse.json({

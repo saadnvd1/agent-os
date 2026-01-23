@@ -24,10 +24,14 @@ import {
   GitBranch,
   RefreshCw,
   Server,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { AgentType } from "@/lib/providers";
 import type { DetectedDevServer } from "@/lib/projects";
 import { useCreateProject } from "@/data/projects";
+import { useSSHConnectionsQuery } from "@/data/ssh-connections";
 
 const RECENT_DIRS_KEY = "agentOS:recentDirectories";
 const MAX_RECENT_DIRS = 5;
@@ -77,8 +81,12 @@ export function NewProjectDialog({
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [checkingDir, setCheckingDir] = useState(false);
+  const [isRemote, setIsRemote] = useState(false);
+  const [sshConnectionId, setSSHConnectionId] = useState<string | null>(null);
 
   const createProject = useCreateProject();
+  const { data: sshConnections, isPending: isLoadingSSH } =
+    useSSHConnectionsQuery();
 
   // Load recent directories
   useEffect(() => {
@@ -92,28 +100,31 @@ export function NewProjectDialog({
     }
   }, []);
 
-  // Check if directory exists and is a git repo
-  const checkDirectory = useCallback(async (path: string) => {
-    if (!path || path === "~") {
-      setIsGitRepo(false);
-      return;
-    }
+  // Check if directory exists and is a git repo (skip for remote projects)
+  const checkDirectory = useCallback(
+    async (path: string) => {
+      if (!path || path === "~" || isRemote) {
+        setIsGitRepo(false);
+        return;
+      }
 
-    setCheckingDir(true);
-    try {
-      const res = await fetch("/api/git/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path }),
-      });
-      const data = await res.json();
-      setIsGitRepo(data.isGitRepo);
-    } catch {
-      setIsGitRepo(false);
-    } finally {
-      setCheckingDir(false);
-    }
-  }, []);
+      setCheckingDir(true);
+      try {
+        const res = await fetch("/api/git/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path }),
+        });
+        const data = await res.json();
+        setIsGitRepo(data.isGitRepo);
+      } catch {
+        setIsGitRepo(false);
+      } finally {
+        setCheckingDir(false);
+      }
+    },
+    [isRemote]
+  );
 
   // Debounce directory check
   useEffect(() => {
@@ -123,9 +134,9 @@ export function NewProjectDialog({
     return () => clearTimeout(timer);
   }, [workingDirectory, checkDirectory]);
 
-  // Detect dev servers
+  // Detect dev servers (skip for remote projects for now)
   const detectDevServers = async () => {
-    if (!workingDirectory || workingDirectory === "~") return;
+    if (!workingDirectory || workingDirectory === "~" || isRemote) return;
 
     setIsDetecting(true);
     try {
@@ -213,6 +224,11 @@ export function NewProjectDialog({
       return;
     }
 
+    if (isRemote && !sshConnectionId) {
+      setError("SSH connection is required for remote projects");
+      return;
+    }
+
     // Validate dev servers
     const validDevServers = devServers.filter(
       (ds) => ds.name.trim() && ds.command.trim()
@@ -231,6 +247,8 @@ export function NewProjectDialog({
           port: ds.port || undefined,
           portEnvVar: ds.portEnvVar || undefined,
         })),
+        isRemote,
+        sshConnectionId,
       },
       {
         onSuccess: (data) => {
@@ -252,6 +270,8 @@ export function NewProjectDialog({
     setDefaultModel("sonnet");
     setDevServers([]);
     setError(null);
+    setIsRemote(false);
+    setSSHConnectionId(null);
     onClose();
   };
 
@@ -312,6 +332,69 @@ export function NewProjectDialog({
             )}
           </div>
 
+          {/* Remote Project Toggle */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <label className="text-sm font-medium">
+                  Remote Project (via SSH)
+                </label>
+              </div>
+              <Switch checked={isRemote} onCheckedChange={setIsRemote} />
+            </div>
+
+            {isRemote && (
+              <div className="space-y-2 pt-2">
+                {isLoadingSSH ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading SSH connections...
+                  </div>
+                ) : !sshConnections || sshConnections.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-3">
+                    <p className="text-sm text-muted-foreground">
+                      No SSH connections configured.
+                    </p>
+                    <a
+                      href="/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                    >
+                      Configure SSH connections in Settings
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-sm font-medium">
+                      SSH Connection
+                    </label>
+                    <Select
+                      value={sshConnectionId || ""}
+                      onValueChange={(v) => setSSHConnectionId(v || null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select SSH connection" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sshConnections.map((conn) => (
+                          <SelectItem key={conn.id} value={conn.id}>
+                            {conn.name} ({conn.user}@{conn.host})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Working directory will be relative to the SSH server.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Agent Type */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Default Agent</label>
@@ -363,7 +446,15 @@ export function NewProjectDialog({
                   size="sm"
                   onClick={detectDevServers}
                   disabled={
-                    isDetecting || !workingDirectory || workingDirectory === "~"
+                    isDetecting ||
+                    !workingDirectory ||
+                    workingDirectory === "~" ||
+                    isRemote
+                  }
+                  title={
+                    isRemote
+                      ? "Auto-detection not available for remote projects"
+                      : undefined
                   }
                 >
                   {isDetecting ? (
@@ -387,8 +478,9 @@ export function NewProjectDialog({
 
             {devServers.length === 0 ? (
               <p className="text-muted-foreground py-2 text-sm">
-                No dev servers configured. Click Detect to auto-find or Add to
-                configure manually.
+                {isRemote
+                  ? "No dev servers configured. Click Add to configure manually."
+                  : "No dev servers configured. Click Detect to auto-find or Add to configure manually."}
               </p>
             ) : (
               <div className="space-y-2">

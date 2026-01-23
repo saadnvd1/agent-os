@@ -28,6 +28,8 @@ export interface CreateProjectOptions {
   agentType?: AgentType;
   defaultModel?: string;
   devServers?: CreateDevServerOptions[];
+  isRemote?: boolean;
+  sshConnectionId?: string | null;
 }
 
 export interface CreateDevServerOptions {
@@ -80,7 +82,9 @@ export function createProject(
       opts.workingDirectory,
       opts.agentType || "claude",
       opts.defaultModel || "sonnet",
-      maxOrder + 1
+      maxOrder + 1,
+      opts.isRemote ? 1 : 0,
+      opts.sshConnectionId || null
     );
 
   // Create dev server configs if provided
@@ -133,6 +137,7 @@ export function getProject(id: string): Project | undefined {
     ...project,
     expanded: Boolean(project.expanded),
     is_uncategorized: Boolean(project.is_uncategorized),
+    is_remote: Boolean(project.is_remote),
   };
 }
 

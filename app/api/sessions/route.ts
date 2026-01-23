@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     if (useWorktree && featureName) {
       try {
-        const worktreeInfo = await createWorktree({
+        const worktreeInfo = await createWorktree(projectId, {
           projectPath: workingDirectory,
           featureName,
           baseBranch,

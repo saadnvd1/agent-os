@@ -2,20 +2,21 @@
  * Git utilities for worktree management
  */
 
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
-
-const execAsync = promisify(exec);
+import { execForProject } from "./exec-wrapper";
 
 /**
  * Check if a directory is a git repository
  */
-export async function isGitRepo(dirPath: string): Promise<boolean> {
+export async function isGitRepo(
+  projectId: string,
+  dirPath: string
+): Promise<boolean> {
   try {
     const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-    await execAsync(`git -C "${resolvedPath}" rev-parse --git-dir`, {
+    await execForProject(projectId, "git rev-parse --git-dir", {
+      cwd: resolvedPath,
       timeout: 5000,
     });
     return true;
@@ -27,11 +28,18 @@ export async function isGitRepo(dirPath: string): Promise<boolean> {
 /**
  * Get the current branch name
  */
-export async function getCurrentBranch(dirPath: string): Promise<string> {
+export async function getCurrentBranch(
+  projectId: string,
+  dirPath: string
+): Promise<string> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  const { stdout } = await execAsync(
-    `git -C "${resolvedPath}" rev-parse --abbrev-ref HEAD`,
-    { timeout: 5000 }
+  const { stdout } = await execForProject(
+    projectId,
+    "git rev-parse --abbrev-ref HEAD",
+    {
+      cwd: resolvedPath,
+      timeout: 5000,
+    }
   );
   return stdout.trim();
 }
@@ -39,13 +47,20 @@ export async function getCurrentBranch(dirPath: string): Promise<string> {
 /**
  * Get the default branch (main or master)
  */
-export async function getDefaultBranch(dirPath: string): Promise<string> {
+export async function getDefaultBranch(
+  projectId: string,
+  dirPath: string
+): Promise<string> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
   try {
     // Try to get the default branch from remote
-    const { stdout } = await execAsync(
-      `git -C "${resolvedPath}" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`,
-      { timeout: 5000 }
+    const { stdout } = await execForProject(
+      projectId,
+      "git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'",
+      {
+        cwd: resolvedPath,
+        timeout: 5000,
+      }
     );
     if (stdout.trim()) {
       return stdout.trim();
@@ -56,19 +71,21 @@ export async function getDefaultBranch(dirPath: string): Promise<string> {
 
   // Fallback: check if main or master exists
   try {
-    await execAsync(`git -C "${resolvedPath}" rev-parse --verify main`, {
+    await execForProject(projectId, "git rev-parse --verify main", {
+      cwd: resolvedPath,
       timeout: 5000,
     });
     return "main";
   } catch {
     try {
-      await execAsync(`git -C "${resolvedPath}" rev-parse --verify master`, {
+      await execForProject(projectId, "git rev-parse --verify master", {
+        cwd: resolvedPath,
         timeout: 5000,
       });
       return "master";
     } catch {
       // Return current branch as fallback
-      return getCurrentBranch(resolvedPath);
+      return getCurrentBranch(projectId, resolvedPath);
     }
   }
 }
@@ -76,11 +93,18 @@ export async function getDefaultBranch(dirPath: string): Promise<string> {
 /**
  * Get list of local branches
  */
-export async function getBranches(dirPath: string): Promise<string[]> {
+export async function getBranches(
+  projectId: string,
+  dirPath: string
+): Promise<string[]> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  const { stdout } = await execAsync(
-    `git -C "${resolvedPath}" branch --format='%(refname:short)'`,
-    { timeout: 5000 }
+  const { stdout } = await execForProject(
+    projectId,
+    "git branch --format='%(refname:short)'",
+    {
+      cwd: resolvedPath,
+      timeout: 5000,
+    }
   );
   return stdout
     .trim()
@@ -92,15 +116,16 @@ export async function getBranches(dirPath: string): Promise<string[]> {
  * Check if a branch exists
  */
 export async function branchExists(
+  projectId: string,
   dirPath: string,
   branchName: string
 ): Promise<boolean> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
   try {
-    await execAsync(
-      `git -C "${resolvedPath}" rev-parse --verify "${branchName}"`,
-      { timeout: 5000 }
-    );
+    await execForProject(projectId, `git rev-parse --verify "${branchName}"`, {
+      cwd: resolvedPath,
+      timeout: 5000,
+    });
     return true;
   } catch {
     return false;
@@ -138,14 +163,19 @@ export function generateBranchName(feature: string): string {
  * Check if a branch exists on remote
  */
 export async function remoteBranchExists(
+  projectId: string,
   dirPath: string,
   branchName: string
 ): Promise<boolean> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
   try {
-    const { stdout } = await execAsync(
-      `git -C "${resolvedPath}" ls-remote --heads origin "${branchName}"`,
-      { timeout: 10000 }
+    const { stdout } = await execForProject(
+      projectId,
+      `git ls-remote --heads origin "${branchName}"`,
+      {
+        cwd: resolvedPath,
+        timeout: 10000,
+      }
     );
     return stdout.trim().length > 0;
   } catch {
@@ -158,6 +188,7 @@ export async function remoteBranchExists(
  * Returns the new branch name or throws on error
  */
 export async function renameBranch(
+  projectId: string,
   dirPath: string,
   oldBranchName: string,
   newBranchName: string
@@ -168,9 +199,13 @@ export async function renameBranch(
 
   // Rename local branch
   try {
-    await execAsync(
-      `git -C "${resolvedPath}" branch -m "${oldBranchName}" "${newBranchName}"`,
-      { timeout: 10000 }
+    await execForProject(
+      projectId,
+      `git branch -m "${oldBranchName}" "${newBranchName}"`,
+      {
+        cwd: resolvedPath,
+        timeout: 10000,
+      }
     );
     renamed = true;
   } catch (error) {
@@ -179,18 +214,26 @@ export async function renameBranch(
   }
 
   // Check if old branch exists on remote and rename there too
-  const hasRemote = await remoteBranchExists(dirPath, oldBranchName);
+  const hasRemote = await remoteBranchExists(projectId, dirPath, oldBranchName);
   if (hasRemote) {
     try {
       // Push new branch to remote
-      await execAsync(
-        `git -C "${resolvedPath}" push origin "${newBranchName}" -u`,
-        { timeout: 30000 }
+      await execForProject(
+        projectId,
+        `git push origin "${newBranchName}" -u`,
+        {
+          cwd: resolvedPath,
+          timeout: 30000,
+        }
       );
       // Delete old branch from remote
-      await execAsync(
-        `git -C "${resolvedPath}" push origin --delete "${oldBranchName}"`,
-        { timeout: 30000 }
+      await execForProject(
+        projectId,
+        `git push origin --delete "${oldBranchName}"`,
+        {
+          cwd: resolvedPath,
+          timeout: 30000,
+        }
       );
       remoteRenamed = true;
     } catch {
@@ -207,7 +250,10 @@ export async function renameBranch(
 /**
  * Get git status summary (files changed, ahead/behind)
  */
-export async function getGitStatus(dirPath: string): Promise<{
+export async function getGitStatus(
+  projectId: string,
+  dirPath: string
+): Promise<{
   staged: number;
   unstaged: number;
   untracked: number;
@@ -217,9 +263,13 @@ export async function getGitStatus(dirPath: string): Promise<{
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
 
   // Get file counts
-  const { stdout: statusOutput } = await execAsync(
-    `git -C "${resolvedPath}" status --porcelain`,
-    { timeout: 5000 }
+  const { stdout: statusOutput } = await execForProject(
+    projectId,
+    "git status --porcelain",
+    {
+      cwd: resolvedPath,
+      timeout: 5000,
+    }
   );
 
   const lines = statusOutput.trim().split("\n").filter(Boolean);
@@ -242,9 +292,13 @@ export async function getGitStatus(dirPath: string): Promise<{
   let ahead = 0;
   let behind = 0;
   try {
-    const { stdout: aheadBehind } = await execAsync(
-      `git -C "${resolvedPath}" rev-list --left-right --count HEAD...@{upstream} 2>/dev/null || echo "0 0"`,
-      { timeout: 5000 }
+    const { stdout: aheadBehind } = await execForProject(
+      projectId,
+      "git rev-list --left-right --count HEAD...@{upstream} 2>/dev/null || echo '0 0'",
+      {
+        cwd: resolvedPath,
+        timeout: 5000,
+      }
     );
     const [a, b] = aheadBehind.trim().split(/\s+/);
     ahead = parseInt(a, 10) || 0;
