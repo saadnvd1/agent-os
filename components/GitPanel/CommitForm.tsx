@@ -1,41 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import { GitCommit, GitBranch, Send, Loader2 } from "lucide-react";
+import {
+  GitCommit,
+  GitBranch,
+  Send,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface CommitFormProps {
   workingDirectory: string;
   stagedCount: number;
-  isOnMainBranch: boolean;
   branch: string;
+  repoName?: string;
+  multipleReposWarning?: boolean;
   onCommit: () => void;
 }
 
 export function CommitForm({
   workingDirectory,
   stagedCount,
-  isOnMainBranch,
   branch,
+  repoName,
+  multipleReposWarning,
   onCommit,
 }: CommitFormProps) {
   const [message, setMessage] = useState("");
-  const [branchName, setBranchName] = useState("");
   const [committing, setCommitting] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const canCommit = stagedCount > 0 && message.trim().length > 0;
-  const needsBranch = isOnMainBranch && !branchName.trim();
 
   const handleCommit = async (): Promise<boolean> => {
     if (!canCommit) return false;
-    if (isOnMainBranch && !branchName.trim()) {
-      setError("Please enter a branch name");
-      return false;
-    }
 
     setError(null);
     setSuccess(null);
@@ -48,7 +50,6 @@ export function CommitForm({
         body: JSON.stringify({
           path: workingDirectory,
           message: message.trim(),
-          branchName: isOnMainBranch ? branchName.trim() : undefined,
         }),
       });
 
@@ -61,7 +62,6 @@ export function CommitForm({
 
       // Clear form
       setMessage("");
-      setBranchName("");
       setSuccess("Committed successfully!");
       onCommit();
       return true;
@@ -121,26 +121,24 @@ export function CommitForm({
 
   return (
     <div className="bg-muted/20 space-y-3 p-3">
-      {/* Branch name input (if on main) */}
-      {isOnMainBranch && (
-        <div className="space-y-1.5">
-          <label className="text-muted-foreground flex items-center gap-1 text-xs">
-            <GitBranch className="h-3 w-3" />
-            New branch name
-          </label>
-          <input
-            type="text"
-            value={branchName}
-            onChange={(e) => setBranchName(e.target.value)}
-            placeholder="feature/my-feature"
-            className={cn(
-              "w-full rounded-md px-3 py-2 text-sm",
-              "bg-muted/50",
-              "focus:ring-primary/50 focus:ring-2 focus:outline-none",
-              "placeholder:text-muted-foreground/50",
-              "min-h-[44px]" // Mobile touch target
-            )}
-          />
+      {/* Repo indicator (multi-repo mode) */}
+      {repoName && (
+        <div className="text-muted-foreground flex items-center gap-1 text-xs">
+          <GitBranch className="h-3 w-3" />
+          Committing to:{" "}
+          <span className="text-foreground font-medium">{repoName}</span>
+          <span className="text-muted-foreground/70">({branch})</span>
+        </div>
+      )}
+
+      {/* Warning for multiple repos with staged changes */}
+      {multipleReposWarning && (
+        <div className="flex items-start gap-2 rounded-md bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-600 dark:text-yellow-500">
+          <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
+          <span>
+            Multiple repos have staged changes. Only the first will be
+            committed.
+          </span>
         </div>
       )}
 
@@ -176,7 +174,7 @@ export function CommitForm({
           variant="outline"
           size="default"
           onClick={handleCommit}
-          disabled={!canCommit || needsBranch || committing || pushing}
+          disabled={!canCommit || committing || pushing}
           className="min-h-[44px] flex-1"
         >
           {committing ? (
@@ -191,7 +189,7 @@ export function CommitForm({
           variant="default"
           size="default"
           onClick={handleCommitAndPush}
-          disabled={!canCommit || needsBranch || committing || pushing}
+          disabled={!canCommit || committing || pushing}
           className="min-h-[44px] flex-1"
         >
           {pushing ? (
