@@ -30,42 +30,102 @@ import {
   useCreatePR,
   useStageFiles,
   useUnstageFiles,
+  useMultiRepoGitStatus,
   gitKeys,
 } from "@/data/git/queries";
 import type { GitStatus, GitFile } from "@/lib/git-status";
+import type { MultiRepoGitFile } from "@/lib/multi-repo-git";
+import type { ProjectRepository } from "@/lib/db";
 
 interface GitPanelProps {
   workingDirectory: string;
+  projectId?: string;
+  repositories?: ProjectRepository[];
   onFileSelect?: (file: GitFile, diff: string) => void;
 }
 
 interface SelectedFile {
-  file: GitFile;
+  file: GitFile | MultiRepoGitFile;
   diff: string;
+  repoPath?: string;
 }
 
-export function GitPanel({ workingDirectory }: GitPanelProps) {
+export function GitPanel({
+  workingDirectory,
+  projectId,
+  repositories = [],
+}: GitPanelProps) {
   const { isMobile } = useViewport();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<GitTab>("changes");
   const [showPRModal, setShowPRModal] = useState(false);
 
-  // React Query hooks
-  const {
-    data: status,
-    isPending: loading,
-    isError,
-    error,
-    refetch: refetchStatus,
-    isRefetching,
-  } = useGitStatus(workingDirectory);
+  // Determine if we're in multi-repo mode
+  const isMultiRepo = repositories.length > 0;
 
-  const { data: prData } = usePRStatus(workingDirectory);
+  // Single-repo mode hooks
+  const singleRepoQuery = useGitStatus(workingDirectory, {
+    enabled: !isMultiRepo,
+  });
+
+  // Multi-repo mode hooks
+  const multiRepoQuery = useMultiRepoGitStatus(projectId, workingDirectory, {
+    enabled: isMultiRepo,
+  });
+
+  // Unified status based on mode
+  const loading = isMultiRepo
+    ? multiRepoQuery.isPending
+    : singleRepoQuery.isPending;
+  const isError = isMultiRepo
+    ? multiRepoQuery.isError
+    : singleRepoQuery.isError;
+  const error = isMultiRepo ? multiRepoQuery.error : singleRepoQuery.error;
+  const isRefetching = isMultiRepo
+    ? multiRepoQuery.isRefetching
+    : singleRepoQuery.isRefetching;
+
+  // Convert multi-repo status to single-repo-like status for unified handling
+  const status: GitStatus | null = isMultiRepo
+    ? multiRepoQuery.data
+      ? {
+          // Use first repo's branch or "Multiple"
+          branch:
+            multiRepoQuery.data.repositories.length === 1
+              ? multiRepoQuery.data.repositories[0]?.branch || ""
+              : `${multiRepoQuery.data.repositories.length} repos`,
+          ahead: multiRepoQuery.data.repositories.reduce(
+            (sum, r) => sum + r.ahead,
+            0
+          ),
+          behind: multiRepoQuery.data.repositories.reduce(
+            (sum, r) => sum + r.behind,
+            0
+          ),
+          staged: multiRepoQuery.data.staged,
+          unstaged: multiRepoQuery.data.unstaged,
+          untracked: multiRepoQuery.data.untracked,
+        }
+      : null
+    : singleRepoQuery.data || null;
+
+  const refetchStatus = isMultiRepo
+    ? multiRepoQuery.refetch
+    : singleRepoQuery.refetch;
+
+  // For PR status, use the primary repo or first repo in multi-repo mode
+  const primaryRepoPath = isMultiRepo
+    ? repositories.find((r) => r.is_primary)?.path ||
+      repositories[0]?.path ||
+      workingDirectory
+    : workingDirectory;
+
+  const { data: prData } = usePRStatus(primaryRepoPath);
   const existingPR = prData?.existingPR ?? null;
 
-  const createPRMutation = useCreatePR(workingDirectory);
-  const stageMutation = useStageFiles(workingDirectory);
-  const unstageMutation = useUnstageFiles(workingDirectory);
+  const createPRMutation = useCreatePR(primaryRepoPath);
+  const stageMutation = useStageFiles(primaryRepoPath);
+  const unstageMutation = useUnstageFiles(primaryRepoPath);
 
   // Selected file for diff view
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
@@ -80,12 +140,15 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
     await refetchStatus();
   };
 
-  const handleFileClick = async (file: GitFile) => {
+  const handleFileClick = async (file: GitFile | MultiRepoGitFile) => {
     setLoadingDiff(true);
     try {
       const isUntracked = file.status === "untracked";
+      // In multi-repo mode, use the file's repoPath
+      const repoPath =
+        "repoPath" in file && file.repoPath ? file.repoPath : workingDirectory;
       const params = new URLSearchParams({
-        path: workingDirectory,
+        path: repoPath,
         file: file.path,
         staged: file.staged.toString(),
         ...(isUntracked && { untracked: "true" }),
@@ -95,7 +158,7 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
       const data = await res.json();
 
       if (data.diff !== undefined) {
-        setSelectedFile({ file, diff: data.diff });
+        setSelectedFile({ file, diff: data.diff, repoPath });
       }
     } catch {
       // Ignore errors
@@ -104,29 +167,49 @@ export function GitPanel({ workingDirectory }: GitPanelProps) {
     }
   };
 
-  const handleStage = (file: GitFile) => {
-    stageMutation.mutate([file.path], {
-      onSuccess: () => {
-        // Update selected file's staged status if it's the same file
-        if (selectedFile?.file.path === file.path) {
-          setSelectedFile({ ...selectedFile, file: { ...file, staged: true } });
-        }
-      },
-    });
+  const handleStage = async (file: GitFile | MultiRepoGitFile) => {
+    // In multi-repo mode, use the file's repoPath
+    const repoPath =
+      "repoPath" in file && file.repoPath ? file.repoPath : primaryRepoPath;
+    try {
+      await fetch("/api/git/stage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: repoPath, files: [file.path] }),
+      });
+      // Invalidate queries to refresh
+      queryClient.invalidateQueries({ queryKey: gitKeys.all });
+      // Update selected file's staged status if it's the same file
+      if (selectedFile?.file.path === file.path) {
+        setSelectedFile({ ...selectedFile, file: { ...file, staged: true } });
+      }
+    } catch {
+      // Ignore errors
+    }
   };
 
-  const handleUnstage = (file: GitFile) => {
-    unstageMutation.mutate([file.path], {
-      onSuccess: () => {
-        // Update selected file's staged status if it's the same file
-        if (selectedFile?.file.path === file.path) {
-          setSelectedFile({
-            ...selectedFile,
-            file: { ...file, staged: false },
-          });
-        }
-      },
-    });
+  const handleUnstage = async (file: GitFile | MultiRepoGitFile) => {
+    // In multi-repo mode, use the file's repoPath
+    const repoPath =
+      "repoPath" in file && file.repoPath ? file.repoPath : primaryRepoPath;
+    try {
+      await fetch("/api/git/unstage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: repoPath, files: [file.path] }),
+      });
+      // Invalidate queries to refresh
+      queryClient.invalidateQueries({ queryKey: gitKeys.all });
+      // Update selected file's staged status if it's the same file
+      if (selectedFile?.file.path === file.path) {
+        setSelectedFile({
+          ...selectedFile,
+          file: { ...file, staged: false },
+        });
+      }
+    } catch {
+      // Ignore errors
+    }
   };
 
   const handleStageAll = () => {
