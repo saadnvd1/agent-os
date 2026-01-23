@@ -45,6 +45,7 @@ export interface Project {
   working_directory: string;
   agent_type: AgentType;
   default_model: string;
+  initial_prompt: string | null;
   expanded: boolean;
   sort_order: number;
   is_uncategorized: boolean;
@@ -60,6 +61,15 @@ export interface ProjectDevServer {
   command: string;
   port: number | null;
   port_env_var: string | null;
+  sort_order: number;
+}
+
+export interface ProjectRepository {
+  id: string;
+  project_id: string;
+  name: string;
+  path: string;
+  is_primary: boolean;
   sort_order: number;
 }
 

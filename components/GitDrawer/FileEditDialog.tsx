@@ -17,16 +17,19 @@ import type { editor } from "monaco-editor";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { GitFile } from "@/lib/git-status";
+import type { MultiRepoGitFile } from "@/lib/multi-repo-git";
+
+type AnyGitFile = GitFile | MultiRepoGitFile;
 
 interface FileEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workingDirectory: string;
-  file: GitFile;
-  allFiles: GitFile[];
-  onFileSelect: (file: GitFile) => void;
-  onStage: (file: GitFile) => void;
-  onUnstage: (file: GitFile) => void;
+  file: AnyGitFile;
+  allFiles: AnyGitFile[];
+  onFileSelect: (file: AnyGitFile) => void;
+  onStage: (file: AnyGitFile) => void;
+  onUnstage: (file: AnyGitFile) => void;
   onSave: () => void;
 }
 
@@ -95,8 +98,17 @@ export function FileEditDialog({
   const [copied, setCopied] = useState(false);
 
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
-  const filePath = `${workingDirectory}/${file.path}`;
+
+  // For multi-repo files, use repoPath; otherwise use workingDirectory
+  const baseDir =
+    "repoPath" in file && file.repoPath ? file.repoPath : workingDirectory;
+  // Expand ~ to home directory for display
+  const expandedBaseDir = baseDir.startsWith("~")
+    ? baseDir.replace("~", process.env.HOME || "/Users")
+    : baseDir;
+  const filePath = `${expandedBaseDir}/${file.path}`;
   const fileName = file.path.split("/").pop() || file.path;
+  const repoName = "repoName" in file ? file.repoName : null;
   const hasChanges = modifiedContent !== initialModified;
 
   useEffect(() => {
@@ -104,12 +116,15 @@ export function FileEditDialog({
     setLoading(true);
     setError(null);
 
+    // Use baseDir for git operations (repo path for multi-repo, working directory otherwise)
+    const gitBasePath = baseDir;
+
     Promise.all([
       fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`).then(
         (r) => r.json()
       ),
       fetch(
-        `/api/git/file-content?path=${encodeURIComponent(workingDirectory)}&file=${encodeURIComponent(file.path)}`
+        `/api/git/file-content?path=${encodeURIComponent(gitBasePath)}&file=${encodeURIComponent(file.path)}`
       ).then((r) => r.json()),
     ])
       .then(([modData, origData]) => {
@@ -127,7 +142,7 @@ export function FileEditDialog({
       })
       .catch(() => setError("Failed to load file"))
       .finally(() => setLoading(false));
-  }, [open, filePath, workingDirectory, file.path, file.status]);
+  }, [open, filePath, baseDir, file.path, file.status]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -216,30 +231,60 @@ export function FileEditDialog({
         className="bg-background m-auto flex h-[90vh] w-[95vw] max-w-7xl overflow-hidden rounded-lg shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Left sidebar - file list */}
+        {/* Left sidebar - file list grouped by repo */}
         <div className="flex w-[280px] flex-shrink-0 flex-col border-r">
           <div className="text-muted-foreground border-b px-3 py-2 text-xs font-medium">
             CHANGED FILES
           </div>
           <div className="flex-1 overflow-y-auto">
-            {allFiles.map((f) => (
-              <button
-                key={f.path}
-                onClick={() => onFileSelect(f)}
-                className={cn(
-                  "hover:bg-accent/50 flex w-full items-center gap-2 px-3 py-2 text-left text-sm",
-                  f.path === file.path && "bg-accent"
-                )}
-              >
-                {getStatusIcon(f.status)}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate">{f.path.split("/").pop()}</div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {f.status} {f.staged && "• staged"}
-                  </div>
+            {(() => {
+              // Group files by repo
+              const grouped = new Map<string, typeof allFiles>();
+              for (const f of allFiles) {
+                const repoKey = "repoName" in f && f.repoName ? f.repoName : "";
+                const existing = grouped.get(repoKey) || [];
+                existing.push(f);
+                grouped.set(repoKey, existing);
+              }
+
+              return Array.from(grouped.entries()).map(([repoKey, files]) => (
+                <div key={repoKey || "default"}>
+                  {repoKey && (
+                    <div className="bg-muted/50 text-muted-foreground px-3 py-1.5 text-xs font-medium">
+                      {repoKey}
+                    </div>
+                  )}
+                  {files.map((f) => {
+                    const isSelected =
+                      "repoPath" in f && "repoPath" in file
+                        ? f.path === file.path && f.repoPath === file.repoPath
+                        : f.path === file.path;
+                    return (
+                      <button
+                        key={`${"repoPath" in f ? f.repoPath : ""}-${f.path}`}
+                        onClick={() => onFileSelect(f)}
+                        className={cn(
+                          "hover:bg-accent/50 flex w-full items-center gap-2 px-3 py-2 text-left text-sm",
+                          isSelected && "bg-accent"
+                        )}
+                      >
+                        {getStatusIcon(f.status)}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate">
+                            {f.path.split("/").pop()}
+                          </div>
+                          <div className="text-muted-foreground truncate text-xs">
+                            {f.path.includes("/")
+                              ? f.path.slice(0, f.path.lastIndexOf("/"))
+                              : f.status}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              </button>
-            ))}
+              ));
+            })()}
           </div>
         </div>
 

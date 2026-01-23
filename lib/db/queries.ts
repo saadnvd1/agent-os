@@ -189,8 +189,8 @@ export const queries = {
   createProject: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO projects (id, name, working_directory, agent_type, default_model, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO projects (id, name, working_directory, agent_type, default_model, initial_prompt, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     ),
 
   getProject: (db: Database.Database) =>
@@ -205,7 +205,7 @@ export const queries = {
   updateProject: (db: Database.Database) =>
     getStmt(
       db,
-      `UPDATE projects SET name = ?, working_directory = ?, agent_type = ?, default_model = ?, updated_at = datetime('now') WHERE id = ?`
+      `UPDATE projects SET name = ?, working_directory = ?, agent_type = ?, default_model = ?, initial_prompt = ?, updated_at = datetime('now') WHERE id = ?`
     ),
 
   updateProjectExpanded: (db: Database.Database) =>
@@ -245,6 +245,35 @@ export const queries = {
 
   deleteProjectDevServers: (db: Database.Database) =>
     getStmt(db, `DELETE FROM project_dev_servers WHERE project_id = ?`),
+
+  // Project repositories
+  createProjectRepository: (db: Database.Database) =>
+    getStmt(
+      db,
+      `INSERT INTO project_repositories (id, project_id, name, path, is_primary, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ),
+
+  getProjectRepository: (db: Database.Database) =>
+    getStmt(db, `SELECT * FROM project_repositories WHERE id = ?`),
+
+  getProjectRepositories: (db: Database.Database) =>
+    getStmt(
+      db,
+      `SELECT * FROM project_repositories WHERE project_id = ? ORDER BY sort_order ASC`
+    ),
+
+  updateProjectRepository: (db: Database.Database) =>
+    getStmt(
+      db,
+      `UPDATE project_repositories SET name = ?, path = ?, is_primary = ?, sort_order = ? WHERE id = ?`
+    ),
+
+  deleteProjectRepository: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM project_repositories WHERE id = ?`),
+
+  deleteProjectRepositories: (db: Database.Database) =>
+    getStmt(db, `DELETE FROM project_repositories WHERE project_id = ?`),
 
   // Dev servers
   createDevServer: (db: Database.Database) =>

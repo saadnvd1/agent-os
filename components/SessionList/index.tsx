@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { ProjectSectionSkeleton } from "@/components/ui/skeleton";
 import { Plus, FolderPlus, Loader2, AlertCircle } from "lucide-react";
 import type { Session } from "@/lib/db";
-import type { ProjectWithDevServers } from "@/lib/projects";
+import type { ProjectWithRepositories } from "@/lib/projects";
 import { useViewport } from "@/hooks/useViewport";
 
 // Data hooks
@@ -74,7 +74,7 @@ export function SessionList({
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [editingProject, setEditingProject] =
-    useState<ProjectWithDevServers | null>(null);
+    useState<ProjectWithRepositories | null>(null);
   const [showKillAllConfirm, setShowKillAllConfirm] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<Session | null>(null);
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });

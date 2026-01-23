@@ -15,6 +15,7 @@ import {
   queries,
   type Project,
   type ProjectDevServer,
+  type ProjectRepository,
   type Session,
   type DevServerType,
 } from "./db";
@@ -27,6 +28,7 @@ export interface CreateProjectOptions {
   workingDirectory: string;
   agentType?: AgentType;
   defaultModel?: string;
+  initialPrompt?: string;
   devServers?: CreateDevServerOptions[];
 }
 
@@ -46,8 +48,18 @@ export interface DetectedDevServer {
   portEnvVar?: string;
 }
 
+export interface CreateRepositoryOptions {
+  name: string;
+  path: string;
+  isPrimary?: boolean;
+}
+
 export interface ProjectWithDevServers extends Project {
   devServers: ProjectDevServer[];
+}
+
+export interface ProjectWithRepositories extends ProjectWithDevServers {
+  repositories: ProjectRepository[];
 }
 
 // Generate project ID
@@ -60,12 +72,17 @@ function generateDevServerId(): string {
   return `pds_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
+// Generate repository config ID
+function generateRepositoryId(): string {
+  return `repo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
 /**
  * Create a new project
  */
 export function createProject(
   opts: CreateProjectOptions
-): ProjectWithDevServers {
+): ProjectWithRepositories {
   const id = generateProjectId();
 
   // Get next sort order
@@ -80,6 +97,7 @@ export function createProject(
       opts.workingDirectory,
       opts.agentType || "claude",
       opts.defaultModel || "sonnet",
+      opts.initialPrompt || null,
       maxOrder + 1
     );
 
@@ -120,6 +138,7 @@ export function createProject(
     expanded: Boolean(project.expanded),
     is_uncategorized: Boolean(project.is_uncategorized),
     devServers,
+    repositories: [],
   };
 }
 
@@ -141,16 +160,25 @@ export function getProject(id: string): Project | undefined {
  */
 export function getProjectWithDevServers(
   id: string
-): ProjectWithDevServers | undefined {
+): ProjectWithRepositories | undefined {
   const project = getProject(id);
   if (!project) return undefined;
 
   const devServers = queries
     .getProjectDevServers(db)
     .all(id) as ProjectDevServer[];
+  const rawRepos = queries.getProjectRepositories(db).all(id) as (Omit<
+    ProjectRepository,
+    "is_primary"
+  > & { is_primary: number })[];
+  const repositories = rawRepos.map((r) => ({
+    ...r,
+    is_primary: Boolean(r.is_primary),
+  }));
   return {
     ...project,
     devServers,
+    repositories,
   };
 }
 
@@ -169,14 +197,28 @@ export function getAllProjects(): Project[] {
 /**
  * Get all projects with their dev server configurations
  */
-export function getAllProjectsWithDevServers(): ProjectWithDevServers[] {
+export function getAllProjectsWithDevServers(): ProjectWithRepositories[] {
   const projects = getAllProjects();
-  return projects.map((p) => ({
-    ...p,
-    devServers: queries
+  return projects.map((p) => {
+    const devServers = queries
       .getProjectDevServers(db)
-      .all(p.id) as ProjectDevServer[],
-  }));
+      .all(p.id) as ProjectDevServer[];
+    const rawRepos = queries.getProjectRepositories(db).all(p.id) as (Omit<
+      ProjectRepository,
+      "is_primary"
+    > & {
+      is_primary: number;
+    })[];
+    const repositories = rawRepos.map((r) => ({
+      ...r,
+      is_primary: Boolean(r.is_primary),
+    }));
+    return {
+      ...p,
+      devServers,
+      repositories,
+    };
+  });
 }
 
 /**
@@ -185,7 +227,14 @@ export function getAllProjectsWithDevServers(): ProjectWithDevServers[] {
 export function updateProject(
   id: string,
   updates: Partial<
-    Pick<Project, "name" | "working_directory" | "agent_type" | "default_model">
+    Pick<
+      Project,
+      | "name"
+      | "working_directory"
+      | "agent_type"
+      | "default_model"
+      | "initial_prompt"
+    >
   >
 ): Project | undefined {
   const project = getProject(id);
@@ -198,6 +247,9 @@ export function updateProject(
       updates.working_directory ?? project.working_directory,
       updates.agent_type ?? project.agent_type,
       updates.default_model ?? project.default_model,
+      updates.initial_prompt !== undefined
+        ? updates.initial_prompt
+        : project.initial_prompt,
       id
     );
 
@@ -444,4 +496,123 @@ export function validateWorkingDirectory(dir: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ============= Repository Management =============
+
+/**
+ * Get repositories for a project
+ */
+export function getProjectRepositories(projectId: string): ProjectRepository[] {
+  const rawRepos = queries.getProjectRepositories(db).all(projectId) as (Omit<
+    ProjectRepository,
+    "is_primary"
+  > & {
+    is_primary: number;
+  })[];
+  return rawRepos.map((r) => ({
+    ...r,
+    is_primary: Boolean(r.is_primary),
+  }));
+}
+
+/**
+ * Add a repository to a project
+ */
+export function addProjectRepository(
+  projectId: string,
+  opts: CreateRepositoryOptions
+): ProjectRepository {
+  const id = generateRepositoryId();
+
+  // Get next sort order
+  const existing = getProjectRepositories(projectId);
+  const maxOrder = existing.reduce(
+    (max, repo) => Math.max(max, repo.sort_order),
+    -1
+  );
+
+  // If this is the first repository or marked as primary, ensure no other is primary
+  const isPrimary = opts.isPrimary || existing.length === 0;
+  if (isPrimary) {
+    // Clear primary flag from other repositories
+    for (const repo of existing) {
+      if (repo.is_primary) {
+        queries
+          .updateProjectRepository(db)
+          .run(repo.name, repo.path, 0, repo.sort_order, repo.id);
+      }
+    }
+  }
+
+  queries
+    .createProjectRepository(db)
+    .run(id, projectId, opts.name, opts.path, isPrimary ? 1 : 0, maxOrder + 1);
+
+  const raw = queries.getProjectRepository(db).get(id) as Omit<
+    ProjectRepository,
+    "is_primary"
+  > & { is_primary: number };
+  return {
+    ...raw,
+    is_primary: Boolean(raw.is_primary),
+  };
+}
+
+/**
+ * Update a repository
+ */
+export function updateProjectRepository(
+  id: string,
+  updates: Partial<CreateRepositoryOptions & { sortOrder?: number }>
+): ProjectRepository | undefined {
+  const raw = queries.getProjectRepository(db).get(id) as
+    | (Omit<ProjectRepository, "is_primary"> & { is_primary: number })
+    | undefined;
+  if (!raw) return undefined;
+
+  const existing = {
+    ...raw,
+    is_primary: Boolean(raw.is_primary),
+  };
+
+  // If setting as primary, clear other primaries
+  const newIsPrimary =
+    updates.isPrimary !== undefined ? updates.isPrimary : existing.is_primary;
+  if (newIsPrimary && !existing.is_primary) {
+    const allRepos = getProjectRepositories(existing.project_id);
+    for (const repo of allRepos) {
+      if (repo.is_primary && repo.id !== id) {
+        queries
+          .updateProjectRepository(db)
+          .run(repo.name, repo.path, 0, repo.sort_order, repo.id);
+      }
+    }
+  }
+
+  queries
+    .updateProjectRepository(db)
+    .run(
+      updates.name ?? existing.name,
+      updates.path ?? existing.path,
+      newIsPrimary ? 1 : 0,
+      updates.sortOrder ?? existing.sort_order,
+      id
+    );
+
+  const updatedRaw = queries.getProjectRepository(db).get(id) as Omit<
+    ProjectRepository,
+    "is_primary"
+  > & { is_primary: number };
+  return {
+    ...updatedRaw,
+    is_primary: Boolean(updatedRaw.is_primary),
+  };
+}
+
+/**
+ * Delete a repository
+ */
+export function deleteProjectRepository(id: string): void {
+  queries.deleteProjectRepository(db).run(id);
 }

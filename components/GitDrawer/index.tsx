@@ -34,59 +34,143 @@ import {
   useCreatePR,
   useStageFiles,
   useUnstageFiles,
+  useMultiRepoGitStatus,
   gitKeys,
 } from "@/data/git/queries";
 import type { GitFile } from "@/lib/git-status";
+import type { MultiRepoGitFile } from "@/lib/multi-repo-git";
+import type { ProjectRepository } from "@/lib/db";
 
 interface GitDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workingDirectory: string;
+  projectId?: string;
+  repositories?: ProjectRepository[];
 }
 
 export function GitDrawer({
   open,
   onOpenChange,
   workingDirectory,
+  projectId,
+  repositories = [],
 }: GitDrawerProps) {
   const queryClient = useQueryClient();
 
-  // React Query hooks - only poll when drawer is open
-  const {
-    data: status,
-    isPending: loading,
-    isError,
-    error,
-    refetch: refetchStatus,
-    isRefetching,
-  } = useGitStatus(workingDirectory, { enabled: open });
+  // Determine if we're in multi-repo mode
+  const isMultiRepo = repositories.length > 0;
 
-  const { data: prData } = usePRStatus(workingDirectory);
+  // Single-repo mode hooks - only poll when drawer is open
+  const singleRepoQuery = useGitStatus(workingDirectory, {
+    enabled: open && !isMultiRepo,
+  });
+
+  // Multi-repo mode hooks
+  const multiRepoQuery = useMultiRepoGitStatus(projectId, workingDirectory, {
+    enabled: open && isMultiRepo,
+  });
+
+  // Unified status based on mode
+  const loading = isMultiRepo
+    ? multiRepoQuery.isPending
+    : singleRepoQuery.isPending;
+  const isError = isMultiRepo
+    ? multiRepoQuery.isError
+    : singleRepoQuery.isError;
+  const error = isMultiRepo ? multiRepoQuery.error : singleRepoQuery.error;
+  const isRefetching = isMultiRepo
+    ? multiRepoQuery.isRefetching
+    : singleRepoQuery.isRefetching;
+
+  // Convert to unified status
+  const status = isMultiRepo
+    ? multiRepoQuery.data
+      ? {
+          branch:
+            multiRepoQuery.data.repositories.length === 1
+              ? multiRepoQuery.data.repositories[0]?.branch || ""
+              : `${multiRepoQuery.data.repositories.length} repos`,
+          ahead: multiRepoQuery.data.repositories.reduce(
+            (sum, r) => sum + r.ahead,
+            0
+          ),
+          behind: multiRepoQuery.data.repositories.reduce(
+            (sum, r) => sum + r.behind,
+            0
+          ),
+          staged: multiRepoQuery.data.staged,
+          unstaged: multiRepoQuery.data.unstaged,
+          untracked: multiRepoQuery.data.untracked,
+        }
+      : null
+    : singleRepoQuery.data || null;
+
+  const refetchStatus = isMultiRepo
+    ? multiRepoQuery.refetch
+    : singleRepoQuery.refetch;
+
+  // For PR status, use the primary repo or first repo in multi-repo mode
+  const primaryRepoPath = isMultiRepo
+    ? repositories.find((r) => r.is_primary)?.path ||
+      repositories[0]?.path ||
+      workingDirectory
+    : workingDirectory;
+
+  const { data: prData } = usePRStatus(primaryRepoPath);
   const existingPR = prData?.existingPR ?? null;
 
-  const createPRMutation = useCreatePR(workingDirectory);
-  const stageMutation = useStageFiles(workingDirectory);
-  const unstageMutation = useUnstageFiles(workingDirectory);
+  const createPRMutation = useCreatePR(primaryRepoPath);
+  const stageMutation = useStageFiles(primaryRepoPath);
+  const unstageMutation = useUnstageFiles(primaryRepoPath);
 
   // Local UI state
-  const [selectedFile, setSelectedFile] = useState<GitFile | null>(null);
-  const [discardFile, setDiscardFile] = useState<GitFile | null>(null);
+  const [selectedFile, setSelectedFile] = useState<
+    GitFile | MultiRepoGitFile | null
+  >(null);
+  const [discardFile, setDiscardFile] = useState<
+    GitFile | MultiRepoGitFile | null
+  >(null);
   const [discarding, setDiscarding] = useState(false);
 
   // Animation
   const isAnimatingIn = useDrawerAnimation(open);
 
   // Clear selected file when drawer opens
-  const handleFileClick = (file: GitFile) => {
+  const handleFileClick = (file: GitFile | MultiRepoGitFile) => {
     setSelectedFile(file);
   };
 
-  const handleStage = (file: GitFile) => {
-    stageMutation.mutate([file.path]);
+  const handleStage = async (file: GitFile | MultiRepoGitFile) => {
+    // In multi-repo mode, use the file's repoPath
+    const repoPath =
+      "repoPath" in file && file.repoPath ? file.repoPath : primaryRepoPath;
+    try {
+      await fetch("/api/git/stage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: repoPath, files: [file.path] }),
+      });
+      queryClient.invalidateQueries({ queryKey: gitKeys.all });
+    } catch {
+      // Ignore errors
+    }
   };
 
-  const handleUnstage = (file: GitFile) => {
-    unstageMutation.mutate([file.path]);
+  const handleUnstage = async (file: GitFile | MultiRepoGitFile) => {
+    // In multi-repo mode, use the file's repoPath
+    const repoPath =
+      "repoPath" in file && file.repoPath ? file.repoPath : primaryRepoPath;
+    try {
+      await fetch("/api/git/unstage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: repoPath, files: [file.path] }),
+      });
+      queryClient.invalidateQueries({ queryKey: gitKeys.all });
+    } catch {
+      // Ignore errors
+    }
   };
 
   const handleStageAll = () => {
@@ -102,17 +186,20 @@ export function GitDrawer({
 
     setDiscarding(true);
     try {
+      // In multi-repo mode, use the file's repoPath
+      const repoPath =
+        "repoPath" in discardFile && discardFile.repoPath
+          ? discardFile.repoPath
+          : primaryRepoPath;
       await fetch("/api/git/discard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          path: workingDirectory,
+          path: repoPath,
           file: discardFile.path,
         }),
       });
-      queryClient.invalidateQueries({
-        queryKey: gitKeys.status(workingDirectory),
-      });
+      queryClient.invalidateQueries({ queryKey: gitKeys.all });
       setDiscardFile(null);
     } catch {
       // Ignore errors
@@ -256,6 +343,7 @@ export function GitDrawer({
                 onUnstage={handleUnstage}
                 onUnstageAll={handleUnstageAll}
                 isStaged={true}
+                groupByRepo={isMultiRepo}
               />
 
               {/* Unstaged files */}
@@ -268,6 +356,7 @@ export function GitDrawer({
                 onStageAll={handleStageAll}
                 onDiscard={setDiscardFile}
                 isStaged={false}
+                groupByRepo={isMultiRepo}
               />
             </>
           )}
@@ -276,17 +365,12 @@ export function GitDrawer({
         {/* Commit form at bottom */}
         {status && (
           <CommitForm
-            workingDirectory={workingDirectory}
+            workingDirectory={primaryRepoPath}
             stagedCount={stagedFiles.length}
             isOnMainBranch={isOnMainBranch}
             branch={status.branch}
             onCommit={() => {
-              queryClient.invalidateQueries({
-                queryKey: gitKeys.status(workingDirectory),
-              });
-              queryClient.invalidateQueries({
-                queryKey: gitKeys.pr(workingDirectory),
-              });
+              queryClient.invalidateQueries({ queryKey: gitKeys.all });
             }}
           />
         )}

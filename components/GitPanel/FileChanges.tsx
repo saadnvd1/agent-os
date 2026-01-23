@@ -20,19 +20,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { GitFile } from "@/lib/git-status";
+import type { MultiRepoGitFile } from "@/lib/multi-repo-git";
+
+type AnyGitFile = GitFile | MultiRepoGitFile;
 
 interface FileChangesProps {
-  files: GitFile[];
+  files: AnyGitFile[];
   title: string;
   emptyMessage: string;
   selectedPath?: string;
-  onFileClick: (file: GitFile) => void;
-  onStage?: (file: GitFile) => void;
-  onUnstage?: (file: GitFile) => void;
+  onFileClick: (file: AnyGitFile) => void;
+  onStage?: (file: AnyGitFile) => void;
+  onUnstage?: (file: AnyGitFile) => void;
   onStageAll?: () => void;
   onUnstageAll?: () => void;
-  onDiscard?: (file: GitFile) => void;
+  onDiscard?: (file: AnyGitFile) => void;
   isStaged?: boolean;
+  groupByRepo?: boolean;
 }
 
 const SWIPE_THRESHOLD = 80;
@@ -49,6 +53,7 @@ export function FileChanges({
   onUnstageAll,
   onDiscard,
   isStaged = false,
+  groupByRepo = false,
 }: FileChangesProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -57,6 +62,20 @@ export function FileChanges({
   }
 
   const showAllButton = files.length > 1 && (onStageAll || onUnstageAll);
+
+  // Group files by repo if enabled
+  const groupedFiles = groupByRepo
+    ? (() => {
+        const grouped = new Map<string, AnyGitFile[]>();
+        for (const f of files) {
+          const repoKey = "repoName" in f && f.repoName ? f.repoName : "";
+          const existing = grouped.get(repoKey) || [];
+          existing.push(f);
+          grouped.set(repoKey, existing);
+        }
+        return Array.from(grouped.entries());
+      })()
+    : [["", files] as [string, AnyGitFile[]]];
 
   return (
     <div className="mb-4">
@@ -96,19 +115,34 @@ export function FileChanges({
 
       {expanded && (
         <div className="space-y-0.5">
-          {files.map((file) => (
-            <FileItem
-              key={file.path}
-              file={file}
-              isSelected={file.path === selectedPath}
-              onClick={() => onFileClick(file)}
-              onStage={onStage ? () => onStage(file) : undefined}
-              onUnstage={onUnstage ? () => onUnstage(file) : undefined}
-              onDiscard={onDiscard ? () => onDiscard(file) : undefined}
-              onSwipeLeft={isStaged ? () => onUnstage?.(file) : undefined}
-              onSwipeRight={!isStaged ? () => onStage?.(file) : undefined}
-              isStaged={isStaged}
-            />
+          {groupedFiles.map(([repoName, repoFiles]) => (
+            <div key={repoName || "default"}>
+              {repoName && (
+                <div className="bg-muted/30 text-muted-foreground mx-2 mt-2 mb-1 rounded px-2 py-1 text-xs font-medium">
+                  {repoName}
+                </div>
+              )}
+              {repoFiles.map((file) => {
+                const fileKey =
+                  "repoPath" in file
+                    ? `${file.repoPath}-${file.path}`
+                    : file.path;
+                return (
+                  <FileItem
+                    key={fileKey}
+                    file={file}
+                    isSelected={file.path === selectedPath}
+                    onClick={() => onFileClick(file)}
+                    onStage={onStage ? () => onStage(file) : undefined}
+                    onUnstage={onUnstage ? () => onUnstage(file) : undefined}
+                    onDiscard={onDiscard ? () => onDiscard(file) : undefined}
+                    onSwipeLeft={isStaged ? () => onUnstage?.(file) : undefined}
+                    onSwipeRight={!isStaged ? () => onStage?.(file) : undefined}
+                    isStaged={isStaged}
+                  />
+                );
+              })}
+            </div>
           ))}
         </div>
       )}
@@ -117,7 +151,7 @@ export function FileChanges({
 }
 
 interface FileItemProps {
-  file: GitFile;
+  file: AnyGitFile;
   isSelected?: boolean;
   onClick: () => void;
   onStage?: () => void;

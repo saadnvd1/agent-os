@@ -5,6 +5,8 @@ import { gitKeys } from "./keys";
 export { gitKeys };
 import type { CommitSummary, CommitDetail } from "@/lib/git-history";
 import type { GitStatus } from "@/lib/git-status";
+import type { MultiRepoGitStatus } from "@/lib/multi-repo-git";
+import type { ProjectRepository } from "@/lib/db";
 
 export interface PRInfo {
   number: number;
@@ -270,5 +272,82 @@ export function useCommitFileDiff(
     queryFn: () => fetchCommitFileDiff(workingDir, hash!, file!),
     staleTime: 60000, // Diffs don't change
     enabled: !!workingDir && !!hash && !!file,
+  });
+}
+
+// --- Multi-repo Git Status ---
+
+async function fetchMultiRepoGitStatus(
+  projectId?: string,
+  fallbackPath?: string
+): Promise<MultiRepoGitStatus> {
+  const params = new URLSearchParams();
+  if (projectId) params.set("projectId", projectId);
+  if (fallbackPath) params.set("fallbackPath", fallbackPath);
+
+  const res = await fetch(`/api/git/multi-status?${params}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+export function useMultiRepoGitStatus(
+  projectId?: string,
+  fallbackPath?: string,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: gitKeys.multiStatus(projectId || "", fallbackPath),
+    queryFn: () => fetchMultiRepoGitStatus(projectId, fallbackPath),
+    staleTime: 10000, // Consider fresh for 10s
+    refetchInterval: 15000, // Poll every 15s
+    enabled: (!!projectId || !!fallbackPath) && (options?.enabled ?? true),
+  });
+}
+
+// Multi-repo stage/unstage mutations
+export function useMultiRepoStageFiles(repoPath: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (files?: string[]) => {
+      const res = await fetch("/api/git/stage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: repoPath, files }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate all multi-status queries since we don't know which project
+      queryClient.invalidateQueries({
+        queryKey: gitKeys.all,
+      });
+    },
+  });
+}
+
+export function useMultiRepoUnstageFiles(repoPath: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (files?: string[]) => {
+      const res = await fetch("/api/git/unstage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: repoPath, files }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate all multi-status queries since we don't know which project
+      queryClient.invalidateQueries({
+        queryKey: gitKeys.all,
+      });
+    },
   });
 }

@@ -121,6 +121,19 @@ export const Pane = memo(function Pane({
 
   const isConductor = workerCount > 0;
 
+  // Get current project and its repositories
+  const currentProject = useMemo(() => {
+    if (!session?.project_id) return null;
+    return projects.find((p) => p.id === session.project_id) || null;
+  }, [session?.project_id, projects]);
+
+  // Type assertion for repositories (projects passed here should have repositories)
+  const projectRepositories = useMemo(() => {
+    if (!currentProject) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (currentProject as any).repositories || [];
+  }, [currentProject]);
+
   // Watch for file open requests
   const { request: fileOpenRequest } = useSnapshot(fileOpenStore);
 
@@ -359,7 +372,11 @@ export const Pane = memo(function Pane({
           {/* Git - mobile only */}
           {session?.working_directory && (
             <div className={viewMode === "git" ? "h-full" : "hidden"}>
-              <GitPanel workingDirectory={session.working_directory} />
+              <GitPanel
+                workingDirectory={session.working_directory}
+                projectId={currentProject?.id}
+                repositories={projectRepositories}
+              />
             </div>
           )}
 
@@ -500,6 +517,8 @@ export const Pane = memo(function Pane({
                   open={true}
                   onOpenChange={setGitDrawerOpen}
                   workingDirectory={session.working_directory}
+                  projectId={currentProject?.id}
+                  repositories={projectRepositories}
                 />
               </ResizablePanel>
             </>
