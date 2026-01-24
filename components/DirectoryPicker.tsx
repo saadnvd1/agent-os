@@ -18,6 +18,7 @@ import {
   ChevronUp,
   Loader2,
   FolderInput,
+  HardDrive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FileNode } from "@/lib/file-utils";
@@ -83,19 +84,33 @@ export function DirectoryPicker({
 
   // Navigate up to parent
   const goUp = () => {
-    if (
-      currentPath === "~" ||
-      currentPath === "/" ||
-      (homePath && currentPath === homePath)
-    ) {
+    // Can't go above root
+    if (currentPath === "/") {
       return;
     }
+
+    // From ~ or homePath, go to parent of home directory
+    if (currentPath === "~" || (homePath && currentPath === homePath)) {
+      if (homePath) {
+        const homeParent = homePath.split("/").slice(0, -1).join("/") || "/";
+        setCurrentPath(homeParent);
+        setExpanded(new Set());
+      }
+      return;
+    }
+
     const parts = currentPath.split("/").filter(Boolean);
     parts.pop();
     const newPath = currentPath.startsWith("~")
       ? "~/" + parts.slice(1).join("/") || "~"
       : "/" + parts.join("/") || "/";
     setCurrentPath(newPath);
+    setExpanded(new Set());
+  };
+
+  // Go to root
+  const goRoot = () => {
+    setCurrentPath("/");
     setExpanded(new Set());
   };
 
@@ -160,6 +175,9 @@ export function DirectoryPicker({
 
         {/* Navigation bar */}
         <div className="flex items-center gap-2 border-b pb-2">
+          <Button variant="ghost" size="icon-sm" onClick={goRoot} title="Root">
+            <HardDrive className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon-sm" onClick={goHome} title="Home">
             <Home className="h-4 w-4" />
           </Button>
@@ -167,7 +185,7 @@ export function DirectoryPicker({
             variant="ghost"
             size="icon-sm"
             onClick={goUp}
-            disabled={currentPath === "~" || currentPath === "/"}
+            disabled={currentPath === "/"}
             title="Go up"
           >
             <ChevronUp className="h-4 w-4" />
