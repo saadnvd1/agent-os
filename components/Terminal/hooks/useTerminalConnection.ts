@@ -137,12 +137,13 @@ export function useTerminalConnection({
     let cleanupTouchScroll: (() => void) | null = null;
     let cleanupResizeHandlers: (() => void) | null = null;
     let cleanupWebSocket: (() => void) | null = null;
+    let cleanupTerminal: (() => void) | null = null;
 
     const connectTimeout = setTimeout(() => {
       if (cancelled || !terminalRef.current) return;
 
       // Initialize terminal
-      const { term, fitAddon, searchAddon } = createTerminal(
+      const { term, fitAddon, searchAddon, cleanup } = createTerminal(
         terminalRef.current,
         isMobile,
         theme
@@ -150,6 +151,7 @@ export function useTerminalConnection({
       xtermRef.current = term;
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
+      cleanupTerminal = cleanup;
 
       // Scroll tracking
       term.onScroll(() => {
@@ -222,6 +224,7 @@ export function useTerminalConnection({
       cleanupResizeHandlers?.();
       cleanupWebSocket?.();
       cleanupTouchScroll?.();
+      cleanupTerminal?.();
 
       // Reset refs
       reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;

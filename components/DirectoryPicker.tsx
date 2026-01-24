@@ -271,11 +271,19 @@ function DirectoryTree({
 
         return (
           <div key={node.path}>
-            <button
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => onSelect(node.path)}
               onDoubleClick={() => onDoubleClick(node.path)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(node.path);
+                }
+              }}
               className={cn(
-                "flex w-full items-center gap-2 px-2 py-2 text-left transition-colors",
+                "flex w-full cursor-pointer items-center gap-2 px-2 py-2 text-left transition-colors",
                 "min-h-[40px] text-sm md:min-h-[32px]",
                 isSelected ? "bg-primary/20 text-primary" : "hover:bg-accent"
               )}
@@ -305,7 +313,7 @@ function DirectoryTree({
 
               {/* Name */}
               <span className="flex-1 truncate font-medium">{node.name}</span>
-            </button>
+            </div>
 
             {/* Children */}
             {isExpanded && node.children && node.children.length > 0 && (

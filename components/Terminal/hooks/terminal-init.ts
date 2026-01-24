@@ -11,6 +11,7 @@ export interface TerminalInstance {
   term: XTerm;
   fitAddon: FitAddon;
   searchAddon: SearchAddon;
+  cleanup: () => void;
 }
 
 export function createTerminal(
@@ -50,9 +51,33 @@ export function createTerminal(
   term.loadAddon(new CanvasAddon());
   fitAddon.fit();
 
-  // Handle Cmd+A and Cmd+C via container event listener (more reliable than attachCustomKeyEventHandler)
+  // Helper to copy text to clipboard with fallback
+  const copyToClipboard = (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {
+        // Fallback if clipboard API fails
+        execCommandCopy(text);
+      });
+    } else {
+      // Fallback for non-secure contexts
+      execCommandCopy(text);
+    }
+  };
+
+  const execCommandCopy = (text: string) => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  };
+
+  // Handle Cmd+A and Cmd+C via document event listener (more reliable than attachCustomKeyEventHandler)
   const handleKeyDown = (event: KeyboardEvent) => {
-    // Only handle when terminal is focused
+    // Only handle when terminal is focused (xterm creates its textarea inside the container)
     if (!container.contains(document.activeElement)) return;
 
     const key = event.key.toLowerCase();
@@ -71,7 +96,7 @@ export function createTerminal(
       if (selection) {
         event.preventDefault();
         event.stopPropagation();
-        navigator.clipboard.writeText(selection);
+        copyToClipboard(selection);
       }
     }
   };
@@ -79,7 +104,11 @@ export function createTerminal(
   // Use capture phase to intercept before browser default
   document.addEventListener("keydown", handleKeyDown, true);
 
-  return { term, fitAddon, searchAddon };
+  const cleanup = () => {
+    document.removeEventListener("keydown", handleKeyDown, true);
+  };
+
+  return { term, fitAddon, searchAddon, cleanup };
 }
 
 export function updateTerminalForMobile(
