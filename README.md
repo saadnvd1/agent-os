@@ -105,6 +105,10 @@ Use [Tailscale](https://tailscale.com) for secure access from your phone:
 
 For configuration and advanced usage, see the [docs](https://www.runagentos.com/docs).
 
+## Related Projects
+
+- **[aTerm](https://github.com/saadnvd1/aTerm)** - A Tauri-based desktop terminal workspace for AI-assisted coding. While AgentOS is a mobile-first web UI, aTerm is a native desktop app with multi-pane layouts optimized for running AI coding agents (Claude Code, Aider, OpenCode) alongside shells, dev servers, and a built-in git panel. Choose AgentOS for mobile access and browser-based workflows, or aTerm for a native desktop terminal experience.
+
 ## License
 
 MIT License - Free and open source.
