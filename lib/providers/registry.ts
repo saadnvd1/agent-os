@@ -12,6 +12,7 @@ export const PROVIDER_IDS = [
   "aider",
   "cursor",
   "amp",
+  "pi",
   "shell",
 ] as const;
 
@@ -133,6 +134,17 @@ export const PROVIDERS: ProviderDefinition[] = [
     autoApproveFlag: "--dangerously-allow-all",
     supportsResume: false,
     supportsFork: false,
+    initialPromptFlag: "", // Positional argument
+  },
+  {
+    id: "pi",
+    name: "Pi",
+    description: "Extensible coding harness",
+    cli: "pi",
+    configDir: "~/.pi/agent",
+    supportsResume: false,
+    supportsFork: false,
+    modelFlag: "--model",
     initialPromptFlag: "", // Positional argument
   },
   {

@@ -72,6 +72,7 @@ npm run dev  # http://localhost:3011
 | Aider       | ❌     | ❌   | `--yes`                          |
 | Cursor CLI  | ❌     | ❌   | N/A                              |
 | Amp         | ❌     | ❌   | `--dangerously-allow-all`        |
+| Pi          | ❌     | ❌   | N/A                              |
 
 ## Features
 

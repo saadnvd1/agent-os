@@ -97,6 +97,7 @@ export const AGENT_OPTIONS: {
   { value: "aider", label: "Aider", description: "AI pair programming" },
   { value: "cursor", label: "Cursor CLI", description: "Cursor's AI agent" },
   { value: "amp", label: "Amp", description: "Multi-model coding agent" },
+  { value: "pi", label: "Pi", description: "Extensible coding harness" },
 ];
 
 // Props for main dialog

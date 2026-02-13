@@ -36,6 +36,7 @@ export const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
   { value: "aider", label: "Aider" },
   { value: "cursor", label: "Cursor CLI" },
   { value: "amp", label: "Amp" },
+  { value: "pi", label: "Pi" },
 ];
 
 export const MODEL_OPTIONS = [
