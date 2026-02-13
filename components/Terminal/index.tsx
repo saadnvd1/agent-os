@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useTheme } from "next-themes";
 import "@xterm/xterm/css/xterm.css";
-import { ImagePlus, WifiOff, Upload, Loader2 } from "lucide-react";
+import { Paperclip, WifiOff, Upload, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchBar } from "./SearchBar";
 import { ScrollToBottomButton } from "./ScrollToBottomButton";
@@ -21,7 +21,7 @@ import type { TerminalScrollState } from "./hooks";
 import { useViewport } from "@/hooks/useViewport";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { uploadFileToTemp } from "@/lib/file-upload";
-import { ImagePicker } from "@/components/ImagePicker";
+import { FilePicker } from "@/components/FilePicker";
 
 export type { TerminalScrollState };
 
@@ -57,7 +57,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const { isMobile } = useViewport();
     const { theme: currentTheme, resolvedTheme } = useTheme();
-    const [showImagePicker, setShowImagePicker] = useState(false);
+    const [showFilePicker, setShowFilePicker] = useState(false);
     const [selectMode, setSelectMode] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
 
@@ -108,7 +108,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     const handleImageSelect = useCallback(
       (filePath: string) => {
         sendInput(filePath);
-        setShowImagePicker(false);
+        setShowFilePicker(false);
         focus();
       },
       [sendInput, focus]
@@ -137,7 +137,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     const { isDragging, dragHandlers } = useFileDrop(
       containerRef,
       handleFileDrop,
-      { disabled: isUploading || showImagePicker }
+      { disabled: isUploading || showFilePicker }
     );
 
     // Expose imperative methods
@@ -288,23 +288,23 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           </div>
         )}
 
-        {/* Image picker button - desktop only, for agent terminals */}
+        {/* File picker button - desktop only, for agent terminals */}
         {!isMobile && showImageButton && (
           <button
-            onClick={() => setShowImagePicker(true)}
+            onClick={() => setShowFilePicker(true)}
             className="bg-secondary hover:bg-accent absolute top-3 right-3 z-40 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all"
-            title="Select image"
+            title="Attach file"
           >
-            <ImagePlus className="h-4 w-4" />
+            <Paperclip className="h-4 w-4" />
           </button>
         )}
 
         {/* Image picker modal */}
-        {showImagePicker && (
-          <ImagePicker
+        {showFilePicker && (
+          <FilePicker
             initialPath="~"
             onSelect={handleImageSelect}
-            onClose={() => setShowImagePicker(false)}
+            onClose={() => setShowFilePicker(false)}
           />
         )}
 
@@ -315,7 +315,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         {isMobile && (
           <TerminalToolbar
             onKeyPress={sendInput}
-            onImagePicker={() => setShowImagePicker(true)}
+            onFilePicker={() => setShowFilePicker(true)}
             onCopy={copySelection}
             selectMode={selectMode}
             onSelectModeChange={setSelectMode}

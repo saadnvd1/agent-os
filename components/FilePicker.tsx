@@ -4,19 +4,24 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Folder,
-  Image as ImageIcon,
+  FileIcon,
+  FileImage,
   ChevronLeft,
   Loader2,
   Home,
   ChevronRight,
   Upload,
   Clipboard,
+  Search,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { FileNode } from "@/lib/file-utils";
 import { uploadFileToTemp } from "@/lib/file-upload";
 import { useFileDrop } from "@/hooks/useFileDrop";
+import { useViewport } from "@/hooks/useViewport";
+import { useDirectoryBrowser } from "@/hooks/useDirectoryBrowser";
+import type { FileNode } from "@/lib/file-utils";
 
 const IMAGE_EXTENSIONS = [
   "png",
@@ -29,29 +34,44 @@ const IMAGE_EXTENSIONS = [
   "ico",
 ];
 
-interface ImagePickerProps {
+interface FilePickerProps {
   initialPath?: string;
   onSelect: (path: string) => void;
   onClose: () => void;
 }
 
-export function ImagePicker({
+function isImageFile(node: FileNode) {
+  if (node.type !== "file") return false;
+  const ext = node.extension?.toLowerCase() || "";
+  return IMAGE_EXTENSIONS.includes(ext);
+}
+
+export function FilePicker({
   initialPath,
   onSelect,
   onClose,
-}: ImagePickerProps) {
-  const [currentPath, setCurrentPath] = useState(initialPath || "~");
-  const [files, setFiles] = useState<FileNode[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+}: FilePickerProps) {
+  const {
+    currentPath,
+    filteredFiles,
+    loading,
+    error,
+    search,
+    setSearch,
+    pathSegments,
+    navigateTo,
+    navigateUp,
+    navigateHome,
+  } = useDirectoryBrowser({ initialPath });
+
   const [uploading, setUploading] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isMobile } = useViewport();
 
-  // Handle dropped/pasted image file
-  const handleImageFile = useCallback(
+  // Handle dropped/pasted/selected file
+  const handleFile = useCallback(
     async (file: File) => {
-      if (!file.type.startsWith("image/")) return;
-
       setUploading(true);
       try {
         const path = await uploadFileToTemp(file);
@@ -59,7 +79,7 @@ export function ImagePicker({
           onSelect(path);
         }
       } catch (err) {
-        console.error("Failed to upload image:", err);
+        console.error("Failed to upload file:", err);
       } finally {
         setUploading(false);
       }
@@ -67,16 +87,10 @@ export function ImagePicker({
     [onSelect]
   );
 
-  // Drag and drop using shared hook
-  const { isDragging, dragHandlers } = useFileDrop(
-    dropZoneRef,
-    (file) => {
-      if (file.type.startsWith("image/")) {
-        handleImageFile(file);
-      }
-    },
-    { disabled: uploading }
-  );
+  // Drag and drop (desktop only)
+  const { isDragging, dragHandlers } = useFileDrop(dropZoneRef, handleFile, {
+    disabled: uploading || isMobile,
+  });
 
   // Clipboard paste handler
   useEffect(() => {
@@ -85,11 +99,11 @@ export function ImagePicker({
       if (!items) return;
 
       for (const item of items) {
-        if (item.type.startsWith("image/")) {
+        if (item.kind === "file") {
           const file = item.getAsFile();
           if (file) {
             e.preventDefault();
-            handleImageFile(file);
+            handleFile(file);
             break;
           }
         }
@@ -98,76 +112,15 @@ export function ImagePicker({
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [handleImageFile]);
-
-  // Load directory contents
-  const loadDirectory = useCallback(async (path: string) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-        setFiles([]);
-      } else {
-        // Sort: directories first, then files
-        const sorted = (data.files || []).sort((a: FileNode, b: FileNode) => {
-          if (a.type === "directory" && b.type !== "directory") return -1;
-          if (a.type !== "directory" && b.type === "directory") return 1;
-          return a.name.localeCompare(b.name);
-        });
-        setFiles(sorted);
-        setCurrentPath(data.path || path);
-      }
-    } catch {
-      setError("Failed to load directory");
-      setFiles([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadDirectory(currentPath);
-  }, []);
-
-  const navigateTo = (path: string) => {
-    loadDirectory(path);
-  };
-
-  const navigateUp = () => {
-    const parts = currentPath.split("/").filter(Boolean);
-    if (parts.length > 1) {
-      parts.pop();
-      navigateTo("/" + parts.join("/"));
-    } else {
-      navigateTo("/");
-    }
-  };
-
-  const navigateHome = () => {
-    navigateTo("~");
-  };
+  }, [handleFile]);
 
   const handleItemClick = (node: FileNode) => {
     if (node.type === "directory") {
       navigateTo(node.path);
-    } else if (isImage(node)) {
+    } else if (node.type === "file") {
       onSelect(node.path);
     }
   };
-
-  const isImage = (node: FileNode) => {
-    if (node.type !== "file") return false;
-    const ext = node.extension?.toLowerCase() || "";
-    return IMAGE_EXTENSIONS.includes(ext);
-  };
-
-  // Get path segments for breadcrumb
-  const pathSegments = currentPath.split("/").filter(Boolean);
 
   return (
     <div className="bg-background fixed inset-0 z-50 flex flex-col">
@@ -182,7 +135,7 @@ export function ImagePicker({
           <X className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-medium">Select Image</h3>
+          <h3 className="text-sm font-medium">Select File</h3>
           <p className="text-muted-foreground truncate text-xs">
             {currentPath}
           </p>
@@ -228,40 +181,85 @@ export function ImagePicker({
         </div>
       </div>
 
-      {/* Drop Zone */}
-      <div
-        ref={dropZoneRef}
-        {...dragHandlers}
-        className={cn(
-          "border-border mx-3 mt-3 flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors",
-          isDragging && "border-primary bg-primary/10",
-          uploading && "opacity-50"
-        )}
-      >
-        {uploading ? (
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Uploading...</span>
-          </div>
-        ) : isDragging ? (
-          <div className="flex items-center gap-2">
-            <Upload className="text-primary h-5 w-5" />
-            <span className="text-primary text-sm font-medium">
-              Drop image here
-            </span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-1 text-center">
-            <div className="text-muted-foreground flex items-center gap-2">
+      {/* Upload zone */}
+      {isMobile ? (
+        <div className="mx-3 mt-3 flex items-center justify-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="gap-2"
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
               <Upload className="h-4 w-4" />
-              <span className="text-sm">Drop screenshot here</span>
+            )}
+            {uploading ? "Uploading..." : "Upload file"}
+          </Button>
+          <span className="text-muted-foreground text-xs">
+            or select a file below
+          </span>
+        </div>
+      ) : (
+        <div
+          ref={dropZoneRef}
+          {...dragHandlers}
+          className={cn(
+            "border-border mx-3 mt-3 flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors",
+            isDragging && "border-primary bg-primary/10",
+            uploading && "opacity-50"
+          )}
+        >
+          {uploading ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-sm">Uploading...</span>
             </div>
-            <div className="text-muted-foreground flex items-center gap-1 text-xs">
-              <Clipboard className="h-3 w-3" />
-              <span>or paste from clipboard (⌘V)</span>
+          ) : isDragging ? (
+            <div className="flex items-center gap-2">
+              <Upload className="text-primary h-5 w-5" />
+              <span className="text-primary text-sm font-medium">
+                Drop file here
+              </span>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex flex-col items-center gap-1 text-center">
+              <div className="text-muted-foreground flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                <span className="text-sm">Drop file here</span>
+              </div>
+              <div className="text-muted-foreground flex items-center gap-1 text-xs">
+                <Clipboard className="h-3 w-3" />
+                <span>or paste from clipboard</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="px-3 py-2">
+        <div className="relative">
+          <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
+          <Input
+            type="text"
+            placeholder="Search files..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-9 pl-9"
+          />
+        </div>
       </div>
 
       {/* Content */}
@@ -282,27 +280,26 @@ export function ImagePicker({
               Go back
             </Button>
           </div>
-        ) : files.length === 0 ? (
+        ) : filteredFiles.length === 0 ? (
           <div className="text-muted-foreground flex h-32 items-center justify-center">
-            <p className="text-sm">Empty directory</p>
+            <p className="text-sm">
+              {search ? "No matching files" : "Empty directory"}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {files.map((node) => {
-              const isImg = isImage(node);
+            {filteredFiles.map((node) => {
+              const isImg = isImageFile(node);
               const isDir = node.type === "directory";
-              const isClickable = isImg || isDir;
+              const isFile = node.type === "file";
 
               return (
                 <button
                   key={node.path}
-                  onClick={() => isClickable && handleItemClick(node)}
-                  disabled={!isClickable}
+                  onClick={() => handleItemClick(node)}
                   className={cn(
                     "flex flex-col items-center gap-2 rounded-lg border p-3 text-center transition-colors",
-                    isClickable
-                      ? "hover:bg-muted/50 hover:border-primary/50 cursor-pointer"
-                      : "cursor-not-allowed opacity-40",
+                    "hover:bg-muted/50 hover:border-primary/50 cursor-pointer",
                     isImg && "border-primary/30 bg-primary/5"
                   )}
                 >
@@ -310,7 +307,11 @@ export function ImagePicker({
                     <Folder className="text-primary/70 h-10 w-10" />
                   ) : isImg ? (
                     <div className="bg-muted flex h-10 w-10 items-center justify-center overflow-hidden rounded">
-                      <ImageIcon className="text-primary h-6 w-6" />
+                      <FileImage className="text-primary h-6 w-6" />
+                    </div>
+                  ) : isFile ? (
+                    <div className="bg-muted/50 flex h-10 w-10 items-center justify-center rounded">
+                      <FileIcon className="text-muted-foreground h-6 w-6" />
                     </div>
                   ) : (
                     <div className="bg-muted/50 flex h-10 w-10 items-center justify-center rounded">
@@ -330,7 +331,7 @@ export function ImagePicker({
       {/* Footer hint */}
       <div className="border-border border-t p-3 text-center">
         <p className="text-muted-foreground text-xs">
-          Click an image to select it, or navigate into folders
+          Select any file or navigate into folders
         </p>
       </div>
     </div>

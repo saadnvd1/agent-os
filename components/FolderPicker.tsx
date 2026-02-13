@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   Folder,
@@ -14,8 +14,9 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import type { FileNode } from "@/lib/file-utils";
+import { useDirectoryBrowser } from "@/hooks/useDirectoryBrowser";
+
+const DIRS_ONLY = (f: { type: string }) => f.type === "directory";
 
 interface FolderPickerProps {
   initialPath?: string;
@@ -28,89 +29,34 @@ export function FolderPicker({
   onSelect,
   onClose,
 }: FolderPickerProps) {
-  const [currentPath, setCurrentPath] = useState(initialPath || "~");
-  const [files, setFiles] = useState<FileNode[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    currentPath,
+    filteredFiles,
+    loading,
+    error,
+    search,
+    setSearch,
+    pathSegments,
+    navigateTo,
+    navigateUp,
+    navigateHome,
+  } = useDirectoryBrowser({ initialPath, filter: DIRS_ONLY });
+
+  // Git repo check for current directory
   const [isGitRepo, setIsGitRepo] = useState(false);
-  const [search, setSearch] = useState("");
-
-  // Load directory contents
-  const loadDirectory = useCallback(async (path: string) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const [filesRes, gitRes] = await Promise.all([
-        fetch(`/api/files?path=${encodeURIComponent(path)}`),
-        fetch("/api/git/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path }),
-        }),
-      ]);
-
-      const filesData = await filesRes.json();
-      const gitData = await gitRes.json();
-
-      if (filesData.error) {
-        setError(filesData.error);
-        setFiles([]);
-      } else {
-        // Filter to only directories, sorted alphabetically
-        const dirs = (filesData.files || [])
-          .filter((f: FileNode) => f.type === "directory")
-          .sort((a: FileNode, b: FileNode) => a.name.localeCompare(b.name));
-        setFiles(dirs);
-        setCurrentPath(filesData.path || path);
-      }
-
-      setIsGitRepo(gitData.isGitRepo || false);
-    } catch {
-      setError("Failed to load directory");
-      setFiles([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    loadDirectory(currentPath);
-  }, []);
+    fetch("/api/git/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: currentPath }),
+    })
+      .then((res) => res.json())
+      .then((data) => setIsGitRepo(data.isGitRepo || false))
+      .catch(() => setIsGitRepo(false));
+  }, [currentPath]);
 
-  const navigateTo = (path: string) => {
-    setSearch("");
-    loadDirectory(path);
-  };
-
-  const navigateUp = () => {
-    const parts = currentPath.split("/").filter(Boolean);
-    if (parts.length > 1) {
-      parts.pop();
-      navigateTo("/" + parts.join("/"));
-    } else {
-      navigateTo("/");
-    }
-  };
-
-  const navigateHome = () => {
-    navigateTo("~");
-  };
-
-  const handleSelectCurrent = () => {
-    onSelect(currentPath);
-  };
-
-  // Get path segments for breadcrumb
-  const pathSegments = currentPath.split("/").filter(Boolean);
-
-  // Get folder name from path
   const folderName = pathSegments[pathSegments.length - 1] || "root";
-
-  // Filter files by search
-  const filteredFiles = search
-    ? files.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()))
-    : files;
 
   return (
     <div className="bg-background fixed inset-0 z-[100] flex flex-col">
@@ -242,7 +188,10 @@ export function FolderPicker({
             )}
           </div>
         </div>
-        <Button onClick={handleSelectCurrent} className="shrink-0 gap-2">
+        <Button
+          onClick={() => onSelect(currentPath)}
+          className="shrink-0 gap-2"
+        >
           <Check className="h-4 w-4" />
           Select
         </Button>

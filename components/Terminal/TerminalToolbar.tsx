@@ -7,7 +7,7 @@ import {
   Send,
   Mic,
   MicOff,
-  ImagePlus,
+  Paperclip,
   FileText,
   Plus,
   Trash2,
@@ -33,7 +33,7 @@ const SPECIAL_KEYS = {
 
 interface TerminalToolbarProps {
   onKeyPress: (key: string) => void;
-  onImagePicker?: () => void;
+  onFilePicker?: () => void;
   onCopy?: () => boolean; // Returns true if selection was copied
   selectMode?: boolean;
   onSelectModeChange?: (enabled: boolean) => void;
@@ -305,7 +305,7 @@ function PasteModal({
 
 export function TerminalToolbar({
   onKeyPress,
-  onImagePicker,
+  onFilePicker,
   onCopy,
   selectMode = false,
   onSelectModeChange,
@@ -461,18 +461,18 @@ export function TerminalToolbar({
           </button>
         )}
 
-        {/* Image picker button */}
-        {onImagePicker && (
+        {/* File picker button */}
+        {onFilePicker && (
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={(e) => {
               e.stopPropagation();
-              onImagePicker();
+              onFilePicker();
             }}
             className="bg-secondary text-secondary-foreground active:bg-primary active:text-primary-foreground flex-shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium"
           >
-            <ImagePlus className="h-4 w-4" />
+            <Paperclip className="h-4 w-4" />
           </button>
         )}
 
