@@ -96,6 +96,7 @@ export const AGENT_OPTIONS: {
   { value: "gemini", label: "Gemini CLI", description: "Google's CLI" },
   { value: "aider", label: "Aider", description: "AI pair programming" },
   { value: "cursor", label: "Cursor CLI", description: "Cursor's AI agent" },
+  { value: "amp", label: "Amp", description: "Multi-model coding agent" },
 ];
 
 // Props for main dialog

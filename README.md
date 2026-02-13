@@ -71,6 +71,7 @@ npm run dev  # http://localhost:3011
 | Gemini CLI  | ❌     | ❌   | `--yolomode`                     |
 | Aider       | ❌     | ❌   | `--yes`                          |
 | Cursor CLI  | ❌     | ❌   | N/A                              |
+| Amp         | ❌     | ❌   | `--dangerously-allow-all`        |
 
 ## Features
 

@@ -46,6 +46,7 @@ const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
   { value: "gemini", label: "Gemini CLI" },
   { value: "aider", label: "Aider" },
   { value: "cursor", label: "Cursor CLI" },
+  { value: "amp", label: "Amp" },
 ];
 
 const MODEL_OPTIONS = [

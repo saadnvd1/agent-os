@@ -408,6 +408,56 @@ export const cursorProvider: AgentProvider = {
 };
 
 /**
+ * Amp Provider
+ * Multi-model coding agent CLI
+ */
+export const ampProvider: AgentProvider = {
+  id: "amp",
+  name: "Amp",
+  description: "Multi-model coding agent",
+  command: "amp",
+  configDir: "~/.config/amp",
+
+  supportsResume: false,
+  supportsFork: false,
+
+  buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition("amp");
+    const flags: string[] = [];
+
+    // Auto-approve flag from registry
+    if (
+      (options.skipPermissions || options.autoApprove) &&
+      def.autoApproveFlag
+    ) {
+      flags.push(def.autoApproveFlag);
+    }
+
+    // Initial prompt (positional argument for Amp)
+    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
+      const prompt = options.initialPrompt.trim();
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      flags.push(`'${escapedPrompt}'`);
+    }
+
+    return flags;
+  },
+
+  waitingPatterns: [
+    /\[Y\/n\]/i,
+    /\[y\/N\]/i,
+    /approve/i,
+    /confirm/i,
+    /Press Enter/i,
+    /\(yes\/no\)/i,
+  ],
+
+  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
+
+  idlePatterns: [/^>\s*$/m, /amp.*>\s*$/im, /\$\s*$/m],
+};
+
+/**
  * Shell Provider
  * Plain terminal without any AI CLI
  */
@@ -438,6 +488,7 @@ export const providers: Record<AgentType, AgentProvider> = {
   gemini: geminiProvider,
   aider: aiderProvider,
   cursor: cursorProvider,
+  amp: ampProvider,
   shell: shellProvider,
 };
 

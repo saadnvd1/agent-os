@@ -11,6 +11,7 @@ export const PROVIDER_IDS = [
   "gemini",
   "aider",
   "cursor",
+  "amp",
   "shell",
 ] as const;
 
@@ -122,6 +123,17 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsResume: false,
     supportsFork: false,
     modelFlag: "--model",
+  },
+  {
+    id: "amp",
+    name: "Amp",
+    description: "Multi-model coding agent",
+    cli: "amp",
+    configDir: "~/.config/amp",
+    autoApproveFlag: "--dangerously-allow-all",
+    supportsResume: false,
+    supportsFork: false,
+    initialPromptFlag: "", // Positional argument
   },
   {
     id: "shell",
