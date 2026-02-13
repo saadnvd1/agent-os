@@ -75,6 +75,7 @@ npm run dev  # http://localhost:3011
 ## Features
 
 - **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
+- **Voice-to-text** - Dictate prompts to your coding sessions hands-free
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
 - **Code search** - Fast codebase search with syntax-highlighted results (Cmd+K)
 - **File picker** - Browse and attach files to sessions, with direct upload from mobile
