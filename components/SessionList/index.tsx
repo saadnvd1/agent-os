@@ -72,6 +72,7 @@ export function SessionList({
 
   // Local UI state
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [newProjectMode, setNewProjectMode] = useState<"new" | "clone">("new");
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [editingProject, setEditingProject] =
     useState<ProjectWithRepositories | null>(null);
@@ -150,8 +151,15 @@ export function SessionList({
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <SessionListHeader
-        onNewProject={() => setShowNewProjectDialog(true)}
+        onNewProject={() => {
+          setNewProjectMode("new");
+          setShowNewProjectDialog(true);
+        }}
         onOpenProject={() => setShowFolderPicker(true)}
+        onCloneFromGithub={() => {
+          setNewProjectMode("clone");
+          setShowNewProjectDialog(true);
+        }}
         onKillAll={() => setShowKillAllConfirm(true)}
       />
 
@@ -312,6 +320,7 @@ export function SessionList({
       {/* New Project Dialog */}
       <NewProjectDialog
         open={showNewProjectDialog}
+        mode={newProjectMode}
         onClose={() => setShowNewProjectDialog(false)}
         onCreated={() => setShowNewProjectDialog(false)}
       />

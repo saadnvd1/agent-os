@@ -24,6 +24,48 @@ export interface PRData {
   suggestedBody: string;
 }
 
+// --- Git Check ---
+
+async function fetchGitCheck(path: string): Promise<{ isGitRepo: boolean }> {
+  const res = await fetch("/api/git/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  return res.json();
+}
+
+export function useGitCheck(path: string) {
+  return useQuery({
+    queryKey: gitKeys.check(path),
+    queryFn: () => fetchGitCheck(path),
+    staleTime: 10000,
+    enabled: !!path && path !== "~",
+  });
+}
+
+// --- Git Clone ---
+
+async function cloneRepo(data: {
+  url: string;
+  directory: string;
+}): Promise<{ path: string; name: string }> {
+  const res = await fetch("/api/git/clone", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to clone repository");
+  }
+  return res.json();
+}
+
+export function useCloneRepo() {
+  return useMutation({ mutationFn: cloneRepo });
+}
+
 // --- Git Status ---
 
 async function fetchGitStatus(workingDir: string): Promise<GitStatus> {

@@ -1,5 +1,6 @@
 export const gitKeys = {
   all: ["git"] as const,
+  check: (path: string) => [...gitKeys.all, "check", path] as const,
   status: (workingDir: string) =>
     [...gitKeys.all, "status", workingDir] as const,
   multiStatus: (projectId: string, fallbackPath?: string) =>

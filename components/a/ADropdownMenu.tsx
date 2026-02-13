@@ -30,6 +30,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -85,11 +91,13 @@ export type DropdownItemConfig =
 type FalsyItem = false | null | undefined | "" | 0;
 
 export interface ADropdownMenuProps {
-  trigger: ReactNode;
+  trigger?: ReactNode;
+  icon?: LucideIcon;
   items: (DropdownItemConfig | FalsyItem)[];
   align?: "start" | "center" | "end";
   minWidth?: string;
   className?: string;
+  tooltip?: string;
 }
 
 function filterVisibleItems(
@@ -184,16 +192,37 @@ function DropdownItemRenderer({ item }: { item: DropdownItemConfig }) {
 
 export function ADropdownMenu({
   trigger,
+  icon: Icon,
   items,
   align = "end",
   minWidth = "180px",
   className,
+  tooltip,
 }: ADropdownMenuProps) {
   const visibleItems = filterVisibleItems(items);
 
+  const resolvedTrigger =
+    trigger ??
+    (Icon ? (
+      <Button variant="ghost" size="icon-sm">
+        <Icon className="h-4 w-4" />
+      </Button>
+    ) : null);
+
+  const triggerElement = tooltip ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <DropdownMenuTrigger asChild>{resolvedTrigger}</DropdownMenuTrigger>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  ) : (
+    <DropdownMenuTrigger asChild>{resolvedTrigger}</DropdownMenuTrigger>
+  );
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      {triggerElement}
       <DropdownMenuContent
         align={align}
         className={className}

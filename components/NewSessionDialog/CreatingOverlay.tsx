@@ -1,25 +1,41 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import { Loader2, GitBranch, Package, FileCode, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface CreatingOverlayProps {
-  isWorktree: boolean;
-  step: "creating" | "worktree" | "setup" | "done";
+export interface StepConfig {
+  id: string;
+  label: string;
+  icon: LucideIcon;
 }
 
-const worktreeSteps = [
+interface CreatingOverlayProps {
+  isWorktree: boolean;
+  step: string;
+  /** Override default steps and hint text */
+  steps?: StepConfig[];
+  hint?: string;
+}
+
+const worktreeSteps: StepConfig[] = [
   { id: "worktree", label: "Creating worktree", icon: GitBranch },
   { id: "setup", label: "Setting up environment", icon: Package },
   { id: "done", label: "Finalizing", icon: FileCode },
 ];
 
-export function CreatingOverlay({ isWorktree, step }: CreatingOverlayProps) {
-  // Use a portal-style overlay that covers the dialog content
+export function CreatingOverlay({
+  isWorktree,
+  step,
+  steps,
+  hint,
+}: CreatingOverlayProps) {
   const baseClasses =
     "fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-background/95 backdrop-blur-sm";
 
-  if (!isWorktree) {
+  const resolvedSteps = steps ?? (isWorktree ? worktreeSteps : null);
+
+  if (!resolvedSteps) {
     return (
       <div className={baseClasses}>
         <Loader2 className="text-primary h-8 w-8 animate-spin" />
@@ -28,13 +44,13 @@ export function CreatingOverlay({ isWorktree, step }: CreatingOverlayProps) {
     );
   }
 
-  const currentIndex = worktreeSteps.findIndex((s) => s.id === step);
+  const currentIndex = resolvedSteps.findIndex((s) => s.id === step);
 
   return (
     <div className={cn(baseClasses, "gap-6")}>
       <Loader2 className="text-primary h-8 w-8 animate-spin" />
       <div className="space-y-3">
-        {worktreeSteps.map((s, index) => {
+        {resolvedSteps.map((s, index) => {
           const Icon = s.icon;
           const isComplete = index < currentIndex;
           const isCurrent = index === currentIndex;
@@ -71,7 +87,7 @@ export function CreatingOverlay({ isWorktree, step }: CreatingOverlayProps) {
         })}
       </div>
       <p className="text-muted-foreground text-xs">
-        This may take a minute for large codebases
+        {hint ?? "This may take a minute for large codebases"}
       </p>
     </div>
   );

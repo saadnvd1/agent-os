@@ -1,19 +1,9 @@
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ADropdownMenu, menuItem } from "@/components/a/ADropdownMenu";
 import {
   Plus,
   FolderPlus,
   FolderOpen,
+  GitBranch,
   MoreHorizontal,
   Trash2,
 } from "lucide-react";
@@ -21,12 +11,14 @@ import {
 interface SessionListHeaderProps {
   onNewProject: () => void;
   onOpenProject: () => void;
+  onCloneFromGithub: () => void;
   onKillAll: () => void;
 }
 
 export function SessionListHeader({
   onNewProject,
   onOpenProject,
+  onCloneFromGithub,
   onKillAll,
 }: SessionListHeaderProps) {
   return (
@@ -52,49 +44,27 @@ export function SessionListHeader({
         <h2 className="font-semibold">AgentOS</h2>
       </div>
       <div className="flex gap-1">
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent>New project</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onNewProject}>
-              <FolderPlus className="mr-2 h-3 w-3" />
-              New Project
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onOpenProject}>
-              <FolderOpen className="mr-2 h-3 w-3" />
-              Open Project
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent>More options</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={onKillAll}
-              className="text-red-500 focus:text-red-500"
-            >
-              <Trash2 className="mr-2 h-3 w-3" />
-              Kill all sessions
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ADropdownMenu
+          icon={Plus}
+          tooltip="New project"
+          items={[
+            menuItem("New Project", onNewProject, { icon: FolderPlus }),
+            menuItem("Open Project", onOpenProject, { icon: FolderOpen }),
+            menuItem("Clone from GitHub", onCloneFromGithub, {
+              icon: GitBranch,
+            }),
+          ]}
+        />
+        <ADropdownMenu
+          icon={MoreHorizontal}
+          tooltip="More options"
+          items={[
+            menuItem("Kill all sessions", onKillAll, {
+              icon: Trash2,
+              variant: "destructive",
+            }),
+          ]}
+        />
       </div>
     </div>
   );

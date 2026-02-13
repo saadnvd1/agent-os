@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ProjectWithRepositories } from "@/lib/projects";
+import type {
+  ProjectWithRepositories,
+  DetectedDevServer,
+} from "@/lib/projects";
 import { projectKeys } from "./keys";
 import { sessionKeys } from "../sessions/keys";
 
@@ -168,6 +171,23 @@ export function useCreateProject() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.list() });
+    },
+  });
+}
+
+export function useDetectDevServers() {
+  return useMutation({
+    mutationFn: async (
+      workingDirectory: string
+    ): Promise<DetectedDevServer[]> => {
+      const res = await fetch("/api/projects/detect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workingDirectory }),
+      });
+      if (!res.ok) throw new Error("Failed to detect dev servers");
+      const data = await res.json();
+      return data.detected || [];
     },
   });
 }

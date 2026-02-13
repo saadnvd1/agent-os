@@ -6,4 +6,5 @@ export {
   useDeleteProject,
   useRenameProject,
   useUpdateProject,
+  useDetectDevServers,
 } from "./queries";

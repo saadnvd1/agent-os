@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,499 +16,173 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Plus,
-  Trash2,
-  Loader2,
-  GitBranch,
-  RefreshCw,
-  Server,
-  FolderOpen,
-} from "lucide-react";
+import { Link, GitBranch, FolderPlus, Check } from "lucide-react";
 import type { AgentType } from "@/lib/providers";
-import type { DetectedDevServer } from "@/lib/projects";
-import { useCreateProject } from "@/data/projects";
-import { DirectoryPicker } from "@/components/DirectoryPicker";
+import {
+  AGENT_OPTIONS,
+  MODEL_OPTIONS,
+  CLONE_STEP,
+} from "./NewProjectDialog.types";
+import type { NewProjectDialogProps } from "./NewProjectDialog.types";
+import { useNewProjectForm } from "./hooks/useNewProjectForm";
+import { DevServersSection } from "./DevServersSection";
+import { DirectoryField } from "./DirectoryField";
+import {
+  CreatingOverlay,
+  type StepConfig,
+} from "@/components/NewSessionDialog/CreatingOverlay";
 
-const RECENT_DIRS_KEY = "agentOS:recentDirectories";
-const MAX_RECENT_DIRS = 5;
-
-const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
-  { value: "claude", label: "Claude Code" },
-  { value: "codex", label: "Codex" },
-  { value: "opencode", label: "OpenCode" },
-  { value: "gemini", label: "Gemini CLI" },
-  { value: "aider", label: "Aider" },
-  { value: "cursor", label: "Cursor CLI" },
+const cloneSteps: StepConfig[] = [
+  { id: CLONE_STEP.CLONING, label: "Cloning repository", icon: GitBranch },
+  { id: CLONE_STEP.CREATING, label: "Creating project", icon: FolderPlus },
+  { id: CLONE_STEP.DONE, label: "Done", icon: Check },
 ];
-
-const MODEL_OPTIONS = [
-  { value: "sonnet", label: "Sonnet" },
-  { value: "opus", label: "Opus" },
-  { value: "haiku", label: "Haiku" },
-];
-
-interface DevServerConfig {
-  id: string;
-  name: string;
-  type: "node" | "docker";
-  command: string;
-  port?: number;
-  portEnvVar?: string;
-}
-
-interface NewProjectDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (projectId: string) => void;
-}
 
 export function NewProjectDialog({
   open,
+  mode = "new",
   onClose,
   onCreated,
 }: NewProjectDialogProps) {
-  const [name, setName] = useState("");
-  const [workingDirectory, setWorkingDirectory] = useState("~");
-  const [agentType, setAgentType] = useState<AgentType>("claude");
-  const [defaultModel, setDefaultModel] = useState("opus");
-  const [devServers, setDevServers] = useState<DevServerConfig[]>([]);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [recentDirs, setRecentDirs] = useState<string[]>([]);
-  const [isGitRepo, setIsGitRepo] = useState(false);
-  const [checkingDir, setCheckingDir] = useState(false);
-  const [showDirectoryPicker, setShowDirectoryPicker] = useState(false);
-
-  const createProject = useCreateProject();
-
-  // Load recent directories
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(RECENT_DIRS_KEY);
-      if (saved) {
-        setRecentDirs(JSON.parse(saved));
-      }
-    } catch {
-      // Ignore
-    }
-  }, []);
-
-  // Check if directory exists and is a git repo
-  const checkDirectory = useCallback(async (path: string) => {
-    if (!path || path === "~") {
-      setIsGitRepo(false);
-      return;
-    }
-
-    setCheckingDir(true);
-    try {
-      const res = await fetch("/api/git/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path }),
-      });
-      const data = await res.json();
-      setIsGitRepo(data.isGitRepo);
-    } catch {
-      setIsGitRepo(false);
-    } finally {
-      setCheckingDir(false);
-    }
-  }, []);
-
-  // Debounce directory check
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      checkDirectory(workingDirectory);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [workingDirectory, checkDirectory]);
-
-  // Detect dev servers
-  const detectDevServers = async () => {
-    if (!workingDirectory || workingDirectory === "~") return;
-
-    setIsDetecting(true);
-    try {
-      const res = await fetch(
-        `/api/projects/uncategorized/detect?workingDirectory=${encodeURIComponent(workingDirectory)}`
-      );
-
-      // Fall back to direct API call with working directory in body
-      const detectRes = await fetch("/api/projects/detect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workingDirectory }),
-      });
-
-      if (detectRes.ok) {
-        const data = await detectRes.json();
-        const detected = (data.detected || []) as DetectedDevServer[];
-
-        // Convert to config format
-        const configs = detected.map((d, i) => ({
-          id: `ds_${Date.now()}_${i}`,
-          name: d.name,
-          type: d.type,
-          command: d.command,
-          port: d.port,
-          portEnvVar: d.portEnvVar,
-        }));
-
-        setDevServers(configs);
-      }
-    } catch (err) {
-      console.error("Failed to detect dev servers:", err);
-    } finally {
-      setIsDetecting(false);
-    }
-  };
-
-  // Add new dev server config
-  const addDevServer = () => {
-    setDevServers((prev) => [
-      ...prev,
-      {
-        id: `ds_${Date.now()}`,
-        name: "",
-        type: "node",
-        command: "",
-      },
-    ]);
-  };
-
-  // Remove dev server config
-  const removeDevServer = (id: string) => {
-    setDevServers((prev) => prev.filter((ds) => ds.id !== id));
-  };
-
-  // Update dev server config
-  const updateDevServer = (id: string, updates: Partial<DevServerConfig>) => {
-    setDevServers((prev) =>
-      prev.map((ds) => (ds.id === id ? { ...ds, ...updates } : ds))
-    );
-  };
-
-  // Save recent directory
-  const addRecentDirectory = useCallback((dir: string) => {
-    if (!dir || dir === "~") return;
-    setRecentDirs((prev) => {
-      const filtered = prev.filter((d) => d !== dir);
-      const updated = [dir, ...filtered].slice(0, MAX_RECENT_DIRS);
-      localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!name.trim()) {
-      setError("Project name is required");
-      return;
-    }
-
-    if (!workingDirectory || workingDirectory === "~") {
-      setError("Working directory is required");
-      return;
-    }
-
-    // Validate dev servers
-    const validDevServers = devServers.filter(
-      (ds) => ds.name.trim() && ds.command.trim()
-    );
-
-    createProject.mutate(
-      {
-        name: name.trim(),
-        workingDirectory,
-        agentType,
-        defaultModel,
-        devServers: validDevServers.map((ds) => ({
-          name: ds.name.trim(),
-          type: ds.type,
-          command: ds.command.trim(),
-          port: ds.port || undefined,
-          portEnvVar: ds.portEnvVar || undefined,
-        })),
-      },
-      {
-        onSuccess: (data) => {
-          addRecentDirectory(workingDirectory);
-          handleClose();
-          onCreated(data.project.id);
-        },
-        onError: (err) => {
-          setError(err.message || "Failed to create project");
-        },
-      }
-    );
-  };
-
-  const handleClose = () => {
-    setName("");
-    setWorkingDirectory("~");
-    setAgentType("claude");
-    setDefaultModel("opus");
-    setDevServers([]);
-    setError(null);
-    onClose();
-  };
+  const form = useNewProjectForm(mode, onClose, onCreated);
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New Project</DialogTitle>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={(o) => !o && form.handleClose()}>
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+        {form.isCloning && (
+          <CreatingOverlay
+            isWorktree={false}
+            step={form.cloneStep}
+            steps={cloneSteps}
+            hint="This may take a moment depending on the repository size"
+          />
+        )}
+        <DialogHeader>
+          <DialogTitle>
+            {form.isCloneMode ? "Clone from GitHub" : "New Project"}
+          </DialogTitle>
+        </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Project Name */}
+        <form onSubmit={form.handleSubmit} className="space-y-4">
+          {/* GitHub URL (clone mode only) */}
+          {form.isCloneMode && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Project Name</label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="my-awesome-project"
-                autoFocus
-              />
-            </div>
-
-            {/* Working Directory */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Working Directory</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    value={workingDirectory}
-                    onChange={(e) => setWorkingDirectory(e.target.value)}
-                    placeholder="~/projects/my-app"
-                  />
-                  {checkingDir && (
-                    <div className="absolute top-1/2 right-3 -translate-y-1/2">
-                      <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
-                    </div>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowDirectoryPicker(true)}
-                  title="Browse folders"
-                >
-                  <FolderOpen className="h-4 w-4" />
-                </Button>
+              <label className="text-sm font-medium">Repository URL</label>
+              <div className="relative">
+                <Input
+                  value={form.githubUrl}
+                  onChange={(e) => form.handleGithubUrlChange(e.target.value)}
+                  placeholder="https://github.com/user/repo"
+                  autoFocus
+                />
+                <Link className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2" />
               </div>
-              {isGitRepo && (
-                <p className="text-muted-foreground flex items-center gap-1 text-xs">
-                  <GitBranch className="h-3 w-3" />
-                  Git repository
-                </p>
+            </div>
+          )}
+
+          {/* Project Name */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Project Name
+              {form.isCloneMode && (
+                <span className="text-muted-foreground ml-1 font-normal">
+                  (optional, derived from URL)
+                </span>
               )}
-              {recentDirs.length > 0 && (
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {recentDirs.map((dir) => (
-                    <button
-                      key={dir}
-                      type="button"
-                      onClick={() => setWorkingDirectory(dir)}
-                      className="bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground max-w-[200px] truncate rounded-full px-2 py-0.5 text-xs transition-colors"
-                      title={dir}
-                    >
-                      {dir.replace(/^~\//, "").split("/").pop() || dir}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            </label>
+            <Input
+              value={form.name}
+              onChange={(e) => form.setName(e.target.value)}
+              placeholder={
+                form.isCloneMode
+                  ? "auto-detected from URL"
+                  : "my-awesome-project"
+              }
+              autoFocus={!form.isCloneMode}
+            />
+          </div>
 
-            {/* Agent Type */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Default Agent</label>
-              <Select
-                value={agentType}
-                onValueChange={(v) => setAgentType(v as AgentType)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AGENT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Working Directory */}
+          <DirectoryField
+            label={form.isCloneMode ? "Clone Into" : "Working Directory"}
+            value={form.workingDirectory}
+            onChange={form.setWorkingDirectory}
+            checkingDir={form.checkingDir}
+            isGitRepo={form.isGitRepo}
+            recentDirs={form.recentDirs}
+          />
 
-            {/* Default Model */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Default Model</label>
-              <Select value={defaultModel} onValueChange={setDefaultModel}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MODEL_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Agent Type */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Default Agent</label>
+            <Select
+              value={form.agentType}
+              onValueChange={(v) => form.setAgentType(v as AgentType)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AGENT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Dev Servers */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <Server className="h-4 w-4" />
-                  Dev Servers
-                </label>
-                <div className="flex gap-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={detectDevServers}
-                    disabled={
-                      isDetecting ||
-                      !workingDirectory ||
-                      workingDirectory === "~"
-                    }
-                  >
-                    {isDetecting ? (
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-1 h-3 w-3" />
-                    )}
-                    Detect
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addDevServer}
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    Add
-                  </Button>
-                </div>
-              </div>
+          {/* Default Model */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Default Model</label>
+            <Select
+              value={form.defaultModel}
+              onValueChange={form.setDefaultModel}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              {devServers.length === 0 ? (
-                <p className="text-muted-foreground py-2 text-sm">
-                  No dev servers configured. Click Detect to auto-find or Add to
-                  configure manually.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {devServers.map((ds) => (
-                    <div
-                      key={ds.id}
-                      className="bg-accent/30 space-y-2 rounded-lg p-3"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={ds.name}
-                          onChange={(e) =>
-                            updateDevServer(ds.id, { name: e.target.value })
-                          }
-                          placeholder="Server name"
-                          className="h-8 flex-1"
-                        />
-                        <Select
-                          value={ds.type}
-                          onValueChange={(v) =>
-                            updateDevServer(ds.id, {
-                              type: v as "node" | "docker",
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="node">Node</SelectItem>
-                            <SelectItem value="docker">Docker</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => removeDevServer(ds.id)}
-                          className="text-red-500 hover:text-red-600"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <Input
-                        value={ds.command}
-                        onChange={(e) =>
-                          updateDevServer(ds.id, { command: e.target.value })
-                        }
-                        placeholder={
-                          ds.type === "docker" ? "Service name" : "npm run dev"
-                        }
-                        className="h-8"
-                      />
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          value={ds.port || ""}
-                          onChange={(e) =>
-                            updateDevServer(ds.id, {
-                              port: e.target.value
-                                ? parseInt(e.target.value)
-                                : undefined,
-                            })
-                          }
-                          placeholder="Port (e.g., 3000)"
-                          className="h-8 w-32"
-                        />
-                        <Input
-                          value={ds.portEnvVar || ""}
-                          onChange={(e) =>
-                            updateDevServer(ds.id, {
-                              portEnvVar: e.target.value,
-                            })
-                          }
-                          placeholder="Port env var (e.g., PORT)"
-                          className="h-8 flex-1"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          {/* Dev Servers (hidden in clone mode) */}
+          {!form.isCloneMode && (
+            <DevServersSection
+              devServers={form.devServers}
+              isDetecting={form.isDetecting}
+              workingDirectory={form.workingDirectory}
+              onDetect={form.detectDevServers}
+              onAdd={form.addDevServer}
+              onRemove={form.removeDevServer}
+              onUpdate={form.updateDevServer}
+            />
+          )}
 
-            {error && <p className="text-sm text-red-500">{error}</p>}
+          {form.error && <p className="text-sm text-red-500">{form.error}</p>}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createProject.isPending}>
-                {createProject.isPending ? "Creating..." : "Create Project"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <DirectoryPicker
-        open={showDirectoryPicker}
-        onClose={() => setShowDirectoryPicker(false)}
-        onSelect={(path) => setWorkingDirectory(path)}
-        initialPath={workingDirectory !== "~" ? workingDirectory : "~"}
-      />
-    </>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={form.handleClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={form.isPending || form.isCloning}>
+              {form.isCloning
+                ? "Cloning..."
+                : form.isPending
+                  ? "Creating..."
+                  : form.isCloneMode
+                    ? "Clone & Create"
+                    : "Create Project"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
