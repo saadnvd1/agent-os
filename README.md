@@ -77,6 +77,8 @@ npm run dev  # http://localhost:3011
 - **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
 - **Code search** - Fast codebase search with syntax-highlighted results (Cmd+K)
+- **File picker** - Browse and attach files to sessions, with direct upload from mobile
+- **Clone from GitHub** - Clone repos directly from the UI when creating projects
 - **Git integration** - Status, diffs, commits, PRs from the UI
 - **Git worktrees** - Isolated branches with auto-setup
 - **Dev servers** - Start/stop Node.js and Docker servers
