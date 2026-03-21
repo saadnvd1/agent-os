@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { PaneLayout } from "@/components/PaneLayout";
 import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
 import { QuickSwitcher } from "@/components/QuickSwitcher";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import type { ViewProps } from "./types";
 import { fileOpenActions } from "@/stores/fileOpen";
 
@@ -69,6 +70,9 @@ export function MobileView({
           </div>
         </div>
       </SwipeSidebar>
+
+      {/* Update banner (fullscreen overlay when updating) */}
+      <UpdateBanner />
 
       {/* Terminal fills the screen */}
       <div className="min-h-0 w-full flex-1">
