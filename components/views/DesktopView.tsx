@@ -4,7 +4,7 @@ import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { SidebarFooter } from "@/components/SidebarFooter";
 import { Button } from "@/components/ui/button";
 import {
   PanelLeftClose,
@@ -84,11 +84,7 @@ export function DesktopView({
             />
           </div>
 
-          {/* Sidebar footer with theme toggle */}
-          <div className="mt-auto flex items-center justify-between px-3 py-1.5">
-            <span className="text-muted-foreground text-xs">Theme</span>
-            <ThemeToggle />
-          </div>
+          <SidebarFooter />
         </div>
       </div>
 
