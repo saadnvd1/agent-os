@@ -3,7 +3,7 @@
 import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { SidebarFooter } from "@/components/SidebarFooter";
 import { PaneLayout } from "@/components/PaneLayout";
 import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
 import { QuickSwitcher } from "@/components/QuickSwitcher";
@@ -62,11 +62,7 @@ export function MobileView({
             />
           </div>
 
-          {/* Sidebar footer with theme toggle */}
-          <div className="mt-auto flex items-center justify-between px-4 py-2">
-            <span className="text-muted-foreground text-xs">Theme</span>
-            <ThemeToggle />
-          </div>
+          <SidebarFooter />
         </div>
       </SwipeSidebar>
 
