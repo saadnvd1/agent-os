@@ -21,6 +21,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { QuickSwitcher } from "@/components/QuickSwitcher";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import type { ViewProps } from "./types";
 import { fileOpenActions } from "@/stores/fileOpen";
 
@@ -181,6 +182,7 @@ export function DesktopView({
                 <p className="text-muted-foreground text-xs">⌘K</p>
               </TooltipContent>
             </Tooltip>
+            <UpdateBanner />
             <NotificationSettings
               open={showNotificationSettings}
               onOpenChange={setShowNotificationSettings}
