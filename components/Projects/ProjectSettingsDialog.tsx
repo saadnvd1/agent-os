@@ -48,6 +48,7 @@ const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
   { value: "cursor", label: "Cursor CLI" },
   { value: "amp", label: "Amp" },
   { value: "pi", label: "Pi" },
+  { value: "omp", label: "Oh My Pi" },
 ];
 
 const MODEL_OPTIONS = [

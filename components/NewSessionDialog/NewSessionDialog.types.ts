@@ -98,6 +98,11 @@ export const AGENT_OPTIONS: {
   { value: "cursor", label: "Cursor CLI", description: "Cursor's AI agent" },
   { value: "amp", label: "Amp", description: "Multi-model coding agent" },
   { value: "pi", label: "Pi", description: "Extensible coding harness" },
+  {
+    value: "omp",
+    label: "Oh My Pi",
+    description: "Enhanced Pi coding harness",
+  },
 ];
 
 // Props for main dialog

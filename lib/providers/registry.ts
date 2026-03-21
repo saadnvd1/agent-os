@@ -13,6 +13,7 @@ export const PROVIDER_IDS = [
   "cursor",
   "amp",
   "pi",
+  "omp",
   "shell",
 ] as const;
 
@@ -142,6 +143,18 @@ export const PROVIDERS: ProviderDefinition[] = [
     description: "Extensible coding harness",
     cli: "pi",
     configDir: "~/.pi/agent",
+    supportsResume: false,
+    supportsFork: false,
+    modelFlag: "--model",
+    initialPromptFlag: "", // Positional argument
+  },
+  {
+    id: "omp",
+    name: "Oh My Pi",
+    description: "Enhanced Pi coding harness",
+    cli: "omp",
+    configDir: "~/.omp",
+    autoApproveFlag: undefined,
     supportsResume: false,
     supportsFork: false,
     modelFlag: "--model",

@@ -504,6 +504,51 @@ export const piProvider: AgentProvider = {
 };
 
 /**
+ * Oh My Pi Provider
+ * Enhanced Pi coding harness with multi-agent orchestration
+ */
+export const ompProvider: AgentProvider = {
+  id: "omp",
+  name: "Oh My Pi",
+  description: "Enhanced Pi coding harness",
+  command: "omp",
+  configDir: "~/.omp",
+
+  supportsResume: false,
+  supportsFork: false,
+
+  buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition("omp");
+    const flags: string[] = [];
+
+    if (options.model && def.modelFlag) {
+      flags.push(`${def.modelFlag} ${options.model}`);
+    }
+
+    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
+      const prompt = options.initialPrompt.trim();
+      const escapedPrompt = prompt.replace(/'/g, "'\\'");
+      flags.push(`'${escapedPrompt}'`);
+    }
+
+    return flags;
+  },
+
+  waitingPatterns: [
+    /\[Y\/n\]/i,
+    /\[y\/N\]/i,
+    /approve/i,
+    /confirm/i,
+    /Press Enter/i,
+    /\(yes\/no\)/i,
+  ],
+
+  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
+
+  idlePatterns: [/^>\s*$/m, /omp.*>\s*$/im, /\$\s*$/m],
+};
+
+/**
  * Shell Provider
  * Plain terminal without any AI CLI
  */
@@ -536,6 +581,7 @@ export const providers: Record<AgentType, AgentProvider> = {
   cursor: cursorProvider,
   amp: ampProvider,
   pi: piProvider,
+  omp: ompProvider,
   shell: shellProvider,
 };
 

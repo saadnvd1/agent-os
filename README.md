@@ -73,6 +73,7 @@ npm run dev  # http://localhost:3011
 | Cursor CLI  | ❌     | ❌   | N/A                              |
 | Amp         | ❌     | ❌   | `--dangerously-allow-all`        |
 | Pi          | ❌     | ❌   | N/A                              |
+| Oh My Pi    | ❌     | ❌   | N/A                              |
 
 ## Features
 
