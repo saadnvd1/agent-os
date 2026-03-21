@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { DirectoryPicker } from "@/components/DirectoryPicker";
+import { FolderPicker } from "@/components/FolderPicker";
+import { useHomePath } from "@/hooks/useHomePath";
 
 import { useNewSessionForm } from "./hooks/useNewSessionForm";
 import { AgentSelector } from "./AgentSelector";
@@ -29,6 +30,7 @@ export function NewSessionDialog({
   onCreated,
   onCreateProject,
 }: NewSessionDialogProps) {
+  const { toTildePath } = useHomePath();
   const form = useNewSessionForm({
     open,
     projects,
@@ -174,14 +176,16 @@ export function NewSessionDialog({
         </DialogContent>
       </Dialog>
 
-      <DirectoryPicker
-        open={form.showDirectoryPicker}
-        onClose={() => form.setShowDirectoryPicker(false)}
-        onSelect={(path) => form.setWorkingDirectory(path)}
-        initialPath={
-          form.workingDirectory !== "~" ? form.workingDirectory : "~"
-        }
-      />
+      {form.showDirectoryPicker && (
+        <FolderPicker
+          initialPath={form.workingDirectory || "~"}
+          onSelect={(path) => {
+            form.setWorkingDirectory(toTildePath(path));
+            form.setShowDirectoryPicker(false);
+          }}
+          onClose={() => form.setShowDirectoryPicker(false)}
+        />
+      )}
     </>
   );
 }

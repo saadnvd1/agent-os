@@ -61,7 +61,7 @@ export function FolderPicker({
   return (
     <div className="bg-background fixed inset-0 z-[100] flex flex-col">
       {/* Header */}
-      <div className="border-border bg-background/95 flex items-center gap-2 border-b p-3 backdrop-blur-sm">
+      <div className="bg-background/95 flex items-center gap-2 p-3 shadow-sm backdrop-blur-sm">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -79,7 +79,7 @@ export function FolderPicker({
       </div>
 
       {/* Search */}
-      <div className="border-border border-b px-3 py-2">
+      <div className="px-3 py-2">
         <div className="relative">
           <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
           <Input
@@ -93,7 +93,7 @@ export function FolderPicker({
       </div>
 
       {/* Navigation bar */}
-      <div className="border-border flex items-center gap-1 overflow-x-auto border-b px-3 py-2">
+      <div className="flex items-center gap-1 overflow-x-auto px-3 pb-2">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -156,12 +156,12 @@ export function FolderPicker({
             </p>
           </div>
         ) : (
-          <div className="divide-border divide-y">
+          <div className="space-y-0.5 px-2 pt-1">
             {filteredFiles.map((node) => (
               <button
                 key={node.path}
                 onClick={() => navigateTo(node.path)}
-                className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
+                className="hover:bg-muted/50 flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors"
               >
                 <Folder className="text-muted-foreground h-5 w-5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-sm">
@@ -175,7 +175,7 @@ export function FolderPicker({
       </div>
 
       {/* Footer with select button */}
-      <div className="border-border flex items-center justify-between gap-3 border-t p-3">
+      <div className="flex items-center justify-between gap-3 p-3 shadow-[0_-2px_8px_rgba(0,0,0,0.08)]">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <Folder className="text-primary h-5 w-5 shrink-0" />

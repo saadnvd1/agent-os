@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, GitBranch, FolderOpen } from "lucide-react";
-import { DirectoryPicker } from "@/components/DirectoryPicker";
+import { FolderPicker } from "@/components/FolderPicker";
+import { useHomePath } from "@/hooks/useHomePath";
 
 interface DirectoryFieldProps {
   label: string;
@@ -22,6 +23,12 @@ export function DirectoryField({
   recentDirs,
 }: DirectoryFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
+  const { toTildePath } = useHomePath();
+
+  const handleSelect = (absolutePath: string) => {
+    onChange(toTildePath(absolutePath));
+    setShowPicker(false);
+  };
 
   return (
     <>
@@ -73,12 +80,13 @@ export function DirectoryField({
         )}
       </div>
 
-      <DirectoryPicker
-        open={showPicker}
-        onClose={() => setShowPicker(false)}
-        onSelect={(path) => onChange(path)}
-        initialPath={value !== "~" ? value : "~"}
-      />
+      {showPicker && (
+        <FolderPicker
+          initialPath={value || "~"}
+          onSelect={handleSelect}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
     </>
   );
 }
