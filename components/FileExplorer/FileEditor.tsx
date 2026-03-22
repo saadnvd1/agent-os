@@ -26,6 +26,7 @@ interface FileEditorProps {
   onSave?: () => void;
 }
 
+// Theme that uses CSS variables from the app
 const editorTheme = EditorView.theme({
   "&": {
     fontSize: "13px",
@@ -89,15 +90,16 @@ const editorTheme = EditorView.theme({
   },
 });
 
+// Syntax highlighting that adapts to both light and dark themes
 const highlightStyle = HighlightStyle.define([
   { tag: t.keyword, color: "hsl(var(--primary))" },
   {
     tag: [t.name, t.deleted, t.character, t.macroName],
     color: "hsl(var(--foreground))",
   },
-  { tag: [t.propertyName], color: "#7dd3fc" },
-  { tag: [t.function(t.variableName), t.labelName], color: "#c4b5fd" },
-  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: "#fcd34d" },
+  { tag: [t.propertyName], color: "#7dd3fc" }, // sky-300
+  { tag: [t.function(t.variableName), t.labelName], color: "#c4b5fd" }, // violet-300
+  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: "#fcd34d" }, // amber-300
   { tag: [t.definition(t.name), t.separator], color: "hsl(var(--foreground))" },
   {
     tag: [
@@ -110,7 +112,7 @@ const highlightStyle = HighlightStyle.define([
       t.self,
       t.namespace,
     ],
-    color: "#f9a8d4",
+    color: "#f9a8d4", // pink-300
   },
   {
     tag: [
@@ -121,7 +123,7 @@ const highlightStyle = HighlightStyle.define([
       t.regexp,
       t.special(t.string),
     ],
-    color: "#67e8f9",
+    color: "#67e8f9", // cyan-300
   },
   {
     tag: [t.meta, t.comment],
@@ -133,9 +135,9 @@ const highlightStyle = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: "line-through" },
   { tag: t.link, color: "#67e8f9", textDecoration: "underline" },
   { tag: t.heading, fontWeight: "bold", color: "hsl(var(--primary))" },
-  { tag: [t.atom, t.bool], color: "#f9a8d4" },
-  { tag: [t.processingInstruction, t.string, t.inserted], color: "#86efac" },
-  { tag: t.invalid, color: "#fca5a5" },
+  { tag: [t.atom, t.bool], color: "#f9a8d4" }, // pink-300
+  { tag: [t.processingInstruction, t.string, t.inserted], color: "#86efac" }, // green-300
+  { tag: t.invalid, color: "#fca5a5" }, // red-300
 ]);
 
 function getLanguageExtension(language: string): Extension | null {
@@ -220,7 +222,7 @@ export function FileEditor({
   return (
     <div className="bg-background flex h-full w-full flex-col overflow-hidden">
       {hasPreview && (
-        <div className="bg-muted/30 flex items-center justify-end border-b px-2 py-1">
+        <div className="bg-muted/30 flex items-center justify-end px-2 py-1 shadow-sm">
           <Button
             variant="ghost"
             size="icon-sm"
