@@ -12,7 +12,10 @@ import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { markdown } from "@codemirror/lang-markdown";
 import type { Extension } from "@codemirror/state";
-import { FileCode } from "lucide-react";
+import { FileCode, Eye, Code2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MarkdownRenderer } from "./MarkdownRenderer";
+import { HtmlRenderer } from "./HtmlRenderer";
 
 interface FileEditorProps {
   content: string;
@@ -23,7 +26,6 @@ interface FileEditorProps {
   onSave?: () => void;
 }
 
-// Theme that uses CSS variables from the app
 const editorTheme = EditorView.theme({
   "&": {
     fontSize: "13px",
@@ -87,16 +89,15 @@ const editorTheme = EditorView.theme({
   },
 });
 
-// Syntax highlighting that adapts to both light and dark themes
 const highlightStyle = HighlightStyle.define([
   { tag: t.keyword, color: "hsl(var(--primary))" },
   {
     tag: [t.name, t.deleted, t.character, t.macroName],
     color: "hsl(var(--foreground))",
   },
-  { tag: [t.propertyName], color: "#7dd3fc" }, // sky-300
-  { tag: [t.function(t.variableName), t.labelName], color: "#c4b5fd" }, // violet-300
-  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: "#fcd34d" }, // amber-300
+  { tag: [t.propertyName], color: "#7dd3fc" },
+  { tag: [t.function(t.variableName), t.labelName], color: "#c4b5fd" },
+  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: "#fcd34d" },
   { tag: [t.definition(t.name), t.separator], color: "hsl(var(--foreground))" },
   {
     tag: [
@@ -110,7 +111,7 @@ const highlightStyle = HighlightStyle.define([
       t.namespace,
     ],
     color: "#f9a8d4",
-  }, // pink-300
+  },
   {
     tag: [
       t.operator,
@@ -121,7 +122,7 @@ const highlightStyle = HighlightStyle.define([
       t.special(t.string),
     ],
     color: "#67e8f9",
-  }, // cyan-300
+  },
   {
     tag: [t.meta, t.comment],
     color: "hsl(var(--muted-foreground))",
@@ -132,9 +133,9 @@ const highlightStyle = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: "line-through" },
   { tag: t.link, color: "#67e8f9", textDecoration: "underline" },
   { tag: t.heading, fontWeight: "bold", color: "hsl(var(--primary))" },
-  { tag: [t.atom, t.bool], color: "#f9a8d4" }, // pink-300
-  { tag: [t.processingInstruction, t.string, t.inserted], color: "#86efac" }, // green-300
-  { tag: t.invalid, color: "#fca5a5" }, // red-300
+  { tag: [t.atom, t.bool], color: "#f9a8d4" },
+  { tag: [t.processingInstruction, t.string, t.inserted], color: "#86efac" },
+  { tag: t.invalid, color: "#fca5a5" },
 ]);
 
 function getLanguageExtension(language: string): Extension | null {
@@ -169,6 +170,10 @@ export function FileEditor({
   onSave,
 }: FileEditorProps) {
   const [extensions, setExtensions] = useState<Extension[]>([]);
+  const [previewMode, setPreviewMode] = useState(false);
+  const isMarkdown = language === "markdown";
+  const isHtml = language === "html";
+  const hasPreview = isMarkdown || isHtml;
 
   useEffect(() => {
     const langExt = getLanguageExtension(language);
@@ -199,6 +204,10 @@ export function FileEditor({
     setExtensions(baseExtensions);
   }, [language, onSave]);
 
+  useEffect(() => {
+    if (!hasPreview) setPreviewMode(false);
+  }, [hasPreview]);
+
   if (isBinary) {
     return (
       <div className="text-muted-foreground flex h-full flex-col items-center justify-center p-8">
@@ -209,32 +218,57 @@ export function FileEditor({
   }
 
   return (
-    <div className="bg-background h-full w-full overflow-hidden">
-      <CodeMirror
-        value={content}
-        height="100%"
-        theme="none"
-        extensions={extensions}
-        onChange={onChange}
-        readOnly={readOnly}
-        basicSetup={{
-          lineNumbers: true,
-          highlightActiveLineGutter: true,
-          highlightActiveLine: true,
-          foldGutter: true,
-          dropCursor: true,
-          allowMultipleSelections: true,
-          indentOnInput: true,
-          bracketMatching: true,
-          closeBrackets: true,
-          autocompletion: true,
-          rectangularSelection: true,
-          crosshairCursor: false,
-          highlightSelectionMatches: true,
-          searchKeymap: true,
-        }}
-        className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:!overflow-auto"
-      />
+    <div className="bg-background flex h-full w-full flex-col overflow-hidden">
+      {hasPreview && (
+        <div className="bg-muted/30 flex items-center justify-end border-b px-2 py-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setPreviewMode(!previewMode)}
+            title={previewMode ? "Show source" : "Preview"}
+          >
+            {previewMode ? (
+              <Code2 className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {previewMode && isMarkdown ? (
+          <MarkdownRenderer content={content} />
+        ) : previewMode && isHtml ? (
+          <HtmlRenderer content={content} />
+        ) : (
+          <CodeMirror
+            value={content}
+            height="100%"
+            theme="none"
+            extensions={extensions}
+            onChange={onChange}
+            readOnly={readOnly}
+            basicSetup={{
+              lineNumbers: true,
+              highlightActiveLineGutter: true,
+              highlightActiveLine: true,
+              foldGutter: true,
+              dropCursor: true,
+              allowMultipleSelections: true,
+              indentOnInput: true,
+              bracketMatching: true,
+              closeBrackets: true,
+              autocompletion: true,
+              rectangularSelection: true,
+              crosshairCursor: false,
+              highlightSelectionMatches: true,
+              searchKeymap: true,
+            }}
+            className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:!overflow-auto"
+          />
+        )}
+      </div>
     </div>
   );
 }
