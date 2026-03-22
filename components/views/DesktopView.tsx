@@ -58,7 +58,7 @@ export function DesktopView({
   renderPane,
 }: ViewProps) {
   return (
-    <div className="bg-background flex h-dvh overflow-hidden">
+    <div className="bg-background flex h-screen overflow-hidden">
       {/* Desktop Sidebar */}
       <div
         className={` ${sidebarOpen ? "w-60" : "w-0"} bg-sidebar-background flex-shrink-0 overflow-hidden shadow-xl shadow-black/10 transition-all duration-200 dark:shadow-black/30`}

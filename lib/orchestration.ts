@@ -167,7 +167,7 @@ export async function spawnWorker(
   // Create tmux session with the agent and banner
   const agentCmd = `${provider.command} ${flagsStr}`;
   const newSessionCmd = wrapWithBanner(agentCmd);
-  const createCmd = `tmux new-session -d -s "${tmuxSessionName}" -c "${cwd}" "${newSessionCmd}"`;
+  const createCmd = `tmux set -g mouse on 2>/dev/null; tmux new-session -d -s "${tmuxSessionName}" -c "${cwd}" "${newSessionCmd}"`;
 
   try {
     await execAsync(createCmd);

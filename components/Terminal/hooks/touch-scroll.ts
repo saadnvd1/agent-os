@@ -10,7 +10,7 @@ interface TouchScrollConfig {
 }
 
 export function setupTouchScroll(config: TouchScrollConfig): () => void {
-  const { term, selectModeRef, wsRef } = config;
+  const { term, selectModeRef } = config;
 
   if (!term.element) return () => {};
 
@@ -30,91 +30,107 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
       return;
     }
 
-    // Apply touch-action to prevent browser handling
     xtermScreen.style.touchAction = "none";
     xtermScreen.style.userSelect = "none";
     (
       xtermScreen.style as CSSStyleDeclaration & { webkitUserSelect?: string }
     ).webkitUserSelect = "none";
 
-    // Also apply to canvas children
     const canvases = xtermScreen.querySelectorAll("canvas");
     canvases.forEach((canvas) => {
       (canvas as HTMLElement).style.touchAction = "none";
     });
 
-    // Touch state for scroll handling
-    let touchState = {
-      lastY: null as number | null,
-      initialX: null as number | null,
-      initialY: null as number | null,
-      isHorizontal: null as boolean | null,
-    };
+    // Prevent native scroll on the xterm-viewport and scrollable-element wrappers
+    // which can intercept touch events on mobile before they reach .xterm-screen
+    const viewport = term.element?.querySelector(
+      ".xterm-viewport"
+    ) as HTMLElement | null;
+    if (viewport) {
+      viewport.style.touchAction = "none";
+      viewport.style.overflowY = "hidden";
+    }
+    const scrollableEl = term.element?.querySelector(
+      ".xterm-scrollable-element"
+    ) as HTMLElement | null;
+    if (scrollableEl) {
+      scrollableEl.style.touchAction = "none";
+    }
 
-    const resetTouchState = () => {
-      touchState = {
-        lastY: null,
-        initialX: null,
-        initialY: null,
-        isHorizontal: null,
-      };
-    };
+    let startX = 0;
+    let startY = 0;
+    let lastY = 0;
+    let scrollDirection: "vertical" | "horizontal" | null = null;
+    let scrollAccumulator = 0;
 
     handleTouchStart = (e: TouchEvent) => {
       if (selectModeRef.current || e.touches.length === 0) return;
       const touch = e.touches[0];
-      touchState = {
-        lastY: touch.clientY,
-        initialX: touch.clientX,
-        initialY: touch.clientY,
-        isHorizontal: null,
-      };
+      startX = touch.clientX;
+      startY = touch.clientY;
+      lastY = touch.clientY;
+      scrollDirection = null;
+      scrollAccumulator = 0;
     };
 
     handleTouchMove = (e: TouchEvent) => {
       if (selectModeRef.current || e.touches.length === 0) return;
-      const { lastY, initialX, initialY, isHorizontal } = touchState;
-      if (lastY === null || initialX === null || initialY === null) return;
+      if (scrollDirection === null && startX === 0 && startY === 0) return;
 
       const touch = e.touches[0];
-      const deltaX = Math.abs(touch.clientX - initialX);
-      const deltaY = Math.abs(touch.clientY - initialY);
 
-      // Determine swipe direction on first significant movement
-      if (isHorizontal === null && (deltaX > 15 || deltaY > 15)) {
-        touchState.isHorizontal = deltaX > deltaY;
+      if (scrollDirection === null) {
+        const deltaX = Math.abs(touch.clientX - startX);
+        const deltaY = Math.abs(touch.clientY - startY);
+        if (deltaX > 8 || deltaY > 8) {
+          scrollDirection = deltaX > deltaY ? "horizontal" : "vertical";
+        }
       }
 
-      // Let parent handle horizontal swipes for session switching
-      if (touchState.isHorizontal) return;
+      if (scrollDirection === "horizontal") return;
 
-      e.preventDefault();
-      e.stopPropagation();
+      if (scrollDirection === "vertical") {
+        e.preventDefault();
+        e.stopPropagation();
+      }
 
-      const moveDeltaY = touch.clientY - lastY;
-      if (Math.abs(moveDeltaY) < 25) return;
+      const deltaY = touch.clientY - lastY;
+      lastY = touch.clientY;
 
-      const buffer = term.buffer.active;
+      if (Math.abs(deltaY) < 1) return;
 
-      if (
-        buffer.type === "alternate" &&
-        wsRef.current?.readyState === WebSocket.OPEN
-      ) {
-        // Send mouse wheel events for alternate buffer (e.g., less, vim)
-        const wheelEvent = moveDeltaY < 0 ? "\x1b[<65;1;1M" : "\x1b[<64;1;1M";
-        wsRef.current.send(JSON.stringify({ type: "input", data: wheelEvent }));
-        touchState.lastY = touch.clientY;
-      } else if (buffer.type !== "alternate") {
-        const scrollAmount = Math.round(moveDeltaY / 15);
-        if (scrollAmount !== 0) {
-          term.scrollLines(scrollAmount);
-          touchState.lastY = touch.clientY;
-        }
+      // Convert touch movement to synthetic WheelEvents on the xterm element.
+      // This feeds into xterm's full event pipeline:
+      //   - Normal buffer: SmoothScrollableElement handles wheel → viewport scrolls
+      //   - Alternate buffer with mouse protocol (tmux mouse on): coreMouseService
+      //     converts wheel to mouse escape sequences sent through the PTY properly
+      scrollAccumulator += deltaY;
+      const step = 20;
+
+      while (Math.abs(scrollAccumulator) >= step) {
+        // Negate: finger DOWN (positive deltaY) → scroll UP (negative wheel deltaY)
+        const wheelDelta = scrollAccumulator > 0 ? -100 : 100;
+        const syntheticWheel = new WheelEvent("wheel", {
+          deltaY: wheelDelta,
+          deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+          bubbles: true,
+          cancelable: true,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+        });
+        xtermScreen.dispatchEvent(syntheticWheel);
+        scrollAccumulator += scrollAccumulator > 0 ? -step : step;
       }
     };
 
-    handleTouchEnd = resetTouchState;
-    handleTouchCancel = resetTouchState;
+    handleTouchEnd = () => {
+      startX = 0;
+      startY = 0;
+      lastY = 0;
+      scrollDirection = null;
+      scrollAccumulator = 0;
+    };
+    handleTouchCancel = handleTouchEnd;
 
     xtermScreen.addEventListener("touchstart", handleTouchStart, {
       passive: true,
@@ -130,7 +146,6 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
 
   setupTouchScrollInner();
 
-  // Return cleanup function
   return () => {
     if (setupTimeout) clearTimeout(setupTimeout);
     if (touchElement) {
