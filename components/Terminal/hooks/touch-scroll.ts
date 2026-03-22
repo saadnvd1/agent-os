@@ -6,7 +6,6 @@ import type { RefObject } from "react";
 interface TouchScrollConfig {
   term: XTerm;
   selectModeRef: RefObject<boolean>;
-  wsRef: RefObject<WebSocket | null>;
 }
 
 export function setupTouchScroll(config: TouchScrollConfig): () => void {

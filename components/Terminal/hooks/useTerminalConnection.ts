@@ -160,7 +160,7 @@ export function useTerminalConnection({
       });
 
       // Setup touch scroll
-      cleanupTouchScroll = setupTouchScroll({ term, selectModeRef, wsRef });
+      cleanupTouchScroll = setupTouchScroll({ term, selectModeRef });
 
       // Setup WebSocket
       const wsManager = createWebSocketConnection(
