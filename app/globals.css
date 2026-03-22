@@ -159,11 +159,9 @@ body {
   max-height: var(--app-height, 100vh);
 }
 
-/* Ensure terminal container respects visual viewport */
+/* Terminal container on mobile - sized by flex layout, not explicit height */
 @media (max-width: 767px) {
   .terminal-container {
-    height: 100%;
-    max-height: calc(100vh - env(safe-area-inset-bottom));
     overflow: hidden;
   }
 }

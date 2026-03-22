@@ -285,7 +285,7 @@ export async function POST(
         ? "claude --dangerously-skip-permissions"
         : "claude";
 
-      const tmuxCmd = `tmux new-session -d -s "${newTmuxSession}" -c "${cwdExpanded}" "${claudeCmd}"`;
+      const tmuxCmd = `tmux set -g mouse on 2>/dev/null; tmux new-session -d -s "${newTmuxSession}" -c "${cwdExpanded}" "${claudeCmd}"`;
       console.log(`[summarize] Creating tmux session: ${tmuxCmd}`);
       await execAsync(tmuxCmd);
       console.log(`[summarize] Tmux session created: ${newTmuxSession}`);

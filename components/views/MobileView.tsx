@@ -36,7 +36,7 @@ export function MobileView({
   renderPane,
 }: ViewProps) {
   return (
-    <main className="bg-background flex h-dvh flex-col overflow-hidden">
+    <main className="bg-background flex h-screen flex-col overflow-hidden">
       {/* Swipe sidebar */}
       <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
         <div className="flex h-full flex-col">

@@ -204,12 +204,11 @@ function HomeContent() {
       sessionInfo: { sessionName: string; cwd: string; command: string }
     ) => {
       const { sessionName, cwd, command } = sessionInfo;
-      // For shell sessions (empty command), just start tmux without a command so it opens the default shell
       const tmuxNew = command
         ? `tmux new -s ${sessionName} -c "${cwd}" "${command}"`
         : `tmux new -s ${sessionName} -c "${cwd}"`;
       terminal.sendCommand(
-        `tmux attach -t ${sessionName} 2>/dev/null || ${tmuxNew}`
+        `tmux set -g mouse on 2>/dev/null; tmux attach -t ${sessionName} 2>/dev/null || ${tmuxNew}`
       );
       attachSession(paneId, session.id, sessionName);
       terminal.focus();

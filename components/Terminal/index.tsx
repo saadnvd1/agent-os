@@ -7,7 +7,6 @@ import {
   useCallback,
   useState,
   useMemo,
-  useEffect,
 } from "react";
 import { useTheme } from "next-themes";
 import "@xterm/xterm/css/xterm.css";
@@ -149,41 +148,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       restoreScrollState,
     }));
 
-    // Track visual viewport for iOS keyboard
-    // We use explicit height instead of fixed positioning to stay in document flow
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-    useEffect(() => {
-      if (!isMobile || typeof window === "undefined") return;
-
-      const viewport = window.visualViewport;
-      if (!viewport) return;
-
-      // Track the initial full height to detect keyboard
-      const fullHeight = window.innerHeight;
-
-      const updateViewport = () => {
-        // Calculate how much space the keyboard is taking
-        const currentHeight = viewport.height;
-        const kbHeight = Math.max(
-          0,
-          fullHeight - currentHeight - viewport.offsetTop
-        );
-        setKeyboardHeight(kbHeight);
-      };
-
-      // Initial measurement
-      updateViewport();
-
-      viewport.addEventListener("resize", updateViewport);
-      viewport.addEventListener("scroll", updateViewport);
-
-      return () => {
-        viewport.removeEventListener("resize", updateViewport);
-        viewport.removeEventListener("scroll", updateViewport);
-      };
-    }, [isMobile]);
-
     // Extract terminal text for select mode overlay
     const terminalText = useMemo(() => {
       if (!selectMode || !xtermRef.current) return "";
@@ -210,9 +174,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           position: "relative",
           width: "100%",
           height: "100%",
-          // On mobile, shrink container when keyboard is open
-          paddingBottom:
-            isMobile && keyboardHeight > 0 ? keyboardHeight : undefined,
         }}
         {...dragHandlers}
       >
