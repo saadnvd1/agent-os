@@ -46,6 +46,11 @@ sleep 0.8
 # Ensure ~/.local/bin is in PATH (where claude is installed)
 export PATH="$HOME/.local/bin:$PATH"
 
+# If running as root, set IS_SANDBOX=1 so Claude Code allows --dangerously-skip-permissions
+if [ "$(id -u)" = "0" ]; then
+  export IS_SANDBOX=1
+fi
+
 # Start the agent
 exec ${agentCommand}
 `;

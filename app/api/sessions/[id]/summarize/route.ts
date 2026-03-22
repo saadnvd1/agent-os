@@ -281,8 +281,10 @@ export async function POST(
       const newTmuxSession = tmuxName;
 
       // Start new tmux session with Claude directly
+      const isRoot = process.getuid?.() === 0;
+      const envPrefix = isRoot ? "IS_SANDBOX=1 " : "";
       const claudeCmd = session.auto_approve
-        ? "claude --dangerously-skip-permissions"
+        ? `${envPrefix}claude --dangerously-skip-permissions`
         : "claude";
 
       const tmuxCmd = `tmux set -g mouse on 2>/dev/null; tmux new-session -d -s "${newTmuxSession}" -c "${cwdExpanded}" "${claudeCmd}"`;
