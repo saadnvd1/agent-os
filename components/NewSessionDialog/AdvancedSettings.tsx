@@ -22,6 +22,7 @@ export function AdvancedSettings({
   onSkipPermissionsChange,
 }: AdvancedSettingsProps) {
   const provider = getProviderDefinition(agentType);
+  const supportsAutoApprove = Boolean(provider.autoApproveFlag);
 
   return (
     <div className="border-border rounded-lg border">
@@ -57,13 +58,14 @@ export function AdvancedSettings({
               type="checkbox"
               id="skipPermissions"
               checked={skipPermissions}
+              disabled={!supportsAutoApprove}
               onChange={(e) => onSkipPermissionsChange(e.target.checked)}
-              className="border-border bg-background accent-primary h-4 w-4 rounded"
+              className="border-border bg-background accent-primary h-4 w-4 rounded disabled:cursor-not-allowed disabled:opacity-50"
             />
             <label htmlFor="skipPermissions" className="cursor-pointer text-sm">
               Auto-approve tool calls
               <span className="text-muted-foreground ml-1">
-                {provider.autoApproveFlag
+                {supportsAutoApprove
                   ? `(${provider.autoApproveFlag})`
                   : "(not supported)"}
               </span>

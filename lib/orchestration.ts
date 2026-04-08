@@ -11,7 +11,7 @@ import { promisify } from "util";
 import { db, queries, type Session } from "./db";
 import { createWorktree, deleteWorktree } from "./worktrees";
 import { setupWorktree } from "./env-setup";
-import { getProvider } from "./providers";
+import { type AgentType, getProvider } from "./providers";
 import { statusDetector } from "./status-detector";
 import { wrapWithBanner } from "./banner";
 import { runInBackground } from "./async-operations";
@@ -25,7 +25,7 @@ export interface SpawnWorkerOptions {
   branchName?: string;
   useWorktree?: boolean;
   model?: string;
-  agentType?: "claude" | "codex" | "opencode";
+  agentType?: AgentType;
 }
 
 export interface WorkerInfo {
