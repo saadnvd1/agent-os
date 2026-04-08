@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { AgentType } from "@/lib/providers";
+import { getProviderDefinition, type AgentType } from "@/lib/providers";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import { setPendingPrompt } from "@/stores/initialPrompt";
 import { useCreateSession } from "@/data/sessions";
@@ -163,6 +163,19 @@ export function useNewSessionForm({
       }
     }
   }, [open, selectedProjectId, projects]);
+
+  useEffect(() => {
+    if (!skipPermissions) {
+      return;
+    }
+
+    if (getProviderDefinition(agentType).autoApproveFlag) {
+      return;
+    }
+
+    setSkipPermissions(false);
+    localStorage.setItem(SKIP_PERMISSIONS_KEY, "false");
+  }, [agentType, skipPermissions]);
 
   // Save directory to recent list
   const addRecentDirectory = useCallback((dir: string) => {
