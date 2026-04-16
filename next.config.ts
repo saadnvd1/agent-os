@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { resolve } from "path";
+import { withSerwist } from "@serwist/turbopack";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
@@ -8,4 +9,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSerwist(nextConfig);
