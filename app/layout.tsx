@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { Providers } from "@/components/Providers";
+import { SerwistProvider } from "./serwist-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,8 +18,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AgentOS",
   description: "AI Agent Command Center",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "AgentOS",
+  },
   icons: {
     icon: "/icon.svg",
+    apple: "/icons/icon-192.png",
   },
 };
 
@@ -29,6 +37,7 @@ export const viewport: Viewport = {
   userScalable: false,
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
+  themeColor: "#3B82F6",
 };
 
 export default function RootLayout({
@@ -83,7 +92,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <SerwistProvider swUrl="/serwist/sw.js">
+          <Providers>{children}</Providers>
+        </SerwistProvider>
         <Toaster
           position="top-center"
           closeButton
