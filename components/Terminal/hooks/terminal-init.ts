@@ -75,23 +75,37 @@ export function createTerminal(
     document.body.removeChild(textarea);
   };
 
+  // True when focus is on an editable field outside the terminal
+  // (e.g. the search bar) — we must not hijack their copy/select.
+  const isExternalFormFieldFocused = () => {
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || container.contains(active)) return false;
+    return (
+      active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.isContentEditable
+    );
+  };
+
   // Handle Cmd+A and Cmd+C via document event listener (more reliable than attachCustomKeyEventHandler)
   const handleKeyDown = (event: KeyboardEvent) => {
-    // Only handle when terminal is focused (xterm creates its textarea inside the container)
-    if (!container.contains(document.activeElement)) return;
-
     const key = event.key.toLowerCase();
 
-    // Cmd+A (macOS) / Ctrl+A for select all
+    // Cmd+A (macOS) / Ctrl+A for select all — only when terminal is focused
     if ((event.metaKey || event.ctrlKey) && key === "a") {
+      if (!container.contains(document.activeElement)) return;
       event.preventDefault();
       event.stopPropagation();
       term.selectAll();
       return;
     }
 
-    // Cmd+C (macOS) / Ctrl+C for copy when text is selected
+    // Cmd+C (macOS) / Ctrl+C: copy whenever the terminal has a selection.
+    // We can't rely on focus being inside the container — a mouse drag
+    // often leaves focus on <body>.
     if ((event.metaKey || event.ctrlKey) && key === "c") {
+      if (isExternalFormFieldFocused()) return;
+      if (!term.hasSelection()) return;
       const selection = term.getSelection();
       if (selection) {
         event.preventDefault();
@@ -101,11 +115,20 @@ export function createTerminal(
     }
   };
 
+  // Auto-copy after a mouse-drag selection (iTerm/tmux-style).
+  const handleMouseUp = () => {
+    if (!term.hasSelection()) return;
+    const selection = term.getSelection();
+    if (selection) copyToClipboard(selection);
+  };
+
   // Use capture phase to intercept before browser default
   document.addEventListener("keydown", handleKeyDown, true);
+  container.addEventListener("mouseup", handleMouseUp);
 
   const cleanup = () => {
     document.removeEventListener("keydown", handleKeyDown, true);
+    container.removeEventListener("mouseup", handleMouseUp);
   };
 
   return { term, fitAddon, searchAddon, cleanup };
