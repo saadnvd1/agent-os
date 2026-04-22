@@ -18,11 +18,8 @@ import {
 } from "@/components/ui/select";
 import { Link, GitBranch, FolderPlus, Check } from "lucide-react";
 import type { AgentType } from "@/lib/providers";
-import {
-  AGENT_OPTIONS,
-  MODEL_OPTIONS,
-  CLONE_STEP,
-} from "./NewProjectDialog.types";
+import { getModelOptions } from "@/lib/model-catalog";
+import { AGENT_OPTIONS, CLONE_STEP } from "./NewProjectDialog.types";
 import type { NewProjectDialogProps } from "./NewProjectDialog.types";
 import { useNewProjectForm } from "./hooks/useNewProjectForm";
 import { DevServersSection } from "./DevServersSection";
@@ -45,6 +42,10 @@ export function NewProjectDialog({
   onCreated,
 }: NewProjectDialogProps) {
   const form = useNewProjectForm(mode, onClose, onCreated);
+  const modelOptions = getModelOptions(form.agentType);
+  const selectedModelLabel =
+    modelOptions.find((option) => option.value === form.defaultModel)?.label ||
+    "Select a model";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && form.handleClose()}>
@@ -117,7 +118,7 @@ export function NewProjectDialog({
             <label className="text-sm font-medium">Default Agent</label>
             <Select
               value={form.agentType}
-              onValueChange={(v) => form.setAgentType(v as AgentType)}
+              onValueChange={(v) => form.handleAgentTypeChange(v as AgentType)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -136,14 +137,15 @@ export function NewProjectDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Default Model</label>
             <Select
+              key={form.agentType}
               value={form.defaultModel}
               onValueChange={form.setDefaultModel}
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue>{selectedModelLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {MODEL_OPTIONS.map((opt) => (
+                {modelOptions.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>

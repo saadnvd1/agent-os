@@ -11,6 +11,7 @@ import { promisify } from "util";
 import { db, queries, type Session } from "./db";
 import { createWorktree, deleteWorktree } from "./worktrees";
 import { setupWorktree } from "./env-setup";
+import { resolveModelForAgent } from "./model-catalog";
 import { type AgentType, getProvider } from "./providers";
 import { statusDetector } from "./status-detector";
 import { wrapWithBanner } from "./banner";
@@ -85,9 +86,9 @@ export async function spawnWorker(
     workingDirectory: rawWorkingDir,
     branchName = taskToBranchName(task),
     useWorktree = true,
-    model = "sonnet",
     agentType = "claude",
   } = options;
+  const model = resolveModelForAgent(agentType, options.model);
 
   // Expand ~ to home directory
   const workingDirectory = rawWorkingDir.replace(/^~/, process.env.HOME || "");

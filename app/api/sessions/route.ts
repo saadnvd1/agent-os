@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb, queries, type Session, type Group } from "@/lib/db";
 import { isValidAgentType, type AgentType } from "@/lib/providers";
+import { resolveModelForAgent } from "@/lib/model-catalog";
 import { createWorktree } from "@/lib/worktrees";
 import { setupWorktree, type SetupResult } from "@/lib/env-setup";
 import { findAvailablePort } from "@/lib/ports";
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
       name: providedName,
       workingDirectory = "~",
       parentSessionId = null,
-      model = "sonnet",
+      model: requestedModel = null,
       systemPrompt = null,
       groupPath = "sessions",
       claudeSessionId = null,
@@ -77,6 +78,12 @@ export async function POST(request: NextRequest) {
     const agentType: AgentType = isValidAgentType(rawAgentType)
       ? rawAgentType
       : "claude";
+    const project = projectId ? getProject(projectId) : null;
+    const model = resolveModelForAgent(
+      agentType,
+      (typeof requestedModel === "string" && requestedModel.trim()) ||
+        project?.default_model
+    );
 
     // Auto-generate name if not provided
     const name =
@@ -183,7 +190,6 @@ export async function POST(request: NextRequest) {
     const session = queries.getSession(db).get(id) as Session;
 
     // Get project's initial prompt if available
-    const project = projectId ? getProject(projectId) : null;
     const projectInitialPrompt = project?.initial_prompt?.trim();
     const sessionInitialPrompt = initialPrompt?.trim();
 
