@@ -178,6 +178,7 @@ export interface CreateSessionInput {
   name?: string;
   workingDirectory: string;
   projectId: string | null;
+  model: string;
   agentType: AgentType;
   useWorktree: boolean;
   featureName: string | null;

@@ -40,12 +40,6 @@ export const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
   { value: "omp", label: "Oh My Pi" },
 ];
 
-export const MODEL_OPTIONS = [
-  { value: "sonnet", label: "Sonnet" },
-  { value: "opus", label: "Opus" },
-  { value: "haiku", label: "Haiku" },
-];
-
 export function extractRepoName(url: string): string | null {
   const match = url.match(
     /(?:github\.com[/:][\w.-]+\/([\w.-]+?)(?:\.git)?|^([\w.-]+)\.git)$/

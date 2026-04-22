@@ -34,6 +34,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { devServerKeys } from "@/data/dev-servers";
 import { repositoryKeys } from "@/data/repositories";
 import type { AgentType } from "@/lib/providers";
+import {
+  getDefaultModelForAgent,
+  getModelOptions,
+  isSupportedModelForAgent,
+} from "@/lib/model-catalog";
 import type {
   ProjectWithRepositories,
   DetectedDevServer,
@@ -49,12 +54,6 @@ const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
   { value: "amp", label: "Amp" },
   { value: "pi", label: "Pi" },
   { value: "omp", label: "Oh My Pi" },
-];
-
-const MODEL_OPTIONS = [
-  { value: "sonnet", label: "Sonnet" },
-  { value: "opus", label: "Opus" },
-  { value: "haiku", label: "Haiku" },
 ];
 
 interface DevServerConfig {
@@ -93,7 +92,9 @@ export function ProjectSettingsDialog({
   const [name, setName] = useState("");
   const [workingDirectory, setWorkingDirectory] = useState("");
   const [agentType, setAgentType] = useState<AgentType>("claude");
-  const [defaultModel, setDefaultModel] = useState("sonnet");
+  const [defaultModel, setDefaultModel] = useState(
+    getDefaultModelForAgent("claude")
+  );
   const [initialPrompt, setInitialPrompt] = useState("");
   const [devServers, setDevServers] = useState<DevServerConfig[]>([]);
   const [repositories, setRepositories] = useState<RepositoryConfig[]>([]);
@@ -107,6 +108,10 @@ export function ProjectSettingsDialog({
 
   const updateProject = useUpdateProject();
   const queryClient = useQueryClient();
+  const modelOptions = getModelOptions(agentType);
+  const selectedModelLabel =
+    modelOptions.find((option) => option.value === defaultModel)?.label ||
+    "Select a model";
 
   // Initialize form when project changes
   useEffect(() => {
@@ -114,7 +119,11 @@ export function ProjectSettingsDialog({
       setName(project.name);
       setWorkingDirectory(project.working_directory);
       setAgentType(project.agent_type);
-      setDefaultModel(project.default_model);
+      setDefaultModel(
+        isSupportedModelForAgent(project.agent_type, project.default_model)
+          ? project.default_model
+          : getDefaultModelForAgent(project.agent_type)
+      );
       setInitialPrompt(project.initial_prompt || "");
       setDevServers(
         project.devServers.map((ds) => ({
@@ -434,6 +443,15 @@ export function ProjectSettingsDialog({
   const visibleDevServers = devServers.filter((ds) => !ds.isDeleted);
   const visibleRepositories = repositories.filter((repo) => !repo.isDeleted);
 
+  const handleAgentTypeChange = (value: AgentType) => {
+    setAgentType(value);
+    setDefaultModel((current) =>
+      isSupportedModelForAgent(value, current)
+        ? current
+        : getDefaultModelForAgent(value)
+    );
+  };
+
   if (!project) return null;
 
   return (
@@ -473,7 +491,7 @@ export function ProjectSettingsDialog({
               <label className="text-sm font-medium">Default Agent</label>
               <Select
                 value={agentType}
-                onValueChange={(v) => setAgentType(v as AgentType)}
+                onValueChange={(v) => handleAgentTypeChange(v as AgentType)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -491,12 +509,16 @@ export function ProjectSettingsDialog({
             {/* Default Model */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Default Model</label>
-              <Select value={defaultModel} onValueChange={setDefaultModel}>
+              <Select
+                key={agentType}
+                value={defaultModel}
+                onValueChange={setDefaultModel}
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>{selectedModelLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {MODEL_OPTIONS.map((opt) => (
+                  {modelOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
