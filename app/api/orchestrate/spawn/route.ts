@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { resolveModelForAgent } from "@/lib/model-catalog";
+import { isValidAgentType, type AgentType } from "@/lib/providers";
 import { spawnWorker } from "@/lib/orchestration";
 
 export async function POST(request: Request) {
@@ -10,9 +12,16 @@ export async function POST(request: Request) {
       workingDirectory,
       branchName,
       useWorktree = true,
-      model = "sonnet",
-      agentType = "claude",
+      model,
+      agentType: rawAgentType = "claude",
     } = body;
+    const agentType: AgentType = isValidAgentType(rawAgentType)
+      ? rawAgentType
+      : "claude";
+    const resolvedModel = resolveModelForAgent(
+      agentType,
+      typeof model === "string" ? model.trim() : model
+    );
 
     if (!conductorSessionId || !task || !workingDirectory) {
       return NextResponse.json(
@@ -30,7 +39,7 @@ export async function POST(request: Request) {
       workingDirectory,
       branchName,
       useWorktree,
-      model,
+      model: resolvedModel,
       agentType,
     });
 

@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import type { AgentType } from "@/lib/providers";
+import {
+  getDefaultModelForAgent,
+  isSupportedModelForAgent,
+} from "@/lib/model-catalog";
 import { useCreateProject, useDetectDevServers } from "@/data/projects";
 import { useGitCheck, useCloneRepo } from "@/data/git/queries";
 import {
@@ -20,7 +24,9 @@ export function useNewProjectForm(
   const [workingDirectory, setWorkingDirectory] = useState("~");
   const [debouncedDir, setDebouncedDir] = useState("~");
   const [agentType, setAgentType] = useState<AgentType>("claude");
-  const [defaultModel, setDefaultModel] = useState("opus");
+  const [defaultModel, setDefaultModel] = useState(
+    getDefaultModelForAgent("claude")
+  );
   const [devServers, setDevServers] = useState<DevServerConfig[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
@@ -105,13 +111,22 @@ export function useNewProjectForm(
     setName("");
     setWorkingDirectory("~");
     setAgentType("claude");
-    setDefaultModel("opus");
+    setDefaultModel(getDefaultModelForAgent("claude"));
     setDevServers([]);
     setGithubUrl("");
     setCloneStep(CLONE_STEP.IDLE);
     setError(null);
     onClose();
   };
+
+  const handleAgentTypeChange = useCallback((value: AgentType) => {
+    setAgentType(value);
+    setDefaultModel((current) =>
+      isSupportedModelForAgent(value, current)
+        ? current
+        : getDefaultModelForAgent(value)
+    );
+  }, []);
 
   const handleGithubUrlChange = (value: string) => {
     setGithubUrl(value);
@@ -222,7 +237,7 @@ export function useNewProjectForm(
     workingDirectory,
     setWorkingDirectory,
     agentType,
-    setAgentType,
+    handleAgentTypeChange,
     defaultModel,
     setDefaultModel,
     devServers,

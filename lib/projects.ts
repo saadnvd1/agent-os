@@ -19,6 +19,7 @@ import {
   type Session,
   type DevServerType,
 } from "./db";
+import { resolveModelForAgent } from "./model-catalog";
 import type { AgentType } from "./providers";
 
 const execAsync = promisify(exec);
@@ -96,7 +97,7 @@ export function createProject(
       opts.name,
       opts.workingDirectory,
       opts.agentType || "claude",
-      opts.defaultModel || "sonnet",
+      resolveModelForAgent(opts.agentType || "claude", opts.defaultModel),
       opts.initialPrompt || null,
       maxOrder + 1
     );
@@ -239,14 +240,18 @@ export function updateProject(
 ): Project | undefined {
   const project = getProject(id);
   if (!project || project.is_uncategorized) return undefined;
+  const agentType = updates.agent_type ?? project.agent_type;
 
   queries
     .updateProject(db)
     .run(
       updates.name ?? project.name,
       updates.working_directory ?? project.working_directory,
-      updates.agent_type ?? project.agent_type,
-      updates.default_model ?? project.default_model,
+      agentType,
+      resolveModelForAgent(
+        agentType,
+        updates.default_model ?? project.default_model
+      ),
       updates.initial_prompt !== undefined
         ? updates.initial_prompt
         : project.initial_prompt,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getProviderDefinition, type AgentType } from "@/lib/providers";
+import { resolveModelForAgent } from "@/lib/model-catalog";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import { setPendingPrompt } from "@/stores/initialPrompt";
 import { useCreateSession } from "@/data/sessions";
@@ -243,11 +244,17 @@ export function useNewSessionForm({
       }, 2000);
     }
 
+    const projectDefaultModel = projects.find(
+      (project) => project.id === projectId
+    )?.default_model;
+    const resolvedModel = resolveModelForAgent(agentType, projectDefaultModel);
+
     createSession.mutate(
       {
         name: name.trim() || undefined,
         workingDirectory,
         projectId,
+        model: resolvedModel,
         agentType,
         useWorktree,
         featureName: useWorktree ? featureName.trim() : null,
