@@ -8,6 +8,7 @@ export const PROVIDER_IDS = [
   "claude",
   "codex",
   "opencode",
+  "kilocode",
   "gemini",
   "aider",
   "cursor",
@@ -90,6 +91,18 @@ export const PROVIDERS: ProviderDefinition[] = [
     autoApproveFlag: undefined, // OpenCode manages this via config
     supportsResume: false,
     supportsFork: false,
+    initialPromptFlag: "--prompt",
+  },
+  {
+    id: "kilocode",
+    name: "Kilo Code",
+    description: "Kilo's AI coding CLI",
+    cli: "kilo",
+    configDir: "~/.config/kilo/kilo.json",
+    autoApproveFlag: undefined, // Kilo manages this via config
+    supportsResume: true,
+    supportsFork: true,
+    resumeFlag: "--session",
     initialPromptFlag: "--prompt",
   },
   {

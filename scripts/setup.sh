@@ -27,13 +27,20 @@ if ! command -v tmux &> /dev/null; then
 fi
 echo "tmux: $(tmux -V)"
 
-# Check Claude CLI
-if ! command -v claude &> /dev/null; then
-    echo "Error: Claude Code CLI is not installed"
-    echo "Install: npm install -g @anthropic-ai/claude-code"
+# Check AI coding CLI
+AI_CLI_FOUND=""
+for cli in claude codex opencode kilo gemini aider cursor-agent amp pi omp; do
+    if command -v "$cli" &> /dev/null; then
+        AI_CLI_FOUND="$AI_CLI_FOUND $cli"
+    fi
+done
+
+if [ -z "$AI_CLI_FOUND" ]; then
+    echo "Error: no supported AI coding CLI is installed"
+    echo "Install one of: Claude Code, Codex, OpenCode, Kilo Code CLI, Gemini CLI, Aider, Cursor CLI, Amp, Pi, or Oh My Pi"
     exit 1
 fi
-echo "Claude CLI: installed"
+echo "AI CLI(s):$AI_CLI_FOUND"
 
 # Check jq
 if ! command -v jq &> /dev/null; then

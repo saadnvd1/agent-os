@@ -72,6 +72,7 @@ You need at least one AI coding CLI installed. The installer will prompt you to 
 | Codex       | OpenAI    | `npm install -g @openai/codex`             |
 | Aider       | Multi-LLM | `pip install aider-chat`                   |
 | Gemini CLI  | Google    | `npm install -g gemini-cli`                |
+| Kilo Code CLI | Kilo   | `npm install -g @kilocode/cli`             |
 
 ## Configuration
 

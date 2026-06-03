@@ -93,6 +93,7 @@ export const AGENT_OPTIONS: {
   { value: "claude", label: "Claude Code", description: "Anthropic's CLI" },
   { value: "codex", label: "Codex", description: "OpenAI's CLI" },
   { value: "opencode", label: "OpenCode", description: "Multi-provider CLI" },
+  { value: "kilocode", label: "Kilo Code", description: "Kilo's AI coding CLI" },
   { value: "gemini", label: "Gemini CLI", description: "Google's CLI" },
   { value: "aider", label: "Aider", description: "AI pair programming" },
   { value: "cursor", label: "Cursor CLI", description: "Cursor's AI agent" },

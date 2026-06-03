@@ -241,6 +241,62 @@ export const opencodeProvider: AgentProvider = {
 };
 
 /**
+ * Kilo Code Provider
+ * Kilo's AI coding CLI
+ */
+export const kilocodeProvider: AgentProvider = {
+  id: "kilocode",
+  name: "Kilo Code",
+  description: "Kilo's AI coding CLI",
+  command: "kilo",
+  configDir: "~/.config/kilo/kilo.json",
+
+  supportsResume: true,
+  supportsFork: true,
+
+  buildFlags(options: BuildFlagsOptions): string[] {
+    const def = getProviderDefinition("kilocode");
+    const flags: string[] = [];
+
+    // AgentOS launches the interactive TUI; approval-bypass flags are only
+    // documented for `kilo run`, so interactive approvals are managed via config.
+    if (options.skipPermissions) {
+      // No documented skip-permissions flag for interactive mode.
+    }
+
+    if (options.sessionId && def.resumeFlag) {
+      flags.push(def.resumeFlag);
+      flags.push(options.sessionId);
+    } else if (options.parentSessionId && def.resumeFlag) {
+      flags.push(def.resumeFlag);
+      flags.push(options.parentSessionId);
+      flags.push("--fork");
+    }
+
+    if (options.initialPrompt?.trim() && def.initialPromptFlag) {
+      const prompt = options.initialPrompt.trim();
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      flags.push(def.initialPromptFlag);
+      flags.push(`'${escapedPrompt}'`);
+    }
+
+    return flags;
+  },
+
+  waitingPatterns: [
+    /\[Y\/n\]/i,
+    /\[y\/N\]/i,
+    /confirm/i,
+    /Press Enter/i,
+    /\(yes\/no\)/i,
+  ],
+
+  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
+
+  idlePatterns: [/^>\s*$/m, /kilo(?:code)?.*>\s*$/im, /\$\s*$/m],
+};
+
+/**
  * Gemini CLI Provider
  * Google's AI coding CLI powered by Gemini models
  */
@@ -576,6 +632,7 @@ export const providers: Record<AgentType, AgentProvider> = {
   claude: claudeProvider,
   codex: codexProvider,
   opencode: opencodeProvider,
+  kilocode: kilocodeProvider,
   gemini: geminiProvider,
   aider: aiderProvider,
   cursor: cursorProvider,

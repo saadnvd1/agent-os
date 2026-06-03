@@ -59,7 +59,7 @@ npm run dev  # http://localhost:3011
 - Node.js 20+
 - tmux
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (for code search - auto-installed by installer script, or run `agent-os update`)
-- At least one AI CLI: [Claude Code](https://github.com/anthropics/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://github.com/anomalyco/opencode), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Aider](https://aider.chat/), or [Cursor CLI](https://cursor.com/cli)
+- At least one AI CLI: [Claude Code](https://github.com/anthropics/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://github.com/anomalyco/opencode), [Kilo Code CLI](https://kilo.ai/docs/cli), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Aider](https://aider.chat/), or [Cursor CLI](https://cursor.com/cli)
 
 ## Supported Agents
 
@@ -68,6 +68,7 @@ npm run dev  # http://localhost:3011
 | Claude Code | ✅     | ✅   | `--dangerously-skip-permissions` |
 | Codex       | ❌     | ❌   | `--approval-mode full-auto`      |
 | OpenCode    | ❌     | ❌   | Config file                      |
+| Kilo Code   | ✅     | ✅   | Config file                      |
 | Gemini CLI  | ❌     | ❌   | `--yolomode`                     |
 | Aider       | ❌     | ❌   | `--yes`                          |
 | Cursor CLI  | ❌     | ❌   | N/A                              |

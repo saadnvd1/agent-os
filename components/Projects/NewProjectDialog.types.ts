@@ -32,6 +32,7 @@ export const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
   { value: "claude", label: "Claude Code" },
   { value: "codex", label: "Codex" },
   { value: "opencode", label: "OpenCode" },
+  { value: "kilocode", label: "Kilo Code" },
   { value: "gemini", label: "Gemini CLI" },
   { value: "aider", label: "Aider" },
   { value: "cursor", label: "Cursor CLI" },

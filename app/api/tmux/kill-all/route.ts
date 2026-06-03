@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { getDb, queries, type Session } from "@/lib/db";
+import { getManagedSessionPattern } from "@/lib/providers/registry";
 
 const execAsync = promisify(exec);
 
@@ -16,12 +17,11 @@ export async function POST() {
       { timeout: 5000 }
     );
 
+    const managedSessionPattern = getManagedSessionPattern();
     const tmuxSessions = stdout
       .trim()
       .split("\n")
-      .filter(
-        (s) => s && /^(claude|codex|opencode|gemini|aider|cursor)-/.test(s)
-      );
+      .filter((s) => s && managedSessionPattern.test(s));
 
     // Kill each tmux session
     const killed: string[] = [];
