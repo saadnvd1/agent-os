@@ -1,4 +1,10 @@
 import { ADropdownMenu, menuItem } from "@/components/a/ADropdownMenu";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Plus,
   FolderPlus,
@@ -6,6 +12,8 @@ import {
   GitBranch,
   MoreHorizontal,
   Trash2,
+  Pin,
+  PinOff,
 } from "lucide-react";
 
 interface SessionListHeaderProps {
@@ -13,6 +21,10 @@ interface SessionListHeaderProps {
   onOpenProject: () => void;
   onCloneFromGithub: () => void;
   onKillAll: () => void;
+  pinControls?: {
+    isPinned: boolean;
+    onTogglePin: () => void;
+  };
 }
 
 export function SessionListHeader({
@@ -20,6 +32,7 @@ export function SessionListHeader({
   onOpenProject,
   onCloneFromGithub,
   onKillAll,
+  pinControls,
 }: SessionListHeaderProps) {
   return (
     <div className="flex items-center justify-between px-3 py-2">
@@ -44,6 +57,26 @@ export function SessionListHeader({
         <h2 className="font-semibold">AgentOS</h2>
       </div>
       <div className="flex gap-1">
+        {pinControls && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={pinControls.onTogglePin}
+              >
+                {pinControls.isPinned ? (
+                  <PinOff className="h-4 w-4" />
+                ) : (
+                  <Pin className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{pinControls.isPinned ? "Unpin sidebar" : "Pin sidebar"}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
         <ADropdownMenu
           icon={Plus}
           tooltip="New project"

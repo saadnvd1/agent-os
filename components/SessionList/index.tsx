@@ -40,6 +40,7 @@ export function SessionList({
   onOpenTerminal,
   onStartDevServer,
   onCreateDevServer,
+  pinControls,
 }: SessionListProps) {
   const { isMobile } = useViewport();
 
@@ -161,6 +162,7 @@ export function SessionList({
           setShowNewProjectDialog(true);
         }}
         onKillAll={() => setShowKillAllConfirm(true)}
+        pinControls={pinControls}
       />
 
       {/* Kill All Confirmation */}
