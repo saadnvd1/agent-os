@@ -17,6 +17,12 @@ import {
   clearTabNotifications,
 } from "@/lib/notifications";
 
+// Temporarily disabled: notifications (toasts, sounds, browser notifications,
+// tab-title flash/badge) fire off the session status detector, which isn't
+// accurate enough yet (too many false positives). Flip back to true to
+// re-enable the whole system once detection is improved.
+const NOTIFICATIONS_ENABLED = false;
+
 type SessionStatus = "idle" | "running" | "waiting" | "error" | "dead";
 
 interface SessionState {
@@ -87,6 +93,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       sessionName: string,
       message?: string
     ) => {
+      if (!NOTIFICATIONS_ENABLED) return;
       if (!settings.enabled || !settings.events[event]) return;
 
       const titles: Record<NotificationEvent, string> = {
@@ -140,6 +147,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   // Check for state changes and notify
   const checkStateChanges = useCallback(
     (sessions: SessionState[], activeSessionId?: string | null) => {
+      if (!NOTIFICATIONS_ENABLED) return;
       if (!settings.enabled) return;
 
       let newWaitingCount = 0;
