@@ -1,10 +1,9 @@
 "use client";
 
-import { SessionList } from "@/components/SessionList";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
-import { SidebarFooter } from "@/components/SidebarFooter";
+import { DesktopSidebar } from "./DesktopSidebar";
 import { Button } from "@/components/ui/button";
 import {
   PanelLeftClose,
@@ -23,13 +22,12 @@ import {
 import { QuickSwitcher } from "@/components/QuickSwitcher";
 import type { ViewProps } from "./types";
 import { fileOpenActions } from "@/stores/fileOpen";
+import { useSidebarPinned } from "@/hooks/useSidebarPinned";
 
 export function DesktopView({
   sessions,
   projects,
   sessionStatuses,
-  sidebarOpen,
-  setSidebarOpen,
   activeSession,
   focusedActiveTab,
   copiedSessionId,
@@ -57,53 +55,48 @@ export function DesktopView({
   setStartDevServerProjectId,
   renderPane,
 }: ViewProps) {
+  const { isPinned, togglePin } = useSidebarPinned();
+
   return (
     <div className="bg-background flex h-screen overflow-hidden">
-      {/* Desktop Sidebar */}
-      <div
-        className={` ${sidebarOpen ? "w-60" : "w-0"} bg-sidebar-background flex-shrink-0 overflow-hidden shadow-xl shadow-black/10 transition-all duration-200 dark:shadow-black/30`}
-      >
-        <div className="flex h-full flex-col">
-          {/* Session list */}
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <SessionList
-              activeSessionId={focusedActiveTab?.sessionId || undefined}
-              sessionStatuses={sessionStatuses}
-              onSelect={(id) => {
-                const session = sessions.find((s) => s.id === id);
-                if (session) attachToSession(session);
-              }}
-              onOpenInTab={(id) => {
-                const session = sessions.find((s) => s.id === id);
-                if (session) openSessionInNewTab(session);
-              }}
-              onNewSessionInProject={handleNewSessionInProject}
-              onOpenTerminal={handleOpenTerminal}
-              onStartDevServer={handleStartDevServer}
-              onCreateDevServer={handleCreateDevServer}
-            />
-          </div>
-
-          <SidebarFooter />
-        </div>
-      </div>
+      <DesktopSidebar
+        isPinned={isPinned}
+        togglePin={togglePin}
+        activeSessionId={focusedActiveTab?.sessionId || undefined}
+        sessionStatuses={sessionStatuses}
+        onSelect={(id) => {
+          const session = sessions.find((s) => s.id === id);
+          if (session) attachToSession(session);
+        }}
+        onOpenInTab={(id) => {
+          const session = sessions.find((s) => s.id === id);
+          if (session) openSessionInNewTab(session);
+        }}
+        onNewSessionInProject={handleNewSessionInProject}
+        onOpenTerminal={handleOpenTerminal}
+        onStartDevServer={handleStartDevServer}
+        onCreateDevServer={handleCreateDevServer}
+      />
 
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
         <header className="flex items-center justify-between px-4 py-2">
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              {sidebarOpen ? (
-                <PanelLeftClose className="h-4 w-4" />
-              ) : (
-                <PanelLeft className="h-4 w-4" />
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-sm" onClick={togglePin}>
+                  {isPinned ? (
+                    <PanelLeftClose className="h-4 w-4" />
+                  ) : (
+                    <PanelLeft className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isPinned ? "Unpin sidebar" : "Pin sidebar"}</p>
+              </TooltipContent>
+            </Tooltip>
 
             {activeSession && (
               <div className="flex items-center gap-2">

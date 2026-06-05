@@ -22,6 +22,10 @@ export interface SessionListProps {
     workingDirectory: string;
     ports?: number[];
   }) => Promise<void>;
+  pinControls?: {
+    isPinned: boolean;
+    onTogglePin: () => void;
+  };
 }
 
 export interface SessionHoverHandlers {
