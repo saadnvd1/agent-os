@@ -16,6 +16,7 @@ import {
   updateTerminalTheme,
 } from "./terminal-init";
 import { setupTouchScroll } from "./touch-scroll";
+import { setupZoom } from "./zoom";
 import { createWebSocketConnection } from "./websocket-connection";
 import { setupResizeHandlers } from "./resize-handlers";
 
@@ -135,6 +136,7 @@ export function useTerminalConnection({
     // Reset intentional close flag (may be true from previous cleanup)
     intentionalCloseRef.current = false;
     let cleanupTouchScroll: (() => void) | null = null;
+    let cleanupZoom: (() => void) | null = null;
     let cleanupResizeHandlers: (() => void) | null = null;
     let cleanupWebSocket: (() => void) | null = null;
     let cleanupTerminal: (() => void) | null = null;
@@ -191,6 +193,9 @@ export function useTerminalConnection({
       cleanupWebSocket = wsManager.cleanup;
       reconnectFnRef.current = wsManager.reconnect;
 
+      // Setup pinch/trackpad zoom
+      cleanupZoom = setupZoom(term, fitAddon, wsManager.sendResize);
+
       // Setup resize handlers
       cleanupResizeHandlers = setupResizeHandlers({
         term,
@@ -222,6 +227,7 @@ export function useTerminalConnection({
 
       // Cleanup in reverse order
       cleanupResizeHandlers?.();
+      cleanupZoom?.();
       cleanupWebSocket?.();
       cleanupTouchScroll?.();
       cleanupTerminal?.();

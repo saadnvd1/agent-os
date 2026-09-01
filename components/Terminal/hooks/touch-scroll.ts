@@ -63,7 +63,7 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
     let scrollAccumulator = 0;
 
     handleTouchStart = (e: TouchEvent) => {
-      if (selectModeRef.current || e.touches.length === 0) return;
+      if (selectModeRef.current || e.touches.length !== 1) return;
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
@@ -73,7 +73,7 @@ export function setupTouchScroll(config: TouchScrollConfig): () => void {
     };
 
     handleTouchMove = (e: TouchEvent) => {
-      if (selectModeRef.current || e.touches.length === 0) return;
+      if (selectModeRef.current || e.touches.length !== 1) return;
       if (scrollDirection === null && startX === 0 && startY === 0) return;
 
       const touch = e.touches[0];
