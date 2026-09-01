@@ -6,6 +6,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { getTerminalThemeForApp } from "../constants";
+import { loadFontSize } from "./zoom";
 
 export interface TerminalInstance {
   term: XTerm;
@@ -31,7 +32,7 @@ export function createTerminal(
   isMobile: boolean,
   theme: string
 ): TerminalInstance {
-  const fontSize = isMobile ? 11 : 14;
+  const fontSize = loadFontSize();
   const terminalTheme = getTerminalThemeForApp(theme || "dark");
 
   const term = new XTerm({
@@ -129,11 +130,9 @@ export function updateTerminalForMobile(
   isMobile: boolean,
   sendResize: (cols: number, rows: number) => void
 ): void {
-  const newFontSize = isMobile ? 11 : 14;
   const newLineHeight = isMobile ? 1.15 : 1.2;
 
-  if (term.options.fontSize !== newFontSize) {
-    term.options.fontSize = newFontSize;
+  if (term.options.lineHeight !== newLineHeight) {
     term.options.lineHeight = newLineHeight;
     term.refresh(0, term.rows - 1);
     fitAddon.fit();
