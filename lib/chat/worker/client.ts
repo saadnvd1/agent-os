@@ -174,6 +174,9 @@ async function spawnWorker(sessionId: string): Promise<void> {
     name,
     "-c",
     process.cwd(),
+    // The worker finds its env file by DB_PATH, so it can't come from there.
+    "-e",
+    `DB_PATH=${env.DB_PATH}`,
     `exec ${shellQuote(process.execPath)} --import tsx ${shellQuote(entry)} ${shellQuote(sessionId)} > ${shellQuote(path.join(workerDir(), `${sessionId}.log`))} 2>&1`,
   ]);
 }

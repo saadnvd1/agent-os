@@ -36,6 +36,7 @@ export interface ChatConversation {
   setModel(model: string): Promise<void>;
   setAccess(access: ChatAccess): Promise<void>;
   respond(id: string, answer: ApprovalDecision): void;
+  stopTask(taskId: string): Promise<void>;
   // Puts files back as they were before a message (dryRun: only say what).
   undo(checkpoint: string, dryRun: boolean): Promise<UndoResult>;
   close(): void;

@@ -41,6 +41,9 @@ export function groupTimeline(items: ChatItem[]): TimelineBlock[] {
       tools.push(item);
     } else if (item.kind === "reasoning" && tools.length) {
       continue;
+    } else if (item.kind === "task") {
+      // Background work is listed by the composer, not in the conversation.
+      continue;
     } else if (
       item.kind === "approval" &&
       item.status !== "pending" &&

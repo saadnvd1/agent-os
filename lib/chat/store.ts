@@ -39,6 +39,9 @@ export function settle(items: ChatItem[]): ChatItem[] {
     if (item.kind === "approval" && item.status === "pending") {
       return { ...item, status: "expired" };
     }
+    if (item.kind === "task" && item.status === "running") {
+      return { ...item, status: "stopped" };
+    }
     return item;
   });
 }

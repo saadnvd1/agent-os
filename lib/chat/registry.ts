@@ -14,6 +14,16 @@ export interface Live {
   state: ChatState;
   // Streamed items carry their latest text here, ahead of SQLite.
   streaming: Map<string, ChatItem>;
+  // What the turn is doing right now, for the session list.
+  activity: ChatActivity;
+}
+
+export interface ChatActivity {
+  turnStartedAt?: number;
+  // Running tool calls by id: their label and when they started.
+  tools: Map<string, { label: string; since: number }>;
+  // Running background tasks (not housekeeping ones).
+  tasks: Set<string>;
 }
 
 export type Listener = (m: ChatServerMessage) => void;

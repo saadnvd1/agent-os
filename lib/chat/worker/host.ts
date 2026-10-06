@@ -125,6 +125,8 @@ export class ChatHost {
         return this.conversation.setAccess(cmd.access);
       case "respond":
         return this.conversation.respond(cmd.id, cmd);
+      case "stop_task":
+        return this.conversation.stopTask(cmd.taskId);
       case "undo":
         try {
           const result = await this.conversation.undo(

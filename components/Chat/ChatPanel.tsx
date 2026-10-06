@@ -8,7 +8,9 @@ import {
   type TimelineBlock,
 } from "@/lib/chat/group";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
+import { ActivityLine } from "./Activity";
 import { Approval } from "./Approval";
+import { BackgroundTasks } from "./BackgroundTasks";
 import { SubagentCard } from "./Subagent";
 import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
@@ -122,6 +124,9 @@ export function ChatPanel({
     undo,
     undoPreview,
     clearUndo,
+    stopTask,
+    loadTaskOutput,
+    taskOutputs,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -158,14 +163,16 @@ export function ChatPanel({
             </p>
           )}
           <Timeline blocks={blocks} actions={actions} />
-          {state === "running" && blocks.at(-1)?.type !== "tools" && (
-            <p className="text-muted-foreground animate-pulse text-xs">
-              Working…
-            </p>
-          )}
         </div>
       </div>
       <div className="mx-auto w-full max-w-3xl px-3 pb-3">
+        <ActivityLine items={items} state={state} onStop={interrupt} />
+        <BackgroundTasks
+          items={items}
+          outputs={taskOutputs}
+          onStop={stopTask}
+          onLoadOutput={loadTaskOutput}
+        />
         <Composer
           running={running}
           disabled={!connected}

@@ -303,3 +303,75 @@ describe("ClaudeMapper", () => {
     expect(skill).toMatchObject({ name: "Skill", title: "Skill: ship" });
   });
 });
+
+describe("ClaudeMapper background tasks", () => {
+  it("follows a task from start to finish as one item", () => {
+    const m = new ClaudeMapper();
+    const [started] = items(
+      m.map({
+        type: "system",
+        subtype: "task_started",
+        task_id: "b1",
+        tool_use_id: "t1",
+        description: "Watch the deploy",
+        task_type: "local_bash",
+      })
+    );
+    expect(started).toMatchObject({
+      id: "task-b1",
+      kind: "task",
+      status: "running",
+      description: "Watch the deploy",
+    });
+    const [progress] = items(
+      m.map({
+        type: "system",
+        subtype: "task_progress",
+        task_id: "b1",
+        description: "",
+        usage: { tool_uses: 3 },
+      })
+    );
+    expect(progress).toMatchObject({
+      description: "Watch the deploy",
+      toolUses: 3,
+      createdAt: started.createdAt,
+    });
+    const [done] = items(
+      m.map({
+        type: "system",
+        subtype: "task_notification",
+        task_id: "b1",
+        status: "failed",
+        output_file: "/tmp/b1.output",
+        summary: "exit 1",
+      })
+    );
+    expect(done).toMatchObject({
+      id: "task-b1",
+      status: "failed",
+      outputFile: "/tmp/b1.output",
+      summary: "exit 1",
+    });
+    expect((done as { endedAt?: number }).endedAt).toBeTypeOf("number");
+  });
+
+  it("titles a command by the agent's own description", () => {
+    const [tool] = items(
+      new ClaudeMapper().map({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "t2",
+              name: "Bash",
+              input: { command: "npm test", description: "Run the tests" },
+            },
+          ],
+        },
+      })
+    );
+    expect(tool).toMatchObject({ title: "Run the tests" });
+  });
+});

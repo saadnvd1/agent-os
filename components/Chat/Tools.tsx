@@ -6,7 +6,9 @@ import type { FileDiff } from "@/lib/chat/events";
 import type { ToolItem } from "@/lib/chat/group";
 import { lineDiff, shortPath, type DiffLine } from "@/lib/chat/diff";
 import { cn } from "@/lib/utils";
+import { formatElapsed } from "@/lib/chat/elapsed";
 import { Highlighted } from "./Code";
+import { useNow } from "./useNow";
 
 export function StatusIcon({ status }: { status: ToolItem["status"] }) {
   if (status === "running")
@@ -80,6 +82,20 @@ function ToolDetail({ tool }: { tool: ToolItem }) {
   );
 }
 
+// How long a step has run, or took once it's done (only when it's long
+// enough to matter).
+function Elapsed({ tool }: { tool: ToolItem }) {
+  const running = tool.status === "running";
+  const now = useNow(running);
+  const ms = (running ? now : (tool.endedAt ?? 0)) - tool.createdAt;
+  if (!running && (!tool.endedAt || ms < 3000)) return null;
+  return (
+    <span className="text-muted-foreground shrink-0 font-mono text-[11px] tabular-nums">
+      {formatElapsed(ms)}
+    </span>
+  );
+}
+
 function ToolRow({ tool }: { tool: ToolItem }) {
   const [open, setOpen] = useState(tool.status === "error" || !!tool.diff);
   return (
@@ -93,6 +109,7 @@ function ToolRow({ tool }: { tool: ToolItem }) {
         <span className="min-w-0 flex-1 truncate font-mono text-xs">
           {tool.title}
         </span>
+        <Elapsed tool={tool} />
       </button>
       {open && <ToolDetail tool={tool} />}
     </div>
@@ -106,7 +123,8 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
   const stopped = tools.filter((t) => t.status === "stopped").length;
   const edits = tools.filter((t) => t.diff).length;
   const [open, setOpen] = useState(false);
-  const latest = tools[tools.length - 1];
+  const latest =
+    tools.findLast((t) => t.status === "running") ?? tools[tools.length - 1];
   return (
     <div className="bg-foreground/[0.025] rounded-xl px-2 py-1">
       <button
@@ -129,6 +147,7 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
             : `${tools.length} step${tools.length === 1 ? "" : "s"}`}
           {!running && edits > 0 && ` · ${edits} edit${edits === 1 ? "" : "s"}`}
         </span>
+        {running && <Elapsed tool={latest} />}
         {failed > 0 && (
           <span className="text-destructive">{failed} failed</span>
         )}

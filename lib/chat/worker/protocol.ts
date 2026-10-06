@@ -33,6 +33,7 @@ export type WorkerCommand =
   | { type: "set_access"; access: ChatAccess }
   | ({ type: "respond"; id: string } & ApprovalDecision)
   | { type: "undo"; reqId: string; checkpoint: string; dryRun: boolean }
+  | { type: "stop_task"; taskId: string }
   | { type: "close" };
 
 // Worker -> server: what's live right now on connecting, then events.

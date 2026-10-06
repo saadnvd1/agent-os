@@ -31,6 +31,9 @@ export function useChat(
     from: string;
     preview: UndoPreview | null; // null while it loads
   } | null>(null);
+  const [taskOutputs, setTaskOutputs] = useState<Record<string, string | null>>(
+    {}
+  );
   const onUndoneRef = useRef(onUndone);
   useEffect(() => {
     onUndoneRef.current = onUndone;
@@ -60,6 +63,8 @@ export function useChat(
           setModels(m.models);
           setModelState(m.model);
           setAccessState(m.access);
+        } else if (m.type === "task_output") {
+          setTaskOutputs((prev) => ({ ...prev, [m.taskId]: m.text }));
         } else if (m.type === "undo_preview") {
           setUndoPreview({ from: m.from, preview: m.preview });
         } else if (m.type === "undone") {
@@ -136,6 +141,14 @@ export function useChat(
     wsRef.current?.send(JSON.stringify({ type: "undo", from, dryRun }));
   }, []);
 
+  const stopTask = useCallback((taskId: string) => {
+    wsRef.current?.send(JSON.stringify({ type: "stop_task", taskId }));
+  }, []);
+
+  const loadTaskOutput = useCallback((taskId: string) => {
+    wsRef.current?.send(JSON.stringify({ type: "task_output", taskId }));
+  }, []);
+
   return {
     items,
     state,
@@ -152,5 +165,8 @@ export function useChat(
     undo,
     undoPreview,
     clearUndo: () => setUndoPreview(null),
+    stopTask,
+    loadTaskOutput,
+    taskOutputs,
   };
 }

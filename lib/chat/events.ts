@@ -72,6 +72,8 @@ export type ChatItem =
       status: ToolStatus;
       output?: string;
       diff?: FileDiff;
+      // When it finished, to show how long a step took.
+      endedAt?: number;
     })
   | (Base & {
       kind: "todos";
@@ -100,6 +102,24 @@ export type ChatItem =
       // Whether "always allow" is on offer.
       canAlways: boolean;
       status: "pending" | "allowed" | "denied" | "answered" | "expired";
+    })
+  | (Base & {
+      // Work the agent runs alongside the turn: a background shell, a
+      // subagent, a monitor. Shown in the composer, not the timeline.
+      kind: "task";
+      taskId: string;
+      toolUseId?: string;
+      description: string;
+      taskType?: string;
+      subagentType?: string;
+      status: "running" | "completed" | "failed" | "stopped";
+      endedAt?: number;
+      summary?: string;
+      outputFile?: string;
+      toolUses?: number;
+      lastToolName?: string;
+      // Housekeeping the agent runs on its own: listed, never counted.
+      ambient?: boolean;
     })
   | (Base & {
       kind: "undo";
@@ -144,6 +164,7 @@ export type ChatServerMessage =
       access: ChatAccess;
     }
   | { type: "undo_preview"; from: string; preview: UndoPreview }
+  | { type: "task_output"; taskId: string; text: string | null }
   | { type: "undone"; from: string; text: string };
 
 // What a browser sends.
@@ -153,4 +174,6 @@ export type ChatClientMessage =
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }
   | ({ type: "respond"; id: string } & ApprovalDecision)
-  | { type: "undo"; from: string; dryRun?: boolean };
+  | { type: "undo"; from: string; dryRun?: boolean }
+  | { type: "stop_task"; taskId: string }
+  | { type: "task_output"; taskId: string };

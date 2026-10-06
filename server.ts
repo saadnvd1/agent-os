@@ -8,12 +8,14 @@ import { buildAttachProcess, type AttachSpec } from "./lib/hosts/attach";
 import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
 import {
+  chatTaskOutput,
   interruptChat,
   reattachChats,
   respondChat,
   sendChat,
   setChatAccess,
   setChatModel,
+  stopChatTask,
   undoChat,
   watchChat,
 } from "./lib/chat/runner";
@@ -112,6 +114,13 @@ app.prepare().then(() => {
         else if (msg.type === "set_access")
           void setChatAccess(sessionId, msg.access);
         else if (msg.type === "respond") respondChat(sessionId, msg.id, msg);
+        else if (msg.type === "stop_task") stopChatTask(sessionId, msg.taskId);
+        else if (msg.type === "task_output")
+          reply({
+            type: "task_output",
+            taskId: msg.taskId,
+            text: chatTaskOutput(sessionId, msg.taskId),
+          });
         else if (msg.type === "undo")
           void undoChat(sessionId, msg.from, !!msg.dryRun, reply).catch((err) =>
             reply({
