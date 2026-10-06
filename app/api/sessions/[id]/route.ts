@@ -7,6 +7,7 @@ import { hostExec } from "@/lib/hosts";
 import { shellQuote } from "@/lib/hosts/ssh";
 import { supportsChat } from "@/lib/chat/capabilities";
 import { stopChat } from "@/lib/chat/runner";
+import { statusDetector } from "@/lib/status-detector";
 import { deleteItems } from "@/lib/chat/store";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 import { runInBackground } from "@/lib/async-operations";
@@ -69,6 +70,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           { error: `${existing.agent_type} sessions can't run as chat yet` },
           { status: 400 }
         );
+      }
+      if (body.view === "chat" && existing.view !== "chat") {
+        // Switching kills the terminal's agent, so never while it's working.
+        if (existing.task_prompt)
+          return NextResponse.json(
+            { error: "Tasks run in the terminal" },
+            { status: 400 }
+          );
+        if (
+          existing.tmux_name &&
+          (await statusDetector.getStatus(existing.tmux_name)) === "running"
+        )
+          return NextResponse.json(
+            {
+              error:
+                "The agent is working in the terminal; switch once it's done",
+            },
+            { status: 409 }
+          );
       }
       if (body.view === "terminal") stopChat(id);
       if (body.view === "chat" && existing.tmux_name) {

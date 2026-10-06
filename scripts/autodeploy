@@ -14,14 +14,14 @@ fi
 
 state="$HOME/.agent-os/autodeploy"
 mkdir -p "$state"
-# One run at a time; a deploy can outlast the minute.
-if ! mkdir "$state/lock" 2>/dev/null; then
-  # A lock older than 30 minutes is from a run that died.
-  if [ -n "$(find "$state/lock" -maxdepth 0 -mmin +30)" ]; then
-    rmdir "$state/lock"
+# A lock older than 30 minutes is from a run that died.
+for lock in lock publish.lock; do
+  if [ -d "$state/$lock" ] && [ -n "$(find "$state/$lock" -maxdepth 0 -mmin +30)" ]; then
+    rmdir "$state/$lock"
   fi
-  exit 0
-fi
+done
+# One deploy at a time; a deploy can outlast the minute.
+mkdir "$state/lock" 2>/dev/null || exit 0
 trap 'rmdir "$state/lock"' EXIT
 
 git fetch -q origin main
@@ -29,7 +29,6 @@ head=$(git rev-parse origin/main)
 deployed=$(cat "$state/deployed" 2>/dev/null || true)
 published=$(cat "$state/published" 2>/dev/null || true)
 [ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
-
 log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
 
 if [ "$head" != "$deployed" ]; then
@@ -38,15 +37,18 @@ if [ "$head" != "$deployed" ]; then
   echo "$head" > "$state/deployed"
 fi
 
-if [ "$head" != "$published" ]; then
-  # From a clean copy of the commit, so the live checkout is never touched.
-  tmp=$(mktemp -d)
-  trap 'rmdir "$state/lock"; rm -rf "$tmp"' EXIT
-  git archive "$head" | tar -x -C "$tmp"
-  base=$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")')
-  version="$base.$(git rev-list --count "$head")"
-  (cd "$tmp" && npm version "$version" --no-git-tag-version --allow-same-version >/dev/null)
-  log "Publishing $version"
-  "$tmp/scripts/publish"
-  echo "$head" > "$state/published"
+# Publishing waits minutes for npm to serve a version, so it runs on its own
+# with its own lock and never holds up the next deploy.
+if [ "$head" != "$published" ] && mkdir "$state/publish.lock" 2>/dev/null; then
+  (
+    trap 'rmdir "$state/publish.lock"; rm -rf "$tmp"' EXIT
+    tmp=$(mktemp -d)
+    git archive "$head" | tar -x -C "$tmp"
+    base=$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")')
+    version="$base.$(git rev-list --count "$head")"
+    (cd "$tmp" && npm version "$version" --no-git-tag-version --allow-same-version >/dev/null)
+    log "Publishing $version"
+    "$tmp/scripts/publish" && echo "$head" > "$state/published"
+  ) &
+  disown
 fi
