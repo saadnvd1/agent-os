@@ -127,8 +127,13 @@ async function deliver(
 ): Promise<boolean> {
   // Chat sessions get the message as their next prompt.
   if (to.view === "chat") {
-    sendChat(to.id, { text: line, from: fromName });
-    return true;
+    try {
+      await sendChat(to.id, { text: line, from: fromName });
+      return true;
+    } catch (error) {
+      console.error("Could not deliver to chat:", error);
+      return false;
+    }
   }
   if (!statusDetector.sessionExists(to.tmux_name)) return false;
   const target = shellQuote(`=${to.tmux_name}:`);

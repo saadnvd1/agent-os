@@ -1,3 +1,4 @@
+import { WORKER_TMUX_PREFIX } from "../chat/worker/protocol";
 import type { Project, Session } from "../db";
 import type { TmuxSessionInfo } from "../status-detector";
 
@@ -37,7 +38,9 @@ export function discoverSessions(
     .sort((a, b) => b.dir.length - a.dir.length);
 
   return tmuxSessions
-    .filter((t) => !managedNames.has(t.name))
+    .filter(
+      (t) => !managedNames.has(t.name) && !t.name.startsWith(WORKER_TMUX_PREFIX)
+    )
     .map((t) => {
       const path = homeRelative(t.path);
       const match = dirs.find(

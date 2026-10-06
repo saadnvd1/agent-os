@@ -117,7 +117,9 @@ export async function setChatModel(
     value,
     sessionId
   );
-  await registry.live.get(sessionId)?.conversation.setModel(value);
+  registry.live
+    .get(sessionId)
+    ?.worker.command({ type: "set_model", model: value });
   emitCapabilities(getSession(sessionId));
 }
 
@@ -131,6 +133,6 @@ export async function setChatAccess(
     access,
     sessionId
   );
-  await registry.live.get(sessionId)?.conversation.setAccess(access);
+  registry.live.get(sessionId)?.worker.command({ type: "set_access", access });
   emitCapabilities(getSession(sessionId));
 }
