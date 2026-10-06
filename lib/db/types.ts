@@ -22,6 +22,10 @@ export interface Session {
   task_status: "running" | "merged" | "dropped" | null;
   // How the session is shown: a chat conversation or a terminal.
   view: "chat" | "terminal";
+  // LumifyHub card this task moves (and the board it's on)
+  lh_card_id: string | null;
+  lh_board_id: string | null;
+  lh_card_list: string | null;
   // Worktree fields (optional)
   worktree_path: string | null;
   branch_name: string | null;
@@ -57,6 +61,9 @@ export interface Project {
   is_uncategorized: boolean;
   host_id: string;
   workspace_id: string | null;
+  lh_board_id: string | null;
+  lh_board_name: string | null;
+  lh_board_page_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -124,6 +131,9 @@ export interface Workspace {
   name: string;
   sort_order: number;
   collapsed: boolean;
+  lh_workspace_id: string | null;
+  lh_workspace_slug: string | null;
+  lh_workspace_name: string | null;
   created_at: string;
 }
 
