@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { checksVerdict, type TaskPR } from "./state";
+import { checksVerdict, failingCheck, type TaskPR } from "./state";
 
 const execFileAsync = promisify(execFile);
 
@@ -35,7 +35,7 @@ export async function findPRStrict(
       "--limit",
       "1",
       "--json",
-      "number,url,state,statusCheckRollup",
+      "number,url,state,headRefOid,statusCheckRollup",
     ],
     repoDir,
     15000
@@ -44,7 +44,8 @@ export async function findPRStrict(
     number: number;
     url: string;
     state: TaskPR["state"];
-    statusCheckRollup: Parameters<typeof checksVerdict>[0] | null;
+    headRefOid?: string;
+    statusCheckRollup: Parameters<typeof failingCheck>[0] | null;
   }>;
   if (!pr) return null;
   return {
@@ -52,6 +53,8 @@ export async function findPRStrict(
     url: pr.url,
     state: pr.state,
     checks: checksVerdict(pr.statusCheckRollup ?? []),
+    head: pr.headRefOid,
+    failing: failingCheck(pr.statusCheckRollup ?? []),
   };
 }
 

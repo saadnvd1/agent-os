@@ -4,12 +4,17 @@ import type { ReactNode } from "react";
 import type { Session } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import { useWorkspacesQuery } from "@/data/workspaces";
+import type { SessionStatus } from "@/components/SessionList/SessionList.types";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { OrchestratorRow } from "./OrchestratorRow";
 
 interface WorkspaceGroupsProps<P extends ProjectWithDevServers> {
   projects: P[];
+  // Every session, the workspaces' orchestrators included.
   sessions: Session[];
-  sessionStatuses?: Record<string, { status: string }>;
+  sessionStatuses?: Record<string, SessionStatus>;
+  activeSessionId?: string;
+  onSelect: (sessionId: string) => void;
   renderProjects: (projects: P[]) => ReactNode;
 }
 
@@ -19,6 +24,8 @@ export function WorkspaceGroups<P extends ProjectWithDevServers>({
   projects,
   sessions,
   sessionStatuses,
+  activeSessionId,
+  onSelect,
   renderProjects,
 }: WorkspaceGroupsProps<P>) {
   const { data: workspaces = [] } = useWorkspacesQuery();
@@ -47,13 +54,33 @@ export function WorkspaceGroups<P extends ProjectWithDevServers>({
       {ungrouped.length > 0 && renderProjects(urgentFirst(ungrouped))}
       {workspaces.map((workspace) => {
         const members = projects.filter((p) => p.workspace_id === workspace.id);
+        const orchestrator = sessions.find(
+          (s) => s.role === "orchestrator" && s.workspace_id === workspace.id
+        );
+        const orchestratorWaiting =
+          !!orchestrator &&
+          sessionStatuses?.[orchestrator.id]?.status === "waiting";
         return (
           <div key={workspace.id}>
             <WorkspaceHeader
               workspace={workspace}
               projectCount={members.length}
-              needsYou={needsYou(new Set(members.map((p) => p.id)))}
+              needsYou={
+                needsYou(new Set(members.map((p) => p.id))) +
+                Number(orchestratorWaiting)
+              }
             />
+            {!workspace.collapsed && (
+              <OrchestratorRow
+                workspaceId={workspace.id}
+                session={orchestrator}
+                status={
+                  orchestrator ? sessionStatuses?.[orchestrator.id] : undefined
+                }
+                active={!!orchestrator && orchestrator.id === activeSessionId}
+                onSelect={onSelect}
+              />
+            )}
             {!workspace.collapsed &&
               (members.length > 0 ? (
                 renderProjects(urgentFirst(members))

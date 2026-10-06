@@ -47,11 +47,23 @@ async function main(sessionId: string) {
     for (const c of clients) c.write(line);
   };
 
+  // Only orchestrators get role extras; their module loads only for them.
+  const extras =
+    session.role === "orchestrator"
+      ? await (
+          await import("../../orchestrator/worker")
+        ).orchestratorExtras(session)
+      : {};
+
   let idleTimer: NodeJS.Timeout | undefined;
-  const host = new ChatHost(session, (e) => {
-    emit(e);
-    if (e.type === "state") armIdle();
-  });
+  const host = new ChatHost(
+    session,
+    (e) => {
+      emit(e);
+      if (e.type === "state") armIdle();
+    },
+    extras
+  );
   function armIdle() {
     clearTimeout(idleTimer);
     if (host.state === "idle")

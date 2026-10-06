@@ -26,6 +26,9 @@ export interface Session {
   chat_access: ChatAccess;
   chat_resume_at: string | null;
   last_seen_at: string | null;
+  // A workspace's standing orchestrator chat (and that workspace), or null.
+  role: "orchestrator" | null;
+  workspace_id: string | null;
   // LumifyHub card this task moves (and the board it's on)
   lh_card_id: string | null;
   lh_board_id: string | null;

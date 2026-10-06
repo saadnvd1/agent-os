@@ -129,6 +129,8 @@ export async function setChatAccess(
   access: ChatAccess
 ): Promise<void> {
   if (!CHAT_ACCESS.includes(access)) return;
+  // An orchestrator's access is fixed by its role.
+  if (getSession(sessionId).role === "orchestrator") return;
   db.prepare(`UPDATE sessions SET chat_access = ? WHERE id = ?`).run(
     access,
     sessionId

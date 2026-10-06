@@ -103,9 +103,12 @@ function Timeline({
 export function ChatPanel({
   sessionId,
   sessionName,
+  accessLocked = false,
 }: {
   sessionId: string;
   sessionName: string;
+  // Its access is set by its role (an orchestrator), not picked here.
+  accessLocked?: boolean;
 }) {
   const [prefill, setPrefill] = useState<{ text: string; at: number }>();
   const {
@@ -188,7 +191,7 @@ export function ChatPanel({
           model={model}
           onSetModel={setModel}
           access={access}
-          onSetAccess={setAccess}
+          onSetAccess={accessLocked ? undefined : setAccess}
           prefill={prefill}
         />
       </div>
