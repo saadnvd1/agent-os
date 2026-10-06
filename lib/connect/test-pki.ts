@@ -1,4 +1,4 @@
-/** Test-only: a throwaway CA and leaf certificates, minted with openssl. */
+/** Test-only: a throwaway CA and leaf certificates, minted with openssl. Shared with the relay. */
 
 import { execFileSync } from "child_process";
 import fs from "fs";

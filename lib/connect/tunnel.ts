@@ -31,6 +31,8 @@ export function startTunnel(opts: TunnelOptions) {
     const { relayUrl, relayServername, relayCa } = opts.config;
     // ws hands these to tls.connect; servername isn't in its own types.
     const tlsOptions = {
+      // Frames are at most 64 KB; nothing legitimate comes near this.
+      maxPayload: 1 << 20,
       servername: relayServername,
       ca: relayCa,
       headers: relayServername ? { Host: relayServername } : undefined,

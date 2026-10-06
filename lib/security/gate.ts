@@ -43,11 +43,16 @@ export function authPolicy(env = process.env): AuthPolicy {
   };
 }
 
+// Connect streams have no address. Give them a fixed label so rate limits
+// can't be steered by headers the caller chose.
+export const sourceLabel = (remote?: string) =>
+  plainAddress(remote) || "connect";
+
 function decide(req: IncomingMessage, policy: AuthPolicy): AuthResult {
   // Never trust a client-supplied verdict.
   delete req.headers[DEVICE_HEADER];
   delete req.headers[TRUST_HEADER];
-  req.headers[REMOTE_HEADER] = plainAddress(req.socket.remoteAddress);
+  req.headers[REMOTE_HEADER] = sourceLabel(req.socket.remoteAddress);
   const result = authorize(
     {
       url: req.url,
