@@ -216,6 +216,26 @@ Group projects into workspaces (e.g. Work, Personal) from the **+** menu.
 Each workspace is a collapsible sidebar section showing how many sessions need
 you; move a project in from its menu. Deleting a workspace keeps its projects.
 
+### Orchestrator
+
+Each workspace has one standing orchestrator, pinned at the top of its
+section: a chat that runs the work across the workspace's projects. It's made
+the first time you open it, works from a scratch folder in
+`~/.agent-os/orchestrators/<workspace>`, and is never swept with idle sessions.
+Its brief lists the workspace's projects (path, board, default branch), what
+it may do on its own, and the lines that always come back to you as asks.
+
+- **Tools:** `sessions` (every session's status, activity, task, PR, CI and
+  stack position), `read` (the end of a terminal or chat) and `cards` (the
+  linked boards' cards), served in-process to its chat. Read-only for now; it
+  acts through `aos`.
+- **Events:** the server sends it one short line per event (a PR opened, CI
+  green or failed, a `BLOCKED:` line, a merge, a session needing input, a
+  stack step, a task idle 30 minutes with no PR). Events wait while its turn
+  runs, duplicates fold, and at most one batched message goes out per 30
+  seconds. What it has been told is kept in `orchestrator_events`, so a
+  restart resends nothing. Set `AGENTOS_ORCHESTRATOR=off` to stop events.
+
 ## LumifyHub (optional)
 
 AgentOS works fully without a LumifyHub account. Connecting one, from a

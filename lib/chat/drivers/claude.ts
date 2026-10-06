@@ -75,6 +75,8 @@ export const claudeDriver: ChatDriver = {
         permissionMode: SDK_MODE[options.access],
         allowDangerouslySkipPermissions: true,
         canUseTool: approvals.canUseTool,
+        mcpServers: options.mcpServers,
+        allowedTools: options.allowedTools,
         hooks: {
           PreToolUse: [
             {

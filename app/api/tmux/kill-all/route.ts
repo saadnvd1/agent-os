@@ -34,8 +34,11 @@ export async function POST() {
       }
     }
 
-    // Delete ALL sessions from database
-    const dbSessions = queries.getAllSessions(db).all() as Session[];
+    // Delete every session from the database but the workspaces'
+    // orchestrators, which are never swept.
+    const dbSessions = (queries.getAllSessions(db).all() as Session[]).filter(
+      (s) => s.role !== "orchestrator"
+    );
     for (const session of dbSessions) {
       try {
         queries.deleteSession(db).run(session.id);

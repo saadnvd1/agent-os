@@ -7,6 +7,9 @@ export interface TaskPR {
   url: string;
   state: "OPEN" | "MERGED" | "CLOSED";
   checks: ChecksVerdict;
+  // The head commit the checks ran on, and the first failing check's name.
+  head?: string;
+  failing?: string | null;
 }
 
 export type TaskState =
@@ -100,8 +103,33 @@ export function checksVerdict(
   return "pass";
 }
 
+const BLOCKED_LINE = /^\s*[⏺●•]?\s*BLOCKED:\s*(.*)$/m;
+
 export function isBlocked(paneTail: string): boolean {
-  return /^\s*[⏺●•]?\s*BLOCKED:/m.test(paneTail);
+  return BLOCKED_LINE.test(paneTail);
+}
+
+// What the agent said it needs, from its last BLOCKED: line.
+export function blockedReason(paneTail: string): string | null {
+  const lines = paneTail.split("\n").filter((l) => BLOCKED_LINE.test(l));
+  const last = lines.at(-1);
+  return last ? (BLOCKED_LINE.exec(last)?.[1].trim() ?? "") : null;
+}
+
+// The first failing check in gh's statusCheckRollup, by name.
+export function failingCheck(
+  rollup: Array<{
+    name?: string | null;
+    context?: string | null;
+    conclusion?: string | null;
+    state?: string | null;
+  }>
+): string | null {
+  const bad = ["FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED"];
+  const c = rollup.find((r) =>
+    bad.includes((r.conclusion || r.state || "").toUpperCase())
+  );
+  return c ? (c.name ?? c.context ?? null) : null;
 }
 
 // Keys that answer Claude's folder-trust prompt with "trust", or null when the

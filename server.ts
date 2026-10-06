@@ -21,6 +21,7 @@ import {
 } from "./lib/chat/runner";
 import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
 import { startStackWatcher } from "./lib/stacks";
+import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
 import {
   bindAddresses,
   requestAllowed,
@@ -317,4 +318,6 @@ app.prepare().then(() => {
   void reattachChats();
   // Stacks start their next cards from here; their state is in the database.
   if (process.env.AGENTOS_STACKS !== "off") startStackWatcher();
+  // Each workspace's orchestrator hears about its sessions as events.
+  if (process.env.AGENTOS_ORCHESTRATOR !== "off") startOrchestratorWatcher();
 });

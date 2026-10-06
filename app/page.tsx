@@ -47,6 +47,7 @@ import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
 import { useQuickStart } from "@/hooks/useQuickStart";
+import { useOpenOrchestrator } from "@/hooks/useOpenOrchestrator";
 
 function HomeContent() {
   // UI State
@@ -469,6 +470,15 @@ function HomeContent() {
 
   // A project row with no sessions starts one in a tap.
   useQuickStart(handleSessionCreated);
+  // A workspace's orchestrator row opens its chat, made on first open.
+  const handleOrchestratorOpened = useCallback(
+    (sessionId: string) => {
+      if (isMobile) setSidebarOpen(false);
+      void handleSessionCreated(sessionId);
+    },
+    [isMobile, handleSessionCreated]
+  );
+  useOpenOrchestrator(handleOrchestratorOpened);
 
   // Project created handler (shared between desktop/mobile)
   const handleCreateProject = useCallback(

@@ -10,23 +10,10 @@ import {
   getSessionIdFromName,
 } from "@/lib/providers/registry";
 import { getDb, type Session } from "@/lib/db";
-import { chatActivity, chatState } from "@/lib/chat/runner";
+import { chatState } from "@/lib/chat/runner";
+import { chatActivityLine } from "@/lib/chat/activity";
 import { needsYou } from "@/lib/needs-you";
-import { formatElapsed } from "@/lib/chat/elapsed";
 
-// What a chat session is doing right now: "Run the tests · 2m 14s".
-function activityLine(sessionId: string): string | null {
-  const a = chatActivity(sessionId);
-  if (!a) return null;
-  const background = a.background
-    ? `${a.background} running in background`
-    : "";
-  if (a.label === "Idle") return background || null;
-  const parts = [a.label];
-  if (a.since) parts.push(formatElapsed(Date.now() - a.since));
-  if (background) parts.push(background);
-  return parts.join(" · ");
-}
 import { lastUserTask } from "@/lib/chat/store";
 
 import { hostExec, isRemoteHost } from "@/lib/hosts";
@@ -278,7 +265,7 @@ export async function GET() {
             : needsYou(session, state)
               ? "waiting"
               : "idle",
-        task: activityLine(session.id) ?? lastUserTask(session.id),
+        task: chatActivityLine(session.id) ?? lastUserTask(session.id),
         agentType: session.agent_type,
       };
     }

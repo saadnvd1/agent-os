@@ -1,3 +1,4 @@
+import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 import type {
   ApprovalDecision,
   ChatAccess,
@@ -19,6 +20,10 @@ export interface ChatStartOptions {
   // Extra instructions appended to the provider's own system prompt.
   systemAppend?: string;
   env: Record<string, string>;
+  // Tools served in-process for this conversation, and tools it may use
+  // without asking.
+  mcpServers?: Record<string, McpServerConfig>;
+  allowedTools?: string[];
 }
 
 // One live conversation with an agent. Messages sent while a turn runs are

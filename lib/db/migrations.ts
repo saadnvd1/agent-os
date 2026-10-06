@@ -415,6 +415,33 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    id: 26,
+    name: "add_workspace_orchestrator",
+    up: (db) => {
+      // One standing orchestrator chat per workspace. Its events are kept
+      // by key: a key present means that event is known, delivered or queued.
+      db.exec(`ALTER TABLE sessions ADD COLUMN role TEXT`);
+      db.exec(`ALTER TABLE sessions ADD COLUMN workspace_id TEXT`);
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_orchestrator
+         ON sessions(workspace_id) WHERE role = 'orchestrator'`
+      );
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS orchestrator_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          workspace_id TEXT NOT NULL,
+          key TEXT NOT NULL,
+          subject TEXT,
+          line TEXT NOT NULL,
+          sticky INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          delivered_at TEXT,
+          UNIQUE (workspace_id, key)
+        )
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

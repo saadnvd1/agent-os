@@ -71,7 +71,9 @@ export function SessionList({
   const isInitialLoading = isSessionsPending || isProjectsPending;
   const hasError = isSessionsError || isProjectsError;
 
-  const sessions = sessionsData?.sessions ?? [];
+  const allSessions = sessionsData?.sessions ?? [];
+  // Orchestrators are pinned in their workspace, not listed in a project.
+  const sessions = allSessions.filter((s) => s.role !== "orchestrator");
   const docsWorkspace = useDocsWorkspace(
     sessions.find((s) => s.id === activeSessionId)?.project_id
   );
@@ -257,15 +259,17 @@ export function SessionList({
           {!isInitialLoading && !hasError && useProjectsView && (
             <>
               <NeedsYouPill
-                sessions={sessions}
+                sessions={allSessions}
                 sessionStatuses={sessionStatuses}
                 activeSessionId={activeSessionId}
                 onSelect={onSelect}
               />
               <WorkspaceGroups
                 projects={projects}
-                sessions={sessions}
+                sessions={allSessions}
                 sessionStatuses={sessionStatuses}
+                activeSessionId={activeSessionId}
+                onSelect={onSelect}
                 renderProjects={(subset) => (
                   <ProjectsSection
                     projects={subset}
