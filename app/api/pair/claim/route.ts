@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { claimPairing } from "@/lib/security/pairing";
 import { REMOTE_HEADER } from "@/lib/security/auth";
+import { rateLimitKey } from "@/lib/security/rate-limit-key";
 import { deviceCookie, isHttps } from "@/lib/security/cookie";
-
-// Behind a proxy on this machine every claim comes from loopback; key on the
-// client it names too. Anywhere else the forwarded header is the caller's own
-// choice, so it's ignored (Connect streams are all "connect"). The global
-// cap in pairing.ts applies either way.
-function rateLimitKey(request: NextRequest): string {
-  const remote = request.headers.get(REMOTE_HEADER) ?? "unknown";
-  if (remote !== "127.0.0.1" && remote !== "::1") return remote;
-  const client = request.headers.get("x-forwarded-for")?.split(",")[0].trim();
-  return client ? `${remote}>${client}` : remote;
-}
 
 // POST /api/pair/claim - reachable without a token; trades a code for one
 export async function POST(request: NextRequest) {
@@ -26,7 +16,10 @@ export async function POST(request: NextRequest) {
     code: body.code,
     name: body.name ?? "",
     userAgent: request.headers.get("user-agent"),
-    address: rateLimitKey(request),
+    address: rateLimitKey(
+      request.headers.get(REMOTE_HEADER),
+      request.headers.get("x-forwarded-for")
+    ),
   });
   if (!result.ok) {
     const status = result.error === "rate_limited" ? 429 : 400;

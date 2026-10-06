@@ -9,6 +9,7 @@ import { TunnelStream } from "./stream";
 
 // Past this much unsent data, writers wait for the socket to drain.
 const HIGH_WATER = 1 << 20;
+export const MAX_STREAMS = 256;
 
 export interface OpenMeta {
   remote?: string;
@@ -73,6 +74,11 @@ export class Mux {
     switch (f.type) {
       case Frame.OPEN: {
         if (!this.onOpen || this.streams.has(f.stream)) return null;
+        // The relay doesn't get to open unlimited connections into this machine.
+        if (this.streams.size >= MAX_STREAMS) {
+          this.ws.send(encode(Frame.CLOSE, f.stream));
+          return null;
+        }
         const meta = json<OpenMeta>(f.payload) ?? {};
         const created = this.stream(f.stream);
         created.remoteAddress = meta.remote;

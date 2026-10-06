@@ -38,6 +38,7 @@ export function useUpdateNetwork() {
     mutationFn: async (body: {
       lan?: boolean;
       requirePairingOnTailnet?: boolean;
+      connect?: boolean;
     }) =>
       json<NetworkState>(
         await fetch("/api/devices/network", {

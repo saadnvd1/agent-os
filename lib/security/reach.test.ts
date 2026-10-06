@@ -43,6 +43,13 @@ describe("reachFrom", () => {
     ]);
   });
 
+  it("puts the Connect address first when Connect is on", () => {
+    expect(reachFrom(ts, [], 3011, "abcd1234.on.runagentos.com")[0]).toEqual({
+      kind: "connect",
+      url: "https://abcd1234.on.runagentos.com",
+    });
+  });
+
   it("is empty when nothing else can reach this machine", () => {
     expect(reachFrom({ state: "missing" }, [], 3011)).toEqual([]);
   });

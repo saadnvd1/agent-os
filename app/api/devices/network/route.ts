@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { networkState } from "@/lib/security/network-state";
 import { requireLocalTrust } from "@/lib/security/route-guard";
+import { setConnectEnabled } from "@/lib/connect/config";
 import {
   setNetworkSetting,
   networkSettingLocked,
@@ -19,7 +20,14 @@ export async function PUT(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as {
     lan?: boolean;
     requirePairingOnTailnet?: boolean;
+    connect?: boolean;
   };
+  if (body.connect !== undefined && !setConnectEnabled(body.connect)) {
+    return NextResponse.json(
+      { error: "This machine isn't enrolled. Run agent-os connect first." },
+      { status: 409 }
+    );
+  }
   const changes: [NetworkSetting, boolean | undefined][] = [
     ["lan", body.lan],
     ["require_pairing_on_tailnet", body.requirePairingOnTailnet],

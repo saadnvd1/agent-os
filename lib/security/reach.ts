@@ -1,23 +1,28 @@
 /**
  * The addresses another device can use to reach this AgentOS, best first:
- * Tailscale's name, then its IP, then Wi-Fi addresses we actually listen on.
+ * Connect, then Tailscale's name, then its IP, then Wi-Fi addresses we listen on.
  */
 
 import { tailscaleStatus, type TailscaleState } from "@/lib/tailscale";
 import { lanAddresses } from "./net";
 import { lanEnabled } from "./network-settings";
+import { loadConnect } from "@/lib/connect/config";
 
 export interface Reach {
-  kind: "tailscale" | "lan";
+  kind: "connect" | "tailscale" | "lan";
   url: string;
 }
 
 export function reachFrom(
   ts: TailscaleState,
   lan: string[],
-  port: number
+  port: number,
+  connectHost: string | null = null
 ): Reach[] {
-  const out: Reach[] = [];
+  // Connect works from anywhere, with HTTPS, and needs nothing on the phone.
+  const out: Reach[] = connectHost
+    ? [{ kind: "connect", url: `https://${connectHost}` }]
+    : [];
   if (ts.state === "running") {
     if (ts.dnsName)
       out.push({ kind: "tailscale", url: `http://${ts.dnsName}:${port}` });
@@ -33,6 +38,7 @@ export async function reachableAt(): Promise<Reach[]> {
   return reachFrom(
     await tailscaleStatus(),
     lanEnabled() ? lanAddresses() : [],
-    port
+    port,
+    loadConnect()?.config.hostname ?? null
   );
 }
