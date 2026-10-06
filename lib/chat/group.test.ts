@@ -140,3 +140,12 @@ describe("groupTimeline approvals", () => {
     expect((blocks[0] as { tools: unknown[] }).tools).toHaveLength(2);
   });
 });
+
+describe("toolTitle", () => {
+  it("reads MCP tools as server and words", async () => {
+    const { toolTitle } = await import("./tools");
+    expect(toolTitle("mcp__chrome-devtools__take_screenshot", {})).toBe(
+      "chrome-devtools: take screenshot"
+    );
+  });
+});
