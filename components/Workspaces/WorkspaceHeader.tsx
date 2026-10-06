@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import {
+  Archive,
   ChevronRight,
+  CircleCheck,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -20,6 +22,8 @@ import { useDeleteWorkspace, useUpdateWorkspace } from "@/data/workspaces";
 import { WorkspaceNameDialog } from "./WorkspaceNameDialog";
 import { WorkspaceLumifyHubItem } from "@/components/LumifyHub";
 import { cn } from "@/lib/utils";
+import { useCleanupIdle } from "./useCleanupIdle";
+import { archivedUiActions } from "@/stores/archivedUi";
 
 interface WorkspaceHeaderProps {
   workspace: Workspace;
@@ -39,6 +43,7 @@ export function WorkspaceHeader({
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
   const [renaming, setRenaming] = useState(false);
+  const cleanup = useCleanupIdle(workspace);
 
   return (
     <>
@@ -87,6 +92,16 @@ export function WorkspaceHeader({
             <DropdownMenuItem onClick={() => setRenaming(true)}>
               <Pencil className="mr-2 h-3 w-3" />
               Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={cleanup}>
+              <CircleCheck className="mr-2 h-3 w-3" />
+              Clean up idle sessions
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => archivedUiActions.open(workspace.id)}
+            >
+              <Archive className="mr-2 h-3 w-3" />
+              Archived
             </DropdownMenuItem>
             <WorkspaceLumifyHubItem
               workspace={workspace}

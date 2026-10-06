@@ -21,7 +21,9 @@ import {
   Square,
   CheckSquare,
   ExternalLink,
+  CircleCheck,
 } from "lucide-react";
+import { useDoneAction } from "@/components/SessionList/useDoneAction";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -100,6 +102,7 @@ export function SessionCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(session.name);
   const [menuOpen, setMenuOpen] = useState(false);
+  const markDone = useDoneAction();
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -305,6 +308,15 @@ export function SessionCard({
                 ))}
             </MenuSubContent>
           </MenuSub>
+        )}
+        {!session.role && (
+          <>
+            <MenuSeparator />
+            <MenuItem onClick={() => markDone(session)}>
+              <CircleCheck className="mr-2 h-3 w-3" />
+              Done
+            </MenuItem>
+          </>
         )}
         {onDelete && (
           <>

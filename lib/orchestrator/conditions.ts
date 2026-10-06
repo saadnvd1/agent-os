@@ -8,6 +8,7 @@
  */
 
 import { db, type StackItemStatus, type StackStatus } from "../db";
+import { isFinished } from "../tasks/state";
 import { ciWord } from "./describe";
 import type { SessionFacts } from "./facts";
 import { untrusted } from "./untrusted";
@@ -79,7 +80,7 @@ function sessionConditions(
     );
 
   const shouldPR = !!f.task || !!f.branch;
-  const finished = f.task?.state === "merged" || f.task?.state === "dropped";
+  const finished = !!f.task && isFinished(f.task.state);
   const idleFor = now - f.lastActive;
   if (
     shouldPR &&

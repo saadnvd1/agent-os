@@ -1,7 +1,7 @@
 import os from "os";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
-import { findPR } from "./gh";
+import { findPR, findPRStrict } from "./gh";
 import type { TaskPR } from "./state";
 
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
@@ -28,15 +28,17 @@ export function projectPathFor(session: Session): string | null {
 
 const prCache = new Map<string, { at: number; pr: TaskPR | null }>();
 
+// strict: a gh failure throws instead of reading as "no PR".
 export async function prFor(
   session: Session,
-  fresh = false
+  fresh = false,
+  strict = false
 ): Promise<TaskPR | null> {
   const repo = projectPathFor(session);
   if (!repo || !session.branch_name) return null;
   const cached = prCache.get(session.id);
   if (!fresh && cached && Date.now() - cached.at < 20000) return cached.pr;
-  const pr = await findPR(repo, session.branch_name);
+  const pr = await (strict ? findPRStrict : findPR)(repo, session.branch_name);
   prCache.set(session.id, { at: Date.now(), pr });
   if (pr) {
     db.prepare(

@@ -50,6 +50,7 @@ export const TOOL_SHAPES = {
   land: { id: stackId },
   drop: { task, reason: z.string().trim().min(1).max(2000) },
   stop: { session },
+  done: { session },
   note: { text: z.string().trim().min(1).max(2000) },
   review: {
     target: ref("The task, or its PR (#12 or URL)"),

@@ -15,9 +15,13 @@ import { supportsChat } from "@/lib/chat/capabilities";
 export async function GET() {
   try {
     const db = getDb();
-    // Merged and dropped tasks live in the Tasks panel, not the sidebar.
+    // Merged and dropped tasks live in the Tasks panel, archived sessions
+    // in the Archived view: neither is in the sidebar.
     const sessions = (queries.getAllSessions(db).all() as Session[]).filter(
-      (s) => s.task_status !== "merged" && s.task_status !== "dropped"
+      (s) =>
+        !s.archived_at &&
+        s.task_status !== "merged" &&
+        s.task_status !== "dropped"
     );
     const groups = queries.getAllGroups(db).all() as Group[];
 

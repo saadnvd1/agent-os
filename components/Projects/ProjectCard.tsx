@@ -21,6 +21,7 @@ import {
   Terminal,
   LayoutGrid,
   ChevronRight,
+  CircleCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +43,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Project, DevServer } from "@/lib/db";
+import type { Project, DevServer, Session } from "@/lib/db";
+import { useDoneAction } from "@/components/SessionList/useDoneAction";
 
 interface ProjectCardProps {
   project: Project;
@@ -62,6 +64,8 @@ interface ProjectCardProps {
   row?: ProjectRowModel;
   onOpenLatest?: () => void;
   onStartSession?: () => void;
+  // The row stands in for its only session: that session's Done is here.
+  singleSession?: Session;
 }
 
 export function ProjectCard({
@@ -80,7 +84,9 @@ export function ProjectCard({
   row,
   onOpenLatest,
   onStartSession,
+  singleSession,
 }: ProjectCardProps) {
+  const markDone = useDoneAction();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -208,6 +214,15 @@ export function ProjectCard({
         )}
         {!project.is_uncategorized && (
           <ProjectBoardItem project={project} Item={MenuItem} />
+        )}
+        {singleSession && !singleSession.role && (
+          <>
+            <MenuSeparator />
+            <MenuItem onClick={() => markDone(singleSession)}>
+              <CircleCheck className="mr-2 h-3 w-3" />
+              Done with {singleSession.name}
+            </MenuItem>
+          </>
         )}
         {onStartDevServer && (
           <>

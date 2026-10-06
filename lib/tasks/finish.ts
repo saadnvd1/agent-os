@@ -1,5 +1,6 @@
 import { db, type Session } from "../db";
 import { deleteWorktree } from "../worktrees";
+import { settleWorktree, type MergedAs } from "../done/worktree";
 import {
   syncTaskCardInBackground,
   inBackground,
@@ -11,17 +12,24 @@ import { run } from "./gh";
 import { canSignOff } from "./state";
 import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
 
+// After a merge (`merged`), the worktree goes only if nothing in it would
+// be lost; a drop removes it whatever it holds.
 async function cleanup(
   session: Session,
   repo: string,
-  keepRemoteBranch = false
+  opts: { keepRemoteBranch?: boolean; merged?: MergedAs } = {}
 ): Promise<void> {
+  const keepRemoteBranch = opts.keepRemoteBranch ?? false;
   await run(
     "tmux",
     ["kill-session", "-t", `=${session.tmux_name}`],
     repo
   ).catch(() => {});
-  if (session.worktree_path) {
+  if (session.worktree_path && opts.merged) {
+    const fate = await settleWorktree(session, opts.merged).catch(() => null);
+    if (fate?.action === "kept")
+      console.log(`[tasks] kept ${fate.path} after merge: ${fate.why}`);
+  } else if (session.worktree_path) {
     await deleteWorktree(session.worktree_path, repo, true).catch(() => {});
   }
   // A stacked child's PR targets this branch: deleting it on origin would
@@ -45,7 +53,11 @@ export const signingOff = new Set<string>();
 // session, worktree and branch. Kept per task so Land can wait for it.
 const afterMerge = new Map<string, Promise<void>>();
 
-async function finishMerge(session: Session, repo: string): Promise<void> {
+async function finishMerge(
+  session: Session,
+  repo: string,
+  prHead: string | null
+): Promise<void> {
   // Before cleanup deletes this branch on origin: children are retargeted
   // first. One that could not be moved keeps the branch alive.
   const { stuck } = await restackAfterMerge(session.id).catch(
@@ -54,7 +66,10 @@ async function finishMerge(session: Session, repo: string): Promise<void> {
       return { stuck: true };
     }
   );
-  await cleanup(session, repo, stuck);
+  await cleanup(session, repo, {
+    keepRemoteBranch: stuck,
+    merged: { prHead },
+  });
   // After cleanup's fetch, so the base branch holds the merged files.
   inBackground(`re-publish docs after task ${session.id}`, () =>
     republishAfterMerge(session)
@@ -106,7 +121,11 @@ export async function signOffTask(
     signingOff.delete(id);
   }
   syncTaskCardInBackground(session, "merged", pr);
-  const done = finishMerge(session, repo).finally(() => afterMerge.delete(id));
+  const done = finishMerge(
+    session,
+    repo,
+    opts.head ?? pr!.head ?? null
+  ).finally(() => afterMerge.delete(id));
   afterMerge.set(id, done);
   if (opts.wait) await done;
 }

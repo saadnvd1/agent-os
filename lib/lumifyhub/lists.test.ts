@@ -25,6 +25,7 @@ describe("task state → list", () => {
     expect(cardTargetFor("review")).toBe("in_review");
     expect(cardTargetFor("checks-failing")).toBe("in_review");
     expect(cardTargetFor("merged")).toBe("done");
+    expect(cardTargetFor("done")).toBe("done");
     expect(cardTargetFor("dropped")).toBe("dropped");
     expect(cardTargetFor("exited")).toBe("failed");
   });

@@ -20,12 +20,15 @@ export interface Session {
   host_id: string;
   // Async tasks: a session started from a prompt that ends in a PR
   task_prompt: string | null;
-  task_status: "running" | "merged" | "dropped" | null;
+  // done: finished without a merge (no PR, or its PR closed).
+  task_status: "running" | "merged" | "dropped" | "done" | null;
   // How the session is shown: a chat conversation or a terminal.
   view: "chat" | "terminal";
   chat_access: ChatAccess;
   chat_resume_at: string | null;
   last_seen_at: string | null;
+  // Set by done: hidden from the sidebar and the orchestrator, never deleted.
+  archived_at: string | null;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
   // An orchestrator's tool-call secret.

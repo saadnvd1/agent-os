@@ -40,15 +40,15 @@ export function spendApproval(id: number): boolean {
   );
 }
 
-// Open asks whose task has since been merged or dropped (by Saad, or
-// anyone), closed so they stop needing him.
+// Open asks whose task has since been merged, dropped or done (by Saad,
+// or anyone), closed so they stop needing him.
 export function resolveFinishedTaskAsks(workspaceId: string): number {
   const rows = db
     .prepare(
       `SELECT a.subject, s.task_status FROM orchestrator_asks a
        LEFT JOIN sessions s ON a.subject = 'task:' || s.id
        WHERE a.workspace_id = ? AND a.status = 'open' AND a.subject LIKE 'task:%'
-         AND (s.id IS NULL OR s.task_status IN ('merged', 'dropped'))`
+         AND (s.id IS NULL OR s.task_status IN ('merged', 'dropped', 'done'))`
     )
     .all(workspaceId) as { subject: string; task_status: string | null }[];
   let n = 0;
