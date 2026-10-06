@@ -30,6 +30,11 @@
 - [ ] Resume an exited task with `claude --resume`
 - [ ] Per-task dev server port and database, as dispatch does
 
+## Workspace orchestrator
+
+- [ ] One standing orchestrator per workspace: see docs/plans/workspace-orchestrator.md
+      (after stacks and the TipTap composer ship)
+
 ## Chat (after V1)
 
 - [ ] Drivers for Codex, OpenCode and others (lib/chat/drivers)
