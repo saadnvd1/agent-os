@@ -200,8 +200,14 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
 }
 
 // Content analysis helpers
-function checkBusyIndicators(content: string): boolean {
+// Claude Code's working line, whatever word it picks: "✻ Composing… (4m 0s ·
+// ↓ 23.5k tokens)". It sits above the input box and status line, so it can be
+// several lines up from the bottom.
+const WORKING_LINE = /^\s*\S\s+[A-Z][a-z]+(?:ing)?…\s+\(\d+[smh]?\b/m;
+
+export function checkBusyIndicators(content: string): boolean {
   const lines = content.split("\n");
+  if (WORKING_LINE.test(lines.slice(-12).join("\n"))) return true;
   // Focus on last 10 lines to avoid old scrollback false positives
   const recentContent = lines.slice(-10).join("\n").toLowerCase();
 
