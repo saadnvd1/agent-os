@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
 
 function commit(repo: string, file: string, text: string): string {
   fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
