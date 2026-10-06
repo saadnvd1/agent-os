@@ -273,18 +273,21 @@ function HomeContent() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ view: request.view }),
         });
-        if (!res.ok) return;
-        const { session } = (await res.json()) as { session?: Session };
-        await fetchSessions();
-        if (request.view !== "terminal" || !session) return;
-        const tab = getActiveTab(focusedPaneId);
-        const key = tab ? `${focusedPaneId}:${tab.id}` : "";
-        for (let i = 0; i < 40 && !terminalRefs.current.has(key); i++) {
-          await new Promise((r) => setTimeout(r, 100));
-        }
-        attachToSession({ ...session, view: "terminal" });
+        // The tab's terminal mounts once the session reads as terminal, and
+        // attaches through onAttachSession, resuming the conversation.
+        if (res.ok) await fetchSessions();
       }),
-    [fetchSessions, getActiveTab, focusedPaneId, attachToSession]
+    [fetchSessions]
+  );
+
+  // How a session's terminal connects: its full launch command, which
+  // attaches to a running tmux session or starts it (resuming the agent).
+  const attachSessionTerminal = useCallback(
+    async (terminal: TerminalHandle, session: Session) => {
+      if (session.view === "chat") return;
+      terminal.attach(await buildSessionCommand(session));
+    },
+    [buildSessionCommand]
   );
 
   // Attach a tmux session agent-os didn't create (discovered on any machine)
@@ -425,9 +428,17 @@ function HomeContent() {
         onRegisterTerminal={registerTerminalRef}
         onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined}
         onSelectSession={handleSelectSession}
+        onAttachSession={attachSessionTerminal}
       />
     ),
-    [sessions, projects, registerTerminalRef, isMobile, handleSelectSession]
+    [
+      sessions,
+      projects,
+      registerTerminalRef,
+      isMobile,
+      handleSelectSession,
+      attachSessionTerminal,
+    ]
   );
 
   // New session in project handler
