@@ -14,6 +14,8 @@ export function ViewSwitch({
 }) {
   if (!session || !supportsChat(session.agent_type)) return null;
   if (session.host_id && session.host_id !== "local") return null;
+  // A task's agent runs in its terminal with its brief; chat would end it.
+  if (session.task_prompt) return null;
   const options = [
     { view: "chat" as const, icon: MessageSquare, label: "Chat" },
     { view: "terminal" as const, icon: SquareTerminal, label: "Terminal" },

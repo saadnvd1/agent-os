@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+
 import { LumifyHubDialogs } from "@/components/LumifyHub";
 import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
@@ -273,6 +275,11 @@ function HomeContent() {
         // The tab's terminal mounts once the session reads as terminal, and
         // attaches through onAttachSession, resuming the conversation.
         if (res.ok) await fetchSessions();
+        else
+          toast.error(
+            ((await res.json().catch(() => null)) as { error?: string } | null)
+              ?.error ?? "Couldn't switch view"
+          );
       }),
     [fetchSessions]
   );
