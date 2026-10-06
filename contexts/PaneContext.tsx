@@ -6,6 +6,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useMemo,
   type ReactNode,
 } from "react";
 import {
@@ -23,6 +24,14 @@ import {
   MAX_PANES,
 } from "@/lib/panes";
 import { useViewport } from "@/hooks/useViewport";
+
+export type ViewMode = "terminal" | "files" | "git" | "workers";
+
+export interface PaneViewState {
+  viewMode: ViewMode;
+  gitDrawerOpen: boolean;
+  shellDrawerOpen: boolean;
+}
 
 interface PaneContextValue {
   state: PaneState;
@@ -43,6 +52,15 @@ interface PaneContextValue {
   detachSession: (paneId: string) => void;
   getPaneData: (paneId: string) => PaneData;
   getActiveTab: (paneId: string) => TabData | null;
+  // Per-pane view state (viewMode + drawers), lifted so the top bar can drive
+  // the focused pane.
+  getViewMode: (paneId: string) => ViewMode;
+  setViewMode: (paneId: string, mode: ViewMode) => void;
+  getGitDrawerOpen: (paneId: string) => boolean;
+  setGitDrawerOpen: (paneId: string, open: boolean) => void;
+  getShellDrawerOpen: (paneId: string) => boolean;
+  setShellDrawerOpen: (paneId: string, open: boolean) => void;
+  focusedViewState: PaneViewState;
 }
 
 const PaneContext = createContext<PaneContextValue | null>(null);
@@ -54,6 +72,29 @@ export function PaneProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PaneState>(createInitialPaneState);
   const [hydrated, setHydrated] = useState(false);
   const { isMobile } = useViewport();
+
+  // Per-pane view state (viewMode + git/shell drawers), keyed by paneId.
+  // Drawer defaults seed from the global localStorage keys to preserve the
+  // prior persistence behavior.
+  const [viewStates, setViewStates] = useState<Record<string, PaneViewState>>(
+    {}
+  );
+  const viewDefaults = useMemo<PaneViewState>(() => {
+    if (typeof window === "undefined") {
+      return {
+        viewMode: "terminal",
+        gitDrawerOpen: true,
+        shellDrawerOpen: false,
+      };
+    }
+    const git = localStorage.getItem("gitDrawerOpen");
+    const shell = localStorage.getItem("shellDrawerOpen");
+    return {
+      viewMode: "terminal",
+      gitDrawerOpen: git === null ? true : git === "true",
+      shellDrawerOpen: shell === "true",
+    };
+  }, []);
 
   // Load from localStorage after hydration
   useEffect(() => {
@@ -114,6 +155,12 @@ export function PaneProvider({ children }: { children: ReactNode }) {
     setState((prev) => {
       const newState = closePane(prev, paneId);
       return newState || prev;
+    });
+    setViewStates((prev) => {
+      if (!(paneId in prev)) return prev;
+      const next = { ...prev };
+      delete next[paneId];
+      return next;
     });
   }, []);
 
@@ -240,6 +287,57 @@ export function PaneProvider({ children }: { children: ReactNode }) {
     [state.panes]
   );
 
+  // Per-pane view state getters/setters
+  const getViewMode = useCallback(
+    (paneId: string): ViewMode =>
+      viewStates[paneId]?.viewMode ?? viewDefaults.viewMode,
+    [viewStates, viewDefaults]
+  );
+  const getGitDrawerOpen = useCallback(
+    (paneId: string): boolean =>
+      viewStates[paneId]?.gitDrawerOpen ?? viewDefaults.gitDrawerOpen,
+    [viewStates, viewDefaults]
+  );
+  const getShellDrawerOpen = useCallback(
+    (paneId: string): boolean =>
+      viewStates[paneId]?.shellDrawerOpen ?? viewDefaults.shellDrawerOpen,
+    [viewStates, viewDefaults]
+  );
+  const setViewMode = useCallback(
+    (paneId: string, mode: ViewMode) => {
+      setViewStates((prev) => ({
+        ...prev,
+        [paneId]: { ...(prev[paneId] ?? viewDefaults), viewMode: mode },
+      }));
+    },
+    [viewDefaults]
+  );
+  const setGitDrawerOpen = useCallback(
+    (paneId: string, open: boolean) => {
+      setViewStates((prev) => ({
+        ...prev,
+        [paneId]: { ...(prev[paneId] ?? viewDefaults), gitDrawerOpen: open },
+      }));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("gitDrawerOpen", String(open));
+      }
+    },
+    [viewDefaults]
+  );
+  const setShellDrawerOpen = useCallback(
+    (paneId: string, open: boolean) => {
+      setViewStates((prev) => ({
+        ...prev,
+        [paneId]: { ...(prev[paneId] ?? viewDefaults), shellDrawerOpen: open },
+      }));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("shellDrawerOpen", String(open));
+      }
+    },
+    [viewDefaults]
+  );
+  const focusedViewState = viewStates[state.focusedPaneId] ?? viewDefaults;
+
   // On mobile: disable splits (single pane only)
   const canSplit = !isMobile && countPanes(state.layout) < MAX_PANES;
   const canClose = !isMobile && countPanes(state.layout) > 1;
@@ -263,6 +361,13 @@ export function PaneProvider({ children }: { children: ReactNode }) {
         detachSession,
         getPaneData,
         getActiveTab,
+        getViewMode,
+        setViewMode,
+        getGitDrawerOpen,
+        setGitDrawerOpen,
+        getShellDrawerOpen,
+        setShellDrawerOpen,
+        focusedViewState,
       }}
     >
       {children}
