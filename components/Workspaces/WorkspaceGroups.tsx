@@ -34,10 +34,17 @@ export function WorkspaceGroups<P extends ProjectWithDevServers>({
         projectIds.has(s.project_id) &&
         sessionStatuses?.[s.id]?.status === "waiting"
     ).length;
+  // Projects waiting on you come first; the rest keep their order.
+  const urgentFirst = (list: P[]) =>
+    [...list].sort(
+      (a, b) =>
+        Number(needsYou(new Set([b.id])) > 0) -
+        Number(needsYou(new Set([a.id])) > 0)
+    );
 
   return (
     <>
-      {ungrouped.length > 0 && renderProjects(ungrouped)}
+      {ungrouped.length > 0 && renderProjects(urgentFirst(ungrouped))}
       {workspaces.map((workspace) => {
         const members = projects.filter((p) => p.workspace_id === workspace.id);
         return (
@@ -49,7 +56,7 @@ export function WorkspaceGroups<P extends ProjectWithDevServers>({
             />
             {!workspace.collapsed &&
               (members.length > 0 ? (
-                renderProjects(members)
+                renderProjects(urgentFirst(members))
               ) : (
                 <p className="text-muted-foreground/60 px-2 py-1 text-xs">
                   Move projects here from their ⋯ menu

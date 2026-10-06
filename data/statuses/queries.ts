@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import type { Session } from "@/lib/db";
 import type { SessionStatus } from "@/components/views/types";
 import { statusKeys } from "../sessions/keys";
+import { useMarkSeen } from "./useMarkSeen";
 
 interface StatusResponse {
   statuses: Record<string, SessionStatus>;
@@ -61,6 +62,11 @@ export function useSessionStatusesQuery({
     checkStateChanges(sessionStates, activeSessionId);
     // Note: claude_session_id is now updated server-side in /api/sessions/status
   }, [query.data, sessions, activeSessionId, checkStateChanges]);
+
+  useMarkSeen(
+    activeSessionId,
+    activeSessionId ? query.data?.statuses[activeSessionId]?.status : undefined
+  );
 
   return {
     sessionStatuses: query.data?.statuses ?? {},

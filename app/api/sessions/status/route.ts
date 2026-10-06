@@ -11,6 +11,7 @@ import {
 } from "@/lib/providers/registry";
 import { getDb, type Session } from "@/lib/db";
 import { chatActivity, chatState } from "@/lib/chat/runner";
+import { needsYou } from "@/lib/needs-you";
 import { formatElapsed } from "@/lib/chat/elapsed";
 
 // What a chat session is doing right now: "Run the tests · 2m 14s".
@@ -177,6 +178,17 @@ function getAgentTypeFromSessionName(sessionName: string): AgentType {
   return getProviderIdFromSessionName(sessionName) || "claude";
 }
 
+function terminalNeedsYou(db: ReturnType<typeof getDb>, id: string): boolean {
+  const row = db
+    .prepare(
+      `SELECT id, view, updated_at, last_seen_at FROM sessions WHERE id = ?`
+    )
+    .get(id) as
+    | Pick<Session, "id" | "view" | "updated_at" | "last_seen_at">
+    | undefined;
+  return row ? needsYou({ ...row, view: "terminal" }, null) : true;
+}
+
 export async function GET() {
   try {
     const sessions = await getTmuxSessions();
@@ -224,7 +236,9 @@ export async function GET() {
 
       statusMap[id] = {
         sessionName,
-        status,
+        // Waiting counts only when it's news: not a prompt you've seen.
+        status:
+          status === "waiting" && !terminalNeedsYou(db, id) ? "idle" : status,
         lastLine,
         claudeSessionId,
         agentType,
@@ -258,7 +272,12 @@ export async function GET() {
       const state = chatState(session.id);
       statusMap[session.id] = {
         sessionName: session.tmux_name,
-        status: state === "running" ? "running" : state ? "waiting" : "idle",
+        status:
+          state === "running"
+            ? "running"
+            : needsYou(session, state)
+              ? "waiting"
+              : "idle",
         task: activityLine(session.id) ?? lastUserTask(session.id),
         agentType: session.agent_type,
       };
