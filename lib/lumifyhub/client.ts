@@ -30,6 +30,8 @@ export class LumifyHubError extends Error {
 
 type Fetch = typeof fetch;
 
+const seg = encodeURIComponent;
+
 export class LumifyHubClient {
   constructor(
     readonly baseUrl: string,
@@ -118,38 +120,45 @@ export class LumifyHubClient {
   deleteBoard(boardId: string) {
     return this.data<{ id: string; deleted: boolean }>(
       "DELETE",
-      `/api/cli/boards/${boardId}`
+      `/api/cli/boards/${seg(boardId)}`
     );
   }
 
   listLists(boardId: string) {
-    return this.data<LhList[]>("GET", `/api/cli/boards/${boardId}/lists`);
+    return this.data<LhList[]>("GET", `/api/cli/boards/${seg(boardId)}/lists`);
   }
 
   createList(
     boardId: string,
     input: { name: string; category: LhListCategory; position?: number }
   ) {
-    return this.data<LhList>("POST", `/api/cli/boards/${boardId}/lists`, input);
+    return this.data<LhList>(
+      "POST",
+      `/api/cli/boards/${seg(boardId)}/lists`,
+      input
+    );
   }
 
   updateList(boardId: string, listId: string, input: { position: number }) {
     return this.data<LhList>(
       "PUT",
-      `/api/cli/boards/${boardId}/lists/${listId}`,
+      `/api/cli/boards/${seg(boardId)}/lists/${seg(listId)}`,
       input
     );
   }
 
   listCards(boardId: string, listId?: string) {
     const q = listId ? `?list_id=${encodeURIComponent(listId)}` : "";
-    return this.data<LhCard[]>("GET", `/api/cli/boards/${boardId}/cards${q}`);
+    return this.data<LhCard[]>(
+      "GET",
+      `/api/cli/boards/${seg(boardId)}/cards${q}`
+    );
   }
 
   getCard(boardId: string, cardId: string) {
     return this.data<LhCard>(
       "GET",
-      `/api/cli/boards/${boardId}/cards/${cardId}`
+      `/api/cli/boards/${seg(boardId)}/cards/${seg(cardId)}`
     );
   }
 
@@ -157,13 +166,17 @@ export class LumifyHubClient {
     boardId: string,
     input: { list_id: string; title: string; description?: string }
   ) {
-    return this.data<LhCard>("POST", `/api/cli/boards/${boardId}/cards`, input);
+    return this.data<LhCard>(
+      "POST",
+      `/api/cli/boards/${seg(boardId)}/cards`,
+      input
+    );
   }
 
   moveCard(boardId: string, cardId: string, listId: string) {
     return this.data<LhCard>(
       "PUT",
-      `/api/cli/boards/${boardId}/cards/${cardId}`,
+      `/api/cli/boards/${seg(boardId)}/cards/${seg(cardId)}`,
       { list_id: listId }
     );
   }
@@ -171,7 +184,7 @@ export class LumifyHubClient {
   addComment(boardId: string, cardId: string, content: string) {
     return this.data<{ id: string }>(
       "POST",
-      `/api/cli/boards/${boardId}/cards/${cardId}/comments`,
+      `/api/cli/boards/${seg(boardId)}/cards/${seg(cardId)}/comments`,
       { content }
     );
   }

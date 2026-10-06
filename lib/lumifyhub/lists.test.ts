@@ -88,4 +88,31 @@ describe("ensureTaskLists", () => {
       ["board-1", "done", { position: 3 }],
     ]);
   });
+
+  it("shares one load between concurrent callers", async () => {
+    let n = 0;
+    const client = {
+      listLists: vi.fn().mockImplementation(async () => []),
+      createList: vi
+        .fn()
+        .mockImplementation(async (_b: string, input: { name: string }) =>
+          list(`l${n++}`, input.name, n)
+        ),
+      updateList: vi.fn().mockResolvedValue({}),
+    };
+    const c = client as unknown as LumifyHubClient;
+    const [a, b] = await Promise.all([
+      ensureTaskLists(c, "board-2"),
+      ensureTaskLists(c, "board-2"),
+    ]);
+    expect(a).toEqual(b);
+    expect(client.listLists).toHaveBeenCalledTimes(1);
+    expect(client.createList).toHaveBeenCalledTimes(4);
+    expect(client.createList.mock.calls.map((c) => c[1].name)).toEqual([
+      "To Do",
+      "In Progress",
+      "In Review",
+      "Done",
+    ]);
+  });
 });

@@ -56,4 +56,13 @@ describe("LumifyHubClient", () => {
     expect(error.status).toBe(0);
     expect(error.message).not.toContain("lhcli_secret");
   });
+
+  it("encodes ids in paths", async () => {
+    const fetchImpl = reply(200, { data: {} });
+    const client = new LumifyHubClient("https://lh.test", "t", fetchImpl);
+    await client.getCard("../../workspaces", "a/b?c");
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://lh.test/api/cli/boards/..%2F..%2Fworkspaces/cards/a%2Fb%3Fc"
+    );
+  });
 });

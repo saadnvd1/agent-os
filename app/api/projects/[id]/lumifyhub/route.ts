@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { body, respond } from "@/lib/lumifyhub/http";
+import { lumifyHubId } from "@/lib/lumifyhub/ids";
 import { linkProjectBoard, unlinkProjectBoard } from "@/lib/lumifyhub/links";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -16,7 +17,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       id,
       input.create
         ? { create: true, title: input.title }
-        : { boardId: input.boardId ?? "" }
+        : { boardId: lumifyHubId(input.boardId, "board id") }
     ),
   }));
 }

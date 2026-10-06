@@ -76,16 +76,35 @@ const cache = new Map<
   { at: number; ids: Record<TaskListKey, string> }
 >();
 
+const loading = new Map<string, Promise<Record<TaskListKey, string>>>();
+
 // Make sure the board has To Do / In Progress / In Review / Done, creating any
 // that are missing and reusing what's there (matched case-insensitively).
-export async function ensureTaskLists(
+// Concurrent callers for one board share a single load, so a list is never
+// created twice.
+export function ensureTaskLists(
   client: LumifyHubClient,
   boardId: string,
   fresh = false
 ): Promise<Record<TaskListKey, string>> {
   const hit = cache.get(boardId);
-  if (!fresh && hit && Date.now() - hit.at < 60000) return hit.ids;
+  if (!fresh && hit && Date.now() - hit.at < 60000) {
+    return Promise.resolve(hit.ids);
+  }
+  let pending = loading.get(boardId);
+  if (!pending) {
+    pending = loadTaskLists(client, boardId).finally(() =>
+      loading.delete(boardId)
+    );
+    loading.set(boardId, pending);
+  }
+  return pending;
+}
 
+async function loadTaskLists(
+  client: LumifyHubClient,
+  boardId: string
+): Promise<Record<TaskListKey, string>> {
   const lists = await client.listLists(boardId);
   const created = new Set<string>();
   const hasCompleted = lists.some((l) => l.category === "completed");
