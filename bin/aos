@@ -87,7 +87,10 @@ function stackLines(items) {
   const tree = [];
   const walk = (parent) =>
     items
-      .filter((i) => (i.parentId && ids.has(i.parentId) ? i.parentId : null) === parent)
+      .filter(
+        (i) =>
+          (i.parentId && ids.has(i.parentId) ? i.parentId : null) === parent
+      )
       .forEach((i) => {
         tree.push(i);
         walk(i.id);
@@ -206,7 +209,11 @@ async function main() {
       for (const s of stacks) {
         const head = `${s.name} · ${s.projectName} · ${s.status}`;
         const extra = [s.progress, s.error].filter(Boolean).join("\n  ");
-        console.log([head + (extra ? `\n  ${extra}` : ""), ...stackLines(s.items)].join("\n"));
+        console.log(
+          [head + (extra ? `\n  ${extra}` : ""), ...stackLines(s.items)].join(
+            "\n"
+          )
+        );
       }
       return;
     }
