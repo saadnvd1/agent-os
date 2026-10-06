@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ExternalLink, KanbanSquare, SquareTerminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TaskState, TaskView } from "@/lib/tasks";
+import { isFinished } from "@/lib/tasks/state";
 import { useDropTask, useSignOffTask } from "@/data/tasks";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { tasksUiActions } from "@/stores/tasksUi";
@@ -21,13 +22,14 @@ const STATE: Record<TaskState, { label: string; tone: string }> = {
   exited: { label: "Agent exited", tone: "text-amber-600 dark:text-amber-400" },
   merged: { label: "Merged", tone: "text-emerald-600 dark:text-emerald-400" },
   dropped: { label: "Dropped", tone: "text-muted-foreground/60" },
+  done: { label: "Done", tone: "text-emerald-600 dark:text-emerald-400" },
 };
 
 export function TaskRow({ task }: { task: TaskView }) {
   const signOff = useSignOffTask();
   const drop = useDropTask();
   const [confirmDrop, setConfirmDrop] = useState(false);
-  const live = task.state !== "merged" && task.state !== "dropped";
+  const live = !isFinished(task.state);
   const error = signOff.error?.message || drop.error?.message;
 
   return (

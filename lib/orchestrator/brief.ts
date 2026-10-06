@@ -68,6 +68,7 @@ Acting:
 - \`${TOOL_NAMES.land}\` (id): merge a stack bottom-up through the gates.
 - \`${TOOL_NAMES.drop}\` (task, reason): close a task's PR and remove its worktree.
 - \`${TOOL_NAMES.stop}\` (session): stop a session's agent, keeping its work.
+- \`${TOOL_NAMES.done}\` (session): finish a session whose work is complete. A task with an open PR merges through the same gates as sign_off first (refused naming the gate otherwise); then the agent stops, the worktree goes only if nothing in it would be lost, and the session is archived out of view. Not a rejection: use drop for that.
 - \`${TOOL_NAMES.note}\` (text): a line in this workspace's decision log, shown in your chat. Note each decision that matters, with why.
 - \`${TOOL_NAMES.review}\` (target, fresh?): review a task's PR at its head commit, or read the stored verdict.
 - \`${TOOL_NAMES.sign_off}\` (task): merge through the gates.

@@ -46,7 +46,7 @@ const sqliteMs = (t: string | null | undefined) =>
   t ? Date.parse(`${t.replace(" ", "T")}Z`) || 0 : 0;
 
 // Live sessions in the workspace's projects, plus tasks merged in the last
-// hour so their merge still reads. Never an orchestrator.
+// hour so their merge still reads. Never an orchestrator or an archived one.
 export function workspaceSessions(
   workspaceId: string
 ): (Session & { project_name: string })[] {
@@ -54,7 +54,7 @@ export function workspaceSessions(
     .prepare(
       `SELECT s.*, p.name AS project_name FROM sessions s
        JOIN projects p ON p.id = s.project_id
-       WHERE p.workspace_id = ? AND s.role IS NULL
+       WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND (s.task_status IS NULL OR s.task_status = 'running'
            OR (s.task_status = 'merged' AND s.updated_at > datetime('now', '-1 hour')))
        ORDER BY s.created_at`
@@ -104,7 +104,7 @@ function latestChatAt(sessionId: string): number {
     : 0;
 }
 
-async function statusOf(s: Session): Promise<{
+export async function statusOf(s: Session): Promise<{
   status: FactStatus;
   activity: string | null;
   needsInput: boolean;
@@ -133,12 +133,17 @@ async function statusOf(s: Session): Promise<{
 // A finished task's state is in the database: no gh call for it.
 async function taskFacts(s: Session): Promise<SessionFacts["task"]> {
   if (!s.task_status) return null;
-  if (s.task_status === "merged" || s.task_status === "dropped") {
+  if (s.task_status !== "running") {
     const pr: TaskPR | null = s.pr_number
       ? {
           number: s.pr_number,
           url: s.pr_url ?? "",
-          state: s.task_status === "merged" ? "MERGED" : "CLOSED",
+          state:
+            s.task_status === "merged"
+              ? "MERGED"
+              : s.pr_status === "open"
+                ? "OPEN"
+                : "CLOSED",
           checks: "none",
         }
       : null;

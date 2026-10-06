@@ -21,7 +21,9 @@ import {
   MessagesSquare,
   BookOpen,
   Smartphone,
+  Archive,
 } from "lucide-react";
+import { archivedUiActions } from "@/stores/archivedUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
@@ -102,6 +104,9 @@ export function SessionListHeader({
           items={[
             menuItem("Machines", onManageHosts, { icon: Server }),
             menuItem("Devices", devicesUiActions.open, { icon: Smartphone }),
+            menuItem("Archived", () => archivedUiActions.open(), {
+              icon: Archive,
+            }),
             menuItem("Kill all sessions", onKillAll, {
               icon: Trash2,
               variant: "destructive",

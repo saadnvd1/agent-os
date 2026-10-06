@@ -18,6 +18,7 @@ export const TOOL_NAMES = {
   land: name("land"),
   drop: name("drop"),
   stop: name("stop"),
+  done: name("done"),
   note: name("note"),
   review: name("review"),
   sign_off: name("sign_off"),

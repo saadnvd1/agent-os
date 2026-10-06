@@ -1,5 +1,6 @@
 import { getWorkspace } from "../workspaces";
 import {
+  done,
   drop,
   send,
   stack,
@@ -30,6 +31,7 @@ const ACTING = new Set<ToolName>([
   "land",
   "drop",
   "stop",
+  "done",
   "review",
   "sign_off",
 ]);
@@ -81,6 +83,8 @@ export async function runTool(
     }
     case "stop":
       return stop(w, p(tool, raw).session);
+    case "done":
+      return done(w, p(tool, raw).session);
     case "note":
       addNote(w, p(tool, raw).text);
       return "Noted.";

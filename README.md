@@ -200,6 +200,8 @@ aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
+aos done <session>                # finished: merge through the gates, archive
+aos done --all-idle               # the same for every idle session around you
 aos docs [query]                  # LumifyHub pages, when the workspace is linked
 ```
 
@@ -216,6 +218,23 @@ Group projects into workspaces (e.g. Work, Personal) from the **+** menu.
 Each workspace is a collapsible sidebar section showing how many sessions need
 you; move a project in from its menu. Deleting a workspace keeps its projects.
 
+### Done
+
+**Done** (a session's ⋯ menu, or its project's when it's the only one; `aos
+done`; or the orchestrator's `done` tool)
+is for finished work, where **Stop** keeps everything and **Drop** rejects
+it. A task with an open PR merges first, only through the orchestrator's
+gates at the judged commit; a failing gate refuses with its name and nothing
+merges. A task already merged, or a session with no PR, just cleans up: the
+agent stops, the worktree goes only if its branch is merged or has no
+commits of its own (otherwise it's kept and the reply says why), and the
+session is archived. Archived sessions leave the sidebar, the needs-you
+count and the orchestrator's view, but are never deleted; the **Archived**
+view (each workspace's menu, or ⋯ in the sidebar header for all of them)
+lists them with Unarchive. **Clean up idle
+sessions** in a workspace's menu, or `aos done --all-idle`, does the same for
+every idle or stopped session there and says what was done, kept or refused.
+
 ### Orchestrator
 
 Each workspace has one standing orchestrator, pinned at the top of its
@@ -228,7 +247,7 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Tools:** `sessions` (every session's status, activity, task, PR, CI and
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
-  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `note`,
+  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `note`,
   `review`, `sign_off` and `ask_saad`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The route
   they call answers only the orchestrator's worker, by a per-orchestrator

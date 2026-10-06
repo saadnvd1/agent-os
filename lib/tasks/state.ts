@@ -1,4 +1,4 @@
-export type TaskStatus = "running" | "merged" | "dropped";
+export type TaskStatus = "running" | "merged" | "dropped" | "done";
 
 export type ChecksVerdict = "pass" | "fail" | "pending" | "none";
 
@@ -22,7 +22,8 @@ export type TaskState =
   | "checks-failing"
   | "exited"
   | "merged"
-  | "dropped";
+  | "dropped"
+  | "done";
 
 export interface TaskStateInput {
   taskStatus: TaskStatus;
@@ -37,6 +38,7 @@ export function deriveTaskState(input: TaskStateInput): TaskState {
   const { taskStatus, sessionStatus, pr, blocked } = input;
   if (taskStatus === "merged" || pr?.state === "MERGED") return "merged";
   if (taskStatus === "dropped") return "dropped";
+  if (taskStatus === "done") return "done";
   if (blocked) return "blocked";
   if (pr?.state === "OPEN") {
     return pr.checks === "fail" ? "checks-failing" : "review";
@@ -45,6 +47,9 @@ export function deriveTaskState(input: TaskStateInput): TaskState {
   if (sessionStatus === "running") return "working";
   return "needs-input";
 }
+
+export const isFinished = (state: TaskState) =>
+  state === "merged" || state === "dropped" || state === "done";
 
 export function needsHuman(state: TaskState): boolean {
   return [
