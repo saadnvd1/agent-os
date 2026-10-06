@@ -6,7 +6,16 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { deviceKeys, usePairingStatus, useStartPairing } from "@/data/devices";
 
-const LABEL = { tailscale: "Tailscale", lan: "Wi-Fi" } as const;
+const LABEL = {
+  connect: "Connect",
+  tailscale: "Tailscale",
+  lan: "Wi-Fi",
+} as const;
+const CHOICE = {
+  connect: "Anywhere",
+  tailscale: "Phone on Tailscale",
+  lan: "Phone on this Wi-Fi",
+} as const;
 
 export function AddDevicePanel({ onDone }: { onDone: () => void }) {
   const start = useStartPairing();
