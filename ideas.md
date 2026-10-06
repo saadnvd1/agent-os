@@ -35,6 +35,9 @@
 - [ ] Drivers for Codex, OpenCode and others (lib/chat/drivers)
 - [ ] Approval prompts and plan mode as an opt-in permission level
 - [ ] Import turns made in the terminal when switching back to chat
+- [ ] "Open as chat" for tmux sessions AgentOS didn't start: find the Claude
+      conversation running there, create a session that resumes it in chat,
+      and close the tmux session
 - [ ] Chat for sessions on other machines (via the per-machine AgentOS)
 - [ ] Checkpoints: undo a turn's file changes
 - [ ] Model picker and context-usage meter in the composer
