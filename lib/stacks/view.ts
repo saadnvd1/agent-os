@@ -33,7 +33,9 @@ export function depths<T extends { id: string; parentId: string | null }>(
   return out;
 }
 
-function cardLinker(projectId: string): (cardId: string) => string | null {
+export function cardLinker(
+  projectId: string
+): (cardId: string) => string | null {
   const project = getProject(projectId);
   const client = connectedClient();
   if (!project || !client) return () => null;

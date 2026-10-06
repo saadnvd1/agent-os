@@ -27,11 +27,18 @@ const CHIP: Record<Status, { label: string; tone: string }> = {
 export function StatusChip({
   status,
   attention,
+  stack,
 }: {
   status: Status;
   attention?: boolean;
+  // A whole stack: "running" reads as Running, not Working.
+  stack?: boolean;
 }) {
-  const chip = attention ? { label: "Needs you", tone: amber } : CHIP[status];
+  const chip = attention
+    ? { label: "Needs you", tone: amber }
+    : stack && status === "running"
+      ? { label: "Running", tone: purple }
+      : CHIP[status];
   return (
     <span
       className={cn(

@@ -83,7 +83,17 @@ async function docNew(words) {
 
 // One line per card, indented under the card it is stacked on.
 function stackLines(items) {
-  return items.map((i) => {
+  const ids = new Set(items.map((i) => i.id));
+  const tree = [];
+  const walk = (parent) =>
+    items
+      .filter((i) => (i.parentId && ids.has(i.parentId) ? i.parentId : null) === parent)
+      .forEach((i) => {
+        tree.push(i);
+        walk(i.id);
+      });
+  walk(null);
+  return tree.map((i) => {
     const pr = i.prUrl ? `  ${i.prUrl}` : "";
     const why = i.error || i.waitsOn || i.note;
     const also = i.also.length ? `  (also waits on ${i.also.join(", ")})` : "";
@@ -98,7 +108,7 @@ function parseStackArgs(words) {
   const max = at >= 0 ? Number(words[at + 1]) : undefined;
   if (at >= 0 && !(max >= 1)) fail("--max needs a number");
   const project = words
-    .filter((w, i) => w !== "--plan" && i !== at && i !== at + 1)
+    .filter((w, i) => w !== "--plan" && (at < 0 || (i !== at && i !== at + 1)))
     .join(" ");
   if (!project) fail("usage: aos stack <project> [--plan] [--max N]");
   return { project, plan, max };

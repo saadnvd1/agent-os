@@ -2,10 +2,9 @@
 
 import { db, type Project } from "../db";
 import { requireClient } from "../lumifyhub/connection";
-import { linkedWorkspaceFor } from "../lumifyhub/links";
-import { cardUrl } from "../lumifyhub/urls";
 import type { LhCard, LhList } from "../lumifyhub/types";
 import type { PlanCard } from "./plan";
+import { cardLinker } from "./view";
 
 export interface BoardCards {
   cards: LhCard[];
@@ -64,16 +63,9 @@ export async function readBoard(project: Project): Promise<BoardCards> {
     client.listCards(boardId),
     client.listLists(boardId),
   ]);
-  let slug: string | null = null;
-  try {
-    slug = linkedWorkspaceFor(project).lh_workspace_slug;
-  } catch {
-    slug = null;
-  }
   return {
     cards,
     plan: toPlanCards(cards, lists, runningTasks(boardId)),
-    cardUrl: (id) =>
-      slug ? cardUrl(client.baseUrl, slug, project.lh_board_page_id, id) : null,
+    cardUrl: cardLinker(project.id),
   };
 }

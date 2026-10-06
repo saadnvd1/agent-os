@@ -37,12 +37,12 @@ export function StackCard({ stack }: { stack: StackView }) {
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{stack.name}</p>
-          <p className="text-muted-foreground truncate text-[11px]">
+          <p className="text-muted-foreground text-[11px]">
             {stack.projectName} · {counts(stack) || "nothing yet"} ·{" "}
             {stack.maxParallel} at a time
           </p>
         </div>
-        <StatusChip status={stack.status} />
+        <StatusChip status={stack.status} stack />
       </div>
       {stack.progress && <p className="text-xs">{stack.progress}</p>}
       {stack.error && (

@@ -39,7 +39,18 @@ export function StackItemRow({
                 {item.ticket}
               </span>
             )}
-            {item.title}
+            {!stackId && item.cardUrl ? (
+              <a
+                href={item.cardUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+              >
+                {item.title}
+              </a>
+            ) : (
+              item.title
+            )}
           </p>
         </div>
         <StatusChip status={item.status} attention={attention} />
@@ -47,9 +58,11 @@ export function StackItemRow({
       {why && (
         <p
           className={
-            item.error
-              ? "text-xs break-words text-amber-700 dark:text-amber-300"
-              : "text-muted-foreground text-xs"
+            item.status === "failed"
+              ? "text-destructive text-xs break-words"
+              : item.error
+                ? "text-xs break-words text-amber-700 dark:text-amber-300"
+                : "text-muted-foreground text-xs"
           }
         >
           {why}
@@ -61,70 +74,72 @@ export function StackItemRow({
           base
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-1">
-        {item.prUrl && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-11 px-2 text-xs sm:h-7"
-            asChild
-          >
-            <a href={item.prUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="h-3 w-3" />
-              PR #{item.prNumber}
-            </a>
-          </Button>
-        )}
-        {item.cardUrl && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-11 px-2 text-xs sm:h-7"
-            asChild
-          >
-            <a href={item.cardUrl} target="_blank" rel="noreferrer">
-              <KanbanSquare className="h-3 w-3" />
-              Card
-            </a>
-          </Button>
-        )}
-        <span className="flex-1" />
-        {stackId && attention && item.parentId && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-11 px-2 text-xs sm:h-7"
-            disabled={busy}
-            onClick={() => act("restack")}
-          >
-            <RotateCw className="h-3 w-3" />
-            Restack
-          </Button>
-        )}
-        {stackId &&
-          LIVE.has(item.status) &&
-          (confirmDrop ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-11 px-2 text-xs sm:h-7"
-              disabled={busy}
-              onClick={() => act("drop")}
-            >
-              Confirm drop
-            </Button>
-          ) : (
+      {stackId && (
+        <div className="flex flex-wrap items-center gap-1">
+          {item.prUrl && (
             <Button
               size="sm"
               variant="ghost"
               className="h-11 px-2 text-xs sm:h-7"
-              onClick={() => setConfirmDrop(true)}
+              asChild
             >
-              <X className="h-3 w-3" />
-              Drop
+              <a href={item.prUrl} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3 w-3" />
+                PR #{item.prNumber}
+              </a>
             </Button>
-          ))}
-      </div>
+          )}
+          {item.cardUrl && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-11 px-2 text-xs sm:h-7"
+              asChild
+            >
+              <a href={item.cardUrl} target="_blank" rel="noreferrer">
+                <KanbanSquare className="h-3 w-3" />
+                Card
+              </a>
+            </Button>
+          )}
+          <span className="flex-1" />
+          {stackId && attention && item.parentId && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-11 px-2 text-xs sm:h-7"
+              disabled={busy}
+              onClick={() => act("restack")}
+            >
+              <RotateCw className="h-3 w-3" />
+              Restack
+            </Button>
+          )}
+          {stackId &&
+            LIVE.has(item.status) &&
+            (confirmDrop ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-11 px-2 text-xs sm:h-7"
+                disabled={busy}
+                onClick={() => act("drop")}
+              >
+                Confirm drop
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-11 px-2 text-xs sm:h-7"
+                onClick={() => setConfirmDrop(true)}
+              >
+                <X className="h-3 w-3" />
+                Drop
+              </Button>
+            ))}
+        </div>
+      )}
       {action.error && (
         <p className="text-destructive text-xs">{action.error.message}</p>
       )}

@@ -50,7 +50,6 @@ function previewItems(
   const name = new Map(plan.map((p) => [p.cardId, p.ticket || p.title]));
   const depth = depths(plan.map((p) => ({ id: p.cardId, parentId: p.parent })));
   return plan.map((p) => {
-    const blockers = p.blockers.map((b) => name.get(b) ?? b);
     return {
       id: p.cardId,
       cardId: p.cardId,
@@ -60,9 +59,10 @@ function previewItems(
       depth: depth.get(p.cardId) ?? 0,
       parentId: p.parent,
       also: p.also.map((a) => name.get(a) ?? a),
+      // The other blockers are in `also`.
       waitsOn:
-        p.status === "planned" && blockers.length
-          ? `Waits on ${blockers.join(", ")}'s PR`
+        p.status === "planned" && p.parent
+          ? `Waits on ${name.get(p.parent)}'s PR`
           : null,
       note: p.note,
       error: null,
