@@ -20,8 +20,6 @@ export interface ViewProps {
   setSidebarOpen: (open: boolean) => void;
   activeSession: Session | undefined;
   focusedActiveTab: TabData | null;
-  copiedSessionId: boolean;
-  setCopiedSessionId: (copied: boolean) => void;
 
   // Dialogs
   showNewSessionDialog: boolean;
