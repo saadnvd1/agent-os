@@ -57,12 +57,7 @@ export function SessionListHeader({
           <path d="M15 13v2" />
           <path d="M9 13v2" />
         </svg>
-        <div className="leading-none">
-          <h2 className="text-[15px] font-semibold tracking-tight">AgentOS</h2>
-          <p className="label-mono text-muted-foreground mt-1 text-[9px]">
-            agent control
-          </p>
-        </div>
+        <h2 className="text-[15px] font-semibold tracking-tight">AgentOS</h2>
       </div>
       <div className="flex gap-1">
         {pinControls && (

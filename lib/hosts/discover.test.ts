@@ -4,8 +4,8 @@ import { discoverSessions, homeRelative } from "./discover";
 import type { Project, Session } from "../db";
 import type { TmuxSessionInfo } from "../status-detector";
 
-const project = (id: string, dir: string) =>
-  ({ id, working_directory: dir, is_uncategorized: false }) as Project;
+const project = (id: string, dir: string, host_id = "local") =>
+  ({ id, working_directory: dir, is_uncategorized: false, host_id }) as Project;
 const tmux = (name: string, path: string, hostId = "local") =>
   ({
     name,
@@ -27,27 +27,28 @@ describe("homeRelative", () => {
 
 describe("discoverSessions", () => {
   const projects = [
-    project("app", "~/dev/app"),
+    project("app", "~/dev/app", "box"),
     project("web", "/Users/me/dev/app/web"),
   ];
 
-  it("nests sessions under the deepest project folder on any machine", () => {
+  it("nests sessions under the deepest project folder on the same machine", () => {
     const found = discoverSessions(
       [
         tmux("a", "/home/me/dev/app/src", "box"),
         tmux("b", "/Users/me/dev/app/web/x"),
-        tmux("c", "/home/me/dev/application"),
+        tmux("c", "/home/me/dev/application", "box"),
+        tmux("d", "/Users/me/dev/app/src"),
       ],
       projects,
       []
     );
     const byName = Object.fromEntries(found.map((f) => [f.name, f.projectId]));
-    assert.deepEqual(byName, { a: "app", b: "web", c: null });
+    assert.deepEqual(byName, { a: "app", b: "web", c: null, d: null });
   });
 
   it("skips sessions agent-os already manages", () => {
     const found = discoverSessions(
-      [tmux("claude-1", "/Users/me/dev/app")],
+      [tmux("claude-1", "/Users/me/dev/app/web")],
       projects,
       [{ tmux_name: "claude-1" } as Session]
     );

@@ -1,6 +1,5 @@
 "use client";
 
-import { HostBadge } from "@/components/Hosts/HostBadge";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -70,39 +69,17 @@ interface SessionCardProps {
   onHoverEnd?: () => void;
 }
 
-const statusConfig: Record<
-  TmuxStatus,
-  { color: string; label: string; icon: React.ReactNode }
-> = {
-  idle: {
-    color: "text-muted-foreground/60",
-    label: "idle",
-    icon: <span className="block h-2 w-2 rounded-full bg-current" />,
-  },
-  running: {
-    color: "text-emerald-400",
-    label: "running",
-    icon: (
-      <span className="status-live block h-2 w-2 rounded-full bg-current" />
-    ),
-  },
+// Status lives in the row's text, not its surface. Only states that need a
+// human get a word; idle rows show how long ago they were last active.
+const statusConfig: Record<TmuxStatus, { label: string; tone: string }> = {
+  idle: { label: "", tone: "text-muted-foreground/60" },
+  running: { label: "Working", tone: "text-muted-foreground" },
   waiting: {
-    color: "text-amber-400",
-    label: "waiting",
-    icon: (
-      <span className="status-live block h-2 w-2 rounded-full bg-current" />
-    ),
+    label: "Needs input",
+    tone: "text-amber-600 dark:text-amber-400",
   },
-  error: {
-    color: "text-destructive",
-    label: "error",
-    icon: <span className="block h-2 w-2 rounded-full bg-current" />,
-  },
-  dead: {
-    color: "text-muted-foreground/40",
-    label: "stopped",
-    icon: <span className="block h-2 w-2 rounded-full border border-current" />,
-  },
+  error: { label: "Error", tone: "text-destructive" },
+  dead: { label: "Stopped", tone: "text-muted-foreground/50" },
 };
 
 export function SessionCard({
@@ -358,6 +335,7 @@ export function SessionCard({
   const cardContent = (
     <div
       ref={cardRef}
+      title={session.name}
       onClick={handleCardClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -369,10 +347,9 @@ export function SessionCard({
           : isActive
             ? "text-foreground bg-foreground/[0.06] shadow-[inset_2px_0_0_hsl(var(--primary))]"
             : "hover:bg-foreground/[0.04]",
-        status === "waiting" &&
+        status === "running" &&
           !isActive &&
-          !isSelected &&
-          "bg-amber-400/[0.06]"
+          "opacity-70 transition-opacity hover:opacity-100"
       )}
     >
       {/* Selection checkbox - visible when in select mode */}
@@ -387,20 +364,6 @@ export function SessionCard({
             <Square className="h-4 w-4" />
           )}
         </button>
-      )}
-
-      {/* Status indicator - hidden when in select mode */}
-      {!isInSelectMode && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className={cn("flex-shrink-0", config.color)}>
-              {config.icon}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            <span className="capitalize">{config.label}</span>
-          </TooltipContent>
-        </Tooltip>
       )}
 
       {/* Session name */}
@@ -424,7 +387,6 @@ export function SessionCard({
       ) : (
         <span className="min-w-0 flex-1 truncate text-sm">{session.name}</span>
       )}
-      <HostBadge hostId={session.host_id} />
 
       {/* Fork indicator */}
       {session.parent_session_id && (
@@ -462,10 +424,18 @@ export function SessionCard({
         </a>
       )}
 
-      {/* Time ago */}
-      <span className="text-muted-foreground hidden flex-shrink-0 text-[10px] group-hover:hidden sm:block">
-        {timeAgo}
-      </span>
+      {/* Status, or last activity when idle; the actions menu takes this
+          slot on hover */}
+      {!isInSelectMode && (
+        <span
+          className={cn(
+            "flex-shrink-0 text-[11px] font-medium tabular-nums md:group-hover:hidden",
+            config.tone
+          )}
+        >
+          {config.label || timeAgo}
+        </span>
+      )}
 
       {/* Actions menu (button) */}
       {hasActions && (
@@ -474,7 +444,7 @@ export function SessionCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 flex-shrink-0 opacity-100 md:h-5 md:w-5 md:opacity-0 md:group-hover:opacity-100"
+              className="h-6 w-6 flex-shrink-0 md:hidden md:h-5 md:w-5 md:group-hover:inline-flex"
             >
               <MoreHorizontal className="h-3 w-3" />
             </Button>
@@ -506,14 +476,14 @@ function getTimeAgo(dateStr: string): string {
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
 
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffMins < 1) return "now";
+  if (diffMins < 60) return `${diffMins}m`;
 
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 24) return `${diffHours}h`;
 
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 7) return `${diffDays}d`;
 
-  return date.toLocaleDateString();
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

@@ -182,20 +182,10 @@ export function ProjectCard({
     <div
       onClick={handleClick}
       className={cn(
-        "group flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5",
-        "min-h-11 md:min-h-8",
-        "hover:bg-foreground/[0.04]"
+        "group flex cursor-pointer items-center gap-2 px-2.5 pt-3 pb-1",
+        "min-h-11 md:min-h-8"
       )}
     >
-      {/* Expand/collapse toggle */}
-      <button className="flex-shrink-0 p-0.5">
-        {project.expanded ? (
-          <ChevronDown className="text-muted-foreground h-4 w-4" />
-        ) : (
-          <ChevronRight className="text-muted-foreground h-4 w-4" />
-        )}
-      </button>
-
       {/* Project name */}
       {isEditing ? (
         <input
@@ -215,7 +205,7 @@ export function ProjectCard({
           className="border-primary min-w-0 flex-1 border-b bg-transparent text-sm font-medium outline-none"
         />
       ) : (
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight">
+        <span className="text-muted-foreground/80 group-hover:text-foreground min-w-0 truncate text-xs font-medium transition-colors">
           {project.name}
         </span>
       )}
@@ -239,10 +229,19 @@ export function ProjectCard({
         </Tooltip>
       )}
 
-      {/* Session count */}
-      <span className="text-muted-foreground bg-foreground/[0.05] flex-shrink-0 rounded-md px-1.5 font-mono text-[10px] leading-5 tabular-nums">
-        {sessionCount}
-      </span>
+      {/* Session count, only when collapsed */}
+      {!project.expanded && sessionCount > 0 && (
+        <span className="text-muted-foreground flex-shrink-0 font-mono text-[10px] tabular-nums">
+          {sessionCount}
+        </span>
+      )}
+
+      <span className="bg-foreground/[0.07] h-px min-w-4 flex-1" />
+      {project.expanded ? (
+        <ChevronDown className="text-muted-foreground/50 h-3 w-3 flex-shrink-0" />
+      ) : (
+        <ChevronRight className="text-muted-foreground/50 h-3 w-3 flex-shrink-0" />
+      )}
 
       {/* Actions menu */}
       {hasActions && (
@@ -251,7 +250,7 @@ export function ProjectCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-7 w-7 flex-shrink-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
+              className="h-7 w-7 flex-shrink-0 md:hidden md:h-6 md:w-6 md:group-hover:inline-flex"
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
