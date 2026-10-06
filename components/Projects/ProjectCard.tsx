@@ -127,7 +127,9 @@ export function ProjectCard({
   const handleClick = () => {
     if (isEditing) return;
     onClick?.();
-    if (row?.latest && onOpenLatest) onOpenLatest();
+    // Several sessions: show them, rather than guess which one you meant.
+    if (!row?.single && sessionCount > 1) onToggleExpanded?.(!project.expanded);
+    else if (row?.latest && onOpenLatest) onOpenLatest();
     else if (!row?.latest && onStartSession) onStartSession();
     else onToggleExpanded?.(!project.expanded);
   };

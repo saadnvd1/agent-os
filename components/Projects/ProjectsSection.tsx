@@ -7,7 +7,7 @@ import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { projectRow, type ProjectRowModel } from "@/lib/project-rows";
 import type { TmuxSessionInfo } from "@/lib/status-detector";
 import { cn } from "@/lib/utils";
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useEffect, useState } from "react";
 import { useSnapshot } from "valtio";
 import { ProjectCard } from "./ProjectCard";
 import { SessionCard } from "@/components/SessionCard";
@@ -172,6 +172,20 @@ export function ProjectsSection({
       activeSessionId,
     });
   }
+
+  // The project you're in opens to show your session, so getting back to it
+  // is one tap. Only on arriving: you can still fold it afterwards.
+  const activeProjectId = sessions.find(
+    (s) => s.id === activeSessionId
+  )?.project_id;
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const project = projects.find((p) => p.id === activeProjectId);
+    if (project && !project.expanded && !rows[project.id]?.single)
+      onToggleProject?.(project.id, true);
+    // Runs when you move to another session, not on every refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId]);
 
   // Projects with nothing running or new fold behind one row.
   const visible = projects.filter(
