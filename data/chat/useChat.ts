@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  ChatCommand,
   ChatImage,
   ChatItem,
+  ChatModel,
   ChatServerMessage,
   ChatState,
 } from "@/lib/chat/events";
@@ -14,6 +16,9 @@ export function useChat(sessionId: string) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [state, setState] = useState<ChatState>("idle");
   const [connected, setConnected] = useState(false);
+  const [commands, setCommands] = useState<ChatCommand[]>([]);
+  const [models, setModels] = useState<ChatModel[]>([]);
+  const [model, setModelState] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -34,6 +39,10 @@ export function useChat(sessionId: string) {
           setState(m.state);
         } else if (m.type === "state") {
           setState(m.state);
+        } else if (m.type === "capabilities") {
+          setCommands(m.commands);
+          setModels(m.models);
+          setModelState(m.model);
         } else if (m.type === "item") {
           setItems((prev) => {
             const i = prev.findIndex((p) => p.id === m.item.id);
@@ -85,5 +94,20 @@ export function useChat(sessionId: string) {
     wsRef.current?.send(JSON.stringify({ type: "interrupt" }));
   }, []);
 
-  return { items, state, connected, send, interrupt };
+  const setModel = useCallback((value: string) => {
+    setModelState(value);
+    wsRef.current?.send(JSON.stringify({ type: "set_model", model: value }));
+  }, []);
+
+  return {
+    items,
+    state,
+    connected,
+    commands,
+    models,
+    model,
+    send,
+    interrupt,
+    setModel,
+  };
 }

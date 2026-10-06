@@ -2,12 +2,43 @@ import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ChatDriver, ChatConversation } from "../driver";
 import type { DriverEvent } from "../events";
 import { InputQueue } from "../queue";
-import { ClaudeMapper, type ClaudeMessage } from "./claude-mapper";
+import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
 // Code login. Full access: the same as running it with permissions skipped.
 export const claudeDriver: ChatDriver = {
   id: "claude",
+
+  // Claude Code reports its commands, skills and models while starting up,
+  // before any message, so a short-lived start tells the composer what's
+  // available without spending a turn.
+  async discover({ cwd, env }) {
+    const input = new InputQueue<SDKUserMessage>();
+    const q = query({
+      prompt: input,
+      options: {
+        cwd,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        env: { ...process.env, ...env },
+      },
+    });
+    try {
+      const init = await q.initializationResult();
+      return {
+        commands: (init.commands ?? []).map(toCommand),
+        models: (init.models ?? []).map((m) => ({
+          value: m.value,
+          label: m.displayName,
+          description: m.description,
+        })),
+      };
+    } finally {
+      input.end();
+      q.close();
+    }
+  },
+
   start(options): ChatConversation {
     const input = new InputQueue<SDKUserMessage>();
     const q = query({
@@ -56,6 +87,9 @@ export const claudeDriver: ChatDriver = {
       },
       async interrupt() {
         await q.interrupt();
+      },
+      async setModel(model) {
+        await q.setModel(model);
       },
       close() {
         input.end();

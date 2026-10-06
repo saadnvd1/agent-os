@@ -33,6 +33,8 @@ export function toolTitle(name: string, input: unknown): string {
       return `Fetch ${short(str("url"), 70)}`;
     case "WebSearch":
       return `Search the web: ${short(str("query"), 60)}`;
+    case "Skill":
+      return `Skill: ${str("skill") || "unknown"}`;
     case "Task":
     case "Agent":
       return short(str("description")) || "Run a subagent";

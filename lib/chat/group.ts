@@ -16,7 +16,11 @@ export function groupTimeline(items: ChatItem[]): TimelineBlock[] {
     tools = [];
   };
   for (const item of items) {
-    if (item.kind === "tool") {
+    if (item.kind === "tool" && item.name === "Skill") {
+      // Using a skill is a moment worth seeing, not one step among many.
+      flush();
+      blocks.push({ type: "item", item });
+    } else if (item.kind === "tool") {
       tools.push(item);
     } else if (item.kind === "reasoning" && tools.length) {
       continue;

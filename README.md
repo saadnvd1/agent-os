@@ -104,6 +104,13 @@ the terminal resumes it with `claude --resume`, and switching back closes the
 terminal so only one side drives it. History is kept in AgentOS and survives
 restarts.
 
+Type `/` in the composer for every slash command and skill the agent knows,
+yours included, filtered as you type. Commands such as `/compact`, `/usage`
+and `/context` run in chat and show their output inline; skills the agent
+invokes on its own appear as a chip. `/model` (or the picker under the
+composer) switches the model mid-conversation. Commands that only make sense
+in a terminal, such as `/vim`, are left out.
+
 Chat runs on this machine; sessions on other machines use the terminal.
 Drivers for other agent CLIs plug into `lib/chat/drivers`.
 

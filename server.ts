@@ -7,7 +7,12 @@ import * as pty from "node-pty";
 import { buildAttachProcess, type AttachSpec } from "./lib/hosts/attach";
 import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
-import { interruptChat, sendChat, watchChat } from "./lib/chat/runner";
+import {
+  interruptChat,
+  sendChat,
+  setChatModel,
+  watchChat,
+} from "./lib/chat/runner";
 import type { ChatClientMessage } from "./lib/chat/events";
 import {
   bindAddresses,
@@ -86,6 +91,8 @@ app.prepare().then(() => {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
         if (msg.type === "send") sendChat(sessionId, msg);
         else if (msg.type === "interrupt") void interruptChat(sessionId);
+        else if (msg.type === "set_model")
+          void setChatModel(sessionId, msg.model);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         ws.send(

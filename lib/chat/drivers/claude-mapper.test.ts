@@ -208,4 +208,98 @@ describe("ClaudeMapper", () => {
       })
     ).toEqual([]);
   });
+
+  it("shows a command's own output and marks compaction", () => {
+    const m = new ClaudeMapper();
+    const [out] = items(
+      m.map({
+        type: "system",
+        subtype: "local_command_output",
+        content: "Total cost: $1.20",
+      })
+    );
+    expect(out).toMatchObject({
+      kind: "command_output",
+      text: "Total cost: $1.20",
+    });
+    const [compacted] = items(
+      m.map({
+        type: "system",
+        subtype: "compact_boundary",
+        compact_metadata: { trigger: "manual" },
+      })
+    );
+    expect(compacted).toMatchObject({ kind: "compacted", trigger: "manual" });
+  });
+
+  it("shows a synthetic reply to a local command as command output", () => {
+    const [out] = items(
+      new ClaudeMapper().map({
+        type: "assistant",
+        message: {
+          model: "<synthetic>",
+          content: [
+            { type: "text", text: "Current session: 13% used\n  Top skills" },
+          ],
+        },
+      })
+    );
+    expect(out).toMatchObject({
+      kind: "command_output",
+      text: "Current session: 13% used\n  Top skills",
+    });
+  });
+
+  it("reports command list changes and terminal-only commands", () => {
+    const m = new ClaudeMapper();
+    expect(
+      m.map({
+        type: "system",
+        subtype: "commands_changed",
+        commands: [{ name: "ship", description: "Ship it", argumentHint: "" }],
+      })
+    ).toEqual([
+      {
+        type: "commands",
+        commands: [
+          {
+            name: "ship",
+            description: "Ship it",
+            argumentHint: undefined,
+            builtin: undefined,
+          },
+        ],
+      },
+    ]);
+    expect(
+      m.map({
+        type: "system",
+        subtype: "init",
+        session_id: "s",
+        terminal_slash_commands: ["statusline"],
+      })
+    ).toEqual([
+      { type: "resume_id", id: "s" },
+      { type: "terminal_only", names: ["statusline"] },
+    ]);
+  });
+
+  it("titles a skill call by the skill's name", () => {
+    const [skill] = items(
+      new ClaudeMapper().map({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "t9",
+              name: "Skill",
+              input: { skill: "ship" },
+            },
+          ],
+        },
+      })
+    );
+    expect(skill).toMatchObject({ name: "Skill", title: "Skill: ship" });
+  });
 });

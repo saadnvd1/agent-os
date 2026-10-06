@@ -1,12 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronRight, Circle, CircleDot } from "lucide-react";
+import { Check, ChevronRight, Circle, CircleDot, Sparkles } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
+import { leadingCommand } from "@/lib/chat/commands";
 import { Markdown } from "./Markdown";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
+
+function UserText({ text }: { text: string }) {
+  const command = leadingCommand(text);
+  if (!command) return <>{text}</>;
+  return (
+    <>
+      <span className="text-primary font-mono">{command}</span>
+      {text.slice(command.length)}
+    </>
+  );
+}
 
 export function UserMessage({ item }: { item: Of<"user"> }) {
   return (
@@ -31,7 +43,7 @@ export function UserMessage({ item }: { item: Of<"user"> }) {
       ) : null}
       {item.text && (
         <div className="bg-foreground/[0.07] max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm whitespace-pre-wrap">
-          {item.text}
+          <UserText text={item.text} />
         </div>
       )}
     </div>
@@ -113,6 +125,38 @@ export function ErrorMessage({ item }: { item: Of<"error"> }) {
   return (
     <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap">
       {item.message}
+    </div>
+  );
+}
+
+export function CommandOutput({ item }: { item: Of<"command_output"> }) {
+  return (
+    <pre className="bg-foreground/[0.03] text-muted-foreground max-h-80 overflow-auto rounded-xl px-3.5 py-2.5 font-mono text-xs whitespace-pre-wrap">
+      {item.text}
+    </pre>
+  );
+}
+
+export function Compacted({ item }: { item: Of<"compacted"> }) {
+  return (
+    <div className="text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
+      <span className="bg-foreground/[0.06] h-px flex-1" />
+      {item.trigger === "auto"
+        ? "Context compacted automatically"
+        : "Context compacted"}
+      <span className="bg-foreground/[0.06] h-px flex-1" />
+    </div>
+  );
+}
+
+export function SkillChip({ item }: { item: Of<"tool"> }) {
+  const name = (item.input as { skill?: string } | null)?.skill ?? item.title;
+  return (
+    <div className="flex">
+      <span className="bg-primary/10 text-primary inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-xs">
+        <Sparkles className="h-3 w-3" />
+        {name}
+      </span>
     </div>
   );
 }
