@@ -21,6 +21,19 @@
 - [ ] Resume Claude after a reboot from a recorded session id
 - [ ] Replace status polling with tmux hooks/control mode events
 
+## Tasks (after V1, 2026-10-05)
+
+- [ ] Run tasks on other machines (worktree + tmux over the host exec layer)
+- [ ] Notify (push/Telegram) when a task needs you or is ready for review
+- [ ] Model picker and per-project brief additions in New task
+- [ ] Answer a blocked task from the panel without opening the terminal
+- [ ] Resume an exited task with `claude --resume`
+- [ ] Per-task dev server port and database, as dispatch does
+
+## Tooling
+
+- [ ] Refactor the 21 React Compiler warnings (set-state-in-effect, refs) and make them errors
+
 ## Technical
 
 - [ ] Message streaming improvements - Better partial message handling
