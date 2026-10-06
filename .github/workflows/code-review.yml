@@ -4,8 +4,14 @@ name: Code review
 # "Reviewed:" line names the PR's head commit. Re-runs when the body is
 # edited, so updating the section after a push clears it. Reads the PR as it
 # is now, not the event that started the run, so a re-run sees the edit.
+#
+# pull_request_target, not pull_request: it runs this file and the checker as
+# they are on the base branch, so a PR can't rewrite the gate to pass. Safe
+# because nothing from the PR is checked out, installed or run; the body and
+# head sha are only data. No npm ci: base package.json scripts aren't needed,
+# and tsx is pinned and fetched on its own.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
@@ -22,12 +28,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # The base branch's checker and the parser it imports (the default ref
+      # under pull_request_target).
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/check-code-review.ts
+            lib/tasks/code-review.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
       - name: Check the PR body
         env:
           GH_TOKEN: ${{ github.token }}
@@ -35,6 +47,6 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           gh pr view "$PR" --repo "$REPO" --json body,headRefOid > "$RUNNER_TEMP/pr.json"
-          PR_BODY="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")" \
-          HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")" \
-            npx tsx scripts/check-code-review.ts
+          export PR_BODY="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")"
+          export HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")"
+          npx --yes tsx@4.23.15 scripts/check-code-review.ts

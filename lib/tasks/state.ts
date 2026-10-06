@@ -80,35 +80,57 @@ export function canSignOff(pr: TaskPR | null): {
   return { ok: true };
 }
 
-// Summarise gh's statusCheckRollup into one verdict.
-export function checksVerdict(
-  rollup: Array<{
-    conclusion?: string | null;
-    state?: string | null;
-    status?: string | null;
-  }>
-): ChecksVerdict {
-  if (!rollup.length) return "none";
-  const outcomes = rollup.map((c) =>
-    (c.conclusion || c.state || c.status || "").toUpperCase()
+type RollupEntry = {
+  __typename?: string | null;
+  workflowName?: string | null;
+  name?: string | null;
+  context?: string | null;
+  conclusion?: string | null;
+  state?: string | null;
+  status?: string | null;
+};
+
+const FAILED = ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"];
+
+const outcome = (c: RollupEntry) =>
+  (c.conclusion || c.state || c.status || "").toUpperCase();
+
+// Job names repeat across workflows, and a status context can share a check
+// run's name, so a check is its kind, workflow and name together.
+const checkKey = (c: RollupEntry) => {
+  const name = c.name ?? c.context;
+  return name ? `${c.__typename ?? ""}|${c.workflowName ?? ""}|${name}` : null;
+};
+
+// A concurrency group cancels the stale run on the same sha, so a CANCELLED
+// entry says nothing when the same check also has a run that wasn't cancelled.
+function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
+  const ran = new Set(
+    rollup.filter((c) => outcome(c) !== "CANCELLED").map(checkKey)
   );
+  return rollup.filter((c) => {
+    const key = checkKey(c);
+    return outcome(c) !== "CANCELLED" || key === null || !ran.has(key);
+  });
+}
+
+// Summarise gh's statusCheckRollup into one verdict. A lone CANCELLED run is
+// pending: it is waiting on a rerun, not a failure.
+export function checksVerdict(rollup: RollupEntry[]): ChecksVerdict {
+  if (!rollup.length) return "none";
+  const outcomes = liveChecks(rollup).map(outcome);
+  if (outcomes.some((o) => FAILED.includes(o))) return "fail";
   if (
     outcomes.some((o) =>
       [
-        "FAILURE",
-        "ERROR",
-        "TIMED_OUT",
+        "",
+        "PENDING",
+        "QUEUED",
+        "IN_PROGRESS",
+        "EXPECTED",
+        "WAITING",
         "CANCELLED",
-        "ACTION_REQUIRED",
       ].includes(o)
-    )
-  )
-    return "fail";
-  if (
-    outcomes.some((o) =>
-      ["", "PENDING", "QUEUED", "IN_PROGRESS", "EXPECTED", "WAITING"].includes(
-        o
-      )
     )
   )
     return "pending";
@@ -129,18 +151,8 @@ export function blockedReason(paneTail: string): string | null {
 }
 
 // The first failing check in gh's statusCheckRollup, by name.
-export function failingCheck(
-  rollup: Array<{
-    name?: string | null;
-    context?: string | null;
-    conclusion?: string | null;
-    state?: string | null;
-  }>
-): string | null {
-  const bad = ["FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED"];
-  const c = rollup.find((r) =>
-    bad.includes((r.conclusion || r.state || "").toUpperCase())
-  );
+export function failingCheck(rollup: RollupEntry[]): string | null {
+  const c = liveChecks(rollup).find((r) => FAILED.includes(outcome(r)));
   return c ? (c.name ?? c.context ?? null) : null;
 }
 
