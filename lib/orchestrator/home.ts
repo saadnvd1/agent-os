@@ -7,7 +7,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { randomUUID } from "crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import { db, type Session } from "../db";
 import { resolveModelForAgent } from "../model-catalog";
 import { getWorkspace } from "../workspaces";
@@ -65,6 +65,30 @@ export function ensureOrchestrator(workspaceId: string): Session {
     workspaceId
   );
   return getOrchestrator(workspaceId)!;
+}
+
+// The secret its worker sends with each tool call, so no other local
+// process can act as the orchestrator. Made on first use.
+export function orchestratorToken(workspaceId: string): string {
+  const o = getOrchestrator(workspaceId);
+  if (!o) throw new Error("This workspace has no orchestrator");
+  if (o.orch_token) return o.orch_token;
+  const token = randomBytes(32).toString("hex");
+  db.prepare(
+    `UPDATE sessions SET orch_token = COALESCE(orch_token, ?) WHERE id = ?`
+  ).run(token, o.id);
+  return getOrchestrator(workspaceId)!.orch_token!;
+}
+
+export function isOrchestratorToken(
+  workspaceId: string,
+  token: string | null
+): boolean {
+  const want = getOrchestrator(workspaceId)?.orch_token;
+  if (!want || !token) return false;
+  const a = Buffer.from(want);
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // Why a session can't be deleted on its own, or null. An orchestrator goes

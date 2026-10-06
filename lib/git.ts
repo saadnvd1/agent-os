@@ -117,6 +117,13 @@ export function getRepoName(dirPath: string): string {
 /**
  * Slugify a string for use in branch names
  */
+// A plain branch name: no leading dash (an option), no "..", "//" or "@{",
+// nothing a shell or git would read as anything else.
+export const BRANCH_NAME =
+  /^(?!-)(?!.*\.\.)(?!.*\/\/)(?!.*@\{)[A-Za-z0-9._/-]{1,200}(?<![./])$/;
+
+export const isBranchName = (name: string) => BRANCH_NAME.test(name);
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

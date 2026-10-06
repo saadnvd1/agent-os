@@ -100,4 +100,38 @@ describe("landStack", () => {
       "CI still pending after 2 min"
     );
   });
+
+  it("asks the gate before each merge and merges only the head it named", async () => {
+    const { s, deps, merged } = setup();
+    const heads: (string | undefined)[] = [];
+    const inner = deps.signOff;
+    deps.signOff = vi.fn(async (id: string, head?: string) => {
+      heads.push(head);
+      await inner(id);
+    });
+    let asked = 0;
+    deps.beforeMerge = vi.fn(async (id: string) => {
+      const key = q.itemForSession(db, id)!.ticket;
+      // C was restacked: its new head has no review yet, the first time.
+      if (key === "C" && asked++ === 0) return { wait: "no review of c2 yet" };
+      return { head: key === "P" ? "p1" : "c2" };
+    });
+    await landStack(s.stackId, deps);
+    expect(merged).toEqual(["P", "C"]);
+    expect(heads).toEqual(["p1", "c2"]);
+    expect(deps.beforeMerge).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops the land when the gate refuses an item", async () => {
+    const { s, deps, merged } = setup();
+    deps.beforeMerge = async (id: string) =>
+      q.itemForSession(db, id)!.ticket === "C"
+        ? { stop: "review of c2 has blocking findings" }
+        : { head: "p1" };
+    await landStack(s.stackId, deps);
+    expect(merged).toEqual(["P"]);
+    expect(q.get(db, s.stackId)!.error).toBe(
+      "stopped at C: review of c2 has blocking findings\nLanded so far: P"
+    );
+  });
 });

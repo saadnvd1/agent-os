@@ -91,6 +91,13 @@ export type ChatItem =
   | (Base & { kind: "command_output"; text: string })
   | (Base & { kind: "compacted"; trigger?: "manual" | "auto" })
   | (Base & { kind: "error"; message: string })
+  // A line in an orchestrator's decision log, shown in its chat: a note it
+  // wrote, a brake that stopped new starts, or something Saad must decide.
+  | (Base & {
+      kind: "note";
+      text: string;
+      tone: "note" | "brake" | "escalation";
+    })
   | (Base & {
       kind: "approval";
       toolName: string;

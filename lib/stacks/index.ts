@@ -8,7 +8,7 @@
 import { db, stackQueries as q, type StackRow } from "../db";
 import { dropTask } from "../tasks";
 import { createStack } from "./create";
-import { landStack } from "./land";
+import { landStack, LAND_DEFAULTS, type LandDeps } from "./land";
 import { restackItem } from "./restack";
 import { tickSoon } from "./tick";
 import { blockersOf } from "./ready";
@@ -61,13 +61,17 @@ export function resumeStack(id: string): StackView {
   return getStack(id);
 }
 
-// Merges in the background; progress is on the stack row.
-export function landInBackground(id: string): StackView {
+// Merges in the background; progress is on the stack row. A gate, when
+// given, is asked before each merge.
+export function landInBackground(
+  id: string,
+  deps: Partial<LandDeps> = {}
+): StackView {
   const stack = stackOrThrow(id);
   if (stack.status === "landing" || stack.status === "landed") {
     throw new Error(`The stack is already ${stack.status}`);
   }
-  void landStack(id);
+  void landStack(id, { ...LAND_DEFAULTS, ...deps });
   return getStack(id);
 }
 

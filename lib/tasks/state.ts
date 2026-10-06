@@ -10,6 +10,8 @@ export interface TaskPR {
   // The head commit the checks ran on, and the first failing check's name.
   head?: string;
   failing?: string | null;
+  // How many checks are registered on the head.
+  checkCount?: number;
 }
 
 export type TaskState =

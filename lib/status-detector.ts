@@ -228,7 +228,7 @@ export function checkBusyIndicators(content: string): boolean {
   return false;
 }
 
-function checkWaitingPatterns(content: string): boolean {
+export function checkWaitingPatterns(content: string): boolean {
   const recentLines = content.split("\n").slice(-5).join("\n");
   return WAITING_PATTERNS.some((p) => p.test(recentLines));
 }

@@ -28,6 +28,8 @@ export interface Session {
   last_seen_at: string | null;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
+  // An orchestrator's tool-call secret.
+  orch_token?: string | null;
   workspace_id: string | null;
   // LumifyHub card this task moves (and the board it's on)
   lh_card_id: string | null;
@@ -141,6 +143,10 @@ export interface Workspace {
   lh_workspace_id: string | null;
   lh_workspace_slug: string | null;
   lh_workspace_name: string | null;
+  // The orchestrator's brakes, and the one in force (noted once).
+  orch_max_running: number;
+  orch_max_starts_per_hour: number;
+  orch_brake: string | null;
   created_at: string;
 }
 

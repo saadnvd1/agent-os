@@ -21,6 +21,7 @@ import {
   Compacted,
   SkillChip,
   ErrorMessage,
+  NoteLine,
   Reasoning,
   Todos,
   TurnEnd,
@@ -60,6 +61,8 @@ function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
       return <CommandOutput item={item} />;
     case "compacted":
       return <Compacted item={item} />;
+    case "note":
+      return <NoteLine item={item} />;
     case "approval":
       return <Approval item={item} respond={actions.respond} />;
     case "tool":
