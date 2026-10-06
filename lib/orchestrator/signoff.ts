@@ -7,11 +7,11 @@
  * signs it off or drops it.
  */
 
-import type { Session } from "../db";
 import { prFor } from "../tasks/session";
-import { signOffTask } from "../tasks";
+import { codeReviewRefusal, signOffTask } from "../tasks";
 import { signOffRefusal } from "../stacks/guard";
 import { getStack, landInBackground } from "../stacks";
+import { db, stackQueries, type Session } from "../db";
 import { getCheck } from "./checks";
 import { addedLines, changedFiles, ruleBreaks, sensitiveFiles } from "./diff";
 import { escalate } from "./escalate";
@@ -32,6 +32,12 @@ import { workspaceStack, workspaceTask } from "./targets";
 import { ciSettleIn, waitingState } from "./task-state";
 
 const short = (sha: string) => sha.slice(0, 7);
+
+// The heads AgentOS's own restack moved the task's branch between.
+function restackedOf(taskId: string) {
+  const item = stackQueries.itemForSession(db, taskId);
+  return item ? { from: item.restacked_from, to: item.restacked_to } : null;
+}
 
 // `approval`: Saad approved this merge on his asks list, for this commit.
 export type Verdict =
@@ -90,6 +96,11 @@ export async function judge(
     fromCard: !!task.lh_card_id,
     scope: getCheck(task.id, sha, "scope"),
     stackRefusal: landing ? null : signOffRefusal(task.id),
+    codeReviewRefusal: codeReviewRefusal(
+      pr.codeReview,
+      sha,
+      restackedOf(task.id)
+    ),
   });
   const head = `${task.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
   const toSaad = outcomes.find((o) => o.state === "escalate");

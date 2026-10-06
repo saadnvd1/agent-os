@@ -2,7 +2,7 @@ import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
-import { db } from "../db";
+import { db, stackQueries as q } from "../db";
 import { restackAfterMerge, type RestackDeps } from "./restack";
 import { seedStack } from "./testing";
 import type { Runner } from "./git";
@@ -17,6 +17,7 @@ function fakeGit(opts: { conflict?: string } = {}) {
     ["origin/feature/g", "g-old"],
   ]);
   const heads = new Map<string, string>();
+  const origHeads = new Map<string, string>();
   const calls: string[] = [];
   const runner: Runner = async (cmd, args, cwd) => {
     const line = `${cmd} ${args.join(" ")}`;
@@ -32,14 +33,17 @@ function fakeGit(opts: { conflict?: string } = {}) {
     if (args[0] === "rebase" && args[1] === "--onto") {
       if (opts.conflict === wt)
         throw Object.assign(new Error("x"), { stderr: "CONFLICT" });
+      origHeads.set(wt, heads.get(wt) ?? "");
       heads.set(wt, `${wt}-rebased`);
     }
     if (args[0] === "rev-parse" && args[1] === "HEAD")
       return heads.get(wt) ?? "";
+    if (args[0] === "rev-parse" && args[1] === "ORIG_HEAD")
+      return origHeads.get(wt) ?? "";
     if (args[0] === "push") remote.set(`origin/${args[4]}`, heads.get(wt)!);
     return "";
   };
-  return { runner, calls, remote };
+  return { runner, calls, remote, heads };
 }
 
 const openPr = (n: number) => ({
@@ -127,6 +131,75 @@ describe("restack after a squash merge", () => {
     expect(s.item("P").status).toBe("merged");
     expect(notify).toHaveBeenCalledTimes(2);
     expect(notify.mock.calls[0][1]).toContain("retargeted your PR to main");
+  });
+
+  it("records the heads it moved, so the task's code review still covers its branch", async () => {
+    const { cWt, gWt, s } = seed();
+    const [c, g] = [cWt, gWt].map((w) => w.split("/").pop()!);
+    const git = fakeGit();
+    git.heads.set(c, "c-old");
+    git.heads.set(g, "g-old");
+    // G was restacked before, and its task hasn't pushed since.
+    q.updateItem(db, s.item("G").id, {
+      restacked_from: "g-reviewed",
+      restacked_to: "g-old",
+    });
+
+    await restackAfterMerge(s.session("P"), depsFor(git.runner));
+
+    expect(s.item("C")).toMatchObject({
+      restacked_from: "c-old",
+      restacked_to: `${c}-rebased`,
+    });
+    expect(s.item("G")).toMatchObject({
+      restacked_from: "g-reviewed",
+      restacked_to: `${g}-rebased`,
+    });
+  });
+
+  it("records before pushing, and keeps the record when a retry pushes that same commit", async () => {
+    const { cWt, s } = seed();
+    const c = cWt.split("/").pop()!;
+    const git = fakeGit();
+    git.heads.set(c, "c-old");
+    let recordAtPush: unknown = null;
+    let refuse = true;
+    const runner: Runner = async (cmd, args, cwd) => {
+      if (args[0] === "push" && args[4] === "feature/c") {
+        recordAtPush = s.item("C").restacked_to;
+        if (refuse) throw new Error("connection reset");
+      }
+      return git.runner(cmd, args, cwd);
+    };
+    await restackAfterMerge(s.session("P"), depsFor(runner));
+    expect(recordAtPush).toBe(`${c}-rebased`);
+
+    // The retry finds the worktree already rebased: no rebase, same commit.
+    refuse = false;
+    git.calls.length = 0;
+    await restackAfterMerge(s.session("P"), depsFor(runner));
+    expect(s.item("C")).toMatchObject({
+      restacked_from: "c-old",
+      restacked_to: `${c}-rebased`,
+    });
+  });
+
+  it("records nothing reviewed when the worktree had commits the task never pushed", async () => {
+    const { cWt, s } = seed();
+    const git = fakeGit();
+    git.heads.set(cWt.split("/").pop()!, "c-unpushed");
+    // A record from an earlier restack must not survive.
+    q.updateItem(db, s.item("C").id, {
+      restacked_from: "c-reviewed",
+      restacked_to: "c-old",
+    });
+
+    await restackAfterMerge(s.session("P"), depsFor(git.runner));
+
+    expect(s.item("C")).toMatchObject({
+      restacked_from: null,
+      restacked_to: null,
+    });
   });
 
   it("aborts a conflict, names the exact command and keeps the parent branch", async () => {

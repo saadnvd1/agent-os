@@ -155,6 +155,8 @@ function setup() {
       head: s.head!,
       failing: null,
       checkCount: 1,
+      // The task's /do-code-review of its head, in the PR body.
+      codeReview: { sha: s.head! },
       ...over,
     };
     prs.set(s.branch, pr);
@@ -173,6 +175,20 @@ function setup() {
 }
 
 describe("done, by state", () => {
+  it("(a) refuses an open PR whose body has no code review of its head", async () => {
+    const t = setup();
+    const s = t.session("unreviewed", {
+      task: true,
+      commits: { "src/a.ts": "export const a = 1;\n" },
+      live: "idle",
+    });
+    t.openPR(s, { codeReview: null });
+    await expect(doneSession(s.id, { by: "direct" })).rejects.toThrow(
+      /Not done, nothing merged[\s\S]*no Code review section/
+    );
+    expect(merges).toEqual([]);
+  });
+
   it("(a) merges an open PR that passes the gates, pinned to its head, then cleans up", async () => {
     const t = setup();
     const s = t.session("ship", {

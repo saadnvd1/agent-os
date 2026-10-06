@@ -1,3 +1,5 @@
+import type { CodeReviewSection } from "./code-review";
+
 export type TaskStatus = "running" | "merged" | "dropped" | "done";
 
 export type ChecksVerdict = "pass" | "fail" | "pending" | "none";
@@ -12,6 +14,9 @@ export interface TaskPR {
   failing?: string | null;
   // How many checks are registered on the head.
   checkCount?: number;
+  // The body's Code review section: null when it has none, undefined
+  // when the body wasn't read.
+  codeReview?: CodeReviewSection | null;
 }
 
 export type TaskState =

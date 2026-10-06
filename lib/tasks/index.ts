@@ -32,6 +32,7 @@ import {
 import { expandHome, prFor, taskSessions } from "./session";
 
 export * from "./state";
+export { codeReviewRefusal, parseCodeReview } from "./code-review";
 export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
 export { prFor as taskPR } from "./session";
 

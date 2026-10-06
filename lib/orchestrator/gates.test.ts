@@ -26,6 +26,7 @@ const input = (over: Partial<GateInput> = {}): GateInput => ({
   fromCard: false,
   scope: null,
   stackRefusal: null,
+  codeReviewRefusal: null,
   ...over,
 });
 const gate = (i: GateInput, name: string) =>
@@ -130,6 +131,15 @@ describe("the merge gates", () => {
       gate(input({ stackRefusal: "sign off ROA-1 first" }), "stack").state
     ).toBe("fail");
   });
+
+  it("code-review: a PR body without a review of this commit fails", () => {
+    expect(
+      gate(
+        input({ codeReviewRefusal: "no Code review section" }),
+        "code-review"
+      )
+    ).toMatchObject({ state: "fail", reason: "no Code review section" });
+  });
 });
 
 describe("the plain diff rules", () => {
@@ -169,6 +179,9 @@ describe("the plain diff rules", () => {
       "src/app.ts",
       "README.md",
       "lib/securityish.ts",
+      "lib/tasks/code-review.ts",
+      "scripts/check-code-review.ts",
+      "lib/tasks/code-review.test.ts",
     ].map((p) => ({ path: p, status: "M" }));
     expect(sensitiveFiles(files).map((s) => `${s.path}:${s.why}`)).toEqual([
       ".github/workflows/ci.yml:CI config",
@@ -191,6 +204,8 @@ describe("the plain diff rules", () => {
       "lib/secrets.ts:secrets handling",
       "lib/security/auth.ts:secrets handling",
       "app/api/pair/route.ts:secrets handling",
+      "lib/tasks/code-review.ts:the code review gate",
+      "scripts/check-code-review.ts:the code review gate",
     ]);
   });
 

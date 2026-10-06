@@ -1,0 +1,40 @@
+name: Code review
+
+# Every PR body carries a "Code review" section from /do-code-review whose
+# "Reviewed:" line names the PR's head commit. Re-runs when the body is
+# edited, so updating the section after a push clears it. Reads the PR as it
+# is now, not the event that started the run, so a re-run sees the edit.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  section:
+    name: Code review section
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check the PR body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr view "$PR" --repo "$REPO" --json body,headRefOid > "$RUNNER_TEMP/pr.json"
+          PR_BODY="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")" \
+          HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")" \
+            npx tsx scripts/check-code-review.ts
