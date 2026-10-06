@@ -10,6 +10,7 @@ export type StackStatus =
 export type StackItemStatus =
   | "planned"
   | "held"
+  | "starting"
   | "running"
   | "pr"
   | "merged"
@@ -46,11 +47,14 @@ export interface StackItemRow {
   pr_number: number | null;
   note: string | null;
   error: string | null;
+  attempts: number;
+  // Held by the plan (an open blocker outside the stack): a retry keeps it.
+  held_outside: number;
 }
 
 export type NewStackItem = Omit<
   StackItemRow,
-  "stack_id" | "pr_number" | "error"
+  "stack_id" | "pr_number" | "error" | "attempts"
 >;
 
 type ItemPatch = Partial<
@@ -63,6 +67,7 @@ type ItemPatch = Partial<
     | "pr_number"
     | "note"
     | "error"
+    | "attempts"
   >
 >;
 
@@ -100,10 +105,10 @@ export const stackQueries = {
       const insert = db.prepare(
         `INSERT INTO stack_items (id, stack_id, position, lh_card_id, ticket, title,
            parent_item_id, also_item_ids, blocker_item_ids, status, session_id,
-           base_branch, base_tip, note)
+           base_branch, base_tip, note, held_outside)
          VALUES (@id, @stack_id, @position, @lh_card_id, @ticket, @title,
            @parent_item_id, @also_item_ids, @blocker_item_ids, @status, @session_id,
-           @base_branch, @base_tip, @note)`
+           @base_branch, @base_tip, @note, @held_outside)`
       );
       for (const item of items) insert.run({ ...item, stack_id: stack.id });
     })(),

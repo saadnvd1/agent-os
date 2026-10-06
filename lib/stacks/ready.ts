@@ -33,7 +33,9 @@ export function planTick(items: StackItemRow[], max: number): TickPlan {
   const byId = new Map(items.map((i) => [i.id, { ...i }]));
   const hold: TickPlan["hold"] = [];
   const start: string[] = [];
-  let inFlight = items.filter((i) => i.status === "running").length;
+  let inFlight = items.filter(
+    (i) => i.status === "running" || i.status === "starting"
+  ).length;
   for (const item of byId.values()) {
     if (item.status !== "planned") continue;
     const dead = blockersOf(item)

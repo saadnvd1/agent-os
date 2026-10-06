@@ -22,7 +22,8 @@ export interface LandDeps {
 }
 
 const defaults: LandDeps = {
-  signOff: signOffTask,
+  // Waits for the restack, so its children are checked after they moved.
+  signOff: (id) => signOffTask(id, { wait: true }),
   prOf: (s) => taskPR(s, true),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   refresh: refreshItems,

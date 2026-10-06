@@ -12,13 +12,18 @@ import {
   type StackItemRow,
   type StackRow,
 } from "../db";
-import { taskPR } from "../tasks";
+import { signingOff, taskPR } from "../tasks";
 import { planTick } from "./ready";
-import { startItem } from "./start";
+import { reconcileStarting, startItem } from "./start";
+import { restackDescendants } from "./restack";
+import { parentBranchOf } from "./guard";
 import { outputOf } from "./git";
 
 const EVERY = 60_000;
+// A start that fails is tried again on the next looks, up to this many times.
+export const START_ATTEMPTS = 3;
 const busy = new Set<string>();
+const LIVE = new Set(["running", "pr"]);
 
 const sessionOf = (id: string) =>
   db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
@@ -26,8 +31,7 @@ const sessionOf = (id: string) =>
     | undefined;
 
 async function refreshItem(item: StackItemRow): Promise<void> {
-  if (!item.session_id || (item.status !== "running" && item.status !== "pr"))
-    return;
+  if (!item.session_id || !LIVE.has(item.status)) return;
   const session = sessionOf(item.session_id);
   if (!session || session.task_status === "dropped") {
     q.updateItem(db, item.id, {
@@ -40,6 +44,7 @@ async function refreshItem(item: StackItemRow): Promise<void> {
     q.updateItem(db, item.id, { status: "merged" });
     return;
   }
+  if (signingOff.has(session.id)) return;
   const pr = await taskPR(session);
   if (!pr) return;
   if (
@@ -48,10 +53,11 @@ async function refreshItem(item: StackItemRow): Promise<void> {
   ) {
     q.updateItem(db, item.id, { status: "pr", pr_number: pr.number });
   } else if (pr.state === "MERGED") {
+    // Its children are moved by the reconciliation below.
     q.updateItem(db, item.id, {
       status: "merged",
       pr_number: pr.number,
-      note: "Merged outside AgentOS: anything stacked on it was not restacked",
+      note: "Merged on GitHub, not signed off in AgentOS",
     });
   } else if (pr.state === "CLOSED" && item.status === "pr") {
     q.updateItem(db, item.id, {
@@ -65,28 +71,104 @@ export async function refreshItems(stackId: string): Promise<void> {
   for (const item of q.items(db, stackId)) await refreshItem(item);
 }
 
-export async function tickStack(stack: StackRow): Promise<void> {
+// Merged parents whose children still sit on their branch: a crash between
+// the merge and the restack, or a merge done on GitHub. One that needs a
+// human (has an error) is left to the Restack button.
+export function parentsToRestack(
+  items: StackItemRow[],
+  branchOf: (parent: StackItemRow) => string | null
+): StackItemRow[] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const parents = new Map<string, StackItemRow>();
+  for (const item of items) {
+    const parent = item.parent_item_id ? byId.get(item.parent_item_id) : null;
+    if (!parent || parent.status !== "merged") continue;
+    if (!LIVE.has(item.status) || item.error || !item.base_tip) continue;
+    const branch = branchOf(parent);
+    if (branch && item.base_branch === branch) parents.set(parent.id, parent);
+  }
+  return [...parents.values()];
+}
+
+// Nothing left to start, wait on or merge: the stack is finished.
+export function finishedStatus(
+  items: StackItemRow[]
+): "landed" | "failed" | null {
+  const open = new Set(["planned", "held", "starting", "running", "pr"]);
+  if (items.some((i) => open.has(i.status))) return null;
+  return items.some((i) => i.status === "failed") ? "failed" : "landed";
+}
+
+export interface TickDeps {
+  start: typeof startItem;
+  restack: (parent: StackItemRow) => Promise<unknown>;
+}
+
+const defaults: TickDeps = { start: startItem, restack: restackDescendants };
+
+async function startOrRetry(
+  stack: StackRow,
+  id: string,
+  deps: TickDeps
+): Promise<void> {
+  const item = q.item(db, id)!;
+  try {
+    await deps.start(stack, item);
+  } catch (error) {
+    const attempts = item.attempts + 1;
+    const reason = outputOf(error).slice(0, 300);
+    // Transient failures (LumifyHub, a fetch) get another look; then it is
+    // failed, and its dependents are held until someone presses Retry.
+    q.updateItem(
+      db,
+      id,
+      attempts < START_ATTEMPTS
+        ? {
+            status: "planned",
+            attempts,
+            error: `Start failed (try ${attempts} of ${START_ATTEMPTS}), trying again: ${reason}`,
+          }
+        : {
+            status: "failed",
+            attempts,
+            error: `Could not start after ${attempts} tries: ${reason}`,
+          }
+    );
+  }
+}
+
+export async function tickStack(
+  stack: StackRow,
+  deps: TickDeps = defaults
+): Promise<void> {
   if (busy.has(stack.id)) return;
   busy.add(stack.id);
   try {
     await refreshItems(stack.id);
+    for (const parent of parentsToRestack(
+      q.items(db, stack.id),
+      parentBranchOf
+    )) {
+      void deps
+        .restack(parent)
+        .catch((error: unknown) =>
+          console.error(`[stacks] restack ${parent.id}:`, error)
+        );
+    }
     const fresh = q.get(db, stack.id);
     if (fresh?.status !== "running") return;
     const plan = planTick(q.items(db, stack.id), fresh.max_parallel);
     for (const { id, note } of plan.hold) {
       q.updateItem(db, id, { status: "held", note });
     }
-    for (const id of plan.start) {
-      const item = q.item(db, id)!;
-      try {
-        await startItem(fresh, item);
-      } catch (error) {
-        // Marked, not retried in a loop: its dependents are held next look.
-        q.updateItem(db, id, {
-          status: "failed",
-          error: `Could not start: ${outputOf(error).slice(0, 300)}`,
-        });
-      }
+    for (const id of plan.start) await startOrRetry(fresh, id, deps);
+    const done = finishedStatus(q.items(db, stack.id));
+    if (done) {
+      q.update(db, stack.id, {
+        status: done,
+        landed_at: done === "landed" ? new Date().toISOString() : null,
+        error: done === "failed" ? "Every card is done, but some failed" : null,
+      });
     }
   } finally {
     busy.delete(stack.id);
@@ -101,23 +183,30 @@ export async function tickAll(): Promise<void> {
   }
 }
 
+// Look at one stack (or all of them) now, without waiting for it.
 export function tickSoon(stackId?: string): void {
-  const run = stackId ? q.get(db, stackId) : null;
-  void (run ? tickStack(run) : tickAll()).catch((error: unknown) =>
+  const stack = stackId ? q.get(db, stackId) : null;
+  void (stack ? tickStack(stack) : tickAll()).catch((error: unknown) =>
     console.error("[stacks] tick:", error)
   );
+}
+
+// After a restart. A land cut short is paused with its progress kept: Land
+// carries on from the first PR not yet merged.
+export function recoverAfterRestart(): void {
+  reconcileStarting();
+  db.prepare(
+    `UPDATE stacks SET status = 'paused',
+       error = 'Landing was interrupted by a restart. Press Land to carry on.'
+     WHERE status = 'landing'`
+  ).run();
 }
 
 let timer: NodeJS.Timeout | null = null;
 
 export function startStackWatcher(): void {
   if (timer) return;
-  // A land cut short by a restart is not resumed on its own.
-  db.prepare(
-    `UPDATE stacks SET status = 'failed', progress = NULL,
-       error = 'Landing was interrupted by a restart; land again to carry on'
-     WHERE status = 'landing'`
-  ).run();
+  recoverAfterRestart();
   timer = setInterval(() => void tickAll(), EVERY);
   timer.unref();
   void tickAll();

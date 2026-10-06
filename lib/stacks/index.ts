@@ -11,11 +11,12 @@ import { createStack } from "./create";
 import { landStack } from "./land";
 import { restackItem } from "./restack";
 import { tickSoon } from "./tick";
+import { blockersOf } from "./ready";
 import { stackView } from "./view";
 import type { StackView } from "./types";
 
 export { previewStack } from "./create";
-export { startStackWatcher, tickAll } from "./tick";
+export { startStackWatcher, tickAll, tickSoon } from "./tick";
 export type * from "./types";
 
 function stackOrThrow(id: string): StackRow {
@@ -86,6 +87,40 @@ export async function dropItem(
     status: "dropped",
     note: "Dropped from the stack",
   });
+  tickSoon(stackId);
+  return getStack(stackId);
+}
+
+// Put a failed or held item back in the plan, with everything held behind
+// it; the next look starts what is ready and holds again what still can't.
+// A hold the plan made (a blocker outside the stack) is kept unless it is
+// the item retried.
+export function retryItem(stackId: string, itemId: string): StackView {
+  const item = q.item(db, itemId);
+  if (!item || item.stack_id !== stackId) throw new Error("Item not found");
+  if (item.status !== "failed" && item.status !== "held") {
+    throw new Error(`It is ${item.status}, not failed or held`);
+  }
+  const items = q.items(db, stackId);
+  const reset = new Set([item.id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const i of items) {
+      if (reset.has(i.id) || i.status !== "held" || i.held_outside) continue;
+      if (blockersOf(i).some((b) => reset.has(b))) {
+        reset.add(i.id);
+        grew = true;
+      }
+    }
+  }
+  for (const id of reset) {
+    q.updateItem(db, id, {
+      status: "planned",
+      attempts: 0,
+      error: null,
+      note: null,
+    });
+  }
   tickSoon(stackId);
   return getStack(stackId);
 }

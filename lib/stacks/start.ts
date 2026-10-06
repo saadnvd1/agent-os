@@ -52,12 +52,60 @@ async function stackedBase(
   };
 }
 
+// The task already running for this card, if any.
+export function existingTask(cardId: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT id FROM sessions WHERE lh_card_id = ? AND task_status = 'running'
+       ORDER BY created_at DESC LIMIT 1`
+    )
+    .get(cardId) as { id: string } | undefined;
+  return row?.id ?? null;
+}
+
+function linkTask(item: StackItemRow, sessionId: string, note: string | null) {
+  const session = db
+    .prepare(`SELECT base_branch FROM sessions WHERE id = ?`)
+    .get(sessionId) as { base_branch: string | null } | undefined;
+  q.updateItem(db, item.id, {
+    status: "running",
+    session_id: sessionId,
+    base_branch: session?.base_branch ?? item.base_branch,
+    note,
+  });
+}
+
+// After a restart: an item caught between its claim and its task either
+// has its task (link it) or never got one (plan it again).
+export function reconcileStarting(): void {
+  const rows = db
+    .prepare(`SELECT * FROM stack_items WHERE status = 'starting'`)
+    .all() as StackItemRow[];
+  for (const item of rows) {
+    const sessionId = item.session_id ?? existingTask(item.lh_card_id);
+    if (sessionId) linkTask(item, sessionId, null);
+    else q.updateItem(db, item.id, { status: "planned" });
+  }
+}
+
+// Claims the item ('starting') before anything is created, and records the
+// task the moment its row exists, so a restart never starts a card twice.
 export async function startItem(
   stack: StackRow,
   item: StackItemRow
 ): Promise<void> {
+  const existing = existingTask(item.lh_card_id);
+  if (existing) {
+    linkTask(
+      item,
+      existing,
+      "Linked to the task already running for this card"
+    );
+    return;
+  }
   const project = getProject(stack.project_id);
   if (!project) throw new Error("The stack's project is gone");
+  q.updateItem(db, item.id, { status: "starting", error: null });
   const repo = expandHome(project.working_directory);
   const items = q.items(db, stack.id);
   const parent = items.find((i) => i.id === item.parent_item_id) ?? null;
@@ -69,18 +117,30 @@ export async function startItem(
     stack.lh_board_id,
     item.lh_card_id
   );
-  const session = await createTask({
-    projectId: project.id,
-    prompt: promptFromCard(card),
-    cardId: card.id,
-    base,
-  });
-  q.updateItem(db, item.id, {
-    status: "running",
-    session_id: session.id,
-    base_branch: session.base_branch,
-    base_tip: base?.tip ?? null,
-    error: null,
-    note: null,
-  });
+  try {
+    await createTask({
+      projectId: project.id,
+      prompt: promptFromCard(card),
+      cardId: card.id,
+      base,
+      onCreated: (sessionId) =>
+        q.updateItem(db, item.id, {
+          session_id: sessionId,
+          base_branch: base?.branch ?? null,
+          base_tip: base?.tip ?? null,
+        }),
+    });
+  } catch (error) {
+    // The task exists but its agent didn't launch: keep it, don't start
+    // the card again.
+    const sessionId = q.item(db, item.id)?.session_id;
+    if (!sessionId) throw error;
+    linkTask(item, sessionId, null);
+    q.updateItem(db, item.id, {
+      error: `The agent did not launch: ${outputOf(error).slice(0, 200)}`,
+    });
+    return;
+  }
+  linkTask(item, q.item(db, item.id)!.session_id!, null);
+  q.updateItem(db, item.id, { error: null, attempts: 0 });
 }

@@ -32,7 +32,7 @@ import {
 import { expandHome, prFor, taskSessions } from "./session";
 
 export * from "./state";
-export { signOffTask, dropTask } from "./finish";
+export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
 export { prFor as taskPR } from "./session";
 
 export interface TaskView {
@@ -64,6 +64,8 @@ export async function createTask(opts: {
   cardId?: string;
   // Stacked: cut from another task's pushed branch, at this exact commit.
   base?: { branch: string; tip: string; stack: StackedOn };
+  // Called once the session row exists, before the agent launches.
+  onCreated?: (sessionId: string) => void;
 }): Promise<Session> {
   const prompt = opts.prompt.trim();
   if (!prompt) throw new Error("Describe the task");
@@ -120,6 +122,7 @@ export async function createTask(opts: {
   db.prepare(
     `UPDATE sessions SET task_prompt = ?, task_status = 'running' WHERE id = ?`
   ).run(prompt, id);
+  opts.onCreated?.(id);
 
   await launchClaude({
     sessionId: id,

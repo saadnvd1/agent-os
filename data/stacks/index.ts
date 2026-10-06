@@ -84,7 +84,7 @@ export function useStackItemAction() {
     }: {
       id: string;
       itemId: string;
-      action: "drop" | "restack";
+      action: "drop" | "restack" | "retry";
     }) => call(`/api/stacks/${id}/items/${itemId}/${action}`, {})
   );
 }

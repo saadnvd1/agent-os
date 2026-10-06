@@ -2,6 +2,7 @@ import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
+import { db } from "../db";
 import { restackAfterMerge, type RestackDeps } from "./restack";
 import { seedStack } from "./testing";
 import type { Runner } from "./git";
@@ -41,6 +42,28 @@ function fakeGit(opts: { conflict?: string } = {}) {
   return { runner, calls, remote };
 }
 
+const openPr = (n: number) => ({
+  number: n,
+  url: `https://github.com/o/r/pull/${n}`,
+  state: "OPEN" as const,
+  checks: "pass" as const,
+});
+
+// Deps around a fake runner: GitHub says feature/c has PR #12 open.
+function depsFor(
+  runner: Runner,
+  extra: Partial<RestackDeps> = {}
+): RestackDeps {
+  return {
+    runner,
+    notify: vi.fn().mockResolvedValue(undefined),
+    interrupt: vi.fn().mockResolvedValue(undefined),
+    defaultBranch: async () => "main",
+    prOf: async (_repo, branch) => (branch === "feature/c" ? openPr(12) : null),
+    ...extra,
+  };
+}
+
 // The fake keys each worktree by its folder name.
 function seed() {
   const cWt = mkdtempSync(join(tmpdir(), "c"));
@@ -76,11 +99,7 @@ describe("restack after a squash merge", () => {
     const { cWt, s } = seed();
     const git = fakeGit();
     const notify = vi.fn().mockResolvedValue(undefined);
-    const deps: RestackDeps = {
-      runner: git.runner,
-      notify,
-      defaultBranch: async () => "main",
-    };
+    const deps = depsFor(git.runner, { notify });
 
     const result = await restackAfterMerge(s.session("P"), deps);
 
@@ -113,11 +132,7 @@ describe("restack after a squash merge", () => {
   it("aborts a conflict, names the exact command and keeps the parent branch", async () => {
     const { cWt, s } = seed();
     const git = fakeGit({ conflict: cWt.split("/").pop() });
-    const deps: RestackDeps = {
-      runner: git.runner,
-      notify: vi.fn(),
-      defaultBranch: async () => "main",
-    };
+    const deps = depsFor(git.runner);
 
     const result = await restackAfterMerge(s.session("P"), deps);
 
@@ -138,12 +153,97 @@ describe("restack after a squash merge", () => {
       args[0] === "status" && cwd === cWt
         ? Promise.resolve(" M file.ts")
         : git.runner(cmd, args, cwd);
-    await restackAfterMerge(s.session("P"), {
-      runner,
-      notify: vi.fn(),
-      defaultBranch: async () => "main",
-    });
+    await restackAfterMerge(s.session("P"), depsFor(runner));
     expect(s.item("C").error).toContain("uncommitted changes");
     expect(git.calls.some((l) => l.startsWith("gh"))).toBe(false);
+  });
+});
+
+describe("restack, the review's cases", () => {
+  it("retargets a PR opened after the watcher's last look", async () => {
+    const { s } = seed();
+    db.prepare(
+      `UPDATE stack_items SET pr_number = NULL, status = 'running' WHERE id = ?`
+    ).run(s.item("C").id);
+    const git = fakeGit();
+    await restackAfterMerge(s.session("P"), depsFor(git.runner));
+    expect(git.calls).toContain("gh pr edit 12 --base main");
+    expect(s.item("C")).toMatchObject({ pr_number: 12, status: "pr" });
+  });
+
+  it("keeps the parent's branch when GitHub can't say whether a child has a PR", async () => {
+    const { s } = seed();
+    const git = fakeGit();
+    const result = await restackAfterMerge(
+      s.session("P"),
+      depsFor(git.runner, {
+        prOf: async () => {
+          throw new Error("gh: rate limited");
+        },
+      })
+    );
+    expect(result.stuck).toBe(true);
+    expect(s.item("C").error).toContain("Couldn't read C's PR from GitHub");
+    expect(git.calls.some((l) => l.startsWith("git rebase"))).toBe(false);
+  });
+
+  it("fails rather than rebasing onto a stale origin when the fetch fails", async () => {
+    const { s } = seed();
+    const git = fakeGit();
+    const runner: Runner = (cmd, args, cwd) =>
+      args[0] === "fetch"
+        ? Promise.reject(
+            Object.assign(new Error("x"), { stderr: "no network" })
+          )
+        : git.runner(cmd, args, cwd);
+    const result = await restackAfterMerge(s.session("P"), depsFor(runner));
+    expect(result.stuck).toBe(true);
+    expect(s.item("C").error).toContain("Could not fetch origin");
+    expect(
+      git.calls.some((l) => l.startsWith("gh") || l.startsWith("git rebase"))
+    ).toBe(false);
+  });
+
+  it("interrupts each agent before rewriting its worktree, and tells it to carry on", async () => {
+    const { s } = seed();
+    const git = fakeGit();
+    const order: string[] = [];
+    const runner: Runner = (cmd, args, cwd) => {
+      if (args[0] === "rebase") order.push("rebase");
+      return git.runner(cmd, args, cwd);
+    };
+    const notify = vi.fn(async (_to: string, _body: string) => {
+      order.push("notify");
+    });
+    const interrupt = vi.fn(async () => {
+      order.push("interrupt");
+    });
+    await restackAfterMerge(
+      s.session("P"),
+      depsFor(runner, { notify, interrupt })
+    );
+    expect(order).toEqual([
+      "interrupt",
+      "rebase",
+      "notify",
+      "interrupt",
+      "rebase",
+      "notify",
+    ]);
+    expect(notify.mock.calls[0][1]).toContain("carry on where you were");
+  });
+
+  it("doesn't interrupt a grandchild whose parent's branch didn't move", async () => {
+    const { s } = seed();
+    const git = fakeGit({ conflict: "none" });
+    const interrupt = vi.fn().mockResolvedValue(undefined);
+    // C was already moved: only G is looked at, and origin/feature/c is
+    // still the commit G sits on.
+    db.prepare(`UPDATE stack_items SET base_branch = 'main' WHERE id = ?`).run(
+      s.item("C").id
+    );
+    await restackAfterMerge(s.session("P"), depsFor(git.runner, { interrupt }));
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(git.calls.some((l) => l.startsWith("git rebase"))).toBe(false);
   });
 });

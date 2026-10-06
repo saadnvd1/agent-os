@@ -5,7 +5,7 @@ import {
   landInBackground,
   pauseStack,
   resumeStack,
-  tickAll,
+  tickSoon,
 } from "@/lib/stacks";
 
 type RouteParams = { params: Promise<{ id: string; action: string }> };
@@ -14,9 +14,9 @@ const actions: Record<string, (id: string) => unknown> = {
   pause: pauseStack,
   resume: resumeStack,
   land: landInBackground,
-  // Look now instead of waiting for the next minute.
-  tick: async (id) => {
-    await tickAll();
+  // Look now instead of waiting for the next minute; it runs on its own.
+  tick: (id) => {
+    tickSoon(id);
     return getStack(id);
   },
 };

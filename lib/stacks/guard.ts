@@ -48,9 +48,6 @@ export function liveChildren(sessionId: string): StackItemRow[] {
     .filter(
       (i) =>
         i.parent_item_id === item.id &&
-        (i.status === "running" || i.status === "pr")
+        (i.status === "starting" || i.status === "running" || i.status === "pr")
     );
 }
-
-export const hasLiveChildren = (sessionId: string) =>
-  liveChildren(sessionId).length > 0;

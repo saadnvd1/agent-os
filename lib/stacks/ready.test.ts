@@ -28,6 +28,8 @@ const row = (
   pr_number: null,
   note: null,
   error: null,
+  attempts: 0,
+  held_outside: 0,
   ...extra,
 });
 

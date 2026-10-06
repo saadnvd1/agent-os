@@ -23,7 +23,7 @@ export function StackItemRow({
     !!item.error && (item.status === "pr" || item.status === "running");
   const why = item.error || item.waitsOn || item.note;
   const busy = action.isPending;
-  const act = (kind: "drop" | "restack") =>
+  const act = (kind: "drop" | "restack" | "retry") =>
     stackId && action.mutate({ id: stackId, itemId: item.id, action: kind });
 
   return (
@@ -113,6 +113,18 @@ export function StackItemRow({
             >
               <RotateCw className="h-3 w-3" />
               Restack
+            </Button>
+          )}
+          {(item.status === "failed" || item.status === "held") && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-11 px-2 text-xs sm:h-7"
+              disabled={busy}
+              onClick={() => act("retry")}
+            >
+              <RotateCw className="h-3 w-3" />
+              Retry
             </Button>
           )}
           {stackId &&

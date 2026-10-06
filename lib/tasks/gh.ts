@@ -18,42 +18,46 @@ export async function run(
   return stdout;
 }
 
+// The branch's PR, null when it has none; throws when gh can't say.
+export async function findPRStrict(
+  repoDir: string,
+  branch: string
+): Promise<TaskPR | null> {
+  const out = await run(
+    "gh",
+    [
+      "pr",
+      "list",
+      "--head",
+      branch,
+      "--state",
+      "all",
+      "--limit",
+      "1",
+      "--json",
+      "number,url,state,statusCheckRollup",
+    ],
+    repoDir,
+    15000
+  );
+  const [pr] = JSON.parse(out) as Array<{
+    number: number;
+    url: string;
+    state: TaskPR["state"];
+    statusCheckRollup: Parameters<typeof checksVerdict>[0] | null;
+  }>;
+  if (!pr) return null;
+  return {
+    number: pr.number,
+    url: pr.url,
+    state: pr.state,
+    checks: checksVerdict(pr.statusCheckRollup ?? []),
+  };
+}
+
 export async function findPR(
   repoDir: string,
   branch: string
 ): Promise<TaskPR | null> {
-  try {
-    const out = await run(
-      "gh",
-      [
-        "pr",
-        "list",
-        "--head",
-        branch,
-        "--state",
-        "all",
-        "--limit",
-        "1",
-        "--json",
-        "number,url,state,statusCheckRollup",
-      ],
-      repoDir,
-      15000
-    );
-    const [pr] = JSON.parse(out) as Array<{
-      number: number;
-      url: string;
-      state: TaskPR["state"];
-      statusCheckRollup: Parameters<typeof checksVerdict>[0] | null;
-    }>;
-    if (!pr) return null;
-    return {
-      number: pr.number,
-      url: pr.url,
-      state: pr.state,
-      checks: checksVerdict(pr.statusCheckRollup ?? []),
-    };
-  } catch {
-    return null;
-  }
+  return findPRStrict(repoDir, branch).catch(() => null);
 }

@@ -12,6 +12,7 @@ const red = "bg-destructive/15 text-destructive";
 const CHIP: Record<Status, { label: string; tone: string }> = {
   planned: { label: "Planned", tone: muted },
   held: { label: "Held", tone: amber },
+  starting: { label: "Starting", tone: purple },
   running: { label: "Working", tone: purple },
   pr: { label: "PR open", tone: purple },
   merged: { label: "Merged", tone: green },

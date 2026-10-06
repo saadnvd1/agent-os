@@ -36,6 +36,7 @@ export function itemsFromPlan(
     session_id: p.sessionId,
     base_branch: null,
     base_tip: null,
+    held_outside: p.status === "held" ? 1 : 0,
     note:
       p.status === "running"
         ? "Already had a task; it was started off the default branch"

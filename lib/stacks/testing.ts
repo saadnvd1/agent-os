@@ -70,6 +70,7 @@ export function seedStack(repo: string, specs: SeedItem[]) {
       base_branch: s.baseBranch ?? null,
       base_tip: s.baseTip ?? null,
       note: null,
+      held_outside: 0,
     }))
   );
   for (const s of specs) {
