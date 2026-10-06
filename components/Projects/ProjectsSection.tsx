@@ -172,11 +172,11 @@ export function ProjectsSection({
     });
   }
 
-  // Projects with nothing running fold behind one row.
+  // Projects with nothing running or new fold behind one row.
   const visible = projects.filter(
     (p) =>
       !(p.is_uncategorized && rows[p.id].sessionCount === 0) &&
-      (rows[p.id].running || rows[p.id].active)
+      (rows[p.id].running || rows[p.id].active || rows[p.id].fresh)
   );
   const idle = projects.filter(
     (p) =>

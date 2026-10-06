@@ -230,28 +230,24 @@ function HomeContent() {
   // Attach session to terminal
   const attachToSession = useCallback(
     async (session: Session) => {
-      // Chat sessions are shown by the tab itself; there's no terminal to attach.
-      if (session.view === "chat") {
+      // A chat tab, or a tab whose terminal isn't mounted yet: point the tab
+      // at the session and its terminal attaches as it connects
+      // (onAttachSession), resuming the agent.
+      const activeTab = getActiveTab(focusedPaneId);
+      const terminalInfo =
+        session.view === "chat" || !activeTab
+          ? undefined
+          : terminalRefs.current.get(`${focusedPaneId}:${activeTab.id}`);
+      if (!terminalInfo) {
         attachSession(focusedPaneId, session.id, session.tmux_name);
         return;
       }
-      const terminalInfo = getTerminalWithFallback();
-      if (!terminalInfo) {
-        debugLog(
-          `ERROR: No terminal available to attach session: ${session.name}`
-        );
-        alert(
-          `[AgentOS Debug] No terminal available!\n\nRun agentOSLogs() in console to see debug logs.`
-        );
-        return;
-      }
 
-      const { terminal, paneId } = terminalInfo;
       const spec = await buildSessionCommand(session);
-      runSessionInTerminal(terminal, paneId, session, spec);
+      runSessionInTerminal(terminalInfo, focusedPaneId, session, spec);
     },
     [
-      getTerminalWithFallback,
+      getActiveTab,
       buildSessionCommand,
       runSessionInTerminal,
       attachSession,

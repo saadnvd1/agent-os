@@ -60,4 +60,15 @@ describe("projectRow", () => {
     );
     expect(row.single).toBeNull();
   });
+
+  it("a session created in the last day keeps its project visible", () => {
+    const now = Date.parse("2026-10-06T04:00:00Z");
+    const at = (created_at: string) => ({ id: "s", created_at }) as Session;
+    expect(
+      projectRow(input({ sessions: [at("2026-10-06 03:31:59")], now })).fresh
+    ).toBe(true);
+    expect(
+      projectRow(input({ sessions: [at("2026-10-04 03:31:59")], now })).fresh
+    ).toBe(false);
+  });
 });
