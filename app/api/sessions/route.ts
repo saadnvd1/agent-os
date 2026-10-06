@@ -14,7 +14,10 @@ import { isRemoteHost } from "@/lib/hosts";
 export async function GET() {
   try {
     const db = getDb();
-    const sessions = queries.getAllSessions(db).all() as Session[];
+    // Merged and dropped tasks live in the Tasks panel, not the sidebar.
+    const sessions = (queries.getAllSessions(db).all() as Session[]).filter(
+      (s) => s.task_status !== "merged" && s.task_status !== "dropped"
+    );
     const groups = queries.getAllGroups(db).all() as Group[];
 
     // Convert expanded from 0/1 to boolean

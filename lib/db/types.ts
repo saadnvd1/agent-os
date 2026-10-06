@@ -17,6 +17,9 @@ export interface Session {
   agent_type: AgentType;
   auto_approve: boolean;
   host_id: string;
+  // Async tasks: a session started from a prompt that ends in a PR
+  task_prompt: string | null;
+  task_status: "running" | "merged" | "dropped" | null;
   // Worktree fields (optional)
   worktree_path: string | null;
   branch_name: string | null;

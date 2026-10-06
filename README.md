@@ -92,6 +92,24 @@ npm run dev  # http://localhost:3011
 - **Dev servers** - Start/stop Node.js and Docker servers
 - **Session orchestration** - Conductor/worker model via MCP
 
+## Tasks
+
+Hand off work and keep going. **Tasks → New task** takes a project and a
+prompt. AgentOS creates a git worktree and branch, starts Claude there in tmux
+with a brief to finish by pushing and opening a pull request, and tracks it:
+Working, Needs input, Blocked, Ready for review, Checks failing or Agent
+exited. **Sign off & merge** squash-merges the PR (refused while CI is failing
+or pending), then removes the session, worktree and branches. **Drop** closes
+the PR and removes everything. Agents never merge their own work.
+
+Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
+
+## Workspaces
+
+Group projects into workspaces (e.g. Work, Personal) from the **+** menu.
+Each workspace is a collapsible sidebar section showing how many sessions need
+you; move a project in from its menu. Deleting a workspace keeps its projects.
+
 ## Machines
 
 Open the sidebar menu (⋯) → **Machines** and add one with a name and an ssh

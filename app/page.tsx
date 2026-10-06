@@ -1,6 +1,7 @@
 "use client";
 
 import { useSnapshot } from "valtio";
+import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -482,11 +483,17 @@ function HomeContent() {
     renderPane,
   };
 
-  if (isMobile) {
-    return <MobileView {...viewProps} />;
-  }
-
-  return <DesktopView {...viewProps} />;
+  return (
+    <>
+      {isMobile ? (
+        <MobileView {...viewProps} />
+      ) : (
+        <DesktopView {...viewProps} />
+      )}
+      <TasksDialog />
+      <NewTaskDialog />
+    </>
+  );
 }
 
 export default function Home() {
