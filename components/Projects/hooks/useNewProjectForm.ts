@@ -22,6 +22,7 @@ export function useNewProjectForm(
 ) {
   const [name, setName] = useState("");
   const [workingDirectory, setWorkingDirectory] = useState("~");
+  const [hostId, setHostId] = useState("local");
   const [debouncedDir, setDebouncedDir] = useState("~");
   const [agentType, setAgentType] = useState<AgentType>("claude");
   const [defaultModel, setDefaultModel] = useState(
@@ -209,6 +210,7 @@ export function useNewProjectForm(
         workingDirectory,
         agentType,
         defaultModel,
+        hostId,
         devServers: validDevServers.map((ds) => ({
           name: ds.name.trim(),
           type: ds.type,
@@ -236,6 +238,8 @@ export function useNewProjectForm(
     setName,
     workingDirectory,
     setWorkingDirectory,
+    hostId,
+    setHostId,
     agentType,
     handleAgentTypeChange,
     defaultModel,

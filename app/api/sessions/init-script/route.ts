@@ -51,8 +51,9 @@ if [ "$(id -u)" = "0" ]; then
   export IS_SANDBOX=1
 fi
 
-# Start the agent
-exec ${agentCommand}
+# Start the agent; leave a shell behind when it exits
+${agentCommand}
+exec "\${SHELL:-/bin/bash}" -l
 `;
 }
 

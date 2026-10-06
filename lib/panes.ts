@@ -18,6 +18,7 @@ export interface TabData {
   id: string;
   sessionId: string | null;
   attachedTmux: string | null;
+  attachedHost?: string | null;
 }
 
 export interface PaneData {

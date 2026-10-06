@@ -1,5 +1,6 @@
 "use client";
 
+import { HostBadge } from "@/components/Hosts/HostBadge";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -418,6 +419,7 @@ export function SessionCard({
       ) : (
         <span className="min-w-0 flex-1 truncate text-sm">{session.name}</span>
       )}
+      <HostBadge hostId={session.host_id} />
 
       {/* Fork indicator */}
       {session.parent_session_id && (

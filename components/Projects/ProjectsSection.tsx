@@ -1,5 +1,6 @@
 "use client";
 
+import { DiscoveredTmuxList } from "@/components/Hosts/DiscoveredTmuxList";
 import { useMemo, useCallback } from "react";
 import { useSnapshot } from "valtio";
 import { ProjectCard } from "./ProjectCard";
@@ -353,11 +354,13 @@ export function ProjectsSection({
                     );
                   })
                 )}
+                <DiscoveredTmuxList projectId={project.id} />
               </div>
             )}
           </div>
         );
       })}
+      <DiscoveredTmuxList projectId={null} title="Elsewhere" />
     </div>
   );
 }

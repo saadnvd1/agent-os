@@ -18,6 +18,7 @@ import {
 import { setupTouchScroll } from "./touch-scroll";
 import { setupZoom } from "./zoom";
 import { createWebSocketConnection } from "./websocket-connection";
+import type { AttachSpec } from "@/lib/hosts/attach";
 import { setupResizeHandlers } from "./resize-handlers";
 
 export type { TerminalScrollState } from "./useTerminalConnection.types";
@@ -80,6 +81,12 @@ export function useTerminalConnection({
   const sendCommand = useCallback((command: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "command", data: command }));
+    }
+  }, []);
+
+  const attach = useCallback((spec: AttachSpec) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "attach", spec }));
     }
   }, []);
 
@@ -279,6 +286,7 @@ export function useTerminalConnection({
     copySelection,
     sendInput,
     sendCommand,
+    attach,
     focus,
     getScrollState,
     restoreScrollState,

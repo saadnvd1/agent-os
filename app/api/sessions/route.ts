@@ -8,6 +8,7 @@ import { setupWorktree, type SetupResult } from "@/lib/env-setup";
 import { findAvailablePort } from "@/lib/ports";
 import { runInBackground } from "@/lib/async-operations";
 import { getProject } from "@/lib/projects";
+import { isRemoteHost } from "@/lib/hosts";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -79,6 +80,14 @@ export async function POST(request: NextRequest) {
       ? rawAgentType
       : "claude";
     const project = projectId ? getProject(projectId) : null;
+    const hostId = project?.host_id || "local";
+
+    if (useWorktree && isRemoteHost(hostId)) {
+      return NextResponse.json(
+        { error: "Worktrees are not available on other machines yet" },
+        { status: 400 }
+      );
+    }
     const model = resolveModelForAgent(
       agentType,
       (typeof requestedModel === "string" && requestedModel.trim()) ||
@@ -153,7 +162,8 @@ export async function POST(request: NextRequest) {
       groupPath,
       agentType,
       autoApprove ? 1 : 0, // SQLite stores booleans as integers
-      projectId
+      projectId,
+      hostId
     );
 
     // Set worktree info if created

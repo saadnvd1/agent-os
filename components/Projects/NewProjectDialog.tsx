@@ -24,6 +24,7 @@ import type { NewProjectDialogProps } from "./NewProjectDialog.types";
 import { useNewProjectForm } from "./hooks/useNewProjectForm";
 import { DevServersSection } from "./DevServersSection";
 import { DirectoryField } from "./DirectoryField";
+import { useHostsQuery } from "@/data/hosts";
 import {
   CreatingOverlay,
   type StepConfig,
@@ -42,6 +43,7 @@ export function NewProjectDialog({
   onCreated,
 }: NewProjectDialogProps) {
   const form = useNewProjectForm(mode, onClose, onCreated);
+  const { data: hosts = [] } = useHostsQuery();
   const modelOptions = getModelOptions(form.agentType);
   const selectedModelLabel =
     modelOptions.find((option) => option.value === form.defaultModel)?.label ||
@@ -103,6 +105,24 @@ export function NewProjectDialog({
             />
           </div>
 
+          {!form.isCloneMode && hosts.length > 1 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Machine</label>
+              <Select value={form.hostId} onValueChange={form.setHostId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {hosts.map((host) => (
+                    <SelectItem key={host.id} value={host.id}>
+                      {host.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Working Directory */}
           <DirectoryField
             label={form.isCloneMode ? "Clone Into" : "Working Directory"}
@@ -155,7 +175,7 @@ export function NewProjectDialog({
           </div>
 
           {/* Dev Servers (hidden in clone mode) */}
-          {!form.isCloneMode && (
+          {!form.isCloneMode && form.hostId === "local" && (
             <DevServersSection
               devServers={form.devServers}
               isDetecting={form.isDetecting}

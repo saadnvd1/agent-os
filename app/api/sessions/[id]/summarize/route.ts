@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRemoteHost } from "@/lib/hosts";
 import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import { getDb, queries, type Session } from "@/lib/db";
@@ -211,6 +212,15 @@ export async function POST(
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+    if (isRemoteHost(session.host_id)) {
+      return NextResponse.json(
+        {
+          error:
+            "Summarize is not available for sessions on other machines yet",
+        },
+        { status: 400 }
+      );
+    }
 
     // Get tmux session name (pattern: {agent_type}-{id})
     const tmuxSessionName = `${session.agent_type}-${id}`;
@@ -274,7 +284,8 @@ export async function POST(
         session.group_path,
         agentType,
         session.auto_approve ? 1 : 0,
-        session.project_id || "uncategorized"
+        session.project_id || "uncategorized",
+        session.host_id
       );
 
       newSession = queries.getSession(db).get(newId) as Session;

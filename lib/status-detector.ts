@@ -14,10 +14,7 @@
  * 4. Cooldown - 2s grace period after activity stops
  */
 
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { hostExec, listHosts } from "./hosts";
 
 // Configuration constants
 const CONFIG = {
@@ -157,9 +154,45 @@ interface StateTracker {
   spikeChangeCount: number;
 }
 
+export interface TmuxSessionInfo {
+  name: string;
+  hostId: string;
+  activity: number;
+  path: string;
+  attached: boolean;
+  windows: number;
+}
+
 interface SessionCache {
-  data: Map<string, number>;
+  data: Map<string, TmuxSessionInfo>;
+  hostErrors: Map<string, string>;
   updatedAt: number;
+}
+
+const LIST_FORMAT =
+  "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}";
+
+async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
+  const { stdout } = await hostExec(
+    hostId,
+    `tmux list-sessions -F '${LIST_FORMAT}' 2>/dev/null || true`,
+    8000
+  );
+  return stdout
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [name, activity, path, attached, windows] = line.split("\t");
+      return {
+        name,
+        hostId,
+        activity: parseInt(activity, 10) || 0,
+        path: path || "",
+        attached: attached !== "0" && !!attached,
+        windows: parseInt(windows, 10) || 1,
+      };
+    });
 }
 
 // Content analysis helpers
@@ -192,28 +225,37 @@ function checkWaitingPatterns(content: string): boolean {
 
 class SessionStatusDetector {
   private trackers = new Map<string, StateTracker>();
-  private cache: SessionCache = { data: new Map(), updatedAt: 0 };
+  private cache: SessionCache = {
+    data: new Map(),
+    hostErrors: new Map(),
+    updatedAt: 0,
+  };
 
-  // Cache management
+  // One list-sessions per machine, in parallel. An unreachable machine keeps
+  // its last known sessions so a network blip doesn't mark them dead.
   async refreshCache(): Promise<void> {
     if (Date.now() - this.cache.updatedAt < CONFIG.CACHE_VALIDITY_MS) return;
 
-    try {
-      const { stdout } = await execAsync(
-        `tmux list-sessions -F '#{session_name}\t#{session_activity}' 2>/dev/null || echo ""`
-      );
+    const hosts = listHosts();
+    const results = await Promise.allSettled(
+      hosts.map((h) => listHostSessions(h.id))
+    );
 
-      const newData = new Map<string, number>();
-      for (const line of stdout.trim().split("\n")) {
-        if (!line) continue;
-        const [name, activity] = line.split("\t");
-        if (name && activity) newData.set(name, parseInt(activity, 10) || 0);
+    const data = new Map<string, TmuxSessionInfo>();
+    const hostErrors = new Map<string, string>();
+    results.forEach((result, i) => {
+      const hostId = hosts[i].id;
+      if (result.status === "fulfilled") {
+        for (const info of result.value) data.set(info.name, info);
+        return;
       }
+      hostErrors.set(hostId, String(result.reason?.message || result.reason));
+      for (const info of this.cache.data.values()) {
+        if (info.hostId === hostId) data.set(info.name, info);
+      }
+    });
 
-      this.cache = { data: newData, updatedAt: Date.now() };
-    } catch {
-      // Keep existing cache on error
-    }
+    this.cache = { data, hostErrors, updatedAt: Date.now() };
   }
 
   sessionExists(name: string): boolean {
@@ -221,13 +263,27 @@ class SessionStatusDetector {
   }
 
   getTimestamp(name: string): number {
-    return this.cache.data.get(name) || 0;
+    return this.cache.data.get(name)?.activity || 0;
+  }
+
+  hostFor(name: string): string | undefined {
+    return this.cache.data.get(name)?.hostId;
+  }
+
+  async listSessions(): Promise<TmuxSessionInfo[]> {
+    await this.refreshCache();
+    return [...this.cache.data.values()];
+  }
+
+  hostErrors(): Record<string, string> {
+    return Object.fromEntries(this.cache.hostErrors);
   }
 
   async capturePane(name: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(
-        `tmux capture-pane -t "${name}" -p 2>/dev/null || echo ""`
+      const { stdout } = await hostExec(
+        this.hostFor(name),
+        `tmux capture-pane -t "=${name}:" -p 2>/dev/null || echo ""`
       );
       return stdout.trim();
     } catch {

@@ -1,5 +1,8 @@
 "use client";
 
+import { useSnapshot } from "valtio";
+import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
+import type { AttachSpec } from "@/lib/hosts/attach";
 import { useState, useEffect, useCallback, useRef } from "react";
 
 // Debug log buffer - persists even if console is closed
@@ -146,16 +149,15 @@ function HomeContent() {
 
   // Build tmux command for a session
   const buildSessionCommand = useCallback(
-    async (
-      session: Session
-    ): Promise<{ sessionName: string; cwd: string; command: string }> => {
+    async (session: Session): Promise<AttachSpec> => {
       const provider = getProvider(session.agent_type || "claude");
       const sessionName = session.tmux_name || `${provider.id}-${session.id}`;
-      const cwd = session.working_directory?.replace("~", "$HOME") || "$HOME";
+      const cwd = session.working_directory || "~";
+      const hostId = session.host_id;
 
       // Shell sessions just open a terminal - no agent command
       if (provider.id === "shell") {
-        return { sessionName, cwd, command: "" };
+        return { sessionName, cwd, hostId };
       }
 
       // TODO: Add explicit "Enable Orchestration" toggle that creates .mcp.json
@@ -188,9 +190,14 @@ function HomeContent() {
       const flagsStr = flags.join(" ");
 
       const agentCmd = `${provider.command} ${flagsStr}`;
-      const command = await getInitScriptCommand(agentCmd);
+      // The init script is a file on this machine, so remote sessions run the
+      // agent directly and drop to a shell when it exits.
+      const command =
+        hostId && hostId !== "local"
+          ? `export PATH="$HOME/.local/bin:$PATH"; ${agentCmd}; exec "$SHELL" -l`
+          : await getInitScriptCommand(agentCmd);
 
-      return { sessionName, cwd, command };
+      return { sessionName, cwd, command, hostId };
     },
     [sessions, getInitScriptCommand]
   );
@@ -201,16 +208,10 @@ function HomeContent() {
       terminal: TerminalHandle,
       paneId: string,
       session: Session,
-      sessionInfo: { sessionName: string; cwd: string; command: string }
+      spec: AttachSpec
     ) => {
-      const { sessionName, cwd, command } = sessionInfo;
-      const tmuxNew = command
-        ? `tmux new -s ${sessionName} -c "${cwd}" "${command}"`
-        : `tmux new -s ${sessionName} -c "${cwd}"`;
-      terminal.sendCommand(
-        `tmux set -g mouse on 2>/dev/null; tmux attach -t ${sessionName} 2>/dev/null || ${tmuxNew}`
-      );
-      attachSession(paneId, session.id, sessionName);
+      terminal.attach(spec);
+      attachSession(paneId, session.id, spec.sessionName, spec.hostId);
       terminal.focus();
     },
     [attachSession]
@@ -231,31 +232,24 @@ function HomeContent() {
       }
 
       const { terminal, paneId } = terminalInfo;
-      const activeTab = getActiveTab(paneId);
-      const isInTmux = !!activeTab?.attachedTmux;
-
-      if (isInTmux) {
-        terminal.sendInput("\x02d");
-      }
-
-      setTimeout(
-        () => {
-          terminal.sendInput("\x03");
-          setTimeout(async () => {
-            const sessionInfo = await buildSessionCommand(session);
-            runSessionInTerminal(terminal, paneId, session, sessionInfo);
-          }, 50);
-        },
-        isInTmux ? 100 : 0
-      );
+      const spec = await buildSessionCommand(session);
+      runSessionInTerminal(terminal, paneId, session, spec);
     },
-    [
-      getTerminalWithFallback,
-      getActiveTab,
-      buildSessionCommand,
-      runSessionInTerminal,
-    ]
+    [getTerminalWithFallback, buildSessionCommand, runSessionInTerminal]
   );
+
+  // Attach a tmux session agent-os didn't create (discovered on any machine)
+  const tmuxAttachRequest = useSnapshot(tmuxAttachStore).request;
+  useEffect(() => {
+    if (!tmuxAttachRequest) return;
+    tmuxAttachActions.clear();
+    const terminalInfo = getTerminalWithFallback();
+    if (!terminalInfo) return;
+    const { sessionName, hostId } = tmuxAttachRequest;
+    terminalInfo.terminal.attach({ sessionName, hostId, attachOnly: true });
+    attachSession(terminalInfo.paneId, null, sessionName, hostId);
+    terminalInfo.terminal.focus();
+  }, [tmuxAttachRequest, getTerminalWithFallback, attachSession]);
 
   // Open session in new tab
   const openSessionInNewTab = useCallback(
@@ -273,13 +267,8 @@ function HomeContent() {
           if (!existingKeys.has(key) && key.startsWith(`${focusedPaneId}:`)) {
             const terminal = terminalRefs.current.get(key);
             if (terminal) {
-              buildSessionCommand(session).then((sessionInfo) => {
-                runSessionInTerminal(
-                  terminal,
-                  focusedPaneId,
-                  session,
-                  sessionInfo
-                );
+              buildSessionCommand(session).then((spec) => {
+                runSessionInTerminal(terminal, focusedPaneId, session, spec);
               });
               return;
             }

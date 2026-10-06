@@ -1,5 +1,6 @@
 "use client";
 
+import { HostBadge } from "@/components/Hosts/HostBadge";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -218,6 +219,7 @@ export function ProjectCard({
           {project.name}
         </span>
       )}
+      <HostBadge hostId={project.host_id} />
 
       {/* Running servers indicator */}
       {hasRunningServers && (

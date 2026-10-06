@@ -12,6 +12,15 @@
 - [x] Mobile responsive - Better mobile layout
 - [ ] Dark/light theme toggle
 
+## Machines (after multi-host V1)
+
+- [ ] Files, git and worktrees for sessions on other machines (run git over the host exec layer)
+- [ ] Persist pane layouts per workspace in the DB instead of localStorage
+- [ ] Merge "groups" into projects (one concept, like mterm's `group` field)
+- [ ] Attention queue: pin sessions waiting on you to the top, using mterm's status rules
+- [ ] Resume Claude after a reboot from a recorded session id
+- [ ] Replace status polling with tmux hooks/control mode events
+
 ## Technical
 
 - [ ] Message streaming improvements - Better partial message handling

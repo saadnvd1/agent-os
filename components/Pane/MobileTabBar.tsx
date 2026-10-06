@@ -131,6 +131,8 @@ export function MobileTabBar({
     }
   };
 
+  const isLocalSession = !session?.host_id || session.host_id === "local";
+
   return (
     <div
       className="bg-muted flex items-center gap-2 px-2 py-1.5"
@@ -246,18 +248,22 @@ export function MobileTabBar({
             icon={TerminalIcon}
             onClick={onViewModeChange}
           />
-          <ViewModeButton
-            mode="files"
-            currentMode={viewMode}
-            icon={FolderOpen}
-            onClick={onViewModeChange}
-          />
-          <ViewModeButton
-            mode="git"
-            currentMode={viewMode}
-            icon={GitBranch}
-            onClick={onViewModeChange}
-          />
+          {isLocalSession && (
+            <ViewModeButton
+              mode="files"
+              currentMode={viewMode}
+              icon={FolderOpen}
+              onClick={onViewModeChange}
+            />
+          )}
+          {isLocalSession && (
+            <ViewModeButton
+              mode="git"
+              currentMode={viewMode}
+              icon={GitBranch}
+              onClick={onViewModeChange}
+            />
+          )}
           {isConductor && (
             <ViewModeButton
               mode="workers"

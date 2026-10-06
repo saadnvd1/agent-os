@@ -81,6 +81,9 @@ npm run dev  # http://localhost:3011
 - **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
 - **Voice-to-text** - Dictate prompts to your coding sessions hands-free
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
+- **tmux by default** - Every session lives in tmux, so closing the browser never kills your work
+- **Multiple machines** - Run sessions on any machine you can reach with ssh keys, side by side with local ones
+- **Session discovery** - tmux sessions you started yourself, on any machine, show up under the project whose folder they run in
 - **Code search** - Fast codebase search with syntax-highlighted results (Cmd+K)
 - **File picker** - Browse and attach files to sessions, with direct upload from mobile
 - **Clone from GitHub** - Clone repos directly from the UI when creating projects
@@ -88,6 +91,21 @@ npm run dev  # http://localhost:3011
 - **Git worktrees** - Isolated branches with auto-setup
 - **Dev servers** - Start/stop Node.js and Docker servers
 - **Session orchestration** - Conductor/worker model via MCP
+
+## Machines
+
+Open the sidebar menu (⋯) → **Machines** and add one with a name and an ssh
+target (`user@host` or an alias from `~/.ssh/config`). Requirements: key-based
+ssh from the machine running AgentOS (no password prompts), and tmux on the
+remote machine. **Test connection** checks both.
+
+New projects can then pick a machine. Their sessions run in tmux there and
+attach over one reused ssh connection per machine. Folders match across
+machines relative to `~`, so `~/dev/app` on your laptop and on a server are
+the same project.
+
+On other machines, files, git, worktrees, dev servers and summarize are not
+available yet; the terminal, status, rename and send-keys are.
 
 ## CLI Commands
 

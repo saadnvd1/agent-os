@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getHost, hostExec, isRemoteHost } from "@/lib/hosts";
 import {
   getAllProjectsWithDevServers,
   createProject,
@@ -23,8 +24,14 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, workingDirectory, agentType, defaultModel, devServers } =
-      body;
+    const {
+      name,
+      workingDirectory,
+      agentType,
+      defaultModel,
+      devServers,
+      hostId,
+    } = body;
 
     if (!name || !workingDirectory) {
       return NextResponse.json(
@@ -33,7 +40,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!validateWorkingDirectory(workingDirectory)) {
+    if (isRemoteHost(hostId)) {
+      if (!getHost(hostId)) {
+        return NextResponse.json({ error: "Unknown machine" }, { status: 400 });
+      }
+      const dir = workingDirectory.replace(/^~/, "$HOME");
+      const { stdout } = await hostExec(
+        hostId,
+        `test -d "${dir.replace(/"/g, "")}" && echo ok || true`
+      ).catch(() => ({ stdout: "" }));
+      if (stdout.trim() !== "ok") {
+        return NextResponse.json(
+          { error: "Working directory does not exist on that machine" },
+          { status: 400 }
+        );
+      }
+    } else if (!validateWorkingDirectory(workingDirectory)) {
       return NextResponse.json(
         { error: "Working directory does not exist" },
         { status: 400 }
@@ -46,6 +68,7 @@ export async function POST(request: NextRequest) {
       agentType,
       defaultModel,
       devServers,
+      hostId,
     });
 
     return NextResponse.json({ project }, { status: 201 });

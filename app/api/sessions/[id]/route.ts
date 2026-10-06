@@ -5,6 +5,7 @@ import { getDb, queries, type Session } from "@/lib/db";
 import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
 import { killWorker } from "@/lib/orchestration";
+import { hostExec } from "@/lib/hosts";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 import { runInBackground } from "@/lib/async-operations";
 
@@ -69,7 +70,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       // Try to rename the tmux session
       if (oldTmuxName && newTmuxName) {
         try {
-          await execAsync(
+          await hostExec(
+            existing.host_id,
             `tmux rename-session -t "${oldTmuxName}" "${newTmuxName}"`
           );
           updates.push("tmux_name = ?");
