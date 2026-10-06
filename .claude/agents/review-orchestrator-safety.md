@@ -38,7 +38,7 @@ if (!usage || isStale(usage))
 Every merge passes `--match-head-commit <sha>` with the sha the gates judged, re-read just before merging. Flag a merge without it, a sha taken from a cache or the DB rather than the fresh PR, and a land that judges once up front and merges later without judging each item again at its own head (a restack moves heads). An approval from Saad is for one commit: spent once (`spendApproval`), and a mismatch with the head refuses.
 
 **Code review section**
-Merges refuse a PR whose body has no "Code review" section naming its head commit (`codeReviewRefusal`). Flag a new merge path that skips it, and any relaxation of `restacked` beyond a land of AgentOS's own restack.
+Merges refuse a PR whose body has no "Code review" section naming its head commit (`codeReviewRefusal`). The one exception is a stack item AgentOS restacked itself: a review of `restacked_from` counts while the head is exactly `restacked_to`, and `restackBranch` records it only when the rebase started from origin's head (its `ORIG_HEAD`), before pushing. Flag a new merge path that skips the check, and any other acceptance of a review of a commit that isn't the head.
 
 **Sensitive paths go to Saad**
 `scope.ts`'s list (all of `.github`, CODEOWNERS, `package.json`, lockfile-only diffs, Makefiles, hook managers, `.gitmodules`, `.claude`, AgentOS and dispatch config, AgentOS's own security code), matched case-insensitively and on renames' both sides. Flag a path removed from it, a case-sensitive match, a check against only the new name of a rename, and a new class of sensitive file (deploy, secrets handling) not added.

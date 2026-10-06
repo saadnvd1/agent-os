@@ -17,6 +17,7 @@ function fakeGit(opts: { conflict?: string } = {}) {
     ["origin/feature/g", "g-old"],
   ]);
   const heads = new Map<string, string>();
+  const origHeads = new Map<string, string>();
   const calls: string[] = [];
   const runner: Runner = async (cmd, args, cwd) => {
     const line = `${cmd} ${args.join(" ")}`;
@@ -32,10 +33,13 @@ function fakeGit(opts: { conflict?: string } = {}) {
     if (args[0] === "rebase" && args[1] === "--onto") {
       if (opts.conflict === wt)
         throw Object.assign(new Error("x"), { stderr: "CONFLICT" });
+      origHeads.set(wt, heads.get(wt) ?? "");
       heads.set(wt, `${wt}-rebased`);
     }
     if (args[0] === "rev-parse" && args[1] === "HEAD")
       return heads.get(wt) ?? "";
+    if (args[0] === "rev-parse" && args[1] === "ORIG_HEAD")
+      return origHeads.get(wt) ?? "";
     if (args[0] === "push") remote.set(`origin/${args[4]}`, heads.get(wt)!);
     return "";
   };
@@ -157,6 +161,11 @@ describe("restack after a squash merge", () => {
     const { cWt, s } = seed();
     const git = fakeGit();
     git.heads.set(cWt.split("/").pop()!, "c-unpushed");
+    // A record from an earlier restack must not survive.
+    q.updateItem(db, s.item("C").id, {
+      restacked_from: "c-reviewed",
+      restacked_to: "c-old",
+    });
 
     await restackAfterMerge(s.session("P"), depsFor(git.runner));
 

@@ -114,6 +114,26 @@ describe("landStack", () => {
     expect(merged).toEqual(["P", "C"]);
   });
 
+  it("refuses that review once the task pushed after the restack", async () => {
+    const { s, deps, merged } = setup();
+    q.updateItem(db, s.item("C").id, {
+      restacked_from: "cccccc11",
+      restacked_to: "ddddddd0",
+    });
+    const prOf = deps.prOf;
+    deps.prOf = async (session) => {
+      const p = (await prOf(session))!;
+      return session.name === "C"
+        ? { ...p, codeReview: { sha: "cccccc1" } }
+        : p;
+    };
+    await landStack(s.stackId, deps);
+    expect(merged).toEqual([]);
+    expect(q.get(db, s.stackId)!.error).toContain(
+      "C: the PR's code review covers cccccc1, not its head 2abcdef"
+    );
+  });
+
   it("stops where a restacked PR goes red, and says what landed", async () => {
     const { s, deps, merged } = setup((key, after) =>
       key === "C" && after ? "fail" : "pass"
