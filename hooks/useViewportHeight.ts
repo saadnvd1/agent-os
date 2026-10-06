@@ -15,8 +15,12 @@ export function useViewportHeight() {
   useEffect(() => {
     const setAppHeight = () => {
       // Use visualViewport if available (more accurate on mobile with keyboard)
-      const vh = window.visualViewport?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty("--app-height", `${vh}px`);
+      const vv = window.visualViewport;
+      const root = document.documentElement.style;
+      root.setProperty("--app-height", `${vv?.height ?? window.innerHeight}px`);
+      // iOS pans the visual viewport up to keep a focused input in view;
+      // following that offset keeps the app pinned to what's on screen.
+      root.setProperty("--app-top", `${vv?.offsetTop ?? 0}px`);
     };
 
     // Set initial value
