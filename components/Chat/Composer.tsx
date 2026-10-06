@@ -1,53 +1,36 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, Square, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { EditorContent } from "@tiptap/react";
 import type {
   ChatAccess,
   ChatCommand,
   ChatImage,
   ChatModel,
 } from "@/lib/chat/events";
-import { cn } from "@/lib/utils";
-import { AccessPicker } from "./AccessPicker";
-import { loadDraft, useSaveDraft } from "./useDraft";
+import {
+  attachmentName,
+  composeMessage,
+  type TextAttachment,
+} from "@/lib/chat/paste";
 import { insertCommand, rankCommands, slashQuery } from "@/lib/chat/commands";
+import { cn } from "@/lib/utils";
+import { loadDraft, useSaveDraft } from "./useDraft";
 import { CommandMenu } from "./CommandMenu";
-import { ModelPicker } from "./ModelPicker";
-
-const MAX_HEIGHT = 200;
+import { Attachments } from "./composer/Attachments";
+import { Toolbar } from "./composer/Toolbar";
+import { useImageDrop } from "./composer/useImageDrop";
+import type { MenuKey } from "./composer/keys";
+import {
+  useComposerEditor,
+  type ComposerHandlers,
+} from "./composer/useComposerEditor";
 
 // Handled here rather than sent: picking it opens the model picker.
 const MODEL_COMMAND: ChatCommand = {
   name: "model",
   description: "Switch the model for this conversation",
 };
-
-function readImage(file: File): Promise<ChatImage> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const [meta, data] = String(reader.result).split(",");
-      resolve({ mediaType: meta.slice(5, meta.indexOf(";")), data });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// Dragged files sometimes arrive without a type; go by the name then.
-const isImage = (f: File) =>
-  f.type.startsWith("image/") ||
-  (!f.type && /\.(png|jpe?g|gif|webp|heic)$/i.test(f.name));
-
-const carriesFiles = (e: React.DragEvent) =>
-  [...e.dataTransfer.types].includes("Files");
-
-// Enter sends on a keyboard; on touch screens it's a newline and the button sends.
-const coarsePointer = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia("(pointer: coarse)").matches;
 
 export function Composer({
   running,
@@ -80,25 +63,40 @@ export function Composer({
   // Saves what's typed under this key, so a reload doesn't lose it.
   draftKey?: string;
 }) {
-  const [text, setText] = useState("");
   const [images, setImages] = useState<ChatImage[]>([]);
-  const draft = useMemo(() => ({ text, images }), [text, images]);
+  const [files, setFiles] = useState<TextAttachment[]>([]);
+  // The highlighted command, for the text it was picked on: typing resets it.
+  const [active, setActiveAt] = useState({ text: "", index: 0 });
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const [modelOpen, setModelOpen] = useState(false);
+  const handlers = useRef<ComposerHandlers | null>(null);
+  const { editor, text, setText, plain, setPlain } = useComposerEditor({
+    placeholder,
+    disabled,
+    handlers,
+  });
+
+  const draft = useMemo(() => ({ text, images, files }), [text, images, files]);
   useSaveDraft(draftKey, draft);
 
-  // Restored after mount: the server render has no access to this browser.
+  // Restored once the editor exists (the server render has no access to this
+  // browser), and once per key: toggling plain mode makes a new editor.
+  const restored = useRef<string | null>(null);
   useEffect(() => {
-    if (!draftKey) return;
+    if (!draftKey || !editor || restored.current === draftKey) return;
+    restored.current = draftKey;
     const saved = loadDraft(draftKey);
     setText(saved?.text ?? "");
     setImages(saved?.images ?? []);
-    requestAnimationFrame(resize);
-  }, [draftKey]);
-  const [active, setActive] = useState(0);
-  const [dismissed, setDismissed] = useState<string | null>(null);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+    setFiles(saved?.files ?? []);
+  }, [draftKey, editor, setText]);
+
+  const prefilled = useRef<number | null>(null);
+  useEffect(() => {
+    if (!prefill || !editor || prefilled.current === prefill.at) return;
+    prefilled.current = prefill.at;
+    setText(prefill.text, true);
+  }, [prefill, editor, setText]);
 
   const query = slashQuery(text);
   const matches = useMemo(() => {
@@ -110,78 +108,58 @@ export function Composer({
     return rankCommands(query, all);
   }, [query, commands, onSetModel]);
   const menuOpen = query !== null && dismissed !== text;
-  const highlighted = Math.min(active, Math.max(matches.length - 1, 0));
-
-  const resize = () => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
-  };
-
-  const update = (value: string) => {
-    setText(value);
-    setActive(0);
-    requestAnimationFrame(resize);
-  };
+  const setActive = (index: number) => setActiveAt({ text, index });
+  const highlighted = Math.min(
+    active.text === text ? active.index : 0,
+    Math.max(matches.length - 1, 0)
+  );
 
   const pick = (command: ChatCommand) => {
     if (command === MODEL_COMMAND) {
-      update("");
+      setText("");
       setModelOpen(true);
       return;
     }
-    update(insertCommand(command.name));
-    ref.current?.focus();
+    setText(insertCommand(command.name), true);
+  };
+
+  const { dragging, dropProps, addFiles } = useImageDrop((read) =>
+    setImages((prev) => [...prev, ...read])
+  );
+
+  const empty = !text.trim() && !images.length && !files.length;
+  const submit = () => {
+    if (empty || disabled) return;
+    onSend(composeMessage(text, files), images);
+    setImages([]);
+    setFiles([]);
+    setText("");
+  };
+
+  const onMenuKey = (key: MenuKey) => {
+    if (key === "close") setDismissed(text);
+    else if (key === "pick") pick(matches[highlighted]);
+    else
+      setActive(
+        (highlighted + (key === "down" ? 1 : -1) + matches.length) %
+          matches.length
+      );
   };
 
   useEffect(() => {
-    if (!prefill) return;
-    setText(prefill.text);
-    requestAnimationFrame(() => {
-      resize();
-      ref.current?.focus();
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefill?.at]);
-
-  const addFiles = async (files: Iterable<File>) => {
-    const picked = [...files].filter(isImage);
-    const read = await Promise.all(picked.map(readImage));
-    setImages((prev) => [...prev, ...read]);
-  };
-
-  const submit = () => {
-    if (!text.trim() && !images.length) return;
-    onSend(text, images);
-    setImages([]);
-    update("");
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (menuOpen && matches.length) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        const step = e.key === "ArrowDown" ? 1 : -1;
-        setActive((highlighted + step + matches.length) % matches.length);
-        return;
-      }
-      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
-        e.preventDefault();
-        pick(matches[highlighted]);
-        return;
-      }
-    }
-    if (menuOpen && e.key === "Escape") {
-      e.preventDefault();
-      setDismissed(text);
-      return;
-    }
-    if (e.key === "Enter" && !e.shiftKey && !coarsePointer()) {
-      e.preventDefault();
-      submit();
-    }
-  };
+    handlers.current = {
+      menuOpen,
+      menuHasMatches: matches.length > 0,
+      onMenuKey,
+      onSend: submit,
+      onImages: (picked) => void addFiles(picked),
+      onLongPaste: (pasted, language) =>
+        setFiles((prev) => [
+          ...prev,
+          { name: attachmentName(prev), text: pasted, language },
+        ]),
+    };
+  });
 
   return (
     <div className="relative">
@@ -194,126 +172,37 @@ export function Composer({
         />
       )}
       <div
-        onDragOver={(e) => {
-          if (!carriesFiles(e)) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "copy";
-          setDragging(true);
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null))
-            setDragging(false);
-        }}
-        onDrop={(e) => {
-          if (!carriesFiles(e)) return;
-          e.preventDefault();
-          setDragging(false);
-          void addFiles(e.dataTransfer.files);
-        }}
+        {...dropProps}
         className={cn(
           "bg-card popover-surface rounded-2xl p-2 transition-shadow",
           dragging && "ring-primary ring-2"
         )}
       >
-        {images.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-1 pb-2">
-            {images.map((img, i) => (
-              <div key={i} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`data:${img.mediaType};base64,${img.data}`}
-                  alt=""
-                  className="h-14 w-14 rounded-lg object-cover"
-                />
-                <button
-                  type="button"
-                  aria-label="Remove image"
-                  onClick={() => setImages(images.filter((_, j) => j !== i))}
-                  className="bg-background absolute -top-1.5 -right-1.5 rounded-full p-0.5 shadow"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <textarea
-          ref={ref}
-          aria-label="Message"
-          value={text}
-          rows={1}
-          disabled={disabled}
-          placeholder={placeholder}
-          onChange={(e) => update(e.target.value)}
-          onPaste={(e) => {
-            const files = [...e.clipboardData.files];
-            if (files.some(isImage)) {
-              e.preventDefault();
-              void addFiles(files);
-            }
-          }}
-          onKeyDown={onKeyDown}
-          className="placeholder:text-muted-foreground block min-h-10 w-full resize-none bg-transparent px-2 py-2 text-base outline-none md:text-sm"
+        <Attachments
+          images={images}
+          files={files}
+          onRemoveImage={(i) => setImages(images.filter((_, j) => j !== i))}
+          onRemoveFile={(i) => setFiles(files.filter((_, j) => j !== i))}
         />
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Attach image"
-            className="h-10 w-10 shrink-0"
-            onClick={() => fileRef.current?.click()}
-          >
-            <ImagePlus className="h-4 w-4" />
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              if (e.target.files) void addFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          {onSetAccess && access && (
-            <AccessPicker access={access} onPick={onSetAccess} />
-          )}
-          {onSetModel && (
-            <ModelPicker
-              models={models}
-              model={model}
-              open={modelOpen}
-              onOpenChange={setModelOpen}
-              onPick={onSetModel}
-            />
-          )}
-          <span className="flex-1" />
-          {running && !text.trim() && !images.length ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="secondary"
-              aria-label="Stop"
-              className="h-10 w-10 shrink-0"
-              onClick={onStop}
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="icon"
-              aria-label="Send"
-              className="h-10 w-10 shrink-0 rounded-xl"
-              disabled={disabled || (!text.trim() && !images.length)}
-              onClick={submit}
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
-          )}
+        <div className="chat-composer max-h-[200px] overflow-y-auto overscroll-contain">
+          <EditorContent editor={editor} />
         </div>
+        <Toolbar
+          plain={plain}
+          onTogglePlain={() => setPlain(!plain)}
+          onAddImages={(picked) => void addFiles(picked)}
+          access={access}
+          onSetAccess={onSetAccess}
+          models={models}
+          model={model}
+          onSetModel={onSetModel}
+          modelOpen={modelOpen}
+          onModelOpenChange={setModelOpen}
+          stop={running && empty}
+          onStop={onStop}
+          canSend={!disabled && !empty}
+          onSend={submit}
+        />
       </div>
     </div>
   );

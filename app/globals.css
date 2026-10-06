@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "../styles/themes.css";
+@import "../styles/composer.css";
 
 @plugin "@tailwindcss/typography";
 
