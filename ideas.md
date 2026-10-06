@@ -75,6 +75,14 @@
 - [ ] Port forwarding UI - View/manage all running dev servers across worktrees
 - [ ] Worktree health monitoring - Track build status, test results per environment
 
+## LumifyHub (after V1, 2026-10-06)
+
+- [ ] Tokens scoped to one workspace, so a connected AgentOS can't touch the rest of the account
+- [ ] Webhooks from LumifyHub so card changes reach AgentOS without polling
+- [ ] A deep link to a workspace's members/invites settings (LumifyHub has no URL for it yet)
+- [ ] Agents read and write their own card (status notes, checklists) through `aos`
+- [ ] Re-publish refreshes the page in LumifyHub's editor (an open editor keeps showing old text)
+
 ## Integration
 
 - [ ] tmux session linking - Attach Claude to existing tmux sessions
