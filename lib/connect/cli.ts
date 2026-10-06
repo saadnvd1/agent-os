@@ -1,22 +1,34 @@
 /**
  * agent-os connect — turn Connect on for this machine.
  *
- * Until the Connect service enrols machines itself, this does the machine's
- * half: creates its keys (they never leave this machine), and, given a
- * zone-scoped DNS token in CONNECT_DNS_TOKEN (operators only), gets its
- * certificate. It prints the public key the relay needs to know.
+ *   agent-os connect --code ABCD-EFGH [--name "Studio Mac"]   enrol (code from runagentos.com)
+ *   agent-os connect --renew                                  get a fresh certificate
+ *   agent-os connect --on | --off                             (also: agent-os disconnect)
+ *
+ * The machine key and the TLS key are made here and never leave this
+ * machine. The certificate comes from Let's Encrypt over DNS-01, through
+ * the Connect service's broker (which only touches this machine's name).
+ * Operators may instead use a zone-scoped token: CONNECT_DNS_TOKEN with
+ * AGENTOS_CONNECT_OPERATOR=1.
  */
 
 import fs from "fs";
+import os from "os";
 import path from "path";
-import { connectDir } from "./config";
-import { certify, enrol } from "./enrol";
-import { setConnectEnabled } from "./config";
+import { connectDir, setConnectEnabled } from "./config";
+import { certify, enrol, type DnsChallenge } from "./enrol";
 import { cloudflareDns } from "./cloudflare-dns";
+import { brokerDns, DEFAULT_API, registerWithCode } from "./control-api";
 
 const ZONE = "runagentos.com";
 const domain = process.env.CONNECT_MACHINE_DOMAIN || `on.${ZONE}`;
 const relayUrl = process.env.CONNECT_RELAY_URL || `wss://relay.${ZONE}`;
+const apiUrl = process.env.CONNECT_API_URL || DEFAULT_API;
+
+const arg = (flag: string) => {
+  const i = process.argv.indexOf(flag);
+  return i > -1 ? process.argv[i + 1] : undefined;
+};
 
 async function main() {
   if (process.argv.includes("--off") || process.argv.includes("--on")) {
@@ -28,38 +40,57 @@ async function main() {
     return;
   }
 
-  const { config, machinePublicKey, csr } = await enrol({ domain, relayUrl });
   const dir = connectDir();
-  const pubPath = path.join(dir, "machine.pub");
-  fs.writeFileSync(pubPath, machinePublicKey, { mode: 0o644 });
-
-  console.log(`\n  Machine ${config.machineId}`);
-  console.log(`  Address  https://${config.hostname}`);
-  console.log(`  Keys     ${dir} (private keys never leave this machine)`);
-
+  const code = arg("--code");
   const token = process.env.CONNECT_DNS_TOKEN;
-  if (
-    fs.existsSync(path.join(dir, "tls.crt")) &&
-    !process.argv.includes("--renew")
-  ) {
-    console.log("  Cert     already present (--renew to get a new one)");
-  } else if (token && process.env.AGENTOS_CONNECT_OPERATOR !== "1") {
+  const operator = !!token && process.env.AGENTOS_CONNECT_OPERATOR === "1";
+  if (token && !operator) {
     // A zone-wide DNS token can rewrite any machine's name. Only the operator's
     // own machines may use one; everyone else enrols through the Connect service.
     throw new Error(
       "CONNECT_DNS_TOKEN needs AGENTOS_CONNECT_OPERATOR=1 (operators only)"
     );
-  } else if (token) {
-    console.log("  Cert     asking Let's Encrypt (DNS-01)...");
-    await certify({ csr, dns: cloudflareDns(token, ZONE) });
-    console.log("  Cert     saved");
-  } else {
-    console.log(
-      "  Cert     not yet: needs the Connect service (or CONNECT_DNS_TOKEN)"
+  }
+  if (!fs.existsSync(path.join(dir, "connect.json")) && !code && !operator) {
+    throw new Error(
+      "get a code from runagentos.com (Connect a machine), then: agent-os connect --code <code>"
     );
   }
-  console.log(`\n  Public key for the relay: ${pubPath}`);
-  console.log("  Restart AgentOS to start the tunnel.\n");
+
+  const { config, csr } = await enrol({
+    domain,
+    relayUrl,
+    register: code
+      ? registerWithCode(apiUrl, code, arg("--name") || os.hostname())
+      : undefined,
+  });
+  console.log(`\n  Machine ${config.machineId}`);
+  console.log(`  Address  https://${config.hostname}`);
+  console.log(`  Keys     ${dir} (private keys never leave this machine)`);
+
+  if (
+    fs.existsSync(path.join(dir, "tls.crt")) &&
+    !process.argv.includes("--renew")
+  ) {
+    console.log("  Cert     already present (--renew to get a new one)");
+  } else {
+    const dns: DnsChallenge = config.apiUrl
+      ? brokerDns(
+          config,
+          fs.readFileSync(path.join(dir, "machine.key"), "utf8")
+        )
+      : operator
+        ? cloudflareDns(token!, ZONE)
+        : (() => {
+            throw new Error("no way to prove this name: enrol with --code");
+          })();
+    console.log("  Cert     asking Let's Encrypt (DNS-01)...");
+    await certify({ csr, dns });
+    console.log("  Cert     saved");
+  }
+  console.log(
+    "\n  AgentOS picks this up within seconds; the Devices page shows Connect.\n"
+  );
 }
 
 main().catch((err) => {
