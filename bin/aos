@@ -13,7 +13,12 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos inbox                          read messages sent to you
   aos history <session>              your conversation with a session
   aos spawn <project> <prompt...>    start a new agent session in a project
-  aos task <project> <prompt...>     start a background task that ends in a PR`;
+  aos task <project> <prompt...>     start a background task that ends in a PR
+
+  Docs, when your project's workspace is linked to LumifyHub:
+  aos docs [query]                   list the workspace's pages (id, title)
+  aos doc <id>                       print a page's markdown
+  aos doc new "<title>" [--file f]   create a page from a file or stdin; prints its URL`;
 
 async function call(path, init) {
   let res;
@@ -41,6 +46,35 @@ function fail(msg) {
 
 function needMe() {
   if (!me) fail("not inside an AgentOS session (AGENTOS_SESSION_ID is unset)");
+}
+
+async function stdin() {
+  if (process.stdin.isTTY) return "";
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+// `doc new "<title>" [--file path]`: the title is every word but the flag.
+function parseDocNew(words) {
+  const at = words.findIndex((w) => w === "--file" || w === "-f");
+  const file = at >= 0 ? words[at + 1] : null;
+  if (at >= 0 && !file) fail("--file needs a path");
+  const title = words.filter((_, i) => at < 0 || (i !== at && i !== at + 1));
+  return { title: title.join(" ").trim(), file };
+}
+
+async function docNew(words) {
+  const { title, file } = parseDocNew(words);
+  if (!title) fail('usage: aos doc new "<title>" [--file path]');
+  let content;
+  try {
+    content = file ? require("fs").readFileSync(file, "utf8") : await stdin();
+  } catch (error) {
+    fail(`can't read ${file}: ${error.message}`);
+  }
+  const { page } = await post("/api/bus/docs", { session: me, title, content });
+  console.log(page.url);
 }
 
 const show = (m) =>
@@ -113,6 +147,28 @@ async function main() {
       console.log(
         `started ${cmd === "task" ? "task" : "session"} "${session.name}"`
       );
+      return;
+    }
+    case "docs": {
+      needMe();
+      const q = encodeURIComponent(args.join(" "));
+      const { pages } = await call(
+        `/api/bus/docs?session=${encodeURIComponent(me)}&q=${q}`
+      );
+      if (!pages.length) console.log("no pages");
+      for (const p of pages) console.log(`${p.id}  ${p.title}`);
+      return;
+    }
+    case "doc": {
+      needMe();
+      const [id, ...rest] = args;
+      if (id === "new") return docNew(rest);
+      if (!id)
+        fail('usage: aos doc <id> | aos doc new "<title>" [--file path]');
+      const { page } = await call(
+        `/api/bus/docs/${encodeURIComponent(id)}?session=${encodeURIComponent(me)}`
+      );
+      console.log(`# ${page.title}\n\n${page.content}`.trimEnd());
       return;
     }
     default:
