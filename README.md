@@ -5,8 +5,6 @@ Codex, Gemini CLI and others side by side, chat with them or drop into their
 terminal, hand off tasks that end in a pull request, and check on all of it
 from your phone.
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/cSjutkCGAh)
-
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="screenshots/hero-light.png">
   <img alt="AgentOS: sessions grouped by workspace, a chat with plan, steps and diffs, and the git panel" src="screenshots/hero.png">
