@@ -21,3 +21,7 @@ export function cardUrl(
 ): string {
   return `${boardUrl(baseUrl, slug, pageId)}?card=${encodeURIComponent(cardId)}`;
 }
+
+export function pageUrl(baseUrl: string, slug: string, pageId: string): string {
+  return `${workspaceUrl(baseUrl, slug)}/${encodeURIComponent(pageId)}`;
+}
