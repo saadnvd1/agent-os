@@ -91,7 +91,7 @@ export function handleKeyDown(
     h.onMenuKey("close");
     return true;
   }
-  if (event.key !== "Enter" || mod) return false;
+  if (event.key !== "Enter") return false;
 
   const { $from } = editor.state.selection;
   const fence =
@@ -100,6 +100,7 @@ export function handleKeyDown(
       : FENCE_LINE.exec($from.parent.textContent);
   const action = enterAction({
     shift: event.shiftKey,
+    mod,
     composing: false,
     coarse: coarsePointer(),
     menuOpen: menu,

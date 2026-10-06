@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 // node-only), so the DOM is installed by hand before TipTap loads.
 const { window } = new JSDOM("<!doctype html><html><body></body></html>", {
   pretendToBeVisual: true,
+  url: "http://localhost/",
 });
 const g = globalThis as Record<string, unknown>;
 for (const key of [
@@ -18,6 +19,8 @@ for (const key of [
   "getComputedStyle",
   "requestAnimationFrame",
   "cancelAnimationFrame",
+  "localStorage",
+  "HTMLInputElement",
 ] as const) {
   if (!(key in g) || key === "navigator") {
     Object.defineProperty(g, key, {

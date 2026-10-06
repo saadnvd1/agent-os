@@ -25,7 +25,7 @@ export const TaskShortcut = Extension.create({
             pos,
             pos + list.nodeSize,
             taskList.create(
-              null,
+              { marker: list.attrs.marker ?? "-" },
               taskItem.create({ checked }, paragraph.create())
             )
           );

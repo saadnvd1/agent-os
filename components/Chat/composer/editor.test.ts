@@ -6,6 +6,7 @@ import { markdownToDoc } from "@/lib/chat/markdown/parse";
 import { plainExtensions, richExtensions } from "./extensions";
 import { handlePaste, type PasteHandlers } from "./paste";
 import { handleKeyDown, type KeyHandlers } from "./keys";
+import { loadDoc } from "./load";
 
 let editor: Editor;
 afterEach(() => editor?.destroy());
@@ -72,7 +73,9 @@ describe("typing live markdown", () => {
     ["star bullets", "* one\ntwo", "bulletList"],
     ["numbers", "1. one\ntwo", "orderedList"],
     ["tasks", "- [ ] buy milk\nfix build", "taskList"],
-    ["checked task", "[x] done", "taskList"],
+    ["checked task", "- [x] done", "taskList"],
+    ["star tasks", "* [ ] a\nb", "taskList"],
+    ["paren numbers", "1) one\ntwo", "orderedList"],
   ])("%s become nodes and serialize as typed", (_, typed) => {
     make();
     type(typed);
@@ -81,8 +84,16 @@ describe("typing live markdown", () => {
       .replace("* one\ntwo", "* one\n* two")
       .replace("1. one\ntwo", "1. one\n2. two")
       .replace("- [ ] buy milk\nfix build", "- [ ] buy milk\n- [ ] fix build")
-      .replace("[x] done", "- [x] done");
+      .replace("* [ ] a\nb", "* [ ] a\n* [ ] b")
+      .replace("1) one\ntwo", "1) one\n2) two");
     expect(md()).toBe(expected);
+  });
+
+  it("[ ] at the start of a line stays text", () => {
+    make();
+    type("[ ] foo");
+    expect(editor.getJSON().content?.[0].type).toBe("paragraph");
+    expect(md()).toBe("[ ] foo");
   });
 
   it("marks render as marks, not characters", () => {
@@ -206,6 +217,19 @@ describe("pasting", () => {
   });
 });
 
+describe("loading content", () => {
+  it("content the schema can't hold goes in as text, not an empty doc", () => {
+    make();
+    const invalid = {
+      type: "doc",
+      content: [{ type: "heading", content: [{ type: "text", text: "x" }] }],
+    };
+    loadDoc(editor, invalid, "# x\nmore");
+    expect(md()).toBe("# x\nmore");
+    expect(editor.getText()).toContain("# x");
+  });
+});
+
 describe("Enter", () => {
   it("sends on a keyboard and is a newline on touch", () => {
     make();
@@ -217,6 +241,21 @@ describe("Enter", () => {
     press("Enter", { coarse: true }, h);
     expect(sent).toBe(1);
     expect(md()).toBe("hi\n");
+  });
+
+  it("sends with Cmd/Ctrl+Enter, from a code block too", () => {
+    make();
+    let sent = 0;
+    const h = keys({ onSend: () => sent++ });
+    type("```");
+    press("Enter", {}, h);
+    type("x");
+    for (const opt of [{ metaKey: true }, { ctrlKey: true }]) {
+      const event = new KeyboardEvent("keydown", { key: "Enter", ...opt });
+      expect(handleKeyDown(editor, event, h)).toBe(true);
+    }
+    expect(sent).toBe(2);
+    expect(md()).toBe("```\nx\n```");
   });
 
   it("picks from the command menu instead of sending", () => {

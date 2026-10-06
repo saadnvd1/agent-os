@@ -20,8 +20,13 @@ function subscribe(listener: () => void) {
 
 // Plain mode (no live formatting) is a per-browser choice, shared by every
 // composer on the page.
-export function usePlainMode(): [boolean, (plain: boolean) => void] {
-  const plain = useSyncExternalStore(subscribe, read, () => false);
+// Null until it's known: on the server, and while hydrating.
+export function usePlainMode(): [boolean | null, (plain: boolean) => void] {
+  const plain = useSyncExternalStore<boolean | null>(
+    subscribe,
+    read,
+    () => null
+  );
   const set = useCallback((next: boolean) => {
     try {
       if (next) localStorage.setItem(KEY, "1");

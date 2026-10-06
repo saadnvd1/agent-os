@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { enterAction, FENCE_LINE, type EnterState } from "./enter";
 
 const base: EnterState = {
+  mod: false,
   shift: false,
   composing: false,
   coarse: false,
@@ -12,6 +13,12 @@ const act = (s: Partial<EnterState>) => enterAction({ ...base, ...s });
 
 describe("enterAction", () => {
   it("sends on a keyboard", () => expect(act({})).toBe("send"));
+  it("sends with Cmd/Ctrl+Enter, even on touch, in a menu or code", () => {
+    expect(act({ mod: true, coarse: true })).toBe("send");
+    expect(act({ mod: true, menuOpen: true })).toBe("send");
+    expect(act({ mod: true, fenceLine: true })).toBe("send");
+    expect(act({ mod: true, composing: true })).toBe("ignore");
+  });
   it("is a newline with Shift everywhere", () => {
     expect(act({ shift: true })).toBe("newline");
     expect(act({ shift: true, coarse: true })).toBe("newline");

@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import { codeSpan, fenceFor } from "./fence";
+import { LAZY } from "./inline";
 
 // The composer's document back to the markdown it was typed as. Text is
 // written as is, never escaped: a literal "*" the user typed reaches the
@@ -13,7 +14,7 @@ const DELIMS: Record<string, string> = {
   italic: "_",
   strike: "~~",
 };
-const LISTS = new Set(["bulletList", "orderedList", "taskList"]);
+export const LISTS = new Set(["bulletList", "orderedList", "taskList"]);
 
 const delim = (mark: Mark): string =>
   typeof mark.attrs?.delim === "string" ? mark.attrs.delim : DELIMS[mark.type];
@@ -34,9 +35,15 @@ function runLength(nodes: JSONContent[], i: number, type: string): number {
 }
 
 function leaf(node: JSONContent): string {
-  if (node.type === "hardBreak") return "\n";
+  if (node.type === "hardBreak") return node.attrs?.lazy ? `\n${LAZY}` : "\n";
   const text = node.text ?? "";
-  return node.marks?.some((m) => m.type === "code") ? codeSpan(text) : text;
+  const code = node.marks?.find((m) => m.type === "code");
+  if (!code) return text;
+  // Written with the backticks it was typed with, while they still fit.
+  const delim = code.attrs?.delim;
+  return typeof delim === "string" && !text.includes(delim)
+    ? `${delim}${text}${delim}`
+    : codeSpan(text);
 }
 
 function inline(nodes: JSONContent[] = []): string {
@@ -67,38 +74,55 @@ function item(node: JSONContent, prefix: string, indent: number): string {
   const pad = " ".repeat(indent);
   return blocks(node.content)
     .split("\n")
-    .map((line, i) => (i === 0 ? prefix + line : line && pad + line))
+    .map((line, i) =>
+      i === 0
+        ? prefix + line
+        : line.startsWith(LAZY)
+          ? line
+          : line && pad + line
+    )
     .join("\n");
 }
 
 function list(node: JSONContent): string {
   const items = node.content ?? [];
-  if (node.type === "taskList")
-    return items
-      .map((it) => item(it, `- [${it.attrs?.checked ? "x" : " "}] `, 2))
-      .join("\n");
+  const a = node.attrs ?? {};
+  const join = "\n".repeat(1 + Number(a.gap ?? 0));
   if (node.type === "orderedList") {
-    const start = Number(node.attrs?.start ?? 1);
+    const start = Number(a.start ?? 1);
     return items
       .map((it, i) => {
-        const marker = `${start + i}. `;
+        const marker = `${a.repeat ? start : start + i}${a.delim ?? "."} `;
         return item(it, marker, marker.length);
       })
-      .join("\n");
+      .join(join);
   }
-  const marker = `${node.attrs?.marker ?? "-"} `;
-  return items.map((it) => item(it, marker, 2)).join("\n");
+  const marker = `${a.marker ?? "-"} `;
+  if (node.type === "taskList")
+    return items
+      .map((it) => item(it, `${marker}[${it.attrs?.checked ? "x" : " "}] `, 2))
+      .join(join);
+  return items.map((it) => item(it, marker, 2)).join(join);
+}
+
+// A fence of the same kind it was typed with, unless the code would close it.
+function fenceOf(code: string, typed: unknown): string {
+  if (typeof typed !== "string" || !typed) return fenceFor(code);
+  const runs = code.match(new RegExp(`^ {0,3}\\${typed[0]}{3,}`, "gm")) ?? [];
+  return runs.some((r) => r.trim().length >= typed.length)
+    ? fenceFor(code)
+    : typed;
 }
 
 function block(node: JSONContent): string {
   if (LISTS.has(node.type ?? "")) return list(node);
   if (node.type === "codeBlock") {
     const code = (node.content ?? []).map((n) => n.text ?? "").join("");
-    const fence = fenceFor(code);
-    const lang = node.attrs?.language ?? "";
+    const fence = fenceOf(code, node.attrs?.fence);
+    const info = node.attrs?.info ?? node.attrs?.language ?? "";
     return code
-      ? `${fence}${lang}\n${code}\n${fence}`
-      : `${fence}${lang}\n${fence}`;
+      ? `${fence}${info}\n${code}\n${fence}`
+      : `${fence}${info}\n${fence}`;
   }
   if (node.type === "paragraph") return inline(node.content);
   return blocks(node.content);
@@ -121,5 +145,5 @@ function blocks(nodes: JSONContent[] = []): string {
 }
 
 export function docToMarkdown(doc: JSONContent): string {
-  return blocks(doc.content);
+  return blocks(doc.content).split(LAZY).join("");
 }

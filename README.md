@@ -120,8 +120,9 @@ from an editor (or anything multi-line that reads like code) lands in a code
 block, prose stays prose, and a paste of 32 KB or more becomes an attachment
 sent as a fenced block. Cmd/Ctrl+Shift+V pastes as plain text, and the **T**
 button (Cmd/Ctrl+/) turns live formatting off for this browser. Enter sends on
-a keyboard and is a newline on a phone; Shift+Enter is always a newline, and
-three of them at the end of a code block leave it.
+a keyboard and is a newline on a phone; Cmd/Ctrl+Enter always sends.
+Shift+Enter is always a newline, and three of them at the end of a code block
+leave it.
 
 Type `/` in the composer for every slash command and skill the agent knows,
 yours included, filtered as you type. Commands such as `/compact`, `/usage`

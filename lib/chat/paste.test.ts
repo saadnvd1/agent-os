@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  attachmentName,
+  nextAttachment,
   classifyPaste,
   composeMessage,
   LONG_PASTE_BYTES,
@@ -74,10 +74,20 @@ describe("classifyPaste", () => {
 
 describe("attachments", () => {
   it("names them like files", () => {
-    expect(attachmentName([])).toBe("pasted-text.txt");
-    expect(attachmentName([{ name: "pasted-text.txt", text: "" }])).toBe(
-      "pasted-text-2.txt"
-    );
+    expect(nextAttachment([], 0).name).toBe("pasted-text.txt");
+    const one = { name: "pasted-text.txt", text: "" };
+    expect(nextAttachment([one], 1).name).toBe("pasted-text-2.txt");
+  });
+
+  it("never reuses a name after one is removed", () => {
+    // Pasted 1, 2, 3; removed 3 (the newest) and 1.
+    const two = { name: "pasted-text-2.txt", text: "" };
+    expect(nextAttachment([two], 3)).toEqual({
+      name: "pasted-text-4.txt",
+      number: 4,
+    });
+    // A restored draft: numbers come from the names still attached.
+    expect(nextAttachment([two], 0).name).toBe("pasted-text-3.txt");
   });
 
   it("sends them as fenced blocks after the message", () => {

@@ -90,9 +90,22 @@ export function classifyPaste(paste: Paste): {
 }
 
 // t3code's naming: pasted-text.txt, pasted-text-2.txt, ...
-export function attachmentName(taken: TextAttachment[]): string {
-  const n = taken.length + 1;
-  return n === 1 ? "pasted-text.txt" : `pasted-text-${n}.txt`;
+const numberOf = (name: string) =>
+  name === "pasted-text.txt"
+    ? 1
+    : Number(name.match(/^pasted-text-(\d+)\.txt$/)?.[1] ?? 0);
+
+// The next name, numbered past every one handed out so far (`last`) and
+// every one still attached, so removing one never frees its name.
+export function nextAttachment(
+  taken: TextAttachment[],
+  last: number
+): { name: string; number: number } {
+  const n = Math.max(last, ...taken.map((a) => numberOf(a.name))) + 1;
+  return {
+    name: n === 1 ? "pasted-text.txt" : `pasted-text-${n}.txt`,
+    number: n,
+  };
 }
 
 // No file attachments yet: long pastes ride along as fenced blocks.

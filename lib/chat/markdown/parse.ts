@@ -1,15 +1,15 @@
 import type { JSONContent } from "@tiptap/core";
-import type { List, ListItem, Nodes, Parents, RootContent } from "mdast";
+import type { List, ListItem, Nodes, RootContent } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
+import { endOf, inlineParser, LAZY, startOf } from "./inline";
+import { docToMarkdown, LISTS } from "./serialize";
 
-// Markdown into the composer's document, the inverse of docToMarkdown. Text
-// is taken from the source, not the parsed value, so escapes and anything
-// the composer has no node for (headings, links, tables) come through as the
-// characters that were typed.
-
-type Mark = NonNullable<JSONContent["marks"]>[number];
+// Markdown into the composer's document, the inverse of docToMarkdown, and
+// exact: each block keeps the shape it was written in (list markers and
+// numbering, fences, spacing), and a block that wouldn't serialize back to
+// the same characters stays as plain text lines instead.
 
 const paragraph = (content: JSONContent[] = []): JSONContent =>
   content.length ? { type: "paragraph", content } : { type: "paragraph" };
@@ -17,97 +17,41 @@ const paragraph = (content: JSONContent[] = []): JSONContent =>
 const empties = (n: number): JSONContent[] =>
   Array.from({ length: Math.max(0, n) }, () => paragraph());
 
+const lines = (text: string): JSONContent[] =>
+  text
+    .split("\n")
+    .map((line) => paragraph(line ? [{ type: "text", text: line }] : []));
+
 // Plain text, one paragraph per line: what plain mode holds.
 export function textToDoc(text: string): JSONContent {
-  return {
-    type: "doc",
-    content: text
-      .split("\n")
-      .map((line) => paragraph(line ? [{ type: "text", text: line }] : [])),
-  };
+  return { type: "doc", content: lines(text) };
 }
 
-const startOf = (n: Nodes) =>
-  n.position?.start ?? { line: 1, column: 1, offset: 0 };
-const endOf = (n: Nodes) =>
-  n.position?.end ?? { line: 1, column: 1, offset: 0 };
+const MARKER = /^([-+*]|\d+[.)])( +|$)/;
 
 function parser(src: string) {
-  const slice = (from: number, to: number, indent: number) =>
-    src
-      .slice(from, to)
-      .split("\n")
-      .map((line, i) =>
-        i === 0 ? line : line.replace(new RegExp(`^ {0,${indent}}`), "")
-      )
-      .join("\n");
+  const { slice, inline } = inlineParser(src);
+  const raw = (node: Nodes, indent: number) =>
+    lines(
+      slice(startOf(node).offset ?? 0, endOf(node).offset ?? 0, indent)
+        .split(LAZY)
+        .join("")
+    );
+  const markerOf = (item: ListItem) =>
+    src.slice(startOf(item).offset).match(MARKER)?.[1] ?? "-";
 
-  const text = (raw: string, marks: Mark[]): JSONContent[] =>
-    raw.split("\n").flatMap((part, i) => {
-      const out: JSONContent[] =
-        i > 0 ? [{ type: "hardBreak", ...(marks.length && { marks }) }] : [];
-      if (part)
-        out.push({ type: "text", text: part, ...(marks.length && { marks }) });
-      return out;
-    });
-
-  // Children of an inline container, with any source between them kept.
-  function inline(
-    parent: Parents,
-    from: number,
-    to: number,
-    marks: Mark[],
-    indent: number
-  ): JSONContent[] {
-    const out: JSONContent[] = [];
-    let at = from;
-    for (const child of parent.children as Nodes[]) {
-      const s = startOf(child).offset ?? at;
-      const e = endOf(child).offset ?? s;
-      if (s > at) out.push(...text(slice(at, s, indent), marks));
-      out.push(...phrasing(child, marks, indent));
-      at = Math.max(at, e);
-    }
-    if (to > at) out.push(...text(slice(at, to, indent), marks));
-    return out;
+  // Blank lines between items: the same everywhere, or the list isn't kept.
+  function gap(node: List): number | null {
+    const gaps = node.children
+      .slice(1)
+      .map((it, i) => startOf(it).line - endOf(node.children[i]).line - 1);
+    return gaps.every((g) => g === (gaps[0] ?? 0)) ? (gaps[0] ?? 0) : null;
   }
-
-  function phrasing(node: Nodes, marks: Mark[], indent: number): JSONContent[] {
-    const s = startOf(node).offset ?? 0;
-    const e = endOf(node).offset ?? s;
-    if (node.type === "inlineCode")
-      return [{ type: "text", text: node.value, marks: [{ type: "code" }] }];
-    if (
-      node.type === "strong" ||
-      node.type === "emphasis" ||
-      node.type === "delete"
-    ) {
-      const d =
-        src.slice(s).match(node.type === "delete" ? /^~+/ : /^[*_]+/)?.[0] ??
-        "";
-      const size =
-        node.type === "strong" ? 2 : node.type === "emphasis" ? 1 : d.length;
-      const delim = d.slice(0, size);
-      const type = { strong: "bold", emphasis: "italic", delete: "strike" }[
-        node.type
-      ];
-      const mark: Mark =
-        type === "strike" ? { type } : { type, attrs: { delim } };
-      return inline(node, s + size, e - size, [...marks, mark], indent);
-    }
-    return text(slice(s, e, indent), marks);
-  }
-
-  const raw = (node: Nodes, indent: number): JSONContent[] =>
-    slice(startOf(node).offset ?? 0, endOf(node).offset ?? 0, indent)
-      .split("\n")
-      .map((line) => paragraph(line ? [{ type: "text", text: line }] : []));
 
   function item(node: ListItem, type: string): JSONContent {
     const s = startOf(node);
-    const marker =
-      src.slice(s.offset).match(/^([-+*]|\d+[.)])( {1,4})?/)?.[0] ?? "- ";
-    const content = flow(node.children, s.column - 1 + marker.length);
+    const head = src.slice(s.offset).match(MARKER)?.[0] ?? "- ";
+    const content = flow(node.children, s.column - 1 + head.length);
     if (content[0]?.type !== "paragraph") content.unshift(paragraph());
     const attrs =
       type === "taskItem" ? { attrs: { checked: Boolean(node.checked) } } : {};
@@ -115,31 +59,51 @@ function parser(src: string) {
   }
 
   function list(node: List, indent: number): JSONContent[] {
-    if (node.ordered)
+    const spacing = gap(node);
+    if (spacing === null) return raw(node, indent);
+    const markers = node.children.map(markerOf);
+    if (node.ordered) {
+      const start = node.start ?? 1;
+      const numbers = markers.map((m) => parseInt(m, 10));
+      const repeat = numbers.length > 1 && numbers.every((n) => n === start);
       return [
         {
           type: "orderedList",
-          attrs: { start: node.start ?? 1 },
+          attrs: { start, delim: markers[0].slice(-1), repeat, gap: spacing },
           content: node.children.map((i) => item(i, "listItem")),
         },
       ];
-    const checks = node.children.filter(
-      (i) => typeof i.checked === "boolean"
-    ).length;
-    if (checks === node.children.length)
-      return [
-        {
-          type: "taskList",
-          content: node.children.map((i) => item(i, "taskItem")),
-        },
-      ];
-    if (checks) return raw(node, indent);
-    const marker = src[startOf(node).offset ?? 0] ?? "-";
+    }
+    const checks = node.children.filter((i) => typeof i.checked === "boolean");
+    if (checks.length && checks.length < node.children.length)
+      return raw(node, indent);
+    const type = checks.length ? "taskList" : "bulletList";
     return [
       {
-        type: "bulletList",
-        attrs: { marker },
-        content: node.children.map((i) => item(i, "listItem")),
+        type,
+        attrs: { marker: markers[0], gap: spacing },
+        content: node.children.map((i) =>
+          item(i, checks.length ? "taskItem" : "listItem")
+        ),
+      },
+    ];
+  }
+
+  function code(node: Nodes & { type: "code" }): JSONContent[] | null {
+    const first = src.slice(startOf(node).offset).split("\n")[0];
+    const fence = first.match(/^(`{3,}|~{3,})/)?.[0];
+    if (!fence) return null;
+    const info = first.slice(fence.length);
+    const content = node.value ? [{ type: "text", text: node.value }] : [];
+    return [
+      {
+        type: "codeBlock",
+        attrs: {
+          language: node.lang ?? null,
+          fence,
+          info: info === (node.lang ?? "") ? null : info,
+        },
+        ...(content.length && { content }),
       },
     ];
   }
@@ -155,49 +119,47 @@ function parser(src: string) {
       const to = e + (src.slice(e).match(/^[ \t]+(?=\n|$)/)?.[0].length ?? 0);
       return [paragraph(inline(node, from, to, [], indent))];
     }
-    if (
-      node.type === "code" &&
-      /^\s*(`{3,}|~{3,})/.test(src.slice(startOf(node).offset))
-    ) {
-      const content = node.value
-        ? [{ type: "text", text: node.value }]
-        : undefined;
-      return [
-        {
-          type: "codeBlock",
-          attrs: { language: node.lang ?? null },
-          ...(content && { content }),
-        },
-      ];
-    }
+    if (node.type === "code") return code(node) ?? raw(node, indent);
     if (node.type === "list") return list(node, indent);
     return raw(node, indent);
   }
 
+  // Top level only: a block is kept as nodes when they write back the very
+  // characters it came from.
+  function checked(node: RootContent): JSONContent[] {
+    const converted = block(node, 0);
+    const s = startOf(node);
+    const from = (s.offset ?? 0) - (s.column - 1);
+    const source = src.slice(from, endOf(node).offset ?? 0);
+    const back = docToMarkdown({ type: "doc", content: converted });
+    return back === source ? converted : lines(source);
+  }
+
   // Blocks with the blank lines between them kept as empty paragraphs.
   function flow(children: RootContent[], indent: number): JSONContent[] {
-    return children.flatMap((child, i) => {
-      const converted = block(child, indent);
-      if (i === 0) return converted;
-      const prev = children[i - 1];
-      const leaving =
-        prev.type === "list" &&
-        converted[0]?.content?.length &&
-        converted[0].type === "paragraph"
-          ? 1
-          : 0;
-      return [
-        ...empties(startOf(child).line - endOf(prev).line - 1 - leaving),
-        ...converted,
-      ];
+    const out: JSONContent[] = [];
+    children.forEach((child, i) => {
+      const converted = indent === 0 ? checked(child) : block(child, indent);
+      if (i > 0) {
+        const prev = out[out.length - 1];
+        const leaving =
+          LISTS.has(prev?.type ?? "") &&
+          converted[0]?.type === "paragraph" &&
+          converted[0].content?.length
+            ? 1
+            : 0;
+        const blank = startOf(child).line - endOf(children[i - 1]).line - 1;
+        out.push(...empties(blank - leaving));
+      }
+      out.push(...converted);
     });
+    return out;
   }
 
   return { flow };
 }
 
-export function markdownToDoc(markdown: string): JSONContent {
-  const src = markdown.replace(/\r\n?/g, "\n");
+function parse(src: string): JSONContent {
   const tree = fromMarkdown(src, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
@@ -214,4 +176,12 @@ export function markdownToDoc(markdown: string): JSONContent {
       ...empties(trailing),
     ],
   };
+}
+
+// Whatever happens, what comes back serializes to the same string: if the
+// document as a whole doesn't, it's taken as plain text.
+export function markdownToDoc(markdown: string): JSONContent {
+  const src = markdown.replace(/\r\n?/g, "\n");
+  const doc = parse(src);
+  return docToMarkdown(doc) === src ? doc : textToDoc(src);
 }

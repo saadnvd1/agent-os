@@ -3,14 +3,15 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type RefObject,
 } from "react";
 import { useEditor, type Editor } from "@tiptap/react";
 import { docToMarkdown } from "@/lib/chat/markdown/serialize";
-import { markdownToDoc, textToDoc } from "@/lib/chat/markdown/parse";
 import { plainExtensions, richExtensions } from "./extensions";
+import { loadMarkdown } from "./load";
 import { handleKeyDown, type KeyHandlers } from "./keys";
 import { handlePaste, isImage, type PasteHandlers } from "./paste";
 import { usePlainMode } from "./usePlainMode";
@@ -22,9 +23,6 @@ export type ComposerHandlers = Omit<
   Omit<PasteHandlers, "plain" | "asText">;
 
 const PASTE_AS_TEXT_WINDOW = 1000;
-
-const toDoc = (md: string, plain: boolean) =>
-  plain ? textToDoc(md) : markdownToDoc(md);
 
 // The composer's TipTap editor. It holds markdown: `text` is what gets sent,
 // and setText puts markdown back in (a draft, an undone message, a command).
@@ -38,7 +36,9 @@ export function useComposerEditor({
   // Read at keypress and paste time, so they always see the latest state.
   handlers: RefObject<ComposerHandlers | null>;
 }) {
-  const [plain, setPlain] = usePlainMode();
+  // The composer is only mounted once the mode is known (see Composer).
+  const [stored, setPlain] = usePlainMode();
+  const plain = stored ?? false;
   const [text, setTextState] = useState("");
   const pasteAsTextUntil = useRef(0);
   const editorRef = useRef<Editor | null>(null);
@@ -52,14 +52,20 @@ export function useComposerEditor({
     plainRef.current = plain;
   }, [plain]);
 
+  const extensions = useMemo(
+    () =>
+      plain
+        ? plainExtensions(() => placeholderRef.current)
+        : richExtensions(() => placeholderRef.current),
+    [plain]
+  );
+
   const editor = useEditor(
     {
       immediatelyRender: false,
       shouldRerenderOnTransaction: false,
       enablePasteRules: false,
-      extensions: plain
-        ? plainExtensions(() => placeholderRef.current)
-        : richExtensions(() => placeholderRef.current),
+      extensions,
       editable: !disabled,
       editorProps: {
         attributes: {
@@ -97,9 +103,10 @@ export function useComposerEditor({
         handleDrop: (view, event) =>
           [...(event.dataTransfer?.files ?? [])].some(isImage),
       },
-      onUpdate: ({ editor: ed }) => {
-        const md = docToMarkdown(ed.getJSON());
-        setTextState(md);
+      // Only edits change the text: not loading a draft, not setEditable.
+      onUpdate: ({ editor: ed, transaction }) => {
+        if (!transaction.docChanged) return;
+        setTextState(docToMarkdown(ed.getJSON()));
       },
     },
     [plain]
@@ -109,21 +116,21 @@ export function useComposerEditor({
     if (!editor) return;
     const replacing = editorRef.current !== null;
     editorRef.current = editor;
-    editor.commands.setContent(toDoc(text, plain), { emitUpdate: false });
+    loadMarkdown(editor, text, plain);
     // Toggling plain mode swaps editors under the cursor: keep typing there.
     if (replacing) editor.commands.focus("end");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
   useEffect(() => {
-    editor?.setEditable(!disabled);
+    editor?.setEditable(!disabled, false);
   }, [editor, disabled]);
 
   const setText = useCallback(
     (md: string, focus = false) => {
       setTextState(md);
       if (!editor) return;
-      editor.commands.setContent(toDoc(md, plain), { emitUpdate: false });
+      loadMarkdown(editor, md, plain);
       if (focus) editor.commands.focus("end");
     },
     [editor, plain]
