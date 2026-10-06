@@ -1,0 +1,242 @@
+import { randomUUID } from "crypto";
+import type { ChatItem, DriverEvent } from "../events";
+import { clipOutput, toolDiff, toolTitle } from "../tools";
+
+// Loose views of the SDK's message shapes: only what the mapper reads.
+type Block = {
+  type: string;
+  text?: string;
+  thinking?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+  tool_use_id?: string;
+  content?: unknown;
+  is_error?: boolean;
+};
+export type ClaudeMessage = {
+  type: string;
+  subtype?: string;
+  session_id?: string;
+  message?: { id?: string; content?: Block[] | string };
+  event?: {
+    type: string;
+    content_block?: Block;
+    delta?: { type: string; text?: string; thinking?: string };
+  };
+  parent_tool_use_id?: string | null;
+  duration_ms?: number;
+  total_cost_usd?: number;
+  is_error?: boolean;
+  errors?: string[];
+  result?: string;
+};
+
+const now = () => Date.now();
+
+const INTERRUPT_NOTICE =
+  /doesn't want to proceed with this tool use|Request interrupted by user/i;
+
+function resultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((c) =>
+        c && typeof c === "object" && "text" in c ? String(c.text) : ""
+      )
+      .join("");
+  }
+  return "";
+}
+
+// Turns Claude Agent SDK messages into provider-neutral chat events.
+export class ClaudeMapper {
+  private streamingText: ChatItem | null = null;
+  private streamingThinking: ChatItem | null = null;
+  private tools = new Map<string, Extract<ChatItem, { kind: "tool" }>>();
+
+  map(m: ClaudeMessage): DriverEvent[] {
+    // Subagent traffic stays inside its parent tool call.
+    if (m.parent_tool_use_id) return [];
+    switch (m.type) {
+      case "system":
+        return m.subtype === "init" && m.session_id
+          ? [{ type: "resume_id", id: m.session_id }]
+          : [];
+      case "stream_event":
+        return this.stream(m);
+      case "assistant":
+        return this.assistant(m);
+      case "user":
+        return this.toolResults(m);
+      case "result":
+        return this.result(m);
+      default:
+        return [];
+    }
+  }
+
+  private pendingText = false;
+  private pendingThinking = false;
+
+  // Items are created on their first text, so blocks that never send any
+  // (hidden thinking, empty starts) never show up as empty bubbles.
+  private stream(m: ClaudeMessage): DriverEvent[] {
+    const e = m.event;
+    if (!e) return [];
+    if (e.type === "content_block_start") {
+      if (e.content_block?.type === "text") this.pendingText = true;
+      if (e.content_block?.type === "thinking") this.pendingThinking = true;
+      return [];
+    }
+    if (e.type !== "content_block_delta") return [];
+    if (e.delta?.type === "text_delta" && e.delta.text) {
+      return this.grow("assistant", e.delta.text);
+    }
+    if (e.delta?.type === "thinking_delta" && e.delta.thinking) {
+      return this.grow("reasoning", e.delta.thinking);
+    }
+    return [];
+  }
+
+  private grow(kind: "assistant" | "reasoning", text: string): DriverEvent[] {
+    const current =
+      kind === "assistant" ? this.streamingText : this.streamingThinking;
+    const pending =
+      kind === "assistant" ? this.pendingText : this.pendingThinking;
+    if (current && !pending) return [{ type: "delta", id: current.id, text }];
+    const item: ChatItem = {
+      id: randomUUID(),
+      kind,
+      text,
+      streaming: true,
+      createdAt: now(),
+    };
+    if (kind === "assistant") {
+      this.streamingText = item;
+      this.pendingText = false;
+    } else {
+      this.streamingThinking = item;
+      this.pendingThinking = false;
+    }
+    return [{ type: "item", item }];
+  }
+
+  private assistant(m: ClaudeMessage): DriverEvent[] {
+    const blocks = Array.isArray(m.message?.content) ? m.message.content : [];
+    const out: DriverEvent[] = [];
+    for (const b of blocks) {
+      if (b.type === "text" && b.text) {
+        const id = this.streamingText?.id ?? randomUUID();
+        out.push({
+          type: "item",
+          item: { id, kind: "assistant", text: b.text, createdAt: now() },
+        });
+        this.streamingText = null;
+      } else if (b.type === "thinking" && b.thinking) {
+        const id = this.streamingThinking?.id ?? randomUUID();
+        out.push({
+          type: "item",
+          item: { id, kind: "reasoning", text: b.thinking, createdAt: now() },
+        });
+        this.streamingThinking = null;
+      } else if (b.type === "tool_use" && b.id && b.name) {
+        out.push(...this.toolUse(b.id, b.name, b.input));
+      }
+    }
+    return out;
+  }
+
+  private toolUse(id: string, name: string, input: unknown): DriverEvent[] {
+    if (name === "TodoWrite") {
+      const todos = (
+        (input as { todos?: { content?: string; status?: string }[] })?.todos ??
+        []
+      ).map((t) => ({
+        text: t.content ?? "",
+        status:
+          (t.status as "pending" | "in_progress" | "completed") ?? "pending",
+      }));
+      return [
+        {
+          type: "item",
+          item: { id: "todos", kind: "todos", todos, createdAt: now() },
+        },
+      ];
+    }
+    const item = {
+      id,
+      kind: "tool" as const,
+      name,
+      title: toolTitle(name, input),
+      input,
+      status: "running" as const,
+      diff: toolDiff(name, input),
+      createdAt: now(),
+    };
+    this.tools.set(id, item);
+    return [{ type: "item", item }];
+  }
+
+  private toolResults(m: ClaudeMessage): DriverEvent[] {
+    const blocks = Array.isArray(m.message?.content) ? m.message.content : [];
+    const out: DriverEvent[] = [];
+    for (const b of blocks) {
+      if (b.type !== "tool_result" || !b.tool_use_id) continue;
+      const tool = this.tools.get(b.tool_use_id);
+      if (!tool) continue;
+      const text = resultText(b.content);
+      // An interrupt answers the running tool with a notice meant for the
+      // model, not the reader.
+      const stopped = b.is_error && INTERRUPT_NOTICE.test(text);
+      const done = stopped
+        ? { ...tool, status: "stopped" as const, output: undefined }
+        : {
+            ...tool,
+            status: b.is_error ? ("error" as const) : ("done" as const),
+            output: clipOutput(text),
+          };
+      this.tools.delete(b.tool_use_id);
+      out.push({ type: "item", item: done });
+    }
+    return out;
+  }
+
+  private result(m: ClaudeMessage): DriverEvent[] {
+    const out: DriverEvent[] = [];
+    // Tools still open when the turn ends were cut off.
+    for (const tool of this.tools.values()) {
+      out.push({
+        type: "item",
+        item: { ...tool, status: "stopped", output: undefined },
+      });
+    }
+    this.tools.clear();
+    this.streamingText = this.streamingThinking = null;
+    const interrupted = m.subtype === "error_during_execution";
+    if (m.is_error && !interrupted) {
+      out.push({
+        type: "item",
+        item: {
+          id: randomUUID(),
+          kind: "error",
+          message: m.errors?.join("\n") || m.result || "The turn failed",
+          createdAt: now(),
+        },
+      });
+    }
+    out.push({
+      type: "item",
+      item: {
+        id: randomUUID(),
+        kind: "turn_end",
+        durationMs: m.duration_ms,
+        costUsd: m.total_cost_usd,
+        interrupted,
+        createdAt: now(),
+      },
+    });
+    out.push({ type: "state", state: "idle" });
+    return out;
+  }
+}

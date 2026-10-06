@@ -1,7 +1,7 @@
 /**
  * Async tasks: a prompt becomes an agent working alone in its own worktree,
  * which ends by opening a PR. A human signs off (squash-merge + cleanup) or
- * drops it. Modeled on dispatch.
+ * drops it.
  */
 
 import { randomUUID } from "crypto";

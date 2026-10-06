@@ -27,7 +27,7 @@ export interface TaskStateInput {
   blocked: boolean;
 }
 
-// Ordered by what needs the human first, as dispatch does.
+// Ordered by what needs the human first.
 export function deriveTaskState(input: TaskStateInput): TaskState {
   const { taskStatus, sessionStatus, pr, blocked } = input;
   if (taskStatus === "merged" || pr?.state === "MERGED") return "merged";

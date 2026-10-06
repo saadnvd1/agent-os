@@ -1,5 +1,6 @@
 "use client";
 
+import { ChatPanel } from "@/components/Chat";
 import { useRef, useCallback, useEffect, memo, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { usePanes } from "@/contexts/PaneContext";
@@ -119,6 +120,13 @@ export const Pane = memo(function Pane({
     ? sessions.find((s) => s.id === activeTab.sessionId)
     : null;
   const isLocalSession = !session?.host_id || session.host_id === "local";
+  // A tab whose session runs as chat shows the conversation, not a terminal.
+  const chatSessionFor = (tab: { sessionId: string | null }) => {
+    const s = tab.sessionId
+      ? sessions.find((x) => x.id === tab.sessionId)
+      : undefined;
+    return s?.view === "chat" ? s : null;
+  };
 
   // File editor state - lifted here so it persists across view switches
   const fileEditor = useFileEditor();
@@ -340,27 +348,34 @@ export const Pane = memo(function Pane({
                     : "hidden"
                 }
               >
-                <Terminal
-                  ref={getTerminalRef(tab.id)}
-                  onConnected={getTerminalConnectedHandler(tab)}
-                  onBeforeUnmount={(scrollState) => {
-                    sessionRegistry.saveTerminalState(paneId, tab.id, {
-                      scrollTop: scrollState.scrollTop,
-                      scrollHeight: 0,
-                      lastActivity: Date.now(),
-                      cursorY: scrollState.cursorY,
-                    });
-                  }}
-                  initialScrollState={
-                    savedState
-                      ? {
-                          scrollTop: savedState.scrollTop,
-                          cursorY: savedState.cursorY,
-                          baseY: 0,
-                        }
-                      : undefined
-                  }
-                />
+                {chatSessionFor(tab) ? (
+                  <ChatPanel
+                    sessionId={chatSessionFor(tab)!.id}
+                    sessionName={chatSessionFor(tab)!.name}
+                  />
+                ) : (
+                  <Terminal
+                    ref={getTerminalRef(tab.id)}
+                    onConnected={getTerminalConnectedHandler(tab)}
+                    onBeforeUnmount={(scrollState) => {
+                      sessionRegistry.saveTerminalState(paneId, tab.id, {
+                        scrollTop: scrollState.scrollTop,
+                        scrollHeight: 0,
+                        lastActivity: Date.now(),
+                        cursorY: scrollState.cursorY,
+                      });
+                    }}
+                    initialScrollState={
+                      savedState
+                        ? {
+                            scrollTop: savedState.scrollTop,
+                            cursorY: savedState.cursorY,
+                            baseY: 0,
+                          }
+                        : undefined
+                    }
+                  />
+                )}
               </div>
             );
           })}
@@ -435,27 +450,38 @@ export const Pane = memo(function Pane({
                             : "hidden"
                         }
                       >
-                        <Terminal
-                          ref={getTerminalRef(tab.id)}
-                          onConnected={getTerminalConnectedHandler(tab)}
-                          onBeforeUnmount={(scrollState) => {
-                            sessionRegistry.saveTerminalState(paneId, tab.id, {
-                              scrollTop: scrollState.scrollTop,
-                              scrollHeight: 0,
-                              lastActivity: Date.now(),
-                              cursorY: scrollState.cursorY,
-                            });
-                          }}
-                          initialScrollState={
-                            savedState
-                              ? {
-                                  scrollTop: savedState.scrollTop,
-                                  cursorY: savedState.cursorY,
-                                  baseY: 0,
+                        {chatSessionFor(tab) ? (
+                          <ChatPanel
+                            sessionId={chatSessionFor(tab)!.id}
+                            sessionName={chatSessionFor(tab)!.name}
+                          />
+                        ) : (
+                          <Terminal
+                            ref={getTerminalRef(tab.id)}
+                            onConnected={getTerminalConnectedHandler(tab)}
+                            onBeforeUnmount={(scrollState) => {
+                              sessionRegistry.saveTerminalState(
+                                paneId,
+                                tab.id,
+                                {
+                                  scrollTop: scrollState.scrollTop,
+                                  scrollHeight: 0,
+                                  lastActivity: Date.now(),
+                                  cursorY: scrollState.cursorY,
                                 }
-                              : undefined
-                          }
-                        />
+                              );
+                            }}
+                            initialScrollState={
+                              savedState
+                                ? {
+                                    scrollTop: savedState.scrollTop,
+                                    cursorY: savedState.cursorY,
+                                    baseY: 0,
+                                  }
+                                : undefined
+                            }
+                          />
+                        )}
                       </div>
                     );
                   })}

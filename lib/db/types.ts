@@ -20,6 +20,8 @@ export interface Session {
   // Async tasks: a session started from a prompt that ends in a PR
   task_prompt: string | null;
   task_status: "running" | "merged" | "dropped" | null;
+  // How the session is shown: a chat conversation or a terminal.
+  view: "chat" | "terminal";
   // Worktree fields (optional)
   worktree_path: string | null;
   branch_name: string | null;

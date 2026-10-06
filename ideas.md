@@ -16,8 +16,8 @@
 
 - [ ] Files, git and worktrees for sessions on other machines (run git over the host exec layer)
 - [ ] Persist pane layouts per workspace in the DB instead of localStorage
-- [ ] Merge "groups" into projects (one concept, like mterm's `group` field)
-- [ ] Attention queue: pin sessions waiting on you to the top, using mterm's status rules
+- [ ] Merge "groups" into projects (one concept)
+- [ ] Attention queue: pin sessions waiting on you to the top
 - [ ] Resume Claude after a reboot from a recorded session id
 - [ ] Replace status polling with tmux hooks/control mode events
 
@@ -29,6 +29,15 @@
 - [ ] Answer a blocked task from the panel without opening the terminal
 - [ ] Resume an exited task with `claude --resume`
 - [ ] Per-task dev server port and database, as dispatch does
+
+## Chat (after V1)
+
+- [ ] Drivers for Codex, OpenCode and others (lib/chat/drivers)
+- [ ] Approval prompts and plan mode as an opt-in permission level
+- [ ] Import turns made in the terminal when switching back to chat
+- [ ] Chat for sessions on other machines (via the per-machine AgentOS)
+- [ ] Checkpoints: undo a turn's file changes
+- [ ] Model picker and context-usage meter in the composer
 
 ## Tooling
 

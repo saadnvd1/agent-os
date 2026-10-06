@@ -20,7 +20,7 @@ interface WorkspaceHeaderProps {
   needsYou: number;
 }
 
-// A quiet section label, as in mTerm: the projects under it are the rows.
+// A quiet section label: the projects under it are the rows.
 export function WorkspaceHeader({
   workspace,
   projectCount,

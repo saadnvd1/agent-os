@@ -9,6 +9,7 @@ import { findAvailablePort } from "@/lib/ports";
 import { runInBackground } from "@/lib/async-operations";
 import { getProject } from "@/lib/projects";
 import { isRemoteHost } from "@/lib/hosts";
+import { supportsChat } from "@/lib/chat/capabilities";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -168,6 +169,15 @@ export async function POST(request: NextRequest) {
       projectId,
       hostId
     );
+
+    // Chat is the default view wherever the agent can run as chat.
+    const view =
+      body.view === "terminal" ||
+      !supportsChat(agentType) ||
+      isRemoteHost(hostId)
+        ? "terminal"
+        : "chat";
+    db.prepare(`UPDATE sessions SET view = ? WHERE id = ?`).run(view, id);
 
     // Set worktree info if created
     if (worktreePath) {

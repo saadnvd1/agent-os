@@ -1,7 +1,7 @@
 import type { AgentState } from "@/lib/session-meta";
 import { cn } from "@/lib/utils";
 
-// One meaning per colour, as in mTerm: primary working, red needs you,
+// One meaning per colour: primary working, red needs you,
 // an amber ring for your turn, nothing when idle.
 const TONE: Record<AgentState, string | null> = {
   working: "bg-primary",

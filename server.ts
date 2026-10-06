@@ -7,6 +7,8 @@ import * as pty from "node-pty";
 import { buildAttachProcess, type AttachSpec } from "./lib/hosts/attach";
 import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
+import { interruptChat, sendChat, watchChat } from "./lib/chat/runner";
+import type { ChatClientMessage } from "./lib/chat/events";
 import {
   bindAddresses,
   requestAllowed,
@@ -68,6 +70,41 @@ app.prepare().then(() => {
   // Terminal WebSocket server
   const terminalWss = new WebSocketServer({ noServer: true });
 
+  // Chat: one socket per watched session. Sends a snapshot, then live items;
+  // takes messages and interrupts.
+  const chatWss = new WebSocketServer({ noServer: true });
+  chatWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
+    const sessionId = new URL(request.url ?? "", "http://x").searchParams.get(
+      "session"
+    );
+    if (!sessionId) return ws.close();
+    const unwatch = watchChat(sessionId, (m) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+    });
+    ws.on("message", (raw: Buffer) => {
+      try {
+        const msg = JSON.parse(raw.toString()) as ChatClientMessage;
+        if (msg.type === "send") sendChat(sessionId, msg);
+        else if (msg.type === "interrupt") void interruptChat(sessionId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        ws.send(
+          JSON.stringify({
+            type: "item",
+            item: {
+              id: `error-${Date.now()}`,
+              kind: "error",
+              message,
+              createdAt: Date.now(),
+            },
+          })
+        );
+      }
+    });
+    ws.on("close", unwatch);
+    ws.on("error", unwatch);
+  });
+
   // Handle WebSocket upgrades
   const onUpgrade = (
     request: IncomingMessage,
@@ -88,6 +125,13 @@ app.prepare().then(() => {
       return;
     }
     const { pathname } = parse(request.url || "");
+
+    if (pathname === "/ws/chat") {
+      chatWss.handleUpgrade(request, socket, head, (ws) => {
+        chatWss.emit("connection", ws, request);
+      });
+      return;
+    }
 
     if (pathname === "/ws/terminal") {
       terminalWss.handleUpgrade(request, socket, head, (ws) => {

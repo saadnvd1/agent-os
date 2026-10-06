@@ -20,7 +20,7 @@ export function TasksDialog() {
   const active = tasks.filter(
     (t) => t.state !== "merged" && t.state !== "dropped"
   );
-  // Whatever needs a human first, as dispatch sorts it.
+  // Whatever needs a human first.
   active.sort(
     (a, b) => Number(needsHuman(b.state)) - Number(needsHuman(a.state))
   );

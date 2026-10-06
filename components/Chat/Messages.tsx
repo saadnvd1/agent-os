@@ -1,0 +1,118 @@
+"use client";
+
+import { useState } from "react";
+import { Check, ChevronRight, Circle, CircleDot } from "lucide-react";
+import type { ChatItem } from "@/lib/chat/events";
+import { cn } from "@/lib/utils";
+import { Markdown } from "./Markdown";
+
+type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
+
+export function UserMessage({ item }: { item: Of<"user"> }) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {item.from && (
+        <span className="label-mono text-muted-foreground">
+          from {item.from}
+        </span>
+      )}
+      {item.images?.length ? (
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {item.images.map((img, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={`data:${img.mediaType};base64,${img.data}`}
+              alt=""
+              className="max-h-40 rounded-xl object-cover"
+            />
+          ))}
+        </div>
+      ) : null}
+      {item.text && (
+        <div className="bg-foreground/[0.07] max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm whitespace-pre-wrap">
+          {item.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AssistantMessage({ item }: { item: Of<"assistant"> }) {
+  return (
+    <div className={cn(item.streaming && "streaming-cursor")}>
+      <Markdown text={item.text} />
+    </div>
+  );
+}
+
+export function Reasoning({ item }: { item: Of<"reasoning"> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="text-muted-foreground text-xs">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="hover:text-foreground flex min-h-8 items-center gap-1"
+      >
+        <ChevronRight
+          className={cn("h-3 w-3 transition-transform", open && "rotate-90")}
+        />
+        {item.streaming ? "Thinking…" : "Thought"}
+      </button>
+      {open && (
+        <p className="border-l-2 pl-3 whitespace-pre-wrap">{item.text}</p>
+      )}
+    </div>
+  );
+}
+
+export function Todos({ item }: { item: Of<"todos"> }) {
+  return (
+    <div className="bg-foreground/[0.03] space-y-1.5 rounded-xl px-3.5 py-3">
+      <p className="label-mono text-muted-foreground">Plan</p>
+      {item.todos.map((t, i) => (
+        <div key={i} className="flex items-start gap-2 text-sm">
+          {t.status === "completed" ? (
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          ) : t.status === "in_progress" ? (
+            <CircleDot className="text-primary mt-0.5 h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <Circle className="text-muted-foreground/50 mt-0.5 h-3.5 w-3.5 shrink-0" />
+          )}
+          <span
+            className={cn(
+              t.status === "completed" && "text-muted-foreground line-through"
+            )}
+          >
+            {t.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function TurnEnd({ item }: { item: Of<"turn_end"> }) {
+  const secs = item.durationMs ? Math.round(item.durationMs / 1000) : null;
+  const label = item.interrupted
+    ? "Stopped"
+    : secs !== null
+      ? `Done in ${secs}s`
+      : "Done";
+  return (
+    <div className="text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
+      <span className="bg-foreground/[0.06] h-px flex-1" />
+      {label}
+      <span className="bg-foreground/[0.06] h-px flex-1" />
+    </div>
+  );
+}
+
+export function ErrorMessage({ item }: { item: Of<"error"> }) {
+  return (
+    <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap">
+      {item.message}
+    </div>
+  );
+}

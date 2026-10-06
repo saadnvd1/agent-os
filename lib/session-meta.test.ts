@@ -40,9 +40,14 @@ describe("rowMeta", () => {
 });
 
 describe("tmuxDisplayName", () => {
-  it("drops mTerm's prefix only", () => {
-    expect(tmuxDisplayName("mterm-dashboards")).toBe("dashboards");
-    expect(tmuxDisplayName("dev-server")).toBe("dev-server");
+  it("drops a tool prefix in front of the folder name only", () => {
+    expect(tmuxDisplayName("tool-dashboards", "/Users/me/dev/dashboards")).toBe(
+      "dashboards"
+    );
+    expect(tmuxDisplayName("dev-server", "/Users/me/dev/app")).toBe(
+      "dev-server"
+    );
+    expect(tmuxDisplayName("app", "/Users/me/dev/app")).toBe("app");
   });
 });
 
@@ -56,7 +61,7 @@ describe("agent state from Claude's title", () => {
     expect(taskFromTitle("✳ Claude Code")).toBeNull();
   });
 
-  it("describes a managed session like mTerm's subtitle", () => {
+  it("describes a managed session with a subtitle", () => {
     expect(sessionRowInfo("dead")).toEqual({
       running: false,
       state: "idle",
