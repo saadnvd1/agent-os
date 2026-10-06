@@ -15,113 +15,63 @@ import { addNote } from "./notes";
 import { readSession } from "./read";
 import { review } from "./review";
 import { land, signOff } from "./signoff";
+import { parseArgs as p, type ToolName } from "./tool-schemas";
 
-export const TOOLS = [
-  "sessions",
-  "read",
-  "cards",
-  "send",
-  "start_task",
-  "start_session",
-  "stack",
-  "stack_status",
-  "land",
-  "drop",
-  "stop",
-  "note",
-  "review",
-  "sign_off",
-] as const;
+export { isToolName, TOOLS, type ToolName } from "./tool-schemas";
 
-export type ToolName = (typeof TOOLS)[number];
-
-export interface ToolArgs {
-  session?: string;
-  lines?: number;
-  board?: string;
-  message?: string;
-  project?: string;
-  prompt?: string;
-  base?: string;
-  target?: string;
-  plan_only?: boolean;
-  id?: string;
-  task?: string;
-  reason?: string;
-  text?: string;
-  fresh?: boolean;
-}
-
-const need = (value: string | undefined, what: string): string => {
-  if (!value?.trim()) throw new Error(`Say ${what}`);
-  return value;
-};
-
-// The orchestrator's tools, each scoped to its workspace, answered as
-// compact text.
+// The orchestrator's tools, each scoped to its workspace and its arguments
+// validated, answered as compact text.
 export async function runTool(
-  workspaceId: string,
+  w: string,
   tool: ToolName,
-  args: ToolArgs = {}
+  raw: unknown = {}
 ): Promise<string> {
-  const workspace = getWorkspace(workspaceId);
+  const workspace = getWorkspace(w);
   if (!workspace) throw new Error("Unknown workspace");
-  const w = workspaceId;
   switch (tool) {
     case "sessions":
+      p(tool, raw);
       return describeSessions(workspace.name, await sessionFacts(w));
-    case "read":
-      return readSession(
-        w,
-        need(args.session, "which session to read"),
-        args.lines
-      );
+    case "read": {
+      const a = p(tool, raw);
+      return readSession(w, a.session, a.lines);
+    }
     case "cards":
-      return readCards(w, args.board);
-    case "send":
-      return send(
-        w,
-        need(args.session, "who to send to"),
-        need(args.message, "the message")
-      );
-    case "start_task":
-      return startTask(
-        w,
-        need(args.project, "which project"),
-        need(args.prompt, "the task"),
-        args.base
-      );
-    case "start_session":
-      return startSession(
-        w,
-        need(args.project, "which project"),
-        need(args.prompt, "the prompt")
-      );
-    case "stack":
-      return stack(
-        w,
-        need(args.target, "which board or project"),
-        args.plan_only
-      );
+      return readCards(w, p(tool, raw).board);
+    case "send": {
+      const a = p(tool, raw);
+      return send(w, a.session, a.message);
+    }
+    case "start_task": {
+      const a = p(tool, raw);
+      return startTask(w, a.project, a.prompt, a.base);
+    }
+    case "start_session": {
+      const a = p(tool, raw);
+      return startSession(w, a.project, a.prompt);
+    }
+    case "stack": {
+      const a = p(tool, raw);
+      return stack(w, a.target, a.plan_only);
+    }
     case "stack_status":
-      return stackStatus(w, need(args.id, "which stack"));
+      return stackStatus(w, p(tool, raw).id);
     case "land":
-      return land(w, need(args.id, "which stack"));
-    case "drop":
-      return drop(w, need(args.task, "which task"), need(args.reason, "why"));
+      return land(w, p(tool, raw).id);
+    case "drop": {
+      const a = p(tool, raw);
+      return drop(w, a.task, a.reason);
+    }
     case "stop":
-      return stop(w, need(args.session, "which session"));
+      return stop(w, p(tool, raw).session);
     case "note":
-      addNote(w, need(args.text, "what to note"));
+      addNote(w, p(tool, raw).text);
       return "Noted.";
-    case "review":
-      return review(w, need(args.target, "which PR or task"), {
-        fresh: args.fresh,
-      });
+    case "review": {
+      const a = p(tool, raw);
+      return review(w, a.target, { fresh: a.fresh });
+    }
     case "sign_off":
-      return signOff(w, need(args.task, "which task"));
+      return signOff(w, p(tool, raw).task);
   }
 }
-
-export const isToolName = (t: unknown): t is ToolName =>
-  (TOOLS as readonly unknown[]).includes(t);

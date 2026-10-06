@@ -13,12 +13,14 @@ import { statusDetector } from "../status-detector";
 import { getWorkspace } from "../workspaces";
 import { workspaceSessions } from "./facts";
 import { addNote } from "./notes";
-import { readUsageWindow, windowRefusal, type UsageWindow } from "./usage";
+import { readUsage, windowRefusal, type UsageState } from "./usage";
 
 const HOUR = 60 * 60 * 1000;
 // A session this young counts as running even before its status shows it.
 const WARMUP_MS = 2 * 60 * 1000;
 
+// A stack row marks a stack the orchestrator started; each of its cards
+// is a start of its own, as a task.
 export type StartKind = "task" | "session" | "stack";
 
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -26,7 +28,8 @@ const iso = (ms: number) => new Date(ms).toISOString();
 function startsSince(workspaceId: string, since: number) {
   return db
     .prepare(
-      `SELECT target FROM orchestrator_starts WHERE workspace_id = ? AND created_at >= ?`
+      `SELECT target FROM orchestrator_starts
+       WHERE workspace_id = ? AND created_at >= ? AND kind != 'stack'`
     )
     .all(workspaceId, iso(since)) as { target: string | null }[];
 }
@@ -54,7 +57,7 @@ export async function runningCount(
 // Every brake that holds now, by name, with its reason.
 export async function brakesOn(
   workspaceId: string,
-  opts: { now?: number; usage?: UsageWindow | null } = {}
+  opts: { now?: number; usage?: UsageState } = {}
 ): Promise<{ name: string; reason: string }[]> {
   const now = opts.now ?? Date.now();
   const ws = getWorkspace(workspaceId);
@@ -72,9 +75,7 @@ export async function brakesOn(
       name: "starts",
       reason: `${starts} starts in the last hour, at the limit of ${ws.orch_max_starts_per_hour}`,
     });
-  const window = windowRefusal(
-    opts.usage === undefined ? readUsageWindow() : opts.usage
-  );
+  const window = windowRefusal(opts.usage ?? readUsage());
   if (window) out.push({ name: "window", reason: window });
   return out;
 }
@@ -82,17 +83,8 @@ export async function brakesOn(
 // One start at a time per workspace, so two can't both pass the brakes.
 const queues = new Map<string, Promise<unknown>>();
 
-// Runs a start through the brakes: refuses with the reason when one holds
-// (noting it once), otherwise starts and counts it.
-export function braked<T>(
-  workspaceId: string,
-  kind: StartKind,
-  start: () => Promise<T>,
-  target: (result: T) => string | null
-): Promise<T> {
-  const run = (queues.get(workspaceId) ?? Promise.resolve()).then(() =>
-    brakedNow(workspaceId, kind, start, target)
-  );
+function serially<T>(workspaceId: string, job: () => Promise<T>): Promise<T> {
+  const run = (queues.get(workspaceId) ?? Promise.resolve()).then(job);
   const tail = run.catch(() => {});
   queues.set(workspaceId, tail);
   void tail.then(() => {
@@ -101,36 +93,75 @@ export function braked<T>(
   return run;
 }
 
-async function brakedNow<T>(
+// The reason no start may go now (noted once per brake), or null.
+async function refusal(workspaceId: string): Promise<string | null> {
+  const on = await brakesOn(workspaceId);
+  if (!on.length) {
+    db.prepare(`UPDATE workspaces SET orch_brake = NULL WHERE id = ?`).run(
+      workspaceId
+    );
+    return null;
+  }
+  const key = on.map((b) => b.name).join("+");
+  const reason = on.map((b) => b.reason).join("; ");
+  if (getWorkspace(workspaceId)?.orch_brake !== key) {
+    db.prepare(`UPDATE workspaces SET orch_brake = ? WHERE id = ?`).run(
+      key,
+      workspaceId
+    );
+    addNote(
+      workspaceId,
+      `New starts paused: ${reason}. Running work carries on.`,
+      "brake"
+    );
+  }
+  return reason;
+}
+
+function recordStart(
+  workspaceId: string,
+  kind: StartKind,
+  target: string | null
+): void {
+  db.prepare(
+    `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, ?, ?, ?)`
+  ).run(workspaceId, kind, target, iso(Date.now()));
+}
+
+// Runs a start through the brakes: refuses with the reason when one holds,
+// otherwise starts and counts it.
+export function braked<T>(
   workspaceId: string,
   kind: StartKind,
   start: () => Promise<T>,
   target: (result: T) => string | null
 ): Promise<T> {
-  const on = await brakesOn(workspaceId);
-  if (on.length) {
-    const key = on.map((b) => b.name).join("+");
-    const ws = getWorkspace(workspaceId)!;
-    const reason = on.map((b) => b.reason).join("; ");
-    if (ws.orch_brake !== key) {
-      db.prepare(`UPDATE workspaces SET orch_brake = ? WHERE id = ?`).run(
-        key,
-        workspaceId
-      );
-      addNote(
-        workspaceId,
-        `New starts paused: ${reason}. Running work carries on.`,
-        "brake"
-      );
-    }
-    throw new Error(`Brake: not starting a ${kind}: ${reason}.`);
-  }
-  db.prepare(`UPDATE workspaces SET orch_brake = NULL WHERE id = ?`).run(
-    workspaceId
-  );
-  const result = await start();
-  db.prepare(
-    `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, ?, ?, ?)`
-  ).run(workspaceId, kind, target(result), iso(Date.now()));
-  return result;
+  return serially(workspaceId, async () => {
+    const why = await refusal(workspaceId);
+    if (why) throw new Error(`Brake: not starting a ${kind}: ${why}.`);
+    const result = await start();
+    recordStart(workspaceId, kind, target(result));
+    return result;
+  });
+}
+
+// The stack watcher asks before starting each card. A stack the
+// orchestrator started is braked card by card, like any task it starts;
+// one a person started isn't the orchestrator's to hold.
+export async function stackStartGate(
+  stackId: string,
+  itemId: string
+): Promise<string | null> {
+  const row = db
+    .prepare(
+      `SELECT workspace_id FROM orchestrator_starts WHERE kind = 'stack' AND target = ?`
+    )
+    .get(stackId) as { workspace_id: string } | undefined;
+  if (!row) return null;
+  return serially(row.workspace_id, async () => {
+    const why = await refusal(row.workspace_id);
+    if (why) return `Held by the orchestrator's brakes: ${why}`;
+    recordStart(row.workspace_id, "task", itemId);
+    return null;
+  });
 }

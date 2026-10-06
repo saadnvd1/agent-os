@@ -28,6 +28,8 @@ export interface Session {
   last_seen_at: string | null;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
+  // An orchestrator's tool-call secret.
+  orch_token?: string | null;
   workspace_id: string | null;
   // LumifyHub card this task moves (and the board it's on)
   lh_card_id: string | null;

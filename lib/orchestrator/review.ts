@@ -1,35 +1,43 @@
 /**
  * `review`: an independent, read-only review of a task's PR at its exact
- * head commit. A fresh `claude -p` reads a detached checkout of that commit
- * with no edit tools, and its verdict is stored against the sha. When the
- * task came from a card, a second run checks the change against what the
- * card asks for. Both run in the background; the orchestrator hears the
- * verdict as an event.
+ * head commit. A fresh `claude -p` (claude-cli.ts) reads a symlink-free
+ * detached checkout of that commit, with Read/Grep/Glob limited to it and no
+ * shell, and its verdict is stored against the sha. When the task came from
+ * a card, a second run checks the change against the card. A diff too big
+ * to read whole goes to Saad instead of being judged on a part. Both run in
+ * the background; the orchestrator hears the verdict as an event.
  */
 
-import fs from "fs";
-import os from "os";
-import path from "path";
 import type { Session } from "../db";
+import type { TaskPR } from "../tasks/state";
 import { prFor } from "../tasks/session";
 import { run } from "../tasks/gh";
 import { queueEvent } from "./events";
 import { clearStaleRunning, getCheck, putCheck, type CheckRow } from "./checks";
 import { runClaude, type ClaudeRunner } from "./claude-cli";
 import { changedFiles } from "./diff";
-import { checkScope } from "./scope";
+import { escalate } from "./escalate";
+import { escalations } from "./gates";
+import {
+  baseReviewSkill,
+  checkout,
+  fetchRefs,
+  removeCheckout,
+  repoOf,
+} from "./repo";
 import {
   REVIEW_SCHEMA,
   reviewPrompt,
   REVIEW_SYSTEM,
   toVerdict,
 } from "./review-prompt";
+import { checkScope } from "./scope";
 import { workspaceTask } from "./targets";
-import { expandHome } from "../tasks/session";
-import { getProject } from "../projects";
+import { untrusted } from "./untrusted";
 
 const short = (sha: string) => sha.slice(0, 7);
-const DIFF_CAP = 80000;
+// The most diff a reviewer is given; more goes to Saad.
+export const DIFF_CAP = 80000;
 
 export function describeReview(row: CheckRow): string {
   const at = short(row.sha);
@@ -40,104 +48,52 @@ export function describeReview(row: CheckRow): string {
     row.status === "pass"
       ? `Review of ${at}: pass.`
       : `Review of ${at}: blocking findings.`;
-  return row.detail ? `${head}\n${row.detail}` : head;
-}
-
-export function repoOf(task: Session): string {
-  const project = task.project_id ? getProject(task.project_id) : null;
-  if (!project) throw new Error("The task has no project");
-  return expandHome(project.working_directory);
-}
-
-// The task's base on origin, fetched along with its head.
-export async function fetchRefs(repo: string, task: Session): Promise<string> {
-  const base = task.base_branch || "main";
-  await run(
-    "git",
-    ["fetch", "--quiet", "origin", base, task.branch_name ?? base],
-    repo
-  ).catch(() => {});
-  const remote = `origin/${base}`;
-  const has = await run(
-    "git",
-    ["rev-parse", "--verify", "--quiet", remote],
-    repo
-  ).then(
-    () => true,
-    () => false
-  );
-  return has ? remote : base;
-}
-
-// A review skill the repository ships, as a path inside the checkout.
-export function reviewSkill(dir: string): string | null {
-  for (const sub of [".claude/skills", ".agents/skills"]) {
-    const root = path.join(dir, sub);
-    if (!fs.existsSync(root)) continue;
-    const name = fs.readdirSync(root).find((n) => /review/i.test(n));
-    const file = name && path.join(sub, name, "SKILL.md");
-    if (file && fs.existsSync(path.join(dir, file))) return file;
-  }
-  const cmd = path.join(dir, ".claude/commands");
-  const md =
-    fs.existsSync(cmd) &&
-    fs.readdirSync(cmd).find((n) => /review.*\.md$/i.test(n));
-  return md ? path.join(".claude/commands", md) : null;
+  return row.detail ? `${head}\n${untrusted("reviewer", row.detail)}` : head;
 }
 
 async function reviewJob(
   workspaceId: string,
   task: Session,
+  pr: TaskPR,
   sha: string,
   claude: ClaudeRunner
 ): Promise<CheckRow> {
+  const row = { workspaceId, sessionId: task.id, sha };
   const repo = repoOf(task);
   const base = await fetchRefs(repo, task);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-review-"));
+  const diff = await run(
+    "git",
+    ["diff", "--no-color", `${base}...${sha}`],
+    repo
+  );
+  if (diff.length > DIFF_CAP) {
+    const why = `PR #${pr.number}'s diff at ${short(sha)} is ${diff.length} characters, too big to review whole`;
+    escalate(workspaceId, task, "size", why, pr.url);
+    return putCheck({
+      ...row,
+      kind: "review",
+      status: "error",
+      detail: `${why}; it's with Saad`,
+    });
+  }
+  const files = await changedFiles(repo, base, sha);
+  const skill = await baseReviewSkill(repo, base);
+  const dir = await checkout(repo, sha);
   try {
-    await run("git", ["worktree", "add", "--detach", dir, sha], repo);
-    const files = await changedFiles(repo, base, sha);
-    const diff = (
-      await run("git", ["diff", "--no-color", `${base}...${sha}`], repo)
-    ).slice(0, DIFF_CAP);
     const answer = await claude({
       cwd: dir,
       system: REVIEW_SYSTEM,
-      prompt: reviewPrompt({
-        task,
-        sha,
-        base,
-        files,
-        diff,
-        skill: reviewSkill(dir),
-      }),
+      prompt: reviewPrompt({ task, sha, base, files, diff, skill }),
       schema: REVIEW_SCHEMA,
-      tools: ["Read", "Grep", "Glob", "Bash"],
-      allow: [
-        "Read",
-        "Grep",
-        "Glob",
-        "Bash(git diff:*)",
-        "Bash(git log:*)",
-        "Bash(git show:*)",
-      ],
+      tools: ["Read", "Grep", "Glob"],
+      allow: [`Read(/${dir}/**)`, `Grep(/${dir}/**)`, `Glob(/${dir}/**)`],
     });
-    const verdict = toVerdict(answer);
-    const row = putCheck({
-      workspaceId,
-      sessionId: task.id,
-      sha,
-      kind: "review",
-      ...verdict,
-    });
+    const done = putCheck({ ...row, kind: "review", ...toVerdict(answer) });
     if (task.lh_card_id)
       await checkScope({ workspaceId, task, sha, files, diff, claude });
-    return row;
+    return done;
   } finally {
-    await run("git", ["worktree", "remove", "--force", dir], repo).catch(
-      () => {}
-    );
-    fs.rmSync(dir, { recursive: true, force: true });
+    await removeCheckout(repo, dir);
   }
 }
 
@@ -150,6 +106,9 @@ export async function review(
   const task = workspaceTask(workspaceId, ref);
   if (task.task_status !== "running")
     throw new Error(`${task.name} is already ${task.task_status}`);
+  const held = escalations(task.id);
+  if (held.length)
+    return `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
   const pr = await prFor(task, true);
   if (!pr?.head) throw new Error(`${task.name} has no PR to review yet`);
   const sha = pr.head;
@@ -160,29 +119,21 @@ export async function review(
   )
     return describeReview(known);
 
-  putCheck({
-    workspaceId,
-    sessionId: task.id,
-    sha,
-    kind: "review",
-    status: "running",
-  });
-  const job = reviewJob(workspaceId, task, sha, opts.claude ?? runClaude)
+  const row = { workspaceId, sessionId: task.id, sha, kind: "review" as const };
+  putCheck({ ...row, status: "running" });
+  const job = reviewJob(workspaceId, task, pr, sha, opts.claude ?? runClaude)
     .catch((e: unknown) =>
       putCheck({
-        workspaceId,
-        sessionId: task.id,
-        sha,
-        kind: "review",
+        ...row,
         status: "error",
         detail: e instanceof Error ? e.message : String(e),
       })
     )
-    .then((row) => {
+    .then((done) => {
       const said =
-        row.status === "pass"
+        done.status === "pass"
           ? "passed"
-          : row.status === "block"
+          : done.status === "block"
             ? "found blocking issues"
             : "couldn't run";
       queueEvent(
@@ -191,7 +142,7 @@ export async function review(
         task.id,
         `task ${task.name}: review of ${short(sha)} ${said}`
       );
-      return row;
+      return done;
     });
   if (opts.wait) return describeReview(await job);
   return `Reviewing ${task.name} at ${short(sha)} (PR #${pr.number}) in a fresh read-only process. The verdict arrives as an event; call review again to read it.`;

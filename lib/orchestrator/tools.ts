@@ -10,25 +10,26 @@ import {
   tool,
   type McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
-import { z } from "zod";
-import type { ToolArgs, ToolName } from "./serve";
 import { ORCHESTRATOR_SERVER } from "./tool-names";
-import { actingTools } from "./tools-act";
+import { TOOL_SHAPES, TOOLS, type ToolName } from "./tool-schemas";
 
 type CallToolResult = Awaited<ReturnType<Parameters<typeof tool>[3]>>;
 
-export type ToolCaller = (tool: ToolName, args: ToolArgs) => Promise<string>;
+export type ToolCaller = (tool: ToolName, args: object) => Promise<string>;
+
+export const TOKEN_HEADER = "x-agentos-orchestrator";
 
 export function httpToolCaller(
   baseUrl: string,
-  workspaceId: string
+  workspaceId: string,
+  token: string
 ): ToolCaller {
   return async (name, args) => {
     const res = await fetch(
       `${baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/orchestrator/tools`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", [TOKEN_HEADER]: token },
         body: JSON.stringify({ tool: name, args }),
       }
     );
@@ -47,48 +48,39 @@ const answer = async (call: Promise<string>): Promise<CallToolResult> => {
   }
 };
 
+const DESCRIPTIONS: Record<ToolName, string> = {
+  sessions:
+    "Every session in this workspace: project, view, status, what it's doing, task/PR/CI state and stack position.",
+  read: "The end of one session's terminal or chat, as plain text (capped at about 4k tokens).",
+  cards: "Cards on this workspace's linked LumifyHub boards, by list.",
+  send: "Message a session in this workspace over the bus. It arrives as its next prompt.",
+  start_task:
+    "Start a task: an agent in its own worktree that ends in a PR. Refused while a brake holds.",
+  start_session:
+    "Start an interactive agent session in a project with a prompt. Refused while a brake holds.",
+  stack:
+    "Run a LumifyHub board's open cards as stacked tasks (each start braked), or with plan_only just show the plan.",
+  stack_status: "One stack's items, PRs and progress.",
+  land: "Merge a whole stack bottom-up, each PR through the sign-off gates at its current head.",
+  drop: "Reject a task: close its PR and remove its worktree. Logged with the reason.",
+  stop: "Stop a session's agent, keeping its worktree and branch.",
+  note: "Add a line to this workspace's decision log; it shows in your chat.",
+  review:
+    "Start an independent read-only review of a task's PR at its exact head commit, or read the stored verdict for that commit.",
+  sign_off:
+    "Squash-merge a task's PR through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Refuses with the failing gate.",
+};
+
 export function orchestratorTools(
   call: ToolCaller
 ): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: ORCHESTRATOR_SERVER,
     version: "1.0.0",
-    tools: [
-      tool(
-        "sessions",
-        "Every session in this workspace: project, view, status, what it's doing, task/PR/CI state and stack position.",
-        {},
-        () => answer(call("sessions", {}))
-      ),
-      tool(
-        "read",
-        "The end of one session's terminal or chat, as plain text (capped at about 4k tokens).",
-        {
-          session: z
-            .string()
-            .describe("Session name, project/name, or id from sessions"),
-          lines: z
-            .number()
-            .int()
-            .min(1)
-            .max(400)
-            .optional()
-            .describe("How many lines from the end (default 60)"),
-        },
-        (args) => answer(call("read", args))
-      ),
-      tool(
-        "cards",
-        "Cards on this workspace's linked LumifyHub boards, by list.",
-        {
-          board: z
-            .string()
-            .optional()
-            .describe("One board, by board or project name"),
-        },
-        (args) => answer(call("cards", args))
-      ),
-      ...actingTools((name, args) => answer(call(name, args))),
-    ],
+    tools: TOOLS.map((name) =>
+      tool(name, DESCRIPTIONS[name], TOOL_SHAPES[name], (args: object) =>
+        answer(call(name, args))
+      )
+    ),
   });
 }

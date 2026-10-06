@@ -107,7 +107,7 @@ export async function stack(
     workspaceId,
     "stack",
     () => startStack({ projectId: project.id }),
-    () => null
+    (v) => v.id
   );
   return `Started stack "${view.name}" (id ${view.id}, ${view.maxParallel} at a time):\n${stackItems(view.items)}`;
 }

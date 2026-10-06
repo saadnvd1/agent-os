@@ -6,7 +6,8 @@
 
 import { db } from "../db";
 
-export type CheckKind = "review" | "scope";
+// ci: when the check count on a commit last changed, for settling.
+export type CheckKind = "review" | "scope" | "ci";
 // running: under way. pass / block: done. error: the check itself failed.
 export type CheckStatus = "running" | "pass" | "block" | "error";
 

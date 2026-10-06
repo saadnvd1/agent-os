@@ -1,9 +1,11 @@
 /**
  * One-shot Claude runs in a fresh process, for checks that must not share
- * anything with the session being checked: `claude -p` with its own system
- * prompt (no user memory, no hooks from the user's settings), only the tools
- * named, everything else refused without asking, and a JSON schema for the
- * answer.
+ * anything with the session being checked, nor run anything the checked
+ * code ships: `claude -p` with its own system prompt, no settings from any
+ * source (so no hooks, MCP servers or allow rules from the repository under
+ * review, nor the user's), no MCP config but its own, an allowlisted
+ * environment, only the tools named, everything else refused without
+ * asking, and a JSON schema for the answer.
  */
 
 import { spawn } from "child_process";
@@ -24,12 +26,29 @@ export type ClaudeRunner = (run: ClaudeRun) => Promise<unknown>;
 
 const MODEL = process.env.AGENTOS_REVIEW_MODEL;
 
-// What a check's process may not inherit from the server.
-function cleanEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  for (const k of Object.keys(env))
-    if (k.startsWith("AGENTOS_") || k === "CLAUDECODE") delete env[k];
-  return env;
+// All a check's process gets from the server's environment: enough to run
+// and to sign in to Claude, nothing else.
+const ENV_ALLOW = [
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "TERM",
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+  "ANTHROPIC_API_KEY",
+];
+
+export function checkEnv(
+  from: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  const env: Record<string, string> = {};
+  for (const k of ENV_ALLOW) if (from[k] !== undefined) env[k] = from[k];
+  return env as NodeJS.ProcessEnv;
 }
 
 export function claudeArgs(run: ClaudeRun): string[] {
@@ -39,7 +58,8 @@ export function claudeArgs(run: ClaudeRun): string[] {
     "json",
     "--no-session-persistence",
     "--setting-sources",
-    "project",
+    "",
+    "--strict-mcp-config",
     "--permission-mode",
     "dontAsk",
     "--system-prompt",
@@ -52,6 +72,9 @@ export function claudeArgs(run: ClaudeRun): string[] {
     "Write",
     "MultiEdit",
     "NotebookEdit",
+    "Bash",
+    "WebFetch",
+    "WebSearch",
     "--json-schema",
     JSON.stringify(run.schema),
     ...(MODEL ? ["--model", MODEL] : []),
@@ -63,7 +86,7 @@ export const runClaude: ClaudeRunner = (run) =>
   new Promise((resolve, reject) => {
     const child = spawn("claude", claudeArgs(run), {
       cwd: run.cwd,
-      env: cleanEnv(),
+      env: checkEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     let out = "";

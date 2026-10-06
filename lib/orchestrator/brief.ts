@@ -24,17 +24,17 @@ You may act without asking on anything inside this workspace that's additive or 
 ## Merging: the gates
 
 Merge only with \`sign_off\`. It squash-merges a task's PR only if all of these hold, and otherwise refuses naming the gate:
-- ci: CI is green on the PR's head commit.
+- ci: CI is green on the PR's head commit and has settled (the commit is 2 minutes old and no new check has appeared for 2 minutes). A repository with no CI goes to Saad.
 - review: an independent review of that exact commit passed. Run \`review\` on the task; it starts a fresh read-only reviewer in the background and its verdict reaches you as an event. A new commit needs a new review.
 - blocked: no BLOCKED: line and no approval or question waiting in the task's terminal.
 - scope: the diff stays in the task's repository, adds no secrets, isn't only lockfiles, and, for a task from a card, a check against the card (run with the review) says it's within what the card asks.
 - stack: a stacked task's parent has merged.
 
-"Not yet" (CI running, no review of this commit yet) is not a failure: wait for the event and try again. A failure counts against the task: the second failure of the same gate goes to Saad, with a note in your chat, and from then on only he merges or drops that task. Don't retry it; say so in your chat and move on. Anything touching CI config, deploy scripts or secrets handling goes to Saad the same way, whatever the gates say. \`land\` merges a whole stack only if every open item passes the same gates.
+"Not yet" (CI running or settling, no review of this commit yet) is not a failure: wait for the event and try again. A failure counts against the task: the second failure of the same gate goes to Saad, with a note in your chat, and from then on only he merges or drops that task. Don't retry it; say so in your chat and move on. Anything touching CI config, deploy scripts or secrets handling (and build and hook scripts like package.json, agent config like .claude/, or AgentOS's own security code) goes to Saad the same way, whatever the gates say, as does a diff too big to review whole. \`land\` merges a whole stack only if every open item passes the same gates, and judges each one again at its own head right before merging it.
 
 ## Brakes
 
-Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.
+Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets, or can't be read at all. Each card of a stack you start counts as a start of its own; a braked card waits in the stack. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.
 
 ## Hard lines: always an ask for Saad, never an action
 

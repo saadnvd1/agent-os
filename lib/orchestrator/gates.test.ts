@@ -18,6 +18,7 @@ const check = (over: Partial<CheckRow> = {}): CheckRow => ({
 const input = (over: Partial<GateInput> = {}): GateInput => ({
   sha: SHA,
   checks: "pass",
+  settleIn: 0,
   review: check(),
   blocked: null,
   waitingOn: null,
@@ -35,14 +36,24 @@ describe("the merge gates", () => {
     expect(evaluateGates(input()).every((g) => g.state === "pass")).toBe(true);
   });
 
-  it("ci: waits while running, fails when red or absent", () => {
+  it("ci: waits while running or settling, fails when red, and no CI goes to Saad", () => {
     expect(gate(input({ checks: "pending" }), "ci").state).toBe("wait");
     expect(gate(input({ checks: "fail", failing: "test" }), "ci")).toEqual({
       gate: "ci",
       state: "fail",
-      reason: "CI failed on abc1234 (test)",
+      reason: 'CI failed on abc1234 (<untrusted source="CI">test</untrusted>)',
     });
-    expect(gate(input({ checks: "none" }), "ci").state).toBe("fail");
+    expect(gate(input({ settleIn: 40 }), "ci")).toMatchObject({
+      state: "wait",
+      reason: "CI is green on abc1234 but settling: 40s more with no new check",
+    });
+    expect(gate(input({ checks: "none", settleIn: 40 }), "ci").state).toBe(
+      "wait"
+    );
+    expect(gate(input({ checks: "none" }), "ci")).toMatchObject({
+      state: "escalate",
+      reason: expect.stringContaining("no checks to gate a merge on"),
+    });
   });
 
   it("review: only a pass of this exact commit counts", () => {
@@ -104,7 +115,9 @@ describe("the merge gates", () => {
       )
     ).toMatchObject({
       state: "fail",
-      reason: expect.stringContaining("out of scope: adds billing"),
+      reason: expect.stringContaining(
+        'out of scope: <untrusted source="scope check">adds billing</untrusted>'
+      ),
     });
     expect(
       gate(input({ fromCard: true, scope: check({ kind: "scope" }) }), "scope")
@@ -131,24 +144,53 @@ describe("the plain diff rules", () => {
     ]);
   });
 
-  it("sends CI, deploy and secrets-handling files to Saad", () => {
+  it("sends CI, build, agent, deploy and secrets-handling files to Saad", () => {
     const files = [
       ".github/workflows/ci.yml",
+      ".github/dependabot.yml",
+      "docs/CODEOWNERS",
+      "package.json",
+      "web/Makefile",
+      ".husky/pre-commit",
+      ".githooks/pre-push",
+      "lefthook.yml",
+      ".gitmodules",
+      ".claude/settings.json",
+      ".agent-os.json",
+      ".agent-os/worktrees.json",
+      ".dispatch.json",
       "scripts/autodeploy",
       "scripts/publish",
-      "Dockerfile",
+      "DockerFile",
       ".env.production",
       "lib/secrets.ts",
+      "lib/security/auth.ts",
+      "app/api/pair/route.ts",
       "src/app.ts",
       "README.md",
+      "lib/securityish.ts",
     ].map((p) => ({ path: p, status: "M" }));
     expect(sensitiveFiles(files).map((s) => `${s.path}:${s.why}`)).toEqual([
       ".github/workflows/ci.yml:CI config",
+      ".github/dependabot.yml:CI config",
+      "docs/CODEOWNERS:CI config",
+      "package.json:build and hook scripts",
+      "web/Makefile:build and hook scripts",
+      ".husky/pre-commit:build and hook scripts",
+      ".githooks/pre-push:build and hook scripts",
+      "lefthook.yml:build and hook scripts",
+      ".gitmodules:build and hook scripts",
+      ".claude/settings.json:agent config",
+      ".agent-os.json:agent config",
+      ".agent-os/worktrees.json:agent config",
+      ".dispatch.json:agent config",
       "scripts/autodeploy:deploy",
       "scripts/publish:deploy",
-      "Dockerfile:deploy",
+      "DockerFile:deploy",
       ".env.production:secrets handling",
       "lib/secrets.ts:secrets handling",
+      "lib/security/auth.ts:secrets handling",
+      "app/api/pair/route.ts:secrets handling",
     ]);
   });
 

@@ -66,15 +66,23 @@ export async function addedLines(repo: string, base: string, sha: string) {
 const SENSITIVE: { why: string; test: RegExp }[] = [
   {
     why: "CI config",
-    test: /^(\.github\/(workflows|actions)\/|\.gitlab-ci\.ya?ml$|\.circleci\/|\.buildkite\/|Jenkinsfile|\.travis\.ya?ml$|azure-pipelines\.ya?ml$|bitbucket-pipelines\.ya?ml$|\.husky\/)/,
+    test: /^(\.github\/|\.gitlab-ci\.ya?ml$|\.circleci\/|\.buildkite\/|jenkinsfile|\.travis\.ya?ml$|azure-pipelines\.ya?ml$|bitbucket-pipelines\.ya?ml$)|(^|\/)codeowners$/i,
+  },
+  {
+    why: "build and hook scripts",
+    test: /(^|\/)(package\.json|makefile|gnumakefile|\.gitmodules|lefthook(-local)?\.ya?ml|\.lefthook\/.*|\.pre-commit-config\.ya?ml)$|^(\.husky|\.githooks)\//i,
+  },
+  {
+    why: "agent config",
+    test: /^\.claude\/|(^|\/)(\.agent-os\.json|\.dispatch\.json|\.mcp\.json)$|^\.agent-os\//i,
   },
   {
     why: "deploy",
-    test: /(^|\/)((auto|re)?deploy|release|publish)([-_.][^/]*)?$|(^|\/)(deploy|k8s|helm|charts|terraform|infra)\/|\.tf$|(^|\/)(Dockerfile|docker-compose[^/]*\.ya?ml|fly\.toml|vercel\.json|netlify\.toml|Procfile)$/i,
+    test: /(^|\/)((auto|re)?deploy|release|publish)([-_.][^/]*)?$|(^|\/)(deploy|k8s|helm|charts|terraform|infra)\/|\.tf$|(^|\/)(dockerfile|docker-compose[^/]*\.ya?ml|fly\.toml|vercel\.json|netlify\.toml|procfile)$/i,
   },
   {
     why: "secrets handling",
-    test: /(^|\/)\.env(\.[^/]*)?$|(^|\/)[^/]*(secret|credential|tokenvault|keychain)[^/]*$|\.(pem|key|p12|pfx)$|(^|\/)(id_rsa|id_ed25519|\.npmrc|\.netrc)$|(^|\/)\.ssh\//i,
+    test: /(^|\/)\.env(\.[^/]*)?$|(^|\/)[^/]*(secret|credential|tokenvault|keychain)[^/]*$|\.(pem|key|p12|pfx)$|(^|\/)(id_rsa|id_ed25519|\.npmrc|\.netrc)$|(^|\/)\.ssh\/|^lib\/security\/|^app\/api\/pair\//i,
   },
 ];
 

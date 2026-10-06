@@ -1,19 +1,21 @@
 /**
  * The merge gates, ported from dispatch orchestrate. Each one passes, waits
- * (not ready yet: CI running, no review of this commit yet) or fails. Only
- * a failure counts against the task, and the second failure of the same
- * gate goes to Saad instead of being retried.
+ * (not ready yet: CI running or settling, no review of this commit yet),
+ * fails, or goes straight to Saad (no CI at all). Only a failure counts
+ * against the task, and the second failure of the same gate goes to Saad
+ * instead of being retried.
  */
 
 import { db } from "../db";
 import type { ChecksVerdict } from "../tasks/state";
 import type { CheckRow } from "./checks";
+import { untrusted } from "./untrusted";
 
 export type GateName = "ci" | "review" | "blocked" | "scope" | "stack";
 
 export interface GateOutcome {
   gate: GateName;
-  state: "pass" | "wait" | "fail";
+  state: "pass" | "wait" | "fail" | "escalate";
   reason?: string;
 }
 
@@ -21,6 +23,8 @@ export interface GateInput {
   sha: string;
   checks: ChecksVerdict;
   failing?: string | null;
+  // Seconds until CI on this commit counts as settled (tasks/task-state).
+  settleIn: number;
   review: CheckRow | null;
   // A BLOCKED: line, or an approval or question the agent is waiting on.
   blocked: string | null;
@@ -36,24 +40,31 @@ const short = (sha: string) => sha.slice(0, 7);
 
 function ciGate(i: GateInput): GateOutcome {
   const gate = "ci";
-  if (i.checks === "pass") return { gate, state: "pass" };
+  const at = short(i.sha);
   if (i.checks === "pending")
+    return { gate, state: "wait", reason: `CI is still running on ${at}` };
+  if (i.checks === "fail")
+    return {
+      gate,
+      state: "fail",
+      reason: `CI failed on ${at}${i.failing ? ` (${untrusted("CI", i.failing)})` : ""}`,
+    };
+  if (i.settleIn > 0)
     return {
       gate,
       state: "wait",
-      reason: `CI is still running on ${short(i.sha)}`,
+      reason:
+        i.checks === "none"
+          ? `no CI checks have registered on ${at} yet (looking again in ${i.settleIn}s)`
+          : `CI is green on ${at} but settling: ${i.settleIn}s more with no new check`,
     };
   if (i.checks === "none")
     return {
       gate,
-      state: "fail",
-      reason: `no CI checks ran on ${short(i.sha)}`,
+      state: "escalate",
+      reason: `no CI ran on ${at}: this repository has no checks to gate a merge on`,
     };
-  return {
-    gate,
-    state: "fail",
-    reason: `CI failed on ${short(i.sha)}${i.failing ? ` (${i.failing})` : ""}`,
-  };
+  return { gate, state: "pass" };
 }
 
 // A stored check of this exact commit: missing, running or broken waits.
@@ -85,7 +96,7 @@ function checkGate(
     return {
       gate,
       state: "fail",
-      reason: `the ${what} of ${short(sha)} ${gate === "review" ? "has blocking findings" : "says it's out of scope"}: ${(row.detail ?? "").split("\n").slice(0, 4).join(" ")}`,
+      reason: `the ${what} of ${short(sha)} ${gate === "review" ? "has blocking findings" : "says it's out of scope"}: ${untrusted(gate === "review" ? "reviewer" : "scope check", (row.detail ?? "").split("\n").slice(0, 4).join(" "))}`,
     };
   return { gate, state: "pass" };
 }

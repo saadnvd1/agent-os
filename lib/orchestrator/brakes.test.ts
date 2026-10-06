@@ -4,11 +4,11 @@ import path from "path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
 import { seedSession, seedWorkspace } from "./testing";
-import type { UsageWindow } from "./usage";
+import type { UsageState } from "./usage";
 
 // Sessions named "busy-*" are working; the rest are idle.
 const busy = new Set<string>();
-let window: UsageWindow | null = null;
+let usage: UsageState = { window: null };
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -36,7 +36,7 @@ vi.mock("@/lib/agents/spawn", () => ({
 }));
 vi.mock("./usage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./usage")>()),
-  readUsageWindow: () => window,
+  readUsage: () => usage,
 }));
 
 const { db } = await import("@/lib/db");
@@ -44,6 +44,9 @@ const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { listNotes } = await import("./notes");
 const { usageWindow, windowRefusal } = await import("./usage");
+// The real reader, under the mock the brakes use.
+const { readUsage } =
+  await vi.importActual<typeof import("./usage")>("./usage");
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-brakes-"));
@@ -51,7 +54,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   busy.clear();
-  window = null;
+  usage = { window: null };
 });
 
 function workspace() {
@@ -161,11 +164,83 @@ describe("the usage window brake", () => {
 
   it("refuses new starts while it would run out before resetting", async () => {
     const ws = workspace();
-    window = { pct: 80, resetsIn: 7200, burnPerMin: 2, capsIn: 600 };
+    usage = { window: { pct: 80, resetsIn: 7200, burnPerMin: 2, capsIn: 600 } };
     await expect(ws.start("x")).rejects.toThrow(
       /Brake: .*usage window is 80% used and at this rate runs out in 10m/
     );
-    window = { pct: 80, resetsIn: 600, burnPerMin: 0.5, capsIn: null };
+    usage = {
+      window: { pct: 80, resetsIn: 600, burnPerMin: 0.5, capsIn: null },
+    };
     await expect(ws.start("y")).resolves.toMatch(/Started/);
+  });
+
+  it("fails closed when the window can't be read or is 15 minutes stale", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-limits-"));
+    const file = path.join(dir, "limits.json");
+    expect(readUsage(file, now)).toEqual({
+      unknown: `the usage window can't be read (${file})`,
+    });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ window: now + 3600, samples: [[now - 16 * 60, 20]] })
+    );
+    expect(readUsage(file, now)).toEqual({
+      unknown:
+        "the usage window was last sampled 16m ago, so it can't be checked",
+    });
+    // Eleven minutes stale: no projection, but not unknown either.
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ window: now + 3600, samples: [[now - 11 * 60, 20]] })
+    );
+    expect(readUsage(file, now)).toEqual({ window: null });
+
+    const ws = workspace();
+    usage = readUsage(path.join(dir, "missing.json"), now);
+    await expect(ws.start("x")).rejects.toThrow(
+      /Brake: not starting a session: the usage window can't be read/
+    );
+    await expect(ws.start("y")).rejects.toThrow(/Brake/);
+    expect(
+      listNotes(ws.workspace.id).filter((n) => n.kind === "brake")
+    ).toHaveLength(1);
+  });
+});
+
+describe("a stack the orchestrator starts", () => {
+  it("brakes every card's start, not just the stack", async () => {
+    const { stackStartGate } = await import("./brakes");
+    const ws = workspace();
+    db.prepare(
+      `UPDATE workspaces SET orch_max_starts_per_hour = 2 WHERE id = ?`
+    ).run(ws.workspace.id);
+    db.prepare(
+      `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, 'stack', 'stack-1', ?)`
+    ).run(ws.workspace.id, ago(1000));
+    expect(await stackStartGate("stack-1", "card-a")).toBeNull();
+    expect(await stackStartGate("stack-1", "card-b")).toBeNull();
+    expect(await stackStartGate("stack-1", "card-c")).toMatch(
+      /Held by the orchestrator's brakes: 2 starts in the last hour/
+    );
+    // A stack a person started isn't the orchestrator's to hold.
+    expect(await stackStartGate("someone-elses-stack", "card-d")).toBeNull();
+  });
+
+  it("holds a braked card in the stack watcher, which starts nothing", async () => {
+    const { setStartGate, tickStack } = await import("@/lib/stacks/tick");
+    const { seedStack } = await import("@/lib/stacks/testing");
+    const s = seedStack(fs.mkdtempSync(path.join(os.tmpdir(), "aos-stack-")), [
+      { key: "A", status: "planned" },
+    ]);
+    const { stackQueries: q } = await import("@/lib/db");
+    setStartGate(async () => "Held by the orchestrator's brakes: test");
+    const start = vi.fn(async () => {});
+    await tickStack(q.get(db, s.stackId)!, { start, restack: async () => {} });
+    setStartGate(null);
+    expect(start).not.toHaveBeenCalled();
+    expect(s.item("A")).toMatchObject({
+      status: "planned",
+      note: "Held by the orchestrator's brakes: test",
+    });
   });
 });

@@ -500,6 +500,8 @@ const migrations: Migration[] = [
         `ALTER TABLE workspaces ADD COLUMN orch_max_starts_per_hour INTEGER NOT NULL DEFAULT 6`
       );
       db.exec(`ALTER TABLE workspaces ADD COLUMN orch_brake TEXT`);
+      // The secret an orchestrator's worker sends with each tool call.
+      db.exec(`ALTER TABLE sessions ADD COLUMN orch_token TEXT`);
       db.exec(`
         CREATE TABLE IF NOT EXISTS orchestrator_starts (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

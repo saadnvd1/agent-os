@@ -2,8 +2,11 @@
  * Where the account's 5-hour usage window stands, ported from dispatch's
  * `account_limit`. The statusline in ~/dev/dev-settings samples the window's
  * used percentage into limits.json, keyed on when it resets; this only reads
- * it. A file that's missing, stale or about a window that already reset says
- * nothing about now, so it's "unknown", never the last number seen.
+ * it. A sample that's a little stale or about a window that already reset
+ * says nothing about the burn rate, so the projection is skipped. But a
+ * file that's missing, unreadable or not sampled for 15 minutes means the
+ * window can't be checked at all, and then starts are refused: the brake
+ * fails closed.
  */
 
 import fs from "fs";
@@ -67,12 +70,33 @@ export function usageWindow(
   };
 }
 
-export function readUsageWindow(file = LIMITS_FILE): UsageWindow | null {
+// Past this the window can't be vouched for at all (seconds).
+const UNKNOWN_AFTER = 15 * 60;
+
+export type UsageState = { window: UsageWindow | null } | { unknown: string };
+
+export function readUsage(
+  file = LIMITS_FILE,
+  nowSec = Date.now() / 1000
+): UsageState {
+  let state: LimitsFile;
   try {
-    return usageWindow(JSON.parse(fs.readFileSync(file, "utf8")));
+    state = JSON.parse(fs.readFileSync(file, "utf8")) as LimitsFile;
   } catch {
-    return null;
+    return { unknown: `the usage window can't be read (${file})` };
   }
+  const samples = Array.isArray(state.samples)
+    ? (state.samples as unknown[][])
+    : [];
+  const newest = Number(samples.at(-1)?.[0]);
+  if (!Number.isFinite(newest))
+    return { unknown: "the usage window has no samples" };
+  const age = nowSec - newest;
+  if (age > UNKNOWN_AFTER)
+    return {
+      unknown: `the usage window was last sampled ${minutes(age)} ago, so it can't be checked`,
+    };
+  return { window: usageWindow(state, nowSec) };
 }
 
 function minutes(seconds: number): string {
@@ -81,7 +105,11 @@ function minutes(seconds: number): string {
 }
 
 // Why the window refuses a new start, or null.
-export function windowRefusal(w: UsageWindow | null): string | null {
+export function windowRefusal(
+  state: UsageState | UsageWindow | null
+): string | null {
+  if (state && "unknown" in state) return state.unknown;
+  const w = state && "window" in state ? state.window : state;
   if (!w) return null;
   if (w.pct >= 100)
     return `the usage window is used up; it resets in ${minutes(w.resetsIn)}`;

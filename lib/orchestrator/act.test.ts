@@ -192,3 +192,69 @@ describe("acting inside the workspace", () => {
     });
   });
 });
+
+describe("the tool route and its arguments", () => {
+  it("answers only the workspace's orchestrator worker", async () => {
+    const { POST } =
+      await import("@/app/api/workspaces/[id]/orchestrator/tools/route");
+    const { orchestratorToken } = await import("./home");
+    const { NextRequest } = await import("next/server");
+    const { mine, other } = twoWorkspaces();
+    const call = (id: string, token?: string) =>
+      POST(
+        new NextRequest(
+          `http://127.0.0.1/api/workspaces/${id}/orchestrator/tools`,
+          {
+            method: "POST",
+            headers: token ? { "x-agentos-orchestrator": token } : {},
+            body: JSON.stringify({ tool: "note", args: { text: "hi" } }),
+          }
+        ),
+        { params: Promise.resolve({ id }) }
+      );
+    const w = mine.workspace.id;
+    expect((await call(w)).status).toBe(403);
+    expect((await call(w, "nope")).status).toBe(403);
+    // Another workspace's secret isn't this one's.
+    expect((await call(w, orchestratorToken(other.workspace.id))).status).toBe(
+      403
+    );
+    const ok = await call(w, orchestratorToken(w));
+    expect(ok.status).toBe(200);
+    expect(await ok.text()).toBe("Noted.");
+  });
+
+  it("validates arguments, and a base must be a branch name", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    await expect(runTool(w, "send", { session: "add-auth" })).rejects.toThrow(
+      /Bad arguments for send: message/
+    );
+    await expect(
+      runTool(w, "note", { text: "x", extra: true })
+    ).rejects.toThrow(/Bad arguments for note/);
+    for (const base of ["-x", "--upload-pack=evil", "a..b", 'x";rm -rf ~;"'])
+      await expect(
+        runTool(w, "start_task", { project: mine.api.name, prompt: "p", base })
+      ).rejects.toThrow(/base not a branch name/);
+    const { isBranchName } = await import("@/lib/git");
+    expect(["main", "release/1.2", "feature/x_y-z"].every(isBranchName)).toBe(
+      true
+    );
+  });
+});
+
+describe("the check process", () => {
+  it("gets only an allowlisted environment", async () => {
+    const { checkEnv } = await import("./claude-cli");
+    expect(
+      checkEnv({
+        PATH: "/bin",
+        HOME: "/h",
+        GITHUB_TOKEN: "secret",
+        AGENTOS_URL: "http://x",
+        AWS_SECRET_ACCESS_KEY: "k",
+      } as unknown as NodeJS.ProcessEnv)
+    ).toEqual({ PATH: "/bin", HOME: "/h" });
+  });
+});
