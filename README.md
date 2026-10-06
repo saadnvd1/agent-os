@@ -107,6 +107,18 @@ the same project.
 On other machines, files, git, worktrees, dev servers and summarize are not
 available yet; the terminal, status, rename and send-keys are.
 
+## Development
+
+```bash
+npm run dev          # http://localhost:3011
+npm test             # vitest
+npm run lint         # eslint
+npm run check        # typecheck, lint, format and tests: what CI runs
+```
+
+A pre-commit hook formats and lints staged files, then typechecks and runs the
+tests. CI runs `scripts/check --build` on every pull request and push to main.
+
 ## CLI Commands
 
 ```bash

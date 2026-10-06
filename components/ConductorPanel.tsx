@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { WorkerCard, type WorkerInfo, type WorkerStatus } from "./WorkerCard";
+import { WorkerCard, type WorkerInfo } from "./WorkerCard";
 import { Button } from "./ui/button";
 import {
   RefreshCw,
@@ -166,7 +166,9 @@ export function ConductorPanel({
       <div className="text-muted-foreground flex h-full flex-col items-center justify-center">
         <Users className="mb-4 h-12 w-12 opacity-50" />
         <p className="text-lg font-medium">No workers yet</p>
-        <p className="text-sm">This conductor hasn't spawned any workers.</p>
+        <p className="text-sm">
+          This conductor hasn&apos;t spawned any workers.
+        </p>
         <p className="mt-4 max-w-md text-center text-xs">
           Use the MCP tools or API to spawn workers. The conductor can delegate
           tasks to parallel worker sessions.

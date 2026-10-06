@@ -7,7 +7,6 @@ import {
   isGitRepo,
   expandPath,
   type GitFile,
-  type GitStatus,
 } from "./git-status";
 import type { ProjectRepository } from "./db";
 

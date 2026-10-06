@@ -44,7 +44,7 @@ const SWIPE_THRESHOLD = 80;
 export function FileChanges({
   files,
   title,
-  emptyMessage,
+  emptyMessage: _emptyMessage,
   selectedPath,
   onFileClick,
   onStage,
@@ -99,7 +99,11 @@ export function FileChanges({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              isStaged ? onUnstageAll?.() : onStageAll?.();
+              if (isStaged) {
+                onUnstageAll?.();
+              } else {
+                onStageAll?.();
+              }
             }}
             className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
           >

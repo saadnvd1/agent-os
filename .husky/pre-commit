@@ -1,13 +1,25 @@
-echo "🔍 Running pre-commit checks..."
+# Format and lint what is staged, then typecheck and run the tests.
+# Formatting and lint fixes REWRITE the staged files and re-add them; the rest
+# only reports. Skip with `git commit --no-verify` for a work-in-progress.
+set -e
 
-echo "💅 Formatting staged files..."
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(js|jsx|ts|tsx|json|css|md)$' || true)
-if [ -n "$STAGED_FILES" ]; then
-  echo "$STAGED_FILES" | xargs npx prettier --write
-  echo "$STAGED_FILES" | xargs git add
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+FORMAT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx|json|css|md)$' | grep -v '^package-lock.json$' || true)
+LINT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx)$' || true)
+
+if [ -n "$FORMAT" ]; then
+  echo "▸ prettier"
+  echo "$FORMAT" | xargs npx prettier --write --log-level warn
 fi
+if [ -n "$LINT" ]; then
+  echo "▸ eslint"
+  echo "$LINT" | xargs npx eslint --fix --no-warn-ignored
+fi
+[ -n "$FORMAT$LINT" ] && echo "$FORMAT
+$LINT" | grep . | sort -u | xargs git add
 
-echo "📝 Type checking..."
-npm run typecheck
-
-echo "✅ Pre-commit checks passed!"
+echo "▸ typecheck"
+npm run typecheck --silent
+echo "▸ tests"
+npx vitest run --silent
+echo "✓ pre-commit passed"

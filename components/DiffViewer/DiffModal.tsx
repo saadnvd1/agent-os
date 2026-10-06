@@ -4,7 +4,6 @@ import { X, Plus, Minus, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UnifiedDiff } from "./UnifiedDiff";
 import { parseDiff, getDiffFileName, getDiffSummary } from "@/lib/diff-parser";
-import { cn } from "@/lib/utils";
 
 interface DiffModalProps {
   diff: string;

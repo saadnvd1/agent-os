@@ -32,17 +32,20 @@
     "build": "next build",
     "prestart": "node scripts/ensure-native.mjs",
     "start": "NODE_ENV=production tsx server.ts",
-    "lint": "eslint .",
-    "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test",
     "setup": "bash scripts/setup.sh",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
     "prepare": "husky",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:build:linux": "docker build -t agentos-linux -f src-tauri/Dockerfile.linux src-tauri && docker run --rm -v $(pwd)/src-tauri/target:/app/target agentos-linux"
+    "tauri:build:linux": "docker build -t agentos-linux -f src-tauri/Dockerfile.linux src-tauri && docker run --rm -v $(pwd)/src-tauri/target:/app/target agentos-linux",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "scripts/check"
   },
   "repository": {
     "type": "git",
@@ -135,7 +138,8 @@
     "tailwindcss": "^4.1.18",
     "tsx": "^4.23.15",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "dompurify": "^3.4.16",

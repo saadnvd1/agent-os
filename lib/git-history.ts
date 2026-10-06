@@ -241,7 +241,7 @@ export function getCommitDetail(
     }
 
     // Get total stats
-    let totalFilesChanged = files.length;
+    const totalFilesChanged = files.length;
     let totalAdditions = 0;
     let totalDeletions = 0;
     for (const file of files) {

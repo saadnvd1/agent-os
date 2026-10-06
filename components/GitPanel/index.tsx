@@ -572,7 +572,7 @@ function MobileGitPanel({
   onUnstageAll,
   onBack,
   onCommit,
-  onShowPRModal,
+  onShowPRModal: _onShowPRModal,
   onClosePRModal,
   onCreatePR,
 }: MobileGitPanelProps) {

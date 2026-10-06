@@ -1,4 +1,4 @@
-import type { Session, Group } from "@/lib/db";
+import type { Session } from "@/lib/db";
 
 export interface SessionStatus {
   sessionName: string;

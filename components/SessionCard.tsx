@@ -38,7 +38,6 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "./ui/context-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import type { Session, Group } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 

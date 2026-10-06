@@ -6,7 +6,6 @@ export { gitKeys };
 import type { CommitSummary, CommitDetail } from "@/lib/git-history";
 import type { GitStatus } from "@/lib/git-status";
 import type { MultiRepoGitStatus } from "@/lib/multi-repo-git";
-import type { ProjectRepository } from "@/lib/db";
 
 export interface PRInfo {
   number: number;

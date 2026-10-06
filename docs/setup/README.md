@@ -66,13 +66,13 @@ The installer can automatically install these on macOS and Linux:
 
 You need at least one AI coding CLI installed. The installer will prompt you to choose:
 
-| CLI         | Provider  | Install Command                            |
-| ----------- | --------- | ------------------------------------------ |
-| Claude Code | Anthropic | `npm install -g @anthropic-ai/claude-code` |
-| Codex       | OpenAI    | `npm install -g @openai/codex`             |
-| Aider       | Multi-LLM | `pip install aider-chat`                   |
-| Gemini CLI  | Google    | `npm install -g gemini-cli`                |
-| Kilo Code CLI | Kilo   | `npm install -g @kilocode/cli`             |
+| CLI           | Provider  | Install Command                            |
+| ------------- | --------- | ------------------------------------------ |
+| Claude Code   | Anthropic | `npm install -g @anthropic-ai/claude-code` |
+| Codex         | OpenAI    | `npm install -g @openai/codex`             |
+| Aider         | Multi-LLM | `pip install aider-chat`                   |
+| Gemini CLI    | Google    | `npm install -g gemini-cli`                |
+| Kilo Code CLI | Kilo      | `npm install -g @kilocode/cli`             |
 
 ## Configuration
 
