@@ -17,8 +17,10 @@ import {
   Server,
   LayoutGrid,
   ListTodo,
+  MessagesSquare,
 } from "lucide-react";
 import { tasksUiActions } from "@/stores/tasksUi";
+import { busUiActions } from "@/stores/busUi";
 
 interface SessionListHeaderProps {
   onNewProject: () => void;
@@ -93,6 +95,7 @@ export function SessionListHeader({
             menuItem("New Workspace", onNewWorkspace, { icon: LayoutGrid }),
             menuItem("New Task", tasksUiActions.openNew, { icon: ListTodo }),
             menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
+            menuItem("Messages", busUiActions.open, { icon: MessagesSquare }),
             menuItem("Open Project", onOpenProject, { icon: FolderOpen }),
             menuItem("Clone from GitHub", onCloneFromGithub, {
               icon: GitBranch,

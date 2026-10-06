@@ -7,6 +7,9 @@ export interface AttachSpec {
   hostId?: string;
   // Reattach only; never create a bare session in place of a dead one.
   attachOnly?: boolean;
+  // The AgentOS session this is; the server turns it into the bus env.
+  sessionId?: string;
+  env?: Record<string, string>;
 }
 
 const TMUX_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -35,6 +38,9 @@ export function buildTmuxAttachCommand(spec: AttachSpec): string {
   }
   const parts = ["new-session", "-A", "-s", spec.sessionName];
   if (spec.cwd) parts.push("-c", cwdArg(spec.cwd));
+  for (const [k, v] of Object.entries(spec.env ?? {})) {
+    parts.push("-e", shellQuote(`${k}=${v}`));
+  }
   if (spec.command) parts.push(shellQuote(spec.command));
   return `${prefix} ${parts.join(" ")}`;
 }

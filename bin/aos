@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+// aos: talk to other agent sessions through AgentOS.
+// Sessions started by AgentOS have AGENTOS_SESSION_ID and AGENTOS_URL set.
+
+const url = process.env.AGENTOS_URL || "http://127.0.0.1:3011";
+const me = process.env.AGENTOS_SESSION_ID || null;
+const [cmd, ...args] = process.argv.slice(2);
+
+const usage = `aos: talk to other agent sessions in AgentOS
+
+  aos peers                          sessions, their project and what each is doing
+  aos send <session> <message...>    message a session (name, project/name or id)
+  aos inbox                          read messages sent to you
+  aos history <session>              your conversation with a session
+  aos spawn <project> <prompt...>    start a new agent session in a project
+  aos task <project> <prompt...>     start a background task that ends in a PR`;
+
+async function call(path, init) {
+  let res;
+  try {
+    res = await fetch(url + path, init);
+  } catch {
+    fail(`can't reach AgentOS at ${url}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) fail(data.error || `request failed (${res.status})`);
+  return data;
+}
+
+const post = (path, body) =>
+  call(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+function fail(msg) {
+  console.error(`aos: ${msg}`);
+  process.exit(1);
+}
+
+function needMe() {
+  if (!me) fail("not inside an AgentOS session (AGENTOS_SESSION_ID is unset)");
+}
+
+const show = (m) =>
+  `${m.createdAt}  ${m.fromName} → ${m.toName}\n  ${m.body.replace(/\n/g, "\n  ")}`;
+
+async function main() {
+  switch (cmd) {
+    case "peers": {
+      const { peers } = await call("/api/bus/peers");
+      for (const p of peers) {
+        if (p.id === me) continue;
+        const where = p.projectName ? `${p.projectName}/` : "";
+        const state = p.running ? p.doing || "running" : "not running";
+        console.log(`${where}${p.name}  ·  ${state}`);
+      }
+      return;
+    }
+    case "send": {
+      needMe();
+      const [to, ...words] = args;
+      if (!to || !words.length) fail("usage: aos send <session> <message...>");
+      const { message } = await post("/api/bus/send", {
+        from: me,
+        to,
+        body: words.join(" "),
+      });
+      console.log(`sent to ${message.toName}`);
+      return;
+    }
+    case "inbox": {
+      needMe();
+      const { messages } = await call(
+        `/api/bus/inbox?session=${encodeURIComponent(me)}`
+      );
+      console.log(
+        messages.length ? messages.map(show).join("\n\n") : "no new messages"
+      );
+      return;
+    }
+    case "history": {
+      needMe();
+      const [other] = args;
+      if (!other) fail("usage: aos history <session>");
+      const { peers } = await call("/api/bus/peers");
+      const peer = peers.find(
+        (p) => p.name.toLowerCase() === other.toLowerCase() || p.id === other
+      );
+      if (!peer) fail(`no session called "${other}"`);
+      const { messages } = await call(
+        `/api/bus/messages?session=${encodeURIComponent(me)}`
+      );
+      const thread = messages.filter(
+        (m) => m.fromId === peer.id || m.toId === peer.id
+      );
+      console.log(
+        thread.length ? thread.map(show).join("\n\n") : "no messages yet"
+      );
+      return;
+    }
+    case "spawn":
+    case "task": {
+      const [project, ...words] = args;
+      if (!project || !words.length)
+        fail(`usage: aos ${cmd} <project> <prompt...>`);
+      const { session } = await post("/api/bus/spawn", {
+        project,
+        prompt: words.join(" "),
+        mode: cmd === "task" ? "task" : "session",
+      });
+      console.log(
+        `started ${cmd === "task" ? "task" : "session"} "${session.name}"`
+      );
+      return;
+    }
+    default:
+      console.log(usage);
+      process.exit(cmd && cmd !== "help" && cmd !== "--help" ? 1 : 0);
+  }
+}
+
+main();

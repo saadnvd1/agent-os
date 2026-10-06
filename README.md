@@ -104,6 +104,26 @@ the PR and removes everything. Agents never merge their own work.
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
 
+## Agent network
+
+Sessions started by AgentOS can find and talk to each other without you,
+through the `aos` command on their PATH (any agent CLI can use it; Claude is
+also briefed on it):
+
+```bash
+aos peers                         # sessions, their project, what each is doing
+aos send <session> "message"      # wakes the other session with the message
+aos inbox                         # read messages sent to you
+aos history <session>             # your conversation with a session
+aos spawn <project> "prompt"      # start a new agent session in a project
+aos task <project> "prompt"       # start a background task that ends in a PR
+```
+
+Messages are delivered by typing them into the recipient's terminal, labelled
+as coming from another agent, and a rate limit stops two agents looping. The
+**Messages** panel shows every conversation and lets you message any session.
+Sessions on other machines can receive messages but not yet send them.
+
 ## Workspaces
 
 Group projects into workspaces (e.g. Work, Personal) from the **+** menu.

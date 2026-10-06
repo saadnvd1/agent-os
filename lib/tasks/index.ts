@@ -5,9 +5,7 @@
  */
 
 import { randomUUID } from "crypto";
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
 import { createWorktree, deleteWorktree } from "../worktrees";
@@ -16,12 +14,11 @@ import { getDefaultBranch, slugify } from "../git";
 import { runInBackground } from "../async-operations";
 import { resolveModelForAgent } from "../model-catalog";
 import { getProvider } from "../providers";
-import { shellQuote } from "../hosts/ssh";
+import { launchClaude } from "../agents/launch";
 import { statusDetector } from "../status-detector";
 import { buildTaskBrief } from "./brief";
 import { findPR, run } from "./gh";
 import {
-  trustPromptKeys,
   canSignOff,
   deriveTaskState,
   isBlocked,
@@ -30,8 +27,6 @@ import {
 } from "./state";
 
 export * from "./state";
-
-const TASKS_DIR = path.join(os.homedir(), ".agent-os", "tasks");
 
 export interface TaskView {
   id: string;
@@ -114,47 +109,16 @@ export async function createTask(opts: {
     `UPDATE sessions SET task_prompt = ?, task_status = 'running' WHERE id = ?`
   ).run(prompt, id);
 
-  fs.mkdirSync(TASKS_DIR, { recursive: true });
-  const promptFile = path.join(TASKS_DIR, `${id}.prompt.md`);
-  const briefFile = path.join(TASKS_DIR, `${id}.brief.md`);
-  fs.writeFileSync(promptFile, prompt);
-  fs.writeFileSync(
-    briefFile,
-    buildTaskBrief({ branch: wt.branchName, baseBranch })
-  );
-
-  // Prompt and brief come from files so no quoting can mangle them, and the
-  // shell left behind keeps the pane usable after the agent exits.
-  const flags = provider.buildFlags({ autoApprove: true, model }).join(" ");
-  const agent = `export PATH="$HOME/.local/bin:$PATH"; ${provider.command} ${flags} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
-  await run(
-    "tmux",
-    ["new-session", "-d", "-s", tmuxName, "-c", wt.worktreePath, agent],
-    projectPath
-  );
-  runInBackground(() => acceptTrustPrompt(tmuxName), `trust-${id}`);
+  await launchClaude({
+    sessionId: id,
+    tmuxName,
+    cwd: wt.worktreePath,
+    model,
+    prompt,
+    brief: buildTaskBrief({ branch: wt.branchName, baseBranch }),
+  });
 
   return queries.getSession(db).get(id) as Session;
-}
-
-// A fresh worktree is a folder Claude has never seen, so it asks whether to
-// trust it, with "No, exit" selected. Move to the trust option, then confirm.
-async function acceptTrustPrompt(tmuxName: string): Promise<void> {
-  const target = `=${tmuxName}:`;
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
-    try {
-      const pane = await run("tmux", ["capture-pane", "-t", target, "-p"], "/");
-      const choice = trustPromptKeys(pane);
-      if (choice) {
-        await run("tmux", ["send-keys", "-t", target, ...choice], "/");
-        return;
-      }
-      if (/bypass permissions|\? for shortcuts/i.test(pane)) return;
-    } catch {
-      return;
-    }
-  }
 }
 
 function taskSessions(): Session[] {
