@@ -124,6 +124,8 @@ export const Pane = memo(function Pane({
     ? sessions.find((s) => s.id === activeTab.sessionId)
     : null;
   const isLocalSession = !session?.host_id || session.host_id === "local";
+  // An orchestrator works through tools in a scratch folder: no repo to show.
+  const showGitDrawer = gitDrawerOpen && session?.role !== "orchestrator";
   // A tab whose session runs as chat shows the conversation, not a terminal.
   const chatSessionFor = (tab: { sessionId: string | null }) => {
     const s = tab.sessionId
@@ -360,6 +362,7 @@ export const Pane = memo(function Pane({
                   <ChatPanel
                     sessionId={chatSessionFor(tab)!.id}
                     sessionName={chatSessionFor(tab)!.name}
+                    accessLocked={chatSessionFor(tab)!.role === "orchestrator"}
                   />
                 ) : (
                   <Terminal
@@ -434,7 +437,7 @@ export const Pane = memo(function Pane({
           className="min-h-0 flex-1"
         >
           {/* Left column: Main content + Shell drawer */}
-          <ResizablePanel defaultSize={gitDrawerOpen ? 70 : 100} minSize={20}>
+          <ResizablePanel defaultSize={showGitDrawer ? 70 : 100} minSize={20}>
             <ResizablePanelGroup orientation="vertical" className="h-full">
               {/* Main content */}
               <ResizablePanel
@@ -463,6 +466,9 @@ export const Pane = memo(function Pane({
                           <ChatPanel
                             sessionId={chatSessionFor(tab)!.id}
                             sessionName={chatSessionFor(tab)!.name}
+                            accessLocked={
+                              chatSessionFor(tab)!.role === "orchestrator"
+                            }
                           />
                         ) : (
                           <Terminal
@@ -546,7 +552,7 @@ export const Pane = memo(function Pane({
           </ResizablePanel>
 
           {/* Git drawer - right side, full height */}
-          {gitDrawerOpen && session?.working_directory && isLocalSession && (
+          {showGitDrawer && session?.working_directory && isLocalSession && (
             <>
               <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 w-px cursor-col-resize transition-colors" />
               <ResizablePanel defaultSize={30} minSize={10}>

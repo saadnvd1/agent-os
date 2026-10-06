@@ -72,9 +72,12 @@ export const claudeDriver: ChatDriver = {
         model: options.model,
         resume: options.resumeId ?? undefined,
         resumeSessionAt: options.resumeAt ?? undefined,
-        permissionMode: SDK_MODE[options.access],
+        permissionMode: options.permissionMode ?? SDK_MODE[options.access],
         allowDangerouslySkipPermissions: true,
         canUseTool: approvals.canUseTool,
+        mcpServers: options.mcpServers,
+        allowedTools: options.allowedTools,
+        disallowedTools: options.disallowedTools,
         hooks: {
           PreToolUse: [
             {
@@ -145,6 +148,7 @@ export const claudeDriver: ChatDriver = {
         await q.setModel(model);
       },
       async setAccess(access) {
+        if (options.permissionMode) return;
         await q.setPermissionMode(SDK_MODE[access]);
       },
       respond(id, answer) {

@@ -22,14 +22,17 @@ function latestChatItem(sessionId: string): ChatItem | null {
 
 // A session needs you when it's blocked on you (an approval or a question),
 // or it finished something you haven't looked at since. A live session you
-// have already seen is just idle.
+// have already seen is just idle. An orchestrator works on its own, so only
+// a card waiting on you counts: finishing a turn is routine for it.
 export function needsYou(
-  session: Pick<Session, "id" | "view" | "updated_at" | "last_seen_at">,
+  session: Pick<Session, "id" | "view" | "updated_at" | "last_seen_at"> &
+    Partial<Pick<Session, "role">>,
   chatState: ChatState | null
 ): boolean {
   const seen = sqliteMs(session.last_seen_at);
   if (session.view === "chat") {
     if (chatState === "waiting") return true;
+    if (session.role === "orchestrator") return false;
     const latest = latestChatItem(session.id);
     return latest?.kind === "turn_end" && latest.createdAt > seen;
   }

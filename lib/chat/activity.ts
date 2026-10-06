@@ -1,4 +1,5 @@
 import type { ChatState } from "./events";
+import { formatElapsed } from "./elapsed";
 import { registry, type Live } from "./registry";
 import { listItems } from "./store";
 import type { WorkerEvent } from "./worker/protocol";
@@ -56,4 +57,18 @@ export function chatActivity(
   return tool
     ? { label: tool.label, since: tool.since, background }
     : { label: "Thinking", since: a.turnStartedAt, background };
+}
+
+// The same as one line: "Run the tests · 2m 14s · 1 running in background".
+export function chatActivityLine(sessionId: string): string | null {
+  const a = chatActivity(sessionId);
+  if (!a) return null;
+  const background = a.background
+    ? `${a.background} running in background`
+    : "";
+  if (a.label === "Idle") return background || null;
+  const parts = [a.label];
+  if (a.since) parts.push(formatElapsed(Date.now() - a.since));
+  if (background) parts.push(background);
+  return parts.join(" · ");
 }

@@ -24,8 +24,8 @@ import {
   taskCardUrl,
 } from "../lumifyhub/task-cards";
 import {
+  blockedReason,
   deriveTaskState,
-  isBlocked,
   type TaskPR,
   type TaskState,
 } from "./state";
@@ -46,6 +46,8 @@ export interface TaskView {
   tmuxName: string;
   state: TaskState;
   pr: TaskPR | null;
+  // What its last BLOCKED: line asked for, while it's blocked.
+  blocked: string | null;
   // The task's card on the project's LumifyHub board, when it has one.
   cardUrl: string | null;
   createdAt: string;
@@ -169,7 +171,7 @@ async function shellOnly(tmuxName: string): Promise<boolean> {
   }
 }
 
-async function viewOf(session: Session): Promise<TaskView> {
+export async function taskView(session: Session): Promise<TaskView> {
   const live = session.task_status === "running";
   const [pr, sessionStatus] = await Promise.all([
     prFor(session),
@@ -183,19 +185,19 @@ async function viewOf(session: Session): Promise<TaskView> {
       : false;
   const blocked =
     live && sessionStatus === "waiting"
-      ? isBlocked(
+      ? blockedReason(
           (await statusDetector.capturePane(session.tmux_name))
             .split("\n")
             .slice(-15)
             .join("\n")
         )
-      : false;
+      : null;
   const project = session.project_id ? getProject(session.project_id) : null;
   const state = deriveTaskState({
     taskStatus: session.task_status ?? "running",
     sessionStatus: agentGone ? "dead" : sessionStatus,
     pr,
-    blocked,
+    blocked: blocked !== null,
   });
   syncTaskCardInBackground(session, state, pr);
   return {
@@ -209,11 +211,12 @@ async function viewOf(session: Session): Promise<TaskView> {
     tmuxName: session.tmux_name,
     state,
     pr,
+    blocked,
     cardUrl: taskCardUrl(session),
     createdAt: session.created_at,
   };
 }
 
 export async function listTasks(): Promise<TaskView[]> {
-  return Promise.all(taskSessions().map(viewOf));
+  return Promise.all(taskSessions().map(taskView));
 }

@@ -65,6 +65,12 @@ export function deleteWorkspace(id: string): void {
       `UPDATE projects SET workspace_id = NULL WHERE workspace_id = ?`
     ).run(id);
     db.prepare(`DELETE FROM workspaces WHERE id = ?`).run(id);
+    // Its orchestrator goes with it; a running worker idles out on its own.
+    db.prepare(
+      `DELETE FROM sessions WHERE role = 'orchestrator' AND workspace_id = ?`
+    ).run(id);
+    for (const table of ["orchestrator_events", "orchestrator_event_log"])
+      db.prepare(`DELETE FROM ${table} WHERE workspace_id = ?`).run(id);
   })();
 }
 

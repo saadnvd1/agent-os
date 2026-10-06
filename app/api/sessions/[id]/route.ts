@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { deletionRefusal } from "@/lib/orchestrator/home";
 import { getDb, queries, type Session } from "@/lib/db";
 import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
@@ -196,6 +197,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+    const refusal = deletionRefusal(existing);
+    if (refusal) return NextResponse.json({ error: refusal }, { status: 409 });
 
     // If this is a conductor, delete all its workers first
     const workers = queries.getWorkersByConductor(db).all(id) as Session[];

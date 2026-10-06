@@ -10,7 +10,7 @@ import { agentEnv } from "../../agents/launch";
 import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
-import type { ChatConversation } from "../driver";
+import type { ChatConversation, ChatStartOptions } from "../driver";
 import type { ChatItem, ChatState } from "../events";
 import { listItems, saveItem, settle } from "../store";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
@@ -24,7 +24,16 @@ export class ChatHost {
 
   constructor(
     private session: Session,
-    private emit: (e: WorkerEvent) => void
+    private emit: (e: WorkerEvent) => void,
+    // What a session's role adds: its brief and its own tools.
+    extras: Pick<
+      ChatStartOptions,
+      | "systemAppend"
+      | "mcpServers"
+      | "allowedTools"
+      | "disallowedTools"
+      | "permissionMode"
+    > = {}
   ) {
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
@@ -36,8 +45,14 @@ export class ChatHost {
       resumeId: session.claude_session_id,
       resumeAt: session.chat_resume_at,
       access: session.chat_access ?? "full",
-      systemAppend: BUS_BRIEF,
+      systemAppend: [extras.systemAppend, BUS_BRIEF]
+        .filter(Boolean)
+        .join("\n\n"),
       env: agentEnv(session.id),
+      mcpServers: extras.mcpServers,
+      allowedTools: extras.allowedTools,
+      disallowedTools: extras.disallowedTools,
+      permissionMode: extras.permissionMode,
     });
     // Sends that already made it in, from before a reconnect.
     for (const item of listItems(session.id))
