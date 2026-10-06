@@ -28,6 +28,9 @@ import {
   upgradeAllowed,
   type AccessPolicy,
 } from "./lib/security/net";
+import { authPolicy, gateRequest, gateUpgrade } from "./lib/security/gate";
+import { lanEnabled } from "./lib/security/network-settings";
+import os from "os";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -45,11 +48,13 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const policy: AccessPolicy = {
     bound: [],
-    extraHosts: (process.env.AGENTOS_ALLOWED_HOSTS ?? "")
-      .split(",")
-      .map((h) => h.trim().toLowerCase())
-      .filter(Boolean),
+    extraHosts: [],
   };
+  const configuredHosts = (process.env.AGENTOS_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  const auth = authPolicy();
   const header = (v: string | string[] | undefined) =>
     Array.isArray(v) ? v[0] : v;
 
@@ -71,6 +76,7 @@ app.prepare().then(() => {
       res.end("forbidden");
       return;
     }
+    if (!gateRequest(req, res, auth)) return;
     try {
       const parsedUrl = parse(req.url!, true);
       await handle(req, res, parsedUrl);
@@ -162,6 +168,7 @@ app.prepare().then(() => {
       socket.destroy();
       return;
     }
+    if (!gateUpgrade(request, socket, auth)) return;
     const { pathname } = parse(request.url || "");
 
     if (pathname === "/ws/chat") {
@@ -295,25 +302,58 @@ app.prepare().then(() => {
   });
 
   // One listener per allowed address: loopback and Tailscale by default,
-  // never Wi-Fi or other networks unless AGENTOS_BIND opts in. Tailscale can
-  // come up after AgentOS, so its address is picked up when it appears.
+  // Wi-Fi only when Settings → Devices turns it on (or AGENTOS_BIND opts in).
+  // Addresses come and go (Tailscale starts late, Wi-Fi changes), so the set
+  // is re-read every few seconds and listeners follow it.
+  const listeners = new Map<string, ReturnType<typeof createServer>>();
   const listenOn = (address: string) => {
-    if (policy.bound.includes(address)) return;
+    if (listeners.has(address)) return;
     policy.bound.push(address);
     const server = createServer(onRequest);
+    listeners.set(address, server);
     server.on("upgrade", onUpgrade);
     server.on("error", (err) => {
       console.error(`Could not listen on ${address}:${port}:`, err.message);
-      policy.bound = policy.bound.filter((a) => a !== address);
+      stopListening(address);
     });
     server.listen(port, address, () => {
       console.log(`> Agent-OS ready on http://${address}:${port}`);
     });
   };
-  const refreshListeners = () =>
-    bindAddresses(process.env.AGENTOS_BIND).forEach(listenOn);
+  const stopListening = (address: string) => {
+    listeners.get(address)?.close();
+    listeners.delete(address);
+    policy.bound = policy.bound.filter((a) => a !== address);
+  };
+  const refreshListeners = () => {
+    const lan = lanEnabled();
+    const wanted = bindAddresses(process.env.AGENTOS_BIND, undefined, lan);
+    wanted.forEach(listenOn);
+    for (const address of listeners.keys()) {
+      if (address !== "127.0.0.1" && !wanted.includes(address)) {
+        console.log(`> Agent-OS stopped listening on ${address}`);
+        stopListening(address);
+      }
+    }
+    policy.extraHosts = [
+      ...configuredHosts,
+      ...(lan
+        ? [
+            os
+              .hostname()
+              .toLowerCase()
+              .replace(/\.local$/, "") + ".local",
+          ]
+        : []),
+    ];
+  };
   refreshListeners();
-  if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 30000);
+  if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 5000);
+  if (process.env.AGENTOS_AUTH === "off" && listeners.size > 1) {
+    console.warn(
+      "> WARNING: AGENTOS_AUTH=off and listening beyond loopback. Anyone who can reach this port gets a shell."
+    );
+  }
   // Chat turns that kept running through a restart.
   void reattachChats();
   // Stacks start their next cards from here; their state is in the database.

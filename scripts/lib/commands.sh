@@ -474,6 +474,7 @@ cmd_help() {
     echo "  stop        Stop the server"
     echo "  restart     Restart the server"
     echo "  status      Show server status and URLs"
+    echo "  pair        Add a phone, tablet or laptop (prints a QR code)"
     echo "  logs        Tail server logs"
     echo "  update      Update to latest version"
     echo "  enable      Enable auto-start on boot"
