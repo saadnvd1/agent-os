@@ -1,5 +1,6 @@
 "use client";
 
+import { ProjectAvatar } from "./ProjectAvatar";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import {
   useWorkspacesQuery,
@@ -8,8 +9,6 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
-  ChevronRight,
-  ChevronDown,
   MoreHorizontal,
   Settings,
   Plus,
@@ -221,10 +220,11 @@ export function ProjectCard({
     <div
       onClick={handleClick}
       className={cn(
-        "group flex cursor-pointer items-center gap-2 px-2.5 pt-3 pb-1",
-        "min-h-11 md:min-h-8"
+        "group relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2",
+        "hover:bg-foreground/[0.04] min-h-11 md:min-h-9"
       )}
     >
+      <ProjectAvatar name={project.name} />
       {/* Project name */}
       {isEditing ? (
         <input
@@ -244,7 +244,7 @@ export function ProjectCard({
           className="border-primary min-w-0 flex-1 border-b bg-transparent text-sm font-medium outline-none"
         />
       ) : (
-        <span className="text-muted-foreground/80 group-hover:text-foreground min-w-0 truncate text-xs font-medium transition-colors">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {project.name}
         </span>
       )}
@@ -275,13 +275,6 @@ export function ProjectCard({
         </span>
       )}
 
-      <span className="bg-foreground/[0.07] h-px min-w-4 flex-1" />
-      {project.expanded ? (
-        <ChevronDown className="text-muted-foreground/50 h-3 w-3 flex-shrink-0" />
-      ) : (
-        <ChevronRight className="text-muted-foreground/50 h-3 w-3 flex-shrink-0" />
-      )}
-
       {/* Actions menu */}
       {hasActions && (
         <DropdownMenu>
@@ -289,7 +282,7 @@ export function ProjectCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-7 w-7 flex-shrink-0 md:hidden md:h-6 md:w-6 md:group-hover:inline-flex"
+              className="bg-sidebar-background hover:bg-accent h-7 w-7 md:absolute md:top-1/2 md:right-1 md:h-6 md:w-6 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
