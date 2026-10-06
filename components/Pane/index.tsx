@@ -84,19 +84,31 @@ export const Pane = memo(function Pane({
     closeTab,
     switchTab,
     detachSession,
+    getViewMode,
+    setViewMode: setPaneViewMode,
+    getGitDrawerOpen,
+    setGitDrawerOpen: setPaneGitDrawerOpen,
+    getShellDrawerOpen,
+    setShellDrawerOpen: setPaneShellDrawerOpen,
   } = usePanes();
 
-  const [viewMode, setViewMode] = useState<ViewMode>("terminal");
-  const [gitDrawerOpen, setGitDrawerOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const stored = localStorage.getItem("gitDrawerOpen");
-    return stored === null ? true : stored === "true";
-  });
-  const [shellDrawerOpen, setShellDrawerOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const stored = localStorage.getItem("shellDrawerOpen");
-    return stored === "true";
-  });
+  // Per-pane view state now lives in PaneContext; local wrappers keep the
+  // existing call sites (and tab-bar prop signatures) unchanged.
+  const viewMode = getViewMode(paneId);
+  const gitDrawerOpen = getGitDrawerOpen(paneId);
+  const shellDrawerOpen = getShellDrawerOpen(paneId);
+  const setViewMode = useCallback(
+    (mode: ViewMode) => setPaneViewMode(paneId, mode),
+    [setPaneViewMode, paneId]
+  );
+  const setGitDrawerOpen = useCallback(
+    (open: boolean) => setPaneGitDrawerOpen(paneId, open),
+    [setPaneGitDrawerOpen, paneId]
+  );
+  const setShellDrawerOpen = useCallback(
+    (open: boolean) => setPaneShellDrawerOpen(paneId, open),
+    [setPaneShellDrawerOpen, paneId]
+  );
   const terminalRefs = useRef<Map<string, TerminalHandle | null>>(new Map());
   const paneData = getPaneData(paneId);
   const activeTab = getActiveTab(paneId);
@@ -142,15 +154,6 @@ export const Pane = memo(function Pane({
     setViewMode("terminal");
     fileEditor.reset();
   }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Persist drawer states
-  useEffect(() => {
-    localStorage.setItem("gitDrawerOpen", String(gitDrawerOpen));
-  }, [gitDrawerOpen]);
-
-  useEffect(() => {
-    localStorage.setItem("shellDrawerOpen", String(shellDrawerOpen));
-  }, [shellDrawerOpen]);
 
   // Handle file open requests (only if this pane is focused)
   useEffect(() => {
@@ -304,8 +307,8 @@ export const Pane = memo(function Pane({
           onTabClose={(tabId) => closeTab(paneId, tabId)}
           onTabAdd={() => addTab(paneId)}
           onViewModeChange={setViewMode}
-          onGitDrawerToggle={() => setGitDrawerOpen((prev) => !prev)}
-          onShellDrawerToggle={() => setShellDrawerOpen((prev) => !prev)}
+          onGitDrawerToggle={() => setGitDrawerOpen(!gitDrawerOpen)}
+          onShellDrawerToggle={() => setShellDrawerOpen(!shellDrawerOpen)}
           onSplitHorizontal={() => splitHorizontal(paneId)}
           onSplitVertical={() => splitVertical(paneId)}
           onClose={() => close(paneId)}
