@@ -189,8 +189,8 @@ export const queries = {
   createProject: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO projects (id, name, working_directory, agent_type, default_model, initial_prompt, sort_order, host_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'local'))`
+      `INSERT INTO projects (id, name, working_directory, agent_type, default_model, initial_prompt, sort_order, host_id, workspace_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'local'), ?)`
     ),
 
   getProject: (db: Database.Database) =>

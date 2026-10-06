@@ -1,0 +1,62 @@
+"use client";
+
+import type { ReactNode } from "react";
+import type { Session } from "@/lib/db";
+import type { ProjectWithDevServers } from "@/lib/projects";
+import { useWorkspacesQuery } from "@/data/workspaces";
+import { WorkspaceHeader } from "./WorkspaceHeader";
+
+interface WorkspaceGroupsProps<P extends ProjectWithDevServers> {
+  projects: P[];
+  sessions: Session[];
+  sessionStatuses?: Record<string, { status: string }>;
+  renderProjects: (projects: P[]) => ReactNode;
+}
+
+// Projects without a workspace come first, then one collapsible section per
+// workspace, as in mTerm.
+export function WorkspaceGroups<P extends ProjectWithDevServers>({
+  projects,
+  sessions,
+  sessionStatuses,
+  renderProjects,
+}: WorkspaceGroupsProps<P>) {
+  const { data: workspaces = [] } = useWorkspacesQuery();
+  const known = new Set(workspaces.map((w) => w.id));
+  const ungrouped = projects.filter(
+    (p) => !p.workspace_id || !known.has(p.workspace_id)
+  );
+
+  const needsYou = (projectIds: Set<string>) =>
+    sessions.filter(
+      (s) =>
+        s.project_id &&
+        projectIds.has(s.project_id) &&
+        sessionStatuses?.[s.id]?.status === "waiting"
+    ).length;
+
+  return (
+    <>
+      {ungrouped.length > 0 && renderProjects(ungrouped)}
+      {workspaces.map((workspace) => {
+        const members = projects.filter((p) => p.workspace_id === workspace.id);
+        return (
+          <div key={workspace.id}>
+            <WorkspaceHeader
+              workspace={workspace}
+              needsYou={needsYou(new Set(members.map((p) => p.id)))}
+            />
+            {!workspace.collapsed &&
+              (members.length > 0 ? (
+                renderProjects(members)
+              ) : (
+                <p className="text-muted-foreground/60 px-7 py-1 text-xs">
+                  Move projects here from their ⋯ menu
+                </p>
+              ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}

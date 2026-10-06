@@ -151,6 +151,7 @@ export function useCreateProject() {
       agentType?: string;
       defaultModel?: string;
       hostId?: string;
+      workspaceId?: string | null;
       devServers?: Array<{
         name: string;
         type: string;

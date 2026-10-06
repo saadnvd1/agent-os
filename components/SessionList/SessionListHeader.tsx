@@ -15,6 +15,7 @@ import {
   Pin,
   PinOff,
   Server,
+  LayoutGrid,
 } from "lucide-react";
 
 interface SessionListHeaderProps {
@@ -23,6 +24,7 @@ interface SessionListHeaderProps {
   onCloneFromGithub: () => void;
   onKillAll: () => void;
   onManageHosts: () => void;
+  onNewWorkspace: () => void;
   pinControls?: {
     isPinned: boolean;
     onTogglePin: () => void;
@@ -35,6 +37,7 @@ export function SessionListHeader({
   onCloneFromGithub,
   onKillAll,
   onManageHosts,
+  onNewWorkspace,
   pinControls,
 }: SessionListHeaderProps) {
   return (
@@ -85,6 +88,7 @@ export function SessionListHeader({
           tooltip="New project"
           items={[
             menuItem("New Project", onNewProject, { icon: FolderPlus }),
+            menuItem("New Workspace", onNewWorkspace, { icon: LayoutGrid }),
             menuItem("Open Project", onOpenProject, { icon: FolderOpen }),
             menuItem("Clone from GitHub", onCloneFromGithub, {
               icon: GitBranch,

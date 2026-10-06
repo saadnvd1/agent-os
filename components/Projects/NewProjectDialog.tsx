@@ -25,6 +25,7 @@ import { useNewProjectForm } from "./hooks/useNewProjectForm";
 import { DevServersSection } from "./DevServersSection";
 import { DirectoryField } from "./DirectoryField";
 import { useHostsQuery } from "@/data/hosts";
+import { useWorkspacesQuery } from "@/data/workspaces";
 import {
   CreatingOverlay,
   type StepConfig,
@@ -44,6 +45,7 @@ export function NewProjectDialog({
 }: NewProjectDialogProps) {
   const form = useNewProjectForm(mode, onClose, onCreated);
   const { data: hosts = [] } = useHostsQuery();
+  const { data: workspaces = [] } = useWorkspacesQuery();
   const modelOptions = getModelOptions(form.agentType);
   const selectedModelLabel =
     modelOptions.find((option) => option.value === form.defaultModel)?.label ||
@@ -116,6 +118,28 @@ export function NewProjectDialog({
                   {hosts.map((host) => (
                     <SelectItem key={host.id} value={host.id}>
                       {host.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {!form.isCloneMode && workspaces.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Workspace</label>
+              <Select
+                value={form.workspaceId}
+                onValueChange={form.setWorkspaceId}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {workspaces.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

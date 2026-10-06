@@ -51,6 +51,7 @@ export interface Project {
   sort_order: number;
   is_uncategorized: boolean;
   host_id: string;
+  workspace_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -111,6 +112,14 @@ export interface DevServer {
   working_directory: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  sort_order: number;
+  collapsed: boolean;
+  created_at: string;
 }
 
 export interface Host {

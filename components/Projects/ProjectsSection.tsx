@@ -360,7 +360,6 @@ export function ProjectsSection({
           </div>
         );
       })}
-      <DiscoveredTmuxList projectId={null} title="Elsewhere" />
     </div>
   );
 }

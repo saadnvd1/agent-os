@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       defaultModel,
       devServers,
       hostId,
+      workspaceId,
     } = body;
 
     if (!name || !workingDirectory) {
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
       defaultModel,
       devServers,
       hostId,
+      workspaceId,
     });
 
     return NextResponse.json({ project }, { status: 201 });

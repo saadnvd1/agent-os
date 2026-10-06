@@ -11,7 +11,13 @@ import {
 import { FolderPicker } from "@/components/FolderPicker";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionListHeader } from "./SessionListHeader";
-import { HostsDialog } from "@/components/Hosts";
+import { HostsDialog, DiscoveredTmuxList } from "@/components/Hosts";
+import {
+  WorkspaceGroups,
+  WorkspaceNameDialog,
+  NeedsYouList,
+} from "@/components/Workspaces";
+import { useCreateWorkspace } from "@/data/workspaces";
 import { GroupSection } from "./GroupSection";
 import { KillAllConfirm } from "./KillAllConfirm";
 import { useSessionListMutations } from "./hooks/useSessionListMutations";
@@ -80,6 +86,8 @@ export function SessionList({
     useState<ProjectWithRepositories | null>(null);
   const [showKillAllConfirm, setShowKillAllConfirm] = useState(false);
   const [showHostsDialog, setShowHostsDialog] = useState(false);
+  const [showNewWorkspace, setShowNewWorkspace] = useState(false);
+  const createWorkspace = useCreateWorkspace();
   const [hoveredSession, setHoveredSession] = useState<Session | null>(null);
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
   const [logsServerId, setLogsServerId] = useState<string | null>(null);
@@ -165,6 +173,7 @@ export function SessionList({
         }}
         onKillAll={() => setShowKillAllConfirm(true)}
         onManageHosts={() => setShowHostsDialog(true)}
+        onNewWorkspace={() => setShowNewWorkspace(true)}
         pinControls={pinControls}
       />
 
@@ -238,40 +247,58 @@ export function SessionList({
 
           {/* Content - Projects view */}
           {!isInitialLoading && !hasError && useProjectsView && (
-            <ProjectsSection
-              projects={projects}
-              sessions={sessions}
-              groups={groups}
-              activeSessionId={activeSessionId}
-              sessionStatuses={sessionStatuses}
-              summarizingSessionId={mutations.summarizingSessionId}
-              devServers={devServers}
-              onToggleProject={mutations.handleToggleProject}
-              onEditProject={(projectId) => {
-                const project = projects.find((p) => p.id === projectId);
-                if (project) setEditingProject(project);
-              }}
-              onDeleteProject={mutations.handleDeleteProject}
-              onRenameProject={mutations.handleRenameProject}
-              onNewSession={onNewSessionInProject}
-              onOpenTerminal={onOpenTerminal}
-              onSelectSession={onSelect}
-              onOpenSessionInTab={onOpenInTab}
-              onMoveSession={mutations.handleMoveSessionToProject}
-              onForkSession={mutations.handleForkSession}
-              onSummarize={mutations.handleSummarize}
-              onDeleteSession={mutations.handleDeleteSession}
-              onRenameSession={mutations.handleRenameSession}
-              onStartDevServer={onStartDevServer}
-              onStopDevServer={mutations.handleStopDevServer}
-              onRestartDevServer={mutations.handleRestartDevServer}
-              onRemoveDevServer={mutations.handleRemoveDevServer}
-              onViewDevServerLogs={setLogsServerId}
-              onHoverStart={(session, rect) =>
-                hoverHandlers.onHoverStart(session, rect)
-              }
-              onHoverEnd={hoverHandlers.onHoverEnd}
-            />
+            <>
+              <NeedsYouList
+                sessions={sessions}
+                sessionStatuses={sessionStatuses}
+                projectNames={Object.fromEntries(
+                  projects.map((p) => [p.id, p.name])
+                )}
+                onSelect={onSelect}
+              />
+              <WorkspaceGroups
+                projects={projects}
+                sessions={sessions}
+                sessionStatuses={sessionStatuses}
+                renderProjects={(subset) => (
+                  <ProjectsSection
+                    projects={subset}
+                    sessions={sessions}
+                    groups={groups}
+                    activeSessionId={activeSessionId}
+                    sessionStatuses={sessionStatuses}
+                    summarizingSessionId={mutations.summarizingSessionId}
+                    devServers={devServers}
+                    onToggleProject={mutations.handleToggleProject}
+                    onEditProject={(projectId) => {
+                      const project = projects.find((p) => p.id === projectId);
+                      if (project) setEditingProject(project);
+                    }}
+                    onDeleteProject={mutations.handleDeleteProject}
+                    onRenameProject={mutations.handleRenameProject}
+                    onNewSession={onNewSessionInProject}
+                    onOpenTerminal={onOpenTerminal}
+                    onSelectSession={onSelect}
+                    onOpenSessionInTab={onOpenInTab}
+                    onMoveSession={mutations.handleMoveSessionToProject}
+                    onForkSession={mutations.handleForkSession}
+                    onSummarize={mutations.handleSummarize}
+                    onDeleteSession={mutations.handleDeleteSession}
+                    onRenameSession={mutations.handleRenameSession}
+                    onStartDevServer={onStartDevServer}
+                    onStopDevServer={mutations.handleStopDevServer}
+                    onRestartDevServer={mutations.handleRestartDevServer}
+                    onRemoveDevServer={mutations.handleRemoveDevServer}
+                    onViewDevServerLogs={setLogsServerId}
+                    onHoverStart={(session, rect) =>
+                      hoverHandlers.onHoverStart(session, rect)
+                    }
+                    onHoverEnd={hoverHandlers.onHoverEnd}
+                  />
+                )}
+              />
+              <DiscoveredTmuxList projectId={null} title="Elsewhere" />
+            </>
           )}
 
           {/* Content - Group view (fallback when no projects) */}
@@ -321,6 +348,14 @@ export function SessionList({
           onClose={() => setLogsServerId(null)}
         />
       )}
+
+      <WorkspaceNameDialog
+        open={showNewWorkspace}
+        title="New workspace"
+        submitLabel="Create"
+        onSubmit={(name) => createWorkspace.mutate(name)}
+        onClose={() => setShowNewWorkspace(false)}
+      />
 
       <HostsDialog
         open={showHostsDialog}

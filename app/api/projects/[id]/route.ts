@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { setProjectWorkspace } from "@/lib/workspaces";
 import {
   getProjectWithDevServers,
   updateProject,
@@ -42,11 +43,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       defaultModel,
       initialPrompt,
       expanded,
+      workspaceId,
     } = body;
 
     // Handle expanded toggle separately
     if (typeof expanded === "boolean") {
       toggleProjectExpanded(id, expanded);
+    }
+
+    // null moves the project out of its workspace
+    if (workspaceId !== undefined) {
+      setProjectWorkspace(id, workspaceId);
     }
 
     // Update other fields if provided
