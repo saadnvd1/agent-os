@@ -51,6 +51,7 @@ const { readUsage } =
   await vi.importActual<typeof import("./usage")>("./usage");
 
 beforeAll(() => {
+  process.env.AGENTOS_ORCH_BRAKES = "1";
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-brakes-"));
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
@@ -71,6 +72,21 @@ function workspace() {
 }
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+
+describe("brakes switched off", () => {
+  it("lets starts through past every limit", async () => {
+    const ws = workspace();
+    db.prepare(
+      `UPDATE workspaces SET orch_max_running = 0, orch_max_starts_per_hour = 0 WHERE id = ?`
+    ).run(ws.workspace.id);
+    delete process.env.AGENTOS_ORCH_BRAKES;
+    try {
+      await expect(ws.start("unbraked")).resolves.toBeDefined();
+    } finally {
+      process.env.AGENTOS_ORCH_BRAKES = "1";
+    }
+  });
+});
 
 describe("the running brake", () => {
   it("refuses a start at 4 running sessions, notes it once, and lifts", async () => {

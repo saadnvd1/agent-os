@@ -5,6 +5,9 @@
  * resets. A brake refuses with its reason and pauses new starts only;
  * running work carries on. Each brake writes one note when it starts
  * holding, not one per refused start.
+ *
+ * Off unless AGENTOS_ORCH_BRAKES=1: Saad turned them off on 2026-10-06 so the
+ * orchestrator runs unthrottled. Pause still stops new starts.
  */
 
 import { db } from "../db";
@@ -19,6 +22,8 @@ import { isPaused } from "./pause";
 import { readUsage, windowRefusal, type UsageState } from "./usage";
 
 const HOUR = 60 * 60 * 1000;
+
+export const brakesEnabled = () => process.env.AGENTOS_ORCH_BRAKES === "1";
 // A session this young counts as running even before its status shows it.
 const WARMUP_MS = 2 * 60 * 1000;
 
@@ -65,6 +70,7 @@ export async function brakesOn(
   const now = opts.now ?? Date.now();
   const ws = getWorkspace(workspaceId);
   if (!ws) throw new Error("Unknown workspace");
+  if (!brakesEnabled()) return [];
   const out: { name: string; reason: string }[] = [];
   const running = await runningCount(workspaceId, now);
   if (running >= ws.orch_max_running)

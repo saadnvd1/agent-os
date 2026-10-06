@@ -3,6 +3,11 @@ import { getDefaultBranch } from "../git";
 import { getWorkspace } from "../workspaces";
 import { TOOL_NAMES } from "./tool-names";
 import { UNTRUSTED_RULE } from "./untrusted";
+import { brakesEnabled } from "./brakes";
+
+const BRAKES_ON = `Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets, or can't be read at all. Each card of a stack you start counts as a start of its own; a braked card waits in the stack. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.`;
+
+const BRAKES_OFF = `Starting work has no limits right now: no cap on running sessions or starts, and no usage-window check. Saad's Pause still stops new starts; the start tools say so when it's on.`;
 
 export interface BriefProject {
   name: string;
@@ -35,7 +40,7 @@ Merge only with \`sign_off\`. It squash-merges a task's PR only if all of these 
 
 ## Brakes
 
-Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets, or can't be read at all. Each card of a stack you start counts as a start of its own; a braked card waits in the stack. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.
+${brakesEnabled() ? BRAKES_ON : BRAKES_OFF}
 
 ## Hard lines: always an ask for Saad, never an action
 
