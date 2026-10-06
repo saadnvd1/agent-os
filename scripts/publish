@@ -15,11 +15,17 @@ chmod 600 "$npmrc"
 printf '//registry.npmjs.org/:_authToken=%s\n' "$token" > "$npmrc"
 
 echo "Publishing $name@$version as $(npx -y npm@latest whoami --userconfig "$npmrc")"
-NODE_ENV=development npx -y npm@latest publish --access public \
-  --userconfig "$npmrc" --ignore-scripts --loglevel warn
+# A 409 "previously staged" means npm already took this version (an earlier
+# run gave up waiting): that's not a failure, just keep waiting for it.
+if ! out=$(NODE_ENV=development npx -y npm@latest publish --access public \
+  --userconfig "$npmrc" --ignore-scripts --loglevel warn 2>&1); then
+  echo "$out"
+  echo "$out" | grep -qiE "previously staged|cannot publish over" || exit 1
+  echo "npm already has $version; waiting for it to be served"
+fi
 
 url="https://registry.npmjs.org/${name/\//%2f}"
-for _ in $(seq 1 120); do
+for _ in $(seq 1 240); do
   latest=$(curl -s "$url?t=$(date +%s)" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s)["dist-tags"].latest)}catch{}})')
   if [ "$latest" = "$version" ]; then
     echo "Live: $name@$version (https://www.npmjs.com/package/$name)"
@@ -27,5 +33,5 @@ for _ in $(seq 1 120); do
   fi
   sleep 5
 done
-echo "Accepted but not live after 10 minutes; check npmjs.com Staged Packages" >&2
+echo "Accepted but not live after 20 minutes; check npmjs.com Staged Packages" >&2
 exit 1

@@ -9,6 +9,9 @@ export default defineConfig({
     include: ["**/*.test.ts"],
     exclude: ["**/node_modules/**", ".next/**", "src-tauri/**", ".claude/**"],
     setupFiles: ["./vitest.setup.ts"],
+    // Sessions started by AgentOS inherit NODE_ENV=production, which loads
+    // React's production build (no act()); tests always run as tests.
+    env: { NODE_ENV: "test" },
     // One database file per worker: the db module opens it at import time.
     pool: "forks",
   },
