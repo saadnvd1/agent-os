@@ -16,7 +16,9 @@ import {
   PinOff,
   Server,
   LayoutGrid,
+  ListTodo,
 } from "lucide-react";
+import { tasksUiActions } from "@/stores/tasksUi";
 
 interface SessionListHeaderProps {
   onNewProject: () => void;
@@ -89,6 +91,8 @@ export function SessionListHeader({
           items={[
             menuItem("New Project", onNewProject, { icon: FolderPlus }),
             menuItem("New Workspace", onNewWorkspace, { icon: LayoutGrid }),
+            menuItem("New Task", tasksUiActions.openNew, { icon: ListTodo }),
+            menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
             menuItem("Open Project", onOpenProject, { icon: FolderOpen }),
             menuItem("Clone from GitHub", onCloneFromGithub, {
               icon: GitBranch,
