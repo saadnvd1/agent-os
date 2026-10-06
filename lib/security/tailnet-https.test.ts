@@ -8,8 +8,32 @@ import {
 } from "./tailnet-https";
 
 describe("tailnet HTTPS", () => {
-  it("defaults to AgentOS's port + 432", () => {
-    expect(tailnetHttpsPort(3011)).toBe(3443);
+  it("defaults to AgentOS's port + 432, and refuses an unusable port", () => {
+    expect(tailnetHttpsPort(3011, {})).toBe(3443);
+    expect(tailnetHttpsPort(3011, { AGENTOS_TAILNET_HTTPS_PORT: "8443" })).toBe(
+      8443
+    );
+    for (const bad of ["70000", "-1", "abc", "3011", "1.5"]) {
+      expect(
+        tailnetHttpsPort(3011, { AGENTOS_TAILNET_HTTPS_PORT: bad })
+      ).toBeNull();
+    }
+  });
+
+  it("stays off, without throwing, when the port is unusable", () => {
+    const logs: string[] = [];
+    const prev = process.env.AGENTOS_TAILNET_HTTPS_PORT;
+    process.env.AGENTOS_TAILNET_HTTPS_PORT = "99999";
+    const t = startTailnetHttps({
+      handlers: { onRequest: () => {}, onUpgrade: () => {} },
+      port: 3011,
+      addresses: () => ["127.0.0.1"],
+      log: (l) => logs.push(l),
+    });
+    if (prev === undefined) delete process.env.AGENTOS_TAILNET_HTTPS_PORT;
+    else process.env.AGENTOS_TAILNET_HTTPS_PORT = prev;
+    expect(t.port).toBe(0);
+    expect(logs.join()).toContain("isn't a usable port");
   });
 
   it("serves HTTPS with real sockets, so trust still sees the true remote address", async () => {

@@ -5,7 +5,7 @@
 
 import { execFile } from "child_process";
 import fs from "fs";
-import { tailscaleAddresses } from "@/lib/security/net";
+import { setKnownTailscaleIps, tailscaleAddresses } from "@/lib/security/net";
 
 export type TailscaleState =
   | { state: "running"; ips: string[]; dnsName: string | null; https: boolean }
@@ -75,6 +75,7 @@ export async function tailscaleStatus(): Promise<TailscaleState> {
       value = { state: "logged-out" };
     }
   }
+  if (value.state === "running") setKnownTailscaleIps(value.ips);
   cached = { at: Date.now(), value };
   return value;
 }

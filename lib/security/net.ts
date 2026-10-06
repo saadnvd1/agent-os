@@ -9,16 +9,29 @@ import os from "os";
 
 const TAILSCALE_V4 = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./; // 100.64.0.0/10
 
+// Tailscale's interface is tailscale0 on Linux and a utun on macOS. Other
+// VPNs use 100.64/10 too, so the name must match, and once the tailscale CLI
+// has reported this node's own IPs (lib/tailscale.ts), so must the address.
+const TAILSCALE_IFACE = /^(tailscale\d*|utun\d+)$/;
+const known = globalThis as unknown as { __agentosTailscaleIps?: string[] };
+export const setKnownTailscaleIps = (ips: string[]) => {
+  known.__agentosTailscaleIps = ips;
+};
+
 export function tailscaleAddresses(
-  interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()
+  interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces(),
+  knownIps: string[] | undefined = known.__agentosTailscaleIps
 ): string[] {
-  return Object.values(interfaces)
-    .flat()
-    .filter(
-      (i): i is os.NetworkInterfaceInfo =>
-        !!i && i.family === "IPv4" && TAILSCALE_V4.test(i.address)
-    )
-    .map((i) => i.address);
+  const out: string[] = [];
+  for (const [name, infos] of Object.entries(interfaces)) {
+    if (!TAILSCALE_IFACE.test(name)) continue;
+    for (const i of infos ?? []) {
+      if (i.family !== "IPv4" || !TAILSCALE_V4.test(i.address)) continue;
+      if (knownIps?.length && !knownIps.includes(i.address)) continue;
+      out.push(i.address);
+    }
+  }
+  return out;
 }
 
 const PRIVATE_V4 = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
