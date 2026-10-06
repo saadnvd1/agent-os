@@ -343,7 +343,13 @@ export function ProjectCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="bg-sidebar-background hover:bg-accent h-7 w-7 md:absolute md:top-1/2 md:right-1 md:h-6 md:w-6 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
+              className={cn(
+                "bg-sidebar-background hover:bg-accent h-7 w-7 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100",
+                // Floats over the row's edge, except beside the session
+                // count, which it would otherwise cover on hover.
+                (row?.single || sessionCount <= 1) &&
+                  "md:absolute md:top-1/2 md:right-1 md:-translate-y-1/2"
+              )}
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
