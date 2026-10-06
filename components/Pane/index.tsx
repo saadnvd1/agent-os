@@ -55,6 +55,9 @@ interface PaneProps {
   ) => void;
   onMenuClick?: () => void;
   onSelectSession?: (sessionId: string) => void;
+  // Attach a session's terminal with its full launch command: attaches if it
+  // is running, otherwise starts it (resuming the agent's conversation).
+  onAttachSession?: (terminal: TerminalHandle, session: Session) => void;
 }
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
@@ -66,6 +69,7 @@ export const Pane = memo(function Pane({
   onRegisterTerminal,
   onMenuClick,
   onSelectSession,
+  onAttachSession,
 }: PaneProps) {
   const { isMobile } = useViewport();
   const {
@@ -211,17 +215,20 @@ export const Pane = memo(function Pane({
       const tabSession = tab.sessionId
         ? sessions.find((s) => s.id === tab.sessionId)
         : undefined;
-      const tmuxName = tabSession?.tmux_name || tab.attachedTmux;
-
-      if (tmuxName) {
+      if (tabSession && onAttachSession) {
+        onAttachSession(handle, tabSession);
+        return;
+      }
+      // A tmux session AgentOS didn't start: reattach, never recreate it.
+      if (tab.attachedTmux) {
         handle.attach({
-          sessionName: tmuxName,
-          hostId: tabSession?.host_id ?? tab.attachedHost ?? undefined,
+          sessionName: tab.attachedTmux,
+          hostId: tab.attachedHost ?? undefined,
           attachOnly: true,
         });
       }
     },
-    [paneId, sessions, onRegisterTerminal]
+    [paneId, sessions, onRegisterTerminal, onAttachSession]
   );
 
   // Track current tab ID for cleanup
