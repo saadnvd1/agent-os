@@ -24,6 +24,7 @@ import {
   syncTaskCardInBackground,
   taskCardUrl,
 } from "../lumifyhub/task-cards";
+import { republishAfterMerge } from "../lumifyhub/publish";
 import {
   canSignOff,
   deriveTaskState,
@@ -283,6 +284,10 @@ export async function signOffTask(id: string): Promise<void> {
   ).run(id);
   syncTaskCardInBackground(session, "merged", pr);
   await cleanup(session, repo);
+  // After cleanup's fetch, so the base branch holds the merged files.
+  inBackground(`re-publish docs after task ${id}`, () =>
+    republishAfterMerge(session)
+  );
 }
 
 // Reject the work: close the PR if there is one and remove everything.

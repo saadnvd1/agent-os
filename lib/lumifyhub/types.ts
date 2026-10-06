@@ -75,3 +75,36 @@ export interface BoardTodo {
   boardName: string | null;
   cards: BoardCardView[];
 }
+
+// A document page, as `/api/cli/pages` renders it: markdown in `content`.
+export interface LhPage {
+  id: string;
+  title: string;
+  parent_page_id: string | null;
+  content: string;
+  workspace_id: string;
+  workspace_slug: string;
+  updated_at: string;
+  page_type: string | null;
+}
+
+// A page in the Docs list, without its body.
+export interface DocSummary {
+  id: string;
+  title: string;
+  parentId: string | null;
+  updatedAt: string;
+}
+
+export interface DocView extends DocSummary {
+  content: string;
+  url: string;
+}
+
+// A repo file published to a page.
+export interface PublishedDoc {
+  repoPath: string;
+  pageId: string;
+  url: string;
+  publishedAt: string;
+}
