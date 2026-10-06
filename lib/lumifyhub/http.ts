@@ -22,13 +22,17 @@ export async function respond<T>(fn: () => T | Promise<T>) {
 }
 
 // The origin the browser reached AgentOS on. The Host header has already
-// been checked against the access policy by the server.
+// been checked against the access policy by the server; a forwarded proto
+// other than exactly http or https is ignored.
 export function requestOrigin(request: NextRequest): string {
-  const host = request.headers.get("host") || request.nextUrl.host;
+  const forwarded = request.headers.get("x-forwarded-proto");
   const proto =
-    request.headers.get("x-forwarded-proto") ||
-    request.nextUrl.protocol.replace(/:$/, "");
-  return `${proto}://${host}`;
+    forwarded === "http" || forwarded === "https"
+      ? forwarded
+      : request.nextUrl.protocol.replace(/:$/, "");
+  const url = new URL(`${proto}://localhost`);
+  url.host = request.headers.get("host") || request.nextUrl.host;
+  return url.origin;
 }
 
 export async function body<T>(request: NextRequest): Promise<Partial<T>> {

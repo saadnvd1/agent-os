@@ -25,7 +25,7 @@ export function challengeFor(verifier: string): string {
 export const CALLBACK_PATH = "/api/lumifyhub/callback";
 
 export function callbackUrl(origin: string): string {
-  return `${origin.replace(/\/+$/, "")}${CALLBACK_PATH}`;
+  return new URL(CALLBACK_PATH, origin).toString();
 }
 
 export function clientName(hostname = os.hostname()): string {

@@ -4,7 +4,13 @@
  * runs. All of it is best effort: a LumifyHub outage never breaks a task.
  */
 
-import { db, lumifyhubQueries as q, type Project, type Session } from "../db";
+import {
+  db,
+  queries,
+  lumifyhubQueries as q,
+  type Project,
+  type Session,
+} from "../db";
 import { getProject, getAllProjects } from "../projects";
 import type { TaskPR, TaskState } from "../tasks/state";
 import { connectedClient, forgetIfDisconnected } from "./connection";
@@ -30,95 +36,109 @@ export function cardTitle(prompt: string): string {
   return line.length > 120 ? `${line.slice(0, 117)}...` : line;
 }
 
+// Card work for one task runs one job at a time, in order. Each sync re-reads
+// the session row and applies the latest state asked for, so a change that
+// arrives mid-sync is never lost and a comment is never posted twice.
+const queues = new Map<string, Promise<void>>();
+const wanted = new Map<string, { state: TaskState; pr: TaskPR | null }>();
+
+function serially(sessionId: string, job: () => Promise<void>): Promise<void> {
+  const run = (queues.get(sessionId) ?? Promise.resolve()).then(job);
+  const tail = run.catch(() => {});
+  queues.set(sessionId, tail);
+  tail.then(() => {
+    if (queues.get(sessionId) !== tail) return;
+    queues.delete(sessionId);
+    wanted.delete(sessionId);
+  });
+  return run;
+}
+
 // Give a new task its card: an existing one it was started from, or a new
-// card in To Do. The next sync moves it to where the task is.
-export async function attachTaskCard(
+// card in To Do. Then move it to where the task is.
+export function attachTaskCard(
   session: Session,
   project: Project,
   existingCardId?: string
 ): Promise<void> {
   const boardId = project.lh_board_id;
   const client = connectedClient();
-  if (!boardId || !client) return;
-  let cardId = existingCardId;
-  if (!cardId) {
-    const lists = await ensureTaskLists(client, boardId);
-    const prompt = session.task_prompt || session.name;
-    const card = await client.createCard(boardId, {
-      list_id: lists.todo,
-      title: cardTitle(prompt),
-      description: prompt,
-    });
-    cardId = card.id;
+  if (!boardId || !client) return Promise.resolve();
+  if (!wanted.has(session.id)) {
+    wanted.set(session.id, { state: "working", pr: null });
   }
-  q.linkTaskCard(db, session.id, { cardId, boardId, list: "todo" });
-  await syncTaskCard(
-    {
-      ...session,
-      lh_card_id: cardId,
-      lh_board_id: boardId,
-      lh_card_list: "todo",
-    },
-    "working",
-    null
-  );
+  return serially(session.id, async () => {
+    let cardId = existingCardId;
+    if (!cardId) {
+      const lists = await ensureTaskLists(client, boardId);
+      const prompt = session.task_prompt || session.name;
+      const card = await client.createCard(boardId, {
+        list_id: lists.todo,
+        title: cardTitle(prompt),
+        description: prompt,
+      });
+      cardId = card.id;
+    }
+    q.linkTaskCard(db, session.id, { cardId, boardId, list: "todo" });
+    await applyLatest(session.id);
+  });
 }
 
-const inFlight = new Set<string>();
-
 // Move the card to the list for the task's state, once per change.
-export async function syncTaskCard(
+export function syncTaskCard(
   session: Session,
   state: TaskState,
   pr: TaskPR | null
 ): Promise<void> {
-  const { lh_card_id: cardId, lh_board_id: boardId } = session;
+  wanted.set(session.id, { state, pr });
+  return serially(session.id, () => applyLatest(session.id));
+}
+
+async function applyLatest(sessionId: string): Promise<void> {
+  const want = wanted.get(sessionId);
+  const row = queries.getSession(db).get(sessionId) as Session | undefined;
   const client = connectedClient();
-  if (!cardId || !boardId || !client) return;
-  const target = cardTargetFor(state);
-  if (session.lh_card_list === target || inFlight.has(session.id)) return;
-  inFlight.add(session.id);
-  try {
-    if (target === "failed" || target === "dropped") {
+  if (!want || !row || !client) return;
+  const { lh_card_id: cardId, lh_board_id: boardId } = row;
+  if (!cardId || !boardId) return;
+  const target = cardTargetFor(want.state);
+  if (row.lh_card_list === target) return;
+  if (target === "failed" || target === "dropped") {
+    await client.addComment(
+      boardId,
+      cardId,
+      target === "dropped"
+        ? "AgentOS: the task was dropped."
+        : "AgentOS: the agent exited without opening a pull request."
+    );
+  } else {
+    let lists = await ensureTaskLists(client, boardId);
+    try {
+      await client.moveCard(boardId, cardId, lists[target]);
+    } catch {
+      // A list may have been deleted since it was cached.
+      forgetLists(boardId);
+      lists = await ensureTaskLists(client, boardId, true);
+      await client.moveCard(boardId, cardId, lists[target]);
+    }
+    if (target === "in_review" && want.pr?.url) {
       await client.addComment(
         boardId,
         cardId,
-        target === "dropped"
-          ? "AgentOS: the task was dropped."
-          : "AgentOS: the agent exited without opening a pull request."
+        `AgentOS opened a pull request: ${want.pr.url}`
       );
-    } else {
-      let lists = await ensureTaskLists(client, boardId);
-      try {
-        await client.moveCard(boardId, cardId, lists[target]);
-      } catch {
-        // A list may have been deleted since it was cached.
-        forgetLists(boardId);
-        lists = await ensureTaskLists(client, boardId, true);
-        await client.moveCard(boardId, cardId, lists[target]);
-      }
-      if (target === "in_review" && pr?.url) {
-        await client.addComment(
-          boardId,
-          cardId,
-          `AgentOS opened a pull request: ${pr.url}`
-        );
-      }
     }
-    q.setTaskCardList(db, session.id, target);
-  } finally {
-    inFlight.delete(session.id);
   }
+  q.setTaskCardList(db, sessionId, target);
 }
 
+// The session object a caller holds may be stale (even predate its card), so
+// this always queues; the run reads the row and no-ops if nothing changed.
 export function syncTaskCardInBackground(
   session: Session,
   state: TaskState,
   pr: TaskPR | null
 ): void {
-  if (!session.lh_card_id || session.lh_card_list === cardTargetFor(state)) {
-    return;
-  }
   inBackground(`sync card for task ${session.id}`, () =>
     syncTaskCard(session, state, pr)
   );

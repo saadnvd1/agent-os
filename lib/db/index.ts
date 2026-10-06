@@ -50,6 +50,16 @@ function withInitLock<T>(fn: () => T): T {
   }
 }
 
+// The database holds the LumifyHub token in plain text: keep its files
+// owner-only. Best effort, and only the files, never their directory.
+function restrictDbFiles(): void {
+  for (const file of [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`]) {
+    try {
+      fs.chmodSync(file, 0o600);
+    } catch {}
+  }
+}
+
 // Initialize database with schema
 export function initDb(): Database.Database {
   return withInitLock(() => {
@@ -65,6 +75,7 @@ export function initDb(): Database.Database {
     // Run migrations
     runMigrations(db);
 
+    restrictDbFiles();
     return db;
   });
 }

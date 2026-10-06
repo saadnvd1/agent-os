@@ -41,9 +41,29 @@ async function commonDir(dir: string): Promise<string | null> {
     .catch(() => null);
 }
 
-// The file's path in the repo. It may sit in the project's checkout or in one
-// of its task worktrees: both share the project's git directory.
-async function repoPathFor(project: Project, file: string): Promise<string> {
+// Whether `file` sits inside `root`. Both must already be real paths.
+export function isWithin(root: string, file: string): boolean {
+  const rel = path.relative(root, file);
+  return (
+    !!rel &&
+    rel !== ".." &&
+    !rel.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(rel)
+  );
+}
+
+// The real file to read and its path in the repo. It may sit in the project's
+// checkout or in one of its task worktrees: both share the project's git
+// directory. Symlinks are resolved first, so one can't point outside.
+export async function resolveRepoFile(
+  project: Project,
+  file: string
+): Promise<{ realFile: string; repoPath: string }> {
+  const outside = new Error("That file isn't in this project");
+  const realFile = await fs.realpath(file).catch(() => {
+    throw outside;
+  });
+  if (!(await fs.stat(realFile)).isFile()) throw outside;
   const dir = path.dirname(file);
   const [mine, theirs] = await Promise.all([
     commonDir(project.working_directory),
@@ -53,11 +73,12 @@ async function repoPathFor(project: Project, file: string): Promise<string> {
   if (mine && theirs === mine) {
     root = await git(dir, "rev-parse", "--show-toplevel");
   }
-  const rel = path.relative(path.resolve(root), path.resolve(file));
-  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new Error("That file isn't in this project");
-  }
-  return rel.split(path.sep).join("/");
+  const realRoot = await fs.realpath(root).catch(() => {
+    throw outside;
+  });
+  if (!isWithin(realRoot, realFile)) throw outside;
+  const repoPath = path.relative(realRoot, realFile).split(path.sep).join("/");
+  return { realFile, repoPath };
 }
 
 async function publish(
@@ -115,8 +136,11 @@ export async function publishFile(
     throw new Error("Only markdown files can be published");
   }
   const project = localProject(projectId);
-  const repoPath = await repoPathFor(project, file);
-  const markdown = await fs.readFile(file, "utf8");
+  const { realFile, repoPath } = await resolveRepoFile(project, file);
+  if (!isMarkdownPath(realFile)) {
+    throw new Error("Only markdown files can be published");
+  }
+  const markdown = await fs.readFile(realFile, "utf8");
   await publish(project, repoPath, markdown, false);
   return publishedDocs(projectId).find((d) => d.repoPath === repoPath)!;
 }
