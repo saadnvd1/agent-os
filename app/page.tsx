@@ -1,6 +1,6 @@
 "use client";
 
-import { useSnapshot } from "valtio";
+import { subscribe } from "valtio";
 import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
 import { MessagesDialog } from "@/components/Bus";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
@@ -248,17 +248,24 @@ function HomeContent() {
   );
 
   // Attach a tmux session agent-os didn't create (discovered on any machine)
-  const tmuxAttachRequest = useSnapshot(tmuxAttachStore).request;
-  useEffect(() => {
-    if (!tmuxAttachRequest) return;
-    tmuxAttachActions.clear();
-    const terminalInfo = getTerminalWithFallback();
-    if (!terminalInfo) return;
-    const { sessionName, hostId } = tmuxAttachRequest;
-    terminalInfo.terminal.attach({ sessionName, hostId, attachOnly: true });
-    attachSession(terminalInfo.paneId, null, sessionName, hostId);
-    terminalInfo.terminal.focus();
-  }, [tmuxAttachRequest, getTerminalWithFallback, attachSession]);
+  // Subscribed rather than read in render, so handling a request (and closing
+  // the mobile sidebar, as selecting any session does) happens in a callback.
+  useEffect(
+    () =>
+      subscribe(tmuxAttachStore, () => {
+        const request = tmuxAttachStore.request;
+        if (!request) return;
+        tmuxAttachActions.clear();
+        if (isMobile) setSidebarOpen(false);
+        const terminalInfo = getTerminalWithFallback();
+        if (!terminalInfo) return;
+        const { sessionName, hostId } = request;
+        terminalInfo.terminal.attach({ sessionName, hostId, attachOnly: true });
+        attachSession(terminalInfo.paneId, null, sessionName, hostId);
+        terminalInfo.terminal.focus();
+      }),
+    [getTerminalWithFallback, attachSession, isMobile]
+  );
 
   // Open session in new tab
   const openSessionInNewTab = useCallback(
