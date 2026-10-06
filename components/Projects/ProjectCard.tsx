@@ -3,6 +3,7 @@
 import type { ProjectRowModel } from "@/lib/project-rows";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { HostBadge } from "@/components/Hosts/HostBadge";
+import { BoardChip, ProjectBoardItem } from "@/components/LumifyHub";
 import {
   useWorkspacesQuery,
   useMoveProjectToWorkspace,
@@ -198,6 +199,9 @@ export function ProjectCard({
             Remove from workspace
           </MenuItem>
         )}
+        {!project.is_uncategorized && (
+          <ProjectBoardItem project={project} Item={MenuItem} />
+        )}
         {onStartDevServer && (
           <>
             <MenuSeparator />
@@ -282,6 +286,7 @@ export function ProjectCard({
           )}
         </span>
       )}
+      <BoardChip project={project} />
       <HostBadge hostId={project.host_id} />
 
       {/* Running servers indicator */}
