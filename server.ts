@@ -9,6 +9,7 @@ import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
 import {
   interruptChat,
+  reattachChats,
   respondChat,
   sendChat,
   setChatAccess,
@@ -104,7 +105,7 @@ app.prepare().then(() => {
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
-        if (msg.type === "send") sendChat(sessionId, msg);
+        if (msg.type === "send") void sendChat(sessionId, msg).catch(fail);
         else if (msg.type === "interrupt") void interruptChat(sessionId);
         else if (msg.type === "set_model")
           void setChatModel(sessionId, msg.model);
@@ -302,4 +303,6 @@ app.prepare().then(() => {
     bindAddresses(process.env.AGENTOS_BIND).forEach(listenOn);
   refreshListeners();
   if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 30000);
+  // Chat turns that kept running through a restart.
+  void reattachChats();
 });

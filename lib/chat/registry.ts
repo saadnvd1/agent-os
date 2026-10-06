@@ -1,5 +1,5 @@
 import { db, type Session } from "../db";
-import type { ChatConversation } from "./driver";
+import type { WorkerClient } from "./worker/client";
 import type {
   ChatCommand,
   ChatItem,
@@ -7,13 +7,13 @@ import type {
   ChatServerMessage,
   ChatState,
 } from "./events";
-import { saveItem } from "./store";
 
+// A conversation whose worker this server is connected to.
 export interface Live {
-  conversation: ChatConversation;
+  worker: WorkerClient;
   state: ChatState;
+  // Streamed items carry their latest text here, ahead of SQLite.
   streaming: Map<string, ChatItem>;
-  idleTimer?: NodeJS.Timeout;
 }
 
 export type Listener = (m: ChatServerMessage) => void;
@@ -27,6 +27,7 @@ export interface Capabilities {
 
 interface Registry {
   live: Map<string, Live>;
+  connecting: Map<string, Promise<Live>>;
   listeners: Map<string, Set<Listener>>;
   // What each agent offers per folder: commands, skills, models.
   caps: Map<string, Capabilities>;
@@ -37,18 +38,15 @@ interface Registry {
 const g = globalThis as unknown as { __agentosChat?: Registry };
 export const registry: Registry = (g.__agentosChat ??= {
   live: new Map(),
+  connecting: new Map(),
   listeners: new Map(),
   caps: new Map(),
 });
 registry.caps ??= new Map();
+registry.connecting ??= new Map();
 
 export function emit(sessionId: string, m: ChatServerMessage): void {
   registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
-}
-
-export function record(sessionId: string, item: ChatItem): void {
-  saveItem(sessionId, item);
-  emit(sessionId, { type: "item", item });
 }
 
 export function getSession(sessionId: string): Session {

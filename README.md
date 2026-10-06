@@ -110,8 +110,10 @@ agent as the terminal (Claude Code through the Agent SDK, with your own Claude
 login). The **Chat /
 Terminal** switch in the tab bar hands the same conversation between the two:
 the terminal resumes it with `claude --resume`, and switching back closes the
-terminal so only one side drives it. History is kept in AgentOS and survives
-restarts.
+terminal so only one side drives it. Each chat conversation runs in its own
+worker process (in tmux, like terminal sessions), so restarting or updating
+AgentOS never cuts off a turn: the server reconnects to running workers when
+it starts. History is kept in AgentOS.
 
 Type `/` in the composer for every slash command and skill the agent knows,
 yours included, filtered as you type. Commands such as `/compact`, `/usage`
