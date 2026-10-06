@@ -54,6 +54,7 @@ app.prepare().then(() => {
           host: header(req.headers.host),
           origin: header(req.headers.origin),
           fetchSite: header(req.headers["sec-fetch-site"]),
+          fetchMode: header(req.headers["sec-fetch-mode"]),
         },
         policy
       )

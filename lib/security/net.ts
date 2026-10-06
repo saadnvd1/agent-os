@@ -78,6 +78,24 @@ export function originAllowed(
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+// LumifyHub's approve page sends the browser back here, so this one URL is
+// reached by a cross-site top-level navigation. It acts only on a `state`
+// this instance issued, which a foreign page can't know.
+const CROSS_SITE_NAVIGATIONS = ["/api/lumifyhub/callback"];
+
+function crossSiteNavigationAllowed(req: {
+  method?: string;
+  url?: string;
+  fetchMode?: string;
+}): boolean {
+  const path = (req.url ?? "").split("?")[0];
+  return (
+    (req.method ?? "GET").toUpperCase() === "GET" &&
+    req.fetchMode === "navigate" &&
+    CROSS_SITE_NAVIGATIONS.includes(path)
+  );
+}
+
 export function requestAllowed(
   req: {
     method?: string;
@@ -85,12 +103,13 @@ export function requestAllowed(
     host?: string;
     origin?: string;
     fetchSite?: string;
+    fetchMode?: string;
   },
   policy: AccessPolicy
 ): boolean {
   if (!hostAllowed(req.host, policy)) return false;
   if (!req.url?.startsWith("/api/")) return true;
-  if (req.fetchSite === "cross-site") return false;
+  if (req.fetchSite === "cross-site") return crossSiteNavigationAllowed(req);
   if (!SAFE_METHODS.has((req.method ?? "GET").toUpperCase())) {
     return originAllowed(req.origin, policy);
   }

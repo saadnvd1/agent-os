@@ -80,6 +80,44 @@ describe("requests from web pages", () => {
     expect(originAllowed(undefined, policy)).toBe(true);
   });
 
+  it("lets LumifyHub's approve page navigate back to the callback only", () => {
+    const back = {
+      host: "127.0.0.1:3011",
+      method: "GET",
+      fetchSite: "cross-site",
+      fetchMode: "navigate",
+    };
+    expect(
+      requestAllowed(
+        { ...back, url: "/api/lumifyhub/callback?code=c&state=s" },
+        policy
+      )
+    ).toBe(true);
+    // A fetch from another page, not a navigation
+    expect(
+      requestAllowed(
+        { ...back, url: "/api/lumifyhub/callback", fetchMode: "cors" },
+        policy
+      )
+    ).toBe(false);
+    // Any other path, or a POST, is still refused
+    expect(
+      requestAllowed({ ...back, url: "/api/lumifyhub/token" }, policy)
+    ).toBe(false);
+    expect(
+      requestAllowed(
+        { ...back, url: "/api/exec?x=/api/lumifyhub/callback" },
+        policy
+      )
+    ).toBe(false);
+    expect(
+      requestAllowed(
+        { ...back, method: "POST", url: "/api/lumifyhub/callback" },
+        policy
+      )
+    ).toBe(false);
+  });
+
   it("guards the terminal WebSocket the same way", () => {
     expect(
       upgradeAllowed(
