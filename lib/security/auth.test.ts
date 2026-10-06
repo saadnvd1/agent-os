@@ -11,7 +11,12 @@ const req = (
   remoteAddress: string,
   headers: IncomingHttpHeaders = {},
   localAddress = remoteAddress.startsWith("100.") ? TS_SELF : "127.0.0.1"
-) => ({ url: "/api/sessions", headers, remoteAddress, localAddress });
+) => ({
+  url: "/api/sessions",
+  headers: { host: "127.0.0.1:3011", ...headers },
+  remoteAddress,
+  localAddress,
+});
 
 describe("authorize", () => {
   it("trusts loopback", () => {
@@ -25,13 +30,58 @@ describe("authorize", () => {
 
   it.each([
     "x-forwarded-for",
+    "x-forwarded-proto",
     "forwarded",
+    "via",
     "x-real-ip",
+    "x-client-ip",
+    "true-client-ip",
+    "x-original-forwarded-for",
+    "cf-connecting-ip",
     "tailscale-user-login",
   ])("does not trust loopback carrying %s (a local proxy)", (h) => {
     expect(authorize(req("127.0.0.1", { [h]: "1.2.3.4" }), policy)).toEqual({
       ok: false,
     });
+  });
+
+  it.each(["localhost:3011", "[::1]:3011", "127.0.0.1"])(
+    "trusts loopback addressed as %s",
+    (host) => {
+      expect(authorize(req("127.0.0.1", { host }), policy).ok).toBe(true);
+    }
+  );
+
+  it.each(["evil.example:3011", "", "100.73.93.113:3011"])(
+    "does not trust loopback addressed as %j (DNS rebinding)",
+    (host) => {
+      expect(authorize(req("127.0.0.1", { host }), policy).ok).toBe(false);
+    }
+  );
+
+  it("refuses a malformed cookie instead of throwing", () => {
+    const r = req(
+      "192.168.1.20",
+      { cookie: "aos_device=%E0%A4%A" },
+      "192.168.1.5"
+    );
+    expect(() => authorize(r, policy)).not.toThrow();
+    expect(authorize(r, policy)).toEqual({ ok: false });
+  });
+
+  it("refuses when the lookup itself throws (deny by default)", () => {
+    const broken = {
+      ...policy,
+      lookup: () => {
+        throw new Error("db gone");
+      },
+    };
+    const r = req(
+      "192.168.1.20",
+      { cookie: "aos_device=aosd_good" },
+      "192.168.1.5"
+    );
+    expect(authorize(r, broken)).toEqual({ ok: false });
   });
 
   it("lets a proxied request through with a device token", () => {
@@ -112,8 +162,17 @@ describe("isPublicPath", () => {
     "/api/sessions",
     "/api/pair/start",
     "/pairing-evil",
+    "/pair/x",
     "/api/exec",
     "/_next/data/x",
+    "/_next/static/../../api/exec",
+    "/_next/static/..%2f..%2fapi/exec",
+    "/_next/static/%2e%2e/api/exec",
+    "/pair/..%2fapi/exec",
+    "/icons/..%5capi",
+    "/icons\\..\\api",
+    "//api/exec",
+    "/_next/static//x",
   ])("%s is not", (p) => expect(isPublicPath(p)).toBe(false));
 });
 

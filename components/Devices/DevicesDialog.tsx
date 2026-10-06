@@ -21,6 +21,9 @@ export function DevicesDialog() {
   const { open } = useSnapshot(devicesUi);
   const { data, isPending, isError, error } = useDevicesQuery(open);
   const [adding, setAdding] = useState(false);
+  // A paired phone may use AgentOS but not add devices or open the network.
+  const via = data?.current.via;
+  const canManage = via === "loopback" || via === "tailnet";
 
   const close = (o: boolean) => {
     devicesUiActions.setOpen(o);
@@ -40,7 +43,7 @@ export function DevicesDialog() {
 
         {adding ? (
           <AddDevicePanel onDone={() => setAdding(false)} />
-        ) : (
+        ) : canManage ? (
           <Button
             onClick={() => setAdding(true)}
             className="h-11 w-full sm:h-9"
@@ -48,6 +51,13 @@ export function DevicesDialog() {
             <Plus className="h-4 w-4" />
             Add a device
           </Button>
+        ) : (
+          data && (
+            <p className="text-muted-foreground text-sm">
+              Add devices and change access on the machine running AgentOS, or
+              over Tailscale.
+            </p>
+          )
         )}
 
         <div className="space-y-2">
@@ -72,7 +82,7 @@ export function DevicesDialog() {
         </div>
 
         <p className="pt-2 text-sm font-medium">Access</p>
-        <NetworkSection open={open} />
+        <NetworkSection open={open} canManage={canManage} />
       </DialogContent>
     </Dialog>
   );

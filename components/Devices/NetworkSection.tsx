@@ -23,7 +23,7 @@ function Toggle({
         <p className="text-sm font-medium">{title}</p>
         <p className="text-muted-foreground text-xs">
           {detail}
-          {locked ? " Set by an environment variable." : ""}
+          {locked ? " Can't be changed from here." : ""}
         </p>
       </div>
       <Switch
@@ -36,7 +36,13 @@ function Toggle({
   );
 }
 
-export function NetworkSection({ open }: { open: boolean }) {
+export function NetworkSection({
+  open,
+  canManage,
+}: {
+  open: boolean;
+  canManage: boolean;
+}) {
   const { data, isPending, isError, error } = useNetworkQuery(open);
   const update = useUpdateNetwork();
 
@@ -52,14 +58,14 @@ export function NetworkSection({ open }: { open: boolean }) {
         title="Allow devices on this Wi-Fi"
         detail="Paired devices on the same network can connect. Use it on networks you trust: Wi-Fi traffic isn't encrypted."
         checked={data.lan.on}
-        locked={data.lan.locked}
+        locked={data.lan.locked || !canManage}
         onChange={(lan) => update.mutate({ lan })}
       />
       <Toggle
         title="Require pairing on Tailscale too"
         detail="By default anything on your tailnet is trusted. Turn this on if others share your tailnet."
         checked={data.requirePairingOnTailnet.on}
-        locked={data.requirePairingOnTailnet.locked}
+        locked={data.requirePairingOnTailnet.locked || !canManage}
         onChange={(requirePairingOnTailnet) =>
           update.mutate({ requirePairingOnTailnet })
         }

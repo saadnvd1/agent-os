@@ -280,11 +280,19 @@ AgentOS gives whoever uses it a terminal as you, so it decides who that is:
   too" in Devices if other people share it.
 - **Everything else** needs a paired device. That covers Wi-Fi, `AGENTOS_BIND`,
   and any reverse proxy, including `tailscale serve`. A request that arrives
-  from localhost with proxy headers counts as coming from the proxy's client,
-  not from this machine.
+  from localhost with proxy headers (`X-Forwarded-*`, `Forwarded`, `Via`,
+  `X-Real-IP`, `CF-*`, `Tailscale-*` and similar) counts as coming from the
+  proxy's client, not from this machine. A proxy that sends none of these
+  looks like this machine itself, so put such a proxy behind
+  `AGENTOS_AUTH=off` only if it does its own login.
+- A request from localhost must also be addressed to `localhost` or
+  `127.0.0.1`. This stops a web page that has rebound its own domain to
+  127.0.0.1 from counting as this machine.
 
 Each paired device holds its own token. Only a hash of it is stored, and
-removing the device in Devices cuts its open terminals at once.
+removing the device in Devices cuts its open terminals at once. A paired
+device can use AgentOS but can't add devices or change access; only this
+machine and the tailnet can.
 
 AgentOS also refuses requests addressed to any other host name (DNS rebinding),
 and API calls or terminal connections made by another website's page.

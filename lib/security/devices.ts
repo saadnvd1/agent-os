@@ -65,15 +65,17 @@ export function deviceForToken(token: string): { id: string } | null {
 
 const lastTouch = new Map<string, number>();
 
-export function touchDevice(id: string, address?: string): void {
+/** True when it actually wrote (at most once a minute per device). */
+export function touchDevice(id: string, address?: string): boolean {
   const now = Date.now();
-  if (now - (lastTouch.get(id) ?? 0) < TOUCH_EVERY_MS) return;
+  if (now - (lastTouch.get(id) ?? 0) < TOUCH_EVERY_MS) return false;
   lastTouch.set(id, now);
   getDb()
     .prepare(
       `UPDATE devices SET last_seen_at = datetime('now'), last_address = ? WHERE id = ?`
     )
     .run(address ?? null, id);
+  return true;
 }
 
 export function listDevices(): Device[] {

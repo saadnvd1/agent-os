@@ -51,4 +51,15 @@ describe("pairing", () => {
     });
     expect(claim(code, "10.0.0.13").ok).toBe(true);
   });
+
+  it("caps claims across all addresses", () => {
+    for (let i = 0; i < 60; i++) claim("WRONGWRONGWRONG0", `10.1.${i}.1`);
+    const { code } = startPairing();
+    expect(claim(code, "10.2.0.1")).toEqual({
+      ok: false,
+      error: "rate_limited",
+    });
+    // A minute later the window has cleared and old entries are pruned.
+    expect(claim(code, "10.2.0.1", Date.now() + 61_000).ok).toBe(true);
+  });
 });

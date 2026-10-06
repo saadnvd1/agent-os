@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { networkState } from "@/lib/security/network-state";
+import { requireLocalTrust } from "@/lib/security/route-guard";
 import {
   setNetworkSetting,
   networkSettingLocked,
@@ -13,6 +14,8 @@ export async function GET() {
 
 // PUT /api/devices/network {lan?, requirePairingOnTailnet?}
 export async function PUT(request: NextRequest) {
+  const refused = requireLocalTrust(request);
+  if (refused) return refused;
   const body = (await request.json().catch(() => ({}))) as {
     lan?: boolean;
     requirePairingOnTailnet?: boolean;
