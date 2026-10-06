@@ -22,6 +22,7 @@ describe("homeRelative", () => {
     assert.equal(homeRelative("/home/alice/dev/app/"), "~/dev/app");
     assert.equal(homeRelative("/root"), "~");
     assert.equal(homeRelative("/srv/app"), "/srv/app");
+    assert.equal(homeRelative("/Users/alice//saadnaveed"), "~/saadnaveed");
   });
 });
 
