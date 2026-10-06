@@ -1,12 +1,20 @@
 # AgentOS
 
-A mobile-first web UI for managing AI coding sessions.
+A self-hosted, mobile-first home for your AI coding agents. Run Claude Code,
+Codex, Gemini CLI and others side by side, chat with them or drop into their
+terminal, hand off tasks that end in a pull request, and check on all of it
+from your phone.
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/cSjutkCGAh)
 
-https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/hero-light.png">
+  <img alt="AgentOS: sessions grouped by workspace, a chat with plan, steps and diffs, and the git panel" src="screenshots/hero.png">
+</picture>
 
-![AgentOS Screenshot](screenshot-v2.png)
+![AgentOS on a phone: a chat and the session list](screenshots/mobile.png)
+
+Demo video: https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
 
 ## Installation
 
@@ -111,8 +119,12 @@ invokes on its own appear as a chip. `/model` (or the picker under the
 composer) switches the model mid-conversation. Commands that only make sense
 in a terminal, such as `/vim`, are left out.
 
+![The slash-command menu open in a chat](screenshots/commands.png)
+
 Chat runs on this machine; sessions on other machines use the terminal.
 Drivers for other agent CLIs plug into `lib/chat/drivers`.
+
+![A session in terminal view, with the agent asking before it runs a command](screenshots/terminal.png)
 
 ## Tasks
 
@@ -125,6 +137,8 @@ or pending), then removes the session, worktree and branches. **Drop** closes
 the PR and removes everything. Agents never merge their own work.
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
+
+![Tasks in different states: needs input, ready for review, working, merged](screenshots/tasks.png)
 
 ## Agent network
 
@@ -146,6 +160,8 @@ Messages are delivered by typing them into the recipient's terminal, labelled
 as coming from another agent, and a rate limit stops two agents looping. The
 **Messages** panel shows every conversation and lets you message any session.
 Sessions on other machines can receive messages but not yet send them.
+
+![Messages between agent sessions, and one from you](screenshots/messages.png)
 
 ## Workspaces
 
@@ -204,6 +220,7 @@ it; `AGENTOS_ALLOWED_HOSTS` adds host names it should answer to.
 ## Development
 
 ```bash
+npm run screenshots  # regenerate screenshots/ from a demo instance with fake data
 npm run dev          # http://localhost:3011
 npm test             # vitest
 npm run lint         # eslint
