@@ -21,3 +21,31 @@ jobs:
           cache: npm
       - run: npm ci
       - run: scripts/check --build
+
+  # Every push to main goes to npm. The patch number is the commit count, so
+  # it only ever grows and nothing is committed back.
+  publish:
+    name: Publish to npm
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: npm-publish
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version from commit count
+        run: |
+          base=$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")')
+          npm version "$base.$(git rev-list --count HEAD)" --no-git-tag-version --allow-same-version
+      - run: scripts/publish
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
