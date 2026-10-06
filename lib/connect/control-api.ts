@@ -34,7 +34,6 @@ export function checkApiUrl(raw: string, operator: boolean): string {
 
 /** Server text printed to a terminal: no control characters, bounded. */
 export function clean(text: string, max = 200): string {
-   
   const s = text.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
