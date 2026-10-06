@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Run every minute by serviceman on Saad's Mac: when origin/main moves,
+# redeploy the live instance and publish the same commit to npm. Runs in the
+# background; chat turns live in workers, so the restart interrupts nothing.
+#   sm add agentos-autodeploy "scripts/autodeploy" --cron "* * * * *"
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.nvm/nvm.sh" >/dev/null
+  nvm use >/dev/null
+fi
+
+state="$HOME/.agent-os/autodeploy"
+mkdir -p "$state"
+# One run at a time; a deploy can outlast the minute.
+if ! mkdir "$state/lock" 2>/dev/null; then
+  # A lock older than 30 minutes is from a run that died.
+  if [ -n "$(find "$state/lock" -maxdepth 0 -mmin +30)" ]; then
+    rmdir "$state/lock"
+  fi
+  exit 0
+fi
+trap 'rmdir "$state/lock"' EXIT
+
+git fetch -q origin main
+head=$(git rev-parse origin/main)
+deployed=$(cat "$state/deployed" 2>/dev/null || true)
+published=$(cat "$state/published" 2>/dev/null || true)
+[ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
+
+log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
+
+if [ "$head" != "$deployed" ]; then
+  log "Deploying ${head:0:7}"
+  AGENTOS_RESTART="${AGENTOS_RESTART:-sm restart agentos}" scripts/redeploy
+  echo "$head" > "$state/deployed"
+fi
+
+if [ "$head" != "$published" ]; then
+  # From a clean copy of the commit, so the live checkout is never touched.
+  tmp=$(mktemp -d)
+  trap 'rmdir "$state/lock"; rm -rf "$tmp"' EXIT
+  git archive "$head" | tar -x -C "$tmp"
+  base=$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")')
+  version="$base.$(git rev-list --count "$head")"
+  (cd "$tmp" && npm version "$version" --no-git-tag-version --allow-same-version >/dev/null)
+  log "Publishing $version"
+  "$tmp/scripts/publish"
+  echo "$head" > "$state/published"
+fi
