@@ -31,6 +31,8 @@ import { useViewport } from "@/hooks/useViewport";
 
 // Data hooks
 import { useSessionsQuery } from "@/data/sessions";
+import { useDocsWorkspace } from "@/data/lumifyhub/docs";
+import { docsUiActions } from "@/stores/docsUi";
 import { useProjectsQuery, useCreateProject } from "@/data/projects";
 import { useDevServersQuery } from "@/data/dev-servers";
 
@@ -70,6 +72,9 @@ export function SessionList({
   const hasError = isSessionsError || isProjectsError;
 
   const sessions = sessionsData?.sessions ?? [];
+  const docsWorkspace = useDocsWorkspace(
+    sessions.find((s) => s.id === activeSessionId)?.project_id
+  );
   const groups = sessionsData?.groups ?? [];
 
   // All mutations via custom hook
@@ -174,6 +179,9 @@ export function SessionList({
         onKillAll={() => setShowKillAllConfirm(true)}
         onManageHosts={() => setShowHostsDialog(true)}
         onNewWorkspace={() => setShowNewWorkspace(true)}
+        onOpenDocs={
+          docsWorkspace ? () => docsUiActions.open(docsWorkspace.id) : undefined
+        }
         pinControls={pinControls}
       />
 

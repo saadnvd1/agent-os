@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   ListTodo,
   MessagesSquare,
+  BookOpen,
 } from "lucide-react";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { busUiActions } from "@/stores/busUi";
@@ -30,6 +31,8 @@ interface SessionListHeaderProps {
   onKillAll: () => void;
   onManageHosts: () => void;
   onNewWorkspace: () => void;
+  // Set when the active session's project has LumifyHub docs.
+  onOpenDocs?: () => void;
   pinControls?: {
     isPinned: boolean;
     onTogglePin: () => void;
@@ -43,6 +46,7 @@ export function SessionListHeader({
   onKillAll,
   onManageHosts,
   onNewWorkspace,
+  onOpenDocs,
   pinControls,
 }: SessionListHeaderProps) {
   return (
@@ -81,6 +85,9 @@ export function SessionListHeader({
             menuItem("New Task", tasksUiActions.openNew, { icon: ListTodo }),
             menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
             menuItem("Messages", busUiActions.open, { icon: MessagesSquare }),
+            ...(onOpenDocs
+              ? [menuItem("Docs", onOpenDocs, { icon: BookOpen })]
+              : []),
             menuItem("Open Project", onOpenProject, { icon: FolderOpen }),
             menuItem("Clone from GitHub", onCloneFromGithub, {
               icon: GitBranch,
