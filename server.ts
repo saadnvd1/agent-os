@@ -353,8 +353,10 @@ app.prepare().then(() => {
         stopListening(address);
       }
     }
+    const connectHost = connect.hostname();
     policy.extraHosts = [
       ...configuredHosts,
+      ...(connectHost ? [connectHost] : []),
       ...(lan
         ? [
             os
@@ -366,8 +368,7 @@ app.prepare().then(() => {
     ];
   };
   // AgentOS Connect: reachable at <id>.<machine domain> through the relay.
-  const connect = startConnect({ onRequest, onUpgrade });
-  if (connect) configuredHosts.push(connect.hostname);
+  const connect = startConnect({ onRequest, onUpgrade }, port);
   refreshListeners();
   if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 5000);
   if (process.env.AGENTOS_AUTH === "off" && listeners.size > 1) {

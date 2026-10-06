@@ -75,6 +75,8 @@ case "${1:-}" in
     run)              cmd_run ;;
     status)           cmd_status ;;
     pair)             node "$SCRIPT_DIR/pair.mjs" "$PORT" ;;
+    connect)          shift; (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/connect/cli.ts "$@") ;;
+    disconnect)       (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/connect/cli.ts --off) ;;
     logs)             cmd_logs ;;
     update)           cmd_update ;;
     enable)           cmd_enable ;;

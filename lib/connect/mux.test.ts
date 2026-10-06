@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { EventEmitter } from "events";
 import type WebSocket from "ws";
-import { Mux } from "./mux";
+import { Mux, MAX_STREAMS } from "./mux";
 import { decode, encode, Frame } from "./frames";
 import { MAX_BUFFERED } from "./stream";
 
@@ -60,5 +60,17 @@ describe("Mux", () => {
       mux.handle(encode(Frame.DATA, 99, Buffer.from("x")))
     ).not.toThrow();
     expect(mux.handle(Buffer.from([1]))).toBeNull();
+  });
+});
+
+describe("Mux on the machine side", () => {
+  it("refuses streams past the cap instead of accepting them", () => {
+    const { ws, sent } = fakeWs();
+    let opened = 0;
+    const mux = new Mux(ws, () => opened++);
+    for (let id = 1; id <= MAX_STREAMS + 5; id++)
+      mux.handle(encode(Frame.OPEN, id, {}));
+    expect(opened).toBe(MAX_STREAMS);
+    expect(sent.filter((b) => decode(b)?.type === Frame.CLOSE).length).toBe(5);
   });
 });

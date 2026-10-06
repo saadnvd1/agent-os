@@ -1,12 +1,14 @@
 import { tailscaleStatus, type TailscaleState } from "@/lib/tailscale";
 import { networkSetting, networkSettingLocked } from "./network-settings";
 import { reachableAt, type Reach } from "./reach";
+import { connectStatus, type ConnectStatus } from "@/lib/connect/serve";
 
 export interface NetworkState {
   lan: { on: boolean; locked: boolean };
   requirePairingOnTailnet: { on: boolean; locked: boolean };
   tailscale: TailscaleState;
   reach: Reach[];
+  connect: ConnectStatus;
 }
 
 export async function networkState(): Promise<NetworkState> {
@@ -18,5 +20,6 @@ export async function networkState(): Promise<NetworkState> {
     },
     tailscale: await tailscaleStatus(),
     reach: await reachableAt(),
+    connect: connectStatus(),
   };
 }

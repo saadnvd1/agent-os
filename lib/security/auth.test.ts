@@ -155,6 +155,14 @@ describe("authorize", () => {
     ).toBe(true);
   });
 
+  it("never opens a Connect stream, even with auth off", () => {
+    const tunnel = {
+      url: "/api/exec",
+      headers: { host: "abcd1234.on.runagentos.com" },
+    };
+    expect(authorize(tunnel, { ...policy, off: true })).toEqual({ ok: false });
+  });
+
   it("opens up only when auth is off", () => {
     const r = req("192.168.1.20", {}, "192.168.1.5");
     expect(authorize(r, { ...policy, off: true })).toEqual({
