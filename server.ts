@@ -28,6 +28,7 @@ import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
 import {
   bindAddresses,
   requestAllowed,
+  tailscaleAddresses,
   upgradeAllowed,
   type AccessPolicy,
 } from "./lib/security/net";
@@ -35,6 +36,7 @@ import { authPolicy, gateRequest, gateUpgrade } from "./lib/security/gate";
 import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
+import { startTailnetHttps } from "./lib/security/tailnet-https";
 import os from "os";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -371,6 +373,14 @@ app.prepare().then(() => {
   };
   // AgentOS Connect: reachable at <id>.<machine domain> through the relay.
   const connect = startConnect({ onRequest, onUpgrade }, port);
+  // HTTPS on the tailnet (its own port) for passkeys and other secure-origin APIs.
+  if (process.env.AGENTOS_TAILNET_HTTPS !== "0" && !process.env.AGENTOS_BIND) {
+    startTailnetHttps({
+      handlers: { onRequest, onUpgrade },
+      port,
+      addresses: () => tailscaleAddresses(),
+    });
+  }
   refreshListeners();
   if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 5000);
   if (process.env.AGENTOS_AUTH === "off" && listeners.size > 1) {

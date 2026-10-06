@@ -391,7 +391,12 @@ and type the code. Each code works once, for 10 minutes.
 
 **Anywhere:** install [Tailscale](https://tailscale.com) on this machine and
 your phone and sign in to the same account. Devices then shows a Tailscale
-link, which works from anywhere and is encrypted. Use Wi-Fi access only on
+link, which works from anywhere and is encrypted. If your tailnet has HTTPS
+certificates turned on, AgentOS also serves `https://<machine>.ts.net:3443`
+with Tailscale's own certificate (renewed daily). Passkeys, the clipboard
+and notifications need that secure address. Plain HTTP on 3011 keeps
+working. `AGENTOS_TAILNET_HTTPS=0` turns it off, and
+`AGENTOS_TAILNET_HTTPS_PORT` moves it. Use Wi-Fi access only on
 networks you trust, because traffic on Wi-Fi is not encrypted.
 
 ## Documentation

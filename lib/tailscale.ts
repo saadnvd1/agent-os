@@ -25,7 +25,7 @@ const CACHE_MS = 30_000;
 
 let cached: { at: number; value: TailscaleState } | null = null;
 
-function binary(): string | null {
+export function tailscaleBinary(): string | null {
   for (const dir of (process.env.PATH ?? "").split(":")) {
     const p = `${dir}/tailscale`;
     if (dir && fs.existsSync(p)) return p;
@@ -62,7 +62,7 @@ export function parseStatus(raw: string): TailscaleState {
 
 export async function tailscaleStatus(): Promise<TailscaleState> {
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.value;
-  const bin = binary();
+  const bin = tailscaleBinary();
   let value: TailscaleState;
   if (!bin) {
     const ips = tailscaleAddresses();
