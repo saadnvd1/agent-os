@@ -60,7 +60,7 @@ vi.mock("@/lib/agents/spawn", () => ({
 }));
 vi.mock("./usage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./usage")>()),
-  readUsageWindow: () => null,
+  readUsage: () => ({ window: null }),
 }));
 
 const { db } = await import("@/lib/db");
