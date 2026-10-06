@@ -30,6 +30,13 @@
 - [ ] Resume an exited task with `claude --resume`
 - [ ] Per-task dev server port and database, as dispatch does
 
+## Composer follow-ups (from PR #84 review)
+
+- [ ] Reset the pasted-text attachment counter after sending, so a new message starts at pasted-text.txt
+- [ ] Keep NUL characters in pasted text (the lazy-line marker uses \u0000 and strips them)
+- [ ] Decide on CRLF: pasted Windows line endings are normalised to LF
+- [ ] Tests: typing in the editor serialises to what was typed; a broken draft loads as plain text
+
 ## Workspace orchestrator
 
 - [ ] One standing orchestrator per workspace: see docs/plans/workspace-orchestrator.md
