@@ -39,7 +39,7 @@ Skip agents whose condition isn't met. When in doubt about `review-security`, ru
 
 ### 3. Launch in parallel
 
-Send **one message with one Agent call per selected agent** (`subagent_type` = the agent's name). Each prompt includes the changed-file list (with status letters), the base (`main` or the stack's parent branch), the PR number if any, the goal brief, and: "Follow your review process and output format."
+Send **one message with one Agent call per selected agent** (`subagent_type` = the agent's name). Claude Code registers agent types when a session starts, so in a session started before these files existed (or in a worktree that didn't have them yet), use `subagent_type: "general-purpose"` and begin the prompt with "Read `.claude/agents/<name>.md` and follow it exactly." Each prompt includes the changed-file list (with status letters), the base (`main` or the stack's parent branch), the PR number if any, the goal brief, and: "Follow your review process and output format."
 
 ### 4. Verify every finding
 
@@ -105,7 +105,7 @@ Fixed: #1 upgrade trusted loopback behind a proxy (server.ts); #3 migration id c
 Deferred: #4 composer button is 40px on the sheet (Medium) — the sheet is being replaced in ENG-31
 ```
 
-Any push after that (a CI fix, a rebase, a restack by AgentOS) means a new head: re-run the review on what changed and update the `Reviewed:` line. A section naming another commit is refused like a missing one.
+Any push of yours after that (a CI fix, a rebase) means a new head: re-run the review on what changed and update the `Reviewed:` line. A section naming another commit is refused like a missing one. The one exception is a stack restack: when AgentOS rebases your branch onto a merged parent, your review still counts for the head it pushed, until you push again.
 
 ## Rules
 
@@ -116,7 +116,7 @@ Any push after that (a CI fix, a rebase, a restack by AgentOS) means a new head:
 
 ## The invariants, in brief
 
-The agents carry the detail; this is the short list (the orchestrator's own reviewer reads this file from the base branch as its checklist):
+The agents carry the detail; this is the short list. (The orchestrator's own independent reviewer gets the agents' "Rules" sections from the base branch as its checklist, so a rule written there is checked twice.)
 
 - **Access**: every HTTP route and WebSocket upgrade goes through `lib/security/gate.ts`; loopback trust needs a loopback peer, a loopback Host and no proxy header (`proxied()`); tailnet trust needs Tailscale's interface and IPs; device tokens are hashed at rest; actions that mint devices or open the network need local trust; approvals of hard lines need a fresh WebAuthn assertion bound to that ask; any exception in the auth path denies.
 - **Processes**: `execFile`/`spawn` with an argument array, never a shell string with interpolated input; `--` before user-supplied git refs or paths; tmux calls pass `-S` and the target explicitly.

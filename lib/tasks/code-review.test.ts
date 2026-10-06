@@ -33,6 +33,28 @@ describe("parseCodeReview", () => {
   });
 });
 
+describe("parseCodeReview on hostile bodies", () => {
+  it("stays fast on bodies built to make a regex backtrack", () => {
+    for (const body of [
+      "## Code review" + "\n".repeat(200_000),
+      "## code review" + " ".repeat(200_000) + "x",
+      "## Code review\n" + " \n".repeat(100_000) + "Reviewed: 4f2a9c1",
+      "## Code review\n" + "> * _ - ".repeat(50_000),
+    ]) {
+      const started = performance.now();
+      parseCodeReview(body);
+      // The backtracking versions took 7-10 s on bodies like these.
+      expect(performance.now() - started).toBeLessThan(1000);
+    }
+  });
+
+  it("reads CRLF bodies, as GitHub stores them", () => {
+    expect(parseCodeReview("## Code review\r\nReviewed: 4f2a9c1\r\n")).toEqual({
+      sha: "4f2a9c1",
+    });
+  });
+});
+
 describe("codeReviewRefusal", () => {
   it("passes a review of the head commit", () => {
     expect(codeReviewRefusal({ sha: "4f2a9c1" }, HEAD)).toBeNull();
@@ -49,15 +71,23 @@ describe("codeReviewRefusal", () => {
     );
   });
 
-  it("refuses a review of another commit, unless AgentOS restacked it", () => {
+  it("refuses a review of another commit", () => {
     expect(codeReviewRefusal({ sha: "1234567" }, HEAD)).toMatch(
       /covers 1234567, not its head 4f2a9c1/
     );
+  });
+
+  it("accepts a review of the head AgentOS restacked, only at the head it left", () => {
+    const restacked = { from: "1234567aaaa", to: HEAD };
+    expect(codeReviewRefusal({ sha: "1234567" }, HEAD, restacked)).toBeNull();
+    // The task pushed after the restack.
     expect(
-      codeReviewRefusal({ sha: "1234567" }, HEAD, { restacked: true })
-    ).toBeNull();
-    expect(codeReviewRefusal(null, HEAD, { restacked: true })).toMatch(
-      /no Code review/
+      codeReviewRefusal({ sha: "1234567" }, "9999999bbbb", restacked)
+    ).toMatch(/covers 1234567, not its head 9999999/);
+    // A section naming some other commit.
+    expect(codeReviewRefusal({ sha: "7654321" }, HEAD, restacked)).toMatch(
+      /covers 7654321/
     );
+    expect(codeReviewRefusal(null, HEAD, restacked)).toMatch(/no Code review/);
   });
 });

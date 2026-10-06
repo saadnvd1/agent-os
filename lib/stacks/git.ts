@@ -31,7 +31,13 @@ export interface RestackMove {
 }
 
 export type RestackResult =
-  | { ok: true; newTip: string; message: string }
+  | {
+      ok: true;
+      newTip: string;
+      message: string;
+      // When it pushed: the branch's head on origin before, and after.
+      pushed?: { from: string; to: string };
+    }
   | { ok: false; error: string };
 
 export function outputOf(error: unknown): string {
@@ -140,6 +146,7 @@ export async function restackBranch(
     }
   }
 
+  let pushed: { from: string; to: string } | undefined;
   if (remote.ok) {
     const head = await attempt(runner, "git", ["rev-parse", "HEAD"], wt);
     if (head.ok && head.out !== remote.out) {
@@ -161,6 +168,7 @@ export async function restackBranch(
         return fail(
           `${m.name}: rebased locally, push refused: ${push.out.slice(0, 200)}`
         );
+      pushed = { from: remote.out, to: head.out };
     }
   }
   const retargeted = m.retargetPr ? ` and retargeted PR #${m.retargetPr}` : "";
@@ -168,5 +176,6 @@ export async function restackBranch(
     ok: true,
     newTip: newTip.out,
     message: `${m.name} rebased onto ${m.onto}${retargeted}`,
+    pushed,
   };
 }

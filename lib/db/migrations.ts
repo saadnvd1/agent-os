@@ -645,6 +645,16 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    id: 31,
+    name: "add_stack_item_restacked_heads",
+    up: (db) => {
+      // A branch AgentOS rebased itself: its head before (the commit the
+      // task's code review covered) and after (the head AgentOS pushed).
+      db.exec(`ALTER TABLE stack_items ADD COLUMN restacked_from TEXT`);
+      db.exec(`ALTER TABLE stack_items ADD COLUMN restacked_to TEXT`);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

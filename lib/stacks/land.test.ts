@@ -97,6 +97,23 @@ describe("landStack", () => {
     expect(error).toContain("C: the PR's code review covers 0000000");
   });
 
+  it("accepts a review of the head AgentOS restacked, while the head is still the restack's", async () => {
+    const { s, deps, merged } = setup();
+    q.updateItem(db, s.item("C").id, {
+      restacked_from: "cccccc11",
+      restacked_to: "2abcdef0",
+    });
+    const prOf = deps.prOf;
+    deps.prOf = async (session) => {
+      const p = (await prOf(session))!;
+      return session.name === "C"
+        ? { ...p, codeReview: { sha: "cccccc1" } }
+        : p;
+    };
+    await landStack(s.stackId, deps);
+    expect(merged).toEqual(["P", "C"]);
+  });
+
   it("stops where a restacked PR goes red, and says what landed", async () => {
     const { s, deps, merged } = setup((key, after) =>
       key === "C" && after ? "fail" : "pass"

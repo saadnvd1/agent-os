@@ -30,6 +30,8 @@ const row = (
   error: null,
   attempts: 0,
   held_outside: 0,
+  restacked_from: null,
+  restacked_to: null,
   ...extra,
 });
 

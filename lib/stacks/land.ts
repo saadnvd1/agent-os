@@ -121,7 +121,12 @@ export async function landStack(
       const pr =
         session && item.status === "pr" ? await deps.prOf(session) : null;
       const verdict = canSignOff(pr);
-      const unreviewed = pr && codeReviewRefusal(pr.codeReview, pr.head);
+      const unreviewed =
+        pr &&
+        codeReviewRefusal(pr.codeReview, pr.head, {
+          from: item.restacked_from,
+          to: item.restacked_to,
+        });
       if (!verdict.ok) missing.push(`${itemName(item)}: ${verdict.reason}`);
       else if (unreviewed) missing.push(`${itemName(item)}: ${unreviewed}`);
       else if (item.error) missing.push(`${itemName(item)}: ${item.error}`);

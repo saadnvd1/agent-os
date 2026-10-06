@@ -285,7 +285,7 @@ it may do on its own, and the lines that always come back to you as asks.
   symlink-free detached checkout of the PR's exact head commit. It loads no
   settings or MCP servers from anywhere (so nothing the PR ships runs), gets
   an allowlisted environment, can only Read/Grep/Glob inside the checkout,
-  and follows the repo's review skill as the base branch has it. The verdict
+  and follows the repo's review agents' rules (`.claude/agents/review-*.md`), or its review skill, as the base branch has them. The verdict
   is stored against that sha, and a diff over 80k characters goes to you
   instead. A task from a card also gets a scope check against the card.
   `sign_off` squash-merges only that commit when CI is green and settled on

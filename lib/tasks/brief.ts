@@ -16,7 +16,7 @@ function stackedLines(baseBranch: string, stack: StackedOn): string {
   return `
 - This task is STACKED on ${stack.name} (${on}), which has not merged. Its commits are already in your branch and are not yours: don't change or revert them.
 - Open your pull request against ${baseBranch} (\`gh pr create --base ${baseBranch}\`) so its diff is only your commits, and start the body with the line "Stacked on ${on} (${stack.name})".
-- Never merge or rebase onto the default branch yourself. When the parent merges, AgentOS rebases your branch and retargets your PR, then tells you; re-run your checks and /do-code-review when it does, and update the PR body's Code review section to the new head.${also}`;
+- Never merge or rebase onto the default branch yourself. When the parent merges, AgentOS rebases your branch and retargets your PR, then tells you; re-run your checks when it does. Your code review still counts for the head AgentOS's restack left; if you push after that, review again and update the section.${also}`;
 }
 
 // What the PR body's review section looks like. lib/tasks/code-review.ts

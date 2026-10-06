@@ -16,6 +16,34 @@ import { getProject } from "../projects";
 import { itemName } from "./guard";
 import { outputOf, restackBranch, type Runner } from "./git";
 
+const headOf = (deps: { runner: Runner }, worktree: string | null) =>
+  worktree
+    ? deps.runner("git", ["rev-parse", "HEAD"], worktree).then(
+        (out) => out.trim() || null,
+        () => null
+      )
+    : Promise.resolve(null);
+
+// What a restack moved, for the code-review gate: a task's review of the
+// head it pushed still covers the head AgentOS rebased it to. Not when the
+// worktree had commits the task never pushed (the restack pushed them, so
+// no review covers them). Restacked again without the task pushing, it
+// keeps pointing at the task's own head.
+function restackedHeads(
+  item: StackItemRow,
+  localBefore: string | null,
+  pushed: { from: string; to: string } | undefined
+): Partial<Pick<StackItemRow, "restacked_from" | "restacked_to">> {
+  if (!pushed) return {};
+  if (localBefore !== pushed.from)
+    return { restacked_from: null, restacked_to: null };
+  const ours = item.restacked_to === pushed.from;
+  return {
+    restacked_from: ours ? item.restacked_from : pushed.from,
+    restacked_to: pushed.to,
+  };
+}
+
 export interface RestackDeps {
   runner: Runner;
   notify: (sessionId: string, body: string) => Promise<void>;
@@ -248,6 +276,7 @@ async function restackItems(
     }
     q.updateItem(db, item.id, { note: `Restacking onto ${onto}` });
     await deps.interrupt(session);
+    const headBefore = await headOf(deps, session.worktree_path);
     const result = await restackBranch(
       {
         name: itemName(item),
@@ -273,6 +302,7 @@ async function restackItems(
       base_tip: result.newTip,
       error: null,
       note: null,
+      ...restackedHeads(item, headBefore, result.pushed),
     });
     items.set(item.id, { ...item, base_branch: onto, base_tip: result.newTip });
     db.prepare(`UPDATE sessions SET base_branch = ? WHERE id = ?`).run(
