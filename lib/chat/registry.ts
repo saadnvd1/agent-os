@@ -16,6 +16,8 @@ export interface Live {
   streaming: Map<string, ChatItem>;
   // What the turn is doing right now, for the session list.
   activity: ChatActivity;
+  // The build its worker runs (lib/build).
+  build?: string;
 }
 
 export interface ChatActivity {

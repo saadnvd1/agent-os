@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  MoreHorizontal,
+  Pause,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +25,8 @@ interface WorkspaceHeaderProps {
   workspace: Workspace;
   projectCount: number;
   needsYou: number;
+  // Its orchestrator is paused: shown even while the section is collapsed.
+  paused?: boolean;
 }
 
 // A quiet section label: the projects under it are the rows.
@@ -26,6 +34,7 @@ export function WorkspaceHeader({
   workspace,
   projectCount,
   needsYou,
+  paused = false,
 }: WorkspaceHeaderProps) {
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
@@ -48,6 +57,12 @@ export function WorkspaceHeader({
         <span className="label-mono text-muted-foreground group-hover:text-foreground truncate transition-colors">
           {workspace.name}
         </span>
+        {paused && (
+          <Pause
+            aria-label="Orchestrator paused"
+            className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400"
+          />
+        )}
         {needsYou > 0 ? (
           <span className="font-mono text-[11px] text-amber-600 tabular-nums dark:text-amber-400">
             {needsYou}

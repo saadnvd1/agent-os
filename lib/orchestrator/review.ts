@@ -68,7 +68,7 @@ async function reviewJob(
   );
   if (diff.length > DIFF_CAP) {
     const why = `PR #${pr.number}'s diff at ${short(sha)} is ${diff.length} characters, too big to review whole`;
-    escalate(workspaceId, task, "size", why, pr.url);
+    escalate(workspaceId, task, "size", why, pr.url, sha);
     return putCheck({
       ...row,
       kind: "review",

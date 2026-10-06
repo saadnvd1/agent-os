@@ -69,7 +69,11 @@ export function deleteWorkspace(id: string): void {
     db.prepare(
       `DELETE FROM sessions WHERE role = 'orchestrator' AND workspace_id = ?`
     ).run(id);
-    for (const table of ["orchestrator_events", "orchestrator_event_log"])
+    for (const table of [
+      "orchestrator_events",
+      "orchestrator_event_log",
+      "orchestrator_asks",
+    ])
       db.prepare(`DELETE FROM ${table} WHERE workspace_id = ?`).run(id);
   })();
 }

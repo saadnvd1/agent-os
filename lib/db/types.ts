@@ -147,6 +147,8 @@ export interface Workspace {
   orch_max_running: number;
   orch_max_starts_per_hour: number;
   orch_brake: string | null;
+  // Set while Saad has the orchestrator paused.
+  orch_paused_at: string | null;
   created_at: string;
 }
 

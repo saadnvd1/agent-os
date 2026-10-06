@@ -13,6 +13,9 @@ import { statusDetector } from "../status-detector";
 import { getWorkspace } from "../workspaces";
 import { workspaceSessions } from "./facts";
 import { addNote } from "./notes";
+import { AskRefused, BRAKE_SUBJECT, raiseAsk, resolveAsks } from "./asks";
+import { spendApproval, unspentApproval, voidApprovals } from "./ask-approvals";
+import { isPaused } from "./pause";
 import { readUsage, windowRefusal, type UsageState } from "./usage";
 
 const HOUR = 60 * 60 * 1000;
@@ -93,27 +96,67 @@ function serially<T>(workspaceId: string, job: () => Promise<T>): Promise<T> {
   return run;
 }
 
-// The reason no start may go now (noted once per brake), or null.
+const setBrake = (workspaceId: string, key: string | null) =>
+  db
+    .prepare(`UPDATE workspaces SET orch_brake = ? WHERE id = ?`)
+    .run(key, workspaceId);
+
+// No brake holds: the next one is noted and asked about afresh.
+export function liftBrake(workspaceId: string): void {
+  setBrake(workspaceId, null);
+  resolveAsks(workspaceId, BRAKE_SUBJECT, "the brakes lifted");
+  voidApprovals(workspaceId, BRAKE_SUBJECT);
+}
+
+// Saad's approval of a brake ask lets one start past the brakes, if he
+// gave it lately; a stale one isn't a standing pass.
+const BRAKE_APPROVAL_MS = 2 * HOUR;
+
+// The reason no start may go now (noted and asked once per brake), or null.
 async function refusal(workspaceId: string): Promise<string | null> {
+  if (isPaused(workspaceId)) return "the orchestrator is paused by Saad";
   const on = await brakesOn(workspaceId);
   if (!on.length) {
-    db.prepare(`UPDATE workspaces SET orch_brake = NULL WHERE id = ?`).run(
-      workspaceId
-    );
+    liftBrake(workspaceId);
     return null;
   }
   const key = on.map((b) => b.name).join("+");
   const reason = on.map((b) => b.reason).join("; ");
-  if (getWorkspace(workspaceId)?.orch_brake !== key) {
-    db.prepare(`UPDATE workspaces SET orch_brake = ? WHERE id = ?`).run(
-      key,
-      workspaceId
+  // An approval is for the brake it was asked about, not whichever holds now.
+  const approval = unspentApproval(
+    workspaceId,
+    BRAKE_SUBJECT,
+    BRAKE_APPROVAL_MS
+  );
+  if (approval?.brake_key === key && spendApproval(approval.id)) {
+    // Spent: the next refusal notes and asks again.
+    setBrake(workspaceId, null);
+    addNote(
+      workspaceId,
+      "One start past the brakes, on Saad's approval.",
+      "brake"
     );
+    return null;
+  }
+  if (getWorkspace(workspaceId)?.orch_brake !== key) {
+    setBrake(workspaceId, key);
     addNote(
       workspaceId,
       `New starts paused: ${reason}. Running work carries on.`,
       "brake"
     );
+    try {
+      raiseAsk({
+        workspaceId,
+        subject: BRAKE_SUBJECT,
+        kind: "brake",
+        title: "New starts are braked",
+        detail: `${reason}. Approve to let one more start through; running work carries on either way.`,
+        brakeKey: key,
+      });
+    } catch (error) {
+      if (!(error instanceof AskRefused)) throw error;
+    }
   }
   return reason;
 }

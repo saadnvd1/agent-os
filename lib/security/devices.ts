@@ -14,6 +14,8 @@ export interface Device {
   last_seen_at: string | null;
   last_address: string | null;
   revoked_at: string | null;
+  // Saad let it answer the orchestrator's asks (off by default).
+  can_approve: number;
 }
 
 const TOKEN_PREFIX = "aosd_";
@@ -45,7 +47,7 @@ export function getDevice(id: string): Device | null {
   return (
     (getDb()
       .prepare(
-        `SELECT id, name, user_agent, created_at, last_seen_at, last_address, revoked_at
+        `SELECT id, name, user_agent, created_at, last_seen_at, last_address, revoked_at, can_approve
          FROM devices WHERE id = ?`
       )
       .get(id) as Device | undefined) ?? null
@@ -81,7 +83,7 @@ export function touchDevice(id: string, address?: string): boolean {
 export function listDevices(): Device[] {
   return getDb()
     .prepare(
-      `SELECT id, name, user_agent, created_at, last_seen_at, last_address, revoked_at
+      `SELECT id, name, user_agent, created_at, last_seen_at, last_address, revoked_at, can_approve
        FROM devices WHERE revoked_at IS NULL ORDER BY created_at DESC`
     )
     .all() as Device[];
@@ -96,6 +98,16 @@ export function renameDevice(id: string, name: string): boolean {
         `UPDATE devices SET name = ? WHERE id = ? AND revoked_at IS NULL`
       )
       .run(trimmed, id).changes > 0
+  );
+}
+
+export function setDeviceCanApprove(id: string, on: boolean): boolean {
+  return (
+    getDb()
+      .prepare(
+        `UPDATE devices SET can_approve = ? WHERE id = ? AND revoked_at IS NULL`
+      )
+      .run(on ? 1 : 0, id).changes > 0
   );
 }
 

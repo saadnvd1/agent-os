@@ -118,7 +118,7 @@ export class WorkerClient {
 type HelloEvent = Extract<WorkerEvent, { type: "hello" }>;
 
 // A socket file left behind by a worker that died.
-function removeStaleSocket(sessionId: string): void {
+export function removeStaleSocket(sessionId: string): void {
   const sock = socketPath(sessionId);
   try {
     if (fs.lstatSync(sock).isSocket()) fs.rmSync(sock);
@@ -137,7 +137,7 @@ async function tmuxHas(name: string): Promise<boolean> {
 }
 
 // A worker that stopped listening is exiting; give it a moment, then end it.
-async function waitForExit(sessionId: string): Promise<void> {
+export async function waitForExit(sessionId: string): Promise<void> {
   const name = workerTmuxName(sessionId);
   const deadline = Date.now() + 5000;
   while (await tmuxHas(name)) {

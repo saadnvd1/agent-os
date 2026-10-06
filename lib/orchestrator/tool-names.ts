@@ -21,6 +21,7 @@ export const TOOL_NAMES = {
   note: name("note"),
   review: name("review"),
   sign_off: name("sign_off"),
+  ask_saad: name("ask_saad"),
 } as const;
 
 // What it may do, fixed by its role: it reads other sessions' text, so it

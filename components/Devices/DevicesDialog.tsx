@@ -16,6 +16,7 @@ import { devicesUi, devicesUiActions } from "@/stores/devicesUi";
 import { AddDevicePanel } from "./AddDevicePanel";
 import { DeviceRow } from "./DeviceRow";
 import { NetworkSection } from "./NetworkSection";
+import { PasskeysSection } from "./PasskeysSection";
 
 export function DevicesDialog() {
   const { open } = useSnapshot(devicesUi);
@@ -77,9 +78,13 @@ export function DevicesDialog() {
               key={d.id}
               device={d}
               isCurrent={d.id === data.current.deviceId}
+              canManage={canManage}
             />
           ))}
         </div>
+
+        <p className="pt-2 text-sm font-medium">Passkeys</p>
+        <PasskeysSection open={open} />
 
         <p className="pt-2 text-sm font-medium">Access</p>
         <NetworkSection open={open} canManage={canManage} />
