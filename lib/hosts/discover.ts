@@ -1,8 +1,8 @@
 import type { Project, Session } from "../db";
 import type { TmuxSessionInfo } from "../status-detector";
 
-// Home directories differ per machine (/Users/me vs /home/me), so folders are
-// compared relative to ~.
+// Folders are compared relative to ~ so a path reads the same on any machine;
+// a session only nests under a project on its own machine.
 export function homeRelative(path: string): string {
   const rel = path
     .replace(/^\/(Users|home)\/[^/]+(?=\/|$)/, "~")
@@ -27,7 +27,11 @@ export function discoverSessions(
   const managedNames = new Set(managed.map((s) => s.tmux_name).filter(Boolean));
   const dirs = projects
     .filter((p) => !p.is_uncategorized)
-    .map((p) => ({ id: p.id, dir: homeRelative(p.working_directory) }))
+    .map((p) => ({
+      id: p.id,
+      hostId: p.host_id || "local",
+      dir: homeRelative(p.working_directory),
+    }))
     .filter((p) => p.dir !== "~")
     .sort((a, b) => b.dir.length - a.dir.length);
 
@@ -35,7 +39,9 @@ export function discoverSessions(
     .filter((t) => !managedNames.has(t.name))
     .map((t) => {
       const path = homeRelative(t.path);
-      const match = dirs.find((p) => isWithin(path, p.dir));
+      const match = dirs.find(
+        (p) => p.hostId === t.hostId && isWithin(path, p.dir)
+      );
       return { ...t, projectId: match?.id ?? null };
     })
     .sort((a, b) => b.activity - a.activity);

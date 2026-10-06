@@ -153,6 +153,9 @@ export function ProjectsSection({
     <div className="space-y-1">
       {projects.map((project) => {
         const projectSessions = sessionsByProject[project.id] || [];
+        if (project.is_uncategorized && projectSessions.length === 0) {
+          return null;
+        }
         const runningServers = getProjectRunningServers(project.id);
         const projectDevServers = getProjectDevServers(project.id);
 
@@ -196,7 +199,7 @@ export function ProjectsSection({
 
             {/* Project contents when expanded */}
             {project.expanded && (
-              <div className="border-border/30 ml-3 space-y-px border-l pl-1.5">
+              <div className="space-y-px">
                 {/* Dev servers for this project */}
                 {projectDevServers.length > 0 && (
                   <div className="space-y-px pb-0.5">
@@ -223,137 +226,134 @@ export function ProjectsSection({
                 )}
 
                 {/* Project sessions */}
-                {projectSessions.length === 0 &&
-                projectDevServers.length === 0 ? (
-                  <p className="text-muted-foreground px-2 py-2 text-xs">
-                    No sessions yet
-                  </p>
-                ) : projectSessions.length === 0 ? null : (
-                  projectSessions.map((session) => {
-                    const workers = workersByConduct[session.id] || [];
-                    const hasWorkers = workers.length > 0;
+                {projectSessions.length === 0
+                  ? null
+                  : projectSessions.map((session) => {
+                      const workers = workersByConduct[session.id] || [];
+                      const hasWorkers = workers.length > 0;
 
-                    return (
-                      <div key={session.id} className="space-y-0.5">
-                        <div className="flex items-center gap-1">
-                          <div className="min-w-0 flex-1">
-                            <SessionCard
-                              session={session}
-                              isActive={session.id === activeSessionId}
-                              isSummarizing={
-                                summarizingSessionId === session.id
-                              }
-                              tmuxStatus={sessionStatuses?.[session.id]?.status}
-                              groups={groups}
-                              projects={projects}
-                              isSelected={selectedIds.has(session.id)}
-                              isInSelectMode={isInSelectMode}
-                              onToggleSelect={(shiftKey) =>
-                                handleToggleSelect(session.id, shiftKey)
-                              }
-                              onClick={() => onSelectSession(session.id)}
-                              onOpenInTab={
-                                onOpenSessionInTab
-                                  ? () => onOpenSessionInTab(session.id)
-                                  : undefined
-                              }
-                              onMoveToProject={
-                                onMoveSession
-                                  ? (projectId) =>
-                                      onMoveSession(session.id, projectId)
-                                  : undefined
-                              }
-                              onFork={
-                                onForkSession
-                                  ? () => onForkSession(session.id)
-                                  : undefined
-                              }
-                              onSummarize={
-                                onSummarize
-                                  ? () => onSummarize(session.id)
-                                  : undefined
-                              }
-                              onDelete={
-                                onDeleteSession
-                                  ? () => onDeleteSession(session.id)
-                                  : undefined
-                              }
-                              onRename={
-                                onRenameSession
-                                  ? (newName) =>
-                                      onRenameSession(session.id, newName)
-                                  : undefined
-                              }
-                              onCreatePR={
-                                onCreatePR
-                                  ? () => onCreatePR(session.id)
-                                  : undefined
-                              }
-                              onHoverStart={
-                                onHoverStart
-                                  ? (rect) => onHoverStart(session, rect)
-                                  : undefined
-                              }
-                              onHoverEnd={onHoverEnd}
-                            />
-                          </div>
-                          {/* Workers badge */}
-                          {hasWorkers && (
-                            <span className="bg-primary/20 text-primary flex-shrink-0 rounded-full px-1.5 py-0.5 text-xs">
-                              {workers.length}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Nested workers */}
-                        {hasWorkers && (
-                          <div className="border-border/30 ml-3 space-y-px border-l pl-1.5">
-                            {workers.map((worker) => (
+                      return (
+                        <div key={session.id} className="space-y-0.5">
+                          <div className="flex items-center gap-1">
+                            <div className="min-w-0 flex-1">
                               <SessionCard
-                                key={worker.id}
-                                session={worker}
-                                isActive={worker.id === activeSessionId}
+                                session={session}
+                                isActive={session.id === activeSessionId}
+                                isSummarizing={
+                                  summarizingSessionId === session.id
+                                }
                                 tmuxStatus={
-                                  sessionStatuses?.[worker.id]?.status
+                                  sessionStatuses?.[session.id]?.status
                                 }
                                 groups={groups}
                                 projects={projects}
-                                isSelected={selectedIds.has(worker.id)}
+                                isSelected={selectedIds.has(session.id)}
                                 isInSelectMode={isInSelectMode}
                                 onToggleSelect={(shiftKey) =>
-                                  handleToggleSelect(worker.id, shiftKey)
+                                  handleToggleSelect(session.id, shiftKey)
                                 }
-                                onClick={() => onSelectSession(worker.id)}
+                                onClick={() => onSelectSession(session.id)}
                                 onOpenInTab={
                                   onOpenSessionInTab
-                                    ? () => onOpenSessionInTab(worker.id)
+                                    ? () => onOpenSessionInTab(session.id)
+                                    : undefined
+                                }
+                                onMoveToProject={
+                                  onMoveSession
+                                    ? (projectId) =>
+                                        onMoveSession(session.id, projectId)
+                                    : undefined
+                                }
+                                onFork={
+                                  onForkSession
+                                    ? () => onForkSession(session.id)
+                                    : undefined
+                                }
+                                onSummarize={
+                                  onSummarize
+                                    ? () => onSummarize(session.id)
                                     : undefined
                                 }
                                 onDelete={
                                   onDeleteSession
-                                    ? () => onDeleteSession(worker.id)
+                                    ? () => onDeleteSession(session.id)
                                     : undefined
                                 }
                                 onRename={
                                   onRenameSession
                                     ? (newName) =>
-                                        onRenameSession(worker.id, newName)
+                                        onRenameSession(session.id, newName)
+                                    : undefined
+                                }
+                                onCreatePR={
+                                  onCreatePR
+                                    ? () => onCreatePR(session.id)
                                     : undefined
                                 }
                                 onHoverStart={
                                   onHoverStart
-                                    ? (rect) => onHoverStart(worker, rect)
+                                    ? (rect) => onHoverStart(session, rect)
                                     : undefined
                                 }
                                 onHoverEnd={onHoverEnd}
                               />
-                            ))}
+                            </div>
+                            {/* Workers badge */}
+                            {hasWorkers && (
+                              <span className="bg-primary/20 text-primary flex-shrink-0 rounded-full px-1.5 py-0.5 text-xs">
+                                {workers.length}
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+
+                          {/* Nested workers */}
+                          {hasWorkers && (
+                            <div className="border-border/30 ml-3 space-y-px border-l pl-1.5">
+                              {workers.map((worker) => (
+                                <SessionCard
+                                  key={worker.id}
+                                  session={worker}
+                                  isActive={worker.id === activeSessionId}
+                                  tmuxStatus={
+                                    sessionStatuses?.[worker.id]?.status
+                                  }
+                                  groups={groups}
+                                  projects={projects}
+                                  isSelected={selectedIds.has(worker.id)}
+                                  isInSelectMode={isInSelectMode}
+                                  onToggleSelect={(shiftKey) =>
+                                    handleToggleSelect(worker.id, shiftKey)
+                                  }
+                                  onClick={() => onSelectSession(worker.id)}
+                                  onOpenInTab={
+                                    onOpenSessionInTab
+                                      ? () => onOpenSessionInTab(worker.id)
+                                      : undefined
+                                  }
+                                  onDelete={
+                                    onDeleteSession
+                                      ? () => onDeleteSession(worker.id)
+                                      : undefined
+                                  }
+                                  onRename={
+                                    onRenameSession
+                                      ? (newName) =>
+                                          onRenameSession(worker.id, newName)
+                                      : undefined
+                                  }
+                                  onHoverStart={
+                                    onHoverStart
+                                      ? (rect) => onHoverStart(worker, rect)
+                                      : undefined
+                                  }
+                                  onHoverEnd={onHoverEnd}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 <DiscoveredTmuxList projectId={project.id} />
               </div>
             )}
