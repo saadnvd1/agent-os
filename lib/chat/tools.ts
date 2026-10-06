@@ -41,8 +41,11 @@ export function toolTitle(name: string, input: unknown): string {
     case "Task":
     case "Agent":
       return short(str("description")) || "Run a subagent";
-    default:
-      return name;
+    default: {
+      // mcp__<server>__<tool> -> "<server>: <tool words>"
+      const mcp = name.match(/^mcp__(.+?)__(.+)$/);
+      return mcp ? `${mcp[1]}: ${mcp[2].replace(/[_-]+/g, " ")}` : name;
+    }
   }
 }
 
