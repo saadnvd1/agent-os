@@ -56,7 +56,6 @@ function HomeContent() {
   const [showNotificationSettings, setShowNotificationSettings] =
     useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
-  const [copiedSessionId, setCopiedSessionId] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
 
   // Pane context
@@ -534,8 +533,6 @@ function HomeContent() {
     setSidebarOpen,
     activeSession,
     focusedActiveTab,
-    copiedSessionId,
-    setCopiedSessionId,
     showNewSessionDialog,
     setShowNewSessionDialog,
     newSessionProjectId,
