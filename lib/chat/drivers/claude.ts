@@ -75,6 +75,16 @@ export const claudeDriver: ChatDriver = {
         permissionMode: SDK_MODE[options.access],
         allowDangerouslySkipPermissions: true,
         canUseTool: approvals.canUseTool,
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "AskUserQuestion",
+              hooks: [approvals.askQuestions],
+              // The reader may take a while to answer.
+              timeout: 24 * 60 * 60,
+            },
+          ],
+        },
         enableFileCheckpointing: true,
         includePartialMessages: true,
         systemPrompt: {

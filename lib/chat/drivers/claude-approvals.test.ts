@@ -81,4 +81,41 @@ describe("Approvals", () => {
     expect(await result).toMatchObject({ behavior: "deny" });
     expect(items().at(-1)).toMatchObject({ status: "expired" });
   });
+
+  it("asks questions through the hook, whatever the access level", async () => {
+    const { approvals, items } = setup();
+    const questions = [
+      { question: "Which?", header: "Pick", multiSelect: false, options: [] },
+    ];
+    const out = approvals.askQuestions(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "AskUserQuestion",
+        tool_input: { questions },
+        tool_use_id: "t9",
+      } as Parameters<typeof approvals.askQuestions>[0],
+      "t9",
+      { signal: new AbortController().signal }
+    );
+    expect(items()[0]).toMatchObject({ id: "approval-t9", questions });
+    approvals.respond("approval-t9", {
+      decision: "answer",
+      answers: { "Which?": "A" },
+    });
+    expect(await out).toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: "allow",
+        updatedInput: { answers: { "Which?": "A" } },
+      },
+    });
+    // The permission check that follows lets the answered call straight through.
+    expect(
+      await approvals.canUseTool(
+        "AskUserQuestion",
+        { questions, answers: { "Which?": "A" } },
+        { signal: new AbortController().signal } as Parameters<CanUseTool>[2]
+      )
+    ).toMatchObject({ behavior: "allow" });
+    expect(items()).toHaveLength(2);
+  });
 });
