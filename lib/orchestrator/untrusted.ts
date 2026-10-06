@@ -2,7 +2,8 @@
 // It's fenced so the orchestrator treats it as data, and stripped of
 // anything token-shaped before it leaves the server.
 
-const TOKEN_PATTERNS: RegExp[] = [
+// Shapes that are a credential wherever they appear.
+export const SECRET_TOKENS: RegExp[] = [
   /\bsk-[A-Za-z0-9_-]{16,}/g,
   /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
@@ -12,9 +13,10 @@ const TOKEN_PATTERNS: RegExp[] = [
   /\bAKIA[0-9A-Z]{16}\b/g,
   // JWTs
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
-  // Long hex runs
-  /\b[a-fA-F0-9]{40,}\b/g,
 ];
+
+// Plus long hex runs, which in a transcript are more often keys than shas.
+const TOKEN_PATTERNS: RegExp[] = [...SECRET_TOKENS, /\b[a-fA-F0-9]{40,}\b/g];
 
 // A long base64-ish run that reads as random rather than as a path or a
 // slug: mixed case, digits, few separators.
@@ -26,7 +28,7 @@ const looksRandom = (s: string) =>
   (s.match(/[/_-]/g)?.length ?? 0) < s.length / 12;
 
 // An env-style secret assignment: API_KEY=..., export TOKEN="...".
-const SECRET_ASSIGNMENT =
+export const SECRET_ASSIGNMENT =
   /^(\s*(?:export\s+)?[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD|CREDENTIALS?|AUTH)[A-Z0-9_]*\s*[=:]\s*).+$/gm;
 
 // The password in a URL: postgres://user:secret@host.

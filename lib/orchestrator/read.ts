@@ -63,6 +63,8 @@ function itemText(i: ChatItem): string | null {
       return i.interrupted ? "[turn stopped]" : "[turn ended]";
     case "command_output":
       return i.text;
+    case "note":
+      return `[${i.tone}] ${i.text}`;
     default:
       return null;
   }

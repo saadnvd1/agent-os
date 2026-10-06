@@ -23,6 +23,18 @@ const EVERY = 60_000;
 // A start that fails is tried again on the next looks, up to this many times.
 export const START_ATTEMPTS = 3;
 const busy = new Set<string>();
+
+// Asked before each card starts; a reason holds the card (it stays planned
+// and shows why). The orchestrator's brakes hook in here.
+export type StartGate = (
+  stackId: string,
+  itemId: string
+) => Promise<string | null>;
+let startGate: StartGate | null = null;
+
+export function setStartGate(gate: StartGate | null): void {
+  startGate = gate;
+}
 const LIVE = new Set(["running", "pr"]);
 
 const sessionOf = (id: string) =>
@@ -161,7 +173,14 @@ export async function tickStack(
     for (const { id, note } of plan.hold) {
       q.updateItem(db, id, { status: "held", note });
     }
-    for (const id of plan.start) await startOrRetry(fresh, id, deps);
+    for (const id of plan.start) {
+      const held = await startGate?.(fresh.id, id);
+      if (held) {
+        q.updateItem(db, id, { note: held });
+        break;
+      }
+      await startOrRetry(fresh, id, deps);
+    }
     const done = finishedStatus(q.items(db, stack.id));
     if (done) {
       q.update(db, stack.id, {

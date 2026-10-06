@@ -227,14 +227,45 @@ it may do on its own, and the lines that always come back to you as asks.
 
 - **Tools:** `sessions` (every session's status, activity, task, PR, CI and
   stack position), `read` (the end of a terminal or chat) and `cards` (the
-  linked boards' cards), served in-process to its chat. Read-only for now; it
-  acts through `aos`.
+  linked boards' cards), plus acting tools: `send`, `start_task`,
+  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `note`,
+  `review` and `sign_off`. All are served in-process to its chat, refuse
+  any target outside its workspace, and validate their arguments. The route
+  they call answers only the orchestrator's worker, by a per-orchestrator
+  secret. Its shell runs only `aos` commands that read.
+- **Brakes:** every start is refused, with the reason, while 4 sessions run in
+  the workspace, after 6 starts in an hour (`orch_max_running` and
+  `orch_max_starts_per_hour` on `workspaces`), or when the account's 5-hour
+  usage window would run out before it resets (read from the statusline's
+  `~/.claude/.context-cost/limits.json`, as dispatch does;
+  `AGENTOS_LIMITS_FILE` overrides). A missing file, or one not sampled for 15
+  minutes, refuses too. Each card of a stack it starts is braked as its own
+  start. A brake writes one note and pauses only new starts.
+- **Review and sign-off:** `review` runs a fresh `claude -p` on a
+  symlink-free detached checkout of the PR's exact head commit. It loads no
+  settings or MCP servers from anywhere (so nothing the PR ships runs), gets
+  an allowlisted environment, can only Read/Grep/Glob inside the checkout,
+  and follows the repo's review skill as the base branch has it. The verdict
+  is stored against that sha, and a diff over 80k characters goes to you
+  instead. A task from a card also gets a scope check against the card.
+  `sign_off` squash-merges only that commit when CI is green and settled on
+  it (2 minutes with no new check), its review passed, nothing is
+  `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
+  lockfiles, nothing outside the repo, within the card) and its stack parent
+  has merged. `land` judges each item again at its own head right before
+  merging it. The second failure of a gate, a repo with no CI, or any change
+  to CI config, build and hook scripts, agent config, deploy scripts or
+  secrets handling goes to you as an escalation note, and the orchestrator
+  stops merging that task.
+- **Decision log:** `note` and the brakes and escalations write to
+  `orchestrator_notes`, and each line shows in its chat.
 - **Events:** the server sends it one short line per event (a PR opened, CI
   green or failed, a `BLOCKED:` line, a merge, a session needing input, a
-  stack step, a task idle 30 minutes with no PR). Events wait while its turn
-  runs, duplicates fold, and at most one batched message goes out per 30
-  seconds. What it has been told is kept in `orchestrator_events`, so a
-  restart resends nothing. Set `AGENTOS_ORCHESTRATOR=off` to stop events.
+  stack step, a task idle 30 minutes with no PR, a review's verdict). Events
+  wait while its turn runs, duplicates fold, and at most one batched message
+  goes out per 30 seconds. What it has been told is kept in
+  `orchestrator_events`, so a restart resends nothing. Set
+  `AGENTOS_ORCHESTRATOR=off` to stop events.
 
 ## LumifyHub (optional)
 

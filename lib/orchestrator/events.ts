@@ -32,6 +32,9 @@ export interface EventRow {
 export const REFIRE_MS = 15 * 60 * 1000;
 const ARMED = 2;
 const SEEN = "seen:";
+// A one-off event that isn't a condition (a review finished): sent once,
+// never cleared by a diff.
+const ONCE = "once:";
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -113,7 +116,12 @@ export function recordConditions(
     }
 
     for (const r of rows) {
-      if (r.key.startsWith(SEEN) || current.has(r.key)) continue;
+      if (
+        r.key.startsWith(SEEN) ||
+        r.key.startsWith(ONCE) ||
+        current.has(r.key)
+      )
+        continue;
       if (!r.delivered_at) remove.run(r.id);
       else if (!r.sticky && !r.cleared_at)
         update.run(
@@ -134,10 +142,34 @@ export function recordConditions(
            AND subject NOT IN (SELECT id FROM sessions)
            AND subject NOT IN (SELECT id FROM stack_items)
            AND subject NOT IN (SELECT id FROM stacks))
-         OR (cleared_at IS NOT NULL AND cleared_at < ?))`
-    ).run(workspaceId, iso(now - 24 * 60 * 60 * 1000));
+         OR (cleared_at IS NOT NULL AND cleared_at < ?)
+         OR (key LIKE '${ONCE}%' AND delivered_at < ?))`
+    ).run(
+      workspaceId,
+      iso(now - 24 * 60 * 60 * 1000),
+      iso(now - 24 * 60 * 60 * 1000)
+    );
   })();
   return ready;
+}
+
+// Queues a one-off line for the orchestrator, ready on the next delivery.
+// The same key again replaces a line not yet sent.
+export function queueEvent(
+  workspaceId: string,
+  key: string,
+  subject: string | null,
+  line: string,
+  now = Date.now()
+): void {
+  db.prepare(
+    `INSERT INTO orchestrator_events
+       (workspace_id, key, subject, line, sticky, low, hits, created_at, delivered_at)
+     VALUES (?, ?, ?, ?, 1, 0, ?, ?, NULL)
+     ON CONFLICT(workspace_id, key) DO UPDATE SET
+       line = excluded.line, hits = excluded.hits, created_at = excluded.created_at,
+       delivered_at = NULL, cleared_at = NULL`
+  ).run(workspaceId, `${ONCE}${key}`, subject, line, ARMED, iso(now));
 }
 
 // Ready to send: held on two diffs, not sent yet.

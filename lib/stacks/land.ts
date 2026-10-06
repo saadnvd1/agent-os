@@ -12,8 +12,15 @@ import { itemName } from "./guard";
 import { refreshItems } from "./tick";
 import { outputOf } from "./git";
 
+// Asked right before each merge: the commit that may merge, a reason to
+// wait (and ask again), or a reason to stop the land.
+export type MergeGate = (
+  sessionId: string
+) => Promise<{ head: string } | { wait: string } | { stop: string }>;
+
 export interface LandDeps {
-  signOff: (sessionId: string) => Promise<void>;
+  signOff: (sessionId: string, head?: string) => Promise<void>;
+  beforeMerge?: MergeGate;
   prOf: (session: Session) => Promise<TaskPR | null>;
   sleep: (ms: number) => Promise<void>;
   refresh: (stackId: string) => Promise<void>;
@@ -21,9 +28,9 @@ export interface LandDeps {
   everyMs: number;
 }
 
-const defaults: LandDeps = {
+export const LAND_DEFAULTS: LandDeps = {
   // Waits for the restack, so its children are checked after they moved.
-  signOff: (id) => signOffTask(id, { wait: true }),
+  signOff: (id, head) => signOffTask(id, { wait: true, head }),
   prOf: (s) => taskPR(s, true),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   refresh: refreshItems,
@@ -61,9 +68,30 @@ async function waitGreen(
   }
 }
 
+// The head an item may merge at, once its gate says so.
+async function gated(
+  item: StackItemRow,
+  gate: MergeGate,
+  deps: LandDeps,
+  waiting: (why: string) => void
+): Promise<string> {
+  for (let waited = 0; ; waited += deps.everyMs) {
+    const verdict = await gate(item.session_id!);
+    if ("head" in verdict) return verdict.head;
+    if ("stop" in verdict)
+      throw new Stop(`stopped at ${itemName(item)}: ${verdict.stop}`);
+    if (waited >= deps.waitMs)
+      throw new Stop(
+        `stopped at ${itemName(item)}, still waiting: ${verdict.wait}`
+      );
+    waiting(verdict.wait);
+    await deps.sleep(deps.everyMs);
+  }
+}
+
 export async function landStack(
   stackId: string,
-  deps: LandDeps = defaults
+  deps: LandDeps = LAND_DEFAULTS
 ): Promise<void> {
   const progress = (text: string) => q.update(db, stackId, { progress: text });
   q.update(db, stackId, {
@@ -110,8 +138,13 @@ export async function landStack(
           }
         );
       }
+      const head = deps.beforeMerge
+        ? await gated(item, deps.beforeMerge, deps, (why) =>
+            progress(`Waiting on ${name}: ${why} (${n + 1}/${items.length})`)
+          )
+        : undefined;
       progress(`Merging ${name} (${n + 1}/${items.length})`);
-      await deps.signOff(item.session_id!).catch((e: unknown) => {
+      await deps.signOff(item.session_id!, head).catch((e: unknown) => {
         throw new Stop(`stopped at ${name}: ${outputOf(e)}`);
       });
       landed.push(name);

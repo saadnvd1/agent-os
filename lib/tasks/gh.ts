@@ -55,6 +55,7 @@ export async function findPRStrict(
     checks: checksVerdict(pr.statusCheckRollup ?? []),
     head: pr.headRefOid,
     failing: failingCheck(pr.statusCheckRollup ?? []),
+    checkCount: (pr.statusCheckRollup ?? []).length,
   };
 }
 
