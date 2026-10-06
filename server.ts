@@ -20,6 +20,7 @@ import {
   watchChat,
 } from "./lib/chat/runner";
 import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
+import { startStackWatcher } from "./lib/stacks";
 import {
   bindAddresses,
   requestAllowed,
@@ -314,4 +315,6 @@ app.prepare().then(() => {
   if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 30000);
   // Chat turns that kept running through a restart.
   void reattachChats();
+  // Stacks start their next cards from here; their state is in the database.
+  if (process.env.AGENTOS_STACKS !== "off") startStackWatcher();
 });

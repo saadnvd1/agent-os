@@ -157,6 +157,23 @@ Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
 
 ![Tasks in different states: needs input, ready for review, working, merged](screenshots/tasks.png)
 
+### Stacks
+
+A project whose board is linked to LumifyHub can run the whole board as
+**stacked** tasks: **Tasks → From the board → Run as stack** shows the plan
+first, then starts it. A card starts as soon as every card it's blocked by has
+a PR open (not merged), on top of the card it depends on most: its branch is
+cut from that card's pushed branch, and its PR targets it, so each PR shows
+only its own commits. At most three run at once without a PR (adjustable).
+
+Merging goes bottom-up. Signing off a card whose parent hasn't merged is
+refused; after a parent merges, every card stacked on it (grandchildren
+included) is rebased and its PR retargeted, and its agent is told. **Land**
+merges every PR in order after checking all of them are open and green, and
+waits for each restacked PR's checks before merging it. A conflict stops on
+that card with the exact command to fix it. How it works:
+[docs/stacks.md](docs/stacks.md).
+
 ## Agent network
 
 Sessions started by AgentOS can find and talk to each other without you,
@@ -170,6 +187,8 @@ aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
+aos stack <project> [--plan]      # run the project's board as stacked tasks
+aos stacks                        # every stack and where each card is
 aos docs [query]                  # LumifyHub pages, when the workspace is linked
 ```
 
