@@ -17,6 +17,8 @@ import {
   ROOT,
   SCREENS,
   TMUX_TMPDIR,
+  TMUX_SOCKET,
+  demoTmuxArgs,
   demoEnv,
 } from "./config";
 import { createRepos } from "./repos";
@@ -195,7 +197,8 @@ function writeHome(): void {
 }
 
 function tmux(args: string[]): void {
-  execFileSync("tmux", args, { env: demoEnv(), stdio: "pipe" });
+  fs.mkdirSync(path.dirname(TMUX_SOCKET), { recursive: true, mode: 0o700 });
+  execFileSync("tmux", demoTmuxArgs(args), { env: demoEnv(), stdio: "pipe" });
 }
 
 async function seedDb(): Promise<void> {
