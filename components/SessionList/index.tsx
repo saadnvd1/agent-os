@@ -11,7 +11,7 @@ import {
 import { FolderPicker } from "@/components/FolderPicker";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionListHeader } from "./SessionListHeader";
-import { HostsDialog, DiscoveredTmuxList } from "@/components/Hosts";
+import { HostsDialog, ElsewhereTmuxList } from "@/components/Hosts";
 import {
   WorkspaceGroups,
   WorkspaceNameDialog,
@@ -297,7 +297,7 @@ export function SessionList({
                   />
                 )}
               />
-              <DiscoveredTmuxList projectId={null} title="Elsewhere" />
+              <ElsewhereTmuxList />
             </>
           )}
 

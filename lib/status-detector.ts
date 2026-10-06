@@ -161,6 +161,8 @@ export interface TmuxSessionInfo {
   path: string;
   attached: boolean;
   windows: number;
+  // The active pane's title; Claude Code writes its state and task there.
+  title: string;
 }
 
 interface SessionCache {
@@ -170,7 +172,7 @@ interface SessionCache {
 }
 
 const LIST_FORMAT =
-  "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}";
+  "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_title}";
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
   const { stdout } = await hostExec(
@@ -183,7 +185,8 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [name, activity, path, attached, windows] = line.split("\t");
+      const [name, activity, path, attached, windows, ...title] =
+        line.split("\t");
       return {
         name,
         hostId,
@@ -191,6 +194,7 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
         path: path || "",
         attached: attached !== "0" && !!attached,
         windows: parseInt(windows, 10) || 1,
+        title: title.join("\t"),
       };
     });
 }
@@ -264,6 +268,10 @@ class SessionStatusDetector {
 
   getTimestamp(name: string): number {
     return this.cache.data.get(name)?.activity || 0;
+  }
+
+  titleFor(name: string): string {
+    return this.cache.data.get(name)?.title ?? "";
   }
 
   hostFor(name: string): string | undefined {

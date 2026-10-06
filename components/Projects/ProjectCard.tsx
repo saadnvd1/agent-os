@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProjectRowModel } from "@/lib/project-rows";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import {
@@ -54,6 +55,9 @@ interface ProjectCardProps {
   onOpenInEditor?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
+  // What runs in the project; with one session the row opens it.
+  row?: ProjectRowModel;
+  onOpenSingle?: () => void;
 }
 
 export function ProjectCard({
@@ -69,6 +73,8 @@ export function ProjectCard({
   onOpenInEditor,
   onDelete,
   onRename,
+  row,
+  onOpenSingle,
 }: ProjectCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
@@ -116,7 +122,8 @@ export function ProjectCard({
   const handleClick = () => {
     if (isEditing) return;
     onClick?.();
-    onToggleExpanded?.(!project.expanded);
+    if (row?.single && onOpenSingle) onOpenSingle();
+    else onToggleExpanded?.(!project.expanded);
   };
 
   const { data: workspaces = [] } = useWorkspacesQuery();
@@ -221,10 +228,16 @@ export function ProjectCard({
       onClick={handleClick}
       className={cn(
         "group relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2",
-        "hover:bg-foreground/[0.04] min-h-11 md:min-h-9"
+        "hover:bg-foreground/[0.04] min-h-11 md:min-h-9",
+        row?.active &&
+          "bg-foreground/[0.06] shadow-[inset_2px_0_0_hsl(var(--primary))]"
       )}
     >
-      <ProjectAvatar name={project.name} />
+      <ProjectAvatar
+        name={project.name}
+        state={row?.state}
+        dim={!row?.running}
+      />
       {/* Project name */}
       {isEditing ? (
         <input
@@ -244,8 +257,29 @@ export function ProjectCard({
           className="border-primary min-w-0 flex-1 border-b bg-transparent text-sm font-medium outline-none"
         />
       ) : (
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {project.name}
+        <span className="flex min-w-0 flex-1 flex-col py-1 leading-tight">
+          <span
+            className={cn(
+              "truncate text-sm",
+              row?.running
+                ? "text-foreground font-medium"
+                : "text-muted-foreground"
+            )}
+          >
+            {project.name}
+          </span>
+          {row?.subtitle && (
+            <span
+              className={cn(
+                "truncate text-[11px]",
+                row.state === "blocked"
+                  ? "text-destructive"
+                  : "text-muted-foreground/70"
+              )}
+            >
+              {row.subtitle}
+            </span>
+          )}
         </span>
       )}
       <HostBadge hostId={project.host_id} />
@@ -269,7 +303,7 @@ export function ProjectCard({
       )}
 
       {/* Session count, only when collapsed */}
-      {!project.expanded && sessionCount > 0 && (
+      {!row?.single && !project.expanded && sessionCount > 1 && (
         <span className="text-muted-foreground flex-shrink-0 font-mono text-[10px] tabular-nums">
           {sessionCount}
         </span>
