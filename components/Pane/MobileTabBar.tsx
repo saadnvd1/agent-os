@@ -1,5 +1,6 @@
 "use client";
 
+import { ViewSwitch } from "@/components/Chat/ViewSwitch";
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -238,6 +239,8 @@ export function MobileTabBar({
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
+
+      <ViewSwitch session={session} />
 
       {/* View mode toggle */}
       {session?.working_directory && (

@@ -9,6 +9,7 @@ import { getProject } from "../projects";
 import { hostExec } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { statusDetector } from "../status-detector";
+import { sendChat } from "../chat/runner";
 import { sessionRowInfo } from "../session-meta";
 import {
   HUMAN,
@@ -119,7 +120,16 @@ function pairTimestamps(a: string | null, b: string): number[] {
 }
 
 // Type the message into the recipient's pane. Claude Code queues it if busy.
-async function deliver(to: Session, line: string): Promise<boolean> {
+async function deliver(
+  to: Session,
+  line: string,
+  fromName: string
+): Promise<boolean> {
+  // Chat sessions get the message as their next prompt.
+  if (to.view === "chat") {
+    sendChat(to.id, { text: line, from: fromName });
+    return true;
+  }
   if (!statusDetector.sessionExists(to.tmux_name)) return false;
   const target = shellQuote(`=${to.tmux_name}:`);
   try {
@@ -165,7 +175,11 @@ export async function sendMessage(opts: {
 
   await statusDetector.refreshCache();
   if (
-    await deliver(to, wakeLine({ fromName, fromId: from?.id ?? null, body }))
+    await deliver(
+      to,
+      wakeLine({ fromName, fromId: from?.id ?? null, body }),
+      fromName
+    )
   ) {
     db.prepare(
       `UPDATE bus_messages SET delivered_at = datetime('now') WHERE id = ?`

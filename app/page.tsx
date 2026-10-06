@@ -1,6 +1,7 @@
 "use client";
 
 import { subscribe } from "valtio";
+import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
 import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
 import { MessagesDialog } from "@/components/Bus";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
@@ -229,6 +230,11 @@ function HomeContent() {
   // Attach session to terminal
   const attachToSession = useCallback(
     async (session: Session) => {
+      // Chat sessions are shown by the tab itself; there's no terminal to attach.
+      if (session.view === "chat") {
+        attachSession(focusedPaneId, session.id, session.tmux_name);
+        return;
+      }
       const terminalInfo = getTerminalWithFallback();
       if (!terminalInfo) {
         debugLog(
@@ -244,7 +250,41 @@ function HomeContent() {
       const spec = await buildSessionCommand(session);
       runSessionInTerminal(terminal, paneId, session, spec);
     },
-    [getTerminalWithFallback, buildSessionCommand, runSessionInTerminal]
+    [
+      getTerminalWithFallback,
+      buildSessionCommand,
+      runSessionInTerminal,
+      attachSession,
+      focusedPaneId,
+    ]
+  );
+
+  // Switching a session between chat and terminal hands the same conversation
+  // over: the server stops whichever side was running, and a terminal resumes
+  // the agent's own session once the tab's terminal is up.
+  useEffect(
+    () =>
+      subscribe(viewSwitchStore, async () => {
+        const request = viewSwitchStore.request;
+        if (!request) return;
+        viewSwitchActions.clear();
+        const res = await fetch(`/api/sessions/${request.sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ view: request.view }),
+        });
+        if (!res.ok) return;
+        const { session } = (await res.json()) as { session?: Session };
+        await fetchSessions();
+        if (request.view !== "terminal" || !session) return;
+        const tab = getActiveTab(focusedPaneId);
+        const key = tab ? `${focusedPaneId}:${tab.id}` : "";
+        for (let i = 0; i < 40 && !terminalRefs.current.has(key); i++) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        attachToSession({ ...session, view: "terminal" });
+      }),
+    [fetchSessions, getActiveTab, focusedPaneId, attachToSession]
   );
 
   // Attach a tmux session agent-os didn't create (discovered on any machine)
@@ -272,6 +312,10 @@ function HomeContent() {
     (session: Session) => {
       const existingKeys = new Set(terminalRefs.current.keys());
       addTab(focusedPaneId);
+      if (session.view === "chat") {
+        attachSession(focusedPaneId, session.id, session.tmux_name);
+        return;
+      }
 
       let attempts = 0;
       const maxAttempts = 20;
@@ -300,7 +344,13 @@ function HomeContent() {
 
       setTimeout(waitForNewTerminal, 50);
     },
-    [addTab, focusedPaneId, buildSessionCommand, runSessionInTerminal]
+    [
+      addTab,
+      focusedPaneId,
+      buildSessionCommand,
+      runSessionInTerminal,
+      attachSession,
+    ]
   );
 
   // Notification click handler

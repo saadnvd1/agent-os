@@ -36,12 +36,16 @@ export function rowMeta(
   return { text: s.label || compactTimeAgo(lastActive, now), tone: s.tone };
 }
 
-// mTerm names its sessions "mterm-<project>"; the prefix says nothing here.
-export function tmuxDisplayName(name: string): string {
-  return name.replace(/^mterm-/, "");
+// Tools that name sessions "<tool>-<folder>" repeat what the row already
+// shows; the folder name alone is enough.
+export function tmuxDisplayName(name: string, path = ""): string {
+  const folder = path.replace(/\/+$/, "").split("/").pop() ?? "";
+  return folder && name !== folder && name.endsWith(`-${folder}`)
+    ? folder
+    : name;
 }
 
-// ── Agent state, as mTerm shows it: a dot plus "what it's doing" ──────────
+// ── Agent state: a dot plus "what it's doing" ─────────────────────────────
 
 export type AgentState = "working" | "blocked" | "waiting" | "idle";
 
@@ -95,7 +99,8 @@ function subtitleFor(state: AgentState, task: string | null): string | null {
 // A session agent-os manages: the detector's status, refined by the title.
 export function sessionRowInfo(
   status: SessionStatus | undefined,
-  title = ""
+  title = "",
+  task?: string | null
 ): RowInfo {
   const running = !!status && status !== "dead";
   if (!running) return { running, state: "idle", subtitle: null };
@@ -108,7 +113,11 @@ export function sessionRowInfo(
           ? "blocked"
           : "idle";
   const state = busiest(fromStatus, stateFromTitle(title) ?? "idle");
-  return { running, state, subtitle: subtitleFor(state, taskFromTitle(title)) };
+  return {
+    running,
+    state,
+    subtitle: subtitleFor(state, task ?? taskFromTitle(title)),
+  };
 }
 
 // A tmux session agent-os didn't start: Claude's title if it has one.

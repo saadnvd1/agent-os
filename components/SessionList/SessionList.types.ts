@@ -5,6 +5,7 @@ export interface SessionStatus {
   status: "idle" | "running" | "waiting" | "error" | "dead";
   lastLine?: string;
   title?: string;
+  task?: string | null;
 }
 
 export interface SessionListProps {

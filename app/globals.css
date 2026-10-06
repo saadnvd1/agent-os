@@ -243,3 +243,11 @@ body {
 .terminal-container {
   background: hsl(var(--background));
 }
+
+/* Streaming chat text ends in a blinking caret. */
+.streaming-cursor .prose > :last-child::after {
+  content: "▍";
+  margin-left: 1px;
+  color: hsl(var(--primary));
+  animation: status-pulse 1s ease-in-out infinite;
+}

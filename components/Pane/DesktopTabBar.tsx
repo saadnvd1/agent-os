@@ -1,5 +1,6 @@
 "use client";
 
+import { ViewSwitch } from "@/components/Chat/ViewSwitch";
 import { Button } from "@/components/ui/button";
 import {
   SplitSquareHorizontal,
@@ -146,6 +147,8 @@ export function DesktopTabBar({
           <TooltipContent>New tab</TooltipContent>
         </Tooltip>
       </div>
+
+      <ViewSwitch session={session} />
 
       {/* View Toggle */}
       {session?.working_directory && (

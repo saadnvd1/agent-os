@@ -92,6 +92,21 @@ npm run dev  # http://localhost:3011
 - **Dev servers** - Start/stop Node.js and Docker servers
 - **Session orchestration** - Conductor/worker model via MCP
 
+## Chat
+
+Sessions open as a chat by default: streaming replies, tool calls folded into
+expandable steps, inline diffs for edits, a plan checklist, image attachments
+and a Stop button, all readable on a phone. Chat drives the same agent as the
+terminal (Claude Code through the Agent SDK, with your own Claude login and
+full access, like running it with permissions skipped). The **Chat /
+Terminal** switch in the tab bar hands the same conversation between the two:
+the terminal resumes it with `claude --resume`, and switching back closes the
+terminal so only one side drives it. History is kept in AgentOS and survives
+restarts.
+
+Chat runs on this machine; sessions on other machines use the terminal.
+Drivers for other agent CLIs plug into `lib/chat/drivers`.
+
 ## Tasks
 
 Hand off work and keep going. **Tasks → New task** takes a project and a

@@ -25,12 +25,10 @@ describe("projectRow", () => {
   });
 
   it("a single session becomes the row", () => {
-    const row = projectRow(
-      input({ tmux: [tmux("mterm-mterm", "⠂ Fix login")] })
-    );
+    const row = projectRow(input({ tmux: [tmux("tool-app", "⠂ Fix login")] }));
     expect(row.single).toEqual({
       kind: "tmux",
-      name: "mterm-mterm",
+      name: "tool-app",
       hostId: "local",
     });
     expect(row).toMatchObject({

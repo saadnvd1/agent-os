@@ -14,7 +14,7 @@ interface WorkspaceGroupsProps<P extends ProjectWithDevServers> {
 }
 
 // Projects without a workspace come first, then one collapsible section per
-// workspace, as in mTerm.
+// workspace.
 export function WorkspaceGroups<P extends ProjectWithDevServers>({
   projects,
   sessions,

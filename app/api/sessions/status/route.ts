@@ -9,7 +9,9 @@ import {
   getProviderIdFromSessionName,
   getSessionIdFromName,
 } from "@/lib/providers/registry";
-import { getDb } from "@/lib/db";
+import { getDb, type Session } from "@/lib/db";
+import { chatState } from "@/lib/chat/runner";
+import { lastUserTask } from "@/lib/chat/store";
 
 import { hostExec, isRemoteHost } from "@/lib/hosts";
 
@@ -23,6 +25,7 @@ interface SessionStatusResponse {
   claudeSessionId?: string | null;
   agentType?: AgentType;
   title?: string;
+  task?: string | null;
 }
 
 async function getTmuxSessions(): Promise<string[]> {
@@ -231,6 +234,19 @@ export async function GET() {
       if (claudeSessionId) {
         updateClaudeIdStmt.run(claudeSessionId, id, claudeSessionId);
       }
+    }
+
+    // Chat sessions have no tmux pane: their live conversation is the status.
+    for (const session of db
+      .prepare(`SELECT * FROM sessions WHERE view = 'chat'`)
+      .all() as Session[]) {
+      const state = chatState(session.id);
+      statusMap[session.id] = {
+        sessionName: session.tmux_name,
+        status: state === "running" ? "running" : state ? "waiting" : "idle",
+        task: lastUserTask(session.id),
+        agentType: session.agent_type,
+      };
     }
 
     // Cleanup old trackers

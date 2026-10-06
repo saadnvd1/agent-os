@@ -4,6 +4,10 @@ import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
 import { killWorker } from "@/lib/orchestration";
 import { hostExec } from "@/lib/hosts";
+import { shellQuote } from "@/lib/hosts/ssh";
+import { supportsChat } from "@/lib/chat/capabilities";
+import { stopChat } from "@/lib/chat/runner";
+import { deleteItems } from "@/lib/chat/store";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 import { runInBackground } from "@/lib/async-operations";
 
@@ -57,6 +61,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Build update query dynamically based on provided fields
     const updates: string[] = [];
     const values: unknown[] = [];
+
+    // Chat and terminal drive the same conversation, never both at once.
+    if (body.view === "chat" || body.view === "terminal") {
+      if (body.view === "chat" && !supportsChat(existing.agent_type)) {
+        return NextResponse.json(
+          { error: `${existing.agent_type} sessions can't run as chat yet` },
+          { status: 400 }
+        );
+      }
+      if (body.view === "terminal") stopChat(id);
+      if (body.view === "chat" && existing.tmux_name) {
+        await hostExec(
+          existing.host_id,
+          `tmux kill-session -t ${shellQuote(`=${existing.tmux_name}`)} 2>/dev/null || true`
+        ).catch(() => {});
+      }
+      updates.push("view = ?");
+      values.push(body.view);
+    }
 
     // Handle name change - also rename tmux session and git branch (for worktrees)
     if (body.name !== undefined && body.name !== existing.name) {
@@ -171,6 +194,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // Delete from database immediately for instant UI feedback
+    stopChat(id);
+    deleteItems(id);
     queries.deleteSession(db).run(id);
 
     // Clean up worktree in background (non-blocking)

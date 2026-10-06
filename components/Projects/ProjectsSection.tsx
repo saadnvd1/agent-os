@@ -172,7 +172,7 @@ export function ProjectsSection({
     });
   }
 
-  // As in mTerm, projects with nothing running fold behind one row.
+  // Projects with nothing running fold behind one row.
   const visible = projects.filter(
     (p) =>
       !(p.is_uncategorized && rows[p.id].sessionCount === 0) &&

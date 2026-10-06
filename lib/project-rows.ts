@@ -28,12 +28,12 @@ export interface ProjectRowInput {
   tmux: TmuxSessionInfo[]; // discovered sessions in the project's folder
   statuses: Record<
     string,
-    { status: SessionStatus; title?: string } | undefined
+    { status: SessionStatus; title?: string; task?: string | null } | undefined
   >;
   activeSessionId?: string;
 }
 
-// One row per project, as mTerm draws it: the busiest state among its
+// One row per project: the busiest state among its
 // sessions and what it's doing. A project with one session IS that session.
 export function projectRow(input: ProjectRowInput): ProjectRowModel {
   const rows = [
@@ -41,7 +41,8 @@ export function projectRow(input: ProjectRowInput): ProjectRowModel {
       target: { kind: "session", id: s.id } as RowTarget,
       info: sessionRowInfo(
         input.statuses[s.id]?.status,
-        input.statuses[s.id]?.title
+        input.statuses[s.id]?.title,
+        input.statuses[s.id]?.task
       ),
       nested: input.hasWorkers(s.id),
     })),

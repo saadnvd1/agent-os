@@ -27,7 +27,7 @@ export function TmuxSessionRow({
       </span>
       <span className="flex min-w-0 flex-1 flex-col py-1 leading-tight">
         <span className="truncate text-sm">
-          {tmuxDisplayName(session.name)}
+          {tmuxDisplayName(session.name, session.path)}
         </span>
         {info.subtitle && (
           <span className="text-muted-foreground/70 truncate text-[11px]">
