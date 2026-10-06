@@ -43,7 +43,7 @@ cmd_install() {
 
     # Install dependencies
     log_info "Installing dependencies..."
-    npm install --legacy-peer-deps
+    npm install --include=dev --legacy-peer-deps
 
     # Build for production
     log_info "Building for production..."
@@ -281,7 +281,7 @@ cmd_update() {
         git pull --ff-only
 
         log_info "Installing dependencies..."
-        npm install --legacy-peer-deps
+        npm install --include=dev --legacy-peer-deps
 
         log_info "Rebuilding..."
         npm run build
