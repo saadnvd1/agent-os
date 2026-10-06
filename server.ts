@@ -1,4 +1,5 @@
-import { createServer } from "http";
+import { createServer, type IncomingMessage } from "http";
+import type { Duplex } from "stream";
 import { parse } from "url";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
@@ -6,9 +7,15 @@ import * as pty from "node-pty";
 import { buildAttachProcess, type AttachSpec } from "./lib/hosts/attach";
 import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
+import {
+  bindAddresses,
+  requestAllowed,
+  upgradeAllowed,
+  type AccessPolicy,
+} from "./lib/security/net";
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "0.0.0.0";
+const hostname = "127.0.0.1";
 
 // Support: npm run dev -- -p 3012
 const pFlagIndex = process.argv.indexOf("-p");
@@ -21,7 +28,33 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  const server = createServer(async (req, res) => {
+  const policy: AccessPolicy = {
+    bound: [],
+    extraHosts: (process.env.AGENTOS_ALLOWED_HOSTS ?? "")
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
+  };
+  const header = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
+
+  const onRequest: Parameters<typeof createServer>[1] = async (req, res) => {
+    if (
+      !requestAllowed(
+        {
+          method: req.method,
+          url: req.url,
+          host: header(req.headers.host),
+          origin: header(req.headers.origin),
+          fetchSite: header(req.headers["sec-fetch-site"]),
+        },
+        policy
+      )
+    ) {
+      res.statusCode = 403;
+      res.end("forbidden");
+      return;
+    }
     try {
       const parsedUrl = parse(req.url!, true);
       await handle(req, res, parsedUrl);
@@ -30,13 +63,30 @@ app.prepare().then(() => {
       res.statusCode = 500;
       res.end("internal server error");
     }
-  });
+  };
 
   // Terminal WebSocket server
   const terminalWss = new WebSocketServer({ noServer: true });
 
   // Handle WebSocket upgrades
-  server.on("upgrade", (request, socket, head) => {
+  const onUpgrade = (
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer
+  ) => {
+    if (
+      !upgradeAllowed(
+        {
+          host: header(request.headers.host),
+          origin: header(request.headers.origin),
+        },
+        policy
+      )
+    ) {
+      socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+      socket.destroy();
+      return;
+    }
     const { pathname } = parse(request.url || "");
 
     if (pathname === "/ws/terminal") {
@@ -45,7 +95,7 @@ app.prepare().then(() => {
       });
     }
     // Let HMR and other WebSocket connections pass through to Next.js
-  });
+  };
 
   // Terminal connections
   terminalWss.on("connection", (ws: WebSocket) => {
@@ -162,7 +212,24 @@ app.prepare().then(() => {
     });
   });
 
-  server.listen(port, () => {
-    console.log(`> Agent-OS ready on http://${hostname}:${port}`);
-  });
+  // One listener per allowed address: loopback and Tailscale by default,
+  // never Wi-Fi or other networks unless AGENTOS_BIND opts in. Tailscale can
+  // come up after AgentOS, so its address is picked up when it appears.
+  const listenOn = (address: string) => {
+    if (policy.bound.includes(address)) return;
+    policy.bound.push(address);
+    const server = createServer(onRequest);
+    server.on("upgrade", onUpgrade);
+    server.on("error", (err) => {
+      console.error(`Could not listen on ${address}:${port}:`, err.message);
+      policy.bound = policy.bound.filter((a) => a !== address);
+    });
+    server.listen(port, address, () => {
+      console.log(`> Agent-OS ready on http://${address}:${port}`);
+    });
+  };
+  const refreshListeners = () =>
+    bindAddresses(process.env.AGENTOS_BIND).forEach(listenOn);
+  refreshListeners();
+  if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 30000);
 });
