@@ -133,7 +133,10 @@ export function QuickSwitcher({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+      <DialogContent
+        showCloseButton={false}
+        className="gap-0 overflow-hidden p-0 sm:max-w-md"
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>Switch Session / Search Code</DialogTitle>
         </DialogHeader>
