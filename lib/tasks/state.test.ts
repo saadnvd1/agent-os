@@ -137,6 +137,24 @@ describe("cancelled check runs", () => {
     ).toBe("pass");
   });
 
+  it("keeps same-named jobs in different workflows apart", () => {
+    const rollup = [
+      { name: "test", workflowName: "CI", conclusion: "CANCELLED" },
+      { name: "test", workflowName: "Nightly", conclusion: "SUCCESS" },
+    ];
+    expect(checksVerdict(rollup)).toBe("pending");
+    expect(failingCheck(rollup)).toBeNull();
+  });
+
+  it("keeps a check run and a status context of the same name apart", () => {
+    expect(
+      checksVerdict([
+        { __typename: "CheckRun", name: "lint", conclusion: "CANCELLED" },
+        { __typename: "StatusContext", context: "lint", state: "SUCCESS" },
+      ])
+    ).toBe("pending");
+  });
+
   it("doesn't let another check's run excuse a cancelled one", () => {
     expect(
       checksVerdict([cancelled, { name: "test", conclusion: "FAILURE" }])

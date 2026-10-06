@@ -81,6 +81,8 @@ export function canSignOff(pr: TaskPR | null): {
 }
 
 type RollupEntry = {
+  __typename?: string | null;
+  workflowName?: string | null;
   name?: string | null;
   context?: string | null;
   conclusion?: string | null;
@@ -93,18 +95,23 @@ const FAILED = ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"];
 const outcome = (c: RollupEntry) =>
   (c.conclusion || c.state || c.status || "").toUpperCase();
 
+// Job names repeat across workflows, and a status context can share a check
+// run's name, so a check is its kind, workflow and name together.
+const checkKey = (c: RollupEntry) => {
+  const name = c.name ?? c.context;
+  return name ? `${c.__typename ?? ""}|${c.workflowName ?? ""}|${name}` : null;
+};
+
 // A concurrency group cancels the stale run on the same sha, so a CANCELLED
 // entry says nothing when the same check also has a run that wasn't cancelled.
 function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
   const ran = new Set(
-    rollup
-      .filter((c) => outcome(c) !== "CANCELLED")
-      .map((c) => c.name ?? c.context)
-      .filter(Boolean)
+    rollup.filter((c) => outcome(c) !== "CANCELLED").map(checkKey)
   );
-  return rollup.filter(
-    (c) => outcome(c) !== "CANCELLED" || !ran.has(c.name ?? c.context)
-  );
+  return rollup.filter((c) => {
+    const key = checkKey(c);
+    return outcome(c) !== "CANCELLED" || key === null || !ran.has(key);
+  });
 }
 
 // Summarise gh's statusCheckRollup into one verdict. A lone CANCELLED run is
