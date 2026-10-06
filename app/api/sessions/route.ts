@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     let branchName: string | null = null;
     let actualWorkingDirectory = workingDirectory;
     let port: number | null = null;
-    let setupResult: SetupResult | null = null;
+    const setupResult: SetupResult | null = null;
 
     if (useWorktree && featureName) {
       try {

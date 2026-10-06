@@ -60,14 +60,7 @@ export function createWebSocketConnection(
   };
 
   // Force reconnect - kills any existing connection and creates fresh one
-  // Note: savedHandlers is populated after handlers are defined below
-  let savedHandlers: {
-    onopen: typeof ws.onopen;
-    onmessage: typeof ws.onmessage;
-    onclose: typeof ws.onclose;
-    onerror: typeof ws.onerror;
-  };
-
+  // Note: savedHandlers is defined below, after the handlers it captures
   const forceReconnect = () => {
     if (intentionalCloseRef.current) return;
 
@@ -182,7 +175,7 @@ export function createWebSocketConnection(
   };
 
   // Save handlers now that they're defined (for reconnection)
-  savedHandlers = {
+  const savedHandlers = {
     onopen: ws.onopen,
     onmessage: ws.onmessage,
     onclose: ws.onclose,

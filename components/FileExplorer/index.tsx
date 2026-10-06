@@ -213,7 +213,7 @@ function DesktopFileExplorer({
   openFiles,
   activeFilePath,
   activeFile,
-  saving,
+  saving: _saving,
   onFileClick,
   onSelectTab,
   onCloseTab,

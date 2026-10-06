@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useRef, useCallback } from "react";
-import { SessionPreviewPopover } from "@/components/SessionPreviewPopover";
 import { ServerLogsModal } from "@/components/DevServers";
 import {
   ProjectsSection,
@@ -46,7 +45,7 @@ export function SessionList({
   onNewSessionInProject,
   onOpenTerminal,
   onStartDevServer,
-  onCreateDevServer,
+  onCreateDevServer: _onCreateDevServer,
   pinControls,
 }: SessionListProps) {
   const { isMobile } = useViewport();
@@ -88,8 +87,8 @@ export function SessionList({
   const [showHostsDialog, setShowHostsDialog] = useState(false);
   const [showNewWorkspace, setShowNewWorkspace] = useState(false);
   const createWorkspace = useCreateWorkspace();
-  const [hoveredSession, setHoveredSession] = useState<Session | null>(null);
-  const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+  const [_hoveredSession, setHoveredSession] = useState<Session | null>(null);
+  const [_hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
   const [logsServerId, setLogsServerId] = useState<string | null>(null);
 
   // Use projects if available

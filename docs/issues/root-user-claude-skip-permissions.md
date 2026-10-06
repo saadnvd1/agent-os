@@ -40,6 +40,7 @@ The init script (`/api/sessions/init-script`) generates a shell script that runs
 Set the `IS_SANDBOX=1` environment variable before launching Claude when running as root. This signals to Claude Code that the environment is a sandboxed/containerized setup where root is expected.
 
 **`app/api/sessions/init-script/route.ts`** — Added root detection in the generated shell script:
+
 ```bash
 if [ "$(id -u)" = "0" ]; then
   export IS_SANDBOX=1
@@ -47,6 +48,7 @@ fi
 ```
 
 **`app/api/sessions/[id]/summarize/route.ts`** — Added root detection for the summarize endpoint which also spawns Claude directly:
+
 ```typescript
 const isRoot = process.getuid?.() === 0;
 const envPrefix = isRoot ? "IS_SANDBOX=1 " : "";

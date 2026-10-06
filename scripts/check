@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# The full guard, the same run locally and in CI:
+#   scripts/check            typecheck, lint, format, tests
+#   scripts/check --build    ...and a production build
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+step() { printf '\n▸ %s\n' "$1"; }
+
+step "typecheck"; npx tsc --noEmit
+step "lint";      npx eslint . --max-warnings=40
+step "format";    npx prettier --check . --log-level warn
+step "test";      npx vitest run
+if [ "${1:-}" = "--build" ]; then
+  step "build";   npx next build
+fi
+printf '\n✓ check passed\n'

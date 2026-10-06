@@ -1,13 +1,10 @@
 "use client";
 
-import { useRef, useCallback, useEffect, memo, useState, useMemo } from "react";
+import { useRef, useCallback, useEffect, memo, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { usePanes } from "@/contexts/PaneContext";
 import { useViewport } from "@/hooks/useViewport";
-import type {
-  TerminalHandle,
-  TerminalScrollState,
-} from "@/components/Terminal";
+import type { TerminalHandle } from "@/components/Terminal";
 import type { Session, Project } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
 import { cn } from "@/lib/utils";

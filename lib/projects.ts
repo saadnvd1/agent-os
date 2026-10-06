@@ -5,7 +5,6 @@
  * Sessions inherit settings from their parent project.
  */
 
-import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";

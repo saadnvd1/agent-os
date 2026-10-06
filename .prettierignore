@@ -1,0 +1,8 @@
+.next
+node_modules
+src-tauri/target
+src-tauri/gen
+public
+package-lock.json
+dist
+*.db

@@ -279,7 +279,6 @@ function parseAnsiToHtml(text: string): string {
 
   let result = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b\[([0-9;]+)m/g, (_, codes) => {
     const codeList = codes.split(";");
 
@@ -300,7 +299,6 @@ function parseAnsiToHtml(text: string): string {
     return "";
   });
 
-  // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b\[0m/g, "</span>");
 
   return result;
