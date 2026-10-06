@@ -64,6 +64,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   land: "Merge a whole stack bottom-up, each PR through the sign-off gates at its current head.",
   drop: "Reject a task: close its PR and remove its worktree. Logged with the reason.",
   stop: "Stop a session's agent, keeping its worktree and branch.",
+  done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
   note: "Add a line to this workspace's decision log; it shows in your chat.",
   review:
     "Start an independent read-only review of a task's PR at its exact head commit, or read the stored verdict for that commit.",

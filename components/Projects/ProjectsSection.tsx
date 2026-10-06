@@ -216,6 +216,9 @@ export function ProjectsSection({
               project={project}
               sessionCount={row.sessionCount}
               row={row}
+              singleSession={projectSessions.find(
+                (s) => row.single?.kind === "session" && s.id === row.single.id
+              )}
               onOpenLatest={() => {
                 const target = row.latest;
                 if (target?.kind === "session") onSelectSession(target.id);

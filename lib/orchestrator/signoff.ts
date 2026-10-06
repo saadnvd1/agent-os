@@ -39,11 +39,14 @@ export type Verdict =
   | { ok: false; wait: boolean; text: string };
 
 // Whether the task may merge now, and at which commit. Landing merges a
-// stack bottom-up, so there a parent not merged yet is fine.
+// stack bottom-up, so there a parent not merged yet is fine. `count`: a
+// failure counts toward going to Saad; off when a person asked (done from
+// the UI or the CLI), so a cleanup sweep run twice doesn't escalate.
 export async function judge(
   workspaceId: string,
   task: Session,
-  landing = false
+  landing = false,
+  opts: { count?: boolean } = {}
 ): Promise<Verdict> {
   const no = (text: string, wait = false): Verdict => ({
     ok: false,
@@ -99,7 +102,11 @@ export async function judge(
   if (!failed.length && !waiting.length)
     return { ok: true, sha, pr: pr.number };
   const lines = [
-    ...failed.map((o) => countFailure(workspaceId, task, o, pr.url, sha)),
+    ...failed.map((o) =>
+      opts.count === false
+        ? `- ${o.gate} failed: ${o.reason}`
+        : countFailure(workspaceId, task, o, pr.url, sha)
+    ),
     ...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`),
   ];
   return no(`${head}\n${lines.join("\n")}`, !failed.length);
@@ -126,9 +133,19 @@ export async function signOff(
   const task = workspaceTask(workspaceId, ref);
   const verdict = await judge(workspaceId, task);
   if (!verdict.ok) throw new Error(verdict.text);
+  return mergeJudged(workspaceId, task, verdict);
+}
+
+// Merges exactly the commit a passing verdict judged.
+export async function mergeJudged(
+  workspaceId: string,
+  task: Session,
+  verdict: Extract<Verdict, { ok: true }>,
+  opts: { wait?: boolean } = {}
+): Promise<string> {
   if (verdict.approval && !spendApproval(verdict.approval))
     throw new Error(`Saad's approval for ${task.name} was already used`);
-  await signOffTask(task.id, { head: verdict.sha });
+  await signOffTask(task.id, { head: verdict.sha, wait: opts.wait });
   addNote(
     workspaceId,
     verdict.approval

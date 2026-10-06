@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useTasksQuery } from "@/data/tasks";
-import { needsHuman } from "@/lib/tasks/state";
+import { isFinished, needsHuman } from "@/lib/tasks/state";
 import { tasksUi, tasksUiActions } from "@/stores/tasksUi";
 import { TaskRow } from "./TaskRow";
 import { BoardTodoSection } from "@/components/LumifyHub";
@@ -19,9 +19,7 @@ import { StacksSection } from "@/components/Stacks";
 export function TasksDialog() {
   const { panelOpen } = useSnapshot(tasksUi);
   const { data: tasks = [], isPending } = useTasksQuery();
-  const active = tasks.filter(
-    (t) => t.state !== "merged" && t.state !== "dropped"
-  );
+  const active = tasks.filter((t) => !isFinished(t.state));
   // Whatever needs a human first.
   active.sort(
     (a, b) => Number(needsHuman(b.state)) - Number(needsHuman(a.state))

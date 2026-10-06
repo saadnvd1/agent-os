@@ -14,5 +14,8 @@ export default defineConfig({
     env: { NODE_ENV: "test" },
     // One database file per worker: the db module opens it at import time.
     pool: "forks",
+    // Several suites run real git many times per test; on a Mac busy with
+    // other agents the 5s default times them out.
+    testTimeout: 30000,
   },
 });

@@ -14,6 +14,7 @@ import { createTask, dropTask } from "../tasks";
 import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
+import { doneSession } from "../done";
 import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
 import { addNote } from "./notes";
@@ -128,6 +129,15 @@ export async function drop(
   await dropTask(task.id);
   addNote(workspaceId, `Dropped task ${task.name}: ${reason.trim()}`);
   return `Dropped ${task.name}: its PR is closed and its worktree removed.`;
+}
+
+// Finished work: merged through the gates if its PR is open, then
+// stopped, cleaned up and archived (lib/done).
+export async function done(workspaceId: string, ref: string): Promise<string> {
+  const s = findWorkspaceSession(workspaceId, ref);
+  const out = await doneSession(s.id, { by: "orchestrator" });
+  if (!out.merged) addNote(workspaceId, `Done: ${s.name}.`);
+  return out.text;
 }
 
 // Stops the agent and keeps everything else: a chat's turn is interrupted,

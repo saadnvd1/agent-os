@@ -32,6 +32,7 @@ export function cardTargetFor(state: TaskState | "queued"): CardTarget {
     case "checks-failing":
       return "in_review";
     case "merged":
+    case "done":
       return "done";
     case "dropped":
       return "dropped";

@@ -86,6 +86,7 @@ describe("what the orchestrator may do", () => {
       "Bash(aos spawn:*)",
       "Bash(aos send:*)",
       "Bash(aos stack:*)",
+      "Bash(aos done:*)",
     ])
       expect(p.allowedTools).not.toContain(t);
     for (const t of ["Edit", "Write", "NotebookEdit"]) {

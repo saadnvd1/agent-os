@@ -61,6 +61,9 @@ describe("deriveTaskState", () => {
     expect(
       deriveTaskState({ ...base, taskStatus: "dropped", sessionStatus: "dead" })
     ).toBe("dropped");
+    expect(
+      deriveTaskState({ ...base, taskStatus: "done", sessionStatus: "dead" })
+    ).toBe("done");
   });
 });
 

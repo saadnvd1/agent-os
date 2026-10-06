@@ -200,6 +200,8 @@ aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
+aos done <session>                # finished: merge through the gates, archive
+aos done --all-idle               # the same for every idle session around you
 aos docs [query]                  # LumifyHub pages, when the workspace is linked
 ```
 
@@ -216,6 +218,34 @@ Group projects into workspaces (e.g. Work, Personal) from the **+** menu.
 Each workspace is a collapsible sidebar section showing how many sessions need
 you; move a project in from its menu. Deleting a workspace keeps its projects.
 
+### Done
+
+**Done** (a session's ⋯ menu, or its project's when it's the only one; `aos
+done`; or the orchestrator's `done` tool) is for finished work, where
+**Stop** keeps everything and **Drop** rejects it. A task with an open PR
+merges first, only through the orchestrator's gates at the judged commit; a
+failing gate refuses with its name and nothing merges. A task already
+merged, or a session with no PR, just cleans up. If GitHub can't be read, or
+a task that had a PR has none now, done refuses rather than guess.
+
+Cleanup stops the agent and archives the session. The worktree goes only if
+nothing in it would be lost: never with uncommitted changes; after a merge,
+only when every commit on it is in the merged PR or on a remote; otherwise
+only when its branch has no commits of its own. Anything else is kept and the
+reply says why. A sign-off from Tasks or the orchestrator follows the same
+rule. A branch merged on GitHub is deleted on origin when origin's tip is the
+commit that merged.
+
+Archived sessions leave the sidebar, the needs-you count, session statuses
+and the orchestrator's view, but are never deleted; the **Archived** view
+(each workspace's menu, or ⋯ in the sidebar header for all of them) lists
+them with Unarchive, which only puts the entry back.
+
+**Clean up idle sessions** (a workspace's menu) first shows what will happen
+to each idle or stopped session, and `aos done --all-idle` does the same
+sweep. A clean-up never merges: open PRs are listed for their own done.
+`aos done` reaches only sessions in the caller's workspace (or project).
+
 ### Orchestrator
 
 Each workspace has one standing orchestrator, pinned at the top of its
@@ -228,7 +258,7 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Tools:** `sessions` (every session's status, activity, task, PR, CI and
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
-  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `note`,
+  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `note`,
   `review`, `sign_off` and `ask_saad`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The route
   they call answers only the orchestrator's worker, by a per-orchestrator

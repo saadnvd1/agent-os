@@ -18,6 +18,11 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      run the project's linked board as stacked tasks
                                      (--plan: just show the order, start nothing)
   aos stacks                         every stack and where each card is
+  aos done <session>                 finished: merge its open PR through the
+                                     gates, stop it, archive it (not a rejection);
+                                     only sessions in your workspace or project
+  aos done --all-idle                clean up every idle or stopped session there;
+                                     never merges, lists open PRs instead
 
   Docs, when your project's workspace is linked to LumifyHub:
   aos docs [query]                   list the workspace's pages (id, title)
@@ -222,6 +227,20 @@ async function main() {
           )
         );
       }
+      return;
+    }
+    case "done": {
+      const allIdle = args.includes("--all-idle");
+      const session = args.filter((a) => a !== "--all-idle").join(" ");
+      if (allIdle === !!session)
+        fail("usage: aos done <session> | aos done --all-idle");
+      needMe();
+      const { summary } = await post("/api/bus/done", {
+        from: me,
+        session,
+        allIdle,
+      });
+      console.log(summary);
       return;
     }
     case "docs": {
