@@ -3,7 +3,7 @@
 // task held so the orchestrator doesn't merge it.
 
 import type { Session } from "../db";
-import { raiseAsk, taskSubject } from "./asks";
+import { AskRefused, raiseAsk, taskSubject } from "./asks";
 import { failureOf, markEscalated, recordFailure } from "./gates";
 import { addNote } from "./notes";
 
@@ -17,15 +17,25 @@ export function escalate(
 ): string {
   if (!failureOf(task.id, gate)) recordFailure(workspaceId, task.id, gate, why);
   markEscalated(task.id, gate);
-  const { created } = raiseAsk({
-    workspaceId,
-    subject: taskSubject(task.id),
-    kind: "gate",
-    title: `Merge ${task.name}?`,
-    detail: why,
-    link: url,
-    sha,
-  });
+  let created = false;
+  try {
+    created = raiseAsk({
+      workspaceId,
+      subject: taskSubject(task.id),
+      kind: "gate",
+      title: `Merge ${task.name}?`,
+      detail: why,
+      link: url,
+      sha,
+    }).created;
+  } catch (error) {
+    if (!(error instanceof AskRefused)) throw error;
+    addNote(
+      workspaceId,
+      `Saad must decide on ${task.name} (${url}): ${why}. Not added to his asks: ${error.message}.`,
+      "escalation"
+    );
+  }
   if (created)
     addNote(
       workspaceId,

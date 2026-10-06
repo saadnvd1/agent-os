@@ -9,6 +9,8 @@
 import { db } from "../db";
 import { queueEvent } from "./events";
 import { addNote } from "./notes";
+import { cleanTitle, classifyKind } from "./ask-text";
+import { revokePasskey } from "../security/passkeys";
 
 export const ASK_KINDS = [
   "decision",
@@ -19,6 +21,7 @@ export const ASK_KINDS = [
   "product",
   "gate",
   "brake",
+  "passkey",
 ] as const;
 export type AskKind = (typeof ASK_KINDS)[number];
 
@@ -41,6 +44,21 @@ export const HARD_LINES: readonly AskKind[] = [
   "product",
 ];
 
+// Approving these needs a passkey assertion, not just a trusted device.
+export const PRESENCE_KINDS: readonly AskKind[] = [
+  ...HARD_LINES,
+  "gate",
+  "brake",
+  "passkey",
+];
+
+// At most this many open asks per workspace, and a declined subject isn't
+// asked again for a while.
+export const MAX_OPEN_ASKS = 10;
+export const DECLINE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+export class AskRefused extends Error {}
+
 export type AskStatus = "open" | "approved" | "declined" | "resolved";
 
 export interface AskRow {
@@ -57,6 +75,7 @@ export interface AskRow {
   created_at: string;
   resolved_at: string | null;
   used_at: string | null;
+  brake_key: string | null;
 }
 
 export type AskAnswer =
@@ -68,8 +87,31 @@ const cap = (s: string, n: number) => s.trim().slice(0, n);
 
 export const taskSubject = (taskId: string) => `task:${taskId}`;
 export const BRAKE_SUBJECT = "brake";
-export const titleSubject = (title: string) =>
-  `ask:${title.trim().toLowerCase().replace(/\s+/g, " ")}`;
+export const passkeySubject = (id: string) => `passkey:${id}`;
+
+// What an approval is pinned to: the commit a gate ask was about, the brake
+// a brake ask was about, else the ask itself. Approve must send it back.
+export const askBinding = (ask: AskRow) =>
+  ask.sha ?? ask.brake_key ?? ask.subject;
+
+const sqliteTime = (ms: number) =>
+  new Date(ms).toISOString().replace("T", " ").slice(0, 19);
+
+function refusal(workspaceId: string, subject: string): string | null {
+  const declined = db
+    .prepare(
+      `SELECT title FROM orchestrator_asks WHERE workspace_id = ? AND subject = ?
+         AND status = 'declined' AND resolved_at >= ? LIMIT 1`
+    )
+    .get(workspaceId, subject, sqliteTime(Date.now() - DECLINE_COOLDOWN_MS)) as
+    | { title: string }
+    | undefined;
+  if (declined)
+    return `Saad declined "${declined.title}" in the last 6 hours; don't ask again yet`;
+  if (openAskCount(workspaceId) >= MAX_OPEN_ASKS)
+    return `Saad already has ${MAX_OPEN_ASKS} open asks here; wait for answers before adding more`;
+  return null;
+}
 
 function openBySubject(workspaceId: string, subject: string): AskRow | null {
   return (
@@ -100,40 +142,47 @@ export function raiseAsk(input: {
   detail?: string;
   link?: string | null;
   sha?: string | null;
+  brakeKey?: string | null;
 }): { ask: AskRow; created: boolean } {
-  const title = cap(input.title, 200);
+  const title = cleanTitle(input.title);
   if (!title) throw new Error("An ask needs a title");
   const detail = cap(input.detail ?? "", 2000);
   const link = input.link ? cap(input.link, 500) : null;
+  const kind = classifyKind(input.kind, title, detail);
   const sha = input.sha ?? null;
+  const brakeKey = input.brakeKey ?? null;
   return db.transaction(() => {
     const open = openBySubject(input.workspaceId, input.subject);
     if (open) {
       db.prepare(
-        `UPDATE orchestrator_asks SET kind = ?, title = ?, detail = ?, link = ?, sha = ? WHERE id = ?`
+        `UPDATE orchestrator_asks SET kind = ?, title = ?, detail = ?, link = ?, sha = ?, brake_key = ? WHERE id = ?`
       ).run(
-        input.kind,
+        kind,
         title,
         detail,
         link ?? open.link,
         sha ?? open.sha,
+        brakeKey ?? open.brake_key,
         open.id
       );
       return { ask: getAsk(input.workspaceId, open.id)!, created: false };
     }
+    const refused = refusal(input.workspaceId, input.subject);
+    if (refused) throw new AskRefused(refused);
     const { lastInsertRowid } = db
       .prepare(
-        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, brake_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.workspaceId,
         input.subject,
-        input.kind,
+        kind,
         title,
         detail,
         link,
-        sha
+        sha,
+        brakeKey
       );
     return {
       ask: getAsk(input.workspaceId, Number(lastInsertRowid))!,
@@ -190,15 +239,24 @@ const STATUS_OF: Record<AskAnswer["action"], AskStatus> = {
 
 // Saad's answer: it closes the ask and reaches the orchestrator as an event,
 // queued like any other (so it waits while it's paused).
+// An approval names what it approves (`binding`); if the ask moved on since
+// (a new commit, another brake), it's refused rather than approving that.
 export function answerAsk(
   workspaceId: string,
   id: number,
-  answer: AskAnswer
+  answer: AskAnswer,
+  binding?: string
 ): AskRow {
   const ask = getAsk(workspaceId, id);
   if (!ask) throw new Error("No such ask");
   if (ask.status !== "open")
     throw new Error(`This ask is already ${ask.status}`);
+  if (
+    answer.action === "approve" &&
+    binding !== undefined &&
+    binding !== askBinding(ask)
+  )
+    throw new Error("This ask changed since you saw it; look again");
   const text =
     answer.action === "reply" ? cap(answer.text, 4000) : answer.action;
   if (answer.action === "reply" && !text) throw new Error("The reply is empty");
@@ -210,10 +268,28 @@ export function answerAsk(
     db.prepare(
       `UPDATE orchestrator_asks SET status = ?, answer = ?, resolved_at = datetime('now') WHERE id = ?`
     ).run(STATUS_OF[answer.action], text, id);
-    queueEvent(workspaceId, `ask:${id}`, null, line);
+    if (ask.kind === "passkey") settlePasskeyAsk(ask, answer.action);
+    else queueEvent(workspaceId, `ask:${id}`, null, line);
   })();
   addNote(workspaceId, `Saad answered ${line}`, "ask");
   return getAsk(workspaceId, id)!;
+}
+
+// A new-passkey ask sits in every workspace: one answer settles them all,
+// and Decline revokes the passkey. The orchestrator isn't told.
+function settlePasskeyAsk(ask: AskRow, action: AskAnswer["action"]): void {
+  const id = ask.subject.slice("passkey:".length);
+  if (action === "decline") revokePasskey(id);
+  resolvePasskeyAsks(id, action === "decline" ? "revoked" : "kept");
+}
+
+export function resolvePasskeyAsks(passkeyId: string, why: string): number {
+  return db
+    .prepare(
+      `UPDATE orchestrator_asks SET status = 'resolved', answer = ?, resolved_at = datetime('now')
+       WHERE subject = ? AND status = 'open'`
+    )
+    .run(why, passkeySubject(passkeyId)).changes;
 }
 
 // Closes the open ask on a subject that no longer needs Saad (the task was

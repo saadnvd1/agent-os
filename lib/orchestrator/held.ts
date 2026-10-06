@@ -2,7 +2,7 @@
 // commit, once. A new commit since he approved goes back to him.
 
 import type { Session } from "../db";
-import { raiseAsk, taskSubject } from "./asks";
+import { AskRefused, raiseAsk, taskSubject } from "./asks";
 import { unspentApproval } from "./ask-approvals";
 import type { FailureRow } from "./gates";
 import type { Verdict } from "./signoff";
@@ -22,15 +22,19 @@ export function heldVerdict(
     return { ok: true, sha, pr, approval: approval.id };
   if (approval) {
     const why = `Saad approved ${approval.sha ? short(approval.sha) : "an earlier commit"}, but PR #${pr}'s head is now ${short(sha)}`;
-    raiseAsk({
-      workspaceId,
-      subject: taskSubject(task.id),
-      kind: "gate",
-      title: `Merge ${task.name}?`,
-      detail: why,
-      link: url,
-      sha,
-    });
+    try {
+      raiseAsk({
+        workspaceId,
+        subject: taskSubject(task.id),
+        kind: "gate",
+        title: `Merge ${task.name}?`,
+        detail: why,
+        link: url,
+        sha,
+      });
+    } catch (error) {
+      if (!(error instanceof AskRefused)) throw error;
+    }
     return {
       ok: false,
       wait: false,

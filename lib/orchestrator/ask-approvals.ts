@@ -60,3 +60,14 @@ export function resolveFinishedTaskAsks(workspaceId: string): number {
     );
   return n;
 }
+
+// Approvals not spent yet on a subject are void once what they were for is
+// gone (the brakes lifted): they never carry over to the next one.
+export function voidApprovals(workspaceId: string, subject: string): number {
+  return db
+    .prepare(
+      `UPDATE orchestrator_asks SET used_at = datetime('now'), answer = 'approve (void)'
+       WHERE workspace_id = ? AND subject = ? AND status = 'approved' AND used_at IS NULL`
+    )
+    .run(workspaceId, subject).changes;
+}

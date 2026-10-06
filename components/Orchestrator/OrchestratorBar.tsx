@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { usePauseOrchestrator } from "@/data/orchestrators";
 import { useOrchestratorHeader } from "@/hooks/useOrchestratorHeader";
 import { headerParts } from "@/lib/orchestrator/header-line";
 import { cn } from "@/lib/utils";
+import { NO_PASSKEYS_HERE, passkeysHere } from "@/data/presence";
 import { AsksList } from "./AsksList";
 
 // The top of an orchestrator's chat: the workspace header line, Pause or
@@ -16,6 +17,11 @@ export function OrchestratorBar({ workspaceId }: { workspaceId: string }) {
   const { overview, counts } = useOrchestratorHeader(workspaceId);
   const pause = usePauseOrchestrator(workspaceId);
   const [open, setOpen] = useState(true);
+  const canProve = useSyncExternalStore(
+    () => () => {},
+    passkeysHere,
+    () => true
+  );
   const asks = overview?.asks ?? [];
   const toggle = () =>
     pause.mutate(!counts.paused, {
@@ -52,7 +58,10 @@ export function OrchestratorBar({ workspaceId }: { workspaceId: string }) {
           size="sm"
           variant={counts.paused ? "default" : "secondary"}
           className="h-11 md:h-8"
-          disabled={!overview || pause.isPending}
+          disabled={
+            !overview || pause.isPending || (counts.paused && !canProve)
+          }
+          title={counts.paused && !canProve ? NO_PASSKEYS_HERE : undefined}
           onClick={toggle}
         >
           {counts.paused ? <Play /> : <Pause />}

@@ -6,7 +6,7 @@
 
 import { db } from "../db";
 import { listWorkspaces } from "../workspaces";
-import { openAsks, type AskKind } from "./asks";
+import { askBinding, openAsks, PRESENCE_KINDS, type AskKind } from "./asks";
 import { getOrchestrator } from "./home";
 
 export interface AskView {
@@ -16,6 +16,11 @@ export interface AskView {
   why: string;
   detail: string;
   link: string | null;
+  // The commit a gate ask is about (shown, so Saad sees what he approves).
+  sha: string | null;
+  // What Approve must send back, and whether it needs a passkey.
+  binding: string;
+  presence: boolean;
   createdAt: string;
 }
 
@@ -59,6 +64,9 @@ export function orchestratorOverview(): OrchestratorOverview[] {
         why: detail.split("\n")[0] ?? "",
         detail,
         link: a.link,
+        sha: a.sha,
+        binding: askBinding(a),
+        presence: PRESENCE_KINDS.includes(a.kind),
         createdAt: a.created_at,
       };
     }),

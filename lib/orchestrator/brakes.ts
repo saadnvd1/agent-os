@@ -13,8 +13,8 @@ import { statusDetector } from "../status-detector";
 import { getWorkspace } from "../workspaces";
 import { workspaceSessions } from "./facts";
 import { addNote } from "./notes";
-import { BRAKE_SUBJECT, raiseAsk, resolveAsks } from "./asks";
-import { spendApproval, unspentApproval } from "./ask-approvals";
+import { AskRefused, BRAKE_SUBJECT, raiseAsk, resolveAsks } from "./asks";
+import { spendApproval, unspentApproval, voidApprovals } from "./ask-approvals";
 import { isPaused } from "./pause";
 import { readUsage, windowRefusal, type UsageState } from "./usage";
 
@@ -105,6 +105,7 @@ const setBrake = (workspaceId: string, key: string | null) =>
 export function liftBrake(workspaceId: string): void {
   setBrake(workspaceId, null);
   resolveAsks(workspaceId, BRAKE_SUBJECT, "the brakes lifted");
+  voidApprovals(workspaceId, BRAKE_SUBJECT);
 }
 
 // Saad's approval of a brake ask lets one start past the brakes, if he
@@ -119,12 +120,15 @@ async function refusal(workspaceId: string): Promise<string | null> {
     liftBrake(workspaceId);
     return null;
   }
+  const key = on.map((b) => b.name).join("+");
+  const reason = on.map((b) => b.reason).join("; ");
+  // An approval is for the brake it was asked about, not whichever holds now.
   const approval = unspentApproval(
     workspaceId,
     BRAKE_SUBJECT,
     BRAKE_APPROVAL_MS
   );
-  if (approval && spendApproval(approval.id)) {
+  if (approval?.brake_key === key && spendApproval(approval.id)) {
     // Spent: the next refusal notes and asks again.
     setBrake(workspaceId, null);
     addNote(
@@ -134,8 +138,6 @@ async function refusal(workspaceId: string): Promise<string | null> {
     );
     return null;
   }
-  const key = on.map((b) => b.name).join("+");
-  const reason = on.map((b) => b.reason).join("; ");
   if (getWorkspace(workspaceId)?.orch_brake !== key) {
     setBrake(workspaceId, key);
     addNote(
@@ -143,13 +145,18 @@ async function refusal(workspaceId: string): Promise<string | null> {
       `New starts paused: ${reason}. Running work carries on.`,
       "brake"
     );
-    raiseAsk({
-      workspaceId,
-      subject: BRAKE_SUBJECT,
-      kind: "brake",
-      title: "New starts are braked",
-      detail: `${reason}. Approve to let one more start through; running work carries on either way.`,
-    });
+    try {
+      raiseAsk({
+        workspaceId,
+        subject: BRAKE_SUBJECT,
+        kind: "brake",
+        title: "New starts are braked",
+        detail: `${reason}. Approve to let one more start through; running work carries on either way.`,
+        brakeKey: key,
+      });
+    } catch (error) {
+      if (!(error instanceof AskRefused)) throw error;
+    }
   }
   return reason;
 }

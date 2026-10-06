@@ -277,8 +277,24 @@ it may do on its own, and the lines that always come back to you as asks.
   notifications. Your answer reaches it as an event (`ask "<title>":
 approved`). An approval covers that one item only: a held task's approval
   lets `sign_off` merge it once, at the commit you approved (a new commit
-  asks again), and a brake's lets one start through. An ask closes itself
-  when its task is merged or dropped, or the brakes lift.
+  asks again), and a brake's lets one start through, for that brake only.
+  An ask closes itself when its task is merged or dropped, or the brakes
+  lift. At most 10 are open per workspace, titles that say the same thing
+  fold into one, a declined subject isn't asked again for 6 hours, and a
+  "decision" that reads as money, outbound, irreversible or credentials is
+  filed as that hard line.
+- **Proof it's you:** only this machine, the tailnet, or a paired device you
+  switched to "Can approve" in Devices may answer asks or pause. Approving a
+  hard line, a gate, a brake or a new passkey, and Resume, also need a
+  passkey (Touch ID or Face ID, user verification required) on a challenge
+  bound to that one ask at its current commit or brake: single use, two
+  minutes. Agents on this machine reach every route but can't make your
+  authenticator sign, and neither `aos` nor the orchestrator's tools can
+  answer or resume. Passkeys belong to the host they were made on
+  (localhost, the tailnet's https name, the Connect host), so add one on
+  each in Devices: the first ever is free, every later one needs a code
+  from a device that has one, and each new passkey becomes an ask (Decline
+  revokes it). Browsers offer passkeys only over https or on localhost.
 - **Header line and Pause:** its row reads like "Orchestrator · 3 running ·
   1 in review · 1 ask" from live data, and tapping it opens the chat, where
   the same line carries Pause/Resume. While paused it acts on nothing:

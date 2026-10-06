@@ -31,10 +31,10 @@ export function AsksList({
           key={ask.id}
           ask={ask}
           dense={dense}
-          pending={answer.isPending && answer.variables?.askId === ask.id}
+          pending={answer.isPending && answer.variables?.ask.id === ask.id}
           onAnswer={(a) =>
             answer.mutate(
-              { askId: ask.id, ...a },
+              { ask, ...a },
               { onError: (e) => toast.error(e.message) }
             )
           }

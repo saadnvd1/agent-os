@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Check, CornerDownLeft, ExternalLink, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { AskView } from "@/lib/orchestrator/overview";
 import type { AskKind } from "@/lib/orchestrator/asks";
 import type { AskAction } from "@/data/orchestrators";
+import { NO_PASSKEYS_HERE, passkeysHere } from "@/data/presence";
 import { cn } from "@/lib/utils";
 
 const amber = "bg-amber-500/15 text-amber-700 dark:text-amber-300";
@@ -21,6 +22,7 @@ const KIND: Record<AskKind, { label: string; tone: string }> = {
   product: { label: "Product call", tone: amber },
   gate: { label: "Merge gate", tone: muted },
   brake: { label: "Brake", tone: muted },
+  passkey: { label: "New passkey", tone: amber },
 };
 
 // "PR #12" for a pull request, otherwise the host and path.
@@ -34,6 +36,8 @@ function linkLabel(link: string): string {
     return link;
   }
 }
+
+const noSubscribe = () => () => {};
 
 const safeHref = (link: string) => /^https?:\/\//i.test(link);
 
@@ -50,6 +54,9 @@ export function AskCard({
   dense?: boolean;
 }) {
   const [replying, setReplying] = useState(false);
+  // Known only in the browser: whether this page can use a passkey.
+  const canProve = useSyncExternalStore(noSubscribe, passkeysHere, () => true);
+  const blocked = ask.presence && !canProve;
   const [text, setText] = useState("");
   const kind = KIND[ask.kind];
   const btn = "h-11 md:h-8";
@@ -86,6 +93,11 @@ export function AskCard({
           {ask.why}
         </p>
       )}
+      {ask.sha && (
+        <p className="text-muted-foreground font-mono text-[11px]">
+          at {ask.sha.slice(0, 7)}
+        </p>
+      )}
       {ask.link &&
         (safeHref(ask.link) ? (
           <a
@@ -102,6 +114,9 @@ export function AskCard({
             {ask.link}
           </p>
         ))}
+      {blocked && !dense && (
+        <p className="text-muted-foreground text-xs">{NO_PASSKEYS_HERE}</p>
+      )}
       {replying ? (
         <div className="space-y-2">
           <Textarea
@@ -146,7 +161,8 @@ export function AskCard({
           <Button
             size="sm"
             className={btn}
-            disabled={pending}
+            disabled={pending || blocked}
+            title={blocked ? NO_PASSKEYS_HERE : undefined}
             onClick={() => onAnswer({ action: "approve" })}
           >
             <Check />

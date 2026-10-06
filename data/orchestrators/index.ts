@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrchestratorOverview } from "@/lib/orchestrator/overview";
+import type {
+  AskView,
+  OrchestratorOverview,
+} from "@/lib/orchestrator/overview";
+import { provePresence } from "../presence";
 import { statusKeys } from "../sessions/keys";
 
 export const orchestratorKeys = {
@@ -46,12 +50,28 @@ export type AskAction =
   | { action: "decline" }
   | { action: "reply"; text: string };
 
+// Approve names what it approves (the commit or brake the card showed) and,
+// for anything but a plain decision, carries a passkey assertion for it.
 export function useAnswerAsk(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ askId, ...answer }: AskAction & { askId: number }) =>
-      post(`/api/workspaces/${workspaceId}/orchestrator/asks/${askId}`, answer),
-    onMutate: async ({ askId }) => {
+    mutationFn: async ({
+      ask,
+      ...answer
+    }: AskAction & { ask: Pick<AskView, "id" | "binding" | "presence"> }) => {
+      const url = `/api/workspaces/${workspaceId}/orchestrator/asks/${ask.id}`;
+      if (answer.action !== "approve") return post(url, answer);
+      const assertion = ask.presence
+        ? await provePresence({
+            purpose: "approve",
+            workspaceId,
+            askId: ask.id,
+            binding: ask.binding,
+          })
+        : undefined;
+      return post(url, { ...answer, binding: ask.binding, assertion });
+    },
+    onMutate: async ({ ask: { id: askId } }) => {
       await queryClient.cancelQueries({ queryKey: orchestratorKeys.all });
       queryClient.setQueryData<OrchestratorOverview[]>(
         orchestratorKeys.all,
@@ -73,10 +93,15 @@ export function useAnswerAsk(workspaceId: string) {
 export function usePauseOrchestrator(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (paused: boolean) =>
-      post(`/api/workspaces/${workspaceId}/orchestrator/pause`, { paused }),
-    onMutate: async (paused) => {
-      await queryClient.cancelQueries({ queryKey: orchestratorKeys.all });
+    // Resuming lets it act again, so it needs a passkey.
+    mutationFn: async (paused: boolean) =>
+      post(`/api/workspaces/${workspaceId}/orchestrator/pause`, {
+        paused,
+        assertion: paused
+          ? undefined
+          : await provePresence({ purpose: "resume", workspaceId }),
+      }),
+    onSuccess: (_data, paused) => {
       queryClient.setQueryData<OrchestratorOverview[]>(
         orchestratorKeys.all,
         (prev) =>

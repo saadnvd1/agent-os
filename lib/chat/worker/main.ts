@@ -9,6 +9,7 @@
 import fs from "fs";
 import net from "net";
 import { envPath, lineReader, PROTOCOL_VERSION, socketPath } from "./protocol";
+import { buildId } from "../../build";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 import type { Session } from "../../db";
 
@@ -79,6 +80,7 @@ async function main(sessionId: string) {
       `${JSON.stringify({
         type: "hello",
         version: PROTOCOL_VERSION,
+        build: buildId(),
         state: host.state,
         streaming: [...host.streaming.values()],
       } satisfies WorkerEvent)}\n`
