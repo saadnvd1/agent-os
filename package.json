@@ -13,6 +13,7 @@
     "hooks/",
     "lib/",
     "!lib/connect/test-pki.ts",
+    "!lib/connect/test-relay.ts",
     "!lib/**/*.test.ts",
     "mcp/",
     "public/",

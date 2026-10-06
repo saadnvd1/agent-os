@@ -37,7 +37,14 @@ export function startTunnel(opts: TunnelOptions) {
       ca: relayCa,
       headers: relayServername ? { Host: relayServername } : undefined,
     } as WebSocket.ClientOptions;
-    ws = new WebSocket(`${relayUrl}/tunnel`, tlsOptions);
+    try {
+      ws = new WebSocket(`${relayUrl}/tunnel`, tlsOptions);
+    } catch (err) {
+      // A bad relayUrl must not throw out of a reconnect timer.
+      log(`connect: can't dial ${relayUrl}: ${(err as Error).message}`);
+      state = "denied";
+      return;
+    }
     const mux = new Mux(ws, (stream) => opts.onStream(stream));
     ws.on("open", () => {
       ws!.send(
