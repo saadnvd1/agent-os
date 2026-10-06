@@ -66,6 +66,8 @@ export async function createTask(opts: {
   cardId?: string;
   // Stacked: cut from another task's pushed branch, at this exact commit.
   base?: { branch: string; tip: string; stack: StackedOn };
+  // Cut from this branch instead of the default one.
+  baseBranch?: string;
   // Called once the session row exists, before the agent launches.
   onCreated?: (sessionId: string) => void;
 }): Promise<Session> {
@@ -80,7 +82,10 @@ export async function createTask(opts: {
   const projectPath = expandHome(project.working_directory);
   const id = randomUUID();
   const feature = `${slugify(prompt.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
-  const baseBranch = opts.base?.branch ?? (await getDefaultBranch(projectPath));
+  const baseBranch =
+    opts.base?.branch ??
+    opts.baseBranch ??
+    (await getDefaultBranch(projectPath));
   const wt = await createWorktree({
     projectPath,
     featureName: feature,

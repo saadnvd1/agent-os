@@ -141,6 +141,10 @@ export interface Workspace {
   lh_workspace_id: string | null;
   lh_workspace_slug: string | null;
   lh_workspace_name: string | null;
+  // The orchestrator's brakes, and the one in force (noted once).
+  orch_max_running: number;
+  orch_max_starts_per_hour: number;
+  orch_brake: string | null;
   created_at: string;
 }
 

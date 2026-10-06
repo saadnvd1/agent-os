@@ -227,8 +227,31 @@ it may do on its own, and the lines that always come back to you as asks.
 
 - **Tools:** `sessions` (every session's status, activity, task, PR, CI and
   stack position), `read` (the end of a terminal or chat) and `cards` (the
-  linked boards' cards), served in-process to its chat. Read-only for now; it
-  acts through `aos`.
+  linked boards' cards), plus acting tools: `send`, `start_task`,
+  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `note`,
+  `review` and `sign_off`. All are served in-process to its chat and refuse
+  any target outside its workspace. Its shell runs only `aos` commands that
+  read, so it can't start or message around them.
+- **Brakes:** every start is refused, with the reason, while 4 sessions run in
+  the workspace, after 6 starts in an hour (`orch_max_running` and
+  `orch_max_starts_per_hour` on `workspaces`), or when the account's 5-hour
+  usage window would run out before it resets (read from the statusline's
+  `~/.claude/.context-cost/limits.json`, as dispatch does;
+  `AGENTOS_LIMITS_FILE` overrides). A brake writes one note and pauses only
+  new starts.
+- **Review and sign-off:** `review` runs a fresh, read-only `claude -p` on a
+  detached checkout of the PR's exact head commit (no edit tools, its own
+  system prompt, the repo's review skill if it has one) and stores the
+  verdict against that sha; a task from a card also gets a scope check
+  against the card. `sign_off` squash-merges only that commit, only when CI
+  is green on it, its review passed, nothing is `BLOCKED:` or waiting on an
+  answer, the diff stays in scope (no secrets, not only lockfiles, nothing
+  outside the repo, within the card) and its stack parent has merged.
+  Failures count per task and gate; the second failure of a gate, or any
+  change to CI config, deploy scripts or secrets handling, goes to you as an
+  escalation note and the orchestrator stops merging that task.
+- **Decision log:** `note` and the brakes and escalations write to
+  `orchestrator_notes`, and each line shows in its chat.
 - **Events:** the server sends it one short line per event (a PR opened, CI
   green or failed, a `BLOCKED:` line, a merge, a session needing input, a
   stack step, a task idle 30 minutes with no PR). Events wait while its turn

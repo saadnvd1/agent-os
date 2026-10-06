@@ -63,10 +63,10 @@ async function finishMerge(session: Session, repo: string): Promise<void> {
 
 // Squash-merge the PR; the restack and cleanup run after it in the
 // background (`wait` to wait for them). The checks are re-read here: the
-// button is not the guard.
+// button is not the guard. With `head`, GitHub merges only that commit.
 export async function signOffTask(
   id: string,
-  opts: { wait?: boolean } = {}
+  opts: { wait?: boolean; head?: string } = {}
 ): Promise<void> {
   const session = getTaskSession(id);
   if (session.task_status !== "running")
@@ -78,11 +78,21 @@ export async function signOffTask(
   const pr = await prFor(session, true);
   const verdict = canSignOff(pr);
   if (!verdict.ok) throw new Error(verdict.reason);
+  if (opts.head && pr!.head && pr!.head !== opts.head)
+    throw new Error(
+      `The PR moved to ${pr!.head.slice(0, 7)} after ${opts.head.slice(0, 7)} was checked`
+    );
   signingOff.add(id);
   try {
     await run(
       "gh",
-      ["pr", "merge", String(pr!.number), "--squash"],
+      [
+        "pr",
+        "merge",
+        String(pr!.number),
+        "--squash",
+        ...(opts.head ? ["--match-head-commit", opts.head] : []),
+      ],
       repo,
       120000
     );

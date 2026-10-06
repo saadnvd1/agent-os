@@ -73,9 +73,21 @@ describe("what the orchestrator may do", () => {
     const p = ORCHESTRATOR_PERMISSIONS;
     expect(p.permissionMode).toBe("dontAsk");
     expect(p.allowedTools).toEqual(
-      expect.arrayContaining([...Object.values(TOOL_NAMES), "Bash(aos:*)"])
+      expect.arrayContaining([
+        ...Object.values(TOOL_NAMES),
+        "Bash(aos peers:*)",
+      ])
     );
     expect(p.allowedTools).not.toContain("Bash");
+    // Starting and messaging go through its own braked, scoped tools.
+    for (const t of [
+      "Bash(aos:*)",
+      "Bash(aos task:*)",
+      "Bash(aos spawn:*)",
+      "Bash(aos send:*)",
+      "Bash(aos stack:*)",
+    ])
+      expect(p.allowedTools).not.toContain(t);
     for (const t of ["Edit", "Write", "NotebookEdit"]) {
       expect(p.allowedTools).not.toContain(t);
       expect(p.disallowedTools).toContain(t);
@@ -115,8 +127,10 @@ describe("orchestratorBrief", () => {
   });
 
   it("carries the gates, the hard lines and the tools", () => {
-    expect(brief).toMatch(/CI is green on the PR head/);
-    expect(brief).toMatch(/failed twice on the same task/);
+    expect(brief).toMatch(/CI is green on the PR's head commit/);
+    expect(brief).toMatch(/second failure of the same gate goes to Saad/);
+    expect(brief).toMatch(/CI config, deploy scripts or secrets handling/);
+    expect(brief).toMatch(/at most a set number of sessions running/);
     for (const line of [
       "Anything public or outbound",
       "Money.",

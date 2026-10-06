@@ -180,6 +180,30 @@ export function CommandOutput({ item }: { item: Of<"command_output"> }) {
   );
 }
 
+const NOTE_LABEL = {
+  note: "Note",
+  brake: "Brake",
+  escalation: "Saad decides",
+} as const;
+
+export function NoteLine({ item }: { item: Of<"note"> }) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap",
+        item.tone === "escalation"
+          ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+          : "bg-primary/[0.06] text-foreground/80"
+      )}
+    >
+      <span className="text-muted-foreground mr-2 font-mono text-[11px] tracking-wide uppercase">
+        {NOTE_LABEL[item.tone]}
+      </span>
+      {item.text}
+    </div>
+  );
+}
+
 export function Compacted({ item }: { item: Of<"compacted"> }) {
   return (
     <div className="text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">

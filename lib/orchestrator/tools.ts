@@ -1,7 +1,8 @@
 /**
  * The orchestrator chat's tools, as an in-process MCP server in its chat
  * worker. Each one asks the AgentOS server, which holds the live state
- * (chat activity, status, tasks), and returns its text as is.
+ * (chat activity, status, tasks) and enforces the workspace scope, brakes
+ * and gates, and returns its text as is.
  */
 
 import {
@@ -12,6 +13,7 @@ import {
 import { z } from "zod";
 import type { ToolArgs, ToolName } from "./serve";
 import { ORCHESTRATOR_SERVER } from "./tool-names";
+import { actingTools } from "./tools-act";
 
 type CallToolResult = Awaited<ReturnType<Parameters<typeof tool>[3]>>;
 
@@ -86,6 +88,7 @@ export function orchestratorTools(
         },
         (args) => answer(call("cards", args))
       ),
+      ...actingTools((name, args) => answer(call(name, args))),
     ],
   });
 }

@@ -3,15 +3,31 @@ import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 // The orchestrator's MCP server and the names Claude sees its tools by.
 export const ORCHESTRATOR_SERVER = "agentos";
 
+const name = <T extends string>(tool: T) =>
+  `mcp__${ORCHESTRATOR_SERVER}__${tool}` as const;
+
 export const TOOL_NAMES = {
-  sessions: `mcp__${ORCHESTRATOR_SERVER}__sessions`,
-  read: `mcp__${ORCHESTRATOR_SERVER}__read`,
-  cards: `mcp__${ORCHESTRATOR_SERVER}__cards`,
+  sessions: name("sessions"),
+  read: name("read"),
+  cards: name("cards"),
+  send: name("send"),
+  start_task: name("start_task"),
+  start_session: name("start_session"),
+  stack: name("stack"),
+  stack_status: name("stack_status"),
+  land: name("land"),
+  drop: name("drop"),
+  stop: name("stop"),
+  note: name("note"),
+  review: name("review"),
+  sign_off: name("sign_off"),
 } as const;
 
 // What it may do, fixed by its role: it reads other sessions' text, so it
 // never gets a general shell or file edits. Anything not listed is refused
-// without asking. Acting tools arrive as MCP tools of its own.
+// without asking. It acts through its own tools, which are scoped to its
+// workspace and braked; the shell keeps only `aos` commands that read, so
+// `aos send`, `task`, `spawn` and `stack` can't go around them.
 export const ORCHESTRATOR_PERMISSIONS: {
   permissionMode: PermissionMode;
   allowedTools: string[];
@@ -25,7 +41,12 @@ export const ORCHESTRATOR_PERMISSIONS: {
     "Glob",
     "ToolSearch",
     "TodoWrite",
-    "Bash(aos:*)",
+    "Bash(aos peers:*)",
+    "Bash(aos inbox:*)",
+    "Bash(aos history:*)",
+    "Bash(aos stacks:*)",
+    "Bash(aos docs:*)",
+    "Bash(aos doc:*)",
   ],
   disallowedTools: ["Edit", "Write", "MultiEdit", "NotebookEdit"],
 };
