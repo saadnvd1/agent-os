@@ -40,7 +40,15 @@
       and close the tmux session
 - [ ] Chat for sessions on other machines (via the per-machine AgentOS)
 - [ ] Checkpoints: undo a turn's file changes
-- [ ] Model picker and context-usage meter in the composer
+- [ ] Context-usage meter in the composer
+- [ ] Durable chat, behind an experimental flag: run each chat conversation
+      in its own worker process (hosted in tmux, like terminal sessions) so a
+      server restart no longer kills a turn in flight. The worker owns the
+      agent and writes every item to SQLite before it's shown; the server
+      becomes a viewer that reattaches after a restart, and the worker
+      resumes an interrupted turn when it starts. Sends carry an id so a
+      retried send is never run twice. Today a restart ends the turn as
+      "stopped" and the next message resumes the conversation.
 
 ## Tooling
 
