@@ -36,7 +36,7 @@ export function MobileView({
   renderPane,
 }: ViewProps) {
   return (
-    <main className="app-backdrop h-app flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
+    <main className="app-backdrop h-app fixed inset-x-0 top-[var(--app-top,0px)] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
       {/* Swipe sidebar */}
       <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
         <div className="flex h-full flex-col">
