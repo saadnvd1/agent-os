@@ -199,7 +199,7 @@ export function ProjectsSection({
 
             {/* Project contents when expanded */}
             {project.expanded && (
-              <div className="space-y-px">
+              <div className="space-y-px pl-7">
                 {/* Dev servers for this project */}
                 {projectDevServers.length > 0 && (
                   <div className="space-y-px pb-0.5">

@@ -44,13 +44,14 @@ export function WorkspaceGroups<P extends ProjectWithDevServers>({
           <div key={workspace.id}>
             <WorkspaceHeader
               workspace={workspace}
+              projectCount={members.length}
               needsYou={needsYou(new Set(members.map((p) => p.id)))}
             />
             {!workspace.collapsed &&
               (members.length > 0 ? (
                 renderProjects(members)
               ) : (
-                <p className="text-muted-foreground/60 px-7 py-1 text-xs">
+                <p className="text-muted-foreground/60 px-2 py-1 text-xs">
                   Move projects here from their ⋯ menu
                 </p>
               ))}

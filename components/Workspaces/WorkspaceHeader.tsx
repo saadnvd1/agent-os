@@ -16,10 +16,16 @@ import { cn } from "@/lib/utils";
 
 interface WorkspaceHeaderProps {
   workspace: Workspace;
+  projectCount: number;
   needsYou: number;
 }
 
-export function WorkspaceHeader({ workspace, needsYou }: WorkspaceHeaderProps) {
+// A quiet section label, as in mTerm: the projects under it are the rows.
+export function WorkspaceHeader({
+  workspace,
+  projectCount,
+  needsYou,
+}: WorkspaceHeaderProps) {
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
   const [renaming, setRenaming] = useState(false);
@@ -30,29 +36,32 @@ export function WorkspaceHeader({ workspace, needsYou }: WorkspaceHeaderProps) {
         onClick={() =>
           update.mutate({ id: workspace.id, collapsed: !workspace.collapsed })
         }
-        className="group flex min-h-11 cursor-pointer items-center gap-1.5 px-2 pt-4 pb-1 md:min-h-9"
+        className="group relative flex min-h-11 cursor-pointer items-center gap-1.5 px-2 pt-3 md:min-h-8"
       >
         <ChevronRight
           className={cn(
-            "text-muted-foreground h-3.5 w-3.5 shrink-0 transition-transform",
+            "text-muted-foreground/60 h-3 w-3 shrink-0 transition-transform",
             !workspace.collapsed && "rotate-90"
           )}
         />
-        <span className="text-foreground min-w-0 truncate text-[13px] font-semibold tracking-tight">
+        <span className="label-mono text-muted-foreground group-hover:text-foreground truncate transition-colors">
           {workspace.name}
         </span>
-        {needsYou > 0 && (
-          <span className="text-[11px] font-medium text-amber-600 tabular-nums dark:text-amber-400">
-            {needsYou} need{needsYou === 1 ? "s" : ""} you
+        {needsYou > 0 ? (
+          <span className="font-mono text-[11px] text-amber-600 tabular-nums dark:text-amber-400">
+            {needsYou}
+          </span>
+        ) : (
+          <span className="text-muted-foreground/50 font-mono text-[11px] tabular-nums">
+            {projectCount}
           </span>
         )}
-        <span className="flex-1" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-7 w-7 md:hidden md:h-6 md:w-6 md:group-hover:inline-flex"
+              className="bg-sidebar-background hover:bg-accent absolute right-1 bottom-0 h-7 w-7 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
               aria-label="Workspace actions"
             >
               <MoreHorizontal className="h-4 w-4" />

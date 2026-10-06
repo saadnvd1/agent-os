@@ -339,7 +339,7 @@ export function SessionCard({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
-        "group flex w-full cursor-pointer items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-colors",
+        "group relative flex w-full cursor-pointer items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-colors",
         "min-h-11 md:min-h-8",
         isSelected
           ? "bg-primary/15"
@@ -428,7 +428,7 @@ export function SessionCard({
       {!isInSelectMode && (
         <span
           className={cn(
-            "flex-shrink-0 text-[11px] font-medium tabular-nums md:group-hover:hidden",
+            "flex-shrink-0 text-[11px] font-medium tabular-nums md:group-hover:invisible",
             config.tone
           )}
         >
@@ -443,7 +443,7 @@ export function SessionCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 flex-shrink-0 md:hidden md:h-5 md:w-5 md:group-hover:inline-flex"
+              className="bg-sidebar-background hover:bg-accent h-6 w-6 flex-shrink-0 md:absolute md:top-1/2 md:right-1.5 md:h-6 md:w-6 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
             >
               <MoreHorizontal className="h-3 w-3" />
             </Button>
