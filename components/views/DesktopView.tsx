@@ -2,6 +2,7 @@
 
 import { TasksButton } from "@/components/Tasks/TasksButton";
 import { MessagesButton } from "@/components/Bus";
+import { DocsButton } from "@/components/LumifyHub";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
@@ -189,6 +190,7 @@ export function DesktopView({
             />
             <MessagesButton />
             <TasksButton />
+            <DocsButton projectId={activeSession?.project_id} />
             <Button size="sm" onClick={() => setShowNewSessionDialog(true)}>
               <Plus className="mr-1 h-4 w-4" />
               New Session

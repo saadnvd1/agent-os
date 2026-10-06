@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type ReactNode,
+} from "react";
 import { FileTree } from "./FileTree";
 import { FileEditor } from "./FileEditor";
 import { FileTabs } from "./FileTabs";
@@ -25,15 +31,18 @@ import {
 } from "@/components/ui/dialog";
 import type { FileNode } from "@/lib/file-utils";
 import type { OpenFile } from "@/hooks/useFileEditor";
+import { PublishDocButton } from "@/components/LumifyHub/PublishDocButton";
 
 interface FileExplorerProps {
   workingDirectory: string;
   fileEditor: UseFileEditorReturn;
+  projectId?: string | null;
 }
 
 export function FileExplorer({
   workingDirectory,
   fileEditor,
+  projectId,
 }: FileExplorerProps) {
   const { isMobile, isHydrated } = useViewport();
   const [files, setFiles] = useState<FileNode[]>([]);
@@ -117,6 +126,13 @@ export function FileExplorer({
   }, [activeFilePath, saveFile]);
 
   const activeFile = activeFilePath ? getFile(activeFilePath) : undefined;
+  const fileActions = activeFile ? (
+    <PublishDocButton
+      projectId={projectId}
+      file={activeFile.path}
+      dirty={isDirty(activeFile.path)}
+    />
+  ) : null;
 
   // Loading state before hydration
   if (!isHydrated) {
@@ -151,6 +167,7 @@ export function FileExplorer({
         onCancelClose={() => setPendingClose(null)}
         onConfirmClose={handleConfirmClose}
         onSaveAndClose={handleSaveAndClose}
+        fileActions={fileActions}
       />
     );
   }
@@ -177,6 +194,7 @@ export function FileExplorer({
       onCancelClose={() => setPendingClose(null)}
       onConfirmClose={handleConfirmClose}
       onSaveAndClose={handleSaveAndClose}
+      fileActions={fileActions}
     />
   );
 }
@@ -202,6 +220,8 @@ interface DesktopFileExplorerProps {
   onCancelClose: () => void;
   onConfirmClose: () => void;
   onSaveAndClose: () => void;
+  // Actions on the open file, shown next to its tabs.
+  fileActions?: ReactNode;
 }
 
 function DesktopFileExplorer({
@@ -224,6 +244,7 @@ function DesktopFileExplorer({
   onCancelClose,
   onConfirmClose,
   onSaveAndClose,
+  fileActions,
 }: DesktopFileExplorerProps) {
   const [treeWidth, setTreeWidth] = useState(280);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -296,14 +317,17 @@ function DesktopFileExplorer({
       <div className="bg-muted/20 flex h-full min-w-0 flex-1 flex-col">
         {/* Tabs */}
         {openFiles.length > 0 && (
-          <div className="bg-background/50">
-            <FileTabs
-              files={openFiles}
-              activeFilePath={activeFilePath}
-              onSelect={onSelectTab}
-              onClose={onCloseTab}
-              isDirty={isDirty}
-            />
+          <div className="bg-background/50 flex items-center gap-1 pr-2">
+            <div className="min-w-0 flex-1">
+              <FileTabs
+                files={openFiles}
+                activeFilePath={activeFilePath}
+                onSelect={onSelectTab}
+                onClose={onCloseTab}
+                isDirty={isDirty}
+              />
+            </div>
+            {fileActions}
           </div>
         )}
 
@@ -368,6 +392,7 @@ function MobileFileExplorer({
   onCancelClose,
   onConfirmClose,
   onSaveAndClose,
+  fileActions,
 }: MobileFileExplorerProps) {
   // Show editor when a file is active
   if (activeFile) {
@@ -389,6 +414,7 @@ function MobileFileExplorer({
               isDirty={isDirty}
             />
           </div>
+          {fileActions}
           {isCurrentDirty && (
             <Button
               variant="default"

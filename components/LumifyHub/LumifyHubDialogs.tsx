@@ -7,6 +7,7 @@ import { lumifyhubKeys } from "@/data/lumifyhub";
 import { ConnectDialog } from "./ConnectDialog";
 import { WorkspaceLinkDialog } from "./WorkspaceLinkDialog";
 import { BoardLinkDialog } from "./BoardLinkDialog";
+import { DocsDialog } from "./Docs/DocsDialog";
 
 // The connect callback lands on /?lumifyhub=connected|error.
 function useConnectResult() {
@@ -33,6 +34,7 @@ export function LumifyHubDialogs() {
       <ConnectDialog />
       <WorkspaceLinkDialog />
       <BoardLinkDialog />
+      <DocsDialog />
     </>
   );
 }

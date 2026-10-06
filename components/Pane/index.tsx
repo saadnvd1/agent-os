@@ -393,6 +393,7 @@ export const Pane = memo(function Pane({
               <FileExplorer
                 workingDirectory={session.working_directory}
                 fileEditor={fileEditor}
+                projectId={session.project_id}
               />
             </div>
           )}
@@ -499,6 +500,7 @@ export const Pane = memo(function Pane({
                       <FileExplorer
                         workingDirectory={session.working_directory}
                         fileEditor={fileEditor}
+                        projectId={session.project_id}
                       />
                     </div>
                   )}

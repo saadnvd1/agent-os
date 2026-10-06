@@ -1,11 +1,12 @@
 "use client";
 
 import type { ComponentType, ReactNode } from "react";
-import { KanbanSquare, Share2 } from "lucide-react";
+import { BookOpen, KanbanSquare, Share2 } from "lucide-react";
 import type { Project, Workspace } from "@/lib/db";
 import { useLumifyHubStatus } from "@/data/lumifyhub";
 import { useWorkspacesQuery } from "@/data/workspaces";
 import { lumifyhubUiActions } from "@/stores/lumifyhubUi";
+import { docsUiActions } from "@/stores/docsUi";
 
 type MenuItem = ComponentType<{ onClick?: () => void; children: ReactNode }>;
 
@@ -35,6 +36,12 @@ export function WorkspaceLumifyHubItem({
           ? `LumifyHub: ${workspace.lh_workspace_name}`
           : "Link to LumifyHub workspace"}
       </Item>
+      {workspace.lh_workspace_slug && (
+        <Item onClick={() => docsUiActions.open(workspace.id)}>
+          <BookOpen className="mr-2 h-3 w-3" />
+          Docs
+        </Item>
+      )}
       <Item onClick={lumifyhubUiActions.openConnect}>
         <span className="mr-2 w-3" />
         LumifyHub account
