@@ -21,9 +21,7 @@
     "server.ts",
     "tsconfig.json",
     "postcss.config.mjs",
-    "server.ts",
     "tailwind.config.ts",
-    "tsconfig.json",
     "package-lock.json",
     "README.md",
     "LICENSE"
