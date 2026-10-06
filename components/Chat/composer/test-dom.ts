@@ -22,7 +22,10 @@ for (const key of [
   "localStorage",
   "HTMLInputElement",
 ] as const) {
-  if (!(key in g) || key === "navigator") {
+  // navigator and localStorage always: Node 22 has its own of both, and its
+  // localStorage is undefined unless Node is given --localstorage-file,
+  // which made these tests fail depending on how the run was started.
+  if (!(key in g) || key === "navigator" || key === "localStorage") {
     Object.defineProperty(g, key, {
       value:
         key === "window"
