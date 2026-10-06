@@ -7,6 +7,7 @@ import { tailscaleStatus, type TailscaleState } from "@/lib/tailscale";
 import { lanAddresses } from "./net";
 import { lanEnabled } from "./network-settings";
 import { loadConnect } from "@/lib/connect/config";
+import { tailnetHttpsUrl } from "./tailnet-https";
 
 export interface Reach {
   kind: "connect" | "tailscale" | "lan";
@@ -17,12 +18,16 @@ export function reachFrom(
   ts: TailscaleState,
   lan: string[],
   port: number,
-  connectHost: string | null = null
+  connectHost: string | null = null,
+  tailnetHttps: string | null = null
 ): Reach[] {
   // Connect works from anywhere, with HTTPS, and needs nothing on the phone.
   const out: Reach[] = connectHost
     ? [{ kind: "connect", url: `https://${connectHost}` }]
     : [];
+  // HTTPS on the tailnet first: it's what passkeys and the clipboard need.
+  if (ts.state === "running" && tailnetHttps)
+    out.push({ kind: "tailscale", url: tailnetHttps });
   if (ts.state === "running") {
     if (ts.dnsName)
       out.push({ kind: "tailscale", url: `http://${ts.dnsName}:${port}` });
@@ -39,6 +44,7 @@ export async function reachableAt(): Promise<Reach[]> {
     await tailscaleStatus(),
     lanEnabled() ? lanAddresses() : [],
     port,
-    loadConnect()?.config.hostname ?? null
+    loadConnect()?.config.hostname ?? null,
+    tailnetHttpsUrl()
   );
 }
