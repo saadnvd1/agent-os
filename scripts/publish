@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Publish the package to npm and wait until the registry serves it.
+# npm accepts a publish at once but can take minutes to show it, and a
+# retry of the same version fails with "previously staged": don't retry,
+# wait. Token: NPM_TOKEN, else `tv get npm "publish token"`.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+name=$(node -p 'require("./package.json").name')
+version=$(node -p 'require("./package.json").version')
+token="${NPM_TOKEN:-$(tv get npm "publish token")}"
+npmrc=$(mktemp)
+trap 'rm -f "$npmrc"' EXIT
+chmod 600 "$npmrc"
+printf '//registry.npmjs.org/:_authToken=%s\n' "$token" > "$npmrc"
+
+echo "Publishing $name@$version as $(npx -y npm@latest whoami --userconfig "$npmrc")"
+NODE_ENV=development npx -y npm@latest publish --access public \
+  --userconfig "$npmrc" --ignore-scripts --loglevel warn
+
+url="https://registry.npmjs.org/${name/\//%2f}"
+for _ in $(seq 1 120); do
+  latest=$(curl -s "$url?t=$(date +%s)" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s)["dist-tags"].latest)}catch{}})')
+  if [ "$latest" = "$version" ]; then
+    echo "Live: $name@$version (https://www.npmjs.com/package/$name)"
+    exit 0
+  fi
+  sleep 5
+done
+echo "Accepted but not live after 10 minutes; check npmjs.com Staged Packages" >&2
+exit 1
