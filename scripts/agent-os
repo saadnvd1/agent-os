@@ -74,6 +74,7 @@ case "${1:-}" in
     restart)          cmd_restart ;;
     run)              cmd_run ;;
     status)           cmd_status ;;
+    pair)             node "$SCRIPT_DIR/pair.mjs" "$PORT" ;;
     logs)             cmd_logs ;;
     update)           cmd_update ;;
     enable)           cmd_enable ;;

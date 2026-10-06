@@ -273,16 +273,38 @@ available yet; the terminal, status, rename and send-keys are.
 
 ## Security
 
-AgentOS has no login: whoever can reach it gets a terminal as you. So by
-default it listens only on localhost and your Tailscale address, never on
-Wi-Fi or other networks, and it refuses:
+AgentOS gives whoever uses it a terminal as you, so it decides who that is:
 
-- requests addressed to any other host name (DNS rebinding), and
-- API calls or terminal connections made by another website's page.
+- **This machine** (localhost) is always trusted.
+- **Your tailnet** is trusted by default. Turn on "Require pairing on Tailscale
+  too" in Devices if other people share it.
+- **Everything else** needs a paired device. That covers Wi-Fi, `AGENTOS_BIND`,
+  and any reverse proxy, including `tailscale serve`. A request that arrives
+  from localhost with proxy headers (`X-Forwarded-*`, `Forwarded`, `Via`,
+  `X-Real-IP`, `CF-*`, `Tailscale-*` and similar) counts as coming from the
+  proxy's client, not from this machine. A proxy that sends none of these
+  looks like this machine itself, so put such a proxy behind
+  `AGENTOS_AUTH=off` only if it does its own login.
+- A request from localhost must also be addressed to `localhost` or
+  `127.0.0.1`. This stops a web page that has rebound its own domain to
+  127.0.0.1 from counting as this machine.
 
-Reach it from your phone over Tailscale. To listen elsewhere, set
-`AGENTOS_BIND` (e.g. `0.0.0.0`) and put your own authentication in front of
-it; `AGENTOS_ALLOWED_HOSTS` adds host names it should answer to.
+Each paired device holds its own token. Only a hash of it is stored, and
+removing the device in Devices cuts its open terminals at once. A paired
+device can use AgentOS but can't add devices or change access; only this
+machine and the tailnet can.
+
+AgentOS also refuses requests addressed to any other host name (DNS rebinding),
+and API calls or terminal connections made by another website's page.
+
+| Variable                               | Effect                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `AGENTOS_NETWORK=lan`                  | Listen on Wi-Fi too. Same as the switch in Devices.                                                    |
+| `AGENTOS_REQUIRE_PAIRING_ON_TAILNET=1` | Pairing on the tailnet too.                                                                            |
+| `AGENTOS_BIND`                         | Listen on these addresses instead (e.g. `0.0.0.0`). Pairing still applies.                             |
+| `AGENTOS_ALLOWED_HOSTS`                | Extra host names to answer to.                                                                         |
+| `AGENTOS_TOKEN`                        | A device token for `aos` and the MCP server when they reach AgentOS over a network that needs pairing. |
+| `AGENTOS_AUTH=off`                     | No pairing, for when your own proxy does the login. Anyone who reaches the port gets a shell.          |
 
 ## Development
 
@@ -305,17 +327,21 @@ agent-os run       # Start and open browser
 agent-os start     # Start in background
 agent-os stop      # Stop server
 agent-os status    # Show URLs
+agent-os pair      # Add a phone, tablet or laptop (prints a QR code)
 agent-os logs      # Tail logs
 agent-os update    # Update to latest
 ```
 
 ## Mobile Access
 
-Use [Tailscale](https://tailscale.com) for secure access from your phone:
+**At home:** open Devices from the menu, turn on "Allow devices on this Wi-Fi",
+tap "Add a device", and scan the QR code with your phone. Laptops open the link
+and type the code. Each code works once, for 10 minutes.
 
-1. Install Tailscale on your dev machine and phone
-2. Sign in with the same account
-3. Access `http://100.x.x.x:3011` from your phone
+**Anywhere:** install [Tailscale](https://tailscale.com) on this machine and
+your phone and sign in to the same account. Devices then shows a Tailscale
+link, which works from anywhere and is encrypted. Use Wi-Fi access only on
+networks you trust, because traffic on Wi-Fi is not encrypted.
 
 ## Documentation
 

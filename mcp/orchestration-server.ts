@@ -40,6 +40,9 @@ async function apiCall(path: string, options?: RequestInit) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(process.env.AGENTOS_TOKEN && {
+        Authorization: `Bearer ${process.env.AGENTOS_TOKEN}`,
+      }),
       ...options?.headers,
     },
   });

@@ -1,5 +1,6 @@
 "use client";
 
+import { DevicesDialog } from "@/components/Devices";
 import { toast } from "sonner";
 
 import { LumifyHubDialogs } from "@/components/LumifyHub";
@@ -584,6 +585,7 @@ function HomeContent() {
       <TasksDialog />
       <NewTaskDialog />
       <MessagesDialog />
+      <DevicesDialog />
       <LumifyHubDialogs />
     </>
   );
