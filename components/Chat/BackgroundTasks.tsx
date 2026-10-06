@@ -19,7 +19,8 @@ import { useNow } from "./useNow";
 
 type Task = Extract<ChatItem, { kind: "task" }>;
 
-const RECENT_MS = 15 * 60 * 1000;
+// Finished tasks stay listed this long, then the chip clears.
+const RECENT_MS = 5 * 60 * 1000;
 const POLL_MS = 2000;
 
 function TaskIcon({ task }: { task: Task }) {
@@ -114,7 +115,7 @@ function TaskRow({
       </div>
       {open && (
         <div className="space-y-1 pb-2 pl-7">
-          {task.summary && (
+          {task.summary && task.summary !== task.description && (
             <p className="text-muted-foreground text-xs">{task.summary}</p>
           )}
           {output === undefined ? (
@@ -127,7 +128,9 @@ function TaskRow({
               {output}
             </pre>
           ) : (
-            <p className="text-muted-foreground text-xs">No output yet.</p>
+            <p className="text-muted-foreground text-xs">
+              {running ? "No output yet." : "No output."}
+            </p>
           )}
         </div>
       )}
