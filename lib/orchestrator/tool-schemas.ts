@@ -3,6 +3,7 @@
 
 import { z } from "zod";
 import { BRANCH_NAME } from "../git";
+import { RAISED_KINDS } from "./asks";
 
 const ref = (what: string) => z.string().trim().min(1).max(300).describe(what);
 const session = ref("Session name, project/name, or id from sessions");
@@ -58,6 +59,33 @@ export const TOOL_SHAPES = {
       .describe("Run it again even if this commit has a verdict"),
   },
   sign_off: { task },
+  ask_saad: {
+    title: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .describe("What Saad decides, as a short question"),
+    detail: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2000)
+      .describe(
+        "The one-line why, then anything he needs: the exact command or change"
+      ),
+    link: z
+      .string()
+      .trim()
+      .max(500)
+      .optional()
+      .describe("A PR, card or page to look at"),
+    kind: z
+      .enum(RAISED_KINDS)
+      .describe(
+        "decision (a call that's his), or the hard line it crosses: public (public or outbound), money, irreversible, credentials, product (what gets built)"
+      ),
+  },
 } satisfies Record<string, z.ZodRawShape>;
 
 export type ToolName = keyof typeof TOOL_SHAPES;

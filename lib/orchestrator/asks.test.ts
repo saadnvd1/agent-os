@@ -1,0 +1,269 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { ChatSender } from "./deliver";
+
+vi.mock("@/lib/status-detector", () => ({
+  checkWaitingPatterns: () => false,
+  statusDetector: {
+    refreshCache: async () => {},
+    sessionExists: () => true,
+    getStatus: async () => "idle",
+    titleFor: () => "",
+    getTimestamp: () => 0,
+    hostFor: () => "local",
+    capturePane: async () => "",
+  },
+}));
+
+const { db } = await import("@/lib/db");
+type Session = import("@/lib/db").Session;
+const getSession = (id: string) =>
+  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+const { ensureOrchestrator } = await import("./home");
+const { runTool } = await import("./serve");
+const { listNotes } = await import("./notes");
+const { needsYou } = await import("@/lib/needs-you");
+const { escalate } = await import("./escalate");
+const { deliverEvents, BATCH_WINDOW_MS } = await import("./deliver");
+const { pendingEvents, queueEvent } = await import("./events");
+const { setPaused, isPaused } = await import("./pause");
+const { orchestratorOverview } = await import("./overview");
+const { seedWorkspace } = await import("./testing");
+const { answerAsk, getAsk, openAskCount, openAsks } = await import("./asks");
+const { resolveFinishedTaskAsks } = await import("./ask-approvals");
+
+beforeAll(() => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-asks-"));
+  vi.spyOn(os, "homedir").mockReturnValue(home);
+});
+
+function workspace() {
+  const ws = seedWorkspace();
+  const orch = ensureOrchestrator(ws.workspace.id);
+  const w = ws.workspace.id;
+  const ask = (title: string, kind = "money", link?: string) =>
+    runTool(w, "ask_saad", {
+      title,
+      detail: `Why: ${title}`,
+      kind,
+      ...(link && { link }),
+    });
+  const sent: string[] = [];
+  const send: ChatSender = async (_id, input) => {
+    sent.push(input.text);
+  };
+  let clock = Date.now();
+  // Each delivery a batch window after the last, so only pause holds it.
+  const deliver = () => {
+    clock += BATCH_WINDOW_MS + 1;
+    return deliverEvents({
+      workspaceId: w,
+      orchestratorId: orch.id,
+      turn: "idle",
+      send,
+      now: clock,
+    });
+  };
+  const orchNeedsYou = () => needsYou(getSession(orch.id)!, "idle");
+  return { ...ws, w, orch, ask, sent, deliver, orchNeedsYou };
+}
+
+describe("the ask lifecycle", () => {
+  it("parks an ask without waiting, and an answer closes it and becomes an event", async () => {
+    const t = workspace();
+    await expect(
+      t.ask("Pay for the domain?", "money", "https://example.com/d")
+    ).resolves.toMatch(/Asked Saad \(ask \d+\)\. Carry on/);
+    const [ask] = openAsks(t.w);
+    expect(ask).toMatchObject({
+      kind: "money",
+      title: "Pay for the domain?",
+      detail: "Why: Pay for the domain?",
+      link: "https://example.com/d",
+      status: "open",
+    });
+    expect(listNotes(t.w).at(-1)).toMatchObject({
+      kind: "ask",
+      text: "Asked Saad: Pay for the domain?",
+    });
+
+    answerAsk(t.w, ask.id, { action: "approve" });
+    expect(getAsk(t.w, ask.id)).toMatchObject({
+      status: "approved",
+      answer: "approve",
+    });
+    expect(getAsk(t.w, ask.id)?.resolved_at).toBeTruthy();
+    await t.deliver();
+    expect(t.sent).toEqual([
+      'ask "Pay for the domain?": approved (this item only, not standing permission)',
+    ]);
+    expect(() => answerAsk(t.w, ask.id, { action: "decline" })).toThrow(
+      /already approved/
+    );
+  });
+
+  it("delivers a decline and a reply as their own lines", async () => {
+    const t = workspace();
+    await t.ask("Ship the blog post?", "public");
+    await t.ask("Which pricing page?", "decision");
+    const [post, pricing] = openAsks(t.w);
+    answerAsk(t.w, post.id, { action: "decline" });
+    answerAsk(t.w, pricing.id, { action: "reply", text: "  the short one " });
+    expect(getAsk(t.w, pricing.id)).toMatchObject({
+      status: "resolved",
+      answer: "the short one",
+    });
+    await t.deliver();
+    expect(t.sent[0].split("\n")).toEqual([
+      'ask "Ship the blog post?": declined',
+      'ask "Which pricing page?": reply: the short one',
+    ]);
+    expect(() =>
+      answerAsk(t.w, post.id, { action: "reply", text: " " })
+    ).toThrow();
+  });
+
+  it("refuses a kind it doesn't raise itself", async () => {
+    const t = workspace();
+    await expect(t.ask("Merge it?", "gate")).rejects.toThrow(/kind/);
+  });
+});
+
+describe("de-duplication", () => {
+  it("keeps one open ask per title, and a new one once it's answered", async () => {
+    const t = workspace();
+    await t.ask("Rotate the API key?", "credentials");
+    await expect(t.ask("rotate the  API key?", "credentials")).resolves.toMatch(
+      /Already on Saad's list/
+    );
+    expect(openAsks(t.w)).toHaveLength(1);
+    answerAsk(t.w, openAsks(t.w)[0].id, { action: "decline" });
+    await t.ask("Rotate the API key?", "credentials");
+    expect(openAsks(t.w)).toHaveLength(1);
+  });
+
+  it("raises one ask per task however often it escalates", () => {
+    const t = workspace();
+    const task = getSession(t.task)!;
+    escalate(t.w, task, "ci", "no CI ran", "https://pr/1", "a".repeat(40));
+    escalate(
+      t.w,
+      task,
+      "review",
+      "review failed twice",
+      "https://pr/1",
+      "b".repeat(40)
+    );
+    const asks = openAsks(t.w);
+    expect(asks).toHaveLength(1);
+    expect(asks[0]).toMatchObject({
+      subject: `task:${t.task}`,
+      kind: "gate",
+      detail: "review failed twice",
+      sha: "b".repeat(40),
+    });
+    expect(listNotes(t.w).filter((n) => n.kind === "escalation")).toHaveLength(
+      1
+    );
+  });
+
+  it("closes a task's ask once the task is merged or dropped", () => {
+    const t = workspace();
+    escalate(
+      t.w,
+      getSession(t.task)!,
+      "ci",
+      "no CI",
+      "https://pr/1",
+      "c".repeat(40)
+    );
+    expect(resolveFinishedTaskAsks(t.w)).toBe(0);
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      t.task
+    );
+    expect(resolveFinishedTaskAsks(t.w)).toBe(1);
+    expect(openAsks(t.w)).toEqual([]);
+  });
+});
+
+describe("needs-you", () => {
+  it("is the orchestrator's open asks, counted per ask", async () => {
+    const t = workspace();
+    expect(t.orchNeedsYou()).toBe(false);
+    await t.ask("One?");
+    await t.ask("Two?");
+    expect(t.orchNeedsYou()).toBe(true);
+    expect(openAskCount(t.w)).toBe(2);
+    const [one, two] = openAsks(t.w);
+    answerAsk(t.w, one.id, { action: "approve" });
+    expect(openAskCount(t.w)).toBe(1);
+    answerAsk(t.w, two.id, { action: "decline" });
+    expect(t.orchNeedsYou()).toBe(false);
+  });
+
+  it("shows on the overview with the fence taken off for Saad", () => {
+    const t = workspace();
+    escalate(
+      t.w,
+      getSession(t.task)!,
+      "ci",
+      'CI failed (<untrusted source="CI">unit</untrusted>)\nmore',
+      "https://pr/1",
+      "d".repeat(40)
+    );
+    const mine = orchestratorOverview().find((o) => o.workspaceId === t.w)!;
+    expect(mine).toMatchObject({ sessionId: t.orch.id, paused: false });
+    expect(mine.asks).toEqual([
+      expect.objectContaining({
+        kind: "gate",
+        why: "CI failed (unit)",
+        link: "https://pr/1",
+      }),
+    ]);
+  });
+});
+
+describe("pause", () => {
+  it("refuses acting tools but still reads, notes and asks", async () => {
+    const t = workspace();
+    setPaused(t.w, true);
+    expect(isPaused(t.w)).toBe(true);
+    for (const [tool, args] of [
+      ["send", { session: "chat-one", message: "hi" }],
+      ["drop", { task: "add-auth", reason: "no" }],
+      ["stop", { session: "chat-one" }],
+      ["sign_off", { task: "add-auth" }],
+      ["review", { target: "add-auth" }],
+      ["start_task", { project: t.app.name, prompt: "x" }],
+    ] as const)
+      await expect(runTool(t.w, tool, args)).rejects.toThrow(/Paused by Saad/);
+    await expect(runTool(t.w, "note", { text: "waiting" })).resolves.toBe(
+      "Noted."
+    );
+    await expect(t.ask("Still allowed?")).resolves.toMatch(/Asked Saad/);
+    await expect(runTool(t.w, "sessions", {})).resolves.toMatch(/chat-one/);
+    expect(listNotes(t.w).map((n) => n.kind)).toContain("pause");
+  });
+
+  it("queues events while paused and delivers them folded on resume", async () => {
+    const t = workspace();
+    setPaused(t.w, true);
+    queueEvent(t.w, "a", null, "task add-auth: CI green");
+    queueEvent(t.w, "b", null, "task add-auth: CI green");
+    queueEvent(t.w, "a", null, "task add-auth: CI green");
+    await t.ask("Paid plan?");
+    answerAsk(t.w, openAsks(t.w)[0].id, { action: "approve" });
+    await expect(t.deliver()).resolves.toBeNull();
+    expect(t.sent).toEqual([]);
+    expect(pendingEvents(t.w)).toHaveLength(3);
+
+    setPaused(t.w, false);
+    await t.deliver();
+    expect(t.sent).toEqual([
+      'task add-auth: CI green\nask "Paid plan?": approved (this item only, not standing permission)',
+    ]);
+    expect(pendingEvents(t.w)).toEqual([]);
+  });
+});

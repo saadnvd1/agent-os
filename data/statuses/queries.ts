@@ -9,7 +9,7 @@ interface StatusResponse {
   statuses: Record<string, SessionStatus>;
 }
 
-async function fetchStatuses(): Promise<StatusResponse> {
+export async function fetchStatuses(): Promise<StatusResponse> {
   const res = await fetch("/api/sessions/status");
   if (!res.ok) throw new Error("Failed to fetch statuses");
   return res.json();

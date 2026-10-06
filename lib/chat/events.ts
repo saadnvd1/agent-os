@@ -92,11 +92,12 @@ export type ChatItem =
   | (Base & { kind: "compacted"; trigger?: "manual" | "auto" })
   | (Base & { kind: "error"; message: string })
   // A line in an orchestrator's decision log, shown in its chat: a note it
-  // wrote, a brake that stopped new starts, or something Saad must decide.
+  // wrote, a brake that stopped new starts, something Saad must decide, his
+  // answer to an ask, or a pause.
   | (Base & {
       kind: "note";
       text: string;
-      tone: "note" | "brake" | "escalation";
+      tone: "note" | "brake" | "escalation" | "ask" | "pause";
     })
   | (Base & {
       kind: "approval";

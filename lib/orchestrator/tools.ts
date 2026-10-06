@@ -69,6 +69,8 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Start an independent read-only review of a task's PR at its exact head commit, or read the stored verdict for that commit.",
   sign_off:
     "Squash-merge a task's PR through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Refuses with the failing gate.",
+  ask_saad:
+    "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event.",
 };
 
 export function orchestratorTools(

@@ -229,7 +229,7 @@ it may do on its own, and the lines that always come back to you as asks.
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
   `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `note`,
-  `review` and `sign_off`. All are served in-process to its chat, refuse
+  `review`, `sign_off` and `ask_saad`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The route
   they call answers only the orchestrator's worker, by a per-orchestrator
   secret. Its shell runs only `aos` commands that read.
@@ -255,8 +255,8 @@ it may do on its own, and the lines that always come back to you as asks.
   has merged. `land` judges each item again at its own head right before
   merging it. The second failure of a gate, a repo with no CI, or any change
   to CI config, build and hook scripts, agent config, deploy scripts or
-  secrets handling goes to you as an escalation note, and the orchestrator
-  stops merging that task.
+  secrets handling goes to you as an ask, and the orchestrator stops merging
+  that task.
 - **Decision log:** `note` and the brakes and escalations write to
   `orchestrator_notes`, and each line shows in its chat.
 - **Events:** the server sends it one short line per event (a PR opened, CI
@@ -266,6 +266,24 @@ it may do on its own, and the lines that always come back to you as asks.
   goes out per 30 seconds. What it has been told is kept in
   `orchestrator_events`, so a restart resends nothing. Set
   `AGENTOS_ORCHESTRATOR=off` to stop events.
+- **Asks:** what's yours to decide sits on its asks list
+  (`orchestrator_asks`): what it raises with `ask_saad` (a decision, or
+  something crossing a hard line: public or outbound, money, irreversible,
+  credentials, a product call), and every escalated gate and brake. There's
+  one open ask per subject (a task, the brakes, a title), so an escalation
+  that repeats updates its ask. Each shows as a card under its row and at the
+  top of its chat, with Approve, Decline and Reply. Open asks are its
+  needs-you: the amber dot, one count each in "N need you", and the
+  notifications. Your answer reaches it as an event (`ask "<title>":
+approved`). An approval covers that one item only: a held task's approval
+  lets `sign_off` merge it once, at the commit you approved (a new commit
+  asks again), and a brake's lets one start through. An ask closes itself
+  when its task is merged or dropped, or the brakes lift.
+- **Header line and Pause:** its row reads like "Orchestrator · 3 running ·
+  1 in review · 1 ask" from live data, and tapping it opens the chat, where
+  the same line carries Pause/Resume. While paused it acts on nothing:
+  events queue, acting tools refuse, and its stack starts and lands hold.
+  It can still read, note and ask. Resume delivers what queued, folded.
 
 ## LumifyHub (optional)
 

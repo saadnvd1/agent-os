@@ -53,6 +53,21 @@ const { listNotes } = await import("./notes");
 const { listItems } = await import("@/lib/chat/store");
 const { claudeArgs } = await import("./claude-cli");
 const { seedSession } = await import("./testing");
+const { answerAsk, getAsk, openAsks } = await import("./asks");
+
+// The one ask a task's escalation leaves on Saad's list.
+function oneGateAsk(w: string, task: string, sha: string) {
+  const asks = openAsks(w);
+  expect(asks).toHaveLength(1);
+  expect(asks[0]).toMatchObject({
+    subject: `task:${task}`,
+    kind: "gate",
+    title: "Merge add-a?",
+    link: "https://github.com/o/r/pull/7",
+    sha,
+  });
+  return asks[0];
+}
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-signoff-"));
@@ -292,6 +307,40 @@ describe("sign_off", () => {
       /is with Saad \(ci: .*\)\. Only he can merge it now/
     );
     expect(merges).toEqual([]);
+    oneGateAsk(t.w, t.task, t.sha);
+  });
+
+  it("merges a held task once, on Saad's approval of that exact commit", async () => {
+    const t = setup();
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const ask = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, ask.id, { action: "approve" });
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", pr!.head!],
+    ]);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
+    expect(listNotes(t.w).at(-1)?.text).toMatch(/on Saad's approval/);
+  });
+
+  it("asks again when the head moved after Saad approved", async () => {
+    const t = setup();
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const first = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, first.id, { action: "approve" });
+    const next = t.push("src/b.ts", "export const b = 2;\n");
+    await expect(t.signOff()).rejects.toThrow(
+      new RegExp(
+        `Saad approved ${first.sha!.slice(0, 7)}, but PR #7's head is now ${next.slice(0, 7)}`
+      )
+    );
+    await expect(t.signOff()).rejects.toThrow(/Asked him again/);
+    expect(oneGateAsk(t.w, t.task, next).id).not.toBe(first.id);
+    expect(merges).toEqual([]);
   });
 
   it("fails the review gate on blocking findings", async () => {
@@ -350,6 +399,7 @@ describe("sign_off", () => {
     expect(merges).toEqual([]);
     expect(listNotes(t.w).at(-1)).toMatchObject({ kind: "escalation" });
     await expect(t.signOff()).rejects.toThrow(/is with Saad \(sensitive/);
+    oneGateAsk(t.w, t.task, pr!.head!);
   });
 });
 
@@ -399,6 +449,7 @@ describe("the reviewer can't be steered by the PR", () => {
     );
     expect(listNotes(t.w).at(-1)).toMatchObject({ kind: "escalation" });
     await expect(t.signOff()).rejects.toThrow(/is with Saad \(size/);
+    expect(oneGateAsk(t.w, t.task, pr!.head!).detail).toMatch(/too big/);
   });
 });
 
@@ -441,6 +492,7 @@ describe("CI and blocked, strictly", () => {
       /Escalated to Saad: no CI ran on .*no checks to gate a merge on/
     );
     expect(failureOf(t.task, "ci")?.escalated_at).toBeTruthy();
+    expect(oneGateAsk(t.w, t.task, t.sha).detail).toMatch(/no CI ran/);
   });
 
   it("won't clear a task whose terminal is gone", async () => {
