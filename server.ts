@@ -5,6 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
 import { buildAttachProcess, type AttachSpec } from "./lib/hosts/attach";
 import { sshTargetFor } from "./lib/hosts";
+import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -13,6 +14,8 @@ const hostname = "0.0.0.0";
 const pFlagIndex = process.argv.indexOf("-p");
 const portArg = pFlagIndex !== -1 ? process.argv[pFlagIndex + 1] : undefined;
 const port = parseInt(portArg || process.env.PORT || "3011", 10);
+process.env.AGENTOS_PORT = String(port);
+ensureBusBrief();
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -104,6 +107,8 @@ app.prepare().then(() => {
     const attach = (spec: AttachSpec) => {
       try {
         const sshTarget = sshTargetFor(spec.hostId);
+        // Local sessions join the agent bus: who they are and where AgentOS is.
+        if (spec.sessionId && !sshTarget) spec.env = agentEnv(spec.sessionId);
         const { file, args } = buildAttachProcess(spec, sshTarget, shell);
         start(file, args, true);
       } catch (err) {

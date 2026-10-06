@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AOS_BIN_DIR } from "@/lib/agents/launch";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -44,7 +45,7 @@ printf "\\n"
 sleep 0.8
 
 # Ensure ~/.local/bin is in PATH (where claude is installed)
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="${AOS_BIN_DIR}:$HOME/.local/bin:$PATH"
 
 # If running as root, set IS_SANDBOX=1 so Claude Code allows --dangerously-skip-permissions
 if [ "$(id -u)" = "0" ]; then

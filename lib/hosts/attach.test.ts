@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import assert from "node:assert/strict";
 import { buildAttachProcess, buildTmuxAttachCommand } from "./attach";
 
@@ -22,6 +22,15 @@ describe("buildTmuxAttachCommand", () => {
       buildTmuxAttachCommand({ sessionName: "s", attachOnly: true }),
       `tmux start-server \\; set -g mouse on \\; attach-session -t '=s'`
     );
+  });
+
+  it("sets the bus environment on a new session", () => {
+    const cmd = buildTmuxAttachCommand({
+      sessionName: "s",
+      env: { AGENTOS_SESSION_ID: "abc", AGENTOS_URL: "http://127.0.0.1:3011" },
+    });
+    expect(cmd).toContain("-e 'AGENTOS_SESSION_ID=abc'");
+    expect(cmd).toContain("-e 'AGENTOS_URL=http://127.0.0.1:3011'");
   });
 
   it("rejects names that could inject arguments", () => {

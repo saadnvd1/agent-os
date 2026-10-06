@@ -1,0 +1,18 @@
+import { NextRequest, NextResponse } from "next/server";
+import { sendMessage } from "@/lib/bus";
+
+// from: the sending session's id, or null when the user sends from the UI.
+export async function POST(request: NextRequest) {
+  try {
+    const { from = null, to, body } = await request.json();
+    const message = await sendMessage({
+      fromId: from,
+      to: String(to ?? ""),
+      body: String(body ?? ""),
+    });
+    return NextResponse.json({ message }, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

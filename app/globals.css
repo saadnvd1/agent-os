@@ -75,8 +75,8 @@
 
 /* ═══════════════════════════════════════════════════════════════════════
    2026 CHROME
-   Translucent panels over a faint dot grid, hairline edges instead of
-   borders, one accent color from the theme.
+   Opaque panels over a faint dot grid, hairline edges instead of borders,
+   one accent color from the theme.
    ═══════════════════════════════════════════════════════════════════════ */
 
 .app-backdrop {
@@ -88,13 +88,13 @@
   background-size: 22px 22px;
 }
 
-@utility glass {
-  background-color: hsl(var(--card) / 0.72);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+/* Floating surfaces (menus, selects, tooltips, dialogs) are fully opaque:
+   translucent ones let the terminal behind them bleed through the options. */
+@utility popover-surface {
+  background-color: hsl(var(--popover));
   box-shadow:
-    inset 0 1px 0 hsl(var(--foreground) / 0.06),
-    0 0 0 1px hsl(var(--foreground) / 0.07),
+    inset 0 1px 0 hsl(var(--foreground) / 0.05),
+    0 0 0 1px hsl(var(--foreground) / 0.1),
     var(--elevation);
 }
 

@@ -2,6 +2,7 @@
 
 import { useSnapshot } from "valtio";
 import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
+import { MessagesDialog } from "@/components/Bus";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -155,10 +156,12 @@ function HomeContent() {
       const sessionName = session.tmux_name || `${provider.id}-${session.id}`;
       const cwd = session.working_directory || "~";
       const hostId = session.host_id;
+      const sessionId = session.id;
+      const isLocal = !hostId || hostId === "local";
 
       // Shell sessions just open a terminal - no agent command
       if (provider.id === "shell") {
-        return { sessionName, cwd, hostId };
+        return { sessionName, cwd, hostId, sessionId };
       }
 
       // TODO: Add explicit "Enable Orchestration" toggle that creates .mcp.json
@@ -190,7 +193,12 @@ function HomeContent() {
       });
       const flagsStr = flags.join(" ");
 
-      const agentCmd = `${provider.command} ${flagsStr}`;
+      // Local Claude sessions learn about the agent bus (`aos`).
+      const busBrief =
+        isLocal && provider.id === "claude"
+          ? ' --append-system-prompt-file "$HOME/.agent-os/bus-brief.md"'
+          : "";
+      const agentCmd = `${provider.command} ${flagsStr}${busBrief}`;
       // The init script is a file on this machine, so remote sessions run the
       // agent directly and drop to a shell when it exits.
       const command =
@@ -198,7 +206,7 @@ function HomeContent() {
           ? `export PATH="$HOME/.local/bin:$PATH"; ${agentCmd}; exec "$SHELL" -l`
           : await getInitScriptCommand(agentCmd);
 
-      return { sessionName, cwd, command, hostId };
+      return { sessionName, cwd, command, hostId, sessionId };
     },
     [sessions, getInitScriptCommand]
   );
@@ -492,6 +500,7 @@ function HomeContent() {
       )}
       <TasksDialog />
       <NewTaskDialog />
+      <MessagesDialog />
     </>
   );
 }
