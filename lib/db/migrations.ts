@@ -344,6 +344,16 @@ const migrations: Migration[] = [
       db.exec(`ALTER TABLE sessions ADD COLUMN last_seen_at TEXT`);
     },
   },
+  {
+    id: 23,
+    name: "mark_existing_sessions_seen",
+    up: (db) => {
+      // Start quiet: what finished before "needs you" meant news is old news.
+      db.exec(
+        `UPDATE sessions SET last_seen_at = datetime('now') WHERE last_seen_at IS NULL`
+      );
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
