@@ -308,6 +308,7 @@ export const Pane = memo(function Pane({
         />
       ) : (
         <DesktopTabBar
+          paneId={paneId}
           tabs={paneData.tabs}
           activeTabId={paneData.activeTabId}
           session={session}

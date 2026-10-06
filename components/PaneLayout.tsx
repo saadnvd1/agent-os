@@ -53,7 +53,7 @@ export function PaneLayout({
 
   // On desktop: render full layout tree with splits
   return (
-    <div className="h-full w-full p-1.5 pt-0">
+    <div className="h-full w-full p-1.5">
       <LayoutRenderer layout={state.layout} renderPane={renderPane} />
     </div>
   );

@@ -1,27 +1,11 @@
 "use client";
 
-import { TasksButton } from "@/components/Tasks/TasksButton";
-import { MessagesButton } from "@/components/Bus";
-import { DocsButton } from "@/components/LumifyHub";
 import { NewSessionDialog } from "@/components/NewSessionDialog";
-import { NotificationSettings } from "@/components/NotificationSettings";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
 import { DesktopSidebar } from "./DesktopSidebar";
-import { Button } from "@/components/ui/button";
-import {
-  PanelLeftClose,
-  PanelLeft,
-  Plus,
-  Copy,
-  Check,
-  Command,
-} from "lucide-react";
+import { DesktopAppActions, SidebarToggle } from "./DesktopAppActions";
 import { PaneLayout } from "@/components/PaneLayout";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { PaneBarSlotsProvider } from "@/components/Pane/PaneBarSlots";
 import { QuickSwitcher } from "@/components/QuickSwitcher";
 import type { ViewProps } from "./types";
 import { fileOpenActions } from "@/stores/fileOpen";
@@ -33,8 +17,6 @@ export function DesktopView({
   sessionStatuses,
   activeSession,
   focusedActiveTab,
-  copiedSessionId,
-  setCopiedSessionId,
   showNewSessionDialog,
   setShowNewSessionDialog,
   newSessionProjectId,
@@ -83,124 +65,31 @@ export function DesktopView({
 
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header */}
-        <header className="flex items-center justify-between px-4 py-2">
-          <div className="flex items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-sm" onClick={togglePin}>
-                  {isPinned ? (
-                    <PanelLeftClose className="h-4 w-4" />
-                  ) : (
-                    <PanelLeft className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isPinned ? "Unpin sidebar" : "Pin sidebar"}</p>
-              </TooltipContent>
-            </Tooltip>
-
-            {activeSession && (
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{activeSession.name}</span>
-                {activeSession.tmux_name && (
-                  <span className="text-muted-foreground text-xs">
-                    {activeSession.tmux_name}
-                  </span>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="h-6 w-6"
-                      onClick={async () => {
-                        try {
-                          if (navigator.clipboard) {
-                            await navigator.clipboard.writeText(
-                              activeSession.id
-                            );
-                          } else {
-                            // Fallback for non-HTTPS contexts
-                            const textarea = document.createElement("textarea");
-                            textarea.value = activeSession.id;
-                            textarea.style.position = "fixed";
-                            textarea.style.opacity = "0";
-                            document.body.appendChild(textarea);
-                            textarea.select();
-                            document.execCommand("copy");
-                            document.body.removeChild(textarea);
-                          }
-                          setCopiedSessionId(true);
-                          setTimeout(() => setCopiedSessionId(false), 2000);
-                        } catch {
-                          console.error("Failed to copy to clipboard");
-                        }
-                      }}
-                    >
-                      {copiedSessionId ? (
-                        <Check className="h-3 w-3 text-green-500" />
-                      ) : (
-                        <Copy className="h-3 w-3" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Copy session ID for orchestration</p>
-                    <p className="text-muted-foreground font-mono text-xs">
-                      {activeSession.id.slice(0, 8)}...
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setShowQuickSwitcher(true)}
-                >
-                  <Command className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Quick switch</p>
-                <p className="text-muted-foreground text-xs">⌘K</p>
-              </TooltipContent>
-            </Tooltip>
-            <NotificationSettings
-              open={showNotificationSettings}
-              onOpenChange={setShowNotificationSettings}
-              settings={notificationSettings}
-              permissionGranted={permissionGranted}
-              waitingSessions={sessions
-                .filter((s) => sessionStatuses[s.id]?.status === "waiting")
-                .map((s) => ({ id: s.id, name: s.name }))}
-              onUpdateSettings={updateSettings}
-              onRequestPermission={requestPermission}
-              onSelectSession={(id) => {
-                const session = sessions.find((s) => s.id === id);
-                if (session) attachToSession(session);
-              }}
-            />
-            <MessagesButton />
-            <TasksButton />
-            <DocsButton projectId={activeSession?.project_id} />
-            <Button size="sm" onClick={() => setShowNewSessionDialog(true)}>
-              <Plus className="mr-1 h-4 w-4" />
-              New Session
-            </Button>
-          </div>
-        </header>
-
         {/* Pane Layout - full height */}
         <div className="min-h-0 flex-1">
-          <PaneLayout renderPane={renderPane} />
+          <PaneBarSlotsProvider
+            leading={
+              <SidebarToggle isPinned={isPinned} togglePin={togglePin} />
+            }
+            trailing={
+              <DesktopAppActions
+                sessions={sessions}
+                sessionStatuses={sessionStatuses}
+                activeSession={activeSession}
+                showNotificationSettings={showNotificationSettings}
+                setShowNotificationSettings={setShowNotificationSettings}
+                setShowQuickSwitcher={setShowQuickSwitcher}
+                setShowNewSessionDialog={setShowNewSessionDialog}
+                notificationSettings={notificationSettings}
+                permissionGranted={permissionGranted}
+                updateSettings={updateSettings}
+                requestPermission={requestPermission}
+                attachToSession={attachToSession}
+              />
+            }
+          >
+            <PaneLayout renderPane={renderPane} />
+          </PaneBarSlotsProvider>
         </div>
       </div>
 
