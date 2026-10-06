@@ -135,6 +135,7 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
-    "dompurify": "^3.4.16"
+    "dompurify": "^3.4.16",
+    "postcss-selector-parser": "^7.1.6"
   }
 }
