@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, SquareTerminal } from "lucide-react";
+import { ExternalLink, KanbanSquare, SquareTerminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TaskState, TaskView } from "@/lib/tasks";
 import { useDropTask, useSignOffTask } from "@/data/tasks";
@@ -38,6 +38,17 @@ export function TaskRow({ task }: { task: TaskView }) {
           <p className="text-muted-foreground truncate font-mono text-[11px]">
             {task.projectName} · {task.branch}
           </p>
+          {task.cardUrl && (
+            <a
+              href={task.cardUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-6 items-center gap-1 text-[11px]"
+            >
+              <KanbanSquare className="h-3 w-3" />
+              Card
+            </a>
+          )}
         </div>
         <span
           className={cn("shrink-0 text-xs font-medium", STATE[task.state].tone)}

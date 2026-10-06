@@ -13,6 +13,7 @@ import { useTasksQuery } from "@/data/tasks";
 import { needsHuman } from "@/lib/tasks/state";
 import { tasksUi, tasksUiActions } from "@/stores/tasksUi";
 import { TaskRow } from "./TaskRow";
+import { BoardTodoSection } from "@/components/LumifyHub";
 
 export function TasksDialog() {
   const { panelOpen } = useSnapshot(tasksUi);
@@ -28,7 +29,7 @@ export function TasksDialog() {
 
   return (
     <Dialog open={panelOpen} onOpenChange={tasksUiActions.setPanelOpen}>
-      <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto [&>*]:min-w-0">
         <DialogHeader className="flex-row items-center justify-between gap-4 space-y-0">
           <DialogTitle>Tasks</DialogTitle>
           <Button size="sm" className="mr-6" onClick={tasksUiActions.openNew}>
@@ -49,6 +50,7 @@ export function TasksDialog() {
             <TaskRow key={t.id} task={t} />
           ))}
         </div>
+        <BoardTodoSection />
         {done.length > 0 && (
           <div className="space-y-2">
             <p className="label-mono text-muted-foreground pt-2">Finished</p>

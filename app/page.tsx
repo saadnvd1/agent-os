@@ -1,5 +1,6 @@
 "use client";
 
+import { LumifyHubDialogs } from "@/components/LumifyHub";
 import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
 import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
@@ -565,6 +566,7 @@ function HomeContent() {
       <TasksDialog />
       <NewTaskDialog />
       <MessagesDialog />
+      <LumifyHubDialogs />
     </>
   );
 }

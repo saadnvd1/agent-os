@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { Workspace } from "@/lib/db";
 import { useDeleteWorkspace, useUpdateWorkspace } from "@/data/workspaces";
 import { WorkspaceNameDialog } from "./WorkspaceNameDialog";
+import { WorkspaceLumifyHubItem } from "@/components/LumifyHub";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceHeaderProps {
@@ -72,6 +73,10 @@ export function WorkspaceHeader({
               <Pencil className="mr-2 h-3 w-3" />
               Rename
             </DropdownMenuItem>
+            <WorkspaceLumifyHubItem
+              workspace={workspace}
+              Item={DropdownMenuItem}
+            />
             <DropdownMenuItem
               onClick={() => remove.mutate(workspace.id)}
               className="text-red-500 focus:text-red-500"
