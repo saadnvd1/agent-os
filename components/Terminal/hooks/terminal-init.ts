@@ -32,7 +32,7 @@ export function createTerminal(
   isMobile: boolean,
   theme: string
 ): TerminalInstance {
-  const fontSize = loadFontSize();
+  const fontSize = loadFontSize(isMobile);
   const terminalTheme = getTerminalThemeForApp(theme || "dark");
 
   const term = new XTerm({
@@ -130,9 +130,14 @@ export function updateTerminalForMobile(
   isMobile: boolean,
   sendResize: (cols: number, rows: number) => void
 ): void {
+  const newFontSize = loadFontSize(isMobile);
   const newLineHeight = isMobile ? 1.15 : 1.2;
 
-  if (term.options.lineHeight !== newLineHeight) {
+  if (
+    term.options.fontSize !== newFontSize ||
+    term.options.lineHeight !== newLineHeight
+  ) {
+    term.options.fontSize = newFontSize;
     term.options.lineHeight = newLineHeight;
     term.refresh(0, term.rows - 1);
     fitAddon.fit();

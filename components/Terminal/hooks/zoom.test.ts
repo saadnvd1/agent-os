@@ -2,8 +2,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   zoomFontSize,
+  loadFontSize,
   MIN_FONT_SIZE,
   MAX_FONT_SIZE,
+  DEFAULT_FONT_SIZE,
+  MOBILE_DEFAULT_FONT_SIZE,
 } from "./zoom";
 
 describe("zoomFontSize", () => {
@@ -31,5 +34,12 @@ describe("zoomFontSize", () => {
 
   it("returns the start size when the start distance is zero", () => {
     assert.equal(zoomFontSize(0, 100, 14), 14);
+  });
+});
+
+describe("loadFontSize", () => {
+  it("falls back to the viewport default when nothing is stored", () => {
+    assert.equal(loadFontSize(true), MOBILE_DEFAULT_FONT_SIZE);
+    assert.equal(loadFontSize(false), DEFAULT_FONT_SIZE);
   });
 });
