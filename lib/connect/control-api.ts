@@ -9,6 +9,35 @@ import type { ConnectConfig } from "./config";
 import type { DnsChallenge, Register } from "./enrol";
 
 export const DEFAULT_API = "https://runagentos.com";
+export const MACHINE_ID = /^[a-z0-9]{8}$/;
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** The Connect service must be https with no credentials in the URL; plain
+ * http to this machine is for operators testing a local control plane. */
+export function checkApiUrl(raw: string, operator: boolean): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`CONNECT_API_URL is not a URL: ${clean(raw)}`);
+  }
+  if (url.username || url.password)
+    throw new Error("CONNECT_API_URL must not carry a username or password");
+  const local = url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname);
+  if (url.protocol !== "https:" && !(local && operator))
+    throw new Error(
+      "CONNECT_API_URL must be https (http://localhost needs AGENTOS_CONNECT_OPERATOR=1)"
+    );
+  return url.origin;
+}
+
+/** Server text printed to a terminal: no control characters, bounded. */
+export function clean(text: string, max = 200): string {
+   
+  const s = text.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
 
 export function signedHeaders(opts: {
   machineId: string;
@@ -41,11 +70,15 @@ export function signedHeaders(opts: {
 }
 
 async function call(url: string, init: RequestInit): Promise<Response> {
-  const res = await fetch(url, init);
+  // Never follow a redirect: it would replay the link code or the signed
+  // headers to whatever host the response names.
+  const res = await fetch(url, { ...init, redirect: "error" });
   if (res.ok) return res;
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  const body = (await res.json().catch(() => ({}))) as { error?: unknown };
   throw new Error(
-    body.error ?? `${init.method} ${new URL(url).pathname}: ${res.status}`
+    typeof body.error === "string"
+      ? clean(body.error)
+      : `${init.method} ${new URL(url).pathname}: ${res.status}`
   );
 }
 
@@ -53,7 +86,8 @@ async function call(url: string, init: RequestInit): Promise<Response> {
 export function registerWithCode(
   apiUrl: string,
   linkCode: string,
-  name: string
+  name: string,
+  domain: string
 ): Register {
   return async (publicKey) => {
     const res = await call(`${apiUrl}/api/v1/machines/enrol`, {
@@ -65,21 +99,26 @@ export function registerWithCode(
         public_key: publicKey,
       }),
     });
-    const m = (await res.json()) as {
-      machine_id: string;
-      hostname: string;
-      relay_url: string;
-    };
-    return {
-      machineId: m.machine_id,
-      hostname: m.hostname,
-      relayUrl: m.relay_url,
-      apiUrl,
-    };
+    return { ...enrolled(await res.json(), domain), apiUrl };
   };
 }
 
+/** What the service answered, refused unless it names exactly <id>.<domain>. */
+export function enrolled(m: unknown, domain: string): ConnectConfig {
+  const r = (m ?? {}) as Record<string, unknown>;
+  const id = typeof r.machine_id === "string" ? r.machine_id : "";
+  if (!MACHINE_ID.test(id))
+    throw new Error("the Connect service sent an invalid machine id");
+  if (r.hostname !== `${id}.${domain}`)
+    throw new Error(`the Connect service sent a hostname outside ${domain}`);
+  if (typeof r.relay_url !== "string" || !r.relay_url.startsWith("wss://"))
+    throw new Error("the Connect service sent a relay URL that isn't wss://");
+  return { machineId: id, hostname: r.hostname, relayUrl: r.relay_url };
+}
+
 function signed(config: ConnectConfig, privateKey: string) {
+  if (!MACHINE_ID.test(config.machineId))
+    throw new Error("connect.json has an invalid machine id");
   return async (method: string, path: string, payload?: object) => {
     const body = payload ? JSON.stringify(payload) : "";
     return call(`${config.apiUrl}${path}`, {
