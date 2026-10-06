@@ -1,6 +1,10 @@
 "use client";
 
 import { HostBadge } from "@/components/Hosts/HostBadge";
+import {
+  useWorkspacesQuery,
+  useMoveProjectToWorkspace,
+} from "@/data/workspaces";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -14,6 +18,7 @@ import {
   Pencil,
   FolderOpen,
   Terminal,
+  LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,6 +120,9 @@ export function ProjectCard({
     onToggleExpanded?.(!project.expanded);
   };
 
+  const { data: workspaces = [] } = useWorkspacesQuery();
+  const moveProject = useMoveProjectToWorkspace();
+
   const renderMenuItems = (isContextMenu: boolean) => {
     const MenuItem = isContextMenu ? ContextMenuItem : DropdownMenuItem;
     const MenuSeparator = isContextMenu
@@ -151,6 +159,37 @@ export function ProjectCard({
           <MenuItem onClick={() => onOpenInEditor()}>
             <FolderOpen className="mr-2 h-3 w-3" />
             Open in editor
+          </MenuItem>
+        )}
+        {!project.is_uncategorized &&
+          workspaces.some((w) => w.id !== project.workspace_id) && (
+            <MenuSeparator />
+          )}
+        {!project.is_uncategorized &&
+          workspaces
+            .filter((w) => w.id !== project.workspace_id)
+            .map((w) => (
+              <MenuItem
+                key={w.id}
+                onClick={() =>
+                  moveProject.mutate({
+                    projectId: project.id,
+                    workspaceId: w.id,
+                  })
+                }
+              >
+                <LayoutGrid className="mr-2 h-3 w-3" />
+                Move to {w.name}
+              </MenuItem>
+            ))}
+        {project.workspace_id && (
+          <MenuItem
+            onClick={() =>
+              moveProject.mutate({ projectId: project.id, workspaceId: null })
+            }
+          >
+            <LayoutGrid className="mr-2 h-3 w-3" />
+            Remove from workspace
           </MenuItem>
         )}
         {onStartDevServer && (
