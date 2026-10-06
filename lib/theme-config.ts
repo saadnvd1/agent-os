@@ -64,9 +64,9 @@ export const DARK_THEMES: ThemeOption[] = [
     description: "Premium true black",
     icon: Moon,
     preview: {
-      background: "#0A0A0A",
+      background: "#08080D",
       foreground: "#EBEBEB",
-      accent: "#3B82F6",
+      accent: "#A47BF8",
     },
   },
   {
@@ -177,9 +177,9 @@ export const LIGHT_THEMES: ThemeOption[] = [
     description: "Clean white",
     icon: Sun,
     preview: {
-      background: "#FFFFFF",
+      background: "#FAFAFC",
       foreground: "#111111",
-      accent: "#3B82F6",
+      accent: "#7C3AED",
     },
   },
   {

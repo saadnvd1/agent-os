@@ -182,9 +182,9 @@ export function ProjectCard({
     <div
       onClick={handleClick}
       className={cn(
-        "group flex cursor-pointer items-center gap-1 rounded-md px-2 py-1.5",
-        "min-h-[36px] md:min-h-[28px]",
-        "hover:bg-accent/50"
+        "group flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5",
+        "min-h-11 md:min-h-8",
+        "hover:bg-foreground/[0.04]"
       )}
     >
       {/* Expand/collapse toggle */}
@@ -215,7 +215,7 @@ export function ProjectCard({
           className="border-primary min-w-0 flex-1 border-b bg-transparent text-sm font-medium outline-none"
         />
       ) : (
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight">
           {project.name}
         </span>
       )}
@@ -240,7 +240,7 @@ export function ProjectCard({
       )}
 
       {/* Session count */}
-      <span className="text-muted-foreground flex-shrink-0 text-xs">
+      <span className="text-muted-foreground bg-foreground/[0.05] flex-shrink-0 rounded-md px-1.5 font-mono text-[10px] leading-5 tabular-nums">
         {sessionCount}
       </span>
 

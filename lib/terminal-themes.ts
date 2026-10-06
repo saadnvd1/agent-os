@@ -70,11 +70,11 @@ const LIGHT_ANSI = {
 // Dark theme terminal configurations
 const DARK_TERMINALS: Record<string, Partial<TerminalTheme>> = {
   deep: {
-    background: "#0A0A0A",
-    foreground: "#EBEBEB",
-    cursor: "#3B82F6",
-    cursorAccent: "#0A0A0A",
-    selectionBackground: "#3B82F640",
+    background: "#0D0D12",
+    foreground: "#ECECF1",
+    cursor: "#A47BF8",
+    cursorAccent: "#0D0D12",
+    selectionBackground: "#A47BF848",
   },
   charcoal: {
     background: "#161A1D",
@@ -161,10 +161,10 @@ const DARK_TERMINALS: Record<string, Partial<TerminalTheme>> = {
 const LIGHT_TERMINALS: Record<string, Partial<TerminalTheme>> = {
   default: {
     background: "#FFFFFF",
-    foreground: "#1a1a1a",
-    cursor: "#3B82F6",
+    foreground: "#14141c",
+    cursor: "#7C3AED",
     cursorAccent: "#FFFFFF",
-    selectionBackground: "#3B82F630",
+    selectionBackground: "#7C3AED30",
   },
   warm: {
     background: "#F5F1E8",

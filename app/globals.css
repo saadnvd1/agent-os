@@ -49,7 +49,7 @@
 }
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   /* Mobile viewport height - JS hook sets this dynamically for keyboard */
   --app-height: 100vh;
   --app-height: 100dvh;
@@ -61,6 +61,77 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.35);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.12) transparent;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2026 CHROME
+   Translucent panels over a faint dot grid, hairline edges instead of
+   borders, one accent color from the theme.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.app-backdrop {
+  background-color: hsl(var(--background));
+  background-image: radial-gradient(
+    hsl(var(--foreground) / 0.04) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+@utility glass {
+  background-color: hsl(var(--card) / 0.72);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 hsl(var(--foreground) / 0.06),
+    0 0 0 1px hsl(var(--foreground) / 0.07),
+    var(--elevation);
+}
+
+@utility hairline {
+  box-shadow: 0 0 0 1px hsl(var(--foreground) / 0.07);
+}
+
+@utility glow {
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.6),
+    0 0 0 4px hsl(var(--primary) / 0.15);
+}
+
+@utility label-mono {
+  font-family: var(--font-geist-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@utility status-live {
+  animation: status-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-live {
+    animation: none;
   }
 }
 

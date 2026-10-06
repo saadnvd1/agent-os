@@ -38,12 +38,12 @@ export function SessionListHeader({
   pinControls,
 }: SessionListHeaderProps) {
   return (
-    <div className="flex items-center justify-between px-3 py-2">
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between px-3 py-3">
+      <div className="flex items-center gap-2.5">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
-          className="h-5 w-5"
+          className="bg-primary text-primary-foreground h-7 w-7 rounded-lg p-1.5"
           stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
@@ -57,7 +57,12 @@ export function SessionListHeader({
           <path d="M15 13v2" />
           <path d="M9 13v2" />
         </svg>
-        <h2 className="font-semibold">AgentOS</h2>
+        <div className="leading-none">
+          <h2 className="text-[15px] font-semibold tracking-tight">AgentOS</h2>
+          <p className="label-mono text-muted-foreground mt-1 text-[9px]">
+            agent control
+          </p>
+        </div>
       </div>
       <div className="flex gap-1">
         {pinControls && (

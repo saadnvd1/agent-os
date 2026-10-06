@@ -58,7 +58,7 @@ export function DesktopView({
   const { isPinned, togglePin } = useSidebarPinned();
 
   return (
-    <div className="bg-background flex h-screen overflow-hidden">
+    <div className="app-backdrop flex h-screen overflow-hidden">
       <DesktopSidebar
         isPinned={isPinned}
         togglePin={togglePin}
