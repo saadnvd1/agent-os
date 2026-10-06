@@ -105,7 +105,7 @@ Fixed: #1 upgrade trusted loopback behind a proxy (server.ts); #3 migration id c
 Deferred: #4 composer button is 40px on the sheet (Medium) — the sheet is being replaced in ENG-31
 ```
 
-Any push of yours after that (a CI fix, a rebase) means a new head: re-run the review on what changed and update the `Reviewed:` line. A section naming another commit is refused like a missing one. The one exception is a stack restack: when AgentOS rebases your branch onto a merged parent, your review still counts for the head it pushed, until you push again.
+Any push of yours after that (a CI fix, a rebase) means a new head: re-run the review on what changed and update the `Reviewed:` line. The CI check reads the PR as it is when it runs, so update the body first and then push, or re-run the check after editing it. A section naming another commit is refused like a missing one. The one exception is a stack restack: when AgentOS rebases your branch onto a merged parent, your review still counts for the head it pushed, until you push again.
 
 ## Rules
 
