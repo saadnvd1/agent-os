@@ -1,0 +1,25 @@
+name: Code review
+
+# Every PR body carries a "Code review" section from /do-code-review whose
+# "Reviewed:" line names the PR's head commit. Re-runs when the body is
+# edited, so updating the section after a push clears it.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  section:
+    name: Code review section
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx --yes tsx@4 scripts/check-code-review.ts
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}

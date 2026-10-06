@@ -26,6 +26,7 @@ const input = (over: Partial<GateInput> = {}): GateInput => ({
   fromCard: false,
   scope: null,
   stackRefusal: null,
+  codeReviewRefusal: null,
   ...over,
 });
 const gate = (i: GateInput, name: string) =>
@@ -129,6 +130,15 @@ describe("the merge gates", () => {
     expect(
       gate(input({ stackRefusal: "sign off ROA-1 first" }), "stack").state
     ).toBe("fail");
+  });
+
+  it("code-review: a PR body without a review of this commit fails", () => {
+    expect(
+      gate(
+        input({ codeReviewRefusal: "no Code review section" }),
+        "code-review"
+      )
+    ).toMatchObject({ state: "fail", reason: "no Code review section" });
   });
 });
 

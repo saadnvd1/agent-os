@@ -1,13 +1,20 @@
 /**
  * Land a stack: merge every PR bottom-up, ported from dispatch's `land`.
- * A preflight checks EVERY PR before anything merges. Each sign-off restacks
+ * A preflight checks EVERY PR before anything merges: CI, and a Code review
+ * section in its body for its head commit. Each sign-off restacks
  * what sits on it, so a restacked PR's checks are waited out again (its green
  * was against the parent's branch). It stops at the first failure and says
  * what landed.
  */
 
 import { db, stackQueries as q, type Session, type StackItemRow } from "../db";
-import { signOffTask, taskPR, canSignOff, type TaskPR } from "../tasks";
+import {
+  signOffTask,
+  taskPR,
+  canSignOff,
+  codeReviewRefusal,
+  type TaskPR,
+} from "../tasks";
 import { itemName } from "./guard";
 import { refreshItems } from "./tick";
 import { outputOf } from "./git";
@@ -114,7 +121,9 @@ export async function landStack(
       const pr =
         session && item.status === "pr" ? await deps.prOf(session) : null;
       const verdict = canSignOff(pr);
+      const unreviewed = pr && codeReviewRefusal(pr.codeReview, pr.head);
       if (!verdict.ok) missing.push(`${itemName(item)}: ${verdict.reason}`);
+      else if (unreviewed) missing.push(`${itemName(item)}: ${unreviewed}`);
       else if (item.error) missing.push(`${itemName(item)}: ${item.error}`);
       hadChecks.set(item.id, pr?.checks !== "none");
     }

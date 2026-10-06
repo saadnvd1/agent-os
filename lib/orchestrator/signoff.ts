@@ -9,7 +9,7 @@
 
 import type { Session } from "../db";
 import { prFor } from "../tasks/session";
-import { signOffTask } from "../tasks";
+import { codeReviewRefusal, signOffTask } from "../tasks";
 import { signOffRefusal } from "../stacks/guard";
 import { getStack, landInBackground } from "../stacks";
 import { getCheck } from "./checks";
@@ -90,6 +90,9 @@ export async function judge(
     fromCard: !!task.lh_card_id,
     scope: getCheck(task.id, sha, "scope"),
     stackRefusal: landing ? null : signOffRefusal(task.id),
+    codeReviewRefusal: codeReviewRefusal(pr.codeReview, sha, {
+      restacked: landing,
+    }),
   });
   const head = `${task.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
   const toSaad = outcomes.find((o) => o.state === "escalate");

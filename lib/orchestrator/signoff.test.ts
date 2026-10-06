@@ -147,6 +147,7 @@ function setup(opts: { card?: boolean; onMain?: [string, string] } = {}) {
     head: sha,
     failing: null,
     checkCount: 1,
+    codeReview: { sha },
   };
   const w = workspace.id;
   // CI has looked settled on every head for a while.
@@ -170,7 +171,8 @@ function setup(opts: { card?: boolean; onMain?: [string, string] } = {}) {
     },
     push: (file: string, text: string, link?: string) => {
       const next = commit(repo, file, text, link);
-      pr = { ...pr!, head: next };
+      // The task re-runs /do-code-review and updates the PR body.
+      pr = { ...pr!, head: next, codeReview: { sha: next } };
       return next;
     },
   };
@@ -281,6 +283,20 @@ describe("sign_off", () => {
       .get(t.task);
     expect(row).toEqual({ task_status: "merged" });
     expect(listNotes(t.w).at(-1)?.text).toMatch(/Merged add-a \(PR #7/);
+  });
+
+  it("refuses a PR whose body has no code review of its head", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    pr = { ...pr!, codeReview: null };
+    await expect(t.signOff()).rejects.toThrow(
+      /- code-review failed \(first\): the PR body has no Code review section/
+    );
+    pr = { ...pr!, codeReview: { sha: "1234567" } };
+    await expect(t.signOff()).rejects.toThrow(
+      /code-review failed \(again\): the PR's code review covers 1234567/
+    );
+    expect(merges).toEqual([]);
   });
 
   it("escalates the second failure of the same gate, and then holds the task for Saad", async () => {

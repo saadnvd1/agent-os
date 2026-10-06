@@ -11,7 +11,13 @@ import type { ChecksVerdict } from "../tasks/state";
 import type { CheckRow } from "./checks";
 import { untrusted } from "./untrusted";
 
-export type GateName = "ci" | "review" | "blocked" | "scope" | "stack";
+export type GateName =
+  | "ci"
+  | "review"
+  | "code-review"
+  | "blocked"
+  | "scope"
+  | "stack";
 
 export interface GateOutcome {
   gate: GateName;
@@ -34,6 +40,8 @@ export interface GateInput {
   fromCard: boolean;
   scope: CheckRow | null;
   stackRefusal: string | null;
+  // Why the PR body's Code review section doesn't cover this commit.
+  codeReviewRefusal: string | null;
 }
 
 const short = (sha: string) => sha.slice(0, 7);
@@ -124,9 +132,13 @@ export function evaluateGates(i: GateInput): GateOutcome[] {
   const stack: GateOutcome = i.stackRefusal
     ? { gate: "stack", state: "fail", reason: i.stackRefusal }
     : { gate: "stack", state: "pass" };
+  const codeReview: GateOutcome = i.codeReviewRefusal
+    ? { gate: "code-review", state: "fail", reason: i.codeReviewRefusal }
+    : { gate: "code-review", state: "pass" };
   return [
     ciGate(i),
     checkGate("review", i.review, i.sha),
+    codeReview,
     blocked,
     scope,
     stack,

@@ -164,6 +164,16 @@ exited. **Sign off & merge** squash-merges the PR (refused while CI is failing
 or pending), then removes the session, worktree and branches. **Drop** closes
 the PR and removes everything. Agents never merge their own work.
 
+Before opening its PR, every task runs `/do-code-review` (the project's
+`.claude/skills/do-code-review`, or Claude Code's `/code-review` where a
+project has none), fixes the Blocking and High findings, and ends the PR body
+with a **Code review** section: the commit it reviewed, the agents that ran,
+what it fixed and what it deferred and why. The orchestrator's `sign_off` and
+a stack's **Land** refuse a PR without that section for its head commit, and
+this repository's CI fails one too. The review agents are in
+[.claude/agents](.claude/agents) and the skill in
+[.claude/skills](.claude/skills/README.md).
+
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
 
 ![Tasks in different states: needs input, ready for review, working, merged](screenshots/tasks.png)
@@ -282,7 +292,7 @@ it may do on its own, and the lines that always come back to you as asks.
   it (2 minutes with no new check), its review passed, nothing is
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent
-  has merged. `land` judges each item again at its own head right before
+  has merged, and the PR body's Code review section names that commit. `land` judges each item again at its own head right before
   merging it. The second failure of a gate, a repo with no CI, or any change
   to CI config, build and hook scripts, agent config, deploy scripts or
   secrets handling goes to you as an ask, and the orchestrator stops merging
@@ -439,7 +449,9 @@ scripts/redeploy     # pull, install, build; restarts via $AGENTOS_RESTART only 
 ```
 
 A pre-commit hook formats and lints staged files, then typechecks and runs the
-tests. CI runs `scripts/check --build` on every pull request and push to main.
+tests. CI runs `scripts/check --build` on every pull request and push to main,
+and fails a pull request whose body has no Code review section for its head
+commit (run `/do-code-review` first; see [Tasks](#tasks)).
 
 ## CLI Commands
 

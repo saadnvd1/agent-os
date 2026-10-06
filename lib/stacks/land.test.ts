@@ -12,6 +12,8 @@ const pr = (n: number, checks: TaskPR["checks"] = "pass"): TaskPR => ({
   url: `https://github.com/o/r/pull/${n}`,
   state: "OPEN",
   checks,
+  head: `${n}abcdef0`,
+  codeReview: { sha: `${n}abcdef` },
 });
 
 function setup(
@@ -77,6 +79,22 @@ describe("landStack", () => {
     expect(status).toBe("failed");
     expect(error).toContain("P: CI checks are still running");
     expect(error).toContain("C: CI checks are failing");
+  });
+
+  it("refuses a PR whose body has no code review of its head", async () => {
+    const { s, deps, merged } = setup();
+    const prOf = deps.prOf;
+    deps.prOf = async (session) => {
+      const p = (await prOf(session))!;
+      return session.name === "P"
+        ? { ...p, codeReview: null }
+        : { ...p, codeReview: { sha: "0000000" } };
+    };
+    await landStack(s.stackId, deps);
+    expect(merged).toEqual([]);
+    const { error } = q.get(db, s.stackId)!;
+    expect(error).toContain("P: the PR body has no Code review section");
+    expect(error).toContain("C: the PR's code review covers 0000000");
   });
 
   it("stops where a restacked PR goes red, and says what landed", async () => {
