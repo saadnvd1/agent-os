@@ -24,10 +24,17 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos doc <id>                       print a page's markdown
   aos doc new "<title>" [--file f]   create a page from a file or stdin; prints its URL`;
 
-async function call(path, init) {
+// Needed only when AgentOS is reached over a network that requires pairing.
+const token = process.env.AGENTOS_TOKEN;
+
+async function call(path, init = {}) {
   let res;
   try {
-    res = await fetch(url + path, init);
+    const headers = {
+      ...init.headers,
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+    res = await fetch(url + path, { ...init, headers });
   } catch {
     fail(`can't reach AgentOS at ${url}`);
   }

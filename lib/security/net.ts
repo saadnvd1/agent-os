@@ -21,10 +21,27 @@ export function tailscaleAddresses(
     .map((i) => i.address);
 }
 
-// AGENTOS_BIND="0.0.0.0" (or a list) opts in to other networks.
+const PRIVATE_V4 = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+
+export function lanAddresses(
+  interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()
+): string[] {
+  return Object.values(interfaces)
+    .flat()
+    .filter(
+      (i): i is os.NetworkInterfaceInfo =>
+        !!i && i.family === "IPv4" && !i.internal && PRIVATE_V4.test(i.address)
+    )
+    .map((i) => i.address);
+}
+
+// AGENTOS_BIND="0.0.0.0" (or a list) opts in to other networks. Wi-Fi access
+// adds this machine's private addresses; every request from them needs a
+// paired device (auth.ts).
 export function bindAddresses(
   bind: string | undefined,
-  interfaces?: NodeJS.Dict<os.NetworkInterfaceInfo[]>
+  interfaces?: NodeJS.Dict<os.NetworkInterfaceInfo[]>,
+  lan = false
 ): string[] {
   if (bind?.trim()) {
     return bind
@@ -32,7 +49,11 @@ export function bindAddresses(
       .map((a) => a.trim())
       .filter(Boolean);
   }
-  return ["127.0.0.1", ...tailscaleAddresses(interfaces)];
+  return [
+    "127.0.0.1",
+    ...tailscaleAddresses(interfaces),
+    ...(lan ? lanAddresses(interfaces) : []),
+  ];
 }
 
 export interface AccessPolicy {
