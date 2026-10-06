@@ -5,6 +5,7 @@ import type { TmuxSessionInfo } from "../status-detector";
 // a session only nests under a project on its own machine.
 export function homeRelative(path: string): string {
   const rel = path
+    .replace(/\/{2,}/g, "/")
     .replace(/^\/(Users|home)\/[^/]+(?=\/|$)/, "~")
     .replace(/^\/root(?=\/|$)/, "~")
     .replace(/\/+$/, "");
