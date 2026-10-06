@@ -23,3 +23,17 @@ export const archivedUiActions = {
     if (!open) archivedUi.report = null;
   },
 };
+
+// The clean-up preview, for one workspace while open.
+export const cleanupUi = proxy<{ workspaceId: string | null }>({
+  workspaceId: null,
+});
+
+export const cleanupUiActions = {
+  open: (workspaceId: string) => {
+    cleanupUi.workspaceId = workspaceId;
+  },
+  close: () => {
+    cleanupUi.workspaceId = null;
+  },
+};

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DoneOutcome } from "@/lib/done";
-import type { BulkResult } from "@/lib/done/bulk";
+import type { BulkResult, PreviewRow } from "@/lib/done/bulk";
 import type { ArchivedView } from "@/lib/done/archive";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "../tasks";
@@ -70,5 +70,21 @@ export function useArchivedQuery(workspaceId?: string, enabled = true) {
         )
       ).sessions,
     enabled,
+  });
+}
+
+export function useCleanupPreview(workspaceId: string | null) {
+  return useQuery({
+    queryKey: [...archivedKeys.all, "preview", workspaceId] as const,
+    queryFn: async () =>
+      (
+        await json<{ rows: PreviewRow[] }>(
+          await fetch(
+            `/api/sessions/done-idle?workspaceId=${encodeURIComponent(workspaceId!)}`
+          )
+        )
+      ).rows,
+    enabled: !!workspaceId,
+    staleTime: 0,
   });
 }

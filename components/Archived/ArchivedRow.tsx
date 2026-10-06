@@ -36,6 +36,11 @@ export function ArchivedRow({ session }: { session: ArchivedView }) {
             .filter(Boolean)
             .join(" · ")}
         </p>
+        {session.worktreeRemoved && (
+          <p className="text-muted-foreground font-mono text-[11px]">
+            worktree removed
+          </p>
+        )}
         {session.keptWorktree && (
           <p className="font-mono text-[11px] break-all text-amber-600 dark:text-amber-400">
             worktree kept: {session.keptWorktree}
@@ -43,31 +48,44 @@ export function ArchivedRow({ session }: { session: ArchivedView }) {
         )}
       </div>
       {session.prUrl && (
-        <Button size="icon-sm" variant="ghost" asChild aria-label="Open PR">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          asChild
+          aria-label="Open PR"
+          className="size-11 shrink-0 md:size-8"
+        >
           <a href={session.prUrl} target="_blank" rel="noreferrer">
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </Button>
       )}
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-11 shrink-0 md:h-8"
-        disabled={unarchive.isPending}
-        onClick={() =>
-          unarchive.mutate(session.id, {
-            onSuccess: () => toast.success(`${session.name} is back`),
-            onError: (e) => toast.error(e.message),
-          })
-        }
-      >
-        {unarchive.isPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <ArchiveRestore className="h-3.5 w-3.5" />
-        )}
-        Unarchive
-      </Button>
+      {session.taskStatus !== "merged" && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-11 shrink-0 md:h-8"
+          title={
+            session.worktreeRemoved
+              ? "Puts the entry back in the sidebar; its worktree was removed"
+              : undefined
+          }
+          disabled={unarchive.isPending}
+          onClick={() =>
+            unarchive.mutate(session.id, {
+              onSuccess: () => toast.success(`${session.name} is back`),
+              onError: (e) => toast.error(e.message),
+            })
+          }
+        >
+          {unarchive.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ArchiveRestore className="h-3.5 w-3.5" />
+          )}
+          {session.worktreeRemoved ? "Restore entry" : "Unarchive"}
+        </Button>
+      )}
     </div>
   );
 }

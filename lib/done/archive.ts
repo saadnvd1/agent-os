@@ -14,8 +14,9 @@ export interface ArchivedView {
   taskStatus: Session["task_status"];
   branch: string | null;
   prUrl: string | null;
-  // The worktree done kept because it held work.
+  // The worktree done kept because it held work, or that it removed.
   keptWorktree: string | null;
+  worktreeRemoved: boolean;
   archivedAt: string;
 }
 
@@ -67,6 +68,7 @@ export function listArchived(workspaceId?: string): ArchivedView[] {
       s.worktree_path && fs.existsSync(s.worktree_path)
         ? s.worktree_path
         : null,
+    worktreeRemoved: !!s.worktree_path && !fs.existsSync(s.worktree_path),
     archivedAt: s.archived_at!,
   }));
 }

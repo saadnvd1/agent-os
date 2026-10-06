@@ -221,19 +221,30 @@ you; move a project in from its menu. Deleting a workspace keeps its projects.
 ### Done
 
 **Done** (a session's ⋯ menu, or its project's when it's the only one; `aos
-done`; or the orchestrator's `done` tool)
-is for finished work, where **Stop** keeps everything and **Drop** rejects
-it. A task with an open PR merges first, only through the orchestrator's
-gates at the judged commit; a failing gate refuses with its name and nothing
-merges. A task already merged, or a session with no PR, just cleans up: the
-agent stops, the worktree goes only if its branch is merged or has no
-commits of its own (otherwise it's kept and the reply says why), and the
-session is archived. Archived sessions leave the sidebar, the needs-you
-count and the orchestrator's view, but are never deleted; the **Archived**
-view (each workspace's menu, or ⋯ in the sidebar header for all of them)
-lists them with Unarchive. **Clean up idle
-sessions** in a workspace's menu, or `aos done --all-idle`, does the same for
-every idle or stopped session there and says what was done, kept or refused.
+done`; or the orchestrator's `done` tool) is for finished work, where
+**Stop** keeps everything and **Drop** rejects it. A task with an open PR
+merges first, only through the orchestrator's gates at the judged commit; a
+failing gate refuses with its name and nothing merges. A task already
+merged, or a session with no PR, just cleans up. If GitHub can't be read, or
+a task that had a PR has none now, done refuses rather than guess.
+
+Cleanup stops the agent and archives the session. The worktree goes only if
+nothing in it would be lost: never with uncommitted changes; after a merge,
+only when every commit on it is in the merged PR or on a remote; otherwise
+only when its branch has no commits of its own. Anything else is kept and the
+reply says why. A sign-off from Tasks or the orchestrator follows the same
+rule. A branch merged on GitHub is deleted on origin when origin's tip is the
+commit that merged.
+
+Archived sessions leave the sidebar, the needs-you count, session statuses
+and the orchestrator's view, but are never deleted; the **Archived** view
+(each workspace's menu, or ⋯ in the sidebar header for all of them) lists
+them with Unarchive, which only puts the entry back.
+
+**Clean up idle sessions** (a workspace's menu) first shows what will happen
+to each idle or stopped session, and `aos done --all-idle` does the same
+sweep. A clean-up never merges: open PRs are listed for their own done.
+`aos done` reaches only sessions in the caller's workspace (or project).
 
 ### Orchestrator
 

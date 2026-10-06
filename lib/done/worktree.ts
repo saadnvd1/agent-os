@@ -1,7 +1,7 @@
 /**
- * What done does with a session's worktree: removed only when nothing in
- * it would be lost (its branch merged, or no commits of its own and
- * nothing uncommitted), kept otherwise with the reason.
+ * What happens to a session's worktree when its work ends: removed only
+ * when nothing in it would be lost, kept otherwise with the reason. Done
+ * and a sign-off's cleanup both go through here.
  */
 
 import fs from "fs";
@@ -54,22 +54,69 @@ async function ownCommits(
   return Number(n) || 0;
 }
 
+// What the merge took: the PR's head commit when it's known.
+export interface MergedAs {
+  prHead?: string | null;
+}
+
+// Commits on HEAD that the merged PR's head doesn't contain and no remote
+// has: the work a removal would lose. Without a known (local) PR head,
+// only the remotes count.
+async function strayCommits(
+  worktree: string,
+  merged: MergedAs
+): Promise<number> {
+  const head = merged.prHead
+    ? await git(
+        worktree,
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        `${merged.prHead}^{commit}`
+      )
+        .then(() => [merged.prHead!])
+        .catch(() => [])
+    : [];
+  const n = await git(
+    worktree,
+    "rev-list",
+    "--count",
+    "HEAD",
+    "--not",
+    ...head,
+    "--remotes"
+  );
+  return Number(n) || 0;
+}
+
+export type FatePreview =
+  | Exclude<WorktreeFate, { action: "removed" }>
+  | { action: "remove"; why: string; repo: string };
+
+// Decides without touching anything. Uncommitted changes always keep it;
+// a merged branch goes only if every commit on it was in the merge or is
+// on a remote; an unmerged one only if it has no commits of its own.
 export async function worktreeFate(
   session: Pick<Session, "worktree_path" | "base_branch">,
-  merged: boolean
-): Promise<
-  | Exclude<WorktreeFate, { action: "removed" }>
-  | { action: "remove"; why: string; repo: string }
-> {
+  merged: MergedAs | null
+): Promise<FatePreview> {
   const path = session.worktree_path;
   if (!path || !fs.existsSync(path)) return { action: "none" };
   const keep = (why: string) => ({ action: "kept" as const, why, path });
   if (!isAgentOSWorktree(path)) return keep("it isn't an AgentOS worktree");
   const repo = await repoOf(path).catch(() => null);
   if (!repo) return keep("it isn't a git worktree any more");
-  if (merged) return { action: "remove", why: "its branch is merged", repo };
   const dirty = await git(path, "status", "--porcelain").catch(() => "?");
   if (dirty) return keep("it has uncommitted changes");
+  if (merged) {
+    const stray = await strayCommits(path, merged).catch(() => null);
+    if (stray === null) return keep("its commits can't be checked");
+    if (stray > 0)
+      return keep(
+        `${stray} commit${stray === 1 ? " is" : "s are"} on it that the merged PR didn't include and no remote has`
+      );
+    return { action: "remove", why: "its branch is merged", repo };
+  }
   const base = session.base_branch || (await getDefaultBranch(repo));
   const own = await ownCommits(path, base).catch(() => null);
   if (own === null) return keep(`its base ${base} can't be found to compare`);
@@ -84,13 +131,17 @@ export async function worktreeFate(
   };
 }
 
-// Removes the worktree (and its local branch) when nothing would be lost.
+// Removes the worktree (and its local branch) when nothing would be lost,
+// and says so only once it's really gone.
 export async function settleWorktree(
   session: Pick<Session, "worktree_path" | "base_branch">,
-  merged: boolean
+  merged: MergedAs | null
 ): Promise<WorktreeFate> {
   const fate = await worktreeFate(session, merged);
   if (fate.action !== "remove") return fate;
-  await deleteWorktree(session.worktree_path!, fate.repo, true);
+  const path = session.worktree_path!;
+  await deleteWorktree(path, fate.repo, true).catch(() => {});
+  if (fs.existsSync(path))
+    return { action: "kept", why: "removing it failed", path };
   return { action: "removed", why: fate.why };
 }

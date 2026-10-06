@@ -4,23 +4,24 @@
  * gates at the judged head (refused, naming the gate, otherwise); one
  * already merged, or a session with no PR, just cleans up. Cleanup stops
  * the agent, removes the worktree only when nothing in it would be lost,
- * and archives the session.
+ * and archives the session. What it will do is decided first (plan.ts).
  */
 
 import fs from "fs";
-import { db, queries, stackQueries as sq, type Session } from "../db";
+import { db, queries, type Session } from "../db";
 import { stopChat } from "../chat/runner";
 import { hostExec } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { getProject } from "../projects";
 import { mergeSettled, type TaskPR } from "../tasks";
-import { prFor } from "../tasks/session";
 import { syncTaskCardInBackground } from "../lumifyhub/task-cards";
-import { statusOf } from "../orchestrator/facts";
+import { statusDetector } from "../status-detector";
 import { judge, mergeJudged } from "../orchestrator/signoff";
 import { isPaused } from "../orchestrator/pause";
 import { plain } from "../orchestrator/overview";
 import { archiveSession } from "./archive";
+import { planDone } from "./plan";
+import { deleteMergedRemote } from "./remote";
 import { settleWorktree, type WorktreeFate } from "./worktree";
 
 export interface DoneOptions {
@@ -29,6 +30,8 @@ export interface DoneOptions {
   by: "orchestrator" | "direct";
   // The session asking, which can't mark itself done.
   callerId?: string | null;
+  // Bulk clean-up: an open PR is refused, never merged.
+  noMerge?: boolean;
 }
 
 export interface DoneOutcome {
@@ -38,8 +41,6 @@ export interface DoneOutcome {
   worktree: WorktreeFate;
   text: string;
 }
-
-const LIVE_ITEM = new Set(["starting", "running", "pr"]);
 
 export function getDoneTarget(id: string): Session {
   const s = queries.getSession(db).get(id) as Session | undefined;
@@ -70,7 +71,7 @@ async function mergeThroughGates(
   s: Session,
   pr: TaskPR,
   opts: DoneOptions
-): Promise<string> {
+): Promise<{ text: string; sha: string }> {
   const w = s.project_id ? getProject(s.project_id)?.workspace_id : null;
   if (!w)
     throw new Error(
@@ -90,19 +91,16 @@ async function mergeThroughGates(
   }
   const said = await mergeJudged(w, s, verdict, { wait: true });
   await mergeSettled(s.id);
-  return said;
+  return { text: said, sha: verdict.sha };
 }
 
-// A task with no PR to merge ends as done; one in a running stack can't,
-// since the cards above it wait on its merge.
-function finishUnmerged(s: Session): void {
-  const item = sq.itemForSession(db, s.id);
-  if (item && LIVE_ITEM.has(item.status))
-    throw new Error(
-      `${s.name} is a card in a running stack and the cards after it wait on its merge: sign it off or drop it.`
-    );
-  db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(s.id);
-  syncTaskCardInBackground(s, "done", null);
+function mark(s: Session, status: "merged" | "done", pr: TaskPR | null) {
+  db.prepare(
+    status === "merged"
+      ? `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
+      : `UPDATE sessions SET task_status = 'done' WHERE id = ?`
+  ).run(s.id);
+  syncTaskCardInBackground(s, status, pr);
 }
 
 export async function doneSession(
@@ -110,47 +108,45 @@ export async function doneSession(
   opts: DoneOptions
 ): Promise<DoneOutcome> {
   const s = getDoneTarget(id);
-  if (s.role === "orchestrator")
+  await statusDetector.refreshCache();
+  const plan = await planDone(s, opts.callerId);
+  if (plan.action === "refuse") throw new Error(plan.reason);
+  if (plan.action === "merge" && opts.noMerge)
     throw new Error(
-      `${s.name} is a workspace's orchestrator; it can't be done`
-    );
-  if (s.archived_at) throw new Error(`${s.name} is already done`);
-  if (opts.callerId && opts.callerId === s.id)
-    throw new Error("A session can't mark itself done");
-  if ((await statusOf(s)).status === "running")
-    throw new Error(
-      `${s.name} is still working: wait for it, or stop it first`
+      `${s.name} has an open PR #${plan.pr.number}: a clean-up never merges, so Done it on its own to merge it through the gates.`
     );
 
   const hadWorktree = !!s.worktree_path && fs.existsSync(s.worktree_path);
+  const notes: string[] = [];
   let merged: string | null = null;
-  let branchMerged = false;
-  if (s.task_status === "running") {
-    const pr = await prFor(s, true);
-    if (pr?.state === "OPEN") {
-      merged = await mergeThroughGates(s, pr, opts);
-      branchMerged = true;
-    } else if (pr?.state === "MERGED") {
-      db.prepare(
-        `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
-      ).run(s.id);
-      syncTaskCardInBackground(s, "merged", pr);
-      branchMerged = true;
-    } else finishUnmerged(s);
-  } else if (s.task_status === "merged") branchMerged = true;
-
-  await stopAgent(s);
-  let worktree = await settleWorktree(s, branchMerged);
-  // A sign-off's own cleanup has already removed it.
-  if (merged && hadWorktree && worktree.action === "none")
+  let worktree: WorktreeFate;
+  if (plan.action === "merge") {
+    const m = await mergeThroughGates(s, plan.pr, opts);
+    merged = m.text;
+    await stopAgent(s);
+    // The sign-off's cleanup has already settled it; this reads the result.
+    worktree = await settleWorktree(s, { prHead: m.sha });
+  } else {
+    if (plan.mark) mark(s, plan.mark, plan.pr);
+    if (plan.mark === "merged" && (await deleteMergedRemote(s, plan.pr)))
+      notes.push("its merged branch deleted on origin");
+    await stopAgent(s);
+    worktree = await settleWorktree(s, plan.merged);
+  }
+  if (
+    hadWorktree &&
+    worktree.action === "none" &&
+    !fs.existsSync(s.worktree_path!)
+  )
     worktree = { action: "removed", why: "its branch is merged" };
   archiveSession(s.id);
   const head = merged ?? `Done: ${s.name}.`;
+  const extra = notes.length ? `, ${notes.join(", ")}` : "";
   return {
     id: s.id,
     name: s.name,
     merged,
     worktree,
-    text: `${head} Agent stopped, ${worktreeLine(worktree)}; archived.`,
+    text: `${head} Agent stopped, ${worktreeLine(worktree)}${extra}; archived.`,
   };
 }

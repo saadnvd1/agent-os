@@ -1,7 +1,7 @@
 "use client";
 
 import { DevicesDialog } from "@/components/Devices";
-import { ArchivedDialog } from "@/components/Archived";
+import { ArchivedDialog, CleanupDialog } from "@/components/Archived";
 import { toast } from "sonner";
 
 import { LumifyHubDialogs } from "@/components/LumifyHub";
@@ -588,6 +588,7 @@ function HomeContent() {
       <MessagesDialog />
       <DevicesDialog />
       <ArchivedDialog />
+      <CleanupDialog />
       <LumifyHubDialogs />
     </>
   );

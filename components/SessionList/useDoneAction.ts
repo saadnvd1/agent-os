@@ -21,14 +21,18 @@ export function useDoneAction() {
       merges ? `Merging ${session.name}…` : `Finishing ${session.name}…`
     );
     done.mutate(session.id, {
+      // Undo only puts the entry back: offered only when that's all done did.
       onSuccess: (outcome) =>
         toast.success(outcome.text, {
           id,
           duration: 8000,
-          action: {
-            label: "Undo",
-            onClick: () => unarchive.mutate(session.id),
-          },
+          ...(!outcome.merged &&
+            outcome.worktree.action !== "removed" && {
+              action: {
+                label: "Undo",
+                onClick: () => unarchive.mutate(session.id),
+              },
+            }),
         }),
       onError: (e) => toast.error(e.message, { id, duration: 12000 }),
     });

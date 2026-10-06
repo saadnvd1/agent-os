@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskPR, TaskState } from "@/lib/tasks/state";
-import { makeRepo, WORKTREE_MARK } from "./testing";
+import { commitFile, git, makeRepo, WORKTREE_MARK } from "./testing";
 
 // Real repositories; gh, tmux, chat workers and LumifyHub are faked.
 const prs = new Map<string, TaskPR>();
@@ -11,6 +11,7 @@ const merges: string[][] = [];
 const killed: string[] = [];
 const cards: [string, TaskState][] = [];
 const status = new Map<string, "running" | "idle">();
+let ghDown = false;
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
@@ -28,12 +29,19 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
       return real.run(cmd, args, cwd, t);
     },
     findPR: async (_repo: string, branch: string) => prs.get(branch) ?? null,
+    findPRStrict: async (_repo: string, branch: string) => {
+      if (ghDown) throw new Error("HTTP 502 from api.github.com");
+      return prs.get(branch) ?? null;
+    },
   };
 });
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
   statusDetector: {
     refreshCache: async () => {},
+    listSessions: async () => [],
+    cleanup: () => {},
+    hostErrors: () => ({}),
     sessionExists: (t: string) => status.has(t),
     getStatus: async (t: string) => status.get(t) ?? "dead",
     titleFor: () => "",
@@ -80,6 +88,7 @@ const { seedSession } = await import("@/lib/orchestrator/testing");
 const { doneSession } = await import("./index");
 
 beforeEach(() => {
+  ghDown = false;
   merges.length = 0;
   killed.length = 0;
   cards.length = 0;
@@ -242,6 +251,96 @@ describe("done, by state", () => {
     expect(row(s.id)).toMatchObject({ task_status: "merged" });
     expect(row(s.id).archived_at).not.toBeNull();
     expect(killed.some((k) => k.includes("tmux kill-session"))).toBe(true);
+    // Origin's branch was exactly what merged, so it goes too.
+    expect(out.text).toContain("its merged branch deleted on origin");
+    expect(git(t.repo, "ls-remote", "--heads", "origin", s.branch)).toBe("");
+  });
+
+  it("(b) keeps origin's branch when it moved past what merged", async () => {
+    const t = setup();
+    const s = t.session("moved", {
+      task: true,
+      commits: { "m.ts": "1\n", "n.ts": "2\n" },
+    });
+    const first = git(s.dir!, "rev-parse", "HEAD~1");
+    t.openPR({ ...s, head: first }, { state: "MERGED" });
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.text).not.toContain("deleted on origin");
+    expect(git(t.repo, "ls-remote", "--heads", "origin", s.branch)).not.toBe(
+      ""
+    );
+    // Its last commit is on origin, so the worktree loses nothing.
+    expect(out.worktree).toMatchObject({ action: "removed" });
+  });
+
+  it("merged never removes uncommitted work or commits that weren't in the PR", async () => {
+    const t = setup();
+    const dirty = t.session("merged-dirty", {
+      task: true,
+      commits: { "p.ts": "1\n" },
+    });
+    t.openPR(dirty, { state: "MERGED" });
+    fs.writeFileSync(path.join(dirty.dir!, "scratch.txt"), "unsaved\n");
+    const a = await doneSession(dirty.id, { by: "direct" });
+    expect(a.worktree).toMatchObject({
+      action: "kept",
+      why: "it has uncommitted changes",
+    });
+    expect(fs.existsSync(path.join(dirty.dir!, "scratch.txt"))).toBe(true);
+
+    const extra = t.session("merged-extra", {
+      task: true,
+      commits: { "q.ts": "1\n" },
+    });
+    t.openPR(extra, { state: "MERGED" });
+    commitFile(extra.dir!, "local-only.ts", "2\n");
+    const b = await doneSession(extra.id, { by: "direct" });
+    expect(b.worktree).toMatchObject({
+      action: "kept",
+      why: "1 commit is on it that the merged PR didn't include and no remote has",
+    });
+    expect(git(t.repo, "branch", "--list", extra.branch)).not.toBe("");
+  });
+
+  it("(a) a sign-off keeps a worktree with uncommitted work", async () => {
+    const t = setup();
+    const s = t.session("ship-dirty", {
+      task: true,
+      commits: { "src/e.ts": "export const e = 1;\n" },
+      live: "idle",
+    });
+    t.openPR(s);
+    fs.writeFileSync(path.join(s.dir!, "notes.md"), "keep me\n");
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(merges).toHaveLength(1);
+    expect(out.worktree).toMatchObject({
+      action: "kept",
+      why: "it has uncommitted changes",
+    });
+    expect(fs.readFileSync(path.join(s.dir!, "notes.md"), "utf8")).toBe(
+      "keep me\n"
+    );
+  });
+
+  it("refuses when GitHub can't say whether a PR is open", async () => {
+    const t = setup();
+    const down = t.session("gh-down", { task: true });
+    ghDown = true;
+    await expect(doneSession(down.id, { by: "direct" })).rejects.toThrow(
+      /couldn't be read from GitHub \(HTTP 502/
+    );
+    ghDown = false;
+    const lost = t.session("pr-lost", { task: true });
+    db.prepare(`UPDATE sessions SET pr_number = 41 WHERE id = ?`).run(lost.id);
+    await expect(doneSession(lost.id, { by: "direct" })).rejects.toThrow(
+      /had PR #41 but GitHub doesn't return it now/
+    );
+    for (const id of [down.id, lost.id])
+      expect(row(id)).toMatchObject({
+        task_status: "running",
+        archived_at: null,
+      });
+    expect(cards).toEqual([]);
   });
 
   it("(c) a plain session with no commits of its own loses its worktree", async () => {
@@ -311,7 +410,10 @@ const { runTool } = await import("@/lib/orchestrator/serve");
 const { setPaused } = await import("@/lib/orchestrator/pause");
 const { listPeers, resolveSession } = await import("@/lib/bus");
 const { listArchived, unarchiveSession } = await import("./archive");
-const { doneIdle, scopeOf } = await import("./bulk");
+const { doneIdle, previewIdle, scopeOf } = await import("./bulk");
+const { POST: busDone } = await import("@/app/api/bus/done/route");
+const { GET: statusGET } = await import("@/app/api/sessions/status/route");
+const { NextRequest } = await import("next/server");
 const { getDoneTarget } = await import("./index");
 const { saveItem } = await import("@/lib/chat/store");
 
@@ -352,37 +454,99 @@ describe("archived sessions", () => {
 });
 
 describe("done --all-idle", () => {
-  it("does every idle or stopped session in the workspace, keeps and refuses as each deserves", async () => {
+  it("previews, then cleans up every idle or stopped session, and never merges", async () => {
     const t = setup();
     const caller = t.session("caller", { worktree: false, live: "running" });
     const busy = t.session("busy", { worktree: false, live: "running" });
     const idle = t.session("idle", { live: "idle" });
     const stopped = t.session("stopped", { commits: { "z.ts": "z\n" } });
-    const red = t.session("red", {
+    const green = t.session("green", {
       task: true,
-      commits: { "r.ts": "r\n" },
+      commits: { "g.ts": "g\n" },
       live: "idle",
     });
-    t.openPR(red, { checks: "fail" });
+    t.openPR(green);
+    const lost = t.session("lost", { task: true });
+    db.prepare(`UPDATE sessions SET pr_number = 9 WHERE id = ?`).run(lost.id);
+    const scope = scopeOf(getDoneTarget(caller.id));
 
-    const r = await doneIdle(scopeOf(getDoneTarget(caller.id)), {
-      by: "direct",
-      callerId: caller.id,
-    });
-    expect(r.done.map((d) => d.name).sort()).toEqual(["idle", "stopped"]);
-    expect(r.refused).toEqual([
-      expect.objectContaining({
-        name: "red",
-        reason: expect.stringMatching(/ci failed/),
-      }),
+    const preview = await previewIdle(scope, caller.id);
+    const by = Object.fromEntries(preview.map((r) => [r.name, r]));
+    expect(Object.keys(by).sort()).toEqual([
+      "green",
+      "idle",
+      "lost",
+      "stopped",
     ]);
-    expect(r.summary).toMatch(/^Done: 2, kept a worktree: 1, refused: 1\./);
-    expect(r.summary).toContain("refused  red:");
+    expect(by.idle).toMatchObject({ action: "cleanup", removesWorktree: true });
+    expect(by.stopped.line).toMatch(
+      /keep its worktree: its branch has 1 commit/
+    );
+    expect(by.green).toMatchObject({ action: "merge" });
+    expect(by.lost).toMatchObject({ action: "refuse" });
+    // A preview changes nothing.
+    expect(fs.existsSync(idle.dir!)).toBe(true);
+    expect(row(idle.id).archived_at).toBeNull();
+
+    const r = await doneIdle(scope, { by: "direct", callerId: caller.id });
+    expect(r.done.map((d) => d.name).sort()).toEqual(["idle", "stopped"]);
+    expect(r.mergeable).toEqual([
+      { id: green.id, name: "green", pr: prs.get(green.branch)!.number },
+    ]);
+    expect(r.refused.map((x) => x.name)).toEqual(["lost"]);
+    expect(r.summary).toMatch(
+      /^Done: 2, kept a worktree: 1, refused: 1, open PRs left for their own done: 1\./
+    );
     expect(merges).toEqual([]);
-    for (const id of [caller.id, busy.id, red.id])
+    for (const id of [caller.id, busy.id, green.id, lost.id])
       expect(row(id).archived_at).toBeNull();
     expect(fs.existsSync(stopped.dir!)).toBe(true);
     expect(fs.existsSync(idle.dir!)).toBe(false);
+  });
+});
+
+describe("aos done", () => {
+  const call = (body: object) =>
+    busDone(
+      new NextRequest("http://x/api/bus/done", {
+        method: "POST",
+        body: JSON.stringify(body),
+      })
+    ).then(async (r) => ({ status: r.status, body: await r.json() }));
+
+  it("reaches only the caller's workspace, and only from a session", async () => {
+    const t = setup();
+    const other = setup();
+    const me = t.session("me-bus", { worktree: false, live: "running" });
+    const mine = t.session("mine-bus", { worktree: false });
+    const theirs = other.session("theirs-bus", { worktree: false });
+
+    const out = await call({ from: me.id, session: theirs.id });
+    expect(out.status).toBe(409);
+    expect(out.body.error).toMatch(/isn't in me-bus's workspace/);
+    expect(row(theirs.id).archived_at).toBeNull();
+
+    expect((await call({ session: mine.id })).body.error).toMatch(
+      /from inside an AgentOS session/
+    );
+    const ok = await call({ from: me.id, session: mine.id });
+    expect(ok.status).toBe(200);
+    expect(row(mine.id).archived_at).not.toBeNull();
+  });
+});
+
+describe("status", () => {
+  it("leaves archived chats out", async () => {
+    const t = setup();
+    const chat = t.session("chat-status", { worktree: false });
+    db.prepare(`UPDATE sessions SET view = 'chat' WHERE id = ?`).run(chat.id);
+    const ids = async () =>
+      Object.keys(
+        ((await (await statusGET()).json()) as { statuses: object }).statuses
+      );
+    expect(await ids()).toContain(chat.id);
+    await doneSession(chat.id, { by: "direct" });
+    expect(await ids()).not.toContain(chat.id);
   });
 });
 

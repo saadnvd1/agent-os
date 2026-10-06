@@ -257,7 +257,9 @@ export async function GET() {
 
     // Chat sessions have no tmux pane: their live conversation is the status.
     for (const session of db
-      .prepare(`SELECT * FROM sessions WHERE view = 'chat'`)
+      .prepare(
+        `SELECT * FROM sessions WHERE view = 'chat' AND archived_at IS NULL`
+      )
       .all() as Session[]) {
       const state = chatState(session.id);
       statusMap[session.id] = {
