@@ -32,12 +32,12 @@ export function ConnectDialog() {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {connected ? "LumifyHub" : "Share with your team"}
+            {connected ? "LumifyHub" : "Docs & boards in LumifyHub"}
           </DialogTitle>
           <DialogDescription>
             {connected
               ? "Workspaces you link keep their boards and docs in LumifyHub."
-              : "Connect LumifyHub to share a workspace's boards and docs with your team. Tasks show up as cards."}
+              : "Keep this workspace's docs and boards in LumifyHub, where you can open them anywhere and share them with anyone. Tasks show up as cards."}
           </DialogDescription>
         </DialogHeader>
         {connected ? <ConnectedAccount /> : <ConnectOptions />}

@@ -1,8 +1,8 @@
 # LumifyHub integration
 
-AgentOS works fully without a LumifyHub account. Connecting one adds team
-features: a workspace's docs and boards live in LumifyHub, where they can be
-shared and worked on together.
+AgentOS works fully without a LumifyHub account. Connecting one gives a
+workspace's docs and boards a home in LumifyHub, where they can be opened
+anywhere and shared with anyone.
 
 ## What maps to what
 
@@ -15,8 +15,8 @@ shared and worked on together.
 | Docs tab | Pages in the workspace | read in AgentOS, edited in LumifyHub |
 | Repo markdown file | Page marked "from repo" | one way, on "Publish" |
 
-Code docs (CLAUDE.md, READMEs, decision records) stay in git. Team docs
-(specs, plans, notes) live in LumifyHub. Nothing syncs both ways.
+Code docs (CLAUDE.md, READMEs, decision records) stay in git. Docs meant for
+reading and sharing (specs, plans, notes) live in LumifyHub. Nothing syncs both ways.
 
 A task's card moves through the board's lists as the task runs:
 

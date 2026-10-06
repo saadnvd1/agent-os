@@ -24,7 +24,7 @@ export function WorkspaceLumifyHubItem({
     return (
       <Item onClick={lumifyhubUiActions.openConnect}>
         <Share2 className="mr-2 h-3 w-3" />
-        Share with your team
+        Docs & boards in LumifyHub
       </Item>
     );
   }
