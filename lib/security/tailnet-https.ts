@@ -26,14 +26,25 @@ export interface HttpsHandlers {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
-export const tailnetHttpsPort = (port: number) =>
-  Number(process.env.AGENTOS_TAILNET_HTTPS_PORT || port + 432);
+/** The HTTPS port, or null when AGENTOS_TAILNET_HTTPS_PORT isn't a usable port. */
+export function tailnetHttpsPort(
+  port: number,
+  env: Record<string, string | undefined> = process.env
+): number | null {
+  const p = Number(env.AGENTOS_TAILNET_HTTPS_PORT || port + 432);
+  return Number.isInteger(p) && p > 0 && p < 65536 && p !== port ? p : null;
+}
 
 const g = globalThis as unknown as { __agentosTailnetHttps?: string | null };
 /** https://<name>.ts.net:<port> while it is being served, else null. */
 export const tailnetHttpsUrl = () => g.__agentosTailnetHttps ?? null;
 
-function runCert(bin: string, name: string, dir: string): Promise<boolean> {
+function runCert(
+  bin: string,
+  name: string,
+  dir: string,
+  log: (line: string) => void
+): Promise<boolean> {
   return new Promise((resolve) =>
     execFile(
       bin,
@@ -46,20 +57,42 @@ function runCert(bin: string, name: string, dir: string): Promise<boolean> {
         name,
       ],
       { timeout: 120_000 },
-      (err) => resolve(!err)
+      (err, _out, stderr) => {
+        // The CLI's own message, first line only: never the cert or key.
+        if (err)
+          log(
+            `> tailnet https: tailscale cert failed: ${String(
+              stderr || err.message
+            )
+              .split("\n")[0]
+              .slice(0, 200)}`
+          );
+        resolve(!err);
+      }
     )
   );
 }
 
 /** Gets (or refreshes) the certificate; null when the tailnet can't issue one. */
 export async function tailnetCert(
+  log: (line: string) => void = console.log,
   dir = path.join(os.homedir(), ".agent-os", "tls")
 ) {
   const ts = await tailscaleStatus();
   const bin = tailscaleBinary();
-  if (ts.state !== "running" || !ts.https || !ts.dnsName || !bin) return null;
+  if (ts.state !== "running" || !ts.https || !ts.dnsName || !bin) {
+    const why =
+      ts.state !== "running"
+        ? `tailscale is ${ts.state}`
+        : !ts.https
+          ? "HTTPS certificates are off for this tailnet"
+          : "no tailscale CLI";
+    log(`> tailnet https: off (${why})`);
+    return null;
+  }
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  if (!(await runCert(bin, ts.dnsName, dir))) return null;
+  fs.chmodSync(dir, 0o700); // mkdir's mode only applies when it creates the folder
+  if (!(await runCert(bin, ts.dnsName, dir, log))) return null;
   fs.chmodSync(path.join(dir, "tailnet.key"), 0o600);
   return {
     name: ts.dnsName,
@@ -77,7 +110,19 @@ export function startTailnetHttps(opts: {
   getCert?: () => Promise<{ key: string; cert: string; name: string } | null>;
 }) {
   const log = opts.log ?? console.log;
-  const port = tailnetHttpsPort(opts.port);
+  const chosen = tailnetHttpsPort(opts.port);
+  if (chosen === null) {
+    log(
+      `> tailnet https: off (AGENTOS_TAILNET_HTTPS_PORT=${process.env.AGENTOS_TAILNET_HTTPS_PORT} isn't a usable port)`
+    );
+    return {
+      url: tailnetHttpsUrl,
+      ready: Promise.resolve(),
+      port: 0,
+      stop: () => {},
+    };
+  }
+  const port = chosen;
   const servers = new Map<
     string,
     { server: https.Server; sockets: Set<Socket> }
@@ -110,7 +155,15 @@ export function startTailnetHttps(opts: {
     s.sockets.forEach((x) => x.destroy());
     servers.delete(address);
   };
+  // Runs from a bare interval in the live server: never throws.
   const follow = () => {
+    try {
+      followNow();
+    } catch (err) {
+      log(`> tailnet https: ${(err as Error).message}`);
+    }
+  };
+  const followNow = () => {
     const want = opts.addresses();
     want.forEach(listen);
     for (const a of servers.keys()) if (!want.includes(a)) close(a);
@@ -119,7 +172,7 @@ export function startTailnetHttps(opts: {
   };
   const refresh = async () => {
     try {
-      const next = await (opts.getCert ?? tailnetCert)();
+      const next = await (opts.getCert ?? (() => tailnetCert(log)))();
       if (!next) return;
       const renewed = tls && tls.cert !== next.cert;
       tls = next;

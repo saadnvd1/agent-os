@@ -133,3 +133,27 @@ describe("requests from web pages", () => {
     ).toBe(true);
   });
 });
+
+describe("tailscaleAddresses (only Tailscale's own interface)", () => {
+  const v4 = (address: string) =>
+    ({ address, family: "IPv4" }) as os.NetworkInterfaceInfo;
+  it("ignores another VPN's 100.64/10 address", () => {
+    const ifaces = {
+      utun4: [v4("100.64.0.1")],
+      wg0: [v4("100.90.1.2")],
+      ppp0: [v4("100.100.1.1")],
+    };
+    expect(tailscaleAddresses(ifaces, [])).toEqual(["100.64.0.1"]);
+  });
+  it("trusts tailscale0 on Linux", () => {
+    expect(
+      tailscaleAddresses({ tailscale0: [v4("100.64.0.3")] }, [])
+    ).toEqual(["100.64.0.3"]);
+  });
+  it("once the CLI has reported this node's IPs, only those count", () => {
+    const ifaces = { utun3: [v4("100.64.0.9")], utun4: [v4("100.64.0.1")] };
+    expect(tailscaleAddresses(ifaces, ["100.64.0.1"])).toEqual([
+      "100.64.0.1",
+    ]);
+  });
+});
