@@ -19,6 +19,12 @@ import { statusDetector } from "../status-detector";
 import { buildTaskBrief } from "./brief";
 import { findPR, run } from "./gh";
 import {
+  attachTaskCard,
+  inBackground,
+  syncTaskCardInBackground,
+  taskCardUrl,
+} from "../lumifyhub/task-cards";
+import {
   canSignOff,
   deriveTaskState,
   isBlocked,
@@ -39,6 +45,8 @@ export interface TaskView {
   tmuxName: string;
   state: TaskState;
   pr: TaskPR | null;
+  // The task's card on the project's LumifyHub board, when it has one.
+  cardUrl: string | null;
   createdAt: string;
 }
 
@@ -53,6 +61,8 @@ export async function createTask(opts: {
   projectId: string;
   prompt: string;
   model?: string;
+  // Started from this LumifyHub card, which the task then moves.
+  cardId?: string;
 }): Promise<Session> {
   const prompt = opts.prompt.trim();
   if (!prompt) throw new Error("Describe the task");
@@ -118,7 +128,11 @@ export async function createTask(opts: {
     brief: buildTaskBrief({ branch: wt.branchName, baseBranch }),
   });
 
-  return queries.getSession(db).get(id) as Session;
+  const session = queries.getSession(db).get(id) as Session;
+  inBackground(`card for task ${id}`, () =>
+    attachTaskCard(session, project, opts.cardId)
+  );
+  return session;
 }
 
 function taskSessions(): Session[] {
@@ -194,6 +208,13 @@ async function viewOf(session: Session): Promise<TaskView> {
         )
       : false;
   const project = session.project_id ? getProject(session.project_id) : null;
+  const state = deriveTaskState({
+    taskStatus: session.task_status ?? "running",
+    sessionStatus: agentGone ? "dead" : sessionStatus,
+    pr,
+    blocked,
+  });
+  syncTaskCardInBackground(session, state, pr);
   return {
     id: session.id,
     name: session.name,
@@ -203,13 +224,9 @@ async function viewOf(session: Session): Promise<TaskView> {
     branch: session.branch_name,
     baseBranch: session.base_branch,
     tmuxName: session.tmux_name,
-    state: deriveTaskState({
-      taskStatus: session.task_status ?? "running",
-      sessionStatus: agentGone ? "dead" : sessionStatus,
-      pr,
-      blocked,
-    }),
+    state,
     pr,
+    cardUrl: taskCardUrl(session),
     createdAt: session.created_at,
   };
 }
@@ -264,6 +281,7 @@ export async function signOffTask(id: string): Promise<void> {
   db.prepare(
     `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
   ).run(id);
+  syncTaskCardInBackground(session, "merged", pr);
   await cleanup(session, repo);
 }
 
@@ -281,5 +299,6 @@ export async function dropTask(id: string): Promise<void> {
   db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
     id
   );
+  syncTaskCardInBackground(session, "dropped", pr);
   await cleanup(session, repo);
 }
