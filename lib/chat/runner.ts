@@ -22,6 +22,10 @@ import {
 } from "./registry";
 import { capsKey, emitCapabilities, sendCapabilities } from "./settings";
 import { listItems, saveItem, settle } from "./store";
+import { taskOutputTail } from "./task-output";
+import { restoreActivity, track } from "./activity";
+
+export { chatActivity } from "./activity";
 import { chatDriverFor } from "./drivers";
 import { connectWorker, runningWorkers } from "./worker/client";
 import type { WorkerEvent } from "./worker/protocol";
@@ -29,6 +33,7 @@ import type { WorkerEvent } from "./worker/protocol";
 export { setChatAccess, setChatModel } from "./settings";
 
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
+  track(live, e);
   if (e.type === "item") {
     if ("streaming" in e.item && e.item.streaming)
       live.streaming.set(e.item.id, e.item);
@@ -82,6 +87,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       worker: client,
       state: hello.state,
       streaming: new Map(hello.streaming.map((i) => [i.id, i])),
+      activity: restoreActivity(sessionId, hello.state),
     };
     registry.live.set(sessionId, live);
     emit(sessionId, { type: "state", state: live.state });
@@ -196,6 +202,21 @@ export function stopChat(sessionId: string): void {
 
 export function chatState(sessionId: string): ChatState | null {
   return registry.live.get(sessionId)?.state ?? null;
+}
+
+export function stopChatTask(sessionId: string, taskId: string): void {
+  registry.live.get(sessionId)?.worker.command({ type: "stop_task", taskId });
+}
+
+export function chatTaskOutput(
+  sessionId: string,
+  taskId: string
+): string | null {
+  const task = listItems(sessionId).find(
+    (i) => i.kind === "task" && i.taskId === taskId
+  );
+  if (task?.kind !== "task") return null;
+  return taskOutputTail(taskId, task.outputFile);
 }
 
 // Snapshot then live updates. Returns the unsubscribe function.

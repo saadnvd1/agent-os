@@ -129,6 +129,13 @@ agent edited since, rewinds the conversation to before it, and returns the
 message to the composer to edit and resend. Changes made by shell commands
 aren't tracked, so they stay.
 
+While a turn runs, a line above the composer says what the agent is doing
+and for how long (with Stop), and every step shows its time. Work the agent
+starts in the background (shells, subagents, monitors) sits behind a
+"running in background" chip: each task with its elapsed time, its live
+output, and its own Stop. The session list says the same thing, so a long
+wait never looks like nothing is happening.
+
 ![The slash-command menu open in a chat](screenshots/commands.png)
 
 Chat runs on this machine; sessions on other machines use the terminal.

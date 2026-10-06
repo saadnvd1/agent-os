@@ -87,6 +87,9 @@ export const claudeDriver: ChatDriver = {
         },
         enableFileCheckpointing: true,
         includePartialMessages: true,
+        // Each background task has its own Stop, so Stop on the turn spares
+        // them.
+        perTaskStopAffordance: true,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
@@ -146,6 +149,9 @@ export const claudeDriver: ChatDriver = {
       },
       respond(id, answer) {
         approvals.respond(id, answer);
+      },
+      async stopTask(taskId) {
+        await q.stopTask(taskId);
       },
       async undo(checkpoint, dryRun) {
         const r = await q.rewindFiles(checkpoint, { dryRun });

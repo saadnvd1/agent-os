@@ -37,7 +37,22 @@ export type ClaudeMessage = {
   terminal_slash_commands?: string[];
   commands?: SdkCommand[];
   compact_metadata?: { trigger?: "manual" | "auto" };
+  // Background tasks (task_started, task_progress, task_notification).
+  task_id?: string;
+  tool_use_id?: string;
+  description?: string;
+  task_type?: string;
+  subagent_type?: string;
+  status?: "completed" | "failed" | "stopped";
+  summary?: string;
+  output_file?: string;
+  last_tool_name?: string;
+  usage?: { tool_uses?: number };
+  skip_transcript?: boolean;
+  ambient?: boolean;
 };
+
+type TaskItem = Extract<ChatItem, { kind: "task" }>;
 
 export type SdkCommand = {
   name: string;
@@ -77,6 +92,7 @@ export class ClaudeMapper {
   private streamingText: ChatItem | null = null;
   private streamingThinking: ChatItem | null = null;
   private tools = new Map<string, Extract<ChatItem, { kind: "tool" }>>();
+  private tasks = new Map<string, TaskItem>();
 
   map(m: ClaudeMessage): DriverEvent[] {
     // Subagent traffic stays inside its parent tool call.
@@ -128,6 +144,10 @@ export class ClaudeMapper {
               },
             ]
           : [];
+      case "task_started":
+      case "task_progress":
+      case "task_notification":
+        return this.task(m);
       case "compact_boundary":
         return [
           {
@@ -143,6 +163,32 @@ export class ClaudeMapper {
       default:
         return [];
     }
+  }
+
+  private task(m: ClaudeMessage): DriverEvent[] {
+    if (!m.task_id) return [];
+    const prev = this.tasks.get(m.task_id);
+    const done = m.subtype === "task_notification";
+    const item: TaskItem = {
+      id: `task-${m.task_id}`,
+      kind: "task",
+      taskId: m.task_id,
+      createdAt: prev?.createdAt ?? now(),
+      toolUseId: m.tool_use_id ?? prev?.toolUseId,
+      description: m.description || prev?.description || "Background task",
+      taskType: m.task_type ?? prev?.taskType,
+      subagentType: m.subagent_type ?? prev?.subagentType,
+      status: done ? (m.status ?? "completed") : "running",
+      endedAt: done ? now() : undefined,
+      summary: m.summary ?? prev?.summary,
+      outputFile: m.output_file ?? prev?.outputFile,
+      toolUses: m.usage?.tool_uses ?? prev?.toolUses,
+      lastToolName: m.last_tool_name ?? prev?.lastToolName,
+      ambient: !!(m.skip_transcript || m.ambient || prev?.ambient),
+    };
+    if (done) this.tasks.delete(m.task_id);
+    else this.tasks.set(m.task_id, item);
+    return [{ type: "item", item }];
   }
 
   // Items are created on their first text, so blocks that never send any
@@ -274,6 +320,7 @@ export class ClaudeMapper {
             ...tool,
             status: b.is_error ? ("error" as const) : ("done" as const),
             output: clipOutput(text),
+            endedAt: now(),
           };
       this.tools.delete(b.tool_use_id);
       out.push({ type: "item", item: done });

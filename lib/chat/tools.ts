@@ -18,7 +18,10 @@ export function toolTitle(name: string, input: unknown): string {
   const str = (k: string) => (typeof i[k] === "string" ? (i[k] as string) : "");
   switch (name) {
     case "Bash":
-      return short(str("command")) || "Run command";
+      // The agent's own one-line description reads better than the command.
+      return (
+        short(str("description")) || short(str("command")) || "Run command"
+      );
     case "Read":
     case "Edit":
     case "Write":
