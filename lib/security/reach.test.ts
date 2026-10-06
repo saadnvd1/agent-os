@@ -50,6 +50,17 @@ describe("reachFrom", () => {
     });
   });
 
+  it("offers the tailnet's HTTPS address before its plain ones", () => {
+    const urls = reachFrom(ts, [], 3011, null, "https://mac.ts.net:3443").map(
+      (r) => r.url
+    );
+    expect(urls).toEqual([
+      "https://mac.ts.net:3443",
+      "http://mac.ts.net:3011",
+      "http://100.1.2.3:3011",
+    ]);
+  });
+
   it("is empty when nothing else can reach this machine", () => {
     expect(reachFrom({ state: "missing" }, [], 3011)).toEqual([]);
   });
