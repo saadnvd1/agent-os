@@ -13,6 +13,7 @@ import { ProjectCard } from "./ProjectCard";
 import { SessionCard } from "@/components/SessionCard";
 import { DevServerCard } from "@/components/DevServers/DevServerCard";
 import { selectionStore, selectionActions } from "@/stores/sessionSelection";
+import { quickStartActions } from "@/stores/quickStart";
 import type { Session, Group, DevServer } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 
@@ -201,12 +202,22 @@ export function ProjectsSection({
               project={project}
               sessionCount={row.sessionCount}
               row={row}
-              onOpenSingle={() => {
-                const target = row.single;
+              onOpenLatest={() => {
+                const target = row.latest;
                 if (target?.kind === "session") onSelectSession(target.id);
                 else if (target)
                   tmuxAttachActions.request(target.name, target.hostId);
               }}
+              onStartSession={
+                project.is_uncategorized
+                  ? undefined
+                  : () =>
+                      quickStartActions.request({
+                        projectId: project.id,
+                        workingDirectory: project.working_directory,
+                        agentType: project.agent_type,
+                      })
+              }
               runningDevServers={runningServers}
               onToggleExpanded={(expanded) =>
                 onToggleProject?.(project.id, expanded)

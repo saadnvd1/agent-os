@@ -18,6 +18,9 @@ export interface ProjectRowModel {
   subtitle: string | null;
   // The project's only session: the row opens it instead of expanding.
   single: RowTarget | null;
+  // What a click on the row opens: the most recently used session, else the
+  // most recently active discovered tmux session. Null means start one.
+  latest: RowTarget | null;
   active: boolean;
   // Created recently: shown even before it has ever run.
   fresh: boolean;
@@ -39,8 +42,17 @@ export interface ProjectRowInput {
 const FRESH_MS = 24 * 60 * 60 * 1000;
 
 // SQLite's datetime('now') is UTC without a zone marker.
-function createdAt(s: Session): number {
-  return Date.parse(`${s.created_at?.replace(" ", "T")}Z`);
+const sqliteTime = (t: string | undefined) =>
+  Date.parse(`${t?.replace(" ", "T")}Z`) || 0;
+const createdAt = (s: Session) => sqliteTime(s.created_at);
+
+function latestTarget(input: ProjectRowInput): RowTarget | null {
+  const session = [...input.sessions].sort(
+    (a, b) => sqliteTime(b.updated_at) - sqliteTime(a.updated_at)
+  )[0];
+  if (session) return { kind: "session", id: session.id };
+  const tmux = input.tmux[0]; // discovered sessions come most active first
+  return tmux ? { kind: "tmux", name: tmux.name, hostId: tmux.hostId } : null;
 }
 
 // One row per project: the busiest state among its
@@ -78,6 +90,7 @@ export function projectRow(input: ProjectRowInput): ProjectRowModel {
     state,
     subtitle,
     single: only?.target ?? null,
+    latest: only?.target ?? latestTarget(input),
     active: input.sessions.some((s) => s.id === input.activeSessionId),
     fresh: input.sessions.some(
       (s) => (input.now ?? Date.now()) - createdAt(s) < FRESH_MS
