@@ -12,7 +12,9 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
 fi
 
 git pull --ff-only
-npm install --no-audit --no-fund
+# The build needs dev dependencies even when the shell runs with
+# NODE_ENV=production (as sessions started by AgentOS do).
+npm install --include=dev --no-audit --no-fund
 node scripts/ensure-native.mjs
 npm run build
 git checkout -- next-env.d.ts 2>/dev/null || true
