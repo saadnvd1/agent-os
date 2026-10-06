@@ -11,6 +11,7 @@ import type {
 } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { AccessPicker } from "./AccessPicker";
+import { loadDraft, useSaveDraft } from "./useDraft";
 import { insertCommand, rankCommands, slashQuery } from "@/lib/chat/commands";
 import { CommandMenu } from "./CommandMenu";
 import { ModelPicker } from "./ModelPicker";
@@ -61,6 +62,7 @@ export function Composer({
   access,
   onSetAccess,
   prefill,
+  draftKey,
 }: {
   running: boolean;
   disabled?: boolean;
@@ -75,9 +77,22 @@ export function Composer({
   onSetAccess?: (access: ChatAccess) => void;
   // Text to put back in the composer (an undone message), once per `at`.
   prefill?: { text: string; at: number };
+  // Saves what's typed under this key, so a reload doesn't lose it.
+  draftKey?: string;
 }) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ChatImage[]>([]);
+  const draft = useMemo(() => ({ text, images }), [text, images]);
+  useSaveDraft(draftKey, draft);
+
+  // Restored after mount: the server render has no access to this browser.
+  useEffect(() => {
+    if (!draftKey) return;
+    const saved = loadDraft(draftKey);
+    setText(saved?.text ?? "");
+    setImages(saved?.images ?? []);
+    requestAnimationFrame(resize);
+  }, [draftKey]);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);

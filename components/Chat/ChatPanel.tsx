@@ -174,6 +174,7 @@ export function ChatPanel({
           onLoadOutput={loadTaskOutput}
         />
         <Composer
+          draftKey={sessionId}
           running={running}
           disabled={!connected}
           placeholder={connected ? `Message ${sessionName}` : "Reconnecting…"}
