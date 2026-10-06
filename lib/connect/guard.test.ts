@@ -53,3 +53,32 @@ describe("takeConnectLock", () => {
     expect(fs.existsSync(path.join(dir, "connect.lock"))).toBe(false);
   });
 });
+
+describe("takeConnectLock races", () => {
+  const lockIn = (dir: string) => path.join(dir, "connect.lock");
+
+  it("gives the lock back when a live process took it between the look and the rename", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-lock-"));
+    fs.writeFileSync(lockIn(dir), "999"); // stale
+    const alive = (pid: number) => {
+      // While we decide 999 is dead, process 222 takes the lock over.
+      if (pid === 999) fs.writeFileSync(lockIn(dir), "222");
+      return pid === 222;
+    };
+    expect(takeConnectLock(dir, 111, alive)).toEqual({ heldBy: 222 });
+    expect(fs.readFileSync(lockIn(dir), "utf8")).toBe("222");
+  });
+
+  it("never throws, even on a lock it can't read", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-lock-"));
+    fs.mkdirSync(lockIn(dir)); // not a file at all
+    let result: ReturnType<typeof takeConnectLock> | undefined;
+    expect(
+      () => (result = takeConnectLock(dir, 111, () => false))
+    ).not.toThrow();
+    expect(result && "release" in result).toBe(true);
+    expect(() =>
+      takeConnectLock(path.join(dir, "missing", "deeper"), 111)
+    ).not.toThrow();
+  });
+});

@@ -1,6 +1,13 @@
-/** Test-only: a throwaway CA and leaf certificates, minted with openssl. Shared with the relay. */
+/**
+ * Test-only: a throwaway CA and leaf certificates. Shared with the relay.
+ *
+ * Keys come from Node (named P-256); openssl only signs, with SHA-256 named
+ * explicitly. macOS's LibreSSL would otherwise sign with SHA-1 and write EC
+ * keys with explicit parameters, both of which TLS refuses.
+ */
 
 import { execFileSync } from "child_process";
+import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -15,18 +22,22 @@ export function makeTestPki(): TestPki {
   const f = (n: string) => path.join(dir, n);
   const ssl = (...args: string[]) =>
     execFileSync("openssl", args, { stdio: "pipe" });
-  const ec = [
-    "-newkey",
-    "ec",
-    "-pkeyopt",
-    "ec_paramgen_curve:prime256v1",
-    "-nodes",
-  ];
+  const newKey = (file: string) => {
+    const { privateKey } = crypto.generateKeyPairSync("ec", {
+      namedCurve: "P-256",
+    });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    fs.writeFileSync(f(file), pem);
+    return pem;
+  };
+
+  newKey("ca.key");
   ssl(
     "req",
+    "-new",
     "-x509",
-    ...ec,
-    "-keyout",
+    "-sha256",
+    "-key",
     f("ca.key"),
     "-out",
     f("ca.crt"),
@@ -38,10 +49,12 @@ export function makeTestPki(): TestPki {
   return {
     ca: fs.readFileSync(f("ca.crt"), "utf8"),
     leaf(name) {
+      const key = newKey(`${name}.key`);
       ssl(
         "req",
-        ...ec,
-        "-keyout",
+        "-new",
+        "-sha256",
+        "-key",
         f(`${name}.key`),
         "-out",
         f(`${name}.csr`),
@@ -52,6 +65,7 @@ export function makeTestPki(): TestPki {
       ssl(
         "x509",
         "-req",
+        "-sha256",
         "-in",
         f(`${name}.csr`),
         "-CA",
@@ -66,10 +80,7 @@ export function makeTestPki(): TestPki {
         "-extfile",
         f(`${name}.ext`)
       );
-      return {
-        key: fs.readFileSync(f(`${name}.key`), "utf8"),
-        cert: fs.readFileSync(f(`${name}.crt`), "utf8"),
-      };
+      return { key, cert: fs.readFileSync(f(`${name}.crt`), "utf8") };
     },
   };
 }
