@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=block"
+      rel="stylesheet"
+    />
+    <style>
+      /* A raw capture framed for the README: brand mark, a plain headline,
+         and the screenshot in a rounded window on a quiet purple-tinted
+         ground. Tokens: THEME, LAYOUT, HEADLINE, SUBLINE, LOGO, SHOTS. */
+      :root {
+        --bg: #0c0b10;
+        --glow: hsla(270, 70%, 55%, 0.16);
+        --fg: #f4f2f8;
+        --muted: rgba(244, 242, 248, 0.58);
+        --edge: rgba(255, 255, 255, 0.08);
+        --shadow:
+          0 40px 100px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4);
+      }
+      .light {
+        --bg: #f6f5f9;
+        --glow: hsla(270, 70%, 60%, 0.12);
+        --fg: #17151c;
+        --muted: rgba(23, 21, 28, 0.58);
+        --edge: rgba(23, 21, 28, 0.08);
+        --shadow:
+          0 40px 90px rgba(40, 20, 70, 0.16), 0 8px 24px rgba(40, 20, 70, 0.08);
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        width: 1600px;
+        height: 1000px;
+        overflow: hidden;
+        background:
+          radial-gradient(
+            1100px 560px at 50% -12%,
+            var(--glow),
+            transparent 70%
+          ),
+          var(--bg);
+        color: var(--fg);
+        font-family:
+          Geist,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 40px;
+        -webkit-font-smoothing: antialiased;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--muted);
+      }
+      .brand svg {
+        width: 26px;
+        height: 26px;
+      }
+      h1 {
+        margin-top: 18px;
+        font-size: 44px;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        text-align: center;
+      }
+      p {
+        margin-top: 12px;
+        font-size: 21px;
+        color: var(--muted);
+        text-align: center;
+        max-width: 1100px;
+      }
+      .stage {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 56px;
+        margin-top: 34px;
+      }
+      .frame {
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow:
+          var(--shadow),
+          0 0 0 1px var(--edge);
+        background: var(--bg);
+      }
+      .frame img {
+        display: block;
+        width: 100%;
+      }
+      /* A whole desktop window. */
+      .window .frame {
+        width: 1200px;
+      }
+      /* A dialog shown whole, at a readable size. */
+      .fit .stage {
+        align-items: center;
+        margin-top: 28px;
+        padding-bottom: 40px;
+      }
+      .fit .frame {
+        border-radius: 16px;
+      }
+      .fit .frame img {
+        width: auto;
+        max-height: 700px;
+        max-width: 1200px;
+      }
+      /* Phones side by side. */
+      .phones .frame {
+        border-radius: 40px;
+        border: 8px solid #1c1a22;
+      }
+      .light.phones .frame {
+        border-color: #24212b;
+      }
+      .phones .frame img {
+        width: auto;
+        height: 740px;
+      }
+    </style>
+  </head>
+  <body class="__THEME__ __LAYOUT__">
+    <div class="brand">__LOGO__ AgentOS</div>
+    <h1>__HEADLINE__</h1>
+    <p>__SUBLINE__</p>
+    <div class="stage">__SHOTS__</div>
+  </body>
+</html>

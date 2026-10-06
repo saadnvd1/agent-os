@@ -45,7 +45,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "scripts/check"
+    "check": "scripts/check",
+    "screenshots": "tsx scripts/screenshots/run.ts"
   },
   "repository": {
     "type": "git",
@@ -134,8 +135,10 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.8",
     "husky": "^9.1.7",
+    "playwright": "^1.63.0",
     "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.7.2",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.23.15",
     "tw-animate-css": "^1.4.0",
