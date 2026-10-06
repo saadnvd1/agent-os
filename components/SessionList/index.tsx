@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultModelForAgent } from "@/lib/model-catalog";
 import { useState, useMemo, useRef, useCallback } from "react";
 import { ServerLogsModal } from "@/components/DevServers";
 import {
@@ -384,7 +385,7 @@ export function SessionList({
                 name,
                 workingDirectory: path,
                 agentType: "claude",
-                defaultModel: "sonnet",
+                defaultModel: getDefaultModelForAgent("claude"),
                 devServers: [],
               },
               {

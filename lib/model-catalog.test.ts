@@ -19,6 +19,10 @@ describe("model catalog", () => {
     expect(new Set(values).size).toBe(values.length);
   });
 
+  it("defaults Claude to Opus", () => {
+    expect(getDefaultModelForAgent("claude")).toBe("opus");
+  });
+
   it("falls back to the default for a model that was removed", () => {
     expect(resolveModelForAgent("claude", "claude-2")).toBe(
       getDefaultModelForAgent("claude")

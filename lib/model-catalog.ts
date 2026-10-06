@@ -7,8 +7,8 @@ export interface ModelOption {
 
 // Claude Code's family aliases always resolve to the newest model in each.
 const CLAUDE_MODEL_OPTIONS: ModelOption[] = [
-  { value: "sonnet", label: "Sonnet" },
   { value: "opus", label: "Opus" },
+  { value: "sonnet", label: "Sonnet" },
   { value: "fable", label: "Fable" },
   { value: "haiku", label: "Haiku" },
 ];
@@ -36,7 +36,7 @@ const MODEL_OPTIONS_BY_AGENT: Partial<Record<AgentType, ModelOption[]>> = {
 };
 
 const DEFAULT_MODEL_BY_AGENT: Partial<Record<AgentType, string>> = {
-  claude: "sonnet",
+  claude: "opus",
   codex: "gpt-6-luna",
   gemini: "gemini-3.8-flash",
 };
@@ -49,7 +49,7 @@ export function getDefaultModelForAgent(agentType: AgentType): string {
   return (
     DEFAULT_MODEL_BY_AGENT[agentType] ??
     getModelOptions(agentType)[0]?.value ??
-    "sonnet"
+    "opus"
   );
 }
 

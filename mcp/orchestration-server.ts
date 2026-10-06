@@ -96,8 +96,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             model: {
               type: "string",
-              description: "Model to use (sonnet, opus, haiku)",
-              default: "sonnet",
+              description: "Model to use (opus, sonnet, fable, haiku)",
+              default: "opus",
             },
           },
           required: ["task", "workingDirectory"],
@@ -239,7 +239,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             workingDirectory: args?.workingDirectory,
             branchName: args?.branchName,
             useWorktree: args?.useWorktree ?? true,
-            model: args?.model || "sonnet",
+            model: args?.model || "opus",
           }),
         });
         return {
