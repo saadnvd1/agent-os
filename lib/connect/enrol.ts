@@ -28,18 +28,35 @@ export interface Enrolment {
   csr: Buffer;
 }
 
-/** Creates the machine's identity and TLS key, or reuses them if present. */
+/** Who names this machine: the Connect service (from a link code), or local (operators). */
+export type Register = (publicKey: string) => Promise<ConnectConfig>;
+
+/**
+ * Creates the machine's identity and TLS key, or reuses them if present.
+ * The machine key comes first: the Connect service registers its public
+ * half and answers with the machine's id and address.
+ */
 export async function enrol(opts: {
   domain: string;
   relayUrl: string;
   dir?: string;
+  register?: Register;
 }): Promise<Enrolment> {
   const dir = opts.dir ?? connectDir();
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (!fs.existsSync(path.join(dir, "machine.key"))) {
+    write(dir, "machine.key", generateMachineKey().privateKey);
+  }
+  const publicKey = crypto
+    .createPublicKey(fs.readFileSync(path.join(dir, "machine.key"), "utf8"))
+    .export({ type: "spki", format: "pem" })
+    .toString();
   const configPath = path.join(dir, "connect.json");
   let config: ConnectConfig;
   if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, "utf8")) as ConnectConfig;
+  } else if (opts.register) {
+    config = await opts.register(publicKey);
   } else {
     const machineId = newMachineId();
     config = {
@@ -48,9 +65,6 @@ export async function enrol(opts: {
       relayUrl: opts.relayUrl,
     };
   }
-  if (!fs.existsSync(path.join(dir, "machine.key"))) {
-    write(dir, "machine.key", generateMachineKey().privateKey);
-  }
   if (!fs.existsSync(path.join(dir, "tls.key"))) {
     write(
       dir,
@@ -58,10 +72,7 @@ export async function enrol(opts: {
       (await acme.crypto.createPrivateEcdsaKey()).toString()
     );
   }
-  const machinePublicKey = crypto
-    .createPublicKey(fs.readFileSync(path.join(dir, "machine.key"), "utf8"))
-    .export({ type: "spki", format: "pem" })
-    .toString();
+  const machinePublicKey = publicKey;
   const [, csr] = await acme.crypto.createCsr(
     { commonName: config.hostname, altNames: [config.hostname] },
     fs.readFileSync(path.join(dir, "tls.key"))

@@ -19,6 +19,8 @@ export interface ConnectConfig {
   relayServername?: string;
   /** PEM of a private CA the relay's certificate chains to (tests). */
   relayCa?: string;
+  /** The Connect service this machine enrolled with (signed API calls). */
+  apiUrl?: string;
 }
 
 export interface ConnectFiles {
