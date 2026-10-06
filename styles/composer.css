@@ -1,0 +1,172 @@
+/* The chat composer's editor (components/Chat/Composer.tsx). Code colors are
+   One Light / One Dark, the same palette replies use (components/Chat/Code.tsx). */
+
+.chat-composer {
+  --hl-text: #383a42;
+  --hl-comment: #a0a1a7;
+  --hl-keyword: #a626a4;
+  --hl-string: #50a14f;
+  --hl-number: #986801;
+  --hl-title: #4078f2;
+  --hl-type: #c18401;
+  --hl-tag: #e45649;
+  --hl-literal: #0184bc;
+}
+
+.dark .chat-composer {
+  --hl-text: #abb2bf;
+  --hl-comment: #5c6370;
+  --hl-keyword: #c678dd;
+  --hl-string: #98c379;
+  --hl-number: #d19a66;
+  --hl-title: #61afef;
+  --hl-type: #e5c07b;
+  --hl-tag: #e06c75;
+  --hl-literal: #56b6c2;
+}
+
+.chat-composer .ProseMirror {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-composer .ProseMirror p {
+  margin: 0;
+}
+
+.chat-composer p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: hsl(var(--muted-foreground));
+}
+
+.chat-composer .ProseMirror strong {
+  font-weight: 600;
+}
+
+.chat-composer .ProseMirror :not(pre) > code {
+  border-radius: 0.375rem;
+  background: hsl(var(--foreground) / 0.07);
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+.chat-composer .ProseMirror pre {
+  margin: 0.25rem 0;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: hsl(var(--foreground) / 0.04);
+  padding: 0.5rem 0.75rem;
+  color: var(--hl-text);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  white-space: pre;
+}
+
+.chat-composer .ProseMirror ul,
+.chat-composer .ProseMirror ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.chat-composer .ProseMirror ul {
+  list-style: disc;
+}
+
+.chat-composer .ProseMirror ol {
+  list-style: decimal;
+}
+
+.chat-composer .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.125rem;
+}
+
+.chat-composer ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.chat-composer ul[data-type="taskList"] li > label {
+  display: flex;
+  height: 1.5em;
+  align-items: center;
+  user-select: none;
+}
+
+.chat-composer ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-composer ul[data-type="taskList"] input {
+  accent-color: hsl(var(--primary));
+}
+
+.chat-composer ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: hsl(var(--muted-foreground));
+  text-decoration: line-through;
+}
+
+.chat-composer .hljs-comment,
+.chat-composer .hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+
+.chat-composer .hljs-keyword,
+.chat-composer .hljs-selector-tag,
+.chat-composer .hljs-doctag,
+.chat-composer .hljs-formula {
+  color: var(--hl-keyword);
+}
+
+.chat-composer .hljs-string,
+.chat-composer .hljs-regexp,
+.chat-composer .hljs-addition,
+.chat-composer .hljs-meta .hljs-string {
+  color: var(--hl-string);
+}
+
+.chat-composer .hljs-number,
+.chat-composer .hljs-attr,
+.chat-composer .hljs-variable,
+.chat-composer .hljs-template-variable,
+.chat-composer .hljs-selector-class,
+.chat-composer .hljs-selector-attr {
+  color: var(--hl-number);
+}
+
+.chat-composer .hljs-title,
+.chat-composer .hljs-section,
+.chat-composer .hljs-symbol,
+.chat-composer .hljs-bullet,
+.chat-composer .hljs-link,
+.chat-composer .hljs-meta,
+.chat-composer .hljs-selector-id {
+  color: var(--hl-title);
+}
+
+.chat-composer .hljs-built_in,
+.chat-composer .hljs-type,
+.chat-composer .hljs-title.class_ {
+  color: var(--hl-type);
+}
+
+.chat-composer .hljs-name,
+.chat-composer .hljs-tag,
+.chat-composer .hljs-deletion,
+.chat-composer .hljs-subst {
+  color: var(--hl-tag);
+}
+
+.chat-composer .hljs-literal,
+.chat-composer .hljs-attribute,
+.chat-composer .hljs-property {
+  color: var(--hl-literal);
+}
