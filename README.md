@@ -145,6 +145,19 @@ the same project.
 On other machines, files, git, worktrees, dev servers and summarize are not
 available yet; the terminal, status, rename and send-keys are.
 
+## Security
+
+AgentOS has no login: whoever can reach it gets a terminal as you. So by
+default it listens only on localhost and your Tailscale address, never on
+Wi-Fi or other networks, and it refuses:
+
+- requests addressed to any other host name (DNS rebinding), and
+- API calls or terminal connections made by another website's page.
+
+Reach it from your phone over Tailscale. To listen elsewhere, set
+`AGENTOS_BIND` (e.g. `0.0.0.0`) and put your own authentication in front of
+it; `AGENTOS_ALLOWED_HOSTS` adds host names it should answer to.
+
 ## Development
 
 ```bash
