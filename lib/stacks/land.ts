@@ -1,13 +1,20 @@
 /**
  * Land a stack: merge every PR bottom-up, ported from dispatch's `land`.
- * A preflight checks EVERY PR before anything merges. Each sign-off restacks
+ * A preflight checks EVERY PR before anything merges: CI, and a Code review
+ * section in its body for its head commit. Each sign-off restacks
  * what sits on it, so a restacked PR's checks are waited out again (its green
  * was against the parent's branch). It stops at the first failure and says
  * what landed.
  */
 
 import { db, stackQueries as q, type Session, type StackItemRow } from "../db";
-import { signOffTask, taskPR, canSignOff, type TaskPR } from "../tasks";
+import {
+  signOffTask,
+  taskPR,
+  canSignOff,
+  codeReviewRefusal,
+  type TaskPR,
+} from "../tasks";
 import { itemName } from "./guard";
 import { refreshItems } from "./tick";
 import { outputOf } from "./git";
@@ -68,6 +75,26 @@ async function waitGreen(
   }
 }
 
+// Without the orchestrator's gate: the item's head right before merging,
+// only if its Code review section covers that commit. A push since the
+// preflight needs a new review; the merge is pinned to this head.
+async function reviewedHead(
+  item: StackItemRow,
+  deps: LandDeps
+): Promise<string> {
+  const now = q.item(db, item.id) ?? item;
+  const session = sessionOf(now.session_id);
+  const pr = session ? await deps.prOf(session) : null;
+  const refusal = pr
+    ? codeReviewRefusal(pr.codeReview, pr.head, {
+        from: now.restacked_from,
+        to: now.restacked_to,
+      })
+    : "its PR is gone";
+  if (refusal) throw new Stop(`stopped at ${itemName(now)}: ${refusal}`);
+  return pr!.head!;
+}
+
 // The head an item may merge at, once its gate says so.
 async function gated(
   item: StackItemRow,
@@ -114,7 +141,14 @@ export async function landStack(
       const pr =
         session && item.status === "pr" ? await deps.prOf(session) : null;
       const verdict = canSignOff(pr);
+      const unreviewed =
+        pr &&
+        codeReviewRefusal(pr.codeReview, pr.head, {
+          from: item.restacked_from,
+          to: item.restacked_to,
+        });
       if (!verdict.ok) missing.push(`${itemName(item)}: ${verdict.reason}`);
+      else if (unreviewed) missing.push(`${itemName(item)}: ${unreviewed}`);
       else if (item.error) missing.push(`${itemName(item)}: ${item.error}`);
       hadChecks.set(item.id, pr?.checks !== "none");
     }
@@ -142,7 +176,7 @@ export async function landStack(
         ? await gated(item, deps.beforeMerge, deps, (why) =>
             progress(`Waiting on ${name}: ${why} (${n + 1}/${items.length})`)
           )
-        : undefined;
+        : await reviewedHead(item, deps);
       progress(`Merging ${name} (${n + 1}/${items.length})`);
       await deps.signOff(item.session_id!, head).catch((e: unknown) => {
         throw new Stop(`stopped at ${name}: ${outputOf(e)}`);

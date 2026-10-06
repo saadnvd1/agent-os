@@ -28,10 +28,18 @@ export interface RestackMove {
   onto: string;
   // Retarget the PR to `onto` first (the parent merged and its branch goes).
   retargetPr: number | null;
+  // Told what it's about to push, BEFORE pushing (so a restart in between
+  // can't lose it): origin's head before, the rebased head, and whether
+  // the rebase moved anything but exactly origin's head.
+  beforePush?: (move: { from: string; to: string; unpushed: boolean }) => void;
 }
 
 export type RestackResult =
-  | { ok: true; newTip: string; message: string }
+  | {
+      ok: true;
+      newTip: string;
+      message: string;
+    }
   | { ok: false; error: string };
 
 export function outputOf(error: unknown): string {
@@ -125,6 +133,10 @@ export async function restackBranch(
     ["merge-base", "--is-ancestor", target, "HEAD"],
     wt
   );
+  // The head the rebase started from (its ORIG_HEAD). Only a rebase of
+  // exactly origin's head carries the task's review over; a hand rebase
+  // or a commit made before the rebase doesn't.
+  let started: Awaited<ReturnType<typeof attempt>> | null = null;
   if (!onIt.ok) {
     const rebase = await attempt(
       runner,
@@ -138,11 +150,17 @@ export async function restackBranch(
         `${m.name}: rebasing onto ${target} conflicts. Resolve it with \`cd ${wt} && git rebase --onto ${target} ${m.oldTip}\`, push with \`git push --force-with-lease origin ${m.branch}\`, then restack again.`
       );
     }
+    started = await attempt(runner, "git", ["rev-parse", "ORIG_HEAD"], wt);
   }
 
   if (remote.ok) {
     const head = await attempt(runner, "git", ["rev-parse", "HEAD"], wt);
     if (head.ok && head.out !== remote.out) {
+      m.beforePush?.({
+        from: remote.out,
+        to: head.out,
+        unpushed: !started?.ok || started.out !== remote.out,
+      });
       // --no-verify: CI runs on the PR, and a pre-push suite would stall
       // the server for minutes.
       const push = await attempt(

@@ -81,6 +81,12 @@ const SENSITIVE: { why: string; test: RegExp }[] = [
     test: /(^|\/)((auto|re)?deploy|release|publish)([-_.][^/]*)?$|(^|\/)(deploy|k8s|helm|charts|terraform|infra)\/|\.tf$|(^|\/)(dockerfile|docker-compose[^/]*\.ya?ml|fly\.toml|vercel\.json|netlify\.toml|procfile)$/i,
   },
   {
+    // What merges check a PR's code review with: a change that weakens it
+    // must not merge through it.
+    why: "the code review gate",
+    test: /^(lib\/tasks\/code-review\.ts|scripts\/check-code-review\.ts)$/i,
+  },
+  {
     why: "secrets handling",
     test: /(^|\/)\.env(\.[^/]*)?$|(^|\/)[^/]*(secret|credential|tokenvault|keychain)[^/]*$|\.(pem|key|p12|pfx)$|(^|\/)(id_rsa|id_ed25519|\.npmrc|\.netrc)$|(^|\/)\.ssh\/|^lib\/security\/|^app\/api\/pair\//i,
   },

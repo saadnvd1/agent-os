@@ -16,6 +16,26 @@ import { getProject } from "../projects";
 import { itemName } from "./guard";
 import { outputOf, restackBranch, type Runner } from "./git";
 
+// What a restack moved, for the code-review gate: a task's review of the
+// head it pushed still covers the head AgentOS rebased it to. Not when the
+// worktree had commits the task never pushed (the restack pushes them, so
+// no review covers them). Restacked again without the task pushing, it
+// keeps pointing at the task's own head.
+function restackedHeads(
+  item: StackItemRow,
+  move: { from: string; to: string; unpushed: boolean }
+): Pick<StackItemRow, "restacked_from" | "restacked_to"> {
+  // A retry pushing the commit an interrupted restack already recorded.
+  if (item.restacked_to === move.to && item.restacked_from)
+    return { restacked_from: item.restacked_from, restacked_to: move.to };
+  if (move.unpushed) return { restacked_from: null, restacked_to: null };
+  const ours = item.restacked_to === move.from;
+  return {
+    restacked_from: ours ? item.restacked_from : move.from,
+    restacked_to: move.to,
+  };
+}
+
 export interface RestackDeps {
   runner: Runner;
   notify: (sessionId: string, body: string) => Promise<void>;
@@ -257,6 +277,8 @@ async function restackItems(
         oldTip: item.base_tip,
         onto,
         retargetPr: direct ? prNumber : null,
+        beforePush: (move) =>
+          q.updateItem(db, item.id, restackedHeads(item, move)),
       },
       deps.runner
     );

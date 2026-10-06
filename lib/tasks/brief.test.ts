@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildTaskBrief } from "./brief";
+import { parseCodeReview } from "./code-review";
 
 describe("buildTaskBrief", () => {
   const brief = buildTaskBrief({ branch: "feature/x", baseBranch: "main" });
@@ -8,6 +9,19 @@ describe("buildTaskBrief", () => {
     expect(brief).toContain("git push -u origin feature/x");
     expect(brief).toContain("gh pr create");
     expect(brief).toMatch(/Never merge/);
+  });
+
+  it("reviews before the PR and asks for the section merges check", () => {
+    expect(brief.indexOf("/do-code-review")).toBeLessThan(
+      brief.indexOf("gh pr create")
+    );
+    expect(brief).toMatch(/Fix every Blocking and High finding/);
+    const section = brief.slice(brief.indexOf("## Code review"));
+    expect(
+      parseCodeReview(section.replace("<the full", "4f2a9c1e0b7d <"))
+    ).toEqual({
+      sha: "4f2a9c1e0b7d",
+    });
   });
 
   it("defines the blocked signal the state detector looks for", () => {

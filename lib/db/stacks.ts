@@ -50,11 +50,20 @@ export interface StackItemRow {
   attempts: number;
   // Held by the plan (an open blocker outside the stack): a retry keeps it.
   held_outside: number;
+  // Set when AgentOS restacked the branch: the head the task last pushed,
+  // and the head AgentOS's restack left.
+  restacked_from: string | null;
+  restacked_to: string | null;
 }
 
 export type NewStackItem = Omit<
   StackItemRow,
-  "stack_id" | "pr_number" | "error" | "attempts"
+  | "stack_id"
+  | "pr_number"
+  | "error"
+  | "attempts"
+  | "restacked_from"
+  | "restacked_to"
 >;
 
 type ItemPatch = Partial<
@@ -68,6 +77,8 @@ type ItemPatch = Partial<
     | "note"
     | "error"
     | "attempts"
+    | "restacked_from"
+    | "restacked_to"
   >
 >;
 
