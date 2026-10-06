@@ -59,6 +59,23 @@ describe("authorize", () => {
     }
   );
 
+  it("never trusts a request that came through the Connect tunnel", () => {
+    // A TunnelStream has no address; its Host is the machine's public name.
+    const tunnel = {
+      url: "/api/sessions",
+      headers: { host: "k7q2mz9x.on.runagentos.com" },
+      remoteAddress: undefined,
+      localAddress: undefined,
+    };
+    expect(authorize(tunnel, policy)).toEqual({ ok: false });
+    expect(
+      authorize(
+        { ...tunnel, headers: { ...tunnel.headers, host: "localhost" } },
+        policy
+      )
+    ).toEqual({ ok: false });
+  });
+
   it("refuses a malformed cookie instead of throwing", () => {
     const r = req(
       "192.168.1.20",

@@ -55,8 +55,9 @@ export class Mux {
     return s;
   }
 
-  /** Relay side: a new client connection. */
-  open(meta: OpenMeta): TunnelStream {
+  /** Relay side: a new client connection, or null if the tunnel is going away. */
+  open(meta: OpenMeta): TunnelStream | null {
+    if (this.ws.readyState !== this.ws.OPEN) return null;
     const id = this.next++;
     const s = this.stream(id);
     s.remoteAddress = meta.remote;

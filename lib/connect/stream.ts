@@ -11,6 +11,8 @@ import { encode, Frame } from "./frames";
 export type Send = (frame: Buffer) => boolean;
 
 const MAX_FRAME = 64 * 1024;
+// PAUSE goes out at the 64 KB high-water mark; this is far past it.
+export const MAX_BUFFERED = 4 * 1024 * 1024;
 
 export class TunnelStream extends Duplex {
   private paused = false;
@@ -32,6 +34,13 @@ export class TunnelStream extends Duplex {
 
   /** DATA from the far end. */
   receive(chunk: Buffer): void {
+    // A far end that ignores PAUSE can't make us buffer without limit.
+    if (this.readableLength + chunk.length > MAX_BUFFERED) {
+      // No error object: nothing listens for "error" on these streams, and an
+      // unheard error event would take the whole process down.
+      this.destroy();
+      return;
+    }
     if (!this.push(chunk) && !this.paused) {
       this.paused = true;
       this.send(encode(Frame.PAUSE, this.id));

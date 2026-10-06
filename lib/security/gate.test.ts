@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { IncomingMessage, ServerResponse } from "http";
 import { EventEmitter } from "events";
 import type { Duplex } from "stream";
-import { gateRequest, gateUpgrade } from "./gate";
+import { gateRequest, gateUpgrade, sourceLabel } from "./gate";
 import { TRUST_HEADER, type AuthPolicy } from "./auth";
 
 const policy: AuthPolicy = { tailnet: ["100.64.0.1"], lookup: () => null };
@@ -110,5 +110,13 @@ describe("the device cookie", () => {
     expect(headers["Set-Cookie"]).toMatch(
       /^aos_device=aosd_x; Path=\/; Max-Age=31536000; HttpOnly; SameSite=Lax$/
     );
+  });
+});
+
+describe("sourceLabel", () => {
+  it("labels address-less Connect streams so headers can't pick the bucket", () => {
+    expect(sourceLabel(undefined)).toBe("connect");
+    expect(sourceLabel("")).toBe("connect");
+    expect(sourceLabel("::ffff:10.0.0.9")).toBe("10.0.0.9");
   });
 });

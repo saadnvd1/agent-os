@@ -306,6 +306,26 @@ and API calls or terminal connections made by another website's page.
 | `AGENTOS_TOKEN`                        | A device token for `aos` and the MCP server when they reach AgentOS over a network that needs pairing. |
 | `AGENTOS_AUTH=off`                     | No pairing, for when your own proxy does the login. Anyone who reaches the port gets a shell.          |
 
+## Connect (in development)
+
+AgentOS Connect will let you reach this machine from anywhere through a
+hosted relay, without opening a port. The client half is here, in
+`lib/connect/`. Connect is off unless `~/.agent-os/connect/connect.json`
+exists.
+
+The relay can't read your sessions, and you can check that in this code
+rather than take it on trust:
+
+- Your machine generates the TLS key for its Connect address and never sends
+  it anywhere (`lib/connect/config.ts`, `serve.ts`). Phones complete TLS with
+  this process, not with the relay.
+- The relay only sees the server name a connection asks for, then passes the
+  encrypted bytes down your machine's tunnel (`lib/connect/frames.ts`,
+  `mux.ts`).
+- Everything that arrives through the tunnel goes through the same
+  paired-device check as Wi-Fi, and is never treated as this machine
+  (`lib/security/auth.test.ts`).
+
 ## Development
 
 ```bash
