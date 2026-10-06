@@ -3,7 +3,7 @@
   "version": "0.3.1",
   "description": "Self-hosted web UI for managing Claude Code sessions",
   "bin": {
-    "agent-os": "./scripts/agent-os"
+    "agent-os": "scripts/agent-os"
   },
   "files": [
     "app/",
