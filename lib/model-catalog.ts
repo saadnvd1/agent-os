@@ -5,29 +5,28 @@ export interface ModelOption {
   label: string;
 }
 
+// Claude Code's family aliases always resolve to the newest model in each.
 const CLAUDE_MODEL_OPTIONS: ModelOption[] = [
   { value: "sonnet", label: "Sonnet" },
   { value: "opus", label: "Opus" },
+  { value: "fable", label: "Fable" },
   { value: "haiku", label: "Haiku" },
 ];
 
+// Codex models that work with a ChatGPT sign-in, checked 2026-10-05.
+// GPT-6 Astra and GPT-6.1 Sol are API-key only; GPT-5.4 retired 2026-08-31.
 const CODEX_MODEL_OPTIONS: ModelOption[] = [
-  { value: "gpt-5.4", label: "GPT-5.4" },
-  { value: "gpt-5.4-mini", label: "GPT-5.4 mini" },
-  { value: "gpt-5.4-nano", label: "GPT-5.4 nano" },
-  { value: "gpt-5.2-codex", label: "GPT-5.2-Codex" },
+  { value: "gpt-6-luna", label: "GPT-6 Luna" },
+  { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+  { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
 ];
 
+// Current Gemini models as of 2026-10 (ai.google.dev/gemini-api/docs/models).
+// The 2.5 family and the 3.x previews are superseded or shut down.
 const GEMINI_MODEL_OPTIONS: ModelOption[] = [
   { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
-  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview" },
-  {
-    value: "gemini-3.1-flash-lite-preview",
-    label: "Gemini 3.1 Flash-Lite Preview",
-  },
-  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite" },
+  { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
+  { value: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite" },
 ];
 
 const MODEL_OPTIONS_BY_AGENT: Partial<Record<AgentType, ModelOption[]>> = {
@@ -38,8 +37,8 @@ const MODEL_OPTIONS_BY_AGENT: Partial<Record<AgentType, ModelOption[]>> = {
 
 const DEFAULT_MODEL_BY_AGENT: Partial<Record<AgentType, string>> = {
   claude: "sonnet",
-  codex: "gpt-5.4",
-  gemini: "gemini-2.5-pro",
+  codex: "gpt-6-luna",
+  gemini: "gemini-3.8-flash",
 };
 
 export function getModelOptions(agentType: AgentType): ModelOption[] {
