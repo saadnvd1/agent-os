@@ -2,23 +2,39 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  ApprovalDecision,
+  ChatAccess,
   ChatCommand,
   ChatImage,
   ChatItem,
   ChatModel,
   ChatServerMessage,
   ChatState,
+  UndoPreview,
 } from "@/lib/chat/events";
 
 // One chat conversation over its WebSocket: a snapshot, then live items and
 // streamed text. Reconnects when the socket drops (e.g. a phone waking up).
-export function useChat(sessionId: string) {
+export function useChat(
+  sessionId: string,
+  // Called with a message's text once it's undone, to edit and resend.
+  onUndone?: (text: string) => void
+) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [state, setState] = useState<ChatState>("idle");
   const [connected, setConnected] = useState(false);
   const [commands, setCommands] = useState<ChatCommand[]>([]);
   const [models, setModels] = useState<ChatModel[]>([]);
   const [model, setModelState] = useState("");
+  const [access, setAccessState] = useState<ChatAccess>("full");
+  const [undoPreview, setUndoPreview] = useState<{
+    from: string;
+    preview: UndoPreview | null; // null while it loads
+  } | null>(null);
+  const onUndoneRef = useRef(onUndone);
+  useEffect(() => {
+    onUndoneRef.current = onUndone;
+  });
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -43,6 +59,12 @@ export function useChat(sessionId: string) {
           setCommands(m.commands);
           setModels(m.models);
           setModelState(m.model);
+          setAccessState(m.access);
+        } else if (m.type === "undo_preview") {
+          setUndoPreview({ from: m.from, preview: m.preview });
+        } else if (m.type === "undone") {
+          setUndoPreview(null);
+          onUndoneRef.current?.(m.text);
         } else if (m.type === "item") {
           setItems((prev) => {
             const i = prev.findIndex((p) => p.id === m.item.id);
@@ -99,6 +121,21 @@ export function useChat(sessionId: string) {
     wsRef.current?.send(JSON.stringify({ type: "set_model", model: value }));
   }, []);
 
+  const setAccess = useCallback((value: ChatAccess) => {
+    setAccessState(value);
+    wsRef.current?.send(JSON.stringify({ type: "set_access", access: value }));
+  }, []);
+
+  const respond = useCallback((id: string, answer: ApprovalDecision) => {
+    wsRef.current?.send(JSON.stringify({ type: "respond", id, ...answer }));
+  }, []);
+
+  // A dry run first, so the reader sees what an undo would change.
+  const undo = useCallback((from: string, dryRun: boolean) => {
+    setUndoPreview({ from, preview: null });
+    wsRef.current?.send(JSON.stringify({ type: "undo", from, dryRun }));
+  }, []);
+
   return {
     items,
     state,
@@ -109,5 +146,11 @@ export function useChat(sessionId: string) {
     send,
     interrupt,
     setModel,
+    access,
+    setAccess,
+    respond,
+    undo,
+    undoPreview,
+    clearUndo: () => setUndoPreview(null),
   };
 }

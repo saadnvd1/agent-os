@@ -60,3 +60,6 @@ CLAUDE.md
 master.md
 progress.md
 .git-evening
+
+# Agent worktrees
+.claude/worktrees/

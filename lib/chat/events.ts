@@ -31,13 +31,37 @@ export interface FileDiff {
   after: string;
 }
 
+// What the agent may do without asking: ask before anything not already
+// allowed, accept file edits on its own, or do everything.
+export type ChatAccess = "ask" | "edits" | "full";
+export const CHAT_ACCESS: ChatAccess[] = ["ask", "edits", "full"];
+
+export interface ChatQuestion {
+  question: string;
+  header: string;
+  multiSelect: boolean;
+  options: { label: string; description: string }[];
+}
+
+// The reader's answer to an approval card.
+export type ApprovalDecision =
+  | { decision: "allow" | "always" | "deny" }
+  | { decision: "answer"; answers: Record<string, string> };
+
 interface Base {
   id: string;
   createdAt: number;
 }
 
 export type ChatItem =
-  | (Base & { kind: "user"; text: string; images?: ChatImage[]; from?: string })
+  | (Base & {
+      kind: "user";
+      text: string;
+      images?: ChatImage[];
+      from?: string;
+      // The provider's id for this message, to undo file changes back to it.
+      checkpoint?: string;
+    })
   | (Base & { kind: "assistant"; text: string; streaming?: boolean })
   | (Base & { kind: "reasoning"; text: string; streaming?: boolean })
   | (Base & {
@@ -64,9 +88,38 @@ export type ChatItem =
     })
   | (Base & { kind: "command_output"; text: string })
   | (Base & { kind: "compacted"; trigger?: "manual" | "auto" })
-  | (Base & { kind: "error"; message: string });
+  | (Base & { kind: "error"; message: string })
+  | (Base & {
+      kind: "approval";
+      toolName: string;
+      title: string;
+      input: unknown;
+      diff?: FileDiff;
+      // Present when the agent is asking the reader questions, not for access.
+      questions?: ChatQuestion[];
+      // Whether "always allow" is on offer.
+      canAlways: boolean;
+      status: "pending" | "allowed" | "denied" | "answered" | "expired";
+    })
+  | (Base & {
+      kind: "undo";
+      // The user message it went back to; it and everything after are undone.
+      from: string;
+      filesChanged: number;
+      insertions?: number;
+      deletions?: number;
+    });
 
-export type ChatState = "idle" | "running" | "error";
+// Waiting: a turn is paused on the reader (an approval or a question).
+export type ChatState = "idle" | "running" | "waiting" | "error";
+
+export interface UndoPreview {
+  canUndo: boolean;
+  error?: string;
+  files: string[];
+  insertions?: number;
+  deletions?: number;
+}
 
 // What a driver emits while a conversation runs.
 export type DriverEvent =
@@ -88,10 +141,16 @@ export type ChatServerMessage =
       commands: ChatCommand[];
       models: ChatModel[];
       model: string;
-    };
+      access: ChatAccess;
+    }
+  | { type: "undo_preview"; from: string; preview: UndoPreview }
+  | { type: "undone"; from: string; text: string };
 
 // What a browser sends.
 export type ChatClientMessage =
   | { type: "send"; text: string; images?: ChatImage[] }
   | { type: "interrupt" }
-  | { type: "set_model"; model: string };
+  | { type: "set_model"; model: string }
+  | { type: "set_access"; access: ChatAccess }
+  | ({ type: "respond"; id: string } & ApprovalDecision)
+  | { type: "undo"; from: string; dryRun?: boolean };

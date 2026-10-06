@@ -7,7 +7,7 @@ export default defineConfig({
   },
   test: {
     include: ["**/*.test.ts"],
-    exclude: ["node_modules/**", ".next/**", "src-tauri/**"],
+    exclude: ["**/node_modules/**", ".next/**", "src-tauri/**", ".claude/**"],
     setupFiles: ["./vitest.setup.ts"],
     // One database file per worker: the db module opens it at import time.
     pool: "forks",

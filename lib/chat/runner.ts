@@ -8,64 +8,32 @@ import os from "os";
 import { db, type Session } from "../db";
 import { agentEnv } from "../agents/launch";
 import { BUS_BRIEF } from "../agents/brief";
-import { resolveModelForAgent } from "../model-catalog";
 import { chatDriverFor } from "./drivers";
-import type { ChatConversation } from "./driver";
 import type {
-  ChatCommand,
+  ApprovalDecision,
   ChatImage,
-  ChatItem,
-  ChatModel,
-  ChatServerMessage,
   ChatState,
+  UndoPreview,
 } from "./events";
-import { listItems, saveItem, settle } from "./store";
+import {
+  emit,
+  getSession,
+  record,
+  registry,
+  type Listener,
+  type Live,
+} from "./registry";
+import {
+  capsKey,
+  chatModel,
+  emitCapabilities,
+  sendCapabilities,
+} from "./settings";
+import { listItems, settle } from "./store";
+
+export { setChatAccess, setChatModel } from "./settings";
 
 const IDLE_CLOSE_MS = 30 * 60 * 1000;
-
-interface Live {
-  conversation: ChatConversation;
-  state: ChatState;
-  streaming: Map<string, ChatItem>;
-  idleTimer?: NodeJS.Timeout;
-}
-
-type Listener = (m: ChatServerMessage) => void;
-
-// Shared across every module instance in the process (custom server and the
-// Next.js route bundles each load their own copy of this file).
-interface Capabilities {
-  commands: ChatCommand[];
-  models: ChatModel[];
-  terminalOnly: Set<string>;
-  at: number;
-}
-
-interface Registry {
-  live: Map<string, Live>;
-  listeners: Map<string, Set<Listener>>;
-  // What each agent offers per folder: commands, skills, models.
-  caps: Map<string, Capabilities>;
-}
-const g = globalThis as unknown as { __agentosChat?: Registry };
-const registry: Registry = (g.__agentosChat ??= {
-  live: new Map(),
-  listeners: new Map(),
-  caps: new Map(),
-});
-registry.caps ??= new Map();
-
-function emit(sessionId: string, m: ChatServerMessage): void {
-  registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
-}
-
-function getSession(sessionId: string): Session {
-  const s = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
-    | Session
-    | undefined;
-  if (!s) throw new Error("Session not found");
-  return s;
-}
 
 function setState(sessionId: string, live: Live, state: ChatState): void {
   live.state = state;
@@ -74,11 +42,6 @@ function setState(sessionId: string, live: Live, state: ChatState): void {
   if (state === "idle") {
     live.idleTimer = setTimeout(() => stopChat(sessionId), IDLE_CLOSE_MS);
   }
-}
-
-function record(sessionId: string, item: ChatItem): void {
-  saveItem(sessionId, item);
-  emit(sessionId, { type: "item", item });
 }
 
 async function pump(sessionId: string, live: Live): Promise<void> {
@@ -95,11 +58,14 @@ async function pump(sessionId: string, live: Live): Promise<void> {
         emit(sessionId, { type: "delta", id: e.id, text: e.text });
       } else if (e.type === "resume_id") {
         // The agent's own conversation id, so the terminal can resume it too.
+        // An undo's resume point is used up once the conversation is back.
         db.prepare(
-          `UPDATE sessions SET claude_session_id = ? WHERE id = ?`
+          `UPDATE sessions SET claude_session_id = ?, chat_resume_at = NULL WHERE id = ?`
         ).run(e.id, sessionId);
       } else if (e.type === "state") {
-        setState(sessionId, live, e.state);
+        // A stopped turn can still settle an approval after it ended.
+        if (e.state !== "running" || live.state !== "idle")
+          setState(sessionId, live, e.state);
       } else if (e.type === "commands" || e.type === "terminal_only") {
         const session = getSession(sessionId);
         const caps = registry.caps.get(capsKey(session));
@@ -139,6 +105,8 @@ function ensureLive(session: Session): Live {
     cwd: session.working_directory.replace(/^~/, os.homedir()),
     model: chatModel(session),
     resumeId: session.claude_session_id,
+    resumeAt: session.chat_resume_at,
+    access: session.chat_access ?? "full",
     systemAppend: BUS_BRIEF,
     env: agentEnv(session.id),
   });
@@ -155,19 +123,80 @@ export function sendChat(
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
   const live = ensureLive(getSession(sessionId));
+  const checkpoint = live.conversation.send(text, input.images);
   record(sessionId, {
     id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     kind: "user",
     text,
     images: input.images,
     from: input.from,
+    checkpoint,
     createdAt: Date.now(),
   });
   setState(sessionId, live, "running");
   db.prepare(
     `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
   ).run(sessionId);
-  live.conversation.send(text, input.images);
+}
+
+export function respondChat(
+  sessionId: string,
+  id: string,
+  answer: ApprovalDecision
+): void {
+  registry.live.get(sessionId)?.conversation.respond(id, answer);
+}
+
+// Puts files back as they were before a message, and continues the
+// conversation from just before it. A dry run only says what would change.
+export async function undoChat(
+  sessionId: string,
+  from: string,
+  dryRun: boolean,
+  reply: Listener
+): Promise<void> {
+  const target = listItems(sessionId).find((i) => i.id === from);
+  if (target?.kind !== "user" || !target.checkpoint)
+    throw new Error("That message can't be undone");
+  const running = registry.live.get(sessionId)?.state;
+  if (running === "running" || running === "waiting")
+    throw new Error("Stop the agent before undoing");
+  const live = ensureLive(getSession(sessionId));
+  const result = await live.conversation.undo(target.checkpoint, dryRun);
+  const preview: UndoPreview = {
+    canUndo: result.canUndo,
+    error: result.error,
+    files: result.files,
+    insertions: result.insertions,
+    deletions: result.deletions,
+  };
+  if (dryRun || !result.canUndo) {
+    reply({ type: "undo_preview", from, preview });
+    return;
+  }
+  record(sessionId, {
+    id: `undo-${Date.now()}`,
+    kind: "undo",
+    from,
+    filesChanged: result.files.length,
+    insertions: result.insertions,
+    deletions: result.deletions,
+    createdAt: Date.now(),
+  });
+  if (result.resumeAt !== undefined) {
+    // The next message starts the conversation again from before this one.
+    stopChat(sessionId);
+    if (result.resumeAt === null)
+      db.prepare(
+        `UPDATE sessions SET claude_session_id = NULL, chat_resume_at = NULL WHERE id = ?`
+      ).run(sessionId);
+    else
+      db.prepare(`UPDATE sessions SET chat_resume_at = ? WHERE id = ?`).run(
+        result.resumeAt,
+        sessionId
+      );
+  }
+  reply({ type: "undone", from, text: target.text });
 }
 
 export async function interruptChat(sessionId: string): Promise<void> {
@@ -201,104 +230,4 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
   if (!set) registry.listeners.set(sessionId, (set = new Set()));
   set.add(listener);
   return () => set?.delete(listener);
-}
-
-// ── Commands, skills and models ──────────────────────────────────────────
-
-const CAPS_TTL_MS = 10 * 60 * 1000;
-
-// Commands that only make sense in a terminal UI, hidden from chat when the
-// agent doesn't say so itself.
-const TERMINAL_ONLY = new Set([
-  "exit",
-  "quit",
-  "statusline",
-  "terminal-setup",
-  "vim",
-  "color",
-  "theme",
-  "ide",
-  "heapdump",
-  "config",
-  "resume",
-  "login",
-  "logout",
-]);
-
-const capsKey = (s: Session) => `${s.agent_type}:${s.working_directory}`;
-
-// The session's own model when it has one; the agent's default otherwise.
-function chatModel(session: Session): string {
-  return (
-    session.model?.trim() || resolveModelForAgent(session.agent_type, null)
-  );
-}
-
-function visibleCommands(caps: Capabilities): ChatCommand[] {
-  return caps.commands.filter(
-    (c) =>
-      !c.name.startsWith("__") &&
-      !caps.terminalOnly.has(c.name) &&
-      !TERMINAL_ONLY.has(c.name)
-  );
-}
-
-function emitCapabilities(session: Session, listener?: Listener): void {
-  const caps = registry.caps.get(capsKey(session));
-  if (!caps) return;
-  const m: ChatServerMessage = {
-    type: "capabilities",
-    commands: visibleCommands(caps),
-    models: caps.models,
-    model: chatModel(session),
-  };
-  if (listener) listener(m);
-  else emit(session.id, m);
-}
-
-async function loadCapabilities(session: Session): Promise<void> {
-  const key = capsKey(session);
-  const cached = registry.caps.get(key);
-  if (cached && Date.now() - cached.at < CAPS_TTL_MS) return;
-  const driver = chatDriverFor(session.agent_type);
-  if (!driver) return;
-  const found = await driver.discover({
-    cwd: session.working_directory.replace(/^~/, os.homedir()),
-    env: agentEnv(session.id),
-  });
-  registry.caps.set(key, {
-    ...found,
-    terminalOnly: cached?.terminalOnly ?? new Set(),
-    at: Date.now(),
-  });
-}
-
-// Sends what the agent offers to one watcher, loading it if needed.
-export async function sendCapabilities(
-  sessionId: string,
-  listener: Listener
-): Promise<void> {
-  const session = getSession(sessionId);
-  if (session.host_id && session.host_id !== "local") return;
-  try {
-    await loadCapabilities(session);
-  } catch (error) {
-    console.error("Could not load chat commands:", error);
-  }
-  emitCapabilities(session, listener);
-}
-
-// Switches the model now if a conversation is live, and for every next start.
-export async function setChatModel(
-  sessionId: string,
-  model: string
-): Promise<void> {
-  const value = model.trim();
-  if (!value) return;
-  db.prepare(`UPDATE sessions SET model = ? WHERE id = ?`).run(
-    value,
-    sessionId
-  );
-  await registry.live.get(sessionId)?.conversation.setModel(value);
-  emitCapabilities(getSession(sessionId));
 }
