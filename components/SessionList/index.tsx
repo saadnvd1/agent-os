@@ -15,7 +15,7 @@ import { HostsDialog, ElsewhereTmuxList } from "@/components/Hosts";
 import {
   WorkspaceGroups,
   WorkspaceNameDialog,
-  NeedsYouList,
+  NeedsYouPill,
 } from "@/components/Workspaces";
 import { useCreateWorkspace } from "@/data/workspaces";
 import { GroupSection } from "./GroupSection";
@@ -256,12 +256,10 @@ export function SessionList({
           {/* Content - Projects view */}
           {!isInitialLoading && !hasError && useProjectsView && (
             <>
-              <NeedsYouList
+              <NeedsYouPill
                 sessions={sessions}
                 sessionStatuses={sessionStatuses}
-                projectNames={Object.fromEntries(
-                  projects.map((p) => [p.id, p.name])
-                )}
+                activeSessionId={activeSessionId}
                 onSelect={onSelect}
               />
               <WorkspaceGroups

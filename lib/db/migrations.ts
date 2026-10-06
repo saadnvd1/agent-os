@@ -336,6 +336,14 @@ const migrations: Migration[] = [
       db.exec(`ALTER TABLE sessions ADD COLUMN chat_resume_at TEXT`);
     },
   },
+  {
+    id: 22,
+    name: "add_last_seen",
+    up: (db) => {
+      // When the reader last looked, so "needs you" means something new.
+      db.exec(`ALTER TABLE sessions ADD COLUMN last_seen_at TEXT`);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
