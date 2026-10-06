@@ -19,6 +19,8 @@ export interface ProjectRowModel {
   // The project's only session: the row opens it instead of expanding.
   single: RowTarget | null;
   active: boolean;
+  // Created recently: shown even before it has ever run.
+  fresh: boolean;
   sessionCount: number;
 }
 
@@ -31,6 +33,14 @@ export interface ProjectRowInput {
     { status: SessionStatus; title?: string; task?: string | null } | undefined
   >;
   activeSessionId?: string;
+  now?: number;
+}
+
+const FRESH_MS = 24 * 60 * 60 * 1000;
+
+// SQLite's datetime('now') is UTC without a zone marker.
+function createdAt(s: Session): number {
+  return Date.parse(`${s.created_at?.replace(" ", "T")}Z`);
 }
 
 // One row per project: the busiest state among its
@@ -69,6 +79,9 @@ export function projectRow(input: ProjectRowInput): ProjectRowModel {
     subtitle,
     single: only?.target ?? null,
     active: input.sessions.some((s) => s.id === input.activeSessionId),
+    fresh: input.sessions.some(
+      (s) => (input.now ?? Date.now()) - createdAt(s) < FRESH_MS
+    ),
     sessionCount: rows.length,
   };
 }
