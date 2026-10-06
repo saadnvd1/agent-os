@@ -30,6 +30,7 @@ import {
   type AccessPolicy,
 } from "./lib/security/net";
 import { authPolicy, gateRequest, gateUpgrade } from "./lib/security/gate";
+import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
 import os from "os";
 
@@ -170,7 +171,11 @@ app.prepare().then(() => {
       return;
     }
     if (!gateUpgrade(request, socket, auth)) return;
-    const { pathname } = parse(request.url || "");
+    const pathname = upgradePath(request.url);
+    if (pathname === null) {
+      socket.destroy();
+      return;
+    }
 
     if (pathname === "/ws/chat") {
       chatWss.handleUpgrade(request, socket, head, (ws) => {
