@@ -11,10 +11,6 @@ let outside: string;
 let project: Project;
 
 beforeAll(() => {
-  // A git hook's environment would point every git call at this repo.
-  for (const key of Object.keys(process.env)) {
-    if (key.startsWith("GIT_")) delete process.env[key];
-  }
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pub-")));
   repo = path.join(base, "repo");
   fs.mkdirSync(repo);
