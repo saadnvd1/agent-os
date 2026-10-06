@@ -27,8 +27,10 @@
     "LICENSE"
   ],
   "scripts": {
+    "predev": "node scripts/ensure-native.mjs",
     "dev": "tsx server.ts",
     "build": "next build",
+    "prestart": "node scripts/ensure-native.mjs",
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
