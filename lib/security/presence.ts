@@ -4,10 +4,11 @@
  * use, two minutes. Agents on this machine can reach every route, but they
  * can't make Saad's platform authenticator sign.
  *
- * Adding a passkey: the very first is trust-on-first-use, and every
- * registration raises an ask so a rogue one can't go unseen. After that, a
- * new passkey needs an enrollment code minted by an assertion from an
- * existing one.
+ * Adding a passkey: the very first on this install is trust-on-first-use,
+ * once (revoking every passkey doesn't re-open it; `agent-os passkeys
+ * reset` does). Every registration and revoke raises an ask so a rogue one
+ * can't go unseen. After the first, a new passkey needs an enrollment code
+ * minted by an assertion from an existing one.
  */
 
 import crypto from "crypto";
@@ -23,8 +24,9 @@ import {
 } from "@simplewebauthn/server";
 import { getDb } from "@/lib/db";
 import {
-  activePasskeyCount,
   activePasskeys,
+  markBootstrapped,
+  passkeysBootstrapped,
   addPasskey,
   getPasskey,
   touchPasskey,
@@ -222,10 +224,10 @@ function enrollmentValid(code: string): boolean {
 }
 
 function registrationBinding(enrollCode?: string): string {
-  if (activePasskeyCount() === 0) return "bootstrap";
+  if (!passkeysBootstrapped()) return "bootstrap";
   if (!enrollCode || !enrollmentValid(enrollCode))
     throw new PresenceError(
-      "Adding a passkey needs a code from a device that already has one (Devices > Add a passkey).",
+      "Adding a passkey needs a code from a device that already has one (Devices > Passkeys). With none left, run `agent-os passkeys reset` on the machine.",
       "enroll"
     );
   return `enroll:${hash(enrollCode)}`;
@@ -284,10 +286,13 @@ export async function verifyRegistration(
   if (!result.verified) throw new PresenceError("Passkey registration failed");
   return getDb().transaction(() => {
     takeChallenge(challenge, "register", "register", binding, rp.rpID);
-    if (binding === "bootstrap" && activePasskeyCount() > 0)
-      throw new PresenceError(
-        "A passkey was added meanwhile; get a code from it"
-      );
+    if (binding === "bootstrap") {
+      if (passkeysBootstrapped())
+        throw new PresenceError(
+          "A passkey was added meanwhile; get a code from it"
+        );
+      markBootstrapped();
+    }
     if (binding !== "bootstrap") {
       const used = getDb()
         .prepare(

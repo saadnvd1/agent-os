@@ -9,6 +9,19 @@ import {
   verifyPresence,
 } from "./presence";
 import { softAuthenticator } from "./soft-authenticator";
+import { resetPasskeys, revokePasskey } from "./passkeys";
+import { resetRefusal } from "./passkeys-reset";
+
+describe("agent-os passkeys reset", () => {
+  it("refuses inside an AgentOS session, an agent's shell, or without a terminal", () => {
+    expect(resetRefusal({ AGENTOS_SESSION_ID: "s1" }, true)).toMatch(
+      /inside an AgentOS session/
+    );
+    expect(resetRefusal({ CLAUDECODE: "1" }, true)).toMatch(/agent's shell/);
+    expect(resetRefusal({}, false)).toMatch(/interactive terminal/);
+    expect(resetRefusal({}, true)).toBeNull();
+  });
+});
 
 const headers = (origin: string | null, host: string) =>
   new Headers({ host, ...(origin ? { origin } : {}) });
@@ -16,7 +29,8 @@ const LOCAL = relyingParty(headers("http://localhost:3011", "localhost:3011"));
 
 beforeEach(() => {
   getDb().exec(
-    `DELETE FROM passkeys; DELETE FROM presence_challenges; DELETE FROM passkey_enrollments;`
+    `DELETE FROM passkeys; DELETE FROM presence_challenges; DELETE FROM passkey_enrollments;
+     DELETE FROM settings WHERE key = 'passkeys_bootstrapped_at';`
   );
 });
 
@@ -111,6 +125,26 @@ describe("an assertion proves presence for exactly one thing", () => {
 });
 
 describe("adding a passkey", () => {
+  it("never re-opens trust-on-first-use once used, even with none left", async () => {
+    const key = softAuthenticator();
+    key.register();
+    revokePasskey(key.id);
+    await expect(registrationOptions(LOCAL)).rejects.toThrow(
+      /needs a code.*agent-os passkeys reset/
+    );
+    // Only the reset a person runs opens it again.
+    resetPasskeys();
+    await expect(registrationOptions(LOCAL)).resolves.toHaveProperty(
+      "challenge"
+    );
+  });
+
+  it("refuses a second passkey without an enrollment code", async () => {
+    softAuthenticator().register();
+    await expect(registrationOptions(LOCAL)).rejects.toThrow(PresenceError);
+    await expect(registrationOptions(LOCAL, "")).rejects.toThrow(PresenceError);
+  });
+
   it("is open for the very first one only, then needs a code", async () => {
     await expect(registrationOptions(LOCAL)).resolves.toHaveProperty(
       "challenge"

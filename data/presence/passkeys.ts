@@ -14,9 +14,11 @@ export function usePasskeysQuery(enabled = true) {
   return useQuery({
     queryKey: passkeyKeys.all,
     queryFn: async () =>
-      json<{ passkeys: PasskeyView[]; host: string | null }>(
-        await fetch("/api/presence/passkeys")
-      ),
+      json<{
+        passkeys: PasskeyView[];
+        host: string | null;
+        bootstrapped: boolean;
+      }>(await fetch("/api/presence/passkeys")),
     enabled,
   });
 }
@@ -45,25 +47,22 @@ export function useEnrollCode() {
   });
 }
 
-// Tries without a passkey first (allowed only for the last one, from this
-// machine), then with one.
+// Always with a passkey, the last one included.
 export function useRevokePasskey() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const del = (body?: object) =>
-        fetch(`/api/presence/passkeys/${id}`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: body ? JSON.stringify(body) : undefined,
-        });
-      const first = await del();
-      if (first.ok) return;
       const assertion = await provePresence({
         purpose: "revoke",
         passkeyId: id,
       });
-      await json(await del({ assertion }));
+      await json(
+        await fetch(`/api/presence/passkeys/${id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assertion }),
+        })
+      );
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: passkeyKeys.all }),

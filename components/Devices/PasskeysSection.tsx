@@ -77,11 +77,17 @@ export function PasskeysSection({ open }: { open: boolean }) {
           </Button>
         </div>
       ))}
-      {!here ? (
+      {data?.bootstrapped && keys.length === 0 ? (
+        <p className="text-muted-foreground text-xs">
+          No passkeys left. To start over, run{" "}
+          <span className="font-mono">agent-os passkeys reset</span> in a
+          terminal on the machine running AgentOS.
+        </p>
+      ) : !here ? (
         <p className="text-muted-foreground text-xs">{NO_PASSKEYS_HERE}</p>
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row">
-          {!mineHere && keys.length > 0 && (
+          {!mineHere && data?.bootstrapped && (
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -92,7 +98,7 @@ export function PasskeysSection({ open }: { open: boolean }) {
           {!mineHere && (
             <Button
               className={btn}
-              disabled={add.isPending || (keys.length > 0 && !code.trim())}
+              disabled={add.isPending || (!!data?.bootstrapped && !code.trim())}
               onClick={() =>
                 add.mutate(code.trim() || undefined, {
                   onError: fail,

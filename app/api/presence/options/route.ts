@@ -5,7 +5,7 @@ import {
   relyingParty,
   type PresencePurpose,
 } from "@/lib/security/presence";
-import { activePasskeyCount } from "@/lib/security/passkeys";
+import { passkeysBootstrapped } from "@/lib/security/passkeys";
 import { refusalResponse } from "@/lib/security/presence-http";
 import { presenceBinding } from "@/lib/orchestrator/presence-binding";
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     if (!options)
       return NextResponse.json({
         needsPasskey: true,
-        canBootstrap: activePasskeyCount() === 0,
+        canBootstrap: !passkeysBootstrapped(),
       });
     return NextResponse.json({ options });
   } catch (error) {

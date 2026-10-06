@@ -11,6 +11,7 @@ import { getOrchestrator } from "./home";
 
 export interface AskView {
   id: number;
+  subject: string;
   kind: AskKind;
   title: string;
   why: string;
@@ -59,6 +60,7 @@ export function orchestratorOverview(): OrchestratorOverview[] {
       const detail = plain(a.detail);
       return {
         id: a.id,
+        subject: a.subject,
         kind: a.kind,
         title: a.title,
         why: detail.split("\n")[0] ?? "",

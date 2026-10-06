@@ -292,9 +292,15 @@ approved`). An approval covers that one item only: a held task's approval
   authenticator sign, and neither `aos` nor the orchestrator's tools can
   answer or resume. Passkeys belong to the host they were made on
   (localhost, the tailnet's https name, the Connect host), so add one on
-  each in Devices: the first ever is free, every later one needs a code
-  from a device that has one, and each new passkey becomes an ask (Decline
-  revokes it). Browsers offer passkeys only over https or on localhost.
+  each in Devices. The first one on an install is trusted on first use,
+  once: every later one needs a code from a device that has one, even after
+  every passkey is revoked. Revoking always needs a passkey, the last one
+  included, and every add or revoke becomes an ask (declining a new one
+  revokes it, with your passkey). If none is left, run `agent-os passkeys
+reset` yourself in a terminal on the machine: it refuses inside an
+  AgentOS session or an agent's shell, asks you to type a confirmation, and
+  makes the next passkey first-use again. Browsers offer passkeys only over
+  https or on localhost.
 - **Header line and Pause:** its row reads like "Orchestrator · 3 running ·
   1 in review · 1 ask" from live data, and tapping it opens the chat, where
   the same line carries Pause/Resume. While paused it acts on nothing:

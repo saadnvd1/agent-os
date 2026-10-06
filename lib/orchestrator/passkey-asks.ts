@@ -1,11 +1,21 @@
-// Every new passkey goes on Saad's asks list in each workspace with an
-// orchestrator, so one he didn't make can't go unseen. Decline revokes it.
+// Every passkey added or revoked goes on Saad's asks list in each workspace
+// with an orchestrator, so one he didn't make or remove can't go unseen.
+// Declining a new passkey's ask revokes it.
 
 import type { PasskeyRow } from "../security/passkeys";
-import { AskRefused, passkeySubject, raiseAsk } from "./asks";
+import {
+  AskRefused,
+  passkeySubject,
+  raiseAsk,
+  revokedPasskeySubject,
+} from "./asks";
 import { listOrchestrators } from "./home";
 
-export function raisePasskeyAsks(key: PasskeyRow, place: string): number {
+export function raisePasskeyAsks(
+  key: Pick<PasskeyRow, "id" | "name" | "rp_id">,
+  place: string,
+  event: "registered" | "revoked" | "reset" = "registered"
+): number {
   const at = new Date().toLocaleString("en-US", {
     month: "short",
     day: "numeric",
@@ -18,10 +28,24 @@ export function raisePasskeyAsks(key: PasskeyRow, place: string): number {
     try {
       raiseAsk({
         workspaceId: o.workspace_id,
-        subject: passkeySubject(key.id),
+        ...(event === "registered"
+          ? {
+              subject: passkeySubject(key.id),
+              title: `New passkey registered on ${place} at ${at}`,
+              detail: `"${key.name}" for ${key.rp_id}. If this wasn't you, Decline (with your passkey) to revoke it.`,
+            }
+          : {
+              subject: revokedPasskeySubject(key.id),
+              title:
+                event === "reset"
+                  ? `All passkeys were reset on ${place} at ${at}`
+                  : `Passkey revoked on ${place} at ${at}`,
+              detail:
+                event === "reset"
+                  ? "Someone ran agent-os passkeys reset. The next passkey added is trusted on first use. If this wasn't you, check this machine."
+                  : `"${key.name}" for ${key.rp_id}. If this wasn't you, check Devices.`,
+            }),
         kind: "passkey",
-        title: `New passkey registered on ${place} at ${at}`,
-        detail: `"${key.name}" for ${key.rp_id}. If this wasn't you, Decline to revoke it.`,
       });
       n++;
     } catch (error) {

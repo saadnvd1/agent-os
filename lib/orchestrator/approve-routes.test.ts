@@ -37,13 +37,16 @@ const pauseRoute =
   await import("@/app/api/workspaces/[id]/orchestrator/pause/route");
 const optionsRoute = await import("@/app/api/presence/options/route");
 const revokeRoute = await import("@/app/api/presence/passkeys/[id]/route");
+const registerOptionsRoute =
+  await import("@/app/api/presence/register/options/route");
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-approve-"));
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {
-  db.exec(`DELETE FROM passkeys; DELETE FROM presence_challenges;`);
+  db.exec(`DELETE FROM passkeys; DELETE FROM presence_challenges;
+    DELETE FROM settings WHERE key = 'passkeys_bootstrapped_at';`);
 });
 
 type Who = { via?: string; device?: string };
@@ -193,7 +196,7 @@ describe("Pause and Resume", () => {
 });
 
 describe("a new passkey", () => {
-  it("lands on the asks list, and Decline revokes it everywhere", async () => {
+  it("lands on the asks list; declining it revokes it everywhere, with a passkey", async () => {
     const t = setup();
     const other = seedWorkspace();
     ensureOrchestrator(other.workspace.id);
@@ -202,22 +205,39 @@ describe("a new passkey", () => {
     expect(raisePasskeyAsks(row, "this machine")).toBeGreaterThanOrEqual(2);
     const ask = openAsks(t.w).find((a) => a.kind === "passkey")!;
     expect(ask.title).toMatch(/^New passkey registered on this machine at /);
-    const res = await askRoute.POST(
-      request(
-        `/api/workspaces/${t.w}/orchestrator/asks/${ask.id}`,
-        { action: "decline" },
-        LOOPBACK
-      ),
-      { params: Promise.resolve({ id: t.w, askId: String(ask.id) }) }
-    );
-    expect(res.status).toBe(200);
+    const decline = (body: object) =>
+      askRoute.POST(
+        request(
+          `/api/workspaces/${t.w}/orchestrator/asks/${ask.id}`,
+          { action: "decline", binding: ask.subject, ...body },
+          LOOPBACK
+        ),
+        { params: Promise.resolve({ id: t.w, askId: String(ask.id) }) }
+      );
+    // Declining revokes, and revoking needs a passkey: none, no revoke.
+    expect((await decline({})).status).toBe(403);
+    expect(getPasskey(key.id)?.revoked_at).toBeNull();
+    const assertion = await proof(key, {
+      purpose: "approve",
+      workspaceId: t.w,
+      askId: ask.id,
+      binding: ask.subject,
+    });
+    expect((await decline({ assertion })).status).toBe(200);
     expect(getPasskey(key.id)?.revoked_at).toBeTruthy();
     expect(
-      openAsks(other.workspace.id).filter((a) => a.kind === "passkey")
+      openAsks(other.workspace.id).filter((a) =>
+        a.subject.startsWith("passkey:")
+      )
     ).toEqual([]);
+    // ...and the revoke itself is on the list.
+    expect(openAsks(t.w).map((a) => a.title)).toContainEqual(
+      expect.stringMatching(/^Passkey revoked on this machine at /)
+    );
   });
 
-  it("is revoked without a passkey only when it's the last, from this machine", async () => {
+  it("is never revoked without a passkey, the last one included", async () => {
+    const t = setup();
     const a = softAuthenticator();
     const b = softAuthenticator();
     a.register();
@@ -230,8 +250,19 @@ describe("a new passkey", () => {
     expect((await revoke(a.id, {})).status).toBe(403);
     const assertion = await proof(a, { purpose: "revoke", passkeyId: a.id });
     expect((await revoke(a.id, { assertion })).status).toBe(200);
-    expect((await revoke(b.id, {}, { via: "tailnet" })).status).toBe(403);
-    expect((await revoke(b.id, {})).status).toBe(200);
+    expect(openAsks(t.w).map((x) => x.title)).toContainEqual(
+      expect.stringMatching(/^Passkey revoked on /)
+    );
+    // The last one, from this machine: still needs the passkey.
+    expect((await revoke(b.id, {})).status).toBe(403);
+    expect(getPasskey(b.id)?.revoked_at).toBeNull();
+    const last = await proof(b, { purpose: "revoke", passkeyId: b.id });
+    expect((await revoke(b.id, { assertion: last })).status).toBe(200);
+    // And with none left, the first-use registration stays shut.
+    const reg = await registerOptionsRoute.POST(
+      request("/api/presence/register/options", {}, LOOPBACK)
+    );
+    expect(reg.status).toBe(403);
   });
 });
 

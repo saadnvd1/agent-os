@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { requireApprover } from "@/lib/security/approver";
 import { relyingParty, verifyPresence } from "@/lib/security/presence";
-import { refusalResponse } from "@/lib/security/presence-http";
+import { placeOf, refusalResponse } from "@/lib/security/presence-http";
+import { getPasskey } from "@/lib/security/passkeys";
+import { raisePasskeyAsks } from "@/lib/orchestrator/passkey-asks";
 import {
   answerAsk,
   getAsk,
@@ -10,6 +12,9 @@ import {
   type AskAnswer,
 } from "@/lib/orchestrator/asks";
 import { askPresence } from "@/lib/orchestrator/presence-binding";
+
+const isNewPasskeyAsk = (ask: { kind: string; subject: string }) =>
+  ask.kind === "passkey" && ask.subject.startsWith("passkey:");
 
 type RouteParams = { params: Promise<{ id: string; askId: string }> };
 
@@ -43,10 +48,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const ask = getAsk(id, Number(askId));
     if (!ask)
       return NextResponse.json({ error: "No such ask" }, { status: 404 });
-    if (answer.action === "approve") {
+    // Declining a new passkey's ask revokes it, so it needs a passkey too.
+    const revokes = answer.action === "decline" && isNewPasskeyAsk(ask);
+    if (answer.action === "approve" || revokes) {
       if (typeof body?.binding !== "string")
         return NextResponse.json(
-          { error: "Approve must say what it approves" },
+          { error: "Say what you're answering" },
           { status: 400 }
         );
       if (PRESENCE_KINDS.includes(ask.kind))
@@ -57,9 +64,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           askPresence(ask.id, body.binding)
         );
     }
-    return NextResponse.json({
-      ask: answerAsk(id, ask.id, answer, body?.binding),
-    });
+    const answered = answerAsk(id, ask.id, answer, body?.binding);
+    if (revokes) {
+      const key = getPasskey(ask.subject.slice("passkey:".length));
+      if (key)
+        raisePasskeyAsks(
+          key,
+          placeOf(gate.approver, request.headers),
+          "revoked"
+        );
+    }
+    return NextResponse.json({ ask: answered });
   } catch (error) {
     return refusalResponse(error);
   }

@@ -58,9 +58,13 @@ export function useAnswerAsk(workspaceId: string) {
     mutationFn: async ({
       ask,
       ...answer
-    }: AskAction & { ask: Pick<AskView, "id" | "binding" | "presence"> }) => {
+    }: AskAction & {
+      ask: Pick<AskView, "id" | "binding" | "presence" | "subject">;
+    }) => {
       const url = `/api/workspaces/${workspaceId}/orchestrator/asks/${ask.id}`;
-      if (answer.action !== "approve") return post(url, answer);
+      const revokes =
+        answer.action === "decline" && ask.subject.startsWith("passkey:");
+      if (answer.action !== "approve" && !revokes) return post(url, answer);
       const assertion = ask.presence
         ? await provePresence({
             purpose: "approve",

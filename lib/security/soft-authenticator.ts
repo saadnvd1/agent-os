@@ -3,7 +3,7 @@
 
 import crypto from "crypto";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
-import { addPasskey, type PasskeyRow } from "./passkeys";
+import { addPasskey, markBootstrapped, type PasskeyRow } from "./passkeys";
 
 const b64url = (b: Buffer) => b.toString("base64url");
 
@@ -24,7 +24,9 @@ export function softAuthenticator(rpId = "localhost") {
 
   return {
     id,
+    // As a verified registration would: stored, and the free first one used.
     register(name = "Test key"): PasskeyRow {
+      markBootstrapped();
       return addPasskey({
         id,
         publicKey: cose,

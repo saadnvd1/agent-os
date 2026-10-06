@@ -104,3 +104,36 @@ export function revokePasskey(id: string): boolean {
       .run(id).changes > 0
   );
 }
+
+// Trust-on-first-use happens once per install: after the first passkey,
+// an empty list never re-opens it. Only `agent-os passkeys reset`, run by
+// a person outside any AgentOS session, clears this.
+const BOOTSTRAPPED = "passkeys_bootstrapped_at";
+
+export function passkeysBootstrapped(): boolean {
+  return !!getDb()
+    .prepare(`SELECT 1 FROM settings WHERE key = ?`)
+    .get(BOOTSTRAPPED);
+}
+
+export function markBootstrapped(): void {
+  getDb()
+    .prepare(
+      `INSERT OR IGNORE INTO settings (key, value) VALUES (?, datetime('now'))`
+    )
+    .run(BOOTSTRAPPED);
+}
+
+// The recovery path: every passkey revoked, and the first one free again.
+export function resetPasskeys(): number {
+  return getDb().transaction(() => {
+    const n = getDb()
+      .prepare(
+        `UPDATE passkeys SET revoked_at = datetime('now') WHERE revoked_at IS NULL`
+      )
+      .run().changes;
+    getDb().prepare(`DELETE FROM settings WHERE key = ?`).run(BOOTSTRAPPED);
+    getDb().prepare(`DELETE FROM passkey_enrollments`).run();
+    return n;
+  })();
+}

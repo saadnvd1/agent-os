@@ -9,7 +9,7 @@
 import { db } from "../db";
 import { queueEvent } from "./events";
 import { addNote } from "./notes";
-import { cleanTitle, classifyKind } from "./ask-text";
+import { cleanTitle, classifyKind, titleSubject } from "./ask-text";
 import { revokePasskey } from "../security/passkeys";
 
 export const ASK_KINDS = [
@@ -88,6 +88,7 @@ const cap = (s: string, n: number) => s.trim().slice(0, n);
 export const taskSubject = (taskId: string) => `task:${taskId}`;
 export const BRAKE_SUBJECT = "brake";
 export const passkeySubject = (id: string) => `passkey:${id}`;
+export const revokedPasskeySubject = (id: string) => `passkey-revoked:${id}`;
 
 // What an approval is pinned to: the commit a gate ask was about, the brake
 // a brake ask was about, else the ask itself. Approve must send it back.
@@ -97,15 +98,25 @@ export const askBinding = (ask: AskRow) =>
 const sqliteTime = (ms: number) =>
   new Date(ms).toISOString().replace("T", " ").slice(0, 19);
 
-function refusal(workspaceId: string, subject: string): string | null {
-  const declined = db
-    .prepare(
-      `SELECT title FROM orchestrator_asks WHERE workspace_id = ? AND subject = ?
-         AND status = 'declined' AND resolved_at >= ? LIMIT 1`
-    )
-    .get(workspaceId, subject, sqliteTime(Date.now() - DECLINE_COOLDOWN_MS)) as
-    | { title: string }
-    | undefined;
+// Declined lately: the same subject, or a title that says the same thing
+// in other words (so rewording doesn't get round a no).
+function refusal(
+  workspaceId: string,
+  subject: string,
+  title: string
+): string | null {
+  const words = titleSubject(title);
+  const declined = (
+    db
+      .prepare(
+        `SELECT subject, title FROM orchestrator_asks WHERE workspace_id = ?
+           AND status = 'declined' AND resolved_at >= ?`
+      )
+      .all(workspaceId, sqliteTime(Date.now() - DECLINE_COOLDOWN_MS)) as {
+      subject: string;
+      title: string;
+    }[]
+  ).find((d) => d.subject === subject || titleSubject(d.title) === words);
   if (declined)
     return `Saad declined "${declined.title}" in the last 6 hours; don't ask again yet`;
   if (openAskCount(workspaceId) >= MAX_OPEN_ASKS)
@@ -167,7 +178,7 @@ export function raiseAsk(input: {
       );
       return { ask: getAsk(input.workspaceId, open.id)!, created: false };
     }
-    const refused = refusal(input.workspaceId, input.subject);
+    const refused = refusal(input.workspaceId, input.subject, title);
     if (refused) throw new AskRefused(refused);
     const { lastInsertRowid } = db
       .prepare(
@@ -252,7 +263,7 @@ export function answerAsk(
   if (ask.status !== "open")
     throw new Error(`This ask is already ${ask.status}`);
   if (
-    answer.action === "approve" &&
+    answer.action !== "reply" &&
     binding !== undefined &&
     binding !== askBinding(ask)
   )
@@ -275,12 +286,16 @@ export function answerAsk(
   return getAsk(workspaceId, id)!;
 }
 
-// A new-passkey ask sits in every workspace: one answer settles them all,
-// and Decline revokes the passkey. The orchestrator isn't told.
+// A passkey ask sits in every workspace: one answer settles them all, and
+// declining a new passkey's ask revokes it. The orchestrator isn't told.
 function settlePasskeyAsk(ask: AskRow, action: AskAnswer["action"]): void {
-  const id = ask.subject.slice("passkey:".length);
-  if (action === "decline") revokePasskey(id);
-  resolvePasskeyAsks(id, action === "decline" ? "revoked" : "kept");
+  const added = ask.subject.startsWith("passkey:");
+  if (added && action === "decline")
+    revokePasskey(ask.subject.slice("passkey:".length));
+  db.prepare(
+    `UPDATE orchestrator_asks SET status = 'resolved', answer = ?, resolved_at = datetime('now')
+     WHERE subject = ? AND status = 'open'`
+  ).run(added && action === "decline" ? "revoked" : "seen", ask.subject);
 }
 
 export function resolvePasskeyAsks(passkeyId: string, why: string): number {
