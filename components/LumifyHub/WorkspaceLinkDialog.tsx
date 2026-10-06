@@ -157,13 +157,14 @@ function Linked({
           <Button variant="outline" className="h-11 sm:h-9" asChild>
             <a href={url} target="_blank" rel="noreferrer">
               <Users className="h-3.5 w-3.5" />
-              Members &amp; invites
+              Share in LumifyHub
             </a>
           </Button>
         </div>
       )}
       <p className="text-muted-foreground text-xs">
-        Members and invites live in LumifyHub: workspace settings → Team.
+        To share docs and boards with someone, invite them from the workspace in
+        LumifyHub.
       </p>
       <div className="flex justify-end gap-2">
         <Button

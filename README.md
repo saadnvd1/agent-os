@@ -156,7 +156,8 @@ you; move a project in from its menu. Deleting a workspace keeps its projects.
 ## LumifyHub (optional)
 
 AgentOS works fully without a LumifyHub account. Connecting one, from a
-workspace's menu, adds things a team can share:
+workspace's menu, gives its docs and boards a home you can open anywhere and
+share with anyone:
 
 - A workspace links to a LumifyHub workspace, and a project to a board in it.
   Tasks get a card on the project's board that moves as the task runs, and a
@@ -238,7 +239,7 @@ For configuration and advanced usage, see the [docs](https://www.runagentos.com/
 ## Related Projects
 
 - **[aTerm](https://github.com/saadnvd1/aTerm)** - A Tauri-based desktop terminal workspace for AI-assisted coding. While AgentOS is a mobile-first web UI, aTerm is a native desktop app with multi-pane layouts optimized for running AI coding agents (Claude Code, Aider, OpenCode) alongside shells, dev servers, and a built-in git panel. Choose AgentOS for mobile access and browser-based workflows, or aTerm for a native desktop terminal experience.
-- **[LumifyHub](https://lumifyhub.io)** - Team collaboration platform with real-time chat and structured documentation. Useful alongside AgentOS for coordinating multi-agent work across a team — share session context, document architectural decisions from coding sessions, and track progress across parallel agent workflows.
+- **[LumifyHub](https://lumifyhub.io)** - A place to keep docs, boards and notes, and share them with anyone. AgentOS can link a workspace to it: tasks become cards on a board, and plans and docs live where you can read and share them.
 
 ## License
 

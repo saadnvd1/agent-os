@@ -42,7 +42,7 @@ export function SidebarFooter() {
           </TooltipTrigger>
           <TooltipContent side="top">
             <p className="flex items-center gap-1.5">
-              Team collaboration with chat and documentation
+              Docs, boards and notes you can share
               <span className="bg-primary/15 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-medium">
                 Sponsor
               </span>
