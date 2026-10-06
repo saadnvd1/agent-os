@@ -18,13 +18,15 @@ STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 FORMAT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx|json|css|md)$' | grep -v '^package-lock.json$' || true)
 LINT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx)$' || true)
 
-if [ -n "$FORMAT" ]; then
-  echo "▸ prettier"
-  echo "$FORMAT" | xargs npx prettier --write --log-level warn
-fi
+# ESLint first: its fixes (e.g. dropping an unused directive) can leave
+# whitespace that only Prettier, run after, puts right.
 if [ -n "$LINT" ]; then
   echo "▸ eslint"
   echo "$LINT" | xargs npx eslint --fix --no-warn-ignored
+fi
+if [ -n "$FORMAT" ]; then
+  echo "▸ prettier"
+  echo "$FORMAT" | xargs npx prettier --write --log-level warn
 fi
 [ -n "$FORMAT$LINT" ] && echo "$FORMAT
 $LINT" | grep . | sort -u | xargs git add
