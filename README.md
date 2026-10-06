@@ -139,6 +139,7 @@ aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
+aos docs [query]                  # LumifyHub pages, when the workspace is linked
 ```
 
 Messages are delivered by typing them into the recipient's terminal, labelled
@@ -151,6 +152,25 @@ Sessions on other machines can receive messages but not yet send them.
 Group projects into workspaces (e.g. Work, Personal) from the **+** menu.
 Each workspace is a collapsible sidebar section showing how many sessions need
 you; move a project in from its menu. Deleting a workspace keeps its projects.
+
+## LumifyHub (optional)
+
+AgentOS works fully without a LumifyHub account. Connecting one, from a
+workspace's menu, adds things a team can share:
+
+- A workspace links to a LumifyHub workspace, and a project to a board in it.
+  Tasks get a card on the project's board that moves as the task runs, and a
+  card in To Do can be started as a task.
+- **Docs** lists the linked workspace's pages and reads them; editing happens
+  in LumifyHub.
+- A markdown file open in the file explorer can be published as a page marked
+  as coming from the repo. Publishing again updates the same page, and so does
+  merging a task that changed the file. It goes one way: edits made in
+  LumifyHub are overwritten.
+- Agents can list, read and create those pages with `aos docs`, `aos doc <id>`
+  and `aos doc new "<title>" --file <path>`. The token stays in AgentOS.
+
+What maps to what, and the API it uses: [docs/lumifyhub.md](docs/lumifyhub.md).
 
 ## Machines
 
