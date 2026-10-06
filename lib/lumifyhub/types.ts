@@ -52,6 +52,27 @@ export interface LhCard {
   title: string;
   description: LhRichText;
   position: number;
+  // Card dependencies (stacks). Older servers leave these out.
+  blocked_by?: LhCardRef[];
+  parent_id?: string | null;
+  completed?: boolean;
+}
+
+export interface LhCardRef {
+  id: string;
+  ticket: string | null;
+}
+
+// A card as the dependencies endpoint renders it.
+export interface LhDependencyCard extends LhCardRef {
+  title: string;
+  list_id: string;
+  completed: boolean;
+}
+
+export interface LhDependencies {
+  blocked_by: LhDependencyCard[];
+  blocks: LhDependencyCard[];
 }
 
 // What the UI is allowed to see about the connection. Never the token.

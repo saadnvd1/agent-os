@@ -14,6 +14,10 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos history <session>              your conversation with a session
   aos spawn <project> <prompt...>    start a new agent session in a project
   aos task <project> <prompt...>     start a background task that ends in a PR
+  aos stack <project> [--plan] [--max N]
+                                     run the project's linked board as stacked tasks
+                                     (--plan: just show the order, start nothing)
+  aos stacks                         every stack and where each card is
 
   Docs, when your project's workspace is linked to LumifyHub:
   aos docs [query]                   list the workspace's pages (id, title)
@@ -75,6 +79,29 @@ async function docNew(words) {
   }
   const { page } = await post("/api/bus/docs", { session: me, title, content });
   console.log(page.url);
+}
+
+// One line per card, indented under the card it is stacked on.
+function stackLines(items) {
+  return items.map((i) => {
+    const pr = i.prUrl ? `  ${i.prUrl}` : "";
+    const why = i.error || i.waitsOn || i.note;
+    const also = i.also.length ? `  (also waits on ${i.also.join(", ")})` : "";
+    const name = i.ticket ? `${i.ticket} ${i.title}` : i.title;
+    return `${"  ".repeat(i.depth + 1)}${i.status.padEnd(8)} ${name}${pr}${also}${why ? `\n${"  ".repeat(i.depth + 6)}${why}` : ""}`;
+  });
+}
+
+function parseStackArgs(words) {
+  const plan = words.includes("--plan");
+  const at = words.indexOf("--max");
+  const max = at >= 0 ? Number(words[at + 1]) : undefined;
+  if (at >= 0 && !(max >= 1)) fail("--max needs a number");
+  const project = words
+    .filter((w, i) => w !== "--plan" && i !== at && i !== at + 1)
+    .join(" ");
+  if (!project) fail("usage: aos stack <project> [--plan] [--max N]");
+  return { project, plan, max };
 }
 
 const show = (m) =>
@@ -147,6 +174,30 @@ async function main() {
       console.log(
         `started ${cmd === "task" ? "task" : "session"} "${session.name}"`
       );
+      return;
+    }
+    case "stack": {
+      const { project, plan, max } = parseStackArgs(args);
+      const res = await post("/api/stacks", {
+        project,
+        dryRun: plan,
+        maxParallel: max,
+      });
+      const view = res.preview || res.stack;
+      const title = res.preview
+        ? `plan for ${view.boardName || view.projectName} (nothing started)`
+        : `started stack "${view.name}" (${view.maxParallel} at a time)`;
+      console.log([title, ...stackLines(view.items)].join("\n"));
+      return;
+    }
+    case "stacks": {
+      const { stacks } = await call("/api/stacks");
+      if (!stacks.length) console.log("no stacks");
+      for (const s of stacks) {
+        const head = `${s.name} · ${s.projectName} · ${s.status}`;
+        const extra = [s.progress, s.error].filter(Boolean).join("\n  ");
+        console.log([head + (extra ? `\n  ${extra}` : ""), ...stackLines(s.items)].join("\n"));
+      }
       return;
     }
     case "docs": {

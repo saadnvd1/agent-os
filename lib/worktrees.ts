@@ -32,6 +32,8 @@ export interface CreateWorktreeOptions {
   projectPath: string;
   featureName: string;
   baseBranch?: string;
+  // Cut from this exact commit instead of the base branch's tip.
+  startPoint?: string;
 }
 
 /**
@@ -65,7 +67,7 @@ function generateWorktreeDirName(
 export async function createWorktree(
   options: CreateWorktreeOptions
 ): Promise<WorktreeInfo> {
-  const { projectPath, featureName, baseBranch = "main" } = options;
+  const { projectPath, featureName, baseBranch = "main", startPoint } = options;
 
   const resolvedProjectPath = resolvePath(projectPath);
 
@@ -97,11 +99,13 @@ export async function createWorktree(
 
   // Create the worktree with a new branch
   // Try multiple ref formats to avoid "ambiguous refname" errors
-  const refFormats = [
-    `origin/${baseBranch}`, // Try remote first (most explicit)
-    `refs/heads/${baseBranch}`, // Then local branch
-    baseBranch, // Finally, bare name as fallback
-  ];
+  const refFormats = startPoint
+    ? [startPoint]
+    : [
+        `origin/${baseBranch}`, // Try remote first (most explicit)
+        `refs/heads/${baseBranch}`, // Then local branch
+        baseBranch, // Finally, bare name as fallback
+      ];
 
   let lastError: Error | null = null;
   for (const ref of refFormats) {

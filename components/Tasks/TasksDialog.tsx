@@ -14,6 +14,7 @@ import { needsHuman } from "@/lib/tasks/state";
 import { tasksUi, tasksUiActions } from "@/stores/tasksUi";
 import { TaskRow } from "./TaskRow";
 import { BoardTodoSection } from "@/components/LumifyHub";
+import { StacksSection } from "@/components/Stacks";
 
 export function TasksDialog() {
   const { panelOpen } = useSnapshot(tasksUi);
@@ -50,6 +51,7 @@ export function TasksDialog() {
             <TaskRow key={t.id} task={t} />
           ))}
         </div>
+        <StacksSection />
         <BoardTodoSection />
         {done.length > 0 && (
           <div className="space-y-2">
