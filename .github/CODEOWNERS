@@ -1,0 +1,3 @@
+# The CI gates (code review, typecheck, tests) live here; changes to them
+# need the owner's review.
+/.github/ @saadnvd1

@@ -45,8 +45,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+        shell: bash
+        # Fails closed: set -e stops on a gh or jq failure (assignments are
+        # kept apart from export so their status isn't masked), jq -e fails
+        # on a missing head sha, and the checker refuses an empty body.
         run: |
+          set -euo pipefail
           gh pr view "$PR" --repo "$REPO" --json body,headRefOid > "$RUNNER_TEMP/pr.json"
-          export PR_BODY="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")"
-          export HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")"
+          PR_BODY="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")"
+          HEAD_SHA="$(jq -er '.headRefOid | strings' "$RUNNER_TEMP/pr.json")"
+          export PR_BODY HEAD_SHA
           npx --yes tsx@4.23.15 scripts/check-code-review.ts
