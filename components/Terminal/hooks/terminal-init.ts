@@ -4,7 +4,7 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
-import { CanvasAddon } from "@xterm/addon-canvas";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { getTerminalThemeForApp } from "../constants";
 
 export interface TerminalInstance {
@@ -12,6 +12,18 @@ export interface TerminalInstance {
   fitAddon: FitAddon;
   searchAddon: SearchAddon;
   cleanup: () => void;
+}
+
+// xterm 6 has no canvas renderer; fall back to the built-in DOM renderer
+// when WebGL is unavailable or its context is lost.
+function loadWebglRenderer(term: XTerm) {
+  try {
+    const webgl = new WebglAddon();
+    webgl.onContextLoss(() => webgl.dispose());
+    term.loadAddon(webgl);
+  } catch {
+    // DOM renderer stays active
+  }
 }
 
 export function createTerminal(
@@ -48,7 +60,7 @@ export function createTerminal(
   term.loadAddon(new WebLinksAddon());
   term.loadAddon(searchAddon);
   term.open(container);
-  term.loadAddon(new CanvasAddon());
+  loadWebglRenderer(term);
   fitAddon.fit();
 
   // Helper to copy text to clipboard with fallback
