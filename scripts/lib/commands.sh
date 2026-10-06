@@ -476,6 +476,7 @@ cmd_help() {
     echo "  status      Show server status and URLs"
     echo "  pair        Add a phone, tablet or laptop (prints a QR code)"
     echo "  connect     Turn on AgentOS Connect for this machine (in development)"
+    echo "  disconnect  Turn Connect off; the tunnel closes within seconds"
     echo "  logs        Tail server logs"
     echo "  update      Update to latest version"
     echo "  enable      Enable auto-start on boot"

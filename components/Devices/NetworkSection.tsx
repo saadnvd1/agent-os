@@ -3,6 +3,7 @@
 import { Switch } from "@/components/ui/switch";
 import { useNetworkQuery, useUpdateNetwork } from "@/data/devices";
 import { TailscaleCard } from "./TailscaleCard";
+import { ConnectCard } from "./ConnectCard";
 
 function Toggle({
   title,
@@ -53,6 +54,11 @@ export function NetworkSection({
 
   return (
     <div className="space-y-2">
+      <ConnectCard
+        connect={data.connect}
+        canManage={canManage}
+        onToggle={(connect) => update.mutate({ connect })}
+      />
       <TailscaleCard tailscale={data.tailscale} />
       <Toggle
         title="Allow devices on this Wi-Fi"

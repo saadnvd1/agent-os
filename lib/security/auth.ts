@@ -151,6 +151,8 @@ function decide(req: AuthRequest, policy: AuthPolicy): AuthResult {
   const token = readToken(req.headers);
   const device = token ? policy.lookup(token) : null;
   if (device) return { ok: true, via: "device", deviceId: device.id };
-  if (policy.off) return { ok: true, via: "open" };
+  // AGENTOS_AUTH=off is for a login proxy on this side of the network. A
+  // Connect stream has no socket address and must never be let in by it.
+  if (policy.off && req.remoteAddress) return { ok: true, via: "open" };
   return { ok: false };
 }

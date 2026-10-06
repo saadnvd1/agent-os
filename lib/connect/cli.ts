@@ -11,6 +11,7 @@ import fs from "fs";
 import path from "path";
 import { connectDir } from "./config";
 import { certify, enrol } from "./enrol";
+import { setConnectEnabled } from "./config";
 import { cloudflareDns } from "./cloudflare-dns";
 
 const ZONE = "runagentos.com";
@@ -18,6 +19,15 @@ const domain = process.env.CONNECT_MACHINE_DOMAIN || `on.${ZONE}`;
 const relayUrl = process.env.CONNECT_RELAY_URL || `wss://relay.${ZONE}`;
 
 async function main() {
+  if (process.argv.includes("--off") || process.argv.includes("--on")) {
+    const on = process.argv.includes("--on");
+    if (!setConnectEnabled(on)) throw new Error("this machine isn't enrolled");
+    console.log(
+      `\n  Connect ${on ? "on" : "off"}. A running AgentOS follows within seconds.\n`
+    );
+    return;
+  }
+
   const { config, machinePublicKey, csr } = await enrol({ domain, relayUrl });
   const dir = connectDir();
   const pubPath = path.join(dir, "machine.pub");
@@ -33,6 +43,12 @@ async function main() {
     !process.argv.includes("--renew")
   ) {
     console.log("  Cert     already present (--renew to get a new one)");
+  } else if (token && process.env.AGENTOS_CONNECT_OPERATOR !== "1") {
+    // A zone-wide DNS token can rewrite any machine's name. Only the operator's
+    // own machines may use one; everyone else enrols through the Connect service.
+    throw new Error(
+      "CONNECT_DNS_TOKEN needs AGENTOS_CONNECT_OPERATOR=1 (operators only)"
+    );
   } else if (token) {
     console.log("  Cert     asking Let's Encrypt (DNS-01)...");
     await certify({ csr, dns: cloudflareDns(token, ZONE) });
