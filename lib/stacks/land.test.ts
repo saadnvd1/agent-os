@@ -134,6 +134,27 @@ describe("landStack", () => {
     );
   });
 
+  it("re-checks each item's review right before merging it, pinned to that head", async () => {
+    const { s, deps, merged } = setup();
+    const prOf = deps.prOf;
+    deps.prOf = async (session) => {
+      const p = (await prOf(session))!;
+      // C's task pushed an unreviewed commit while P was merging.
+      return session.name === "C" && merged.includes("P")
+        ? { ...p, head: "3333333aaaa" }
+        : p;
+    };
+    await landStack(s.stackId, deps);
+    expect(merged).toEqual(["P"]);
+    expect(deps.signOff).toHaveBeenCalledWith(
+      s.item("P").session_id,
+      "1abcdef0"
+    );
+    expect(q.get(db, s.stackId)!.error).toContain(
+      "stopped at C: the PR's code review covers 2abcdef, not its head 3333333"
+    );
+  });
+
   it("stops where a restacked PR goes red, and says what landed", async () => {
     const { s, deps, merged } = setup((key, after) =>
       key === "C" && after ? "fail" : "pass"

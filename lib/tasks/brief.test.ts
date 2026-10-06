@@ -17,8 +17,10 @@ describe("buildTaskBrief", () => {
     );
     expect(brief).toMatch(/Fix every Blocking and High finding/);
     const section = brief.slice(brief.indexOf("## Code review"));
-    expect(parseCodeReview(section.replace("<the full", "4f2a9c1 <"))).toEqual({
-      sha: "4f2a9c1",
+    expect(
+      parseCodeReview(section.replace("<the full", "4f2a9c1e0b7d <"))
+    ).toEqual({
+      sha: "4f2a9c1e0b7d",
     });
   });
 

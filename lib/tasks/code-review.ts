@@ -10,29 +10,59 @@ export interface CodeReviewSection {
 
 // Matched one line at a time, never across lines: the body is written by
 // the task, and a regex that backtracks over it would block the server.
+// Only what renders counts: fenced code and HTML comments are skipped, so an
+// example of the section isn't read as the section.
 const MAX_BODY = 65_536;
-const HEADING = /^ {0,3}#{1,4} *code review *:?$/i;
-const NEXT_HEADING = /^ {0,3}#{1,4} +\S/;
+const HEADING = /^ {0,3}(#{1,6}) *code review *:?$/i;
+const ANY_HEADING = /^ {0,3}(#{1,6}) +\S/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const REVIEWED =
-  /^[>*_ -]*reviewed(?: (?:commit|sha|at))?[*_ ]*:[*_` ]*([0-9a-f]{7,40})\b/i;
+  /^[>*_ -]*reviewed(?: (?:commit|sha|at))?[*_ ]*:[*_` ]*([0-9a-f]{12,40})\b/i;
 
-// Null when the body has no Code review section.
+function renderedLines(body: string): string[] {
+  let text = body.slice(0, MAX_BODY);
+  for (let at = text.indexOf("<!--"); at >= 0; at = text.indexOf("<!--", at)) {
+    const end = text.indexOf("-->", at + 4);
+    text = text.slice(0, at) + (end < 0 ? "" : text.slice(end + 3));
+  }
+  const lines: string[] = [];
+  let fence: string | null = null;
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\t/g, " ").trimEnd();
+    const mark = FENCE.exec(line)?.[1];
+    if (fence) {
+      if (mark && mark[0] === fence[0] && mark.length >= fence.length)
+        fence = null;
+    } else if (mark) fence = mark;
+    else lines.push(line);
+  }
+  return lines;
+}
+
+// The last Code review section that names a commit (or the last one, when
+// none does); null when the body has none. A section runs to the next
+// heading of its level or higher, so its own subheadings stay inside it.
 export function parseCodeReview(
   body: string | null | undefined
 ): CodeReviewSection | null {
   if (!body) return null;
-  const lines = body
-    .slice(0, MAX_BODY)
-    .split("\n")
-    .map((line) => line.replace(/\t/g, " ").trimEnd());
-  const start = lines.findIndex((line) => HEADING.test(line));
-  if (start < 0) return null;
-  for (const line of lines.slice(start + 1)) {
-    if (NEXT_HEADING.test(line)) break;
+  const sections: CodeReviewSection[] = [];
+  let level = 0;
+  for (const line of renderedLines(body)) {
+    const heading = HEADING.exec(line);
+    if (heading) {
+      level = heading[1].length;
+      sections.push({ sha: null });
+      continue;
+    }
+    const other = ANY_HEADING.exec(line);
+    if (other && other[1].length <= level) level = 0;
+    const current = sections.at(-1);
+    if (!level || !current || current.sha) continue;
     const sha = REVIEWED.exec(line)?.[1];
-    if (sha) return { sha: sha.toLowerCase() };
+    if (sha) current.sha = sha.toLowerCase();
   }
-  return { sha: null };
+  return sections.findLast((s) => s.sha) ?? sections.at(-1) ?? null;
 }
 
 // A branch AgentOS rebased itself (a stack restack): the head the task

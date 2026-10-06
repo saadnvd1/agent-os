@@ -20,11 +20,14 @@ jobs:
   section:
     name: Code review section
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Check the PR body
         env:
           GH_TOKEN: ${{ github.token }}
@@ -34,4 +37,4 @@ jobs:
           gh pr view "$PR" --repo "$REPO" --json body,headRefOid > "$RUNNER_TEMP/pr.json"
           PR_BODY="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")" \
           HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")" \
-            npx --yes tsx@4 scripts/check-code-review.ts
+            npx tsx scripts/check-code-review.ts

@@ -75,6 +75,26 @@ async function waitGreen(
   }
 }
 
+// Without the orchestrator's gate: the item's head right before merging,
+// only if its Code review section covers that commit. A push since the
+// preflight needs a new review; the merge is pinned to this head.
+async function reviewedHead(
+  item: StackItemRow,
+  deps: LandDeps
+): Promise<string> {
+  const now = q.item(db, item.id) ?? item;
+  const session = sessionOf(now.session_id);
+  const pr = session ? await deps.prOf(session) : null;
+  const refusal = pr
+    ? codeReviewRefusal(pr.codeReview, pr.head, {
+        from: now.restacked_from,
+        to: now.restacked_to,
+      })
+    : "its PR is gone";
+  if (refusal) throw new Stop(`stopped at ${itemName(now)}: ${refusal}`);
+  return pr!.head!;
+}
+
 // The head an item may merge at, once its gate says so.
 async function gated(
   item: StackItemRow,
@@ -156,7 +176,7 @@ export async function landStack(
         ? await gated(item, deps.beforeMerge, deps, (why) =>
             progress(`Waiting on ${name}: ${why} (${n + 1}/${items.length})`)
           )
-        : undefined;
+        : await reviewedHead(item, deps);
       progress(`Merging ${name} (${n + 1}/${items.length})`);
       await deps.signOff(item.session_id!, head).catch((e: unknown) => {
         throw new Stop(`stopped at ${name}: ${outputOf(e)}`);

@@ -179,6 +179,9 @@ describe("the plain diff rules", () => {
       "src/app.ts",
       "README.md",
       "lib/securityish.ts",
+      "lib/tasks/code-review.ts",
+      "scripts/check-code-review.ts",
+      "lib/tasks/code-review.test.ts",
     ].map((p) => ({ path: p, status: "M" }));
     expect(sensitiveFiles(files).map((s) => `${s.path}:${s.why}`)).toEqual([
       ".github/workflows/ci.yml:CI config",
@@ -201,6 +204,8 @@ describe("the plain diff rules", () => {
       "lib/secrets.ts:secrets handling",
       "lib/security/auth.ts:secrets handling",
       "app/api/pair/route.ts:secrets handling",
+      "lib/tasks/code-review.ts:the code review gate",
+      "scripts/check-code-review.ts:the code review gate",
     ]);
   });
 
