@@ -24,6 +24,7 @@ import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
 import { startStackWatcher } from "./lib/stacks";
 import { setStartGate } from "./lib/stacks/tick";
 import { stackStartGate } from "./lib/orchestrator/brakes";
+import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
 import {
   bindAddresses,
@@ -47,6 +48,8 @@ const pFlagIndex = process.argv.indexOf("-p");
 const portArg = pFlagIndex !== -1 ? process.argv[pFlagIndex + 1] : undefined;
 const port = parseInt(portArg || process.env.PORT || "3011", 10);
 process.env.AGENTOS_PORT = String(port);
+// Fixed for this process and handed to the chat workers it starts.
+buildId();
 ensureBusBrief();
 
 const app = next({ dev, hostname, port });

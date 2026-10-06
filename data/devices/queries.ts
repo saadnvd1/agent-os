@@ -98,3 +98,25 @@ export function useRenameDevice() {
       queryClient.invalidateQueries({ queryKey: deviceKeys.list() }),
   });
 }
+
+export function useSetCanApprove() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      canApprove,
+    }: {
+      id: string;
+      canApprove: boolean;
+    }) =>
+      json(
+        await fetch(`/api/devices/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ canApprove }),
+        })
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: deviceKeys.list() }),
+  });
+}

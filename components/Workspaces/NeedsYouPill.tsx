@@ -3,10 +3,11 @@
 import { useRef } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Session } from "@/lib/db";
+import { needCount } from "@/lib/orchestrator/header-line";
 
 interface NeedsYouPillProps {
   sessions: Session[];
-  sessionStatuses?: Record<string, { status: string }>;
+  sessionStatuses?: Record<string, { status: string; asks?: number }>;
   activeSessionId?: string | null;
   onSelect: (sessionId: string) => void;
 }
@@ -25,6 +26,11 @@ export function NeedsYouPill({
     (s) => sessionStatuses?.[s.id]?.status === "waiting"
   );
   if (waiting.length === 0) return null;
+  // An orchestrator counts once per open ask.
+  const count = waiting.reduce(
+    (n, s) => n + needCount(sessionStatuses?.[s.id]),
+    0
+  );
 
   const next = () => {
     const from = waiting.findIndex(
@@ -43,7 +49,7 @@ export function NeedsYouPill({
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
       <span className="label-mono flex-1">
-        {waiting.length} need{waiting.length === 1 ? "s" : ""} you
+        {count} need{count === 1 ? "s" : ""} you
       </span>
       <ChevronRight className="h-3.5 w-3.5 shrink-0" />
     </button>

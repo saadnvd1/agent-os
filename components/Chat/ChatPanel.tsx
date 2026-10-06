@@ -8,6 +8,7 @@ import {
   type TimelineBlock,
 } from "@/lib/chat/group";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
+import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { ActivityLine } from "./Activity";
 import { Approval } from "./Approval";
 import { BackgroundTasks } from "./BackgroundTasks";
@@ -107,11 +108,14 @@ export function ChatPanel({
   sessionId,
   sessionName,
   accessLocked = false,
+  orchestratorOf,
 }: {
   sessionId: string;
   sessionName: string;
   // Its access is set by its role (an orchestrator), not picked here.
   accessLocked?: boolean;
+  // The workspace it orchestrates: its header line, Pause and asks show on top.
+  orchestratorOf?: string | null;
 }) {
   const [prefill, setPrefill] = useState<{ text: string; at: number }>();
   const {
@@ -153,6 +157,7 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
       <div
         ref={scrollRef}
         onScroll={(e) => {

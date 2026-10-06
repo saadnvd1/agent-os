@@ -13,6 +13,7 @@ import { getDb, type Session } from "@/lib/db";
 import { chatState } from "@/lib/chat/runner";
 import { chatActivityLine } from "@/lib/chat/activity";
 import { needsYou } from "@/lib/needs-you";
+import { openAskCount } from "@/lib/orchestrator/asks";
 
 import { lastUserTask } from "@/lib/chat/store";
 
@@ -29,6 +30,8 @@ interface SessionStatusResponse {
   agentType?: AgentType;
   title?: string;
   task?: string | null;
+  // An orchestrator's open asks: each counts as one thing needing you.
+  asks?: number;
 }
 
 async function getTmuxSessions(): Promise<string[]> {
@@ -267,6 +270,9 @@ export async function GET() {
               : "idle",
         task: chatActivityLine(session.id) ?? lastUserTask(session.id),
         agentType: session.agent_type,
+        ...(session.role === "orchestrator" && {
+          asks: openAskCount(session.workspace_id),
+        }),
       };
     }
 

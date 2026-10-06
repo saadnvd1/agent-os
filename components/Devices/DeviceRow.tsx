@@ -3,7 +3,8 @@
 import { Laptop, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Device } from "@/lib/security/devices";
-import { useRevokeDevice } from "@/data/devices";
+import { useRevokeDevice, useSetCanApprove } from "@/data/devices";
+import { Switch } from "@/components/ui/switch";
 
 // SQLite's datetime('now') is UTC without a zone.
 const parseUtc = (s: string) => new Date(`${s.replace(" ", "T")}Z`);
@@ -28,11 +29,15 @@ function DeviceIcon({ ua }: { ua: string | null }) {
 export function DeviceRow({
   device,
   isCurrent,
+  canManage,
 }: {
   device: Device;
   isCurrent: boolean;
+  // Only this machine or the tailnet may let a device approve asks.
+  canManage: boolean;
 }) {
   const revoke = useRevokeDevice();
+  const setCanApprove = useSetCanApprove();
 
   const onRevoke = () => {
     if (
@@ -60,6 +65,16 @@ export function DeviceRow({
           {device.last_address ? ` · ${device.last_address}` : ""}
         </p>
       </div>
+      <label className="text-muted-foreground flex min-h-11 shrink-0 items-center gap-2 text-xs sm:min-h-8">
+        Can approve
+        <Switch
+          checked={!!device.can_approve}
+          disabled={!canManage || setCanApprove.isPending}
+          onCheckedChange={(on) =>
+            setCanApprove.mutate({ id: device.id, canApprove: on })
+          }
+        />
+      </label>
       <Button
         variant="ghost"
         size="icon-sm"

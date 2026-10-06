@@ -23,6 +23,9 @@ import {
   type GateOutcome,
 } from "./gates";
 import { addNote } from "./notes";
+import { spendApproval } from "./ask-approvals";
+import { heldVerdict } from "./held";
+import { isPaused } from "./pause";
 import { commitTime, fetchRefs, repoOf } from "./repo";
 import { review } from "./review";
 import { workspaceStack, workspaceTask } from "./targets";
@@ -30,8 +33,9 @@ import { ciSettleIn, waitingState } from "./task-state";
 
 const short = (sha: string) => sha.slice(0, 7);
 
+// `approval`: Saad approved this merge on his asks list, for this commit.
 export type Verdict =
-  | { ok: true; sha: string; pr: number }
+  | { ok: true; sha: string; pr: number; approval?: number }
   | { ok: false; wait: boolean; text: string };
 
 // Whether the task may merge now, and at which commit. Landing merges a
@@ -49,14 +53,12 @@ export async function judge(
   if (task.task_status !== "running")
     return no(`${task.name} is already ${task.task_status}`);
   const held = escalations(task.id);
-  if (held.length)
-    return no(
-      `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}: ${held[0].last_reason}). Only he can merge it now.`
-    );
   const pr = await prFor(task, true);
   if (!pr || pr.state !== "OPEN" || !pr.head)
     return no(`${task.name} has no open PR`);
   const sha = pr.head;
+  if (held.length)
+    return heldVerdict(workspaceId, task, held, pr.url, sha, pr.number);
 
   const repo = repoOf(task);
   const base = await fetchRefs(repo, task);
@@ -65,7 +67,7 @@ export async function judge(
   if (sensitive.length) {
     const what = sensitive.map((s) => `${s.path} (${s.why})`).join(", ");
     const why = `PR #${pr.number} at ${short(sha)} touches ${what}`;
-    return no(escalate(workspaceId, task, "sensitive", why, pr.url));
+    return no(escalate(workspaceId, task, "sensitive", why, pr.url, sha));
   }
 
   const outcomes = evaluateGates({
@@ -90,14 +92,14 @@ export async function judge(
   const toSaad = outcomes.find((o) => o.state === "escalate");
   if (toSaad)
     return no(
-      `${head}\n- ${escalate(workspaceId, task, toSaad.gate, toSaad.reason!, pr.url)}`
+      `${head}\n- ${escalate(workspaceId, task, toSaad.gate, toSaad.reason!, pr.url, sha)}`
     );
   const failed = outcomes.filter((o) => o.state === "fail");
   const waiting = outcomes.filter((o) => o.state === "wait");
   if (!failed.length && !waiting.length)
     return { ok: true, sha, pr: pr.number };
   const lines = [
-    ...failed.map((o) => countFailure(workspaceId, task, o, pr.url)),
+    ...failed.map((o) => countFailure(workspaceId, task, o, pr.url, sha)),
     ...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`),
   ];
   return no(`${head}\n${lines.join("\n")}`, !failed.length);
@@ -107,13 +109,14 @@ function countFailure(
   workspaceId: string,
   task: Session,
   o: GateOutcome,
-  url: string
+  url: string,
+  sha: string
 ): string {
   const n = recordFailure(workspaceId, task.id, o.gate, o.reason ?? "");
   const line = `- ${o.gate} failed (${n === 1 ? "first" : "again"}): ${o.reason}`;
   if (n < 2 || failureOf(task.id, o.gate)?.escalated_at) return line;
   const why = `the ${o.gate} gate failed twice: ${o.reason}`;
-  return `${line}\n  ${escalate(workspaceId, task, o.gate, why, url)}`;
+  return `${line}\n  ${escalate(workspaceId, task, o.gate, why, url, sha)}`;
 }
 
 export async function signOff(
@@ -123,10 +126,14 @@ export async function signOff(
   const task = workspaceTask(workspaceId, ref);
   const verdict = await judge(workspaceId, task);
   if (!verdict.ok) throw new Error(verdict.text);
+  if (verdict.approval && !spendApproval(verdict.approval))
+    throw new Error(`Saad's approval for ${task.name} was already used`);
   await signOffTask(task.id, { head: verdict.sha });
   addNote(
     workspaceId,
-    `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}): CI green, review passed, in scope.`
+    verdict.approval
+      ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on Saad's approval of that commit.`
+      : `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}): CI green, review passed, in scope.`
   );
   return `Merged ${task.name}: PR #${verdict.pr} squash-merged at ${short(verdict.sha)}.`;
 }
@@ -138,8 +145,11 @@ export function landGate(workspaceId: string) {
   return async (
     sessionId: string
   ): Promise<{ head: string } | { wait: string } | { stop: string }> => {
+    if (isPaused(workspaceId)) return { wait: "the orchestrator is paused" };
     const task = workspaceTask(workspaceId, sessionId);
     const verdict = await judge(workspaceId, task, true);
+    if (verdict.ok && verdict.approval && !spendApproval(verdict.approval))
+      return { stop: `Saad's approval for ${task.name} was already used` };
     if (verdict.ok) return { head: verdict.sha };
     if (!verdict.wait) return { stop: verdict.text };
     if (verdict.text.includes("call review"))

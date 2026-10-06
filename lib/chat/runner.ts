@@ -27,7 +27,13 @@ import { restoreActivity, track } from "./activity";
 
 export { chatActivity } from "./activity";
 import { chatDriverFor } from "./drivers";
-import { connectWorker, runningWorkers } from "./worker/client";
+import {
+  connectWorker,
+  removeStaleSocket,
+  runningWorkers,
+  waitForExit,
+} from "./worker/client";
+import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
 
 export { setChatAccess, setChatModel } from "./settings";
@@ -46,6 +52,8 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   } else if (e.type === "state") {
     live.state = e.state;
     emit(sessionId, e);
+    // Its turn ended on code from before a redeploy: close it now.
+    if (isStaleWorker(live.build, buildId(), e.state)) stopChat(sessionId);
   } else if (e.type === "commands" || e.type === "terminal_only") {
     const session = getSession(sessionId);
     const caps = registry.caps.get(capsKey(session));
@@ -74,20 +82,32 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
   const connecting = (async () => {
     checkChattable(getSession(sessionId));
     let live: Live | null = null;
-    const { client, hello } = await connectWorker(sessionId, spawn, {
-      onEvent: (e) => live && onWorkerEvent(sessionId, live, e),
+    const handlers = {
+      onEvent: (e: WorkerEvent) => live && onWorkerEvent(sessionId, live, e),
       onClose: () => {
         if (live && registry.live.get(sessionId) === live) {
           registry.live.delete(sessionId);
           emit(sessionId, { type: "state", state: "idle" });
         }
       },
-    });
+    };
+    let { client, hello } = await connectWorker(sessionId, spawn, handlers);
+    // An idle worker left over from before a redeploy: retire it, and start
+    // a fresh one only when a message needs it.
+    if (isStaleWorker(hello.build, buildId(), hello.state)) {
+      client.command({ type: "close" });
+      client.detach();
+      await waitForExit(sessionId);
+      removeStaleSocket(sessionId);
+      if (!spawn) throw new Error(`retired a stale worker for ${sessionId}`);
+      ({ client, hello } = await connectWorker(sessionId, true, handlers));
+    }
     live = {
       worker: client,
       state: hello.state,
       streaming: new Map(hello.streaming.map((i) => [i.id, i])),
       activity: restoreActivity(sessionId, hello.state),
+      build: hello.build,
     };
     registry.live.set(sessionId, live);
     emit(sessionId, { type: "state", state: live.state });
@@ -241,7 +261,7 @@ export async function reattachChats(): Promise<void> {
   await Promise.all(
     runningWorkers().map((id) =>
       ensureLive(id, false).catch((error) =>
-        console.error(`Could not reattach chat ${id}:`, error)
+        console.error(`Not reattaching chat ${id}:`, error.message ?? error)
       )
     )
   );

@@ -44,6 +44,8 @@ const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { listNotes } = await import("./notes");
 const { usageWindow, windowRefusal } = await import("./usage");
+const { answerAsk, openAsks } = await import("./asks");
+const { setPaused } = await import("./pause");
 // The real reader, under the mock the brakes use.
 const { readUsage } =
   await vi.importActual<typeof import("./usage")>("./usage");
@@ -242,5 +244,126 @@ describe("a stack the orchestrator starts", () => {
       status: "planned",
       note: "Held by the orchestrator's brakes: test",
     });
+  });
+});
+
+describe("a brake on Saad's asks list", () => {
+  const brakeAsks = (w: string) =>
+    openAsks(w).filter((a) => a.kind === "brake");
+  const fill = (ws: ReturnType<typeof workspace>) => {
+    for (let i = 0; i < 4; i++) {
+      const id = seedSession({ projectId: ws.api.id, name: `busy-${i}` });
+      busy.add(`claude-${id}`);
+    }
+  };
+
+  it("asks once while it holds, and closes the ask when it lifts", async () => {
+    const ws = workspace();
+    fill(ws);
+    await expect(ws.start("a")).rejects.toThrow(/Brake/);
+    await expect(ws.start("b")).rejects.toThrow(/Brake/);
+    const asks = brakeAsks(ws.workspace.id);
+    expect(asks).toHaveLength(1);
+    expect(asks[0]).toMatchObject({
+      subject: "brake",
+      title: "New starts are braked",
+    });
+    expect(asks[0].detail).toMatch(/4 sessions are running/);
+
+    busy.clear();
+    await expect(ws.start("fits")).resolves.toMatch(/Started/);
+    expect(brakeAsks(ws.workspace.id)).toEqual([]);
+  });
+
+  it("lets exactly one start through on approval, then asks again", async () => {
+    const ws = workspace();
+    fill(ws);
+    await expect(ws.start("a")).rejects.toThrow(/Brake/);
+    const [ask] = brakeAsks(ws.workspace.id);
+    answerAsk(ws.workspace.id, ask.id, { action: "approve" });
+    await expect(ws.start("approved one")).resolves.toMatch(/Started/);
+    await expect(ws.start("not this one")).rejects.toThrow(/Brake/);
+    const again = brakeAsks(ws.workspace.id);
+    expect(again).toHaveLength(1);
+    expect(again[0].id).not.toBe(ask.id);
+  });
+
+  it("binds an approval to its brake, and voids it when the brakes lift", async () => {
+    const ws = workspace();
+    fill(ws);
+    await expect(ws.start("a")).rejects.toThrow(/4 sessions are running/);
+    const [ask] = brakeAsks(ws.workspace.id);
+    expect(ask.brake_key).toBe("running");
+    answerAsk(ws.workspace.id, ask.id, { action: "approve" }, "running");
+    // A different brake now holds: the approval for "running" doesn't wave it through.
+    busy.clear();
+    db.prepare(
+      `UPDATE workspaces SET orch_max_starts_per_hour = 0 WHERE id = ?`
+    ).run(ws.workspace.id);
+    await expect(ws.start("b")).rejects.toThrow(/starts in the last hour/);
+    // The brakes lift: the unspent approval is void, not saved for later.
+    db.prepare(
+      `UPDATE workspaces SET orch_max_starts_per_hour = 6 WHERE id = ?`
+    ).run(ws.workspace.id);
+    await expect(ws.start("c")).resolves.toMatch(/Started/);
+    const row = db
+      .prepare(`SELECT used_at, answer FROM orchestrator_asks WHERE id = ?`)
+      .get(ask.id) as { used_at: string | null; answer: string };
+    expect(row.used_at).toBeTruthy();
+    expect(row.answer).toBe("approve (void)");
+  });
+
+  it("holds a stack it launched before Pause, in the stack watcher too", async () => {
+    const { setStartGate, tickStack } = await import("@/lib/stacks/tick");
+    const { seedStack } = await import("@/lib/stacks/testing");
+    const { stackStartGate } = await import("./brakes");
+    const { landGate } = await import("./signoff");
+    const { stackQueries: q } = await import("@/lib/db");
+    const ws = workspace();
+    const s = seedStack(fs.mkdtempSync(path.join(os.tmpdir(), "aos-stack-")), [
+      { key: "A", status: "planned" },
+    ]);
+    db.prepare(
+      `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, 'stack', ?, ?)`
+    ).run(ws.workspace.id, s.stackId, ago(1000));
+    setPaused(ws.workspace.id, true);
+    setStartGate(stackStartGate);
+    const start = vi.fn(async () => {});
+    try {
+      await tickStack(q.get(db, s.stackId)!, {
+        start,
+        restack: async () => {},
+      });
+      expect(start).not.toHaveBeenCalled();
+      expect(s.item("A")?.note).toMatch(/paused by Saad/);
+      await expect(landGate(ws.workspace.id)("any-task")).resolves.toEqual({
+        wait: "the orchestrator is paused",
+      });
+
+      setPaused(ws.workspace.id, false);
+      await tickStack(q.get(db, s.stackId)!, {
+        start,
+        restack: async () => {},
+      });
+      expect(start).toHaveBeenCalledTimes(1);
+    } finally {
+      setStartGate(null);
+    }
+  });
+
+  it("refuses every start while paused, and none of it is a brake ask", async () => {
+    const ws = workspace();
+    setPaused(ws.workspace.id, true);
+    await expect(ws.start("x")).rejects.toThrow(/Paused by Saad/);
+    const { stackStartGate } = await import("./brakes");
+    db.prepare(
+      `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, 'stack', 'stack-p', ?)`
+    ).run(ws.workspace.id, ago(0));
+    await expect(stackStartGate("stack-p", "item-1")).resolves.toMatch(
+      /paused by Saad/
+    );
+    expect(brakeAsks(ws.workspace.id)).toEqual([]);
+    setPaused(ws.workspace.id, false);
+    await expect(ws.start("y")).resolves.toMatch(/Started/);
   });
 });

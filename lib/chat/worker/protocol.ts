@@ -41,6 +41,8 @@ export type WorkerEvent =
   | {
       type: "hello";
       version: number;
+      // The build of the server that started it (lib/build).
+      build?: string;
       state: ChatState;
       streaming: ChatItem[];
     }

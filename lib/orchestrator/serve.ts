@@ -12,12 +12,27 @@ import { readCards } from "./cards";
 import { describeSessions } from "./describe";
 import { sessionFacts } from "./facts";
 import { addNote } from "./notes";
+import { askSaad } from "./ask-tool";
+import { PAUSED_REFUSAL } from "./pause";
 import { readSession } from "./read";
 import { review } from "./review";
 import { land, signOff } from "./signoff";
 import { parseArgs as p, type ToolName } from "./tool-schemas";
 
 export { isToolName, TOOLS, type ToolName } from "./tool-schemas";
+
+// What a pause stops: everything that changes the workspace or spends.
+const ACTING = new Set<ToolName>([
+  "send",
+  "start_task",
+  "start_session",
+  "stack",
+  "land",
+  "drop",
+  "stop",
+  "review",
+  "sign_off",
+]);
 
 // The orchestrator's tools, each scoped to its workspace and its arguments
 // validated, answered as compact text.
@@ -28,6 +43,8 @@ export async function runTool(
 ): Promise<string> {
   const workspace = getWorkspace(w);
   if (!workspace) throw new Error("Unknown workspace");
+  if (workspace.orch_paused_at && ACTING.has(tool))
+    throw new Error(PAUSED_REFUSAL);
   switch (tool) {
     case "sessions":
       p(tool, raw);
@@ -73,5 +90,7 @@ export async function runTool(
     }
     case "sign_off":
       return signOff(w, p(tool, raw).task);
+    case "ask_saad":
+      return askSaad(w, p(tool, raw));
   }
 }

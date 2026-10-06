@@ -41,6 +41,11 @@
 
 - [ ] One standing orchestrator per workspace: see docs/plans/workspace-orchestrator.md
       (after stacks and the TipTap composer ship)
+- [ ] From a live run (Internal Tools orchestrator, 2026-10-06), not in part C:
+  - Its MCP tools (`sessions`, `read`) began answering "Not the orchestrator" mid-run, and `aos peers` showed it "not running". Likely cause: its chat worker started on part A's code (workers keep old code until idle or closed), so it has no part B tools and sends no `x-agentos-orchestrator` token, which part B's route requires. Fix: when the orchestrator's tool set or brief changes, restart its worker between turns (or tell it its toolset is stale).
+  - `aos stop` / `aos drop <session>` as a CLI fallback scoped to the caller's workspace (drop refuses with an open PR unless `--force`), and a cleanup verb (`aos sessions --prune`) that stops idle sessions whose work is merged or reported.
+  - Session sprawl: one-shot review/merge sessions spawned over `aos` pile up idle. Point orchestrators at `review`/`sign_off`/`stop`/`drop` (part B) and auto-close one-shot spawns once they report back.
+  - Noisy events: "needs input" for a session that's just done, and "CI green" for a head its review already blocked.
 
 ## Chat (after V1)
 

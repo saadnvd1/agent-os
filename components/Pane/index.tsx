@@ -363,6 +363,11 @@ export const Pane = memo(function Pane({
                     sessionId={chatSessionFor(tab)!.id}
                     sessionName={chatSessionFor(tab)!.name}
                     accessLocked={chatSessionFor(tab)!.role === "orchestrator"}
+                    orchestratorOf={
+                      chatSessionFor(tab)!.role === "orchestrator"
+                        ? chatSessionFor(tab)!.workspace_id
+                        : null
+                    }
                   />
                 ) : (
                   <Terminal
@@ -468,6 +473,11 @@ export const Pane = memo(function Pane({
                             sessionName={chatSessionFor(tab)!.name}
                             accessLocked={
                               chatSessionFor(tab)!.role === "orchestrator"
+                            }
+                            orchestratorOf={
+                              chatSessionFor(tab)!.role === "orchestrator"
+                                ? chatSessionFor(tab)!.workspace_id
+                                : null
                             }
                           />
                         ) : (

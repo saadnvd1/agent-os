@@ -10,7 +10,7 @@ import { saveItem } from "../chat/store";
 import type { ChatItem } from "../chat/events";
 import { getOrchestrator } from "./home";
 
-export type NoteKind = "note" | "brake" | "escalation";
+export type NoteKind = "note" | "brake" | "escalation" | "ask" | "pause";
 
 export interface NoteRow {
   id: number;

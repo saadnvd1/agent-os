@@ -1,5 +1,6 @@
 import { getDb, type Session } from "./db";
 import type { ChatItem, ChatState } from "./chat/events";
+import { openAskCount } from "./orchestrator/asks";
 
 // SQLite datetime('now') is UTC without a zone marker.
 const sqliteMs = (t: string | null | undefined) =>
@@ -23,16 +24,18 @@ function latestChatItem(sessionId: string): ChatItem | null {
 // A session needs you when it's blocked on you (an approval or a question),
 // or it finished something you haven't looked at since. A live session you
 // have already seen is just idle. An orchestrator works on its own, so only
-// a card waiting on you counts: finishing a turn is routine for it.
+// a card waiting on you or an open ask on its list counts: finishing a turn
+// is routine for it.
 export function needsYou(
   session: Pick<Session, "id" | "view" | "updated_at" | "last_seen_at"> &
-    Partial<Pick<Session, "role">>,
+    Partial<Pick<Session, "role" | "workspace_id">>,
   chatState: ChatState | null
 ): boolean {
   const seen = sqliteMs(session.last_seen_at);
   if (session.view === "chat") {
     if (chatState === "waiting") return true;
-    if (session.role === "orchestrator") return false;
+    if (session.role === "orchestrator")
+      return openAskCount(session.workspace_id) > 0;
     const latest = latestChatItem(session.id);
     return latest?.kind === "turn_end" && latest.createdAt > seen;
   }

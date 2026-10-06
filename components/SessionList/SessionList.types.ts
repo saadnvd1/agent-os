@@ -6,6 +6,7 @@ export interface SessionStatus {
   lastLine?: string;
   title?: string;
   task?: string | null;
+  asks?: number;
 }
 
 export interface SessionListProps {

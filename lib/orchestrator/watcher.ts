@@ -12,6 +12,17 @@ import { deliverEvents } from "./deliver";
 import { recordConditions } from "./events";
 import { sessionFacts } from "./facts";
 import { listOrchestrators } from "./home";
+import { BRAKE_SUBJECT, openAsks } from "./asks";
+import { resolveFinishedTaskAsks } from "./ask-approvals";
+import { brakesOn, liftBrake } from "./brakes";
+
+// Asks that stopped needing Saad: a held task merged or dropped, brakes
+// that lifted with nothing trying to start.
+async function settleAsks(workspaceId: string): Promise<void> {
+  resolveFinishedTaskAsks(workspaceId);
+  const brake = openAsks(workspaceId).some((a) => a.subject === BRAKE_SUBJECT);
+  if (brake && !(await brakesOn(workspaceId)).length) liftBrake(workspaceId);
+}
 
 const DELIVER_EVERY_MS = 5000;
 export const DIFF_BUSY_MS = 15 * 1000;
@@ -28,6 +39,7 @@ export async function diffWorkspace(
   now = Date.now()
 ): Promise<number> {
   const facts = await sessionFacts(workspaceId);
+  await settleAsks(workspaceId);
   const stacks = stackFacts(workspaceId);
   const subjects = [
     ...facts.map((f) => f.id),
