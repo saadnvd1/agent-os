@@ -25,6 +25,9 @@ function restackedHeads(
   item: StackItemRow,
   move: { from: string; to: string; unpushed: boolean }
 ): Pick<StackItemRow, "restacked_from" | "restacked_to"> {
+  // A retry pushing the commit an interrupted restack already recorded.
+  if (item.restacked_to === move.to && item.restacked_from)
+    return { restacked_from: item.restacked_from, restacked_to: move.to };
   if (move.unpushed) return { restacked_from: null, restacked_to: null };
   const ours = item.restacked_to === move.from;
   return {

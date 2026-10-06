@@ -157,6 +157,33 @@ describe("restack after a squash merge", () => {
     });
   });
 
+  it("records before pushing, and keeps the record when a retry pushes that same commit", async () => {
+    const { cWt, s } = seed();
+    const c = cWt.split("/").pop()!;
+    const git = fakeGit();
+    git.heads.set(c, "c-old");
+    let recordAtPush: unknown = null;
+    let refuse = true;
+    const runner: Runner = async (cmd, args, cwd) => {
+      if (args[0] === "push" && args[4] === "feature/c") {
+        recordAtPush = s.item("C").restacked_to;
+        if (refuse) throw new Error("connection reset");
+      }
+      return git.runner(cmd, args, cwd);
+    };
+    await restackAfterMerge(s.session("P"), depsFor(runner));
+    expect(recordAtPush).toBe(`${c}-rebased`);
+
+    // The retry finds the worktree already rebased: no rebase, same commit.
+    refuse = false;
+    git.calls.length = 0;
+    await restackAfterMerge(s.session("P"), depsFor(runner));
+    expect(s.item("C")).toMatchObject({
+      restacked_from: "c-old",
+      restacked_to: `${c}-rebased`,
+    });
+  });
+
   it("records nothing reviewed when the worktree had commits the task never pushed", async () => {
     const { cWt, s } = seed();
     const git = fakeGit();
