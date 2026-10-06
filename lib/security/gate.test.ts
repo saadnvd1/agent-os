@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { IncomingMessage, ServerResponse } from "http";
-import { gateRequest } from "./gate";
+import { EventEmitter } from "events";
+import type { Duplex } from "stream";
+import { gateRequest, gateUpgrade } from "./gate";
 import { TRUST_HEADER, type AuthPolicy } from "./auth";
 
 const policy: AuthPolicy = { tailnet: ["100.64.0.1"], lookup: () => null };
@@ -13,7 +15,7 @@ function call(
   const req = {
     url,
     method: "POST",
-    headers: { ...headers },
+    headers: { host: "127.0.0.1:3011", ...headers },
     socket: { remoteAddress: remote, localAddress: "127.0.0.1" },
   } as unknown as IncomingMessage;
   const res = {
@@ -51,5 +53,62 @@ describe("gateRequest for this machine's own tools", () => {
       [TRUST_HEADER]: "loopback",
     });
     expect(allowed).toBe(false);
+  });
+});
+
+describe("a garbage cookie from the network", () => {
+  const cookie = "aos_device=%E0%A4%A";
+
+  it("gets a 401 over HTTP, not a crash", () => {
+    let result: ReturnType<typeof call> | undefined;
+    expect(() => {
+      result = call("/api/sessions", "192.168.1.20", { cookie });
+    }).not.toThrow();
+    expect(result!.allowed).toBe(false);
+    expect(result!.res.statusCode).toBe(401);
+  });
+
+  it("gets its upgrade refused, not a crash", () => {
+    const req = {
+      url: "/ws/terminal",
+      headers: { host: "10.0.0.5:3011", cookie },
+      socket: { remoteAddress: "192.168.1.20", localAddress: "10.0.0.5" },
+    } as unknown as IncomingMessage;
+    const written: string[] = [];
+    const socket = Object.assign(new EventEmitter(), {
+      destroyed: false,
+      write: (s: string) => written.push(s),
+      destroy() {
+        this.destroyed = true;
+      },
+    }) as unknown as Duplex & { destroyed: boolean };
+    expect(gateUpgrade(req, socket, policy)).toBe(false);
+    expect(written[0]).toContain("401");
+    expect(socket.destroyed).toBe(true);
+  });
+});
+
+describe("the device cookie", () => {
+  it("slides its expiry forward on use", () => {
+    const headers: Record<string, string> = {};
+    const req = {
+      url: "/api/sessions",
+      method: "GET",
+      headers: { host: "10.0.0.5:3011", cookie: "aos_device=aosd_x" },
+      socket: { remoteAddress: "192.168.1.20", localAddress: "10.0.0.5" },
+    } as unknown as IncomingMessage;
+    const res = {
+      statusCode: 200,
+      setHeader: (k: string, v: string) => (headers[k] = v),
+      end() {},
+    } as unknown as ServerResponse;
+    const withDevice = {
+      ...policy,
+      lookup: () => ({ id: `slide-${Date.now()}` }),
+    };
+    expect(gateRequest(req, res, withDevice)).toBe(true);
+    expect(headers["Set-Cookie"]).toMatch(
+      /^aos_device=aosd_x; Path=\/; Max-Age=31536000; HttpOnly; SameSite=Lax$/
+    );
   });
 });

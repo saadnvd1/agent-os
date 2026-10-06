@@ -11,6 +11,7 @@ const TTL_MS = 10 * 60_000;
 // Crockford base32: no I, L, O, U, so a typed code can't be misread.
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const CLAIMS_PER_MINUTE = 10;
+const CLAIMS_PER_MINUTE_TOTAL = 60;
 
 interface Pending {
   expiresAt: number;
@@ -47,6 +48,9 @@ function sweep(now = Date.now()): void {
   for (const [code, p] of state.codes) {
     if (p.expiresAt < now - TTL_MS) state.codes.delete(code);
   }
+  for (const [key, times] of state.attempts) {
+    if (times.every((t) => t <= now - 60_000)) state.attempts.delete(key);
+  }
 }
 
 export function startPairing(now = Date.now()): {
@@ -81,6 +85,13 @@ export function claimPairing(
   },
   now = Date.now()
 ): ClaimResult {
+  sweep(now);
+  const total = [...state.attempts.values()].reduce(
+    (n, times) => n + times.filter((t) => t > now - 60_000).length,
+    0
+  );
+  if (total >= CLAIMS_PER_MINUTE_TOTAL)
+    return { ok: false, error: "rate_limited" };
   const recent = (state.attempts.get(input.address) ?? []).filter(
     (t) => t > now - 60_000
   );

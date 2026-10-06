@@ -49,6 +49,8 @@ export default function PairPage() {
       body: JSON.stringify({ code, name }),
     }).catch(() => null);
     if (res?.ok) {
+      // Drop the used code from history before leaving.
+      window.history.replaceState(null, "", "/pair");
       window.location.replace("/");
       return;
     }

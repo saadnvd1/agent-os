@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage } from "http";
 import type { Duplex } from "stream";
+import type { Socket } from "net";
 import { parse } from "url";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
@@ -306,11 +307,20 @@ app.prepare().then(() => {
   // Addresses come and go (Tailscale starts late, Wi-Fi changes), so the set
   // is re-read every few seconds and listeners follow it.
   const listeners = new Map<string, ReturnType<typeof createServer>>();
+  const sockets = new Map<string, Set<Socket>>();
   const listenOn = (address: string) => {
     if (listeners.has(address)) return;
     policy.bound.push(address);
     const server = createServer(onRequest);
     listeners.set(address, server);
+    // Kept so that turning an address off also cuts its open terminals and
+    // chats (upgraded sockets outlive server.close()).
+    const open = new Set<Socket>();
+    sockets.set(address, open);
+    server.on("connection", (s: Socket) => {
+      open.add(s);
+      s.once("close", () => open.delete(s));
+    });
     server.on("upgrade", onUpgrade);
     server.on("error", (err) => {
       console.error(`Could not listen on ${address}:${port}:`, err.message);
@@ -323,6 +333,8 @@ app.prepare().then(() => {
   const stopListening = (address: string) => {
     listeners.get(address)?.close();
     listeners.delete(address);
+    for (const s of sockets.get(address) ?? []) s.destroy();
+    sockets.delete(address);
     policy.bound = policy.bound.filter((a) => a !== address);
   };
   const refreshListeners = () => {

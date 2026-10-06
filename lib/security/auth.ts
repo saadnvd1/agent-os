@@ -37,55 +37,75 @@ export interface AuthPolicy {
 
 const TAILSCALE_V4 = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
 const LOOPBACK = new Set(["127.0.0.1", "::1"]);
-const FORWARDING = [
-  "x-forwarded-for",
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+// A proxy must send one of these, or it looks like this machine itself.
+// Proxies that send none need AGENTOS_AUTH, see README "Security".
+const FORWARDING = new Set([
   "forwarded",
+  "via",
   "x-real-ip",
-  "x-forwarded-host",
-];
+  "x-client-ip",
+  "true-client-ip",
+  "x-original-forwarded-for",
+]);
+const FORWARDING_PREFIXES = ["x-forwarded-", "cf-", "tailscale-"];
 
 // Reached without a token: the pairing page, what it needs to render, and
-// the claim it posts.
-const PUBLIC_PREFIXES = [
-  "/_next/static/",
-  "/icons/",
-  "/serwist/",
+// the claim it posts. Exact paths, plus a few static asset folders whose
+// paths may only use plain characters (no traversal, no encoding).
+const PUBLIC_EXACT = new Set([
   "/pair",
   "/api/pair/claim",
-];
-const PUBLIC_FILES = new Set([
   "/manifest.webmanifest",
   "/manifest.json",
   "/favicon.ico",
   "/icon.svg",
 ]);
+const PUBLIC_PREFIXES = ["/_next/static/", "/icons/", "/serwist/"];
+const PLAIN_PATH = /^\/[A-Za-z0-9._~\-/]*$/;
 
 export const plainAddress = (a?: string) => (a ?? "").replace(/^::ffff:/, "");
 
-function proxied(headers: IncomingHttpHeaders): boolean {
-  return (
-    FORWARDING.some((h) => headers[h] !== undefined) ||
-    Object.keys(headers).some((h) => h.startsWith("tailscale-"))
+export function proxied(headers: IncomingHttpHeaders): boolean {
+  return Object.keys(headers).some(
+    (h) => FORWARDING.has(h) || FORWARDING_PREFIXES.some((p) => h.startsWith(p))
   );
+}
+
+function hostName(host?: string): string {
+  const h = (host ?? "").trim().toLowerCase();
+  if (h.startsWith("[")) return h.slice(1, h.indexOf("]"));
+  return h.replace(/:\d+$/, "");
 }
 
 export function isPublicPath(url?: string): boolean {
   const path = (url ?? "/").split("?")[0];
-  if (PUBLIC_FILES.has(path) || path.startsWith("/apple-touch-icon"))
+  if (!PLAIN_PATH.test(path) || path.includes("..") || path.includes("//")) {
+    return false;
+  }
+  if (PUBLIC_EXACT.has(path) || /^\/apple-touch-icon[\w-]*\.png$/.test(path)) {
     return true;
-  return PUBLIC_PREFIXES.some(
-    (p) => path === p || path.startsWith(p.endsWith("/") ? p : `${p}/`)
-  );
+  }
+  return PUBLIC_PREFIXES.some((p) => path.startsWith(p));
+}
+
+export function cookieToken(headers: IncomingHttpHeaders): string | null {
+  for (const part of (headers.cookie ?? "").split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k !== DEVICE_COOKIE) continue;
+    try {
+      return decodeURIComponent(v.join("=")) || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function readToken(headers: IncomingHttpHeaders): string | null {
   const auth = headers.authorization;
   if (auth?.startsWith("Bearer ")) return auth.slice(7).trim() || null;
-  for (const part of (headers.cookie ?? "").split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === DEVICE_COOKIE) return decodeURIComponent(v.join("=")) || null;
-  }
-  return null;
+  return cookieToken(headers);
 }
 
 /** Where the request came from, before any token. */
@@ -95,8 +115,16 @@ export function networkTrust(
 ): Trust | null {
   const remote = plainAddress(req.remoteAddress);
   const local = plainAddress(req.localAddress);
-  // A proxy on this machine connects from loopback on behalf of someone else.
-  if (LOOPBACK.has(remote) && !proxied(req.headers)) return "loopback";
+  // A proxy on this machine connects from loopback on behalf of someone
+  // else, and a DNS-rebinding page reaches loopback under a foreign name:
+  // neither is this machine itself.
+  if (
+    LOOPBACK.has(remote) &&
+    LOOPBACK_HOSTS.has(hostName(req.headers.host)) &&
+    !proxied(req.headers)
+  ) {
+    return "loopback";
+  }
   if (
     !policy.requireOnTailnet &&
     policy.tailnet.includes(local) &&
@@ -108,7 +136,16 @@ export function networkTrust(
   return null;
 }
 
+/** Deny by default: anything that throws while deciding is a refusal. */
 export function authorize(req: AuthRequest, policy: AuthPolicy): AuthResult {
+  try {
+    return decide(req, policy);
+  } catch {
+    return { ok: false };
+  }
+}
+
+function decide(req: AuthRequest, policy: AuthPolicy): AuthResult {
   const trusted = networkTrust(req, policy);
   if (trusted) return { ok: true, via: trusted };
   const token = readToken(req.headers);
