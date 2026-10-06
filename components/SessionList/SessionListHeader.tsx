@@ -20,9 +20,11 @@ import {
   ListTodo,
   MessagesSquare,
   BookOpen,
+  Smartphone,
 } from "lucide-react";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { busUiActions } from "@/stores/busUi";
+import { devicesUiActions } from "@/stores/devicesUi";
 
 interface SessionListHeaderProps {
   onNewProject: () => void;
@@ -99,6 +101,7 @@ export function SessionListHeader({
           tooltip="More options"
           items={[
             menuItem("Machines", onManageHosts, { icon: Server }),
+            menuItem("Devices", devicesUiActions.open, { icon: Smartphone }),
             menuItem("Kill all sessions", onKillAll, {
               icon: Trash2,
               variant: "destructive",
