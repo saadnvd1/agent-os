@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { SearchAddon } from "@xterm/addon-search";
+import type { AttachSpec } from "@/lib/hosts/attach";
 
 export interface TerminalScrollState {
   scrollTop: number;
@@ -31,6 +32,7 @@ export interface UseTerminalConnectionReturn {
   copySelection: () => boolean;
   sendInput: (data: string) => void;
   sendCommand: (command: string) => void;
+  attach: (spec: AttachSpec) => void;
   focus: () => void;
   getScrollState: () => TerminalScrollState | null;
   restoreScrollState: (state: TerminalScrollState) => void;

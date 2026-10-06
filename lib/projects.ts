@@ -31,6 +31,7 @@ export interface CreateProjectOptions {
   defaultModel?: string;
   initialPrompt?: string;
   devServers?: CreateDevServerOptions[];
+  hostId?: string;
 }
 
 export interface CreateDevServerOptions {
@@ -99,7 +100,8 @@ export function createProject(
       opts.agentType || "claude",
       resolveModelForAgent(opts.agentType || "claude", opts.defaultModel),
       opts.initialPrompt || null,
-      maxOrder + 1
+      maxOrder + 1,
+      opts.hostId || null
     );
 
   // Create dev server configs if provided

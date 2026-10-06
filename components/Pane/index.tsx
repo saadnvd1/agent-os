@@ -121,6 +121,7 @@ export const Pane = memo(function Pane({
   const session = activeTab
     ? sessions.find((s) => s.id === activeTab.sessionId)
     : null;
+  const isLocalSession = !session?.host_id || session.host_id === "local";
 
   // File editor state - lifted here so it persists across view switches
   const fileEditor = useFileEditor();
@@ -202,14 +203,17 @@ export const Pane = memo(function Pane({
 
       onRegisterTerminal(paneId, tab.id, handle);
 
-      // Determine tmux session name to attach
-      const tmuxName = tab.sessionId
-        ? sessions.find((s) => s.id === tab.sessionId)?.tmux_name ||
-          tab.attachedTmux
-        : tab.attachedTmux;
+      const tabSession = tab.sessionId
+        ? sessions.find((s) => s.id === tab.sessionId)
+        : undefined;
+      const tmuxName = tabSession?.tmux_name || tab.attachedTmux;
 
       if (tmuxName) {
-        setTimeout(() => handle.sendCommand(`tmux attach -t ${tmuxName}`), 100);
+        handle.attach({
+          sessionName: tmuxName,
+          hostId: tabSession?.host_id ?? tab.attachedHost ?? undefined,
+          attachOnly: true,
+        });
       }
     },
     [paneId, sessions, onRegisterTerminal]
@@ -391,14 +395,11 @@ export const Pane = memo(function Pane({
                 setViewMode("terminal");
                 const worker = sessions.find((s) => s.id === workerId);
                 if (worker && terminalRef) {
-                  const sessionName = `claude-${workerId}`;
-                  terminalRef.sendInput("\x02d");
-                  setTimeout(() => {
-                    terminalRef?.sendInput("\x15");
-                    setTimeout(() => {
-                      terminalRef?.sendCommand(`tmux attach -t ${sessionName}`);
-                    }, 50);
-                  }, 100);
+                  terminalRef.attach({
+                    sessionName: worker.tmux_name || `claude-${workerId}`,
+                    hostId: worker.host_id,
+                    attachOnly: true,
+                  });
                 }
               }}
             />
@@ -478,16 +479,12 @@ export const Pane = memo(function Pane({
                         setViewMode("terminal");
                         const worker = sessions.find((s) => s.id === workerId);
                         if (worker && terminalRef) {
-                          const sessionName = `claude-${workerId}`;
-                          terminalRef.sendInput("\x02d");
-                          setTimeout(() => {
-                            terminalRef?.sendInput("\x15");
-                            setTimeout(() => {
-                              terminalRef?.sendCommand(
-                                `tmux attach -t ${sessionName}`
-                              );
-                            }, 50);
-                          }, 100);
+                          terminalRef.attach({
+                            sessionName:
+                              worker.tmux_name || `claude-${workerId}`,
+                            hostId: worker.host_id,
+                            attachOnly: true,
+                          });
                         }
                       }}
                     />
@@ -496,23 +493,25 @@ export const Pane = memo(function Pane({
               </ResizablePanel>
 
               {/* Shell drawer - under main content */}
-              {shellDrawerOpen && session?.working_directory && (
-                <>
-                  <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 h-px cursor-row-resize transition-colors" />
-                  <ResizablePanel defaultSize={30} minSize={10}>
-                    <ShellDrawer
-                      open={true}
-                      onOpenChange={setShellDrawerOpen}
-                      workingDirectory={session.working_directory}
-                    />
-                  </ResizablePanel>
-                </>
-              )}
+              {shellDrawerOpen &&
+                session?.working_directory &&
+                isLocalSession && (
+                  <>
+                    <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 h-px cursor-row-resize transition-colors" />
+                    <ResizablePanel defaultSize={30} minSize={10}>
+                      <ShellDrawer
+                        open={true}
+                        onOpenChange={setShellDrawerOpen}
+                        workingDirectory={session.working_directory}
+                      />
+                    </ResizablePanel>
+                  </>
+                )}
             </ResizablePanelGroup>
           </ResizablePanel>
 
           {/* Git drawer - right side, full height */}
-          {gitDrawerOpen && session?.working_directory && (
+          {gitDrawerOpen && session?.working_directory && isLocalSession && (
             <>
               <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 w-px cursor-col-resize transition-colors" />
               <ResizablePanel defaultSize={30} minSize={10}>

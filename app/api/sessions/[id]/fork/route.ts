@@ -50,7 +50,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         parent.group_path || "sessions",
         agentType,
         parent.auto_approve ? 1 : 0,
-        parent.project_id || "uncategorized"
+        parent.project_id || "uncategorized",
+        parent.host_id
       );
 
     // NOTE: We do NOT copy claude_session_id here.

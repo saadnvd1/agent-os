@@ -21,11 +21,13 @@ import { useViewport } from "@/hooks/useViewport";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { uploadFileToTemp } from "@/lib/file-upload";
 import { FilePicker } from "@/components/FilePicker";
+import type { AttachSpec } from "@/lib/hosts/attach";
 
 export type { TerminalScrollState };
 
 export interface TerminalHandle {
   sendCommand: (command: string) => void;
+  attach: (spec: AttachSpec) => void;
   sendInput: (data: string) => void;
   focus: () => void;
   getScrollState: () => TerminalScrollState | null;
@@ -78,6 +80,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       copySelection,
       sendInput,
       sendCommand,
+      attach,
       focus,
       getScrollState,
       restoreScrollState,
@@ -142,6 +145,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     // Expose imperative methods
     useImperativeHandle(ref, () => ({
       sendCommand,
+      attach,
       sendInput,
       focus,
       getScrollState,

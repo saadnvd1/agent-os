@@ -18,8 +18,8 @@ export const queries = {
   createSession: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type, auto_approve, project_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, parent_session_id, model, system_prompt, group_path, agent_type, auto_approve, project_id, host_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'local'))`
     ),
 
   getSession: (db: Database.Database) =>
@@ -189,8 +189,8 @@ export const queries = {
   createProject: (db: Database.Database) =>
     getStmt(
       db,
-      `INSERT INTO projects (id, name, working_directory, agent_type, default_model, initial_prompt, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO projects (id, name, working_directory, agent_type, default_model, initial_prompt, sort_order, host_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'local'))`
     ),
 
   getProject: (db: Database.Database) =>

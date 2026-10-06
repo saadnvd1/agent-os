@@ -88,6 +88,9 @@ export function DesktopTabBar({
     return "New Tab";
   };
 
+  // Files, git and the shell drawer read this machine's disk.
+  const isLocalSession = !session?.host_id || session.host_id === "local";
+
   return (
     <div
       className={cn(
@@ -165,63 +168,75 @@ export function DesktopTabBar({
             </TooltipTrigger>
             <TooltipContent>Terminal</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewModeChange("files");
-                }}
-                className={cn(
-                  "rounded px-2 py-1 transition-colors",
-                  viewMode === "files"
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Files</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onGitDrawerToggle();
-                }}
-                className={cn(
-                  "rounded px-2 py-1 transition-colors",
-                  gitDrawerOpen
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <GitBranch className="h-3.5 w-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Git</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onShellDrawerToggle();
-                }}
-                className={cn(
-                  "rounded px-2 py-1 font-mono text-xs transition-colors",
-                  shellDrawerOpen
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {">_"}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Shell</TooltipContent>
-          </Tooltip>
+          {isLocalSession && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewModeChange("files");
+                    }}
+                    className={cn(
+                      "rounded px-2 py-1 transition-colors",
+                      viewMode === "files"
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Files</TooltipContent>
+              </Tooltip>
+            </>
+          )}
+          {isLocalSession && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onGitDrawerToggle();
+                    }}
+                    className={cn(
+                      "rounded px-2 py-1 transition-colors",
+                      gitDrawerOpen
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <GitBranch className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Git</TooltipContent>
+              </Tooltip>
+            </>
+          )}
+          {isLocalSession && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShellDrawerToggle();
+                    }}
+                    className={cn(
+                      "rounded px-2 py-1 font-mono text-xs transition-colors",
+                      shellDrawerOpen
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {">_"}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Shell</TooltipContent>
+              </Tooltip>
+            </>
+          )}
           {isConductor && (
             <Tooltip>
               <TooltipTrigger asChild>

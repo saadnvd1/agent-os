@@ -150,6 +150,7 @@ export function useCreateProject() {
       workingDirectory: string;
       agentType?: string;
       defaultModel?: string;
+      hostId?: string;
       devServers?: Array<{
         name: string;
         type: string;

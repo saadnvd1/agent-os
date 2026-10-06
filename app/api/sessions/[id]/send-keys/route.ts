@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { getDb, queries, type Session } from "@/lib/db";
+import { hostExec, isRemoteHost } from "@/lib/hosts";
+import { shellQuote } from "@/lib/hosts/ssh";
 import { appendFileSync } from "fs";
 
 const execAsync = promisify(exec);
@@ -43,8 +45,25 @@ export async function POST(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const tmuxSessionName = `${session.agent_type}-${id}`;
+    const tmuxSessionName = session.tmux_name || `${session.agent_type}-${id}`;
     log(`Tmux session name: ${tmuxSessionName}`);
+
+    // A temp file here isn't visible to tmux on another machine, so remote
+    // sessions get the text as literal keys instead of a pasted buffer.
+    if (isRemoteHost(session.host_id)) {
+      const target = shellQuote(`=${tmuxSessionName}:`);
+      try {
+        await hostExec(
+          session.host_id,
+          `tmux send-keys -t ${target} -l ${shellQuote(text)}` +
+            (pressEnter ? ` && tmux send-keys -t ${target} Enter` : "")
+        );
+        return NextResponse.json({ success: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+    }
 
     // Check if tmux session exists
     try {

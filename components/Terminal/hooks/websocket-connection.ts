@@ -2,6 +2,7 @@
 
 import type { Terminal as XTerm } from "@xterm/xterm";
 import { WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from "../constants";
+import type { AttachSpec } from "@/lib/hosts/attach";
 
 export interface WebSocketCallbacks {
   onConnected?: () => void;
@@ -16,6 +17,7 @@ export interface WebSocketManager {
   ws: WebSocket;
   sendInput: (data: string) => void;
   sendCommand: (command: string) => void;
+  attach: (spec: AttachSpec) => void;
   sendResize: (cols: number, rows: number) => void;
   reconnect: () => void;
   cleanup: () => void;
@@ -48,6 +50,12 @@ export function createWebSocketConnection(
   const sendCommand = (command: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "command", data: command }));
+    }
+  };
+
+  const attach = (spec: AttachSpec) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "attach", spec }));
     }
   };
 
@@ -140,6 +148,8 @@ export function createWebSocketConnection(
             term.scrollToLine(scrollYBefore);
           }
         });
+      } else if (msg.type === "detached") {
+        term.write("\r\n\x1b[33m[detached]\x1b[0m\r\n");
       } else if (msg.type === "exit") {
         term.write("\r\n\x1b[33m[Session ended]\x1b[0m\r\n");
       }
@@ -252,6 +262,7 @@ export function createWebSocketConnection(
     ws,
     sendInput,
     sendCommand,
+    attach,
     sendResize,
     reconnect: forceReconnect,
     cleanup,

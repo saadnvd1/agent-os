@@ -11,6 +11,7 @@ import {
 import { FolderPicker } from "@/components/FolderPicker";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionListHeader } from "./SessionListHeader";
+import { HostsDialog } from "@/components/Hosts";
 import { GroupSection } from "./GroupSection";
 import { KillAllConfirm } from "./KillAllConfirm";
 import { useSessionListMutations } from "./hooks/useSessionListMutations";
@@ -78,6 +79,7 @@ export function SessionList({
   const [editingProject, setEditingProject] =
     useState<ProjectWithRepositories | null>(null);
   const [showKillAllConfirm, setShowKillAllConfirm] = useState(false);
+  const [showHostsDialog, setShowHostsDialog] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<Session | null>(null);
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
   const [logsServerId, setLogsServerId] = useState<string | null>(null);
@@ -162,6 +164,7 @@ export function SessionList({
           setShowNewProjectDialog(true);
         }}
         onKillAll={() => setShowKillAllConfirm(true)}
+        onManageHosts={() => setShowHostsDialog(true)}
         pinControls={pinControls}
       />
 
@@ -318,6 +321,11 @@ export function SessionList({
           onClose={() => setLogsServerId(null)}
         />
       )}
+
+      <HostsDialog
+        open={showHostsDialog}
+        onClose={() => setShowHostsDialog(false)}
+      />
 
       {/* New Project Dialog */}
       <NewProjectDialog

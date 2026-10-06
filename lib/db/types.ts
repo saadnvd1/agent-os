@@ -16,6 +16,7 @@ export interface Session {
   project_id: string | null;
   agent_type: AgentType;
   auto_approve: boolean;
+  host_id: string;
   // Worktree fields (optional)
   worktree_path: string | null;
   branch_name: string | null;
@@ -49,6 +50,7 @@ export interface Project {
   expanded: boolean;
   sort_order: number;
   is_uncategorized: boolean;
+  host_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -109,4 +111,12 @@ export interface DevServer {
   working_directory: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Host {
+  id: string;
+  name: string;
+  ssh_target: string;
+  sort_order: number;
+  created_at: string;
 }

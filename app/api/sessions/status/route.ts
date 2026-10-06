@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -13,7 +11,10 @@ import {
 } from "@/lib/providers/registry";
 import { getDb } from "@/lib/db";
 
-const execAsync = promisify(exec);
+import { hostExec, isRemoteHost } from "@/lib/hosts";
+
+const execOn = (sessionName: string, command: string) =>
+  hostExec(statusDetector.hostFor(sessionName), command);
 
 interface SessionStatusResponse {
   sessionName: string;
@@ -24,19 +25,14 @@ interface SessionStatusResponse {
 }
 
 async function getTmuxSessions(): Promise<string[]> {
-  try {
-    const { stdout } = await execAsync(
-      "tmux list-sessions -F '#{session_name}' 2>/dev/null || true"
-    );
-    return stdout.trim().split("\n").filter(Boolean);
-  } catch {
-    return [];
-  }
+  const sessions = await statusDetector.listSessions();
+  return sessions.map((s) => s.name);
 }
 
 async function getTmuxSessionCwd(sessionName: string): Promise<string | null> {
   try {
-    const { stdout } = await execAsync(
+    const { stdout } = await execOn(
+      sessionName,
       `tmux display-message -t "${sessionName}" -p "#{pane_current_path}" 2>/dev/null || echo ""`
     );
     const cwd = stdout.trim();
@@ -51,7 +47,8 @@ async function getClaudeSessionIdFromEnv(
   sessionName: string
 ): Promise<string | null> {
   try {
-    const { stdout } = await execAsync(
+    const { stdout } = await execOn(
+      sessionName,
       `tmux show-environment -t "${sessionName}" CLAUDE_SESSION_ID 2>/dev/null || echo ""`
     );
     const line = stdout.trim();
@@ -127,6 +124,9 @@ async function getClaudeSessionId(sessionName: string): Promise<string | null> {
     return envId;
   }
 
+  // Claude's transcript files live on the machine running the session.
+  if (isRemoteHost(statusDetector.hostFor(sessionName))) return null;
+
   const cwd = await getTmuxSessionCwd(sessionName);
   if (cwd) {
     return getClaudeSessionIdFromFiles(cwd);
@@ -137,7 +137,8 @@ async function getClaudeSessionId(sessionName: string): Promise<string | null> {
 
 async function getLastLine(sessionName: string): Promise<string> {
   try {
-    const { stdout } = await execAsync(
+    const { stdout } = await execOn(
+      sessionName,
       `tmux capture-pane -t "${sessionName}" -p -S -5 2>/dev/null || echo ""`
     );
     const lines = stdout.trim().split("\n").filter(Boolean);
@@ -233,7 +234,10 @@ export async function GET() {
     // Cleanup old trackers
     statusDetector.cleanup();
 
-    return NextResponse.json({ statuses: statusMap });
+    return NextResponse.json({
+      statuses: statusMap,
+      hostErrors: statusDetector.hostErrors(),
+    });
   } catch (error) {
     console.error("Error getting session statuses:", error);
     return NextResponse.json({ statuses: {} });

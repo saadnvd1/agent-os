@@ -14,6 +14,7 @@ import {
   Trash2,
   Pin,
   PinOff,
+  Server,
 } from "lucide-react";
 
 interface SessionListHeaderProps {
@@ -21,6 +22,7 @@ interface SessionListHeaderProps {
   onOpenProject: () => void;
   onCloneFromGithub: () => void;
   onKillAll: () => void;
+  onManageHosts: () => void;
   pinControls?: {
     isPinned: boolean;
     onTogglePin: () => void;
@@ -32,6 +34,7 @@ export function SessionListHeader({
   onOpenProject,
   onCloneFromGithub,
   onKillAll,
+  onManageHosts,
   pinControls,
 }: SessionListHeaderProps) {
   return (
@@ -92,6 +95,7 @@ export function SessionListHeader({
           icon={MoreHorizontal}
           tooltip="More options"
           items={[
+            menuItem("Machines", onManageHosts, { icon: Server }),
             menuItem("Kill all sessions", onKillAll, {
               icon: Trash2,
               variant: "destructive",
