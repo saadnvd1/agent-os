@@ -1,5 +1,6 @@
 import type {
   CanUseTool,
+  HookCallback,
   PermissionMode,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -37,6 +38,9 @@ export class Approvals {
   constructor(private emit: (e: DriverEvent) => void) {}
 
   canUseTool: CanUseTool = (toolName, input, options) => {
+    // Already answered on its card by the question hook.
+    if (toolName === "AskUserQuestion" && "answers" in input)
+      return Promise.resolve({ behavior: "allow", updatedInput: input });
     const questions =
       toolName === "AskUserQuestion"
         ? ((input as { questions?: ChatQuestion[] }).questions ?? [])
@@ -71,6 +75,35 @@ export class Approvals {
       this.emit({ type: "item", item });
       this.emit({ type: "state", state: "waiting" });
     });
+  };
+
+  // Full access approves every tool before canUseTool is asked, questions
+  // included, so the agent's questions come through this hook instead.
+  askQuestions: HookCallback = async (input, toolUseID, { signal }) => {
+    if (input.hook_event_name !== "PreToolUse") return {};
+    const result = await this.canUseTool(
+      input.tool_name,
+      (input.tool_input ?? {}) as Record<string, unknown>,
+      {
+        signal,
+        toolUseID: toolUseID ?? input.tool_use_id,
+      } as Parameters<CanUseTool>[2]
+    );
+    if (result?.behavior !== "allow")
+      return {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: result?.message ?? DENIED,
+        },
+      };
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        updatedInput: result.updatedInput,
+      },
+    };
   };
 
   respond(id: string, answer: ApprovalDecision): void {
