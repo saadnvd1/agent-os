@@ -37,8 +37,15 @@ export function PasskeysSection({ open }: { open: boolean }) {
     passkeysHere,
     () => true
   );
+  // A passkey belongs to the page's host name. Read it here: browsers send
+  // no Origin on a same-origin GET, so the server can't tell.
+  const hostname = useSyncExternalStore(
+    () => () => {},
+    () => location.hostname,
+    () => null
+  );
   const keys = data?.passkeys ?? [];
-  const mineHere = keys.some((k) => k.rp_id === data?.host);
+  const mineHere = keys.some((k) => k.rp_id === hostname);
   const btn = "h-11 sm:h-9";
 
   return (

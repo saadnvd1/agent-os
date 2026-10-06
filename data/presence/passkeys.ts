@@ -16,7 +16,6 @@ export function usePasskeysQuery(enabled = true) {
     queryFn: async () =>
       json<{
         passkeys: PasskeyView[];
-        host: string | null;
         bootstrapped: boolean;
       }>(await fetch("/api/presence/passkeys")),
     enabled,
