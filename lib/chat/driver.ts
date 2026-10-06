@@ -1,4 +1,4 @@
-import type { ChatImage, DriverEvent } from "./events";
+import type { ChatCommand, ChatImage, ChatModel, DriverEvent } from "./events";
 
 export interface ChatStartOptions {
   cwd: string;
@@ -15,6 +15,7 @@ export interface ChatStartOptions {
 export interface ChatConversation {
   send(text: string, images?: ChatImage[]): void;
   interrupt(): Promise<void>;
+  setModel(model: string): Promise<void>;
   close(): void;
   events: AsyncIterable<DriverEvent>;
 }
@@ -23,4 +24,10 @@ export interface ChatConversation {
 export interface ChatDriver {
   id: string;
   start(options: ChatStartOptions): ChatConversation;
+  // What the agent offers in a folder (its commands, skills and models),
+  // without starting a conversation.
+  discover(options: { cwd: string; env: Record<string, string> }): Promise<{
+    commands: ChatCommand[];
+    models: ChatModel[];
+  }>;
 }

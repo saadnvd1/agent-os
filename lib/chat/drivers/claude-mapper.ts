@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { ChatItem, DriverEvent } from "../events";
+import type { ChatCommand, ChatItem, DriverEvent } from "../events";
 import { clipOutput, toolDiff, toolTitle } from "../tools";
 
 // Loose views of the SDK's message shapes: only what the mapper reads.
@@ -14,11 +14,13 @@ type Block = {
   content?: unknown;
   is_error?: boolean;
 };
+const SYNTHETIC_MODEL = "<synthetic>";
+
 export type ClaudeMessage = {
   type: string;
   subtype?: string;
   session_id?: string;
-  message?: { id?: string; content?: Block[] | string };
+  message?: { id?: string; model?: string; content?: Block[] | string };
   event?: {
     type: string;
     content_block?: Block;
@@ -30,7 +32,27 @@ export type ClaudeMessage = {
   is_error?: boolean;
   errors?: string[];
   result?: string;
+  content?: string;
+  terminal_slash_commands?: string[];
+  commands?: SdkCommand[];
+  compact_metadata?: { trigger?: "manual" | "auto" };
 };
+
+export type SdkCommand = {
+  name: string;
+  description?: string;
+  argumentHint?: string;
+  builtin?: boolean;
+};
+
+export function toCommand(c: SdkCommand): ChatCommand {
+  return {
+    name: c.name,
+    description: c.description ?? "",
+    argumentHint: c.argumentHint || undefined,
+    builtin: c.builtin,
+  };
+}
 
 const now = () => Date.now();
 
@@ -60,9 +82,7 @@ export class ClaudeMapper {
     if (m.parent_tool_use_id) return [];
     switch (m.type) {
       case "system":
-        return m.subtype === "init" && m.session_id
-          ? [{ type: "resume_id", id: m.session_id }]
-          : [];
+        return this.system(m);
       case "stream_event":
         return this.stream(m);
       case "assistant":
@@ -78,6 +98,51 @@ export class ClaudeMapper {
 
   private pendingText = false;
   private pendingThinking = false;
+
+  private system(m: ClaudeMessage): DriverEvent[] {
+    switch (m.subtype) {
+      case "init": {
+        const out: DriverEvent[] = [];
+        if (m.session_id) out.push({ type: "resume_id", id: m.session_id });
+        if (m.terminal_slash_commands?.length) {
+          out.push({ type: "terminal_only", names: m.terminal_slash_commands });
+        }
+        return out;
+      }
+      case "commands_changed":
+        return m.commands
+          ? [{ type: "commands", commands: m.commands.map(toCommand) }]
+          : [];
+      case "local_command_output":
+        return m.content
+          ? [
+              {
+                type: "item",
+                item: {
+                  id: randomUUID(),
+                  kind: "command_output",
+                  text: m.content,
+                  createdAt: now(),
+                },
+              },
+            ]
+          : [];
+      case "compact_boundary":
+        return [
+          {
+            type: "item",
+            item: {
+              id: randomUUID(),
+              kind: "compacted",
+              trigger: m.compact_metadata?.trigger,
+              createdAt: now(),
+            },
+          },
+        ];
+      default:
+        return [];
+    }
+  }
 
   // Items are created on their first text, so blocks that never send any
   // (hidden thinking, empty starts) never show up as empty bubbles.
@@ -125,8 +190,21 @@ export class ClaudeMapper {
   private assistant(m: ClaudeMessage): DriverEvent[] {
     const blocks = Array.isArray(m.message?.content) ? m.message.content : [];
     const out: DriverEvent[] = [];
+    // The CLI answers local commands (/usage, /context…) with a synthetic
+    // message: preformatted text, not model prose.
+    const synthetic = m.message?.model === SYNTHETIC_MODEL;
     for (const b of blocks) {
-      if (b.type === "text" && b.text) {
+      if (synthetic && b.type === "text" && b.text) {
+        out.push({
+          type: "item",
+          item: {
+            id: randomUUID(),
+            kind: "command_output",
+            text: b.text,
+            createdAt: now(),
+          },
+        });
+      } else if (b.type === "text" && b.text) {
         const id = this.streamingText?.id ?? randomUUID();
         out.push({
           type: "item",

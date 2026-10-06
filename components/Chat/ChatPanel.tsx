@@ -8,6 +8,9 @@ import { Composer } from "./Composer";
 import { ToolGroup } from "./Tools";
 import {
   AssistantMessage,
+  CommandOutput,
+  Compacted,
+  SkillChip,
   ErrorMessage,
   Reasoning,
   Todos,
@@ -29,6 +32,12 @@ function Item({ item }: { item: ChatItem }) {
       return <TurnEnd item={item} />;
     case "error":
       return <ErrorMessage item={item} />;
+    case "command_output":
+      return <CommandOutput item={item} />;
+    case "compacted":
+      return <Compacted item={item} />;
+    case "tool":
+      return item.name === "Skill" ? <SkillChip item={item} /> : null;
     default:
       return null;
   }
@@ -41,7 +50,17 @@ export function ChatPanel({
   sessionId: string;
   sessionName: string;
 }) {
-  const { items, state, connected, send, interrupt } = useChat(sessionId);
+  const {
+    items,
+    state,
+    connected,
+    commands,
+    models,
+    model,
+    send,
+    interrupt,
+    setModel,
+  } = useChat(sessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
 
@@ -96,6 +115,10 @@ export function ChatPanel({
             send(text, images.length ? images : undefined);
           }}
           onStop={interrupt}
+          commands={commands}
+          models={models}
+          model={model}
+          onSetModel={setModel}
         />
       </div>
     </div>

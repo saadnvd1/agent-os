@@ -42,4 +42,18 @@ describe("groupTimeline", () => {
     ]);
     expect(blocks).toHaveLength(1);
   });
+
+  it("shows a skill on its own, between tool runs", () => {
+    const skill: ChatItem = {
+      id: "s",
+      kind: "tool",
+      name: "Skill",
+      title: "Skill: ship",
+      input: {},
+      status: "done",
+      createdAt: 0,
+    };
+    const blocks = groupTimeline([tool("t1"), skill, tool("t2")]);
+    expect(blocks.map((b) => b.type)).toEqual(["tools", "item", "tools"]);
+  });
 });
