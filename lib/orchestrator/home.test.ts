@@ -131,7 +131,7 @@ describe("orchestratorBrief", () => {
     expect(brief).toMatch(/CI is green on the PR's head commit/);
     expect(brief).toMatch(/second failure of the same gate goes to Saad/);
     expect(brief).toMatch(/CI config, deploy scripts or secrets handling/);
-    expect(brief).toMatch(/at most a set number of sessions running/);
+    expect(brief).toMatch(/Starting work has no limits right now/);
     for (const line of [
       "Anything public or outbound",
       "Money.",
