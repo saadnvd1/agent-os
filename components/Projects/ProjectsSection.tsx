@@ -1,7 +1,13 @@
 "use client";
 
-import { DiscoveredTmuxList } from "@/components/Hosts/DiscoveredTmuxList";
-import { useMemo, useCallback } from "react";
+import { ChevronRight } from "lucide-react";
+import { TmuxSessionRow } from "@/components/Hosts/TmuxSessionRow";
+import { useDiscoveredTmuxQuery } from "@/data/hosts";
+import { tmuxAttachActions } from "@/stores/tmuxAttach";
+import { projectRow, type ProjectRowModel } from "@/lib/project-rows";
+import type { TmuxSessionInfo } from "@/lib/status-detector";
+import { cn } from "@/lib/utils";
+import { useMemo, useCallback, useState } from "react";
 import { useSnapshot } from "valtio";
 import { ProjectCard } from "./ProjectCard";
 import { SessionCard } from "@/components/SessionCard";
@@ -77,6 +83,7 @@ export function ProjectsSection({
   onHoverStart,
   onHoverEnd,
 }: ProjectsSectionProps) {
+  const [showIdle, setShowIdle] = useState(false);
   const { selectedIds } = useSnapshot(selectionStore);
   const isInSelectMode = selectedIds.size > 0;
 
@@ -149,13 +156,41 @@ export function ProjectsSection({
     return devServers.filter((ds) => ds.project_id === projectId);
   };
 
+  const { data: discovered } = useDiscoveredTmuxQuery();
+  const tmuxByProject: Record<string, TmuxSessionInfo[]> = {};
+  for (const t of discovered?.sessions ?? []) {
+    if (t.projectId) (tmuxByProject[t.projectId] ??= []).push(t);
+  }
+  const rows: Record<string, ProjectRowModel> = {};
+  for (const project of projects) {
+    rows[project.id] = projectRow({
+      sessions: sessionsByProject[project.id] || [],
+      hasWorkers: (id) => (workersByConduct[id]?.length ?? 0) > 0,
+      tmux: tmuxByProject[project.id] || [],
+      statuses: sessionStatuses ?? {},
+      activeSessionId,
+    });
+  }
+
+  // As in mTerm, projects with nothing running fold behind one row.
+  const visible = projects.filter(
+    (p) =>
+      !(p.is_uncategorized && rows[p.id].sessionCount === 0) &&
+      (rows[p.id].running || rows[p.id].active)
+  );
+  const idle = projects.filter(
+    (p) =>
+      !(p.is_uncategorized && rows[p.id].sessionCount === 0) &&
+      !visible.includes(p)
+  );
+  const shown = showIdle ? [...visible, ...idle] : visible;
+
   return (
-    <div className="space-y-1">
-      {projects.map((project) => {
+    <div className="space-y-px">
+      {shown.map((project) => {
         const projectSessions = sessionsByProject[project.id] || [];
-        if (project.is_uncategorized && projectSessions.length === 0) {
-          return null;
-        }
+        const row = rows[project.id];
+        const projectTmux = tmuxByProject[project.id] || [];
         const runningServers = getProjectRunningServers(project.id);
         const projectDevServers = getProjectDevServers(project.id);
 
@@ -164,7 +199,14 @@ export function ProjectsSection({
             {/* Project header */}
             <ProjectCard
               project={project}
-              sessionCount={projectSessions.length}
+              sessionCount={row.sessionCount}
+              row={row}
+              onOpenSingle={() => {
+                const target = row.single;
+                if (target?.kind === "session") onSelectSession(target.id);
+                else if (target)
+                  tmuxAttachActions.request(target.name, target.hostId);
+              }}
               runningDevServers={runningServers}
               onToggleExpanded={(expanded) =>
                 onToggleProject?.(project.id, expanded)
@@ -226,7 +268,7 @@ export function ProjectsSection({
                 )}
 
                 {/* Project sessions */}
-                {projectSessions.length === 0
+                {row.single || projectSessions.length === 0
                   ? null
                   : projectSessions.map((session) => {
                       const workers = workersByConduct[session.id] || [];
@@ -354,12 +396,32 @@ export function ProjectsSection({
                         </div>
                       );
                     })}
-                <DiscoveredTmuxList projectId={project.id} />
+                {!row.single &&
+                  projectTmux.map((t) => (
+                    <TmuxSessionRow key={`${t.hostId}:${t.name}`} session={t} />
+                  ))}
               </div>
             )}
           </div>
         );
       })}
+      {idle.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowIdle(!showIdle)}
+          className="text-muted-foreground/70 hover:text-muted-foreground flex min-h-11 w-full items-center gap-1.5 px-2.5 text-left text-xs md:min-h-7"
+        >
+          <ChevronRight
+            className={cn(
+              "h-3 w-3 shrink-0 transition-transform",
+              showIdle && "rotate-90"
+            )}
+          />
+          {showIdle
+            ? `Hide ${idle.length} not running`
+            : `${idle.length} not running`}
+        </button>
+      )}
     </div>
   );
 }

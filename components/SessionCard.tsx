@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  fromSqliteTime,
+  rowMeta,
+  type SessionStatus,
+} from "@/lib/session-meta";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -41,7 +46,7 @@ import {
 import type { Session, Group } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 
-type TmuxStatus = "idle" | "running" | "waiting" | "error" | "dead";
+type TmuxStatus = SessionStatus;
 
 interface SessionCardProps {
   session: Session;
@@ -68,19 +73,6 @@ interface SessionCardProps {
   onHoverEnd?: () => void;
 }
 
-// Status lives in the row's text, not its surface. Only states that need a
-// human get a word; idle rows show how long ago they were last active.
-const statusConfig: Record<TmuxStatus, { label: string; tone: string }> = {
-  idle: { label: "", tone: "text-muted-foreground/60" },
-  running: { label: "Working", tone: "text-muted-foreground" },
-  waiting: {
-    label: "Needs input",
-    tone: "text-amber-600 dark:text-amber-400",
-  },
-  error: { label: "Error", tone: "text-destructive" },
-  dead: { label: "Stopped", tone: "text-muted-foreground/50" },
-};
-
 export function SessionCard({
   session,
   isActive,
@@ -103,9 +95,8 @@ export function SessionCard({
   onHoverStart,
   onHoverEnd,
 }: SessionCardProps) {
-  const timeAgo = getTimeAgo(session.updated_at);
   const status = tmuxStatus || "dead";
-  const config = statusConfig[status];
+  const meta = rowMeta(status, fromSqliteTime(session.updated_at));
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(session.name);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -429,10 +420,10 @@ export function SessionCard({
         <span
           className={cn(
             "flex-shrink-0 text-[11px] font-medium tabular-nums md:group-hover:invisible",
-            config.tone
+            meta.tone
           )}
         >
-          {config.label || timeAgo}
+          {meta.text}
         </span>
       )}
 
@@ -467,22 +458,4 @@ export function SessionCard({
   }
 
   return cardContent;
-}
-
-function getTimeAgo(dateStr: string): string {
-  const date = new Date(dateStr + "Z"); // Assume UTC
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-
-  if (diffMins < 1) return "now";
-  if (diffMins < 60) return `${diffMins}m`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d`;
-
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

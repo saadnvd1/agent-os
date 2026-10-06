@@ -22,6 +22,7 @@ interface SessionStatusResponse {
   lastLine?: string;
   claudeSessionId?: string | null;
   agentType?: AgentType;
+  title?: string;
 }
 
 async function getTmuxSessions(): Promise<string[]> {
@@ -209,6 +210,7 @@ export async function GET() {
         lastLine,
         claudeSessionId,
         agentType,
+        title: statusDetector.titleFor(sessionName),
       };
     }
 

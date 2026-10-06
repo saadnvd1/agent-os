@@ -1,3 +1,4 @@
 export { HostsDialog } from "./HostsDialog";
 export { HostBadge } from "./HostBadge";
-export { DiscoveredTmuxList } from "./DiscoveredTmuxList";
+export { ElsewhereTmuxList } from "./DiscoveredTmuxList";
+export { TmuxSessionRow } from "./TmuxSessionRow";

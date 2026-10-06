@@ -7,6 +7,7 @@ export interface SessionStatus {
   sessionName: string;
   status: "idle" | "running" | "waiting" | "error" | "dead";
   lastLine?: string;
+  title?: string;
   claudeSessionId?: string | null;
 }
 
