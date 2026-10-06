@@ -7,6 +7,7 @@ import { runMigrations } from "./migrations";
 // Re-export types and queries
 export * from "./types";
 export { queries } from "./queries";
+export * from "./lumifyhub";
 
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "agent-os.db");
 const LOCK_PATH = DB_PATH + ".init-lock";
