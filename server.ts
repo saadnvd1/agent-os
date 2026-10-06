@@ -32,6 +32,7 @@ import {
 import { authPolicy, gateRequest, gateUpgrade } from "./lib/security/gate";
 import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
+import { startConnect } from "./lib/connect/serve";
 import os from "os";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -364,6 +365,9 @@ app.prepare().then(() => {
         : []),
     ];
   };
+  // AgentOS Connect: reachable at <id>.<machine domain> through the relay.
+  const connect = startConnect({ onRequest, onUpgrade });
+  if (connect) configuredHosts.push(connect.hostname);
   refreshListeners();
   if (!process.env.AGENTOS_BIND) setInterval(refreshListeners, 5000);
   if (process.env.AGENTOS_AUTH === "off" && listeners.size > 1) {
