@@ -167,21 +167,26 @@ async function prFor(session: Session, fresh = false): Promise<TaskPR | null> {
   return pr;
 }
 
-// The agent runs in front of a shell; when only the shell is left it exited.
+// The agent runs under a shell (`zsh -c "...; claude ...; exec $SHELL"`), so
+// the pane's command reads as the shell even while the agent works. It has
+// exited when the shell is all that's left: no child process under it.
 async function shellOnly(tmuxName: string): Promise<boolean> {
   try {
-    const cmd = await run(
+    const out = await run(
       "tmux",
       [
         "display-message",
         "-t",
         `=${tmuxName}:`,
         "-p",
-        "#{pane_current_command}",
+        "#{pane_current_command} #{pane_pid}",
       ],
       "/"
     );
-    return /^-?(zsh|bash|sh|fish)$/.test(cmd.trim());
+    const [cmd, pid] = out.trim().split(" ");
+    if (!/^-?(zsh|bash|sh|fish)$/.test(cmd)) return false;
+    const children = await run("pgrep", ["-P", pid], "/").catch(() => "");
+    return children.trim() === "";
   } catch {
     return false;
   }
