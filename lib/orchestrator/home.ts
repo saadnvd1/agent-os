@@ -54,7 +54,7 @@ export function ensureOrchestrator(workspaceId: string): Session {
     `INSERT OR IGNORE INTO sessions (id, name, tmux_name, working_directory, model,
        group_path, agent_type, auto_approve, project_id, host_id, view, chat_access,
        role, workspace_id)
-     VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 1, NULL, 'local', 'chat', 'full',
+     VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 0, NULL, 'local', 'chat', 'ask',
        'orchestrator', ?)`
   ).run(
     id,
@@ -65,4 +65,12 @@ export function ensureOrchestrator(workspaceId: string): Session {
     workspaceId
   );
   return getOrchestrator(workspaceId)!;
+}
+
+// Why a session can't be deleted on its own, or null. An orchestrator goes
+// only with its workspace.
+export function deletionRefusal(session: Pick<Session, "role">): string | null {
+  return session.role === "orchestrator"
+    ? "A workspace's orchestrator can't be deleted; it goes with its workspace"
+    : null;
 }

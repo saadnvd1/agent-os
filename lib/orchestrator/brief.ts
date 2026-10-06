@@ -2,6 +2,7 @@ import { db, type Project, type Session } from "../db";
 import { getDefaultBranch } from "../git";
 import { getWorkspace } from "../workspaces";
 import { TOOL_NAMES } from "./tool-names";
+import { UNTRUSTED_RULE } from "./untrusted";
 
 export interface BriefProject {
   name: string;
@@ -38,7 +39,11 @@ const TOOLS = `## Your tools
 - \`${TOOL_NAMES.read}\` (session, lines?): the end of a session's terminal or chat.
 - \`${TOOL_NAMES.cards}\` (board?): the cards on the workspace's LumifyHub boards.
 
-These are read-only. To act, use \`aos send\`, \`aos task\` and \`aos spawn\` as the rules above allow.`;
+These are read-only. To act, use \`aos send\`, \`aos task\` and \`aos spawn\` as the rules above allow. You can read files (Read, Grep, Glob) but not edit them, and the shell runs \`aos\` commands only.
+
+## Untrusted text
+
+${UNTRUSTED_RULE}`;
 
 function projectLine(p: BriefProject): string {
   const board = p.board ? `, LumifyHub board "${p.board}"` : "";

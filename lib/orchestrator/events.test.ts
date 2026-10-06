@@ -1,239 +1,202 @@
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspace } from "@/lib/workspaces";
-import type { TaskPR } from "@/lib/tasks/state";
-import { conditionsFor, IDLE_NO_PR_MS, type StackFacts } from "./conditions";
-import { recordConditions, pendingEvents } from "./events";
-import { BATCH_WINDOW_MS, deliverEvents } from "./deliver";
-import type { SessionFacts } from "./facts";
 import { createProject } from "@/lib/projects";
+import type { Condition } from "./conditions";
+import {
+  markDelivered,
+  pendingEvents,
+  recordConditions,
+  REFIRE_MS,
+} from "./events";
+import {
+  backoffMs,
+  BATCH_WINDOW_MS,
+  deliverEvents,
+  LOW_HOLD_MS,
+  SUBJECT_CAP,
+} from "./deliver";
+import { NOW } from "./fixtures";
 import { seedSession } from "./testing";
 
-const NOW = Date.parse("2026-10-06T12:00:00Z");
-// Events about sessions that are gone are forgotten, so they're about a
-// real one.
-const SID = seedSession({
-  projectId: createProject({ name: "api", workingDirectory: "/tmp/api" }).id,
-  name: "add-auth",
-});
+// Events about sessions that are gone are forgotten, so they're about real ones.
+const project = createProject({ name: "api", workingDirectory: "/tmp/api" });
+const sid = () => seedSession({ projectId: project.id, name: "add-auth" });
 
-const facts = (over: Partial<SessionFacts> = {}): SessionFacts => ({
-  id: SID,
-  name: "add-auth",
-  project: "api",
-  view: "terminal",
-  status: "running",
-  activity: null,
-  lastActive: NOW,
-  branch: "feature/add-auth",
-  task: { state: "working", pr: null, blocked: null },
-  stack: null,
+const cond = (
+  subject: string,
+  key: string,
+  over: Partial<Condition> = {}
+): Condition => ({
+  key: `${key}:${subject}`,
+  subject,
+  line: `${key} ${subject.slice(0, 4)}`,
+  sticky: true,
   ...over,
 });
-const pr = (over: Partial<TaskPR> = {}): TaskPR => ({
-  number: 12,
-  url: "u",
-  state: "OPEN",
-  checks: "pending",
-  head: "aaa",
-  ...over,
-});
-const withTask = (task: Partial<NonNullable<SessionFacts["task"]>>) =>
-  facts({ task: { state: "review", pr: null, blocked: null, ...task } });
-const lines = (f: SessionFacts[], stacks: StackFacts[] = []) =>
-  conditionsFor(f, stacks, NOW).map((c) => c.line);
 
-describe("conditionsFor", () => {
-  it("reads PRs, CI, merges and BLOCKED: lines as task events", () => {
-    expect(lines([withTask({ pr: pr() })])).toEqual([
-      "task add-auth: PR #12 opened (CI pending)",
-    ]);
-    expect(lines([withTask({ pr: pr({ checks: "pass" }) })])).toContain(
-      "task add-auth: CI green"
+// A workspace whose sessions have been seen once with nothing going on.
+function setup(subjects = [sid()]) {
+  const w = createWorkspace(`w-${Math.random()}`);
+  recordConditions(w.id, [], subjects, NOW);
+  const record = (conds: Condition[], now = NOW) =>
+    recordConditions(w.id, conds, subjects, now);
+  const pending = () => pendingEvents(w.id).map((e) => e.line);
+  const deliverAll = (at: number) =>
+    markDelivered(
+      pendingEvents(w.id).map((e) => e.id),
+      at
     );
-    expect(
-      lines([withTask({ pr: pr({ checks: "fail", failing: "lint" }) })])
-    ).toContain("task add-auth: CI failed: lint");
-    expect(lines([withTask({ pr: pr({ state: "MERGED" }) })])).toEqual([
-      "task add-auth: merged",
-    ]);
-    expect(
-      lines([withTask({ state: "blocked", blocked: "need the key" })])
-    ).toContain("task add-auth: BLOCKED: need the key");
-  });
-
-  it("reads needs-input and idle-with-no-PR as session events", () => {
-    expect(
-      lines([facts({ task: null, status: "waiting", activity: "Allow Bash?" })])
-    ).toEqual(["add-auth: needs input: Allow Bash?"]);
-    const idle = facts({
-      status: "idle",
-      lastActive: NOW - IDLE_NO_PR_MS - 60000,
-    });
-    expect(lines([idle])).toEqual(["task add-auth: idle 31m, no PR"]);
-    // Not before 30 minutes, not with a PR, not for a session with no branch.
-    expect(lines([facts({ status: "idle", lastActive: NOW - 60000 })])).toEqual(
-      []
-    );
-    expect(
-      lines([
-        facts({ task: null, branch: null, status: "idle", lastActive: 0 }),
-      ])
-    ).toEqual([]);
-  });
-
-  it("reads stack steps", () => {
-    const stack: StackFacts = {
-      id: "st",
-      name: "Auth",
-      status: "running",
-      items: [
-        { id: "i1", ticket: "ROA-1", title: "a", status: "pr", error: null },
-        {
-          id: "i2",
-          ticket: "ROA-2",
-          title: "b",
-          status: "planned",
-          error: null,
-        },
-        {
-          id: "i3",
-          ticket: null,
-          title: "c",
-          status: "failed",
-          error: "conflict",
-        },
-      ],
-    };
-    expect(lines([], [stack])).toEqual([
-      "stack Auth: ROA-1 PR up",
-      "stack Auth: c failed: conflict",
-    ]);
-  });
-});
+  return { w, subjects, record, pending, deliverAll };
+}
 
 describe("recordConditions", () => {
-  it("takes the first look as known, then queues only what's new", async () => {
-    const w = createWorkspace("Diff");
-    const open = conditionsFor([withTask({ pr: pr() })], [], NOW);
-    expect(recordConditions(w.id, open, NOW)).toEqual([]);
+  it("takes a subject's first look as known state", () => {
+    const s = sid();
+    const w = createWorkspace("First");
+    const open = [cond(s, "pr")];
+    recordConditions(w.id, open, [s], NOW);
+    recordConditions(w.id, open, [s], NOW);
     expect(pendingEvents(w.id)).toEqual([]);
-
-    const green = conditionsFor(
-      [withTask({ pr: pr({ checks: "pass" }) })],
-      [],
-      NOW
-    );
-    expect(recordConditions(w.id, green, NOW)).toEqual([
-      "task add-auth: CI green",
-    ]);
-    // Seen again on the next poll, and again after a restart (the store is
-    // the database, so a fresh diff reads the same keys): folded.
-    expect(recordConditions(w.id, green, NOW)).toEqual([]);
-    vi.resetModules();
-    const restarted = await import("./events");
-    expect(restarted.recordConditions(w.id, green, NOW)).toEqual([]);
-    expect(restarted.pendingEvents(w.id).map((e) => e.line)).toEqual([
-      "task add-auth: CI green",
-    ]);
+    // A session that joins later is also first seen as it is.
+    const later = sid();
+    const both = [...open, cond(later, "needs")];
+    recordConditions(w.id, both, [s, later], NOW);
+    recordConditions(w.id, both, [s, later], NOW);
+    expect(pendingEvents(w.id)).toEqual([]);
   });
 
-  it("sends a needs-input again only after it has cleared", () => {
-    const w = createWorkspace("Again");
-    recordConditions(w.id, [], NOW);
-    const waiting = conditionsFor(
-      [facts({ task: null, status: "waiting", activity: "Allow?" })],
-      [],
-      NOW
-    );
-    expect(recordConditions(w.id, waiting, NOW)).toHaveLength(1);
-    expect(recordConditions(w.id, waiting, NOW)).toHaveLength(0);
-    expect(recordConditions(w.id, [], NOW)).toHaveLength(0);
-    expect(recordConditions(w.id, waiting, NOW)).toHaveLength(1);
+  it("sends a condition only once it holds on two diffs in a row", () => {
+    const { subjects, record, pending } = setup();
+    const c = [cond(subjects[0], "ci")];
+    expect(record(c)).toEqual([]);
+    expect(pending()).toEqual([]);
+    expect(record(c)).toEqual([c[0].line]);
+    expect(pending()).toEqual([c[0].line]);
+  });
+
+  it("drops a flap that clears before it's sent", () => {
+    const { subjects, record, pending } = setup();
+    const c = [cond(subjects[0], "needs", { sticky: false })];
+    record(c);
+    record([]);
+    record(c);
+    expect(pending()).toEqual([]);
+  });
+
+  it("doesn't send a passing event again within 15 minutes", () => {
+    const { subjects, record, pending, deliverAll } = setup();
+    const c = [cond(subjects[0], "needs", { sticky: false })];
+    record(c);
+    record(c);
+    deliverAll(NOW);
+    record([], NOW + 60000);
+    record(c, NOW + 120000);
+    record(c, NOW + 125000);
+    expect(pending()).toEqual([]);
+    record([], NOW + 180000);
+    record(c, NOW + REFIRE_MS + 1000);
+    record(c, NOW + REFIRE_MS + 2000);
+    expect(pending()).toEqual([c[0].line]);
+  });
+
+  it("resends nothing after a restart", async () => {
+    const { w, subjects, record, deliverAll } = setup();
+    const c = [cond(subjects[0], "merged")];
+    record(c);
+    record(c);
+    deliverAll(NOW);
+    vi.resetModules();
+    const restarted = await import("./events");
+    restarted.recordConditions(w.id, c, subjects, NOW + 5000);
+    restarted.recordConditions(w.id, c, subjects, NOW + 10000);
+    expect(restarted.pendingEvents(w.id)).toEqual([]);
   });
 });
 
 describe("deliverEvents", () => {
-  const setup = (name: string) => {
-    const w = createWorkspace(name);
-    recordConditions(w.id, [], NOW);
+  function batch() {
+    const s = setup([sid(), sid()]);
+    const live: Condition[] = [];
     const sent: string[] = [];
-    const send = async (_id: string, input: { text: string; from: string }) => {
-      expect(input.from).toBe("agentos");
-      sent.push(input.text);
+    const add = (c: Condition) => {
+      live.push(c);
+      s.record(live);
+      s.record(live);
     };
-    const queue = (key: string, line: string) =>
-      recordConditions(
-        w.id,
-        [
-          ...pendingEvents(w.id).map((e) => ({
-            key: e.key,
-            subject: SID,
-            line: e.line,
-            sticky: true,
-          })),
-          { key, subject: SID, line, sticky: true },
-        ],
-        NOW
-      );
-    const deliver = (now: number, turn: "idle" | "running" | null = null) =>
+    const deliver = (
+      now: number,
+      turn: "idle" | "running" | null = null,
+      fail = false
+    ) =>
       deliverEvents({
-        workspaceId: w.id,
+        workspaceId: s.w.id,
         orchestratorId: "o",
         turn,
-        send,
         now,
+        send: async (_id, input) => {
+          expect(input.from).toBe("agentos");
+          if (fail) throw new Error("worker down");
+          sent.push(input.text);
+        },
       });
-    return { sent, queue, deliver };
-  };
+    return { ...s, add, sent, deliver };
+  }
 
-  it("joins what's queued into one message, at most once per window", async () => {
-    const { sent, queue, deliver } = setup("Batch");
-    queue("a", "task a: PR #1 opened (CI pending)");
-    queue("b", "task b: CI green");
+  it("joins what's ready into one message, at most once per window", async () => {
+    const { subjects, add, sent, deliver } = batch();
+    const [a, b] = subjects;
+    add(cond(a, "pr"));
+    add(cond(b, "ci"));
     await deliver(NOW);
-    expect(sent).toEqual([
-      "task a: PR #1 opened (CI pending)\ntask b: CI green",
-    ]);
-
-    queue("c", "task c: merged");
-    queue("d", "stack S: ROA-1 PR up");
+    expect(sent).toEqual([`pr ${a.slice(0, 4)}\nci ${b.slice(0, 4)}`]);
+    add(cond(a, "merged"));
     await deliver(NOW + BATCH_WINDOW_MS - 1000);
     expect(sent).toHaveLength(1);
     await deliver(NOW + BATCH_WINDOW_MS);
-    expect(sent[1]).toBe("task c: merged\nstack S: ROA-1 PR up");
-    await deliver(NOW + 10 * BATCH_WINDOW_MS);
     expect(sent).toHaveLength(2);
   });
 
   it("holds events while the orchestrator's turn runs", async () => {
-    const { sent, queue, deliver } = setup("Busy");
-    queue("a", "task a: merged");
+    const { subjects, add, sent, deliver } = batch();
+    add(cond(subjects[0], "merged"));
     await deliver(NOW, "running");
     expect(sent).toEqual([]);
     await deliver(NOW + 1000, "idle");
-    expect(sent).toEqual(["task a: merged"]);
+    expect(sent).toHaveLength(1);
   });
 
-  it("puts events back when sending fails", async () => {
-    const w = createWorkspace("Fails");
-    recordConditions(w.id, [], NOW);
-    recordConditions(
-      w.id,
-      [{ key: "k", subject: SID, line: "task k: merged", sticky: true }],
-      NOW
-    );
-    const send = async () => {
-      throw new Error("worker down");
-    };
-    await expect(
-      deliverEvents({
-        workspaceId: w.id,
-        orchestratorId: "o",
-        turn: null,
-        send,
-        now: NOW,
-      })
-    ).rejects.toThrow("worker down");
-    expect(pendingEvents(w.id).map((e) => e.line)).toEqual(["task k: merged"]);
+  it("holds low-value events for a batch or 10 minutes", async () => {
+    const { subjects, add, sent, deliver } = batch();
+    const [a, b] = subjects;
+    add(cond(a, "idle", { low: true, sticky: false }));
+    await deliver(NOW + 1000);
+    expect(sent).toEqual([]);
+    await deliver(NOW + LOW_HOLD_MS + 1000);
+    expect(sent).toHaveLength(1);
+    add(cond(b, "idle", { low: true, sticky: false }));
+    add(cond(a, "merged"));
+    await deliver(NOW + LOW_HOLD_MS + BATCH_WINDOW_MS + 2000);
+    expect(sent[1].split("\n")).toHaveLength(2);
+  });
+
+  it(`caps a subject at ${SUBJECT_CAP} events an hour`, async () => {
+    const { subjects, add, sent, deliver } = batch();
+    for (let i = 0; i < SUBJECT_CAP + 2; i++) {
+      add(cond(subjects[0], `step${i}`));
+      await deliver(NOW + i * BATCH_WINDOW_MS);
+    }
+    expect(sent).toHaveLength(SUBJECT_CAP);
+  });
+
+  it("puts events back and backs off when sending fails", async () => {
+    const { subjects, add, sent, deliver, pending } = batch();
+    add(cond(subjects[0], "merged"));
+    await expect(deliver(NOW, null, true)).rejects.toThrow("worker down");
+    expect(pending()).toEqual([`merged ${subjects[0].slice(0, 4)}`]);
+    await deliver(NOW + backoffMs(1) - 1);
+    expect(sent).toEqual([]);
+    await deliver(NOW + backoffMs(1));
+    expect(sent).toHaveLength(1);
+    expect([1, 2, 3, 10].map(backoffMs)).toEqual([5000, 10000, 20000, 300000]);
   });
 });

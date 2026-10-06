@@ -1,4 +1,7 @@
-import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  McpServerConfig,
+  PermissionMode,
+} from "@anthropic-ai/claude-agent-sdk";
 import type {
   ApprovalDecision,
   ChatAccess,
@@ -24,6 +27,10 @@ export interface ChatStartOptions {
   // without asking.
   mcpServers?: Record<string, McpServerConfig>;
   allowedTools?: string[];
+  disallowedTools?: string[];
+  // A fixed permission mode in place of the access setting, which then
+  // can't be changed for this conversation.
+  permissionMode?: PermissionMode;
 }
 
 // One live conversation with an agent. Messages sent while a turn runs are

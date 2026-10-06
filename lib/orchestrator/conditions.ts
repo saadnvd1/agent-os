@@ -3,12 +3,14 @@
  * the orchestrator hasn't heard about yet is an event. Sticky conditions are
  * facts that stay true once seen (a PR opened, CI finished on a commit);
  * the others hold only while they last (a session needing input), so the
- * same thing happening again later is news again.
+ * same thing happening again later can be news again (events.ts decides
+ * when). Text another session wrote is fenced as untrusted.
  */
 
 import { db, type StackItemStatus, type StackStatus } from "../db";
 import { ciWord } from "./describe";
 import type { SessionFacts } from "./facts";
+import { untrusted } from "./untrusted";
 
 export interface Condition {
   key: string;
@@ -16,6 +18,8 @@ export interface Condition {
   subject: string;
   line: string;
   sticky: boolean;
+  // Worth a message only alongside others, or after a long wait.
+  low?: boolean;
 }
 
 export interface StackFacts {
@@ -39,10 +43,14 @@ function hash(text: string): string {
   return (h >>> 0).toString(36);
 }
 
-function sessionConditions(f: SessionFacts, now: number): Condition[] {
+function sessionConditions(
+  f: SessionFacts,
+  now: number,
+  quiet: boolean
+): Condition[] {
   const out: Condition[] = [];
-  const add = (key: string, line: string, sticky = true) =>
-    out.push({ key: `${key}:${f.id}`, subject: f.id, line, sticky });
+  const add = (key: string, line: string, sticky = true, low = false) =>
+    out.push({ key: `${key}:${f.id}`, subject: f.id, line, sticky, low });
   const who = f.task ? `task ${f.name}` : f.name;
   const pr = f.task?.pr;
 
@@ -61,12 +69,12 @@ function sessionConditions(f: SessionFacts, now: number): Condition[] {
   if (blocked !== null)
     add(
       `blocked:${hash(blocked)}`,
-      `${who}: BLOCKED: ${blocked || "(no reason given)"}`
+      `${who}: BLOCKED: ${blocked ? untrusted(f.name, blocked) : "(no reason given)"}`
     );
-  else if (f.status === "waiting")
+  else if (f.needsInput && !quiet)
     add(
       "needs",
-      `${who}: needs input: ${f.activity ?? "waiting on an answer"}`,
+      `${who}: needs input: ${f.activity ? untrusted(f.name, f.activity) : "waiting on an answer"}`,
       false
     );
 
@@ -80,7 +88,12 @@ function sessionConditions(f: SessionFacts, now: number): Condition[] {
     f.status !== "running" &&
     idleFor >= IDLE_NO_PR_MS
   )
-    add("idle", `${who}: idle ${Math.floor(idleFor / 60000)}m, no PR`, false);
+    add(
+      "idle",
+      `${who}: idle ${Math.floor(idleFor / 60000)}m, no PR`,
+      false,
+      true
+    );
   return out;
 }
 
@@ -98,7 +111,9 @@ function stackConditions(s: StackFacts): Condition[] {
     const step = STEP[item.status];
     if (!step) continue;
     const error =
-      item.status === "failed" && item.error ? `: ${item.error}` : "";
+      item.status === "failed" && item.error
+        ? `: ${untrusted(`stack ${s.name}`, item.error)}`
+        : "";
     out.push({
       key: `stack:${item.status}:${item.id}`,
       subject: item.id,
@@ -116,13 +131,18 @@ function stackConditions(s: StackFacts): Condition[] {
   return out;
 }
 
+// Sessions the orchestrator itself messaged this recently don't raise
+// "needs input": that's most likely it waiting on its own question.
+export const QUIET_AFTER_MESSAGE_MS = 2 * 60 * 1000;
+
 export function conditionsFor(
   facts: SessionFacts[],
   stacks: StackFacts[],
-  now = Date.now()
+  now = Date.now(),
+  quiet: ReadonlySet<string> = new Set()
 ): Condition[] {
   return [
-    ...facts.flatMap((f) => sessionConditions(f, now)),
+    ...facts.flatMap((f) => sessionConditions(f, now, quiet.has(f.id))),
     ...stacks.flatMap(stackConditions),
   ];
 }
@@ -143,4 +163,21 @@ export function stackFacts(workspaceId: string): StackFacts[] {
     ...s,
     items: items.all(s.id) as StackFacts["items"],
   }));
+}
+
+// Sessions the orchestrator sent a bus message to in the quiet window.
+export function recentlyMessaged(
+  orchestratorId: string,
+  now = Date.now()
+): Set<string> {
+  const since = new Date(now - QUIET_AFTER_MESSAGE_MS)
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 19);
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT to_id FROM bus_messages WHERE from_id = ? AND created_at >= ?`
+    )
+    .all(orchestratorId, since) as { to_id: string }[];
+  return new Set(rows.map((r) => r.to_id));
 }

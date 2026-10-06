@@ -11,7 +11,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { ToolArgs, ToolName } from "./serve";
-import { ORCHESTRATOR_SERVER, TOOL_NAMES } from "./tool-names";
+import { ORCHESTRATOR_SERVER } from "./tool-names";
 
 type CallToolResult = Awaited<ReturnType<Parameters<typeof tool>[3]>>;
 
@@ -89,5 +89,3 @@ export function orchestratorTools(
     ],
   });
 }
-
-export const ORCHESTRATOR_TOOLS = Object.values(TOOL_NAMES);

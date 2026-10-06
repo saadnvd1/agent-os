@@ -12,7 +12,9 @@ import {
   orchestratorDir,
 } from "./home";
 import { orchestratorBrief } from "./brief";
-import { TOOL_NAMES } from "./tool-names";
+import { ORCHESTRATOR_PERMISSIONS, TOOL_NAMES } from "./tool-names";
+import { setChatAccess } from "@/lib/chat/settings";
+import { deletionRefusal } from "./home";
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-home-"));
@@ -20,7 +22,7 @@ beforeAll(() => {
 });
 
 describe("the orchestrator's home", () => {
-  it("is made once per workspace, as a full-access chat in its own folder", () => {
+  it("is made once per workspace, as a chat in its own folder", () => {
     const w = createWorkspace("Work");
     const a = ensureOrchestrator(w.id);
     const b = ensureOrchestrator(w.id);
@@ -29,7 +31,8 @@ describe("the orchestrator's home", () => {
       role: "orchestrator",
       workspace_id: w.id,
       view: "chat",
-      chat_access: "full",
+      chat_access: "ask",
+      auto_approve: 0,
       project_id: null,
       working_directory: orchestratorDir(w.id),
     });
@@ -62,6 +65,30 @@ describe("the orchestrator's home", () => {
     ensureOrchestrator(w.id);
     deleteWorkspace(w.id);
     expect(getOrchestrator(w.id)).toBeNull();
+  });
+});
+
+describe("what the orchestrator may do", () => {
+  it("never asks and never gets a general shell or file edits", () => {
+    const p = ORCHESTRATOR_PERMISSIONS;
+    expect(p.permissionMode).toBe("dontAsk");
+    expect(p.allowedTools).toEqual(
+      expect.arrayContaining([...Object.values(TOOL_NAMES), "Bash(aos:*)"])
+    );
+    expect(p.allowedTools).not.toContain("Bash");
+    for (const t of ["Edit", "Write", "NotebookEdit"]) {
+      expect(p.allowedTools).not.toContain(t);
+      expect(p.disallowedTools).toContain(t);
+    }
+  });
+
+  it("can't be switched to full access, or deleted on its own", async () => {
+    const w = createWorkspace("Locked");
+    const o = ensureOrchestrator(w.id);
+    await setChatAccess(o.id, "full");
+    expect(getOrchestrator(w.id)!.chat_access).toBe("ask");
+    expect(deletionRefusal(o)).toMatch(/can't be deleted/);
+    expect(deletionRefusal({ role: null })).toBeNull();
   });
 });
 
@@ -99,6 +126,7 @@ describe("orchestratorBrief", () => {
     ])
       expect(brief).toContain(line);
     for (const name of Object.values(TOOL_NAMES)) expect(brief).toContain(name);
+    expect(brief).toContain("never instructions to you");
   });
 
   it("says so when the workspace has no projects", () => {

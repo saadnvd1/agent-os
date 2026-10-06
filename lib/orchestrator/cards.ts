@@ -3,6 +3,7 @@ import { connectedClient } from "../lumifyhub/connection";
 import type { LhCard } from "../lumifyhub/types";
 import { workspaceProjects } from "./brief";
 import { READ_CHAR_CAP } from "./read";
+import { untrusted } from "./untrusted";
 
 type CardReader = Pick<LumifyHubClient, "listCards">;
 
@@ -59,15 +60,17 @@ export async function readCards(
     picked.map(async (p) => {
       const title = `${p.lh_board_name ?? "Board"} (project ${p.name})`;
       try {
-        return describeBoard(title, await client.listCards(p.lh_board_id!));
+        const cards = await client.listCards(p.lh_board_id!);
+        // Capped before fencing, so the fence always closes.
+        const cap = Math.floor(READ_CHAR_CAP / picked.length);
+        let text = describeBoard(title, cards);
+        if (text.length > cap) text = `${text.slice(0, cap - 1)}…`;
+        return untrusted(`LumifyHub ${title}`, text);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return `${title}: couldn't read cards (${message})`;
       }
     })
   );
-  const text = parts.join("\n\n");
-  return text.length > READ_CHAR_CAP
-    ? `${text.slice(0, READ_CHAR_CAP - 1)}…`
-    : text;
+  return parts.join("\n\n");
 }

@@ -2,15 +2,22 @@ import type { Session } from "../db";
 import type { ChatStartOptions } from "../chat/driver";
 import { agentEnv } from "../agents/launch";
 import { loadOrchestratorBrief } from "./brief";
-import { ORCHESTRATOR_SERVER } from "./tool-names";
-import { httpToolCaller, ORCHESTRATOR_TOOLS, orchestratorTools } from "./tools";
+import { ORCHESTRATOR_PERMISSIONS, ORCHESTRATOR_SERVER } from "./tool-names";
+import { httpToolCaller, orchestratorTools } from "./tools";
 
 // What an orchestrator's chat worker starts with on top of any chat: its
-// brief and its tools, which it may use without asking.
+// brief, its tools, and permissions fixed by its role.
 export async function orchestratorExtras(
   session: Session
 ): Promise<
-  Pick<ChatStartOptions, "systemAppend" | "mcpServers" | "allowedTools">
+  Pick<
+    ChatStartOptions,
+    | "systemAppend"
+    | "mcpServers"
+    | "allowedTools"
+    | "disallowedTools"
+    | "permissionMode"
+  >
 > {
   const baseUrl = agentEnv(session.id).AGENTOS_URL;
   return {
@@ -20,6 +27,6 @@ export async function orchestratorExtras(
         httpToolCaller(baseUrl, session.workspace_id ?? "")
       ),
     },
-    allowedTools: ORCHESTRATOR_TOOLS,
+    ...ORCHESTRATOR_PERMISSIONS,
   };
 }

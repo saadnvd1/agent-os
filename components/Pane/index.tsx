@@ -362,6 +362,7 @@ export const Pane = memo(function Pane({
                   <ChatPanel
                     sessionId={chatSessionFor(tab)!.id}
                     sessionName={chatSessionFor(tab)!.name}
+                    accessLocked={chatSessionFor(tab)!.role === "orchestrator"}
                   />
                 ) : (
                   <Terminal
@@ -465,6 +466,9 @@ export const Pane = memo(function Pane({
                           <ChatPanel
                             sessionId={chatSessionFor(tab)!.id}
                             sessionName={chatSessionFor(tab)!.name}
+                            accessLocked={
+                              chatSessionFor(tab)!.role === "orchestrator"
+                            }
                           />
                         ) : (
                           <Terminal

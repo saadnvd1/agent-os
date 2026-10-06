@@ -23,6 +23,9 @@ export interface SessionFacts {
   view: "chat" | "terminal";
   status: FactStatus;
   activity: string | null;
+  // Really stopped on an answer: a chat's approval or question card, or a
+  // terminal at its prompt. A chat that merely finished doesn't count.
+  needsInput: boolean;
   // Last sign of life, in ms.
   lastActive: number;
   // Work that should end in a PR: a task, or a session on its own branch.
@@ -43,7 +46,7 @@ const sqliteMs = (t: string | null | undefined) =>
   t ? Date.parse(`${t.replace(" ", "T")}Z`) || 0 : 0;
 
 // Live sessions in the workspace's projects, plus tasks merged in the last
-// day so their merge still reads. Never an orchestrator.
+// hour so their merge still reads. Never an orchestrator.
 export function workspaceSessions(
   workspaceId: string
 ): (Session & { project_name: string })[] {
@@ -53,7 +56,7 @@ export function workspaceSessions(
        JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL
          AND (s.task_status IS NULL OR s.task_status = 'running'
-           OR (s.task_status = 'merged' AND s.updated_at > datetime('now', '-1 day')))
+           OR (s.task_status = 'merged' AND s.updated_at > datetime('now', '-1 hour')))
        ORDER BY s.created_at`
     )
     .all(workspaceId) as (Session & { project_name: string })[];
@@ -104,6 +107,7 @@ function latestChatAt(sessionId: string): number {
 async function statusOf(s: Session): Promise<{
   status: FactStatus;
   activity: string | null;
+  needsInput: boolean;
 }> {
   if (s.view === "chat") {
     const state = chatState(s.id);
@@ -112,17 +116,36 @@ async function statusOf(s: Session): Promise<{
     return {
       status,
       activity: chatActivityLine(s.id) ?? lastUserTask(s.id),
+      needsInput: state === "waiting",
     };
   }
   if (!statusDetector.sessionExists(s.tmux_name))
-    return { status: "dead", activity: null };
+    return { status: "dead", activity: null, needsInput: false };
   const raw = await statusDetector.getStatus(s.tmux_name);
   const status: FactStatus =
     raw === "waiting" && !needsYou({ ...s, view: "terminal" }, null)
       ? "idle"
       : raw;
   const info = sessionRowInfo(status, statusDetector.titleFor(s.tmux_name));
-  return { status, activity: info.subtitle };
+  return { status, activity: info.subtitle, needsInput: raw === "waiting" };
+}
+
+// A finished task's state is in the database: no gh call for it.
+async function taskFacts(s: Session): Promise<SessionFacts["task"]> {
+  if (!s.task_status) return null;
+  if (s.task_status === "merged" || s.task_status === "dropped") {
+    const pr: TaskPR | null = s.pr_number
+      ? {
+          number: s.pr_number,
+          url: s.pr_url ?? "",
+          state: s.task_status === "merged" ? "MERGED" : "CLOSED",
+          checks: "none",
+        }
+      : null;
+    return { state: s.task_status, pr, blocked: null };
+  }
+  const view = await taskView(s);
+  return { state: view.state, pr: view.pr, blocked: view.blocked };
 }
 
 export async function sessionFacts(
@@ -131,9 +154,9 @@ export async function sessionFacts(
   await statusDetector.refreshCache();
   return Promise.all(
     workspaceSessions(workspaceId).map(async (s) => {
-      const [{ status, activity }, task] = await Promise.all([
+      const [{ status, activity, needsInput }, task] = await Promise.all([
         statusOf(s),
-        s.task_status ? taskView(s) : Promise.resolve(null),
+        taskFacts(s),
       ]);
       return {
         id: s.id,
@@ -142,15 +165,14 @@ export async function sessionFacts(
         view: s.view,
         status,
         activity,
+        needsInput,
         lastActive: Math.max(
           sqliteMs(s.updated_at),
           statusDetector.getTimestamp(s.tmux_name) * 1000,
           latestChatAt(s.id)
         ),
         branch: s.branch_name,
-        task: task
-          ? { state: task.state, pr: task.pr, blocked: task.blocked }
-          : null,
+        task,
         stack: stackOf(s.id),
       };
     })

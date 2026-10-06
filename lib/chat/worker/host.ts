@@ -28,7 +28,11 @@ export class ChatHost {
     // What a session's role adds: its brief and its own tools.
     extras: Pick<
       ChatStartOptions,
-      "systemAppend" | "mcpServers" | "allowedTools"
+      | "systemAppend"
+      | "mcpServers"
+      | "allowedTools"
+      | "disallowedTools"
+      | "permissionMode"
     > = {}
   ) {
     const driver = chatDriverFor(session.agent_type);
@@ -47,6 +51,8 @@ export class ChatHost {
       env: agentEnv(session.id),
       mcpServers: extras.mcpServers,
       allowedTools: extras.allowedTools,
+      disallowedTools: extras.disallowedTools,
+      permissionMode: extras.permissionMode,
     });
     // Sends that already made it in, from before a reconnect.
     for (const item of listItems(session.id))

@@ -6,6 +6,7 @@ import { matchesRef } from "../bus/format";
 import { hostExec } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { workspaceSessions } from "./facts";
+import { untrusted } from "./untrusted";
 
 // About 4k tokens: what one read may return.
 export const READ_CHAR_CAP = 16000;
@@ -84,7 +85,7 @@ export async function readSession(
   const n = Math.max(1, Math.min(Math.floor(lines) || DEFAULT_LINES, 400));
   if (s.view === "chat") {
     const text = chatText(listItems(s.id).slice(-n * 2));
-    const body = text ? tail(text, n) : "(no messages yet)";
+    const body = text ? untrusted(s.name, tail(text, n)) : "(no messages yet)";
     return `${s.name} (chat), last ${n} lines:\n${body}`;
   }
   await statusDetector.refreshCache();
@@ -94,5 +95,6 @@ export async function readSession(
     statusDetector.hostFor(s.tmux_name),
     `tmux capture-pane -t ${shellQuote(`=${s.tmux_name}:`)} -p -J -S -${n}`
   );
-  return `${s.name} (terminal), last ${n} lines:\n${tail(pane, n) || "(empty)"}`;
+  const body = tail(pane, n);
+  return `${s.name} (terminal), last ${n} lines:\n${body ? untrusted(s.name, body) : "(empty)"}`;
 }

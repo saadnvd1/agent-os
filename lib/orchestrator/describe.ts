@@ -1,5 +1,6 @@
 import type { TaskPR } from "../tasks/state";
 import type { SessionFacts } from "./facts";
+import { untrusted } from "./untrusted";
 
 const STATUS_WORD: Record<SessionFacts["status"], string> = {
   running: "working",
@@ -12,7 +13,9 @@ export function ciWord(pr: TaskPR): string {
   if (pr.state !== "OPEN") return pr.state.toLowerCase();
   if (pr.checks === "pass") return "CI green";
   if (pr.checks === "fail")
-    return pr.failing ? `CI failed: ${pr.failing}` : "CI failed";
+    return pr.failing
+      ? `CI failed: ${untrusted("CI", pr.failing)}`
+      : "CI failed";
   if (pr.checks === "pending") return "CI pending";
   return "no CI";
 }
@@ -21,12 +24,15 @@ export const shortId = (id: string) => id.slice(0, 8);
 
 function sessionLine(f: SessionFacts): string {
   const head = `- ${f.name} (${f.project ?? "no project"}, ${f.view}, id ${shortId(f.id)}): ${STATUS_WORD[f.status]}`;
-  const parts = [f.activity ? `${head}, ${f.activity}` : head];
+  const parts = [
+    f.activity ? `${head}, ${untrusted(f.name, f.activity)}` : head,
+  ];
   if (f.task) {
     let task = `task ${f.task.state}`;
     if (f.task.pr) task += `, PR #${f.task.pr.number} ${ciWord(f.task.pr)}`;
     else task += ", no PR";
-    if (f.task.blocked !== null) task += `, BLOCKED: ${f.task.blocked}`;
+    if (f.task.blocked !== null)
+      task += `, BLOCKED: ${untrusted(f.name, f.task.blocked)}`;
     parts.push(task);
   }
   if (f.stack) {
