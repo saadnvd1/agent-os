@@ -5,10 +5,9 @@
  */
 
 import { randomUUID } from "crypto";
-import os from "os";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
-import { createWorktree, deleteWorktree } from "../worktrees";
+import { createWorktree } from "../worktrees";
 import { setupWorktree } from "../env-setup";
 import { getDefaultBranch, slugify } from "../git";
 import { runInBackground } from "../async-operations";
@@ -16,24 +15,25 @@ import { resolveModelForAgent } from "../model-catalog";
 import { getProvider } from "../providers";
 import { launchClaude } from "../agents/launch";
 import { statusDetector } from "../status-detector";
-import { buildTaskBrief } from "./brief";
-import { findPR, run } from "./gh";
+import { buildTaskBrief, type StackedOn } from "./brief";
+import { run } from "./gh";
 import {
   attachTaskCard,
   inBackground,
   syncTaskCardInBackground,
   taskCardUrl,
 } from "../lumifyhub/task-cards";
-import { republishAfterMerge } from "../lumifyhub/publish";
 import {
-  canSignOff,
   deriveTaskState,
   isBlocked,
   type TaskPR,
   type TaskState,
 } from "./state";
+import { expandHome, prFor, taskSessions } from "./session";
 
 export * from "./state";
+export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
+export { prFor as taskPR } from "./session";
 
 export interface TaskView {
   id: string;
@@ -51,8 +51,6 @@ export interface TaskView {
   createdAt: string;
 }
 
-const expandHome = (p: string) => p.replace(/^~/, os.homedir());
-
 function taskTitle(prompt: string): string {
   const line = prompt.trim().split("\n")[0];
   return line.length > 60 ? `${line.slice(0, 57)}...` : line;
@@ -64,6 +62,10 @@ export async function createTask(opts: {
   model?: string;
   // Started from this LumifyHub card, which the task then moves.
   cardId?: string;
+  // Stacked: cut from another task's pushed branch, at this exact commit.
+  base?: { branch: string; tip: string; stack: StackedOn };
+  // Called once the session row exists, before the agent launches.
+  onCreated?: (sessionId: string) => void;
 }): Promise<Session> {
   const prompt = opts.prompt.trim();
   if (!prompt) throw new Error("Describe the task");
@@ -76,11 +78,12 @@ export async function createTask(opts: {
   const projectPath = expandHome(project.working_directory);
   const id = randomUUID();
   const feature = `${slugify(prompt.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
-  const baseBranch = await getDefaultBranch(projectPath);
+  const baseBranch = opts.base?.branch ?? (await getDefaultBranch(projectPath));
   const wt = await createWorktree({
     projectPath,
     featureName: feature,
     baseBranch,
+    startPoint: opts.base?.tip,
   });
 
   runInBackground(async () => {
@@ -119,6 +122,7 @@ export async function createTask(opts: {
   db.prepare(
     `UPDATE sessions SET task_prompt = ?, task_status = 'running' WHERE id = ?`
   ).run(prompt, id);
+  opts.onCreated?.(id);
 
   await launchClaude({
     sessionId: id,
@@ -126,7 +130,11 @@ export async function createTask(opts: {
     cwd: wt.worktreePath,
     model,
     prompt,
-    brief: buildTaskBrief({ branch: wt.branchName, baseBranch }),
+    brief: buildTaskBrief({
+      branch: wt.branchName,
+      baseBranch,
+      stack: opts.base?.stack,
+    }),
   });
 
   const session = queries.getSession(db).get(id) as Session;
@@ -134,37 +142,6 @@ export async function createTask(opts: {
     attachTaskCard(session, project, opts.cardId)
   );
   return session;
-}
-
-function taskSessions(): Session[] {
-  return db
-    .prepare(
-      `SELECT * FROM sessions WHERE task_status IS NOT NULL ORDER BY created_at DESC`
-    )
-    .all() as Session[];
-}
-
-function projectPathFor(session: Session): string | null {
-  if (!session.project_id) return null;
-  const project = getProject(session.project_id);
-  return project ? expandHome(project.working_directory) : null;
-}
-
-const prCache = new Map<string, { at: number; pr: TaskPR | null }>();
-
-async function prFor(session: Session, fresh = false): Promise<TaskPR | null> {
-  const repo = projectPathFor(session);
-  if (!repo || !session.branch_name) return null;
-  const cached = prCache.get(session.id);
-  if (!fresh && cached && Date.now() - cached.at < 20000) return cached.pr;
-  const pr = await findPR(repo, session.branch_name);
-  prCache.set(session.id, { at: Date.now(), pr });
-  if (pr) {
-    db.prepare(
-      `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`
-    ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
-  }
-  return pr;
 }
 
 // The agent runs under a shell (`zsh -c "...; claude ...; exec $SHELL"`), so
@@ -239,76 +216,4 @@ async function viewOf(session: Session): Promise<TaskView> {
 
 export async function listTasks(): Promise<TaskView[]> {
   return Promise.all(taskSessions().map(viewOf));
-}
-
-function getTaskSession(id: string): Session {
-  const session = queries.getSession(db).get(id) as Session | undefined;
-  if (!session?.task_status) throw new Error("Task not found");
-  return session;
-}
-
-async function cleanup(session: Session, repo: string): Promise<void> {
-  await run(
-    "tmux",
-    ["kill-session", "-t", `=${session.tmux_name}`],
-    repo
-  ).catch(() => {});
-  if (session.worktree_path) {
-    await deleteWorktree(session.worktree_path, repo, true).catch(() => {});
-  }
-  if (session.branch_name) {
-    await run(
-      "git",
-      ["push", "origin", "--delete", session.branch_name],
-      repo
-    ).catch(() => {});
-  }
-  await run("git", ["fetch", "--prune", "--quiet"], repo).catch(() => {});
-  prCache.delete(session.id);
-}
-
-// Squash-merge the PR, then remove the session, worktree and branches.
-// The checks are re-read here: the button is not the guard.
-export async function signOffTask(id: string): Promise<void> {
-  const session = getTaskSession(id);
-  if (session.task_status !== "running")
-    throw new Error(`Task is already ${session.task_status}`);
-  const repo = projectPathFor(session);
-  if (!repo) throw new Error("Task has no project");
-  const pr = await prFor(session, true);
-  const verdict = canSignOff(pr);
-  if (!verdict.ok) throw new Error(verdict.reason);
-  await run(
-    "gh",
-    ["pr", "merge", String(pr!.number), "--squash"],
-    repo,
-    120000
-  );
-  db.prepare(
-    `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
-  ).run(id);
-  syncTaskCardInBackground(session, "merged", pr);
-  await cleanup(session, repo);
-  // After cleanup's fetch, so the base branch holds the merged files.
-  inBackground(`re-publish docs after task ${id}`, () =>
-    republishAfterMerge(session)
-  );
-}
-
-// Reject the work: close the PR if there is one and remove everything.
-export async function dropTask(id: string): Promise<void> {
-  const session = getTaskSession(id);
-  if (session.task_status !== "running")
-    throw new Error(`Task is already ${session.task_status}`);
-  const repo = projectPathFor(session);
-  if (!repo) throw new Error("Task has no project");
-  const pr = await prFor(session, true);
-  if (pr?.state === "OPEN") {
-    await run("gh", ["pr", "close", String(pr.number)], repo).catch(() => {});
-  }
-  db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-    id
-  );
-  syncTaskCardInBackground(session, "dropped", pr);
-  await cleanup(session, repo);
 }

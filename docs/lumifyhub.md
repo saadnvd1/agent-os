@@ -103,5 +103,6 @@ one, or a development server); it defaults to `https://lumifyhub.io`.
 
 Everything after connecting is the existing token API under `/api/cli/*`
 (`Authorization: Bearer lhcli_...`): workspaces (list, create), boards, lists
-and cards (CRUD, comments), and pages (list, show, create, update; markdown in
+and cards (CRUD, comments, and `blocked_by` dependencies for
+[stacks](stacks.md)), and pages (list, show, create, update; markdown in
 `content`). Members and invites stay in LumifyHub; AgentOS links to them.

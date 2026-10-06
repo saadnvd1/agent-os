@@ -1,6 +1,7 @@
 import type {
   LhBoard,
   LhCard,
+  LhDependencies,
   LhList,
   LhListCategory,
   LhUser,
@@ -178,6 +179,33 @@ export class LumifyHubClient {
       "PUT",
       `/api/cli/boards/${seg(boardId)}/cards/${seg(cardId)}`,
       { list_id: listId }
+    );
+  }
+
+  cardDependencies(boardId: string, cardId: string) {
+    return this.data<LhDependencies>(
+      "GET",
+      `/api/cli/boards/${seg(boardId)}/cards/${seg(cardId)}/dependencies`
+    );
+  }
+
+  // `blockedBy` is a card id or a ticket on the same board.
+  addDependency(boardId: string, cardId: string, blockedBy: string) {
+    return this.data<LhDependencies>(
+      "POST",
+      `/api/cli/boards/${seg(boardId)}/cards/${seg(cardId)}/dependencies`,
+      { blocked_by: blockedBy }
+    );
+  }
+
+  removeDependency(boardId: string, cardId: string, blockedById: string) {
+    return this.data<{
+      card_id: string;
+      blocked_by_card_id: string;
+      deleted: boolean;
+    }>(
+      "DELETE",
+      `/api/cli/boards/${seg(boardId)}/cards/${seg(cardId)}/dependencies/${seg(blockedById)}`
     );
   }
 

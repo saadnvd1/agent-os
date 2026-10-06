@@ -14,3 +14,27 @@ describe("buildTaskBrief", () => {
     expect(brief).toContain('"BLOCKED:"');
   });
 });
+
+describe("a stacked brief", () => {
+  const brief = buildTaskBrief({
+    branch: "feature/child",
+    baseBranch: "feature/parent",
+    stack: { pr: 41, name: "ENG-7", also: ["ENG-5"] },
+  });
+
+  it("targets the parent's branch and says what it is stacked on", () => {
+    expect(brief).toContain("gh pr create --base feature/parent");
+    expect(brief).toContain('"Stacked on #41 (ENG-7)"');
+  });
+
+  it("says the parent's work is not its own and names other blockers", () => {
+    expect(brief).toMatch(/are not yours/);
+    expect(brief).toContain("ENG-5, whose work is NOT in your base");
+  });
+
+  it("is unchanged for a task on the default branch", () => {
+    expect(buildTaskBrief({ branch: "b", baseBranch: "main" })).not.toContain(
+      "STACKED"
+    );
+  });
+});
