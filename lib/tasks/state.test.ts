@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   canSignOff,
   checksVerdict,
+  failingCheck,
   deriveTaskState,
   isBlocked,
   trustPromptKeys,
@@ -90,6 +91,59 @@ describe("checksVerdict", () => {
     expect(checksVerdict([{ status: "IN_PROGRESS", conclusion: "" }])).toBe(
       "pending"
     );
+  });
+});
+
+describe("cancelled check runs", () => {
+  const cancelled = { name: "code-review", conclusion: "CANCELLED" };
+
+  it("ignores a cancelled run when the same check also ran", () => {
+    const rollup = [
+      cancelled,
+      { name: "code-review", conclusion: "SUCCESS" },
+      { name: "test", conclusion: "SUCCESS" },
+    ];
+    expect(checksVerdict(rollup)).toBe("pass");
+    expect(failingCheck(rollup)).toBeNull();
+  });
+
+  it("still fails when the surviving run failed", () => {
+    const rollup = [cancelled, { name: "code-review", conclusion: "FAILURE" }];
+    expect(checksVerdict(rollup)).toBe("fail");
+    expect(failingCheck(rollup)).toBe("code-review");
+  });
+
+  it("pends while the replacement run is still going", () => {
+    expect(
+      checksVerdict([
+        cancelled,
+        { name: "code-review", status: "IN_PROGRESS", conclusion: "" },
+      ])
+    ).toBe("pending");
+  });
+
+  it("treats a lone cancelled run as pending, not failing", () => {
+    const rollup = [cancelled, { name: "test", conclusion: "SUCCESS" }];
+    expect(checksVerdict(rollup)).toBe("pending");
+    expect(failingCheck(rollup)).toBeNull();
+  });
+
+  it("matches status contexts by context name", () => {
+    expect(
+      checksVerdict([
+        { context: "ci/build", state: "CANCELLED" },
+        { context: "ci/build", state: "SUCCESS" },
+      ])
+    ).toBe("pass");
+  });
+
+  it("doesn't let another check's run excuse a cancelled one", () => {
+    expect(
+      checksVerdict([cancelled, { name: "test", conclusion: "FAILURE" }])
+    ).toBe("fail");
+    expect(
+      failingCheck([cancelled, { name: "test", conclusion: "FAILURE" }])
+    ).toBe("test");
   });
 });
 
