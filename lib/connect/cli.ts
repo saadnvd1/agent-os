@@ -1,7 +1,8 @@
 /**
  * agent-os connect — turn Connect on for this machine.
  *
- *   agent-os connect --code ABCD-EFGH [--name "Studio Mac"]   enrol (code from runagentos.com)
+ *   agent-os connect [--name "Studio Mac"]   enrol: asks for the code from runagentos.com
+ *     (or AGENTOS_CONNECT_CODE, or piped on stdin; --code works but lands in shell history)
  *   agent-os connect --renew                                  get a fresh certificate
  *   agent-os connect --on | --off                             (also: agent-os disconnect)
  *
@@ -15,20 +16,45 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import readline from "readline/promises";
 import { connectDir, setConnectEnabled } from "./config";
 import { certify, enrol, type DnsChallenge } from "./enrol";
 import { cloudflareDns } from "./cloudflare-dns";
-import { brokerDns, DEFAULT_API, registerWithCode } from "./control-api";
+import {
+  brokerDns,
+  checkApiUrl,
+  DEFAULT_API,
+  registerWithCode,
+} from "./control-api";
 
 const ZONE = "runagentos.com";
 const domain = process.env.CONNECT_MACHINE_DOMAIN || `on.${ZONE}`;
 const relayUrl = process.env.CONNECT_RELAY_URL || `wss://relay.${ZONE}`;
-const apiUrl = process.env.CONNECT_API_URL || DEFAULT_API;
 
 const arg = (flag: string) => {
   const i = process.argv.indexOf(flag);
   return i > -1 ? process.argv[i + 1] : undefined;
 };
+
+/** The link code, kept out of argv and shell history where possible. */
+async function linkCode(): Promise<string | undefined> {
+  const code = process.env.AGENTOS_CONNECT_CODE || arg("--code");
+  if (code) return code.trim();
+  if (process.stdin.isTTY) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    const answer = await rl.question(
+      "  Link code (runagentos.com → Connect a machine): "
+    );
+    rl.close();
+    return answer.trim() || undefined;
+  }
+  let piped = "";
+  for await (const chunk of process.stdin) piped += chunk;
+  return piped.trim() || undefined;
+}
 
 async function main() {
   if (process.argv.includes("--off") || process.argv.includes("--on")) {
@@ -41,9 +67,13 @@ async function main() {
   }
 
   const dir = connectDir();
-  const code = arg("--code");
   const token = process.env.CONNECT_DNS_TOKEN;
-  const operator = !!token && process.env.AGENTOS_CONNECT_OPERATOR === "1";
+  const isOperator = process.env.AGENTOS_CONNECT_OPERATOR === "1";
+  const operator = !!token && isOperator;
+  const apiUrl = checkApiUrl(
+    process.env.CONNECT_API_URL || DEFAULT_API,
+    isOperator
+  );
   if (token && !operator) {
     // A zone-wide DNS token can rewrite any machine's name. Only the operator's
     // own machines may use one; everyone else enrols through the Connect service.
@@ -51,9 +81,15 @@ async function main() {
       "CONNECT_DNS_TOKEN needs AGENTOS_CONNECT_OPERATOR=1 (operators only)"
     );
   }
-  if (!fs.existsSync(path.join(dir, "connect.json")) && !code && !operator) {
+  const enrolled = fs.existsSync(path.join(dir, "connect.json"));
+  const code = enrolled
+    ? undefined
+    : operator
+      ? process.env.AGENTOS_CONNECT_CODE || arg("--code")
+      : await linkCode();
+  if (!enrolled && !code && !operator) {
     throw new Error(
-      "get a code from runagentos.com (Connect a machine), then: agent-os connect --code <code>"
+      "get a code from runagentos.com (Connect a machine), then run agent-os connect and paste it"
     );
   }
 
@@ -61,7 +97,7 @@ async function main() {
     domain,
     relayUrl,
     register: code
-      ? registerWithCode(apiUrl, code, arg("--name") || os.hostname())
+      ? registerWithCode(apiUrl, code, arg("--name") || os.hostname(), domain)
       : undefined,
   });
   console.log(`\n  Machine ${config.machineId}`);
@@ -82,7 +118,9 @@ async function main() {
       : operator
         ? cloudflareDns(token!, ZONE)
         : (() => {
-            throw new Error("no way to prove this name: enrol with --code");
+            throw new Error(
+              "no way to prove this name: enrol with a link code"
+            );
           })();
     console.log("  Cert     asking Let's Encrypt (DNS-01)...");
     await certify({ csr, dns });

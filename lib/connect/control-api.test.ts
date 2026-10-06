@@ -5,7 +5,14 @@ import http, { type IncomingMessage } from "http";
 import os from "os";
 import path from "path";
 import type { AddressInfo } from "net";
-import { brokerDns, registerWithCode, signedHeaders } from "./control-api";
+import {
+  brokerDns,
+  checkApiUrl,
+  clean,
+  enrolled,
+  registerWithCode,
+  signedHeaders,
+} from "./control-api";
 import { enrol } from "./enrol";
 
 // A control plane that checks requests exactly as docs/machine-api.md says.
@@ -86,7 +93,7 @@ describe("control plane API client", () => {
         domain: "on.test",
         relayUrl: "x",
         dir,
-        register: registerWithCode(api, "WRONG-CODE", "Mac"),
+        register: registerWithCode(api, "WRONG-CODE", "Mac", "on.test"),
       })
     ).rejects.toThrow("unknown code");
 
@@ -94,7 +101,7 @@ describe("control plane API client", () => {
       domain: "on.test",
       relayUrl: "x",
       dir,
-      register: registerWithCode(api, "ABCD-EFGH", "Mac"),
+      register: registerWithCode(api, "ABCD-EFGH", "Mac", "on.test"),
     });
     expect(config).toMatchObject({
       machineId: "k7q2mz9x",
@@ -159,5 +166,99 @@ describe("control plane API client", () => {
         Buffer.from(h["X-Connect-Signature"], "base64url")
       )
     ).toBe(false);
+  });
+
+  async function serve(handler: http.RequestListener): Promise<string> {
+    const server = http.createServer(handler);
+    servers.push(server);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }
+
+  it("never follows a redirect, so the code and signatures stay put", async () => {
+    let leaked = "";
+    const elsewhere = await serve((req, res) => {
+      req.on("data", (c) => (leaked += c));
+      req.on("end", () => res.writeHead(201).end("{}"));
+    });
+    const api = await serve((_req, res) =>
+      res.writeHead(307, { Location: `${elsewhere}/steal` }).end()
+    );
+    await expect(
+      registerWithCode(api, "ABCD-EFGH", "Mac", "on.test")("pk")
+    ).rejects.toThrow();
+    const { privateKey } = crypto.generateKeyPairSync("ed25519");
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const config = {
+      machineId: "k7q2mz9x",
+      hostname: "k7q2mz9x.on.test",
+      relayUrl: "wss://r",
+      apiUrl: api,
+    };
+    await expect(brokerDns(config, pem).clear("n", "v")).rejects.toThrow();
+    expect(leaked).toBe("");
+  });
+
+  it("refuses an enrol answer that isn't exactly <id>.<domain> over wss", () => {
+    const ok = {
+      machine_id: "k7q2mz9x",
+      hostname: "k7q2mz9x.on.test",
+      relay_url: "wss://relay.test",
+    };
+    expect(enrolled(ok, "on.test").machineId).toBe("k7q2mz9x");
+    for (const bad of [
+      { ...ok, machine_id: "../../x", hostname: "../../x.on.test" },
+      { ...ok, machine_id: "K7Q2MZ9X", hostname: "K7Q2MZ9X.on.test" },
+      { ...ok, hostname: "victim.on.test" },
+      { ...ok, hostname: "k7q2mz9x.evil.com" },
+      { ...ok, relay_url: "ws://relay.test" },
+      { ...ok, relay_url: 7 },
+      null,
+    ])
+      expect(() => enrolled(bad, "on.test")).toThrow();
+    const pem = crypto
+      .generateKeyPairSync("ed25519")
+      .privateKey.export({ type: "pkcs8", format: "pem" })
+      .toString();
+    expect(() =>
+      brokerDns(
+        { machineId: "../x", hostname: "h", relayUrl: "wss://r", apiUrl: "x" },
+        pem
+      )
+    ).toThrow("invalid machine id");
+  });
+
+  it("needs https with no userinfo; local http only for operators", () => {
+    expect(checkApiUrl("https://runagentos.com/", false)).toBe(
+      "https://runagentos.com"
+    );
+    expect(() => checkApiUrl("http://runagentos.com", false)).toThrow();
+    expect(() => checkApiUrl("https://u:p@runagentos.com", false)).toThrow();
+    expect(() => checkApiUrl("http://localhost:3600", false)).toThrow();
+    expect(checkApiUrl("http://localhost:3600", true)).toBe(
+      "http://localhost:3600"
+    );
+    expect(() => checkApiUrl("http://example.com", true)).toThrow();
+    expect(() => checkApiUrl("not a url", true)).toThrow();
+  });
+
+  it("prints the server's error without control characters, capped", async () => {
+    expect(clean("bad\u001b[2Jcode\r\n")).toBe("bad [2Jcode  ");
+    expect(clean("x".repeat(500))).toHaveLength(201);
+    const api = await serve((_req, res) =>
+      res
+        .writeHead(400, { "Content-Type": "application/json" })
+        .end(
+          JSON.stringify({ error: "\u001b]0;pwned\u0007" + "y".repeat(400) })
+        )
+    );
+    const err = (await registerWithCode(
+      api,
+      "c",
+      "n",
+      "on.test"
+    )("pk").catch((e: unknown) => e)) as Error;
+    expect(err.message).not.toMatch(/[\u0000-\u001f]/);
+    expect(err.message.length).toBeLessThanOrEqual(201);
   });
 });

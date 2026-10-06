@@ -19,8 +19,22 @@ export function newMachineId(): string {
   return Array.from(crypto.randomBytes(8), (b) => ID_ALPHABET[b % 36]).join("");
 }
 
-const write = (dir: string, file: string, data: string) =>
+const SECRETS = ["machine.key", "tls.key", "acme-account.key"];
+
+const write = (dir: string, file: string, data: string) => {
   fs.writeFileSync(path.join(dir, file), data, { mode: 0o600 });
+  fs.chmodSync(path.join(dir, file), 0o600);
+};
+
+/** Owner-only, every time: a folder or key loosened later is tightened again. */
+function lockDown(dir: string) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  fs.chmodSync(dir, 0o700);
+  for (const f of SECRETS) {
+    if (fs.existsSync(path.join(dir, f)))
+      fs.chmodSync(path.join(dir, f), 0o600);
+  }
+}
 
 export interface Enrolment {
   config: ConnectConfig;
@@ -43,7 +57,7 @@ export async function enrol(opts: {
   register?: Register;
 }): Promise<Enrolment> {
   const dir = opts.dir ?? connectDir();
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  lockDown(dir);
   if (!fs.existsSync(path.join(dir, "machine.key"))) {
     write(dir, "machine.key", generateMachineKey().privateKey);
   }
@@ -55,15 +69,20 @@ export async function enrol(opts: {
   let config: ConnectConfig;
   if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, "utf8")) as ConnectConfig;
-  } else if (opts.register) {
-    config = await opts.register(publicKey);
   } else {
-    const machineId = newMachineId();
-    config = {
-      machineId,
-      hostname: `${machineId}.${opts.domain}`,
-      relayUrl: opts.relayUrl,
-    };
+    if (opts.register) {
+      config = await opts.register(publicKey);
+    } else {
+      const machineId = newMachineId();
+      config = {
+        machineId,
+        hostname: `${machineId}.${opts.domain}`,
+        relayUrl: opts.relayUrl,
+      };
+    }
+    // Saved before anything else can fail: the link code is single-use, so
+    // a rerun must resume with this id rather than ask for a new code.
+    write(dir, "connect.json", JSON.stringify(config, null, 2));
   }
   if (!fs.existsSync(path.join(dir, "tls.key"))) {
     write(
@@ -77,7 +96,6 @@ export async function enrol(opts: {
     { commonName: config.hostname, altNames: [config.hostname] },
     fs.readFileSync(path.join(dir, "tls.key"))
   );
-  write(dir, "connect.json", JSON.stringify(config, null, 2));
   return { config, machinePublicKey, csr };
 }
 
@@ -95,6 +113,7 @@ export async function certify(opts: {
   directoryUrl?: string;
 }): Promise<void> {
   const dir = opts.dir ?? connectDir();
+  lockDown(dir);
   const accountKeyPath = path.join(dir, "acme-account.key");
   if (!fs.existsSync(accountKeyPath)) {
     write(
