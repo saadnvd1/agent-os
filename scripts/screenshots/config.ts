@@ -10,6 +10,20 @@ export const HOME = path.join(ROOT, "home", USER);
 export const CODE = path.join(HOME, "code");
 export const BIN = path.join(ROOT, "bin");
 export const TMUX_TMPDIR = path.join(ROOT, "tmux");
+
+// The demo tmux server's socket, named outright. With only TMUX_TMPDIR set,
+// tmux falls back to /tmp when that directory doesn't exist yet, and a
+// "kill-server" there takes down the real server and every session on it
+// (2026-10-06). So demo tmux commands always say -S.
+export const TMUX_SOCKET = path.join(
+  TMUX_TMPDIR,
+  `tmux-${process.getuid?.() ?? 0}`,
+  "default"
+);
+
+export function demoTmuxArgs(args: string[]): string[] {
+  return ["-S", TMUX_SOCKET, ...args];
+}
 export const DB_PATH = path.join(ROOT, "agent-os.db");
 export const SCREENS = path.join(ROOT, "screens");
 export const RAW = path.join(ROOT, "raw");
