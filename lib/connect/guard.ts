@@ -42,30 +42,57 @@ const alive = (pid: number) => {
   }
 };
 
-/** Holds connect.lock for this process; null if another live process has it. */
+const holderOf = (file: string): number | null => {
+  try {
+    return Number(fs.readFileSync(file, "utf8")) || null;
+  } catch {
+    return null; // gone, or never written
+  }
+};
+
+/**
+ * Holds connect.lock for this process, or names the live process that does.
+ * Never throws. A stale lock is taken over by renaming it aside first:
+ * of two processes that both judge it stale, only one rename succeeds, and
+ * whoever moved a lock that turns out to be live puts it back.
+ */
 export function takeConnectLock(
   dir: string,
   pid = process.pid,
   isAlive: (pid: number) => boolean = alive
 ): { release: () => void } | { heldBy: number } {
   const lock = path.join(dir, "connect.lock");
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const mine = {
+    release: () => {
+      if (holderOf(lock) === pid) fs.rmSync(lock, { force: true });
+    },
+  };
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       fs.writeFileSync(lock, String(pid), { flag: "wx", mode: 0o600 });
-      return {
-        release: () => {
-          try {
-            if (fs.readFileSync(lock, "utf8") === String(pid))
-              fs.unlinkSync(lock);
-          } catch {}
-        },
-      };
-    } catch {
-      const holder = Number(fs.readFileSync(lock, "utf8"));
-      if (holder && holder !== pid && isAlive(holder))
-        return { heldBy: holder };
-      fs.rmSync(lock, { force: true }); // stale: its process is gone
+      return mine;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST")
+        return { heldBy: -1 };
     }
+    const holder = holderOf(lock);
+    if (holder === pid) return mine;
+    if (holder && isAlive(holder)) return { heldBy: holder };
+    const aside = `${lock}.stale.${pid}`;
+    try {
+      fs.renameSync(lock, aside);
+    } catch {
+      continue; // someone else moved it first; look again
+    }
+    const moved = holderOf(aside);
+    if (moved && moved !== holder && moved !== pid && isAlive(moved)) {
+      // Between our look and the rename a live process took the lock: give it back.
+      try {
+        fs.renameSync(aside, lock);
+      } catch {}
+      return { heldBy: moved };
+    }
+    fs.rmSync(aside, { force: true, recursive: true });
   }
   return { heldBy: -1 };
 }

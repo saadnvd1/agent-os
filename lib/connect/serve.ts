@@ -146,7 +146,15 @@ export function startConnect(
     }
   };
 
+  // Runs from file watchers and a timer in the live server: never throws.
   const sync = () => {
+    try {
+      syncNow();
+    } catch (err) {
+      log(`connect: ${(err as Error).message}`);
+    }
+  };
+  const syncNow = () => {
     const read = readConnect(dir);
     const want = read.ok && read.enabled;
     if (running && !want) down(read.ok ? "turned off" : read.reason);
@@ -157,8 +165,10 @@ export function startConnect(
     } else if (!running) up();
   };
 
-  up();
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  sync();
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  } catch {}
   for (const f of ["connect.json", "tls.crt"])
     fs.watchFile(path.join(dir, f), { interval: 2000 }, sync);
   setInterval(sync, 24 * 60 * 60 * 1000).unref();
