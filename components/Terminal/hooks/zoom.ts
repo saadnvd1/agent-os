@@ -6,6 +6,7 @@ import type { FitAddon } from "@xterm/addon-fit";
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 28;
 export const DEFAULT_FONT_SIZE = 14;
+export const MOBILE_DEFAULT_FONT_SIZE = 11;
 
 const STORAGE_KEY = "terminal-font-size";
 const WHEEL_STEP = 1;
@@ -23,14 +24,14 @@ export function zoomFontSize(
   return clampSize((startSize * currentDistance) / startDistance);
 }
 
-export function loadFontSize(): number {
+export function loadFontSize(isMobile: boolean): number {
   try {
     const stored = Number(localStorage.getItem(STORAGE_KEY));
     if (stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) return stored;
   } catch {
     /* localStorage unavailable */
   }
-  return DEFAULT_FONT_SIZE;
+  return isMobile ? MOBILE_DEFAULT_FONT_SIZE : DEFAULT_FONT_SIZE;
 }
 
 const pinchDistance = (touches: TouchList): number =>
@@ -92,7 +93,9 @@ export function setupZoom(
     if (!e.ctrlKey) return;
     e.preventDefault();
     e.stopPropagation();
-    const size = (term.options.fontSize ?? DEFAULT_FONT_SIZE) + (e.deltaY < 0 ? WHEEL_STEP : -WHEEL_STEP);
+    const size =
+      (term.options.fontSize ?? DEFAULT_FONT_SIZE) +
+      (e.deltaY < 0 ? WHEEL_STEP : -WHEEL_STEP);
     applySize(clampSize(size));
     if (resizeTimeout) clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(commit, RESIZE_DEBOUNCE_MS);
