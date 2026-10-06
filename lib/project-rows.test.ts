@@ -71,4 +71,22 @@ describe("projectRow", () => {
       projectRow(input({ sessions: [at("2026-10-04 03:31:59")], now })).fresh
     ).toBe(false);
   });
+
+  it("opens the most recently used session, else starts one", () => {
+    const at = (id: string, updated_at: string) =>
+      ({ id, updated_at, created_at: updated_at }) as Session;
+    const row = projectRow(
+      input({
+        sessions: [
+          at("old", "2026-10-01 10:00:00"),
+          at("new", "2026-10-05 10:00:00"),
+        ],
+      })
+    );
+    expect(row.latest).toEqual({ kind: "session", id: "new" });
+    expect(
+      projectRow(input({ tmux: [tmux("t1"), tmux("t2")] })).latest
+    ).toEqual({ kind: "tmux", name: "t1", hostId: "local" });
+    expect(projectRow(input({})).latest).toBeNull();
+  });
 });

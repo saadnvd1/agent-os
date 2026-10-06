@@ -44,6 +44,7 @@ import { getProvider } from "@/lib/providers";
 import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
+import { useQuickStart } from "@/hooks/useQuickStart";
 
 function HomeContent() {
   // UI State
@@ -459,6 +460,9 @@ function HomeContent() {
     },
     [fetchSessions, attachToSession]
   );
+
+  // A project row with no sessions starts one in a tap.
+  useQuickStart(handleSessionCreated);
 
   // Project created handler (shared between desktop/mobile)
   const handleCreateProject = useCallback(

@@ -20,6 +20,7 @@ import {
   FolderOpen,
   Terminal,
   LayoutGrid,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,9 +57,11 @@ interface ProjectCardProps {
   onOpenInEditor?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
-  // What runs in the project; with one session the row opens it.
+  // What runs in the project. A click opens its latest session, or starts
+  // one when it has none; the count expands the full list.
   row?: ProjectRowModel;
-  onOpenSingle?: () => void;
+  onOpenLatest?: () => void;
+  onStartSession?: () => void;
 }
 
 export function ProjectCard({
@@ -75,7 +78,8 @@ export function ProjectCard({
   onDelete,
   onRename,
   row,
-  onOpenSingle,
+  onOpenLatest,
+  onStartSession,
 }: ProjectCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
@@ -123,7 +127,8 @@ export function ProjectCard({
   const handleClick = () => {
     if (isEditing) return;
     onClick?.();
-    if (row?.single && onOpenSingle) onOpenSingle();
+    if (row?.latest && onOpenLatest) onOpenLatest();
+    else if (!row?.latest && onStartSession) onStartSession();
     else onToggleExpanded?.(!project.expanded);
   };
 
@@ -307,11 +312,28 @@ export function ProjectCard({
         </Tooltip>
       )}
 
-      {/* Session count, only when collapsed */}
-      {!row?.single && !project.expanded && sessionCount > 1 && (
-        <span className="text-muted-foreground flex-shrink-0 font-mono text-[10px] tabular-nums">
+      {/* Session count: expands the full list */}
+      {!row?.single && sessionCount > 1 && (
+        <button
+          type="button"
+          aria-label={
+            project.expanded ? "Hide sessions" : `Show ${sessionCount} sessions`
+          }
+          aria-expanded={project.expanded}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpanded?.(!project.expanded);
+          }}
+          className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] -my-1 flex h-8 min-w-8 flex-shrink-0 items-center justify-center gap-0.5 rounded-md px-1 font-mono text-[10px] tabular-nums md:h-6 md:min-w-6"
+        >
           {sessionCount}
-        </span>
+          <ChevronRight
+            className={cn(
+              "h-3 w-3 transition-transform",
+              project.expanded && "rotate-90"
+            )}
+          />
+        </button>
       )}
 
       {/* Actions menu */}
