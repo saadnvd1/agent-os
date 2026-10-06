@@ -5,7 +5,10 @@ import { Check, ChevronRight, Circle, CircleDot, Sparkles } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
+import { UndoButton } from "./Undo";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
@@ -20,9 +23,42 @@ function UserText({ text }: { text: string }) {
   );
 }
 
-export function UserMessage({ item }: { item: Of<"user"> }) {
+function ImageThumb({ src }: { src: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col items-end gap-1">
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="View image"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" className="max-h-40 rounded-xl object-cover" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-[95vw] p-2 sm:max-w-5xl">
+          <DialogTitle className="sr-only">Image</DialogTitle>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt=""
+            className="max-h-[85vh] w-full rounded-lg object-contain"
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export function UserMessage({
+  item,
+  onUndo,
+}: {
+  item: Of<"user">;
+  onUndo?: () => void;
+}) {
+  return (
+    <div className="group flex flex-col items-end gap-1">
       {item.from && (
         <span className="label-mono text-muted-foreground">
           from {item.from}
@@ -31,12 +67,9 @@ export function UserMessage({ item }: { item: Of<"user"> }) {
       {item.images?.length ? (
         <div className="flex flex-wrap justify-end gap-1.5">
           {item.images.map((img, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <ImageThumb
               key={i}
               src={`data:${img.mediaType};base64,${img.data}`}
-              alt=""
-              className="max-h-40 rounded-xl object-cover"
             />
           ))}
         </div>
@@ -46,14 +79,24 @@ export function UserMessage({ item }: { item: Of<"user"> }) {
           <UserText text={item.text} />
         </div>
       )}
+      {onUndo && <UndoButton onClick={onUndo} />}
     </div>
   );
 }
 
 export function AssistantMessage({ item }: { item: Of<"assistant"> }) {
   return (
-    <div className={cn(item.streaming && "streaming-cursor")}>
-      <Markdown text={item.text} />
+    <div className="group">
+      <div className={cn(item.streaming && "streaming-cursor")}>
+        <Markdown text={item.text} />
+      </div>
+      {!item.streaming && (
+        <CopyButton
+          text={item.text}
+          label="Copy message"
+          className="-ml-1.5 opacity-40 group-hover:opacity-100 md:opacity-0"
+        />
+      )}
     </div>
   );
 }

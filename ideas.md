@@ -33,13 +33,16 @@
 ## Chat (after V1)
 
 - [ ] Drivers for Codex, OpenCode and others (lib/chat/drivers)
-- [ ] Approval prompts and plan mode as an opt-in permission level
+- [x] Approval prompts as an opt-in permission level (access picker)
+- [ ] Plan mode: `/plan`, a proposed-plan card, and "build it" to switch access
 - [ ] Import turns made in the terminal when switching back to chat
 - [ ] "Open as chat" for tmux sessions AgentOS didn't start: find the Claude
       conversation running there, create a session that resumes it in chat,
       and close the tmux session
 - [ ] Chat for sessions on other machines (via the per-machine AgentOS)
-- [ ] Checkpoints: undo a turn's file changes
+- [x] Checkpoints: undo a turn's file changes
+- [ ] Undo for shell-command changes too (git stash/snapshot per turn), since
+      SDK checkpoints only cover the file-edit tools
 - [ ] Context-usage meter in the composer
 - [ ] Durable chat, behind an experimental flag: run each chat conversation
       in its own worker process (hosted in tmux, like terminal sessions) so a

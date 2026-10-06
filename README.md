@@ -103,10 +103,11 @@ npm run dev  # http://localhost:3011
 ## Chat
 
 Sessions open as a chat by default: streaming replies, tool calls folded into
-expandable steps, inline diffs for edits, a plan checklist, image attachments
-and a Stop button, all readable on a phone. Chat drives the same agent as the
-terminal (Claude Code through the Agent SDK, with your own Claude login and
-full access, like running it with permissions skipped). The **Chat /
+expandable steps, inline diffs for edits, a plan checklist, highlighted code
+and mermaid diagrams, subagent cards, image attachments (pick, paste or drag
+them in) and a Stop button, all readable on a phone. Chat drives the same
+agent as the terminal (Claude Code through the Agent SDK, with your own Claude
+login). The **Chat /
 Terminal** switch in the tab bar hands the same conversation between the two:
 the terminal resumes it with `claude --resume`, and switching back closes the
 terminal so only one side drives it. History is kept in AgentOS and survives
@@ -118,6 +119,15 @@ and `/context` run in chat and show their output inline; skills the agent
 invokes on its own appear as a chip. `/model` (or the picker under the
 composer) switches the model mid-conversation. Commands that only make sense
 in a terminal, such as `/vim`, are left out.
+
+The access picker under the composer sets what the agent may do on its own:
+**Ask first** (an approval card in the chat for anything not already allowed),
+**Accept edits** (edits files, asks before other commands) or **Full access**
+(the default, like running with permissions skipped). Questions the agent asks
+you come up as cards to answer. **Undo** on a message puts back the files the
+agent edited since, rewinds the conversation to before it, and returns the
+message to the composer to edit and resend. Changes made by shell commands
+aren't tracked, so they stay.
 
 ![The slash-command menu open in a chat](screenshots/commands.png)
 

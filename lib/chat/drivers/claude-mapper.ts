@@ -20,6 +20,7 @@ export type ClaudeMessage = {
   type: string;
   subtype?: string;
   session_id?: string;
+  uuid?: string;
   message?: { id?: string; model?: string; content?: Block[] | string };
   event?: {
     type: string;

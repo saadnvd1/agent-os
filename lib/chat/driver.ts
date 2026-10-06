@@ -1,10 +1,21 @@
-import type { ChatCommand, ChatImage, ChatModel, DriverEvent } from "./events";
+import type {
+  ApprovalDecision,
+  ChatAccess,
+  ChatCommand,
+  ChatImage,
+  ChatModel,
+  DriverEvent,
+  UndoPreview,
+} from "./events";
 
 export interface ChatStartOptions {
   cwd: string;
   model: string;
   // The provider's id for an existing conversation, to continue it.
   resumeId?: string | null;
+  // Continue the conversation only up to this entry (after an undo).
+  resumeAt?: string | null;
+  access: ChatAccess;
   // Extra instructions appended to the provider's own system prompt.
   systemAppend?: string;
   env: Record<string, string>;
@@ -12,10 +23,21 @@ export interface ChatStartOptions {
 
 // One live conversation with an agent. Messages sent while a turn runs are
 // queued by the provider and folded into the conversation.
+export interface UndoResult extends UndoPreview {
+  // Where the conversation continues from: the entry before the message,
+  // null to start over, undefined when only files could be put back.
+  resumeAt?: string | null;
+}
+
 export interface ChatConversation {
-  send(text: string, images?: ChatImage[]): void;
+  // Returns the provider's id for the message, to undo back to it.
+  send(text: string, images?: ChatImage[]): string | undefined;
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
+  setAccess(access: ChatAccess): Promise<void>;
+  respond(id: string, answer: ApprovalDecision): void;
+  // Puts files back as they were before a message (dryRun: only say what).
+  undo(checkpoint: string, dryRun: boolean): Promise<UndoResult>;
   close(): void;
   events: AsyncIterable<DriverEvent>;
 }

@@ -1,9 +1,16 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, ImagePlus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ChatCommand, ChatImage, ChatModel } from "@/lib/chat/events";
+import type {
+  ChatAccess,
+  ChatCommand,
+  ChatImage,
+  ChatModel,
+} from "@/lib/chat/events";
+import { cn } from "@/lib/utils";
+import { AccessPicker } from "./AccessPicker";
 import { insertCommand, rankCommands, slashQuery } from "@/lib/chat/commands";
 import { CommandMenu } from "./CommandMenu";
 import { ModelPicker } from "./ModelPicker";
@@ -28,6 +35,14 @@ function readImage(file: File): Promise<ChatImage> {
   });
 }
 
+// Dragged files sometimes arrive without a type; go by the name then.
+const isImage = (f: File) =>
+  f.type.startsWith("image/") ||
+  (!f.type && /\.(png|jpe?g|gif|webp|heic)$/i.test(f.name));
+
+const carriesFiles = (e: React.DragEvent) =>
+  [...e.dataTransfer.types].includes("Files");
+
 // Enter sends on a keyboard; on touch screens it's a newline and the button sends.
 const coarsePointer = () =>
   typeof window !== "undefined" &&
@@ -43,6 +58,9 @@ export function Composer({
   models = [],
   model = "",
   onSetModel,
+  access,
+  onSetAccess,
+  prefill,
 }: {
   running: boolean;
   disabled?: boolean;
@@ -53,12 +71,17 @@ export function Composer({
   models?: ChatModel[];
   model?: string;
   onSetModel?: (model: string) => void;
+  access?: ChatAccess;
+  onSetAccess?: (access: ChatAccess) => void;
+  // Text to put back in the composer (an undone message), once per `at`.
+  prefill?: { text: string; at: number };
 }) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ChatImage[]>([]);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -97,8 +120,18 @@ export function Composer({
     ref.current?.focus();
   };
 
+  useEffect(() => {
+    if (!prefill) return;
+    setText(prefill.text);
+    requestAnimationFrame(() => {
+      resize();
+      ref.current?.focus();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.at]);
+
   const addFiles = async (files: Iterable<File>) => {
-    const picked = [...files].filter((f) => f.type.startsWith("image/"));
+    const picked = [...files].filter(isImage);
     const read = await Promise.all(picked.map(readImage));
     setImages((prev) => [...prev, ...read]);
   };
@@ -145,7 +178,28 @@ export function Composer({
           onHover={setActive}
         />
       )}
-      <div className="bg-card popover-surface rounded-2xl p-2">
+      <div
+        onDragOver={(e) => {
+          if (!carriesFiles(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+            setDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!carriesFiles(e)) return;
+          e.preventDefault();
+          setDragging(false);
+          void addFiles(e.dataTransfer.files);
+        }}
+        className={cn(
+          "bg-card popover-surface rounded-2xl p-2 transition-shadow",
+          dragging && "ring-primary ring-2"
+        )}
+      >
         {images.length > 0 && (
           <div className="flex flex-wrap gap-2 px-1 pb-2">
             {images.map((img, i) => (
@@ -178,7 +232,7 @@ export function Composer({
           onChange={(e) => update(e.target.value)}
           onPaste={(e) => {
             const files = [...e.clipboardData.files];
-            if (files.some((f) => f.type.startsWith("image/"))) {
+            if (files.some(isImage)) {
               e.preventDefault();
               void addFiles(files);
             }
@@ -208,6 +262,9 @@ export function Composer({
               e.target.value = "";
             }}
           />
+          {onSetAccess && access && (
+            <AccessPicker access={access} onPick={onSetAccess} />
+          )}
           {onSetModel && (
             <ModelPicker
               models={models}

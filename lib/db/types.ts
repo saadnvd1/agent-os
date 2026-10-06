@@ -1,4 +1,5 @@
 import type { AgentType } from "../providers";
+import type { ChatAccess } from "../chat/events";
 
 export interface Session {
   id: string;
@@ -22,6 +23,8 @@ export interface Session {
   task_status: "running" | "merged" | "dropped" | null;
   // How the session is shown: a chat conversation or a terminal.
   view: "chat" | "terminal";
+  chat_access: ChatAccess;
+  chat_resume_at: string | null;
   // LumifyHub card this task moves (and the board it's on)
   lh_card_id: string | null;
   lh_board_id: string | null;

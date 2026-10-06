@@ -9,11 +9,14 @@ import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
 import {
   interruptChat,
+  respondChat,
   sendChat,
+  setChatAccess,
   setChatModel,
+  undoChat,
   watchChat,
 } from "./lib/chat/runner";
-import type { ChatClientMessage } from "./lib/chat/events";
+import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
 import {
   bindAddresses,
   requestAllowed,
@@ -84,9 +87,20 @@ app.prepare().then(() => {
       "session"
     );
     if (!sessionId) return ws.close();
-    const unwatch = watchChat(sessionId, (m) => {
+    const reply = (m: ChatServerMessage) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
-    });
+    };
+    const fail = (err: unknown) =>
+      reply({
+        type: "item",
+        item: {
+          id: `error-${Date.now()}`,
+          kind: "error",
+          message: err instanceof Error ? err.message : String(err),
+          createdAt: Date.now(),
+        },
+      });
+    const unwatch = watchChat(sessionId, reply);
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
@@ -94,19 +108,23 @@ app.prepare().then(() => {
         else if (msg.type === "interrupt") void interruptChat(sessionId);
         else if (msg.type === "set_model")
           void setChatModel(sessionId, msg.model);
+        else if (msg.type === "set_access")
+          void setChatAccess(sessionId, msg.access);
+        else if (msg.type === "respond") respondChat(sessionId, msg.id, msg);
+        else if (msg.type === "undo")
+          void undoChat(sessionId, msg.from, !!msg.dryRun, reply).catch((err) =>
+            reply({
+              type: "undo_preview",
+              from: msg.from,
+              preview: {
+                canUndo: false,
+                files: [],
+                error: err instanceof Error ? err.message : String(err),
+              },
+            })
+          );
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        ws.send(
-          JSON.stringify({
-            type: "item",
-            item: {
-              id: `error-${Date.now()}`,
-              kind: "error",
-              message,
-              createdAt: Date.now(),
-            },
-          })
-        );
+        fail(err);
       }
     });
     ws.on("close", unwatch);

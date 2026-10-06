@@ -29,7 +29,11 @@ describe("groupTimeline", () => {
     ]);
     expect(
       blocks.map((b) =>
-        b.type === "tools" ? b.tools.map((t) => t.id).join("+") : b.item.id
+        b.type === "tools"
+          ? b.tools.map((t) => t.id).join("+")
+          : b.type === "item"
+            ? b.item.id
+            : b.id
       )
     ).toEqual(["a", "t1+t2", "b", "t3"]);
   });
@@ -55,5 +59,84 @@ describe("groupTimeline", () => {
     };
     const blocks = groupTimeline([tool("t1"), skill, tool("t2")]);
     expect(blocks.map((b) => b.type)).toEqual(["tools", "item", "tools"]);
+  });
+});
+
+const user = (id: string): ChatItem => ({
+  id,
+  kind: "user",
+  text: id,
+  checkpoint: `cp-${id}`,
+  createdAt: 0,
+});
+const undo = (id: string, from: string): ChatItem => ({
+  id,
+  kind: "undo",
+  from,
+  filesChanged: 1,
+  createdAt: 0,
+});
+
+describe("groupTimeline undo", () => {
+  it("folds an undone message and its reply behind the undo", () => {
+    const blocks = groupTimeline([
+      user("u1"),
+      text("a1"),
+      user("u2"),
+      tool("t1"),
+      text("a2"),
+      undo("x", "u2"),
+      user("u3"),
+    ]);
+    expect(blocks.map((b) => b.type)).toEqual([
+      "item",
+      "item",
+      "undone",
+      "item",
+    ]);
+    const folded = blocks[2] as Extract<
+      (typeof blocks)[number],
+      { type: "undone" }
+    >;
+    expect(folded.items.map((i) => i.id)).toEqual(["u2", "t1", "a2"]);
+    expect(folded.undo.id).toBe("x");
+  });
+
+  it("merges a second undo that goes back further", () => {
+    const blocks = groupTimeline([
+      user("u1"),
+      text("a1"),
+      user("u2"),
+      undo("x", "u2"),
+      user("u3"),
+      undo("y", "u1"),
+    ]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe("undone");
+    expect(blocks[0].type === "undone" && blocks[0].id).toBe("y");
+  });
+});
+
+describe("groupTimeline approvals", () => {
+  const approval = (status: "pending" | "allowed"): ChatItem => ({
+    id: `ap-${status}`,
+    kind: "approval",
+    toolName: "Bash",
+    title: "ls",
+    input: {},
+    canAlways: false,
+    status,
+    createdAt: 0,
+  });
+
+  it("shows a pending approval on its own and hides a settled one", () => {
+    const blocks = groupTimeline([
+      tool("t1"),
+      approval("allowed"),
+      tool("t2"),
+      approval("pending"),
+    ]);
+    expect(blocks.map((b) => b.type)).toEqual(["tools", "item"]);
+    expect((blocks[0] as { tools: unknown[] }).tools).toHaveLength(2);
   });
 });

@@ -6,8 +6,9 @@ import type { FileDiff } from "@/lib/chat/events";
 import type { ToolItem } from "@/lib/chat/group";
 import { lineDiff, shortPath, type DiffLine } from "@/lib/chat/diff";
 import { cn } from "@/lib/utils";
+import { Highlighted } from "./Code";
 
-function StatusIcon({ status }: { status: ToolItem["status"] }) {
+export function StatusIcon({ status }: { status: ToolItem["status"] }) {
   if (status === "running")
     return (
       <Loader2 className="text-primary h-3.5 w-3.5 shrink-0 animate-spin" />
@@ -25,7 +26,7 @@ const TONE: Record<DiffLine["op"], string> = {
   "+": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
 };
 
-function DiffView({ diff }: { diff: FileDiff }) {
+export function DiffView({ diff }: { diff: FileDiff }) {
   return (
     <div className="overflow-x-auto rounded-lg font-mono text-[11px] leading-5">
       <div className="text-muted-foreground bg-foreground/[0.04] px-2 py-1">
@@ -41,25 +42,35 @@ function DiffView({ diff }: { diff: FileDiff }) {
   );
 }
 
+// What a tool call does: its diff, its command, or its raw input.
+export function ToolPreview({
+  name,
+  input,
+  diff,
+}: {
+  name: string;
+  input: unknown;
+  diff?: FileDiff;
+}) {
+  const i = input as Record<string, unknown> | null;
+  if (diff) return <DiffView diff={diff} />;
+  if (name === "Bash" && typeof i?.command === "string")
+    return (
+      <div className="bg-foreground/[0.04] overflow-x-auto rounded-lg px-2 py-1.5 font-mono text-[11px] leading-5">
+        <Highlighted code={i.command} language="bash" />
+      </div>
+    );
+  return (
+    <pre className="bg-foreground/[0.04] max-h-40 overflow-auto rounded-lg px-2 py-1.5 font-mono text-[11px]">
+      {JSON.stringify(input, null, 2)}
+    </pre>
+  );
+}
+
 function ToolDetail({ tool }: { tool: ToolItem }) {
-  const input = tool.input as Record<string, unknown> | null;
-  const command =
-    tool.name === "Bash" && typeof input?.command === "string"
-      ? input.command
-      : null;
   return (
     <div className="space-y-2 pb-2 pl-6">
-      {tool.diff ? (
-        <DiffView diff={tool.diff} />
-      ) : command ? (
-        <pre className="bg-foreground/[0.04] overflow-x-auto rounded-lg px-2 py-1.5 font-mono text-[11px]">
-          {command}
-        </pre>
-      ) : (
-        <pre className="bg-foreground/[0.04] max-h-40 overflow-auto rounded-lg px-2 py-1.5 font-mono text-[11px]">
-          {JSON.stringify(tool.input, null, 2)}
-        </pre>
-      )}
+      <ToolPreview name={tool.name} input={tool.input} diff={tool.diff} />
       {tool.output && !tool.diff && (
         <pre className="text-muted-foreground max-h-64 overflow-auto rounded-lg px-2 font-mono text-[11px] whitespace-pre-wrap">
           {tool.output}
