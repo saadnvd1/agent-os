@@ -225,6 +225,7 @@ npm run dev          # http://localhost:3011
 npm test             # vitest
 npm run lint         # eslint
 npm run check        # typecheck, lint, format and tests: what CI runs
+scripts/redeploy     # pull, install, build; restarts via $AGENTOS_RESTART only if all of it worked
 ```
 
 A pre-commit hook formats and lints staged files, then typechecks and runs the

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Update a running checkout to origin's branch: pull, install, rebuild, and
+# restart only if every step succeeded, so a failed build never takes the
+# running server down. Restart with: AGENTOS_RESTART="<command>" scripts/redeploy
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.nvm/nvm.sh" >/dev/null
+  nvm use >/dev/null
+fi
+
+git pull --ff-only
+npm install --no-audit --no-fund
+node scripts/ensure-native.mjs
+npm run build
+git checkout -- next-env.d.ts 2>/dev/null || true
+
+if [ -n "${AGENTOS_RESTART:-}" ]; then
+  eval "$AGENTOS_RESTART"
+  port="${PORT:-3011}"
+  for _ in $(seq 1 40); do
+    if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/")" = 200 ]; then
+      echo "AgentOS is up on $port"
+      exit 0
+    fi
+    sleep 1
+  done
+  echo "AgentOS did not come back on $port" >&2
+  exit 1
+fi
+echo "Built. Restart your AgentOS server to run it."
