@@ -30,7 +30,7 @@ function LayoutRenderer({ layout, renderPane }: PaneLayoutProps) {
           </Panel>
           {index < layout.children.length - 1 && (
             <Separator
-              className={` ${orientation === "horizontal" ? "w-0.5 cursor-col-resize" : "h-0.5 cursor-row-resize"} bg-border hover:bg-primary/40 active:bg-primary/60 rounded-full transition-colors`}
+              className={` ${orientation === "horizontal" ? "mx-1 w-px cursor-col-resize" : "my-1 h-px cursor-row-resize"} hover:bg-primary/50 active:bg-primary/70 rounded-full bg-transparent transition-colors`}
             />
           )}
         </Fragment>
@@ -53,7 +53,7 @@ export function PaneLayout({
 
   // On desktop: render full layout tree with splits
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full p-1.5 pt-0">
       <LayoutRenderer layout={state.layout} renderPane={renderPane} />
     </div>
   );

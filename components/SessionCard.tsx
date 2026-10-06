@@ -7,8 +7,6 @@ import {
   GitFork,
   GitBranch,
   GitPullRequest,
-  Circle,
-  AlertCircle,
   Loader2,
   MoreHorizontal,
   FolderInput,
@@ -77,29 +75,33 @@ const statusConfig: Record<
   { color: string; label: string; icon: React.ReactNode }
 > = {
   idle: {
-    color: "text-muted-foreground",
+    color: "text-muted-foreground/60",
     label: "idle",
-    icon: <Circle className="h-2 w-2 fill-current" />,
+    icon: <span className="block h-2 w-2 rounded-full bg-current" />,
   },
   running: {
-    color: "text-blue-500",
+    color: "text-emerald-400",
     label: "running",
-    icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    icon: (
+      <span className="status-live block h-2 w-2 rounded-full bg-current" />
+    ),
   },
   waiting: {
-    color: "text-yellow-500 animate-pulse",
+    color: "text-amber-400",
     label: "waiting",
-    icon: <AlertCircle className="h-3 w-3" />,
+    icon: (
+      <span className="status-live block h-2 w-2 rounded-full bg-current" />
+    ),
   },
   error: {
-    color: "text-red-500",
+    color: "text-destructive",
     label: "error",
-    icon: <Circle className="h-2 w-2 fill-current" />,
+    icon: <span className="block h-2 w-2 rounded-full bg-current" />,
   },
   dead: {
-    color: "text-muted-foreground/50",
+    color: "text-muted-foreground/40",
     label: "stopped",
-    icon: <Circle className="h-2 w-2" />,
+    icon: <span className="block h-2 w-2 rounded-full border border-current" />,
   },
 };
 
@@ -360,14 +362,17 @@ export function SessionCard({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
-        "group flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left transition-colors",
-        "min-h-[36px] md:min-h-0", // Compact touch target
+        "group flex w-full cursor-pointer items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-colors",
+        "min-h-11 md:min-h-8",
         isSelected
-          ? "bg-primary/20"
+          ? "bg-primary/15"
           : isActive
-            ? "bg-primary/10"
-            : "hover:bg-accent/50",
-        status === "waiting" && !isActive && !isSelected && "bg-yellow-500/5"
+            ? "text-foreground bg-foreground/[0.06] shadow-[inset_2px_0_0_hsl(var(--primary))]"
+            : "hover:bg-foreground/[0.04]",
+        status === "waiting" &&
+          !isActive &&
+          !isSelected &&
+          "bg-amber-400/[0.06]"
       )}
     >
       {/* Selection checkbox - visible when in select mode */}

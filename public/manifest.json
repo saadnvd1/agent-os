@@ -4,8 +4,8 @@
   "description": "AI Agent Command Center",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#3B82F6",
+  "background_color": "#08080D",
+  "theme_color": "#08080D",
   "icons": [
     {
       "src": "/icons/icon-192.png",

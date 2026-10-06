@@ -25,7 +25,7 @@ export function DiscoveredTmuxList({
   return (
     <div className="space-y-0.5">
       {title && (
-        <p className="text-muted-foreground px-2 pt-3 pb-1 text-xs font-medium tracking-wide uppercase">
+        <p className="label-mono text-muted-foreground px-2 pt-4 pb-1">
           {title}
         </p>
       )}

@@ -9,7 +9,7 @@ export function SidebarFooter() {
   return (
     <div className="mt-auto px-3 pt-2 pb-3">
       <div className="flex items-center justify-between">
-        <span className="text-muted-foreground text-xs">Theme</span>
+        <span className="label-mono text-muted-foreground">Theme</span>
         <ThemeToggle />
       </div>
       <div className="text-muted-foreground/50 mt-2 text-center text-[10px]">

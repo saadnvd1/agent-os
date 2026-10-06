@@ -94,8 +94,9 @@ export function DesktopTabBar({
   return (
     <div
       className={cn(
-        "flex items-center gap-1 overflow-x-auto px-1 pt-1 transition-colors",
-        isFocused ? "bg-muted" : "bg-muted/50"
+        "flex items-center gap-1 overflow-x-auto px-1.5 py-1.5 transition-colors",
+        "shadow-[inset_0_-1px_0_hsl(var(--foreground)/0.06)]",
+        isFocused ? "bg-foreground/[0.025]" : "bg-transparent"
       )}
     >
       {/* Tabs */}
@@ -108,10 +109,10 @@ export function DesktopTabBar({
               onTabSwitch(tab.id);
             }}
             className={cn(
-              "group flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition-colors",
+              "group relative flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-xs transition-colors",
               tab.id === activeTabId
-                ? "bg-background text-foreground"
-                : "text-muted-foreground hover:text-foreground/80 hover:bg-accent/50"
+                ? "bg-foreground/[0.07] text-foreground after:bg-primary after:absolute after:inset-x-3 after:-bottom-1.5 after:h-px"
+                : "text-muted-foreground hover:text-foreground/80 hover:bg-foreground/[0.04]"
             )}
           >
             <span className="max-w-[120px] truncate">{getTabName(tab)}</span>
