@@ -86,6 +86,19 @@
 - [ ] WebSocket reconnection handling
 - [ ] Session auto-save/recovery
 
+## Performance (after the 2026-10-07 audit)
+
+- [ ] Virtualize long chats: a 600-item chat mounts ~3,900 DOM nodes and its
+      first render is most of the chat page's LCP (~8s on a throttled phone)
+- [ ] Move the status query out of HomeContent: every push re-renders the page
+      shell, the views and the panes' props (rows and dialogs are memoized now)
+- [ ] Layout shift (CLS ~0.19) on chat and terminal pages as the pane's bars and
+      keybar settle after hydration
+- [ ] Memoize the Composer's props (history, handlers) so a streamed word
+      doesn't re-render its toolbar
+- [ ] The remaining sync git calls (stage, commit, push, history, PR) off the
+      event loop, like the polled status reads
+
 ## Workspaces (inspired by catnip)
 
 - [ ] Project-tied workspaces - Sessions grouped by project, not just folders

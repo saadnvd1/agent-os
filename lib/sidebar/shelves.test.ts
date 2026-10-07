@@ -5,6 +5,7 @@ import {
   doneLimit,
   inWorkspace,
   needOf,
+  sameRow,
   taskNeed,
   type RowStatus,
   type ShelfInput,
@@ -177,5 +178,49 @@ describe("inWorkspace", () => {
     });
     expect(inWorkspace(orch, workspaceOf, "w1")).toBe(true);
     expect(inWorkspace(orch, workspaceOf, "w2")).toBe(false);
+  });
+});
+
+describe("sameRow", () => {
+  const sessions = [
+    session("a"),
+    session("b"),
+    session("w", { conductor_session_id: "a" }),
+  ];
+  const rowOf = (out: ReturnType<typeof shelves>, id: string) =>
+    [
+      ...out.raw.pinned,
+      ...out.raw.needsYou,
+      ...out.raw.working,
+      ...out.raw.done,
+    ].find((r) => r.session.id === id)!;
+
+  it("treats a rebuilt row with the same status as unchanged", () => {
+    const before = shelves(sessions, { a: { status: "idle", detail: "x" } });
+    const after = shelves(sessions, { a: { status: "idle", detail: "x" } });
+    expect(sameRow(rowOf(before, "a"), rowOf(after, "a"))).toBe(true);
+  });
+
+  it("sees what a row draws change: status, detail, asks, a worker", () => {
+    const base = shelves(sessions, { a: { status: "idle" } });
+    const changes: Record<string, RowStatus>[] = [
+      { a: { status: "running" } },
+      { a: { status: "idle", detail: "building" } },
+      { a: { status: "idle", asks: 2, need: "answer" as const } },
+      { a: { status: "idle" }, w: { status: "running" } },
+    ];
+    for (const statuses of changes)
+      expect(
+        sameRow(rowOf(base, "a"), rowOf(shelves(sessions, statuses), "a"))
+      ).toBe(false);
+  });
+
+  it("sees a renamed session", () => {
+    const before = shelves(sessions);
+    const after = shelves([
+      session("a", { name: "renamed" }),
+      ...sessions.slice(1),
+    ]);
+    expect(sameRow(rowOf(before, "a"), rowOf(after, "a"))).toBe(false);
   });
 });

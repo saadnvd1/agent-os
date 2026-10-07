@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import * as DM from "@/components/ui/dropdown-menu";
 import { WorkspaceNameDialog } from "@/components/Workspaces";
-import { WorkspaceLumifyHubItem } from "@/components/LumifyHub";
+import { WorkspaceLumifyHubItem } from "@/components/LumifyHub/MenuItems";
 import type { Workspace } from "@/lib/db";
 import {
   useCreateWorkspace,

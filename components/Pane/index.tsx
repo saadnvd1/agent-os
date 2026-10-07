@@ -1,6 +1,5 @@
 "use client";
 
-import { ChatPanel } from "@/components/Chat";
 import { useRef, useCallback, useEffect, memo, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { usePanes } from "@/contexts/PaneContext";
@@ -32,6 +31,13 @@ import { fileOpenStore, fileOpenActions } from "@/stores/fileOpen";
 const Terminal = dynamic(
   () => import("@/components/Terminal").then((mod) => mod.Terminal),
   { ssr: false, loading: () => <TerminalSkeleton /> }
+);
+
+// A chat's markdown and highlighting load with the first chat opened, not
+// with the app.
+const ChatPanel = dynamic(
+  () => import("@/components/Chat/ChatPanel").then((mod) => mod.ChatPanel),
+  { ssr: false }
 );
 
 const FileExplorer = dynamic(

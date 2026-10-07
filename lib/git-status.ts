@@ -1,7 +1,32 @@
-import { execSync } from "child_process";
+import { execFile, execSync } from "child_process";
+import { promisify } from "util";
 import { unlinkSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+
+const execFileAsync = promisify(execFile);
+
+// The reads the git panel polls run off the event loop: a slow repo
+// shouldn't stall every terminal and status push while git works.
+async function git(cwd: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, {
+    cwd,
+    encoding: "utf-8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  return stdout;
+}
+
+// For commands whose exit code isn't failure (a diff with changes exits 1):
+// whatever they printed, or nothing.
+async function gitOutput(cwd: string, args: string[]): Promise<string> {
+  try {
+    return await git(cwd, args);
+  } catch (error) {
+    const stdout = (error as { stdout?: unknown }).stdout;
+    return typeof stdout === "string" ? stdout : "";
+  }
+}
 
 /**
  * Expand ~ to home directory in paths
@@ -41,34 +66,25 @@ export interface GitStatus {
 /**
  * Parse git status --porcelain=v2 output
  */
-export function getGitStatus(workingDir: string): GitStatus {
+export async function getGitStatus(workingDir: string): Promise<GitStatus> {
   try {
-    // Get branch info
-    const branchOutput = execSync("git branch --show-current", {
-      cwd: workingDir,
-      encoding: "utf-8",
-    }).trim();
-
-    // Get ahead/behind counts
-    let ahead = 0;
-    let behind = 0;
-    try {
-      const trackingOutput = execSync(
-        "git rev-list --left-right --count @{upstream}...HEAD 2>/dev/null || echo '0 0'",
-        { cwd: workingDir, encoding: "utf-8" }
-      ).trim();
-      const [b, a] = trackingOutput.split(/\s+/).map(Number);
-      ahead = a || 0;
-      behind = b || 0;
-    } catch {
-      // No upstream configured
-    }
-
-    // Get status
-    const statusOutput = execSync("git status --porcelain=v1", {
-      cwd: workingDir,
-      encoding: "utf-8",
-    });
+    const [branchOutput, trackingOutput, statusOutput] = await Promise.all([
+      git(workingDir, ["branch", "--show-current"]).then((o) => o.trim()),
+      // No upstream configured: nothing ahead or behind.
+      git(workingDir, [
+        "rev-list",
+        "--left-right",
+        "--count",
+        "@{upstream}...HEAD",
+      ]).then(
+        (o) => o.trim(),
+        () => "0 0"
+      ),
+      git(workingDir, ["status", "--porcelain=v1"]),
+    ]);
+    const [b, a] = trackingOutput.split(/\s+/).map(Number);
+    const ahead = a || 0;
+    const behind = b || 0;
 
     const staged: GitFile[] = [];
     const unstaged: GitFile[] = [];
@@ -154,47 +170,27 @@ function parseStatus(char: string): FileStatus {
 /**
  * Get diff for a specific file
  */
-export function getFileDiff(
+export async function getFileDiff(
   workingDir: string,
   filePath: string,
   staged: boolean
-): string {
-  try {
-    const stagedFlag = staged ? "--staged" : "";
-    const output = execSync(
-      `git diff ${stagedFlag} -- "${filePath}" 2>/dev/null || true`,
-      {
-        cwd: workingDir,
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024, // 10MB
-      }
-    );
-    return output;
-  } catch {
-    return "";
-  }
+): Promise<string> {
+  return gitOutput(workingDir, [
+    "diff",
+    ...(staged ? ["--staged"] : []),
+    "--",
+    filePath,
+  ]);
 }
 
 /**
  * Get diff for untracked file (show full content)
  */
-export function getUntrackedFileDiff(
+export async function getUntrackedFileDiff(
   workingDir: string,
   filePath: string
-): string {
-  try {
-    const output = execSync(
-      `git diff --no-index /dev/null "${filePath}" 2>/dev/null || true`,
-      {
-        cwd: workingDir,
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024,
-      }
-    );
-    return output;
-  } catch {
-    return "";
-  }
+): Promise<string> {
+  return gitOutput(workingDir, ["diff", "--no-index", "/dev/null", filePath]);
 }
 
 /**
@@ -262,13 +258,9 @@ export function discardChanges(workingDir: string, filePath: string): void {
 /**
  * Check if directory is a git repository
  */
-export function isGitRepo(workingDir: string): boolean {
+export async function isGitRepo(workingDir: string): Promise<boolean> {
   try {
-    execSync("git rev-parse --git-dir", {
-      cwd: workingDir,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    await git(workingDir, ["rev-parse", "--git-dir"]);
     return true;
   } catch {
     return false;

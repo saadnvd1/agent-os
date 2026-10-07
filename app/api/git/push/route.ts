@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     const path = expandPath(rawPath);
 
-    if (!isGitRepo(path)) {
+    if (!(await isGitRepo(path))) {
       return NextResponse.json(
         { error: "Not a git repository" },
         { status: 400 }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if there are commits to push
-    const status = getGitStatus(path);
+    const status = await getGitStatus(path);
     if (status.ahead === 0) {
       return NextResponse.json({
         success: true,

@@ -3,8 +3,10 @@
 import { useCodeSearch } from "@/data/code-search";
 import { Loader2, FileCode, Search } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+// The async light build loads each language on first use; the full Prism
+// build put every grammar (~600 KB) into the app's first load.
+import { PrismAsyncLight as SyntaxHighlighter } from "react-syntax-highlighter";
+import vscDarkPlus from "react-syntax-highlighter/dist/esm/styles/prism/vsc-dark-plus";
 import { cn } from "@/lib/utils";
 import type { FormattedMatch } from "@/lib/code-search";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { memo, useState, useSyncExternalStore } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,13 @@ import { NO_PASSKEYS_HERE, passkeysHere } from "@/data/presence";
 import { AsksList } from "./AsksList";
 
 // The top of an orchestrator's chat: the workspace header line, Pause or
-// Resume, and its asks for Saad.
-export function OrchestratorBar({ workspaceId }: { workspaceId: string }) {
+// Resume, and its asks for Saad. Memoized: the chat under it re-renders for
+// every streamed word.
+export const OrchestratorBar = memo(function OrchestratorBar({
+  workspaceId,
+}: {
+  workspaceId: string;
+}) {
   const { overview, counts } = useOrchestratorHeader(workspaceId);
   const pause = usePauseOrchestrator(workspaceId);
   const [open, setOpen] = useState(true);
@@ -98,4 +103,4 @@ export function OrchestratorBar({ workspaceId }: { workspaceId: string }) {
       )}
     </div>
   );
-}
+});

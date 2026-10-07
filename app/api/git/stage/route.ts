@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
     const path = expandPath(rawPath);
 
-    if (!isGitRepo(path)) {
+    if (!(await isGitRepo(path))) {
       return NextResponse.json(
         { error: "Not a git repository" },
         { status: 400 }

@@ -164,3 +164,30 @@ export function inWorkspace(
     !!session.project_id && workspaceOf(session.project_id) === workspaceId
   );
 }
+
+// Whether a row would draw the same: statuses are rebuilt on every push, so
+// rows compare by what they show rather than by identity.
+export function sameRow(a: SidebarRow, b: SidebarRow): boolean {
+  if (a === b) return true;
+  return (
+    a.session === b.session &&
+    a.need === b.need &&
+    a.unread === b.unread &&
+    a.working === b.working &&
+    sameStatus(a.status, b.status) &&
+    a.workers.length === b.workers.length &&
+    a.workers.every((w, i) => sameRow(w, b.workers[i]))
+  );
+}
+
+function sameStatus(a: RowStatus | undefined, b: RowStatus | undefined) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.status === b.status &&
+    (a.need ?? null) === (b.need ?? null) &&
+    !!a.unread === !!b.unread &&
+    a.asks === b.asks &&
+    (a.detail ?? null) === (b.detail ?? null)
+  );
+}
