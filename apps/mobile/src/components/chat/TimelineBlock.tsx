@@ -7,6 +7,8 @@ import { font, radius, space, useTheme } from "~/lib/theme";
 import { Approval } from "./blocks/Approval";
 import { Line } from "./blocks/Line";
 import { MessageActions } from "./blocks/MessageActions";
+import { ArtifactCard } from "./web/ArtifactCard";
+import { useActiveMachine } from "~/lib/machines/store";
 import { Todos } from "./blocks/Todos";
 import { TurnEnd } from "./blocks/TurnEnd";
 import { ToolGroup } from "./blocks/ToolGroup";
@@ -35,6 +37,7 @@ export const TimelineBlock = memo(function TimelineBlock({
 
 function Item({ item, respond }: { item: ChatItem; respond: Respond }) {
   const t = useTheme();
+  const machine = useActiveMachine();
   switch (item.kind) {
     case "user":
       return <UserMessage item={item} />;
@@ -127,12 +130,14 @@ function Item({ item, respond }: { item: ChatItem; respond: Respond }) {
         </Text>
       );
     case "artifact":
-      return (
-        <Line
-          icon="macwindow"
-          text={`${item.title}: open on the web to view`}
+      return machine ? (
+        <ArtifactCard
+          machine={machine}
+          artifactId={item.artifactId}
+          title={item.title}
+          height={item.height}
         />
-      );
+      ) : null;
     case "mcp":
       return (
         <Line

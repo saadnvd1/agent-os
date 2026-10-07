@@ -5,6 +5,7 @@ import { Text } from "~/components/ui/Text";
 import { font, radius, space, useTheme, type Palette } from "~/lib/theme";
 import { chunk, imageUrls, type Chunk } from "./chunks";
 import { CodeBlock } from "./CodeBlock";
+import { MermaidBlock } from "../web/MermaidBlock";
 import { ImageRow } from "./ImageRow";
 import { Inline } from "./Inline";
 import { parseMarkdown } from "./parse";
@@ -67,7 +68,9 @@ function Block({
 }) {
   switch (node.type) {
     case "code":
-      return (
+      return node.lang === "mermaid" ? (
+        <MermaidBlock code={node.value} streaming={streaming} />
+      ) : (
         <CodeBlock code={node.value} lang={node.lang} streaming={streaming} />
       );
     case "table":

@@ -112,6 +112,10 @@ export default function RootLayout() {
                 />
                 <Stack.Screen name="session/[id]" options={{ title: "" }} />
                 <Stack.Screen
+                  name="artifact"
+                  options={{ presentation: "modal" }}
+                />
+                <Stack.Screen
                   name="viewer"
                   options={{
                     headerShown: false,
