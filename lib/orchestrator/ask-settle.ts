@@ -23,10 +23,12 @@ export interface PRState {
   mergeSha: string | null;
 }
 
-// What GitHub last said about each PR an ask links. Merged is final; an
-// open or closed one (it can be reopened) is looked up again after a minute.
-const seen = new Map<string, { at: number; pr: PRState }>();
-const RECHECK_MS = 60 * 1000;
+// What GitHub last said about each PR an ask links, and which asks linked it
+// then. Merged is final. Closed is too, until a new ask links it (someone
+// thinks it's live again; a reopened task PR is seen through its task). An
+// open one is looked up again after 5 minutes.
+const seen = new Map<string, { at: number; pr: PRState; asks: Set<number> }>();
+export const RECHECK_MS = 5 * 60 * 1000;
 
 interface TaskRow {
   id: string;
@@ -182,21 +184,31 @@ export async function refreshAskPRs(
   const asks = openAsks(workspaceId).filter(aboutWork);
   if (!asks.length) return;
   const idx = index(workspaceId);
+  const linking = new Map<string, Set<number>>();
+  for (const ask of asks) {
+    const task = taskFor(ask, idx);
+    const key = prKey(ask.link) ?? prKey(task?.pr_url ?? null);
+    if (key) linking.set(key, (linking.get(key) ?? new Set()).add(ask.id));
+  }
   const keys = new Set<string>();
   for (const ask of asks) {
     const task = taskFor(ask, idx);
     const key = prKey(ask.link) ?? prKey(task?.pr_url ?? null);
     if (!key) continue;
     const last = seen.get(key);
-    if (last && (last.pr.state === "MERGED" || now - last.at < RECHECK_MS))
-      continue;
+    if (last) {
+      if (last.pr.state === "MERGED") continue;
+      if (last.pr.state === "CLOSED" && last.asks.has(ask.id)) continue;
+      if (last.pr.state === "OPEN" && now - last.at < RECHECK_MS) continue;
+    }
     if (task?.task_status === "running" && task.pr_status === "open") continue;
     keys.add(key);
   }
   await Promise.all(
     [...keys].map(async (key) => {
       try {
-        seen.set(key, { at: now, pr: await view(key) });
+        const pr = await view(key);
+        seen.set(key, { at: now, pr, asks: linking.get(key)! });
       } catch {
         // gh couldn't say; asked again on the next pass.
       }

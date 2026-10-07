@@ -14,6 +14,7 @@ import { needsYou } from "../needs-you";
 import { programSummary } from "../program-status/store";
 import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
+import { storedPR } from "../tasks/session";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -155,19 +156,7 @@ export async function statusOf(s: Session): Promise<{
 async function taskFacts(s: Session): Promise<SessionFacts["task"]> {
   if (!s.task_status) return null;
   if (s.task_status !== "running") {
-    const pr: TaskPR | null = s.pr_number
-      ? {
-          number: s.pr_number,
-          url: s.pr_url ?? "",
-          state:
-            s.task_status === "merged"
-              ? "MERGED"
-              : s.pr_status === "open"
-                ? "OPEN"
-                : "CLOSED",
-          checks: "none",
-        }
-      : null;
+    const pr = storedPR(s);
     const state = s.task_status === "moved" ? "done" : s.task_status;
     return { state, pr, blocked: null };
   }

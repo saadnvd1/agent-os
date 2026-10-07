@@ -1,0 +1,30 @@
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"list files"}]}}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"list files"}]}}
+{"type":"message_start","message":{"role":"assistant","content":[],"usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"total":0}}}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"thinking_delta","contentIndex":0,"delta":"**Listing**"}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"thinking_end","contentIndex":0,"content":"**Listing**"}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"toolcall_start","contentIndex":1}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"toolcall_end","contentIndex":1,"toolCall":{"type":"toolCall","id":"bash_1791370307582_1","name":"bash","arguments":{"command":"ls"}}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"bash_1791370307582_1","name":"bash","arguments":{"command":"ls"}}],"usage":{"input":1608,"output":45,"cacheRead":0,"cacheWrite":0,"totalTokens":1653,"cost":{"input":0.0004824,"output":0.0001125,"cacheRead":0,"cacheWrite":0,"total":0.0005949}},"stopReason":"toolUse"}}
+{"type":"tool_execution_start","toolCallId":"bash_1791370307582_1","toolName":"bash","args":{"command":"ls"}}
+{"type":"tool_execution_update","toolCallId":"bash_1791370307582_1","toolName":"bash","args":{"command":"ls"},"partialResult":{"content":[{"type":"text","text":"a.txt\n"}]}}
+{"type":"tool_execution_end","toolCallId":"bash_1791370307582_1","toolName":"bash","result":{"content":[{"type":"text","text":"a.txt\nb.txt\n"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","toolCallId":"bash_1791370307582_1","toolName":"bash","content":[{"type":"text","text":"a.txt\nb.txt\n"}],"isError":false}}
+{"type":"turn_end","message":{"role":"assistant","stopReason":"toolUse"},"toolResults":[]}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"assistant","content":[]}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Two "}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"files."}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"Two files."}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Two files."}],"usage":{"input":1529,"output":17,"cacheRead":100,"cacheWrite":0,"totalTokens":1646,"cost":{"total":0.0005012}},"stopReason":"stop"}}
+{"type":"turn_end","message":{"role":"assistant","stopReason":"stop"},"toolResults":[]}
+{"type":"agent_end","messages":[]}
+{"type":"agent_start"}
+{"type":"message_start","message":{"role":"assistant","content":[]}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"partial"}}
+{"type":"message_update","message":{},"assistantMessageEvent":{"type":"error","reason":"aborted"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"partial"}],"stopReason":"aborted","errorMessage":"Request was aborted"}}
+{"type":"agent_end","messages":[]}

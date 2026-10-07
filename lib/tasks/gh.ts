@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { parseCodeReview } from "./code-review";
+import { assertGhAllowed, noteGhFailure, noteGhSuccess } from "./gh-limit";
 import {
   checksVerdict,
   failingCheck,
@@ -19,12 +20,32 @@ export async function run(
   cwd: string,
   timeout = 60000
 ): Promise<string> {
-  const { stdout } = await execFileAsync(cmd, args, {
-    cwd,
-    timeout,
-    maxBuffer: 4 * 1024 * 1024,
-  });
-  return stdout;
+  if (cmd === "gh") assertGhAllowed(args);
+  try {
+    const { stdout } = await execFileAsync(cmd, args, {
+      cwd,
+      timeout,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    if (cmd === "gh") noteGhSuccess();
+    return stdout;
+  } catch (error) {
+    if (cmd === "gh") await noteGhFailure(args, error);
+    throw error;
+  }
+}
+
+// A PR as `gh pr list --json` gives it.
+export interface ListedPR {
+  number: number;
+  url: string;
+  state: TaskPR["state"];
+  headRefOid?: string;
+  statusCheckRollup: RollupEntry[] | null;
+  body?: string;
+  headRefName?: string;
+  isCrossRepository?: boolean;
+  createdAt?: string;
 }
 
 export interface FindPROpts {
@@ -57,23 +78,15 @@ export async function findPRStrict(
     repoDir,
     15000
   );
-  const pr = (
-    JSON.parse(out) as Array<{
-      number: number;
-      url: string;
-      state: TaskPR["state"];
-      headRefOid?: string;
-      statusCheckRollup: RollupEntry[] | null;
-      body?: string;
-      isCrossRepository?: boolean;
-      createdAt?: string;
-    }>
-  ).find(
+  const pr = (JSON.parse(out) as ListedPR[]).find(
     (p) =>
       !p.isCrossRepository &&
       (!opts.since || Date.parse(p.createdAt ?? "") >= Date.parse(opts.since))
   );
-  if (!pr) return null;
+  return pr ? toTaskPR(repoDir, pr) : null;
+}
+
+export async function toTaskPR(repoDir: string, pr: ListedPR): Promise<TaskPR> {
   // A closed PR's checks gate nothing, so they cost no API calls.
   const rollup =
     pr.state === "OPEN"

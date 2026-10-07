@@ -60,15 +60,18 @@ export function ChipItem({
   onSelect,
   children,
   hint,
+  disabled,
 }: {
   checked: boolean;
   onSelect: () => void;
   children: React.ReactNode;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
     <DropdownMenuItem
       onSelect={onSelect}
+      disabled={disabled}
       className="flex min-h-11 items-start gap-2 md:min-h-8"
     >
       <Check

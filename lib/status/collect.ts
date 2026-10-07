@@ -2,10 +2,8 @@
 // program's own reports (OSC 7501) or, failing that, their screen; chats
 // from their live conversation. Shared by GET /api/sessions/status and the
 // pushed /ws/status stream.
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
 import { managedPanes } from "./managed";
+import { findResumeId } from "../providers/resume-ids";
 import {
   findQuestion,
   plainText,
@@ -113,89 +111,34 @@ async function getClaudeSessionIdFromEnv(
   }
 }
 
-// Get Claude session ID by looking at session files on disk
-function getClaudeSessionIdFromFiles(projectPath: string): string | null {
-  const home = os.homedir();
-  const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude");
-  const projectDirName = projectPath.replace(/\//g, "-");
-  const projectDir = path.join(claudeDir, "projects", projectDirName);
-
-  if (!fs.existsSync(projectDir)) {
-    return null;
-  }
-
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/;
-
-  try {
-    const files = fs.readdirSync(projectDir);
-    let mostRecent: string | null = null;
-    let mostRecentTime = 0;
-
-    for (const file of files) {
-      if (file.startsWith("agent-")) continue;
-      if (!uuidPattern.test(file)) continue;
-
-      const filePath = path.join(projectDir, file);
-      const stat = fs.statSync(filePath);
-
-      if (stat.mtimeMs > mostRecentTime) {
-        mostRecentTime = stat.mtimeMs;
-        mostRecent = file.replace(".jsonl", "");
-      }
-    }
-
-    if (mostRecent && Date.now() - mostRecentTime < 5 * 60 * 1000) {
-      return mostRecent;
-    }
-
-    const configFile = path.join(claudeDir, ".claude.json");
-    if (fs.existsSync(configFile)) {
-      try {
-        const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
-        if (config.projects?.[projectPath]?.lastSessionId) {
-          return config.projects[projectPath].lastSessionId;
-        }
-      } catch {
-        // Ignore config parse errors
-      }
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // It rarely changes, and finding it reads a directory: once a minute is plenty.
 const claudeIds = new Map<string, { id: string | null; at: number }>();
 const CLAUDE_ID_MS = 60000;
 
-async function getClaudeSessionId(sessionName: string): Promise<string | null> {
+async function getClaudeSessionId(
+  sessionName: string,
+  agent: AgentType
+): Promise<string | null> {
   const cached = claudeIds.get(sessionName);
   if (cached && Date.now() - cached.at < CLAUDE_ID_MS) return cached.id;
-  const id = await findClaudeSessionId(sessionName);
+  const id = await findResumeIdFor(sessionName, agent);
   claudeIds.set(sessionName, { id, at: Date.now() });
   return id;
 }
 
-async function findClaudeSessionId(
-  sessionName: string
+// The agent's own id for its conversation, to resume it: Claude says so in
+// its environment; every agent's session files say it on this machine.
+async function findResumeIdFor(
+  sessionName: string,
+  agent: AgentType
 ): Promise<string | null> {
-  const envId = await getClaudeSessionIdFromEnv(sessionName);
-  if (envId) {
-    return envId;
+  if (agent === "claude") {
+    const envId = await getClaudeSessionIdFromEnv(sessionName);
+    if (envId) return envId;
   }
-
-  // Claude's transcript files live on the machine running the session.
   if (isRemoteHost(statusDetector.hostFor(sessionName))) return null;
-
   const cwd = await getTmuxSessionCwd(sessionName);
-  if (cwd) {
-    return getClaudeSessionIdFromFiles(cwd);
-  }
-
-  return null;
+  return cwd ? findResumeId(agent, cwd) : null;
 }
 
 // The screen's last line of text.
@@ -275,11 +218,14 @@ async function collect(): Promise<StatusSnapshot> {
     // Working and blocked end with the program that reported them.
     const fg = statusDetector.foregroundFor(sessionName);
     if (fg) dropProgramTransient(sessionName, fg, statusDetector.listedAt());
+    const pane = paneOf.get(sessionName);
+    const agentType =
+      pane?.agentType ?? getAgentTypeFromSessionName(sessionName);
     // A reported question is checked against the screen as it is now.
     const asked = programSummary(sessionName)?.state === "blocked";
     const [screen, claudeSessionId] = await Promise.all([
       statusDetector.captureScreen(sessionName, asked),
-      getClaudeSessionId(sessionName),
+      getClaudeSessionId(sessionName, agentType),
     ]);
     // Read after the screen: a question reported meanwhile is still within
     // its grace and isn't taken as dismissed.
@@ -306,10 +252,7 @@ async function collect(): Promise<StatusSnapshot> {
     const screenNeed = busy
       ? null
       : statusDetector.screenNeed(sessionName, screen, { question: !program });
-    const pane = paneOf.get(sessionName);
     const id = pane?.id ?? getSessionIdFromName(sessionName);
-    const agentType =
-      pane?.agentType ?? getAgentTypeFromSessionName(sessionName);
 
     return {
       sessionName,
@@ -388,16 +331,31 @@ async function collect(): Promise<StatusSnapshot> {
   const updateClaudeIdStmt = db.prepare(
     "UPDATE sessions SET claude_session_id = ? WHERE id = ? AND (claude_session_id IS NULL OR claude_session_id != ?)"
   );
+  // An id found by folder (every agent but Claude, which says its own) is
+  // never one another session already resumes: that one is theirs.
+  const updateFoundIdStmt = db.prepare(
+    `UPDATE sessions SET claude_session_id = ? WHERE id = ?
+       AND (claude_session_id IS NULL OR claude_session_id != ?)
+       AND NOT EXISTS (SELECT 1 FROM sessions o WHERE o.claude_session_id = ? AND o.id != ?)`
+  );
 
   for (const id of sessionsToUpdate) {
     updateStatusStmt.run(id);
   }
 
   // Update claude_session_id directly here instead of requiring separate API calls
-  for (const { id, claudeSessionId } of results) {
-    if (claudeSessionId) {
+  for (const { id, claudeSessionId, agentType } of results) {
+    if (!claudeSessionId) continue;
+    if (agentType === "claude")
       updateClaudeIdStmt.run(claudeSessionId, id, claudeSessionId);
-    }
+    else
+      updateFoundIdStmt.run(
+        claudeSessionId,
+        id,
+        claudeSessionId,
+        claudeSessionId,
+        id
+      );
   }
 
   // Chat sessions have no tmux pane: their live conversation is the status.

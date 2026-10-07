@@ -13,7 +13,17 @@ import { newDraft, type Draft } from "@/lib/drafts";
 import { AGENT_OPTIONS, agentLabel } from "@/lib/agent-options";
 import { resolveModelForAgent } from "@/lib/model-catalog";
 import type { GitCheck } from "@/data/git/queries";
+import { useAgentStatusQuery } from "@/data/agents";
+import type { AgentProbe } from "@/lib/agents/probe";
 import { ChipHeading, ChipItem, ChipMenu, ChipToggle } from "./Chip";
+
+// What stands between an agent and its first prompt, if anything.
+export function agentBlocker(probe?: AgentProbe): string | null {
+  if (!probe) return null;
+  if (!probe.installed) return "Not installed";
+  if (probe.auth === "needs-login") return "Needs sign-in";
+  return null;
+}
 
 const BRANCHES_SHOWN = 20;
 
@@ -31,6 +41,7 @@ export function DraftChips({
   git: GitCheck | undefined;
   onChange: (patch: Partial<Draft>) => void;
 }) {
+  const { data: probes } = useAgentStatusQuery();
   const real = projects.filter((p) => !p.is_uncategorized);
   const project = real.find((p) => p.id === draft.projectId) ?? null;
   // A task runs on another machine through that machine's own AgentOS, so
@@ -115,6 +126,8 @@ export function DraftChips({
             <ChipItem
               key={o.value}
               checked={o.value === draft.agentType}
+              disabled={probes?.[o.value] ? !probes[o.value].installed : false}
+              hint={agentBlocker(probes?.[o.value]) ?? undefined}
               onSelect={() =>
                 onChange({
                   agentType: o.value,
@@ -185,6 +198,14 @@ export function DraftChips({
           title="Works alone in a worktree and opens a pull request"
           onChange={(openPr) => onChange({ openPr })}
         />
+      )}
+      {!draft.openPr && agentBlocker(probes?.[draft.agentType]) && (
+        <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+          {agentBlocker(probes?.[draft.agentType])}
+          {probes?.[draft.agentType]?.hint
+            ? `: ${probes[draft.agentType].hint}`
+            : ""}
+        </p>
       )}
     </div>
   );

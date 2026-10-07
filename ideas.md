@@ -131,6 +131,16 @@
 - [ ] Move a task between two other machines directly (today a move goes through this one)
 - [ ] Interactive and chat sessions on a linked machine through its AgentOS, like tasks (still ssh today)
 
+## Other agents in chat
+
+- [ ] Codex plan mode (its collaboration mode is still behind `experimentalApi`)
+- [ ] Undo in Codex chat via `thread/revert`, OpenCode via its session revert
+- [ ] `@file` suggestions for Codex (`fuzzyFileSearch`) and OpenCode (`/find/file`)
+- [ ] One shared `opencode serve` per machine instead of one per conversation, with orphan reaping
+- [ ] Visuals (html_render) for non-Claude agents, as an MCP server they load
+- [ ] Chat drivers for Gemini CLI (`--experimental-acp`), Cursor and Amp (`--stream-json`)
+- [ ] The composer keeps the last session's model list until the new session's arrives
+
 ## Draft-first sessions (after V1, 2026-10-07)
 
 - Stream install output into the setup card's log as it prints, not per step.

@@ -108,6 +108,12 @@ async function main(sessionId: string) {
   });
   server.listen(sock, () => fs.chmodSync(sock, 0o600));
 
+  // A driver's stray failure is logged, not fatal: the conversation and
+  // the messages it holds outlive one bad call.
+  process.on("unhandledRejection", (error) =>
+    console.error("Unhandled in chat worker:", error)
+  );
+
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const)
     process.on(signal, () => host.close());
 

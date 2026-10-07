@@ -1,0 +1,29 @@
+╭─────────────────────────────────────────────────╮
+│ ✨ Update available! 0.156.0 -> 0.160.1         │
+│ Run brew upgrade --cask codex to update.        │
+│                                                 │
+│ See full release notes:                         │
+│ https://github.com/openai/codex/releases/latest │
+╰─────────────────────────────────────────────────╯
+
+╭──────────────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.156.0)                               │
+│                                                          │
+│ model:     GPT-6-Luna medium   /model to change          │
+│ directory: /w │
+╰──────────────────────────────────────────────────────────╯
+
+  Tip: New For a limited time, Codex is included in your plan for free – let’s build together.
+
+
+› Run the shell command ls, then write a 150-word poem about rivers.
+
+
+• I’ll run ls in the current workspace, then write the poem.
+
+• Working (6s • esc to interrupt)
+
+
+› Ask Codex to do anything
+
+  GPT-6-Luna medium · /w
