@@ -1,8 +1,8 @@
 /**
- * Tasks that can't move: one with Saad (an escalated gate or an open ask),
- * on a LumifyHub card, or in a stack. Their guard state is keyed by this
- * session and wouldn't follow it, so the other machine could merge what's
- * waiting on him.
+ * Tasks that can't move: one waiting on a person (an escalated gate or an
+ * open ask), on a LumifyHub card, or in a stack. Their guard state is keyed
+ * by this session and wouldn't follow it, so the other machine could merge
+ * what's waiting on them.
  */
 
 import { db, type Session } from "../db";

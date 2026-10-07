@@ -42,7 +42,7 @@ agent-os start
 
 ### Desktop App
 
-Download native desktop apps from [Releases](https://github.com/saadnvd1/agent-os/releases):
+Download native desktop apps from [Releases](https://github.com/acme/app/releases):
 
 - macOS (Apple Silicon): `.dmg`
 - Linux: `.deb` or `.AppImage`
@@ -54,7 +54,7 @@ Download native desktop apps from [Releases](https://github.com/saadnvd1/agent-o
 ### Manual Install
 
 ```bash
-git clone https://github.com/saadnvd1/agent-os
+git clone https://github.com/acme/app
 cd agent-os
 npm install
 npm run dev  # http://localhost:3011

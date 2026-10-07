@@ -31,13 +31,11 @@ import { git, setupMoveRepo, type MoveFixture } from "./move-testing";
 
 describe("the same project on another machine", () => {
   it("knows a repository however its remote is written", () => {
-    const id = "github.com/saadnvd1/agent-os";
-    expect(repoIdentity("https://github.com/saadnvd1/agent-os.git")).toBe(id);
-    expect(repoIdentity("git@github.com:saadnvd1/agent-os.git")).toBe(id);
-    expect(repoIdentity("ssh://git@github.com/SaadNvd1/agent-os/")).toBe(id);
-    expect(repoIdentity("https://x-token@github.com/saadnvd1/agent-os")).toBe(
-      id
-    );
+    const id = "github.com/acme/app";
+    expect(repoIdentity("https://github.com/acme/app.git")).toBe(id);
+    expect(repoIdentity("git@github.com:acme/app.git")).toBe(id);
+    expect(repoIdentity("ssh://git@github.com/Acme/app/")).toBe(id);
+    expect(repoIdentity("https://x-token@github.com/acme/app")).toBe(id);
     expect(repoIdentity(null)).toBeNull();
     expect(repoIdentity("/tmp/local.git")).toBeNull();
   });

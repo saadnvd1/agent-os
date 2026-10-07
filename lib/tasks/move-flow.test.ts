@@ -45,7 +45,7 @@ const urls = () => fetchMock.mock.calls.map((c) => String(c[0]));
 
 beforeAll(() => {
   f = setupMoveRepo();
-  hostId = createHost("box", "alice@box").id;
+  hostId = createHost("box", "alice@devbox").id;
   saveHostLink(hostId, "http://box:3011", "tok");
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -163,7 +163,7 @@ describe("moving a task to a linked machine", () => {
     const { id } = await seedTask("feature/other-target");
     fetchMock.mockRejectedValue(new Error("timeout"));
     await expect(moveTask(id, hostId)).rejects.toThrow(/press Move again/);
-    const other = createHost("box2", "alice@box2").id;
+    const other = createHost("box2", "alice@devbox2").id;
     saveHostLink(other, "http://box2:3011", "tok2");
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(json({ session: null }));
@@ -175,7 +175,7 @@ describe("moving a task to a linked machine", () => {
     );
   });
 
-  it("refuses a task that's with Saad, on a card, or finished, before touching it", async () => {
+  it("refuses a task that's waiting on a person, on a card, or finished, before touching it", async () => {
     const { id } = await seedTask("feature/held");
     db.prepare(
       `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title) VALUES ('w', ?, 'merge', 'ok?')`

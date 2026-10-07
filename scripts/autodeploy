@@ -3,7 +3,7 @@
 # redeploy the live instance and publish the same commit to npm. Runs in the
 # background; chat turns live in workers, so the restart interrupts nothing.
 #   sm add agentos-autodeploy "scripts/autodeploy" --cron "* * * * *"
-# Another machine (the devbox box) runs it with AGENTOS_PUBLISH=0: deploy
+# Another machine (a server) runs it with AGENTOS_PUBLISH=0: deploy
 # only, and its own AGENTOS_RESTART. Only one machine publishes to npm.
 set -euo pipefail
 cd "$(dirname "$0")/.."

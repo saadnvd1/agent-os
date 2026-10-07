@@ -26,8 +26,8 @@ import {
 
 describe("linking another machine's AgentOS", () => {
   it("defaults to the ssh host on AgentOS's port", () => {
-    expect(defaultLinkUrl("alice@devbox.tail.ts.net")).toBe(
-      "http://devbox.tail.ts.net:3011"
+    expect(defaultLinkUrl("alice@devbox.example.ts.net")).toBe(
+      "http://devbox.example.ts.net:3011"
     );
     expect(defaultLinkUrl("box")).toBe("http://box:3011");
   });
@@ -62,7 +62,7 @@ describe("linkHost", () => {
       .all(hostId);
 
   beforeAll(() => {
-    hostId = createHost("box", "alice@box.tail.ts.net").id;
+    hostId = createHost("box", "alice@devbox.example.ts.net").id;
     vi.stubGlobal("fetch", fetchMock);
   });
   afterAll(() => vi.unstubAllGlobals());
@@ -89,26 +89,26 @@ describe("linkHost", () => {
       .mockResolvedValueOnce(claimed("aos_device=tok%2B1; Path=/; HttpOnly"))
       .mockResolvedValueOnce(new Response(JSON.stringify({ tasks: [] })));
     await expect(linkHost(hostId)).resolves.toEqual({
-      url: "http://box.tail.ts.net:3011",
+      url: "http://devbox.example.ts.net:3011",
     });
     expect(vi.mocked(hostExec).mock.calls[0][1]).toContain(
       "http://127.0.0.1:3011/api/pair/start"
     );
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "http://box.tail.ts.net:3011/api/pair/claim"
+      "http://devbox.example.ts.net:3011/api/pair/claim"
     );
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe(
       "Bearer tok+1"
     );
     expect(links()).toEqual([
-      { url: "http://box.tail.ts.net:3011", token: "tok+1" },
+      { url: "http://devbox.example.ts.net:3011", token: "tok+1" },
     ]);
     getDb().prepare(`DELETE FROM host_links WHERE host_id = ?`).run(hostId);
   });
 
   it("never sends the code anywhere but the machine itself", async () => {
     await expect(linkHost(hostId, "https://attacker.example")).rejects.toThrow(
-      /must be box.tail.ts.net/
+      /must be devbox.example.ts.net/
     );
     expect(hostExec).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();

@@ -17,7 +17,7 @@ describe("claudeProjectDir", () => {
   it("dashes every character that isn't a letter or digit, as Claude does", () => {
     expect(
       claudeProjectDir("/Users/alice/.agent-os/worktrees/app-x_1", "/c")
-    ).toBe("/c/projects/-Users-saad--agent-os-worktrees-app-x-1");
+    ).toBe("/c/projects/-Users-alice--agent-os-worktrees-app-x-1");
   });
 });
 
@@ -44,9 +44,9 @@ describe("rewritePaths", () => {
   });
 
   it("leaves a longer name that only starts the same alone", () => {
-    const line = JSON.stringify({ p: "/Users/saadx/file /Users/alice" });
+    const line = JSON.stringify({ p: "/Users/alicex/file /Users/alice" });
     expect(JSON.parse(rewritePaths(line, from, to)).p).toBe(
-      "/Users/saadx/file /home/alice"
+      "/Users/alicex/file /home/alice"
     );
   });
 
