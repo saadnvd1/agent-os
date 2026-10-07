@@ -21,6 +21,9 @@ export interface Live {
   build?: string;
   // Whether it can switch plan mode (a worker from before plan mode can't).
   canPlan: boolean;
+  // Whether it keeps the composer's queue and answers @mention lookups
+  // (send_now, drain, files); an older worker drops those silently.
+  canQueue?: boolean;
 }
 
 export interface ChatActivity {

@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "crypto";
+import os from "os";
 import { db, type Session } from "../db";
 import type {
   ApprovalDecision,
@@ -29,6 +30,15 @@ import {
   setChatPlan,
 } from "./settings";
 import { listItems, saveItem, settle } from "./store";
+import {
+  deleteQueued,
+  editQueued,
+  listQueue,
+  moveQueued,
+  queuedSessions,
+} from "./queued";
+import { fallbackFileSuggestions } from "./files";
+import type { FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
 import { restoreActivity, track } from "./activity";
 
@@ -99,8 +109,17 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   } else if (e.type === "state") {
     live.state = e.state;
     emit(sessionId, e);
-    // Its turn ended on code from before a redeploy: close it now.
-    if (isStaleWorker(live.build, buildId(), e.state)) stopChat(sessionId);
+    // Its turn ended on code from before a redeploy: close it now. Its
+    // queue is empty unless its agent died mid-turn; a current worker then
+    // takes what's left.
+    if (isStaleWorker(live.build, buildId(), e.state)) {
+      stopChat(sessionId);
+      void resumeQueue(sessionId);
+    }
+  } else if (e.type === "suggestion") {
+    emit(sessionId, e);
+  } else if (e.type === "queue") {
+    emitQueue(sessionId);
   } else if (e.type === "context") {
     emit(sessionId, e);
   } else if (e.type === "commands" || e.type === "terminal_only") {
@@ -112,6 +131,10 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
       emitCapabilities(session);
     }
   }
+}
+
+function emitQueue(sessionId: string): void {
+  emit(sessionId, { type: "queue", queue: listQueue(sessionId) });
 }
 
 function checkChattable(session: Session): void {
@@ -133,11 +156,14 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
     let live: Live | null = null;
     const handlers = {
       onEvent: (e: WorkerEvent) => live && onWorkerEvent(sessionId, live, e),
-      onClose: () => {
+      onClose: (detached: boolean) => {
         if (live && registry.live.get(sessionId) === live) {
           registry.live.delete(sessionId);
           emit(sessionId, { type: "state", state: "idle" });
         }
+        // Its agent died mid-turn, with messages still queued. (One this
+        // server let go, it stopped on purpose.)
+        if (live && !detached) void resumeQueue(sessionId);
       },
     };
     let { client, hello } = await connectWorker(sessionId, spawn, handlers);
@@ -158,6 +184,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       activity: restoreActivity(sessionId, hello.state),
       build: hello.build,
       canPlan: !!hello.caps?.includes("plan"),
+      canQueue: !!hello.caps?.includes("queue"),
     };
     registry.live.set(sessionId, live);
     // A setting changed while no worker was attached (a restart, a dropped
@@ -184,6 +211,8 @@ export async function sendChat(
     images?: ChatImage[];
     from?: string;
     peer?: PeerMessage;
+    // Typed in the composer: waits in the queue while a turn runs.
+    queue?: boolean;
   }
 ): Promise<void> {
   const text = input.text.trim();
@@ -196,7 +225,89 @@ export async function sendChat(
     images: input.images,
     from: input.from,
     peer: input.peer,
+    queue: input.queue,
   });
+}
+
+// The queue lives in SQLite, so it can be changed with no worker running;
+// a worker reads it only when it sends the next message.
+export function editQueuedChat(sessionId: string, id: string, text: string) {
+  if (text.trim()) editQueued(sessionId, id, text.trim());
+  else deleteQueued(sessionId, id);
+  emitQueue(sessionId);
+}
+
+export function moveQueuedChat(sessionId: string, id: string, by: -1 | 1) {
+  moveQueued(sessionId, id, by);
+  emitQueue(sessionId);
+}
+
+export function deleteQueuedChat(sessionId: string, id: string) {
+  deleteQueued(sessionId, id);
+  emitQueue(sessionId);
+}
+
+// A queue no worker is left to send (it was retired, or its agent died):
+// a fresh worker sends it in order. Never interrupts: a worker that's busy
+// sends its queue when its turn ends. At most once a minute per
+// conversation, so a worker that can't start isn't restarted in a loop.
+const RESUME_EVERY_MS = 60_000;
+const RESUME_WITHIN_MS = 60 * 60 * 1000;
+const resumed = new Map<string, number>();
+async function resumeQueue(sessionId: string): Promise<void> {
+  if (!listQueue(sessionId).length) return;
+  // Switched to the terminal: its agent runs there now, and a chat worker
+  // on the same conversation would race it. The queue waits on screen.
+  const session = db
+    .prepare(`SELECT view, archived_at FROM sessions WHERE id = ?`)
+    .get(sessionId) as { view: string; archived_at: string | null } | undefined;
+  if (session?.view !== "chat" || session.archived_at) return;
+  const last = resumed.get(sessionId) ?? 0;
+  if (Date.now() - last < RESUME_EVERY_MS) return;
+  resumed.set(sessionId, Date.now());
+  try {
+    const live = await ensureLive(sessionId);
+    if (live.canQueue) live.worker.command({ type: "drain" });
+  } catch (error) {
+    console.error(
+      `Not sending ${sessionId}'s queue:`,
+      error instanceof Error ? error.message : error
+    );
+  }
+}
+
+// Sends a queued message now: a running turn stops for it, as on Esc.
+// `during`: the user message whose turn the reader saw running, so a turn
+// that started since (the next queued one) isn't the one stopped.
+export async function sendQueuedNow(
+  sessionId: string,
+  id: string,
+  during?: string
+) {
+  if (!listQueue(sessionId).some((m) => m.id === id)) return;
+  const live = await ensureLive(sessionId);
+  if (!live.canQueue)
+    throw new Error("Reload to send this: the chat is on an older version");
+  live.worker.command({ type: "send_now", id, during });
+}
+
+// Files and folders for an @mention: the agent's own matching when its
+// worker is up and has an answer, ripgrep over the folder otherwise.
+export async function chatFileSuggestions(
+  sessionId: string,
+  query: string
+): Promise<FileSuggestion[]> {
+  const live = registry.live.get(sessionId);
+  const fromAgent = live?.canQueue
+    ? await live.worker.fileSuggestions(query)
+    : null;
+  // Empty while its file index warms up, the first seconds of a worker.
+  if (fromAgent?.length) return fromAgent;
+  const cwd = getSession(sessionId).working_directory.replace(
+    /^~/,
+    os.homedir()
+  );
+  return fallbackFileSuggestions(cwd, query);
 }
 
 // Sends, then waits for the worker to record the message as a user item:
@@ -362,7 +473,13 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
   } else if (!runningWorkers().includes(sessionId)) {
     items = settle(items);
   }
-  listener({ type: "snapshot", items, state: live?.state ?? "idle" });
+  listener({
+    type: "snapshot",
+    items,
+    state: live?.state ?? "idle",
+    queue: listQueue(sessionId),
+    suggestion: getSession(sessionId).chat_suggestion ?? null,
+  });
   listener({ type: "context", context: savedContext(sessionId) });
   void sendCapabilities(sessionId, listener);
   let set = registry.listeners.get(sessionId);
@@ -371,13 +488,19 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
   return () => set?.delete(listener);
 }
 
-// After a restart: reconnect to every worker still running a conversation.
+// After a restart: reconnect to every worker still running a conversation,
+// and send the queues of conversations whose worker is gone.
 export async function reattachChats(): Promise<void> {
+  const running = runningWorkers();
   await Promise.all(
-    runningWorkers().map((id) =>
+    running.map((id) =>
       ensureLive(id, false).catch((error) =>
         console.error(`Not reattaching chat ${id}:`, error.message ?? error)
       )
     )
   );
+  // One at a time, and only what was queued recently: a backlog from long
+  // ago isn't sent unasked by a restart (it stays on screen to send).
+  for (const id of queuedSessions(Date.now() - RESUME_WITHIN_MS))
+    if (!running.includes(id)) await resumeQueue(id);
 }
