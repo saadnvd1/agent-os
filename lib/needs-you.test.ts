@@ -67,8 +67,18 @@ describe("chatNeed", () => {
     expect(chatNeed(orch, "waiting", 0)).toBe("answer");
   });
 
-  it("reads the newest pending approval, not an answered question", () => {
+  it("finds the pending approval under a newer answered question", () => {
     const id = randomUUID();
+    saveItem(id, {
+      id: "a2",
+      kind: "approval",
+      createdAt: Date.now(),
+      toolName: "Bash",
+      title: "Run",
+      input: {},
+      canAlways: false,
+      status: "pending",
+    });
     saveItem(id, {
       id: "q1",
       kind: "approval",
@@ -81,16 +91,6 @@ describe("chatNeed", () => {
       questions: [
         { question: "Which?", header: "Pick", multiSelect: false, options: [] },
       ],
-    });
-    saveItem(id, {
-      id: "a2",
-      kind: "approval",
-      createdAt: Date.now(),
-      toolName: "Bash",
-      title: "Run",
-      input: {},
-      canAlways: false,
-      status: "pending",
     });
     expect(chatNeed({ id }, "waiting")).toBe("approve");
   });
