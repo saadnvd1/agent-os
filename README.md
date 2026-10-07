@@ -223,6 +223,12 @@ exited. **Sign off & merge** squash-merges the PR (refused while CI is failing
 or pending), then removes the session, worktree and branches. **Drop** closes
 the PR and removes everything. Agents never merge their own work.
 
+A task or session started from a prompt gets a short name: the brief's first
+heading at once (when the prompt points at a readable `.md` brief), then a
+2-6 word title from a quick Haiku call a few seconds later. A chat opened as
+"Session 4" is named after its first message. Anything named by hand, a card's
+title, a schedule's name or `--name` is kept as given.
+
 Before opening its PR, every task runs `/do-code-review` (the project's
 `.claude/skills/do-code-review`, or Claude Code's `/code-review` where a
 project has none), fixes the Blocking and High findings, and ends the PR body
@@ -337,6 +343,7 @@ aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
+                                  # (both take --name "..." before the prompt)
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
 aos schedules                     # every schedule, its next run and last outcome

@@ -50,7 +50,8 @@ export async function startTask(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  base?: string
+  base?: string,
+  name?: string
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
   const task = await braked(
@@ -60,26 +61,28 @@ export async function startTask(
       createTask({
         projectId: project.id,
         prompt,
+        name,
         baseBranch: base || undefined,
       }),
     (s) => s.id
   );
-  return `Started task "${task.name}" in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
 }
 
 export async function startSession(
   workspaceId: string,
   projectRef: string,
-  prompt: string
+  prompt: string,
+  name?: string
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
   const session = await braked(
     workspaceId,
     "session",
-    () => spawnSession({ project: project.id, prompt }),
+    () => spawnSession({ project: project.id, prompt, name }),
     (s) => s.id
   );
-  return `Started session "${session.name}" in ${project.name}.`;
+  return `Started session "${session.name}" (id ${session.id.slice(0, 8)}) in ${project.name}.`;
 }
 
 function itemLine(i: StackItemView): string {

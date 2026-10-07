@@ -151,7 +151,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
       // Messages sent to the old name still find it.
       recordPreviousName(id, existing.name);
-      updates.push("name = ?");
+      updates.push("name = ?", "name_source = 'user'");
       values.push(body.name);
     }
     if (body.status !== undefined) {

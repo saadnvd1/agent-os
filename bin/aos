@@ -16,6 +16,8 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos history <session>              your conversation with a session
   aos spawn <project> <prompt...>    start a new agent session in a project
   aos task <project> <prompt...>     start a background task that ends in a PR
+                                     (--name "<name>": name it; otherwise it's
+                                     named from the prompt)
   aos stack <project> [--plan] [--max N]
                                      run the project's linked board as stacked tasks
                                      (--plan: just show the order, start nothing)
@@ -79,6 +81,24 @@ async function stdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   return Buffer.concat(chunks).toString("utf8");
+}
+
+// `[--name "x"] <project> [--name "x"] <prompt...>`: the flag counts only
+// before the prompt starts, so a prompt may mention --name.
+function parseSpawnArgs(words) {
+  let name;
+  let project;
+  let i = 0;
+  for (; i < words.length; i++) {
+    const w = words[i];
+    if (w === "--name") {
+      name = words[++i];
+      if (name === undefined) fail("--name needs a value");
+    } else if (w.startsWith("--name=")) name = w.slice(7);
+    else if (project === undefined) project = w;
+    else break;
+  }
+  return { name: name?.trim() || undefined, project, prompt: words.slice(i) };
 }
 
 // `doc new "<title>" [--file path]`: the title is every word but the flag.
@@ -240,13 +260,14 @@ async function main() {
     }
     case "spawn":
     case "task": {
-      const [project, ...words] = args;
+      const { name, project, prompt: words } = parseSpawnArgs(args);
       if (!project || !words.length)
-        fail(`usage: aos ${cmd} <project> <prompt...>`);
+        fail(`usage: aos ${cmd} <project> [--name "<name>"] <prompt...>`);
       const { session } = await post("/api/bus/spawn", {
         project,
         prompt: words.join(" "),
         mode: cmd === "task" ? "task" : "session",
+        ...(name && { name }),
       });
       console.log(
         `started ${cmd === "task" ? "task" : "session"} "${session.name}"`
@@ -336,9 +357,7 @@ async function main() {
       else if (res.state === "duplicate")
         console.log("already sent this in the last minute; not sent again");
       else if (res.state === "dropped")
-        console.log(
-          "dropped: too many already waiting from you this minute"
-        );
+        console.log("dropped: too many already waiting from you this minute");
       else if (res.state === "held")
         console.log(
           `held: goes out within ${Math.ceil(res.inMs / 1000)}s with anything else sent meanwhile`
