@@ -31,6 +31,17 @@ fi
 [ -n "$FORMAT$LINT" ] && echo "$FORMAT
 $LINT" | grep . | sort -u | xargs git add
 
+# Names that must never land in the repo, one regex per line, kept outside it
+# (the list itself would be a mention).
+BANNED="${AGENTOS_BANNED_NAMES:-$HOME/.config/agent-os/banned-names}"
+if [ -s "$BANNED" ]; then
+  echo "▸ banned names"
+  if git diff --cached -U0 --no-color | grep '^+' | grep -v '^+++' | grep -i -E -f "$BANNED"; then
+    echo "✗ a staged line names something on $BANNED; reword it" >&2
+    exit 1
+  fi
+fi
+
 echo "▸ typecheck"
 npm run typecheck --silent
 echo "▸ tests"
