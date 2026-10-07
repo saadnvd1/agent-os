@@ -5,7 +5,10 @@ import {
   failingCheck,
   deriveTaskState,
   isBlocked,
+  rerunsToLookUp,
+  settleReruns,
   trustPromptKeys,
+  type ActionsRun,
   type TaskPR,
 } from "./state";
 
@@ -166,99 +169,201 @@ describe("cancelled check runs", () => {
 });
 
 describe("reruns of the same check", () => {
-  const review = (conclusion: string, startedAt: string, completedAt = "") => ({
+  const HEAD = "ab4fdba";
+  const review = (runId: number, conclusion: string, status = "COMPLETED") => ({
     __typename: "CheckRun",
     workflowName: "Code review",
     name: "Code review section",
+    detailsUrl: `https://github.com/o/r/actions/runs/${runId}/job/9${runId}`,
     conclusion,
-    startedAt,
-    completedAt,
+    status,
+  });
+  const run = (
+    event: string,
+    startedAt: string,
+    headSha = HEAD
+  ): ActionsRun => ({ event, headSha, startedAt });
+  const runs = (byId: Record<number, ActionsRun | null>) =>
+    new Map(Object.entries(byId).map(([id, r]) => [`o/r#${id}`, r]));
+  const judge = (
+    rollup: ReturnType<typeof review>[],
+    byId: Record<number, ActionsRun | null>,
+    head: string | null = HEAD
+  ) => {
+    const settled = settleReruns(rollup, head, runs(byId));
+    return { checks: checksVerdict(settled), failing: failingCheck(settled) };
+  };
+
+  it("looks up runs only for checks that ran more than once", () => {
+    const ci = {
+      __typename: "CheckRun",
+      workflowName: "CI",
+      name: "Check",
+      detailsUrl: "https://github.com/o/r/actions/runs/7/job/70",
+    };
+    expect(rerunsToLookUp([ci, review(1, "FAILURE")])).toEqual([]);
+    expect(
+      rerunsToLookUp([ci, review(1, "FAILURE"), review(2, "SUCCESS")])
+    ).toEqual([
+      { repo: "o/r", id: "1" },
+      { repo: "o/r", id: "2" },
+    ]);
   });
 
-  it("judges a check by its newest run, whatever order gh lists them in", () => {
-    const stale = review(
-      "FAILURE",
-      "2026-10-07T02:48:35Z",
-      "2026-10-07T02:48:44Z"
-    );
-    const fresh = review(
-      "SUCCESS",
-      "2026-10-07T02:51:32Z",
-      "2026-10-07T02:51:44Z"
-    );
+  it("passes on PR #102: a body edit's green run, then the rerun's green", () => {
+    // Run 1 failed at 02:47, an edited body started run 2 at 02:48, and run 1
+    // was then rerun (attempt 2) at 02:51.
+    const rollup = [review(1, "SUCCESS"), review(2, "SUCCESS")];
+    const byId = {
+      1: run("pull_request_target", "2026-10-07T02:51:28Z"),
+      2: run("pull_request_target", "2026-10-07T02:48:31Z"),
+    };
+    expect(judge(rollup, byId).checks).toBe("pass");
+  });
+
+  it("passes once a body edit's run goes green after a failure", () => {
+    const byId = {
+      1: run("pull_request_target", "2026-10-07T02:47:33Z"),
+      2: run("pull_request_target", "2026-10-07T02:48:31Z"),
+    };
     for (const rollup of [
-      [stale, fresh],
-      [fresh, stale],
-    ]) {
-      expect(checksVerdict(rollup)).toBe("pass");
-      expect(failingCheck(rollup)).toBeNull();
-    }
+      [review(1, "FAILURE"), review(2, "SUCCESS")],
+      [review(2, "SUCCESS"), review(1, "FAILURE")],
+    ])
+      expect(judge(rollup, byId)).toEqual({ checks: "pass", failing: null });
   });
 
-  it("fails when the newest run failed after an older one passed", () => {
-    const rollup = [
-      review("SUCCESS", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
-      review("FAILURE", "2026-10-07T02:51:32Z"),
+  it("judges by the newer run when the two runs overlapped", () => {
+    // The older run was still going (or finished last) when the edit's run
+    // started: start order decides, not finish order.
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:47:33Z"),
+      2: run("pull_request", "2026-10-07T02:47:40Z"),
+    };
+    expect(
+      judge([review(1, "FAILURE"), review(2, "SUCCESS")], byId).checks
+    ).toBe("pass");
+    expect(
+      judge([review(1, "FAILURE"), review(2, "", "IN_PROGRESS")], byId).checks
+    ).toBe("pending");
+  });
+
+  it("fails on a real later failure", () => {
+    const byId = {
+      1: run("pull_request_target", "2026-10-07T02:47:33Z"),
+      2: run("pull_request_target", "2026-10-07T02:51:28Z"),
+    };
+    expect(judge([review(1, "SUCCESS"), review(2, "FAILURE")], byId)).toEqual({
+      checks: "fail",
+      failing: "Code review section",
+    });
+  });
+
+  it("doesn't let a later push run hide a failed pull_request run", () => {
+    // One runner: the pull_request run failed and finished before the push
+    // run of the same job started and passed.
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:47:33Z"),
+      2: run("push", "2026-10-07T02:50:00Z"),
+    };
+    expect(
+      judge([review(1, "FAILURE"), review(2, "SUCCESS")], byId).checks
+    ).toBe("fail");
+  });
+
+  it("lets a later pull_request run replace an earlier push run", () => {
+    const byId = {
+      1: run("push", "2026-10-07T02:47:33Z"),
+      2: run("pull_request", "2026-10-07T02:50:00Z"),
+    };
+    expect(
+      judge([review(1, "FAILURE"), review(2, "SUCCESS")], byId).checks
+    ).toBe("pass");
+  });
+
+  it("ignores a run for another commit", () => {
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:50:00Z", "0ldc0mm1t"),
+      2: run("pull_request", "2026-10-07T02:47:33Z"),
+    };
+    expect(
+      judge([review(1, "SUCCESS"), review(2, "FAILURE")], byId).checks
+    ).toBe("fail");
+    expect(
+      judge([review(1, "FAILURE"), review(2, "SUCCESS")], byId).checks
+    ).toBe("pass");
+  });
+
+  it("fails closed when the API couldn't describe a run", () => {
+    const rollup = [review(1, "FAILURE"), review(2, "SUCCESS")];
+    for (const byId of <Array<Record<number, ActionsRun | null>>>[
+      { 1: run("pull_request", "2026-10-07T02:47:33Z"), 2: null },
+      // Never looked up at all.
+      { 1: run("pull_request", "2026-10-07T02:47:33Z") },
+    ])
+      expect(judge(rollup, byId)).toEqual({
+        checks: "pending",
+        failing: null,
+      });
+  });
+
+  it("fails closed on ambiguous answers", () => {
+    const rollup = [review(1, "FAILURE"), review(2, "SUCCESS")];
+    const same = "2026-10-07T02:47:33Z";
+    const cases: Array<[Record<number, ActionsRun>, string | null]> = [
+      // Both started in the same second.
+      [{ 1: run("pull_request", same), 2: run("pull_request", same) }, HEAD],
+      // No start time.
+      [{ 1: run("pull_request", same), 2: run("pull_request", "") }, HEAD],
+      // Neither run is for the head.
+      [
+        {
+          1: run("pull_request", same, "x"),
+          2: run("pull_request", same, "y"),
+        },
+        HEAD,
+      ],
+      // The PR's head isn't known.
+      [
+        {
+          1: run("pull_request", same),
+          2: run("pull_request", "2026-10-07T02:50:00Z"),
+        },
+        null,
+      ],
     ];
-    expect(checksVerdict(rollup)).toBe("fail");
-    expect(failingCheck(rollup)).toBe("Code review section");
+    for (const [byId, head] of cases)
+      expect(judge(rollup, byId, head).checks).toBe("pending");
   });
 
-  it("pends on a newer run still going, despite gh's zero completedAt", () => {
-    const rollup = [
-      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
-      {
-        ...review("", "2026-10-07T02:51:32Z", "0001-01-01T00:00:00Z"),
-        status: "IN_PROGRESS",
-      },
-    ];
-    expect(checksVerdict(rollup)).toBe("pending");
-    expect(failingCheck(rollup)).toBeNull();
+  it("counts every run of a check that isn't all GitHub Actions", () => {
+    const other = {
+      ...review(2, "SUCCESS"),
+      detailsUrl: "https://ci.example/2",
+    };
+    const settled = settleReruns([review(1, "FAILURE"), other], HEAD, runs({}));
+    expect(checksVerdict(settled)).toBe("fail");
   });
 
-  it("counts runs that overlap, like a push and a pull_request run of one job", () => {
-    const rollup = [
-      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:50:00Z"),
-      review("SUCCESS", "2026-10-07T02:48:40Z", "2026-10-07T02:49:00Z"),
-    ];
-    expect(checksVerdict(rollup)).toBe("fail");
-    expect(failingCheck(rollup)).toBe("Code review section");
-  });
-
-  it("counts a run with no finish time, or gh's zero one", () => {
-    for (const completedAt of ["", "0001-01-01T00:00:00Z"]) {
-      const rollup = [
-        review("FAILURE", "2026-10-07T02:48:35Z", completedAt),
-        review("SUCCESS", "2026-10-07T02:51:32Z", "2026-10-07T02:51:44Z"),
-      ];
-      expect(checksVerdict(rollup)).toBe("fail");
-    }
-  });
-
-  it("keeps a finished failure when the rerun has gh's zero start time", () => {
-    const rollup = [
-      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
-      {
-        ...review("", "0001-01-01T00:00:00Z", "0001-01-01T00:00:00Z"),
-        status: "QUEUED",
-      },
-    ];
-    expect(checksVerdict(rollup)).toBe("fail");
-  });
-
-  it("doesn't let a newer run of one check hide another check's failure", () => {
-    const rollup = [
-      review("SUCCESS", "2026-10-07T02:51:32Z"),
-      {
-        __typename: "CheckRun",
-        workflowName: "CI",
-        name: "Check",
-        conclusion: "FAILURE",
-        startedAt: "2026-10-07T02:40:00Z",
-      },
-    ];
-    expect(checksVerdict(rollup)).toBe("fail");
-    expect(failingCheck(rollup)).toBe("Check");
+  it("doesn't let one check's rerun hide another check's failure", () => {
+    const ci = {
+      __typename: "CheckRun",
+      workflowName: "CI",
+      name: "Check",
+      detailsUrl: "https://github.com/o/r/actions/runs/7/job/70",
+      conclusion: "FAILURE",
+    };
+    const byId = {
+      1: run("pull_request_target", "2026-10-07T02:47:33Z"),
+      2: run("pull_request_target", "2026-10-07T02:48:31Z"),
+    };
+    const settled = settleReruns(
+      [ci, review(1, "FAILURE"), review(2, "SUCCESS")],
+      HEAD,
+      runs(byId)
+    );
+    expect(checksVerdict(settled)).toBe("fail");
+    expect(failingCheck(settled)).toBe("Check");
   });
 });
 

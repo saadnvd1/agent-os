@@ -80,7 +80,7 @@ export function canSignOff(pr: TaskPR | null): {
   return { ok: true };
 }
 
-type RollupEntry = {
+export type RollupEntry = {
   __typename?: string | null;
   workflowName?: string | null;
   name?: string | null;
@@ -90,6 +90,7 @@ type RollupEntry = {
   status?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
+  detailsUrl?: string | null;
 };
 
 const FAILED = ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"];
@@ -113,29 +114,119 @@ const at = (time?: string | null) => {
 
 // A concurrency group cancels the stale run on the same sha, so a CANCELLED
 // entry says nothing when the same check also has a run that wasn't cancelled.
-// A run is also stale once the same check started again after it finished:
-// a rerun, or a check re-triggered by an edited PR body. Runs that overlap,
-// like a push and a pull_request run of one job, all count, as does any run
-// missing a time.
+// Every other run counts here: settleReruns decides which reruns are stale.
 function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
   const ran = new Set(
     rollup.filter((c) => outcome(c) !== "CANCELLED").map(checkKey)
   );
-  const live = rollup.filter((c) => {
+  return rollup.filter((c) => {
     const key = checkKey(c);
     return outcome(c) !== "CANCELLED" || key === null || !ran.has(key);
   });
-  return live.filter((c) => {
+}
+
+// What the Actions API says started a workflow run (its latest attempt).
+export type ActionsRun = { event: string; headSha: string; startedAt: string };
+
+const ACTIONS_RUN =
+  /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/actions\/runs\/(\d+)(?:[/?#]|$)/;
+
+// The Actions workflow run behind a check run, from its details URL.
+export function actionsRunOf(
+  c: RollupEntry
+): { repo: string; id: string } | null {
+  if (c.__typename !== "CheckRun") return null;
+  const m = ACTIONS_RUN.exec(c.detailsUrl ?? "");
+  return m ? { repo: `${m[1]}/${m[2]}`, id: m[3] } : null;
+}
+
+const groupByCheck = <T extends RollupEntry>(rollup: T[]) => {
+  const groups = new Map<string, T[]>();
+  for (const c of rollup) {
     const key = checkKey(c);
-    const done = at(c.completedAt);
-    return (
-      key === null ||
-      done === null ||
-      !live.some(
-        (o) => o !== c && checkKey(o) === key && (at(o.startedAt) ?? 0) > done
-      )
+    if (key) groups.set(key, [...(groups.get(key) ?? []), c]);
+  }
+  return groups;
+};
+
+// The Actions runs settleReruns needs: only checks that ran more than once.
+export function rerunsToLookUp(
+  rollup: RollupEntry[]
+): Array<{ repo: string; id: string }> {
+  const runs = new Map<string, { repo: string; id: string }>();
+  for (const group of groupByCheck(rollup).values()) {
+    if (group.length < 2) continue;
+    for (const c of group) {
+      const run = actionsRunOf(c);
+      if (run) runs.set(`${run.repo}#${run.id}`, run);
+    }
+  }
+  return [...runs.values()];
+}
+
+const PR_EVENTS = ["pull_request", "pull_request_target"];
+
+// Drop the runs of a check that a later pull_request run replaced: a rerun,
+// or a run started by an edited PR body or a push to the branch. gh's rollup
+// doesn't say what started a run, so `runs` (from the Actions API, keyed
+// "owner/repo#id") does. A run for another commit never counts. A push run
+// never replaces anything, so its failure stands until a pull_request run
+// starts after it. When the API couldn't answer, or the answer is ambiguous,
+// the check is not settled yet: it reads as pending, never as passing.
+export function settleReruns<T extends RollupEntry>(
+  rollup: T[],
+  head: string | null | undefined,
+  runs: Map<string, ActionsRun | null>
+): RollupEntry[] {
+  const drop = new Set<RollupEntry>();
+  const unsettled: RollupEntry[] = [];
+  for (const group of groupByCheck(rollup).values()) {
+    if (group.length < 2) continue;
+    const located = group.map((c) => ({ c, run: actionsRunOf(c) }));
+    // Not all GitHub Actions: nothing says which run is stale, so all count.
+    if (located.some((l) => !l.run)) continue;
+    const stale = staleRuns(
+      located.map((l) => ({
+        c: l.c,
+        id: l.run!.id,
+        info: runs.get(`${l.run!.repo}#${l.run!.id}`) ?? null,
+      })),
+      head
     );
-  });
+    if (stale) {
+      for (const c of stale) drop.add(c);
+    } else {
+      for (const c of group) drop.add(c);
+      const { __typename, workflowName, name, context } = group[0];
+      unsettled.push({
+        __typename,
+        workflowName,
+        name,
+        context,
+        status: "PENDING",
+      });
+    }
+  }
+  return [...rollup.filter((c) => !drop.has(c)), ...unsettled];
+}
+
+// The runs of one check that don't count, or null when that can't be told.
+function staleRuns(
+  runs: Array<{ c: RollupEntry; id: string; info: ActionsRun | null }>,
+  head: string | null | undefined
+): RollupEntry[] | null {
+  if (!head || runs.some((r) => !r.info)) return null;
+  const mine = runs.filter((r) => r.info!.headSha === head);
+  if (!mine.length || new Set(mine.map((r) => r.id)).size < mine.length)
+    return null;
+  const timed = mine.map((r) => ({ ...r, at: at(r.info!.startedAt) }));
+  if (timed.some((r) => r.at === null)) return null;
+  const pr = timed.filter((r) => PR_EVENTS.includes(r.info!.event));
+  const newest = pr.length ? Math.max(...pr.map((r) => r.at!)) : -Infinity;
+  if (pr.filter((r) => r.at === newest).length > 1) return null;
+  return runs
+    .filter((r) => !timed.some((t) => t.c === r.c && t.at! >= newest))
+    .map((r) => r.c);
 }
 
 // Summarise gh's statusCheckRollup into one verdict. A lone CANCELLED run is
