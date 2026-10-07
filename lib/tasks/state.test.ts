@@ -197,7 +197,7 @@ describe("reruns of the same check", () => {
 
   it("fails when the newest run failed after an older one passed", () => {
     const rollup = [
-      review("SUCCESS", "2026-10-07T02:48:35Z"),
+      review("SUCCESS", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
       review("FAILURE", "2026-10-07T02:51:32Z"),
     ];
     expect(checksVerdict(rollup)).toBe("fail");
@@ -216,10 +216,32 @@ describe("reruns of the same check", () => {
     expect(failingCheck(rollup)).toBeNull();
   });
 
-  it("keeps every run of a check when one is undated", () => {
+  it("counts runs that overlap, like a push and a pull_request run of one job", () => {
     const rollup = [
-      review("FAILURE", ""),
-      review("SUCCESS", "2026-10-07T02:51:32Z"),
+      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:50:00Z"),
+      review("SUCCESS", "2026-10-07T02:48:40Z", "2026-10-07T02:49:00Z"),
+    ];
+    expect(checksVerdict(rollup)).toBe("fail");
+    expect(failingCheck(rollup)).toBe("Code review section");
+  });
+
+  it("counts a run with no finish time, or gh's zero one", () => {
+    for (const completedAt of ["", "0001-01-01T00:00:00Z"]) {
+      const rollup = [
+        review("FAILURE", "2026-10-07T02:48:35Z", completedAt),
+        review("SUCCESS", "2026-10-07T02:51:32Z", "2026-10-07T02:51:44Z"),
+      ];
+      expect(checksVerdict(rollup)).toBe("fail");
+    }
+  });
+
+  it("keeps a finished failure when the rerun has gh's zero start time", () => {
+    const rollup = [
+      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
+      {
+        ...review("", "0001-01-01T00:00:00Z", "0001-01-01T00:00:00Z"),
+        status: "QUEUED",
+      },
     ];
     expect(checksVerdict(rollup)).toBe("fail");
   });

@@ -172,7 +172,7 @@ export async function mergeJudged(
 // An approval is claimed before the merge, so two merges can't both use it,
 // and given back when GitHub or the checks refuse that merge: it is spent
 // only on a merge that happened.
-async function refundIfRefused(
+export async function refundIfRefused(
   taskId: string,
   approval: number | undefined,
   merge: () => Promise<void>
