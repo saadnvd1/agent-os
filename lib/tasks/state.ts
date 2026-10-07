@@ -80,7 +80,7 @@ export function canSignOff(pr: TaskPR | null): {
   return { ok: true };
 }
 
-type RollupEntry = {
+export type RollupEntry = {
   __typename?: string | null;
   workflowName?: string | null;
   name?: string | null;
@@ -88,9 +88,20 @@ type RollupEntry = {
   conclusion?: string | null;
   state?: string | null;
   status?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  detailsUrl?: string | null;
 };
 
 const FAILED = ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"];
+const UNFINISHED = [
+  "",
+  "PENDING",
+  "QUEUED",
+  "IN_PROGRESS",
+  "EXPECTED",
+  "WAITING",
+];
 
 const outcome = (c: RollupEntry) =>
   (c.conclusion || c.state || c.status || "").toUpperCase();
@@ -102,8 +113,16 @@ const checkKey = (c: RollupEntry) => {
   return name ? `${c.__typename ?? ""}|${c.workflowName ?? ""}|${name}` : null;
 };
 
+// A time from the rollup, or null. gh gives a run not finished yet a zero
+// completedAt (0001-01-01), so only a time after the epoch counts.
+const at = (time?: string | null) => {
+  const t = Date.parse(time || "");
+  return t > 0 ? t : null;
+};
+
 // A concurrency group cancels the stale run on the same sha, so a CANCELLED
 // entry says nothing when the same check also has a run that wasn't cancelled.
+// Every other run counts here: settleReruns decides which reruns are stale.
 function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
   const ran = new Set(
     rollup.filter((c) => outcome(c) !== "CANCELLED").map(checkKey)
@@ -114,25 +133,178 @@ function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
   });
 }
 
+// What the Actions API says started a workflow run (its latest attempt).
+export type ActionsRun = {
+  event: string;
+  headSha: string;
+  startedAt: string;
+  workflowId: number;
+};
+
+const ACTIONS_RUN =
+  /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/actions\/runs\/(\d+)(?:[/?#]|$)/;
+
+// The Actions workflow run behind a check run, from its details URL.
+export function actionsRunOf(
+  c: RollupEntry
+): { repo: string; id: string } | null {
+  if (c.__typename !== "CheckRun") return null;
+  const m = ACTIONS_RUN.exec(c.detailsUrl ?? "");
+  return m ? { repo: `${m[1]}/${m[2]}`, id: m[3] } : null;
+}
+
+const groupByCheck = <T extends RollupEntry>(rollup: T[]) => {
+  const groups = new Map<string, T[]>();
+  for (const c of rollup) {
+    const key = checkKey(c);
+    if (key) groups.set(key, [...(groups.get(key) ?? []), c]);
+  }
+  return groups;
+};
+
+// What the rollup shows of each Actions run: the latest start of its jobs,
+// which a rerun changes. Null while one of its jobs hasn't started, when the
+// rollup can't tell one attempt from the next.
+function shownAttempts(rollup: RollupEntry[]): Map<string, number | null> {
+  const shown = new Map<string, number | null>();
+  for (const c of rollup) {
+    const run = actionsRunOf(c);
+    if (!run) continue;
+    const key = `${run.repo}#${run.id}`;
+    const started = at(c.startedAt);
+    const seen = shown.get(key);
+    shown.set(
+      key,
+      seen === undefined
+        ? started
+        : seen === null || started === null
+          ? null
+          : Math.max(seen, started)
+    );
+  }
+  return shown;
+}
+
+// The Actions runs settleReruns needs: only checks that ran more than once.
+// `attempt` names the attempt the rollup shows (see shownAttempts).
+export function rerunsToLookUp(
+  rollup: RollupEntry[]
+): Array<{ repo: string; id: string; attempt: string | null }> {
+  const shown = shownAttempts(rollup);
+  const runs = new Map<
+    string,
+    { repo: string; id: string; attempt: string | null }
+  >();
+  for (const group of groupByCheck(rollup).values()) {
+    if (group.length < 2) continue;
+    for (const c of group) {
+      const run = actionsRunOf(c);
+      if (!run) continue;
+      const key = `${run.repo}#${run.id}`;
+      const attempt = shown.get(key) ?? null;
+      runs.set(key, {
+        ...run,
+        attempt: attempt === null ? null : String(attempt),
+      });
+    }
+  }
+  return [...runs.values()];
+}
+
+const PR_EVENTS = ["pull_request", "pull_request_target"];
+
+// Drop the runs of a check that a later pull_request run replaced: a rerun,
+// or a run started by an edited PR body or a push to the branch. gh's rollup
+// doesn't say what started a run, so `runs` (from the Actions API, keyed
+// "owner/repo#id") does. A run for another commit never counts. A push run
+// never replaces anything, so its failure stands until a pull_request run
+// starts after it. When the API couldn't answer, or the answer is ambiguous,
+// the check is not settled yet: it reads as pending, never as passing.
+export function settleReruns<T extends RollupEntry>(
+  rollup: T[],
+  head: string | null | undefined,
+  runs: Map<string, ActionsRun | null>
+): RollupEntry[] {
+  const shown = shownAttempts(rollup);
+  const drop = new Set<RollupEntry>();
+  const unsettled: RollupEntry[] = [];
+  for (const group of groupByCheck(rollup).values()) {
+    if (group.length < 2) continue;
+    const located = group.map((c) => ({ c, run: actionsRunOf(c) }));
+    // Not all GitHub Actions: nothing says which run is stale, so all count.
+    if (located.some((l) => !l.run)) continue;
+    const stale = staleRuns(
+      located.map((l) => ({
+        c: l.c,
+        id: l.run!.id,
+        info: runs.get(`${l.run!.repo}#${l.run!.id}`) ?? null,
+        shown: shown.get(`${l.run!.repo}#${l.run!.id}`) ?? null,
+      })),
+      head
+    );
+    if (stale) {
+      for (const c of stale) drop.add(c);
+    } else {
+      for (const c of group) drop.add(c);
+      const { __typename, workflowName, name, context } = group[0];
+      unsettled.push({
+        __typename,
+        workflowName,
+        name,
+        context,
+        status: "PENDING",
+      });
+    }
+  }
+  return [...rollup.filter((c) => !drop.has(c)), ...unsettled];
+}
+
+// The runs of one check that don't count, or null when that can't be told.
+function staleRuns(
+  runs: Array<{
+    c: RollupEntry;
+    id: string;
+    info: ActionsRun | null;
+    shown: number | null;
+  }>,
+  head: string | null | undefined
+): RollupEntry[] | null {
+  if (!head || runs.some((r) => !r.info)) return null;
+  // Workflows can share a display name; only one workflow's runs compare.
+  if (new Set(runs.map((r) => r.info!.workflowId)).size > 1) return null;
+  // A run on another commit never vouches for the head, but a failure the
+  // head's rollup shows can't be explained away by it either: wait.
+  const foreign = runs.filter((r) => r.info!.headSha !== head);
+  if (foreign.some((r) => outcome(r.c) !== "SUCCESS")) return null;
+  const mine = runs.filter((r) => r.info!.headSha === head);
+  if (!mine.length || new Set(mine.map((r) => r.id)).size < mine.length)
+    return null;
+  const timed = mine.map((r) => ({ ...r, at: at(r.info!.startedAt) }));
+  if (timed.some((r) => r.at === null)) return null;
+  // Jobs start after their run does. A run that started after every job the
+  // rollup shows of it was rerun, and the rollup still shows the old attempt.
+  if (timed.some((r) => r.shown === null || r.at! > r.shown)) return null;
+  // Only a run that passed, failed or is still going says anything about the
+  // check; a cancelled, skipped or neutral run replaces nothing.
+  const pr = timed.filter(
+    (r) =>
+      PR_EVENTS.includes(r.info!.event) &&
+      ["SUCCESS", ...FAILED, ...UNFINISHED].includes(outcome(r.c))
+  );
+  const newest = pr.length ? Math.max(...pr.map((r) => r.at!)) : -Infinity;
+  if (pr.filter((r) => r.at === newest).length > 1) return null;
+  return runs
+    .filter((r) => !timed.some((t) => t.c === r.c && t.at! >= newest))
+    .map((r) => r.c);
+}
+
 // Summarise gh's statusCheckRollup into one verdict. A lone CANCELLED run is
 // pending: it is waiting on a rerun, not a failure.
 export function checksVerdict(rollup: RollupEntry[]): ChecksVerdict {
   if (!rollup.length) return "none";
   const outcomes = liveChecks(rollup).map(outcome);
   if (outcomes.some((o) => FAILED.includes(o))) return "fail";
-  if (
-    outcomes.some((o) =>
-      [
-        "",
-        "PENDING",
-        "QUEUED",
-        "IN_PROGRESS",
-        "EXPECTED",
-        "WAITING",
-        "CANCELLED",
-      ].includes(o)
-    )
-  )
+  if (outcomes.some((o) => [...UNFINISHED, "CANCELLED"].includes(o)))
     return "pending";
   return "pass";
 }
