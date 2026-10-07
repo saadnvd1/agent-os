@@ -9,6 +9,8 @@ import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
 import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
 import { MessagesDialog } from "@/components/Bus";
+import { SchedulesDialog } from "@/components/Schedules";
+import { useOpenSession } from "@/hooks/useOpenSession";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -487,6 +489,8 @@ function HomeContent() {
     [isMobile, handleSessionCreated]
   );
   useOpenOrchestrator(handleOrchestratorOpened);
+  // A session opened from elsewhere (a schedule's run history).
+  useOpenSession(handleOrchestratorOpened);
 
   // Project created handler (shared between desktop/mobile)
   const handleCreateProject = useCallback(
@@ -605,6 +609,7 @@ function HomeContent() {
         <DesktopView {...viewProps} />
       )}
       <TasksDialog />
+      <SchedulesDialog />
       <NewTaskDialog />
       <MessagesDialog />
       <DevicesDialog />
