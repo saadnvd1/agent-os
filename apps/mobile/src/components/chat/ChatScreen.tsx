@@ -1,15 +1,13 @@
-import { useMemo } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
-import { Text } from "~/components/ui/Text";
+import { StyleSheet, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
-import { groupTimeline } from "@/lib/chat/group";
 import { SkeletonRows } from "~/components/ui/Skeleton";
+import { Text } from "~/components/ui/Text";
+import { ChatSession } from "~/lib/chat/draft";
 import { useChat } from "~/lib/chat/useChat";
 import type { Machine } from "~/lib/machines/store";
 import { font, space, useTheme } from "~/lib/theme";
+import { ChatFeed } from "./ChatFeed";
 import { Composer } from "./composer/Composer";
-import { ChatSession } from "~/lib/chat/draft";
-import { TimelineBlock } from "./TimelineBlock";
 
 export function ChatScreen({
   machine,
@@ -21,12 +19,6 @@ export function ChatScreen({
   const t = useTheme();
   const chat = useChat(machine, sessionId);
   const { view } = chat;
-  // Inverted: the newest block sits at the bottom and the list starts there.
-  const blocks = useMemo(
-    () => groupTimeline(view.items).reverse(),
-    [view.items]
-  );
-  const running = view.state === "running";
 
   return (
     <ChatSession.Provider value={sessionId}>
@@ -39,31 +31,10 @@ export function ChatScreen({
             <SkeletonRows count={5} />
           </View>
         ) : (
-          <FlatList
-            inverted
-            data={blocks}
-            keyExtractor={(b) => (b.type === "item" ? b.item.id : b.id)}
-            renderItem={({ item }) => (
-              <TimelineBlock block={item} respond={chat.respond} />
-            )}
-            contentContainerStyle={styles.list}
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
-            ListHeaderComponent={
-              running || view.state === "waiting" ? (
-                <View style={styles.working}>
-                  <ActivityIndicator size="small" color={t.primary} />
-                  <Text style={[styles.workingText, { color: t.muted }]}>
-                    {view.state === "waiting" ? "Waiting for you" : "Working…"}
-                  </Text>
-                </View>
-              ) : null
-            }
-            ListEmptyComponent={
-              <Text style={[styles.empty, { color: t.muted }]}>
-                No messages yet. Say hello.
-              </Text>
-            }
+          <ChatFeed
+            items={view.items}
+            state={view.state}
+            respond={chat.respond}
           />
         )}
         {!chat.live && view.loaded ? (
@@ -92,15 +63,6 @@ export function ChatScreen({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  list: { padding: space.lg, gap: space.lg },
-  working: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  workingText: { fontSize: font.size.sm },
-  empty: {
-    textAlign: "center",
-    fontSize: font.size.md,
-    transform: [{ scaleY: -1 }],
-    paddingVertical: space.xxl,
-  },
   banner: {
     textAlign: "center",
     fontSize: font.size.xs,
