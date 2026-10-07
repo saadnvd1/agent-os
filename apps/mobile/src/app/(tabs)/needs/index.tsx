@@ -1,11 +1,6 @@
 import { useState } from "react";
-import {
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { AskCard } from "~/components/asks/AskCard";
 import { useMachineAsks } from "~/components/asks/useMachineAsks";
 import { SessionRow } from "~/components/sessions/SessionRow";

@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { QueuedMessage } from "@/lib/chat/events";
 import { Icon } from "~/components/ui/Icon";
 import { haptic } from "~/lib/haptics";

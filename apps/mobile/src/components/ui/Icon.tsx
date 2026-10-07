@@ -14,6 +14,10 @@ export function Icon({ name, size = 20, color, weight = "medium" }: Props) {
       size={size}
       tintColor={color}
       weight={weight}
+      // Decorative: the control around it carries the label.
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
       style={{ width: size, height: size }}
     />
   );

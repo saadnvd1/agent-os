@@ -1,10 +1,5 @@
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { SymbolViewProps } from "expo-symbols";
 import { haptic } from "~/lib/haptics";
 import { font, HIT, radius, space, useTheme } from "~/lib/theme";

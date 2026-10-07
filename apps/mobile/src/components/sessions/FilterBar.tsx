@@ -1,5 +1,6 @@
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { Icon } from "~/components/ui/Icon";
 import type { Machine } from "~/lib/machines/store";
 import { machineLabel } from "~/lib/machines/url";

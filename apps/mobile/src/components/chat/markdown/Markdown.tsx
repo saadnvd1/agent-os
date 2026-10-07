@@ -18,7 +18,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   );
 });
 
-const HEADING = [22, 19, 17, 16, 15, 15];
+const HEADING = [26, 21, 18, 16, 15, 15];
 
 function block(n: RootContent, key: number, t: Palette): React.ReactNode {
   const body = [styles.p, { color: t.foreground }];

@@ -1,11 +1,13 @@
 import { memo } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
 import type { TimelineBlock as Block } from "@/lib/chat/group";
 import { font, radius, space, useTheme } from "~/lib/theme";
 import { Approval } from "./blocks/Approval";
 import { Line } from "./blocks/Line";
 import { Todos } from "./blocks/Todos";
+import { TurnEnd } from "./blocks/TurnEnd";
 import { ToolGroup } from "./blocks/ToolGroup";
 import { UserMessage } from "./blocks/UserMessage";
 import { Markdown } from "./markdown/Markdown";
@@ -79,19 +81,8 @@ function Item({ item, respond }: { item: ChatItem; respond: Respond }) {
           <Markdown text={item.plan} />
         </View>
       );
-    case "turn_end": {
-      const parts = [
-        item.interrupted ? "Stopped" : "Done",
-        item.durationMs ? `${Math.round(item.durationMs / 1000)}s` : null,
-        item.costUsd ? `$${item.costUsd.toFixed(2)}` : null,
-      ].filter(Boolean);
-      return (
-        <Line
-          icon={item.interrupted ? "stop.circle" : "checkmark"}
-          text={parts.join(" · ")}
-        />
-      );
-    }
+    case "turn_end":
+      return <TurnEnd item={item} />;
     case "error":
       return (
         <Line

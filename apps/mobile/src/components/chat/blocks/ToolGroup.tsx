@@ -1,29 +1,29 @@
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import type { ToolItem } from "@/lib/chat/group";
 import { Icon } from "~/components/ui/Icon";
+import { Text } from "~/components/ui/Text";
 import { haptic } from "~/lib/haptics";
-import { font, radius, space, useTheme } from "~/lib/theme";
-import { DiffView } from "./DiffView";
+import { font, HIT, radius, space, useTheme } from "~/lib/theme";
 import { ToolStep } from "./ToolStep";
 
-// A run of tool calls folded into one line; edits keep their diffs visible.
+// A run of tool calls: one quiet line, expandable to every step (as the web).
 export function ToolGroup({ tools }: { tools: ToolItem[] }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
   const running = tools.some((x) => x.status === "running");
   const failed = tools.filter((x) => x.status === "error").length;
-  const last = tools[tools.length - 1];
-  const diffs = tools.filter((x) => x.diff);
-  const label = `${tools.length} ${tools.length === 1 ? "step" : "steps"}${failed ? ` · ${failed} failed` : ""}`;
+  const stopped = tools.filter((x) => x.status === "stopped").length;
+  const edits = tools.filter((x) => x.diff).length;
+  const latest =
+    tools.findLast((x) => x.status === "running") ?? tools[tools.length - 1];
+  const label = running
+    ? latest.title
+    : `${tools.length} step${tools.length === 1 ? "" : "s"}${
+        edits ? ` · ${edits} edit${edits === 1 ? "" : "s"}` : ""
+      }`;
   return (
-    <View style={[styles.wrap, { backgroundColor: t.card }]}>
+    <View style={[styles.wrap, { backgroundColor: t.wash }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -33,24 +33,22 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
         }}
         style={styles.head}
       >
-        {running ? (
-          <ActivityIndicator size="small" color={t.primary} />
-        ) : (
-          <Icon name="wrench.and.screwdriver" size={14} color={t.muted} />
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.label, { color: t.foreground }]}>{label}</Text>
-          {!open ? (
-            <Text numberOfLines={1} style={[styles.last, { color: t.muted }]}>
-              {last.title}
-            </Text>
-          ) : null}
-        </View>
         <Icon
-          name={open ? "chevron.up" : "chevron.down"}
-          size={12}
-          color={t.faint}
+          name={open ? "chevron.down" : "chevron.right"}
+          size={11}
+          color={t.muted}
         />
+        {running ? <ActivityIndicator size="small" color={t.primary} /> : null}
+        <Text numberOfLines={1} style={[styles.label, { color: t.muted }]}>
+          {label}
+        </Text>
+        {failed ? (
+          <Text style={[styles.side, { color: t.destructive }]}>
+            {failed} failed
+          </Text>
+        ) : stopped ? (
+          <Text style={[styles.side, { color: t.faint }]}>stopped</Text>
+        ) : null}
       </Pressable>
       {open ? (
         <View style={styles.steps}>
@@ -58,31 +56,25 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
             <ToolStep key={tool.id} tool={tool} />
           ))}
         </View>
-      ) : (
-        diffs.slice(-2).map((x) => (
-          <View key={x.id} style={styles.steps}>
-            <DiffView diff={x.diff!} />
-          </View>
-        ))
-      )}
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { borderRadius: radius.md, overflow: "hidden" },
+  wrap: {
+    borderRadius: radius.lg,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+  },
   head: {
     flexDirection: "row",
     alignItems: "center",
-    gap: space.md,
-    padding: space.md,
-    minHeight: 48,
+    gap: space.sm,
+    minHeight: HIT,
+    paddingHorizontal: 6,
   },
-  label: { fontSize: font.size.sm, fontWeight: "600" },
-  last: { fontSize: font.size.xs, fontFamily: font.mono, marginTop: 2 },
-  steps: {
-    paddingHorizontal: space.md,
-    paddingBottom: space.md,
-    gap: space.xs,
-  },
+  label: { flex: 1, fontSize: font.size.xs },
+  side: { fontSize: font.size.xs },
+  steps: { paddingHorizontal: 6, paddingBottom: space.sm, gap: space.xs },
 });

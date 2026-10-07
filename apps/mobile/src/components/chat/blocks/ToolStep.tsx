@@ -1,11 +1,6 @@
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { ToolItem } from "@/lib/chat/group";
 import { Icon } from "~/components/ui/Icon";
 import { font, radius, space, useTheme } from "~/lib/theme";

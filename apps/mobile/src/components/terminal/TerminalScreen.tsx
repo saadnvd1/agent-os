@@ -1,6 +1,7 @@
 import * as Linking from "expo-linking";
 import { useEffect, useRef } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { Button } from "~/components/ui/Button";
 import { SkeletonRows } from "~/components/ui/Skeleton";
 import type { Machine } from "~/lib/machines/store";

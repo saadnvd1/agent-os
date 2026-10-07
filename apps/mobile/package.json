@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/geist": "^0.4.2",
+    "@expo-google-fonts/geist-mono": "^0.4.3",
     "@tanstack/react-query": "^5.104.1",
     "expo": "~57.0.27",
     "expo-clipboard": "~57.0.2",

@@ -1,12 +1,7 @@
 import * as Linking from "expo-linking";
 import { useState } from "react";
-import {
-  ActionSheetIOS,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActionSheetIOS, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "~/components/ui/Text";
 import type { AskView } from "@/lib/orchestrator/ask-view";
 import { Button } from "~/components/ui/Button";
 import { useAnswerAsk } from "~/lib/asks/queries";

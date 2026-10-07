@@ -1,5 +1,6 @@
 import { Image } from "expo-image";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { ChatItem } from "@/lib/chat/events";
 import { font, radius, space, useTheme } from "~/lib/theme";
 
@@ -28,7 +29,7 @@ export function UserMessage({ item }: { item: UserItem }) {
         </View>
       ) : null}
       {text ? (
-        <View style={[styles.bubble, { backgroundColor: t.primarySoft }]}>
+        <View style={[styles.bubble, { backgroundColor: t.bubble }]}>
           <Text selectable style={[styles.text, { color: t.foreground }]}>
             {text}
           </Text>
@@ -42,8 +43,8 @@ const styles = StyleSheet.create({
   wrap: { alignItems: "flex-end", gap: space.xs, paddingLeft: 48 },
   from: { fontSize: font.size.xs },
   bubble: {
-    borderRadius: radius.lg,
-    borderBottomRightRadius: radius.sm,
+    borderRadius: radius.xl,
+    borderBottomRightRadius: 6,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },

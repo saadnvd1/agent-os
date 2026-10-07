@@ -21,6 +21,11 @@ export interface Palette {
   diffDel: string;
   // The terminal pane stays dark in both themes, like the web terminal.
   termBg: string;
+  // foreground at low alpha, as the web layers its quiet surfaces
+  wash: string;
+  bubble: string;
+  hairline: string;
+  running: string;
   termFg: string;
 }
 
@@ -45,6 +50,10 @@ export const light: Palette = {
   diffAdd: "hsla(152, 65%, 40%, 0.12)",
   diffDel: "hsla(352, 80%, 56%, 0.1)",
   termBg: "hsl(240, 18%, 8%)",
+  wash: "hsla(240, 12%, 14%, 0.025)",
+  bubble: "hsla(240, 12%, 14%, 0.07)",
+  hairline: "hsla(240, 12%, 14%, 0.06)",
+  running: "hsl(142, 71%, 45%)",
   termFg: "hsl(240, 10%, 90%)",
 };
 
@@ -69,5 +78,9 @@ export const dark: Palette = {
   diffAdd: "hsla(152, 70%, 52%, 0.14)",
   diffDel: "hsla(352, 85%, 62%, 0.14)",
   termBg: "hsl(0, 0%, 0%)",
+  wash: "hsla(240, 10%, 93%, 0.025)",
+  bubble: "hsla(240, 10%, 93%, 0.07)",
+  hairline: "hsla(240, 10%, 93%, 0.06)",
+  running: "hsl(142, 71%, 45%)",
   termFg: "hsl(240, 10%, 90%)",
 };

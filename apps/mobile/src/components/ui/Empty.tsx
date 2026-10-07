@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { SymbolViewProps } from "expo-symbols";
 import { font, space, useTheme } from "~/lib/theme";
 import { Icon } from "./Icon";

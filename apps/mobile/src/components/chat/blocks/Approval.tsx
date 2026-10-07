@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
 import { Button } from "~/components/ui/Button";
 import { Icon } from "~/components/ui/Icon";

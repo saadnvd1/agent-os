@@ -1,11 +1,6 @@
 import { router } from "expo-router";
-import {
-  ActionSheetIOS,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActionSheetIOS, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { Button } from "~/components/ui/Button";
 import { Group } from "~/components/ui/Group";
 import { GroupTitle, OptionRow } from "~/components/ui/OptionRow";

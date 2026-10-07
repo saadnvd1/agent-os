@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { FileDiff } from "@/lib/chat/events";
 import { lineDiff, shortPath } from "@/lib/chat/diff";
 import { font, radius, space, useTheme } from "~/lib/theme";

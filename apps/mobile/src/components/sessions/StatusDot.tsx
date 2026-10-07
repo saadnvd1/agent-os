@@ -1,45 +1,41 @@
-import { useEffect } from "react";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
+import { View } from "react-native";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
 import { useTheme } from "~/lib/theme";
 
+// The web sidebar's dot: amber when it needs you, green with a halo while
+// it works, a quiet grey otherwise.
 export function StatusDot({ row }: { row: SidebarRow }) {
   const t = useTheme();
-  const pulse = useSharedValue(1);
-  useEffect(() => {
-    pulse.value = row.working
-      ? withRepeat(withTiming(0.35, { duration: 900 }), -1, true)
-      : 1;
-  }, [row.working, pulse]);
-  const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
   const color = row.need
     ? t.warning
     : row.working
-      ? t.primary
+      ? t.running
       : row.status?.status === "error"
         ? t.destructive
-        : row.unread
-          ? t.primary
-          : t.faint;
-  const hollow = !row.need && !row.working && !row.unread;
+        : t.faint;
   return (
-    <Animated.View
-      style={[
-        {
-          width: 9,
-          height: 9,
-          borderRadius: 5,
-          backgroundColor: hollow ? "transparent" : color,
-          borderWidth: hollow ? 1.5 : 0,
-          borderColor: color,
-        },
-        style,
-      ]}
-    />
+    <View
+      style={{
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor:
+          row.working && !row.need
+            ? "hsla(142, 71%, 45%, 0.25)"
+            : "transparent",
+      }}
+    >
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: color,
+          opacity: row.need || row.working ? 1 : 0.6,
+        }}
+      />
+    </View>
   );
 }

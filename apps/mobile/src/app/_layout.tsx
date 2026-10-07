@@ -3,6 +3,19 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
+import {
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+} from "@expo-google-fonts/geist";
+import {
+  GeistMono_400Regular,
+  GeistMono_500Medium,
+  GeistMono_600SemiBold,
+  GeistMono_700Bold,
+} from "@expo-google-fonts/geist-mono";
+import { useFonts } from "expo-font";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -35,7 +48,19 @@ export default function RootLayout() {
         defaultOptions: { queries: { retry: 1, staleTime: 2000 } },
       })
   );
-  const { ready } = useMachines();
+  const { ready: machinesReady } = useMachines();
+  // The web app's fonts; a font that fails to load falls back to the system's.
+  const [fontsLoaded, fontError] = useFonts({
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+    GeistMono_400Regular,
+    GeistMono_500Medium,
+    GeistMono_600SemiBold,
+    GeistMono_700Bold,
+  });
+  const ready = machinesReady && (fontsLoaded || !!fontError);
   const t = useTheme();
 
   useEffect(() => {
@@ -65,7 +90,10 @@ export default function RootLayout() {
               <Stack
                 screenOptions={{
                   headerTintColor: t.primary,
-                  headerTitleStyle: { color: t.foreground },
+                  headerTitleStyle: {
+                    color: t.foreground,
+                    fontFamily: "Geist_600SemiBold",
+                  },
                   headerBackButtonDisplayMode: "minimal",
                 }}
               >

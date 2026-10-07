@@ -10,8 +10,14 @@ export default function Layout() {
         headerTransparent: true,
         headerTintColor: t.primary,
         headerLargeTitleShadowVisible: false,
-        headerLargeTitleStyle: { color: t.foreground },
-        headerTitleStyle: { color: t.foreground },
+        headerLargeTitleStyle: {
+          color: t.foreground,
+          fontFamily: "Geist_700Bold",
+        },
+        headerTitleStyle: {
+          color: t.foreground,
+          fontFamily: "Geist_600SemiBold",
+        },
       }}
     >
       <Stack.Screen name="index" options={{ title: "Needs you" }} />

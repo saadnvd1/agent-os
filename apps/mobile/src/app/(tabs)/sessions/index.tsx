@@ -5,9 +5,9 @@ import {
   RefreshControl,
   SectionList,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { DONE_PAGE } from "@/lib/sidebar/shelves";
 import { FilterBar } from "~/components/sessions/FilterBar";
 import { SessionRow } from "~/components/sessions/SessionRow";
@@ -61,8 +61,7 @@ export default function SessionsScreen() {
         }
         renderSectionHeader={({ section }) => (
           <Text style={[styles.shelf, { color: t.muted }]}>
-            {section.title.toUpperCase()}
-            {section.total > section.data.length ? `  ${section.total}` : ""}
+            {section.title.toUpperCase()} · {section.total}
           </Text>
         )}
         renderItem={({ item }) => (

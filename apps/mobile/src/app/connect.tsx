@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useConnect } from "~/components/connect/useConnect";
 import { Button } from "~/components/ui/Button";

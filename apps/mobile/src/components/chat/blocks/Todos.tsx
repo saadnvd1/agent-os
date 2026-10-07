@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import type { ChatItem } from "@/lib/chat/events";
 import { Icon } from "~/components/ui/Icon";
 import { font, radius, space, useTheme } from "~/lib/theme";

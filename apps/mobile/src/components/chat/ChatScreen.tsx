@@ -1,11 +1,6 @@
 import { useMemo } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { groupTimeline } from "@/lib/chat/group";
 import { SkeletonRows } from "~/components/ui/Skeleton";

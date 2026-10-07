@@ -24,7 +24,7 @@ export function CodeBlock({
   return (
     <View style={[styles.wrap, { backgroundColor: t.codeBg }]}>
       <View style={styles.head}>
-        <Text style={[styles.lang, { color: t.muted }]}>{lang || "code"}</Text>
+        <Text style={[styles.lang, { color: t.muted }]}>{lang || "text"}</Text>
         <Pressable
           accessibilityLabel="Copy code"
           onPress={copy}

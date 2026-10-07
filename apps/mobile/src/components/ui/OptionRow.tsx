@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { Icon } from "./Icon";
 import { haptic } from "~/lib/haptics";
 import { font, space, useTheme } from "~/lib/theme";

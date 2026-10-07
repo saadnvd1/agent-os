@@ -1,16 +1,16 @@
 import { forwardRef } from "react";
 import {
   StyleSheet,
-  Text,
-  TextInput,
+  type TextInput as RNTextInput,
   type TextInputProps,
   View,
 } from "react-native";
+import { Text, TextInput } from "~/components/ui/Text";
 import { font, radius, space, useTheme } from "~/lib/theme";
 
 type Props = TextInputProps & { label: string; hint?: string; mono?: boolean };
 
-export const Field = forwardRef<TextInput, Props>(function Field(
+export const Field = forwardRef<RNTextInput, Props>(function Field(
   { label, hint, mono, style, ...rest },
   ref
 ) {

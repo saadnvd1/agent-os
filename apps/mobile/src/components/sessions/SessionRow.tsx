@@ -1,5 +1,6 @@
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { compactTimeAgo, fromSqliteTime } from "@/lib/session-meta";
 import { NEED_LABEL, type SidebarRow } from "@/lib/sidebar/shelves";
 import { Icon } from "~/components/ui/Icon";
@@ -68,9 +69,14 @@ export function SessionRow({ row, project, nested }: Props) {
           </Text>
         </View>
       ) : (
-        <Text style={[styles.time, { color: t.faint }]}>
-          {compactTimeAgo(fromSqliteTime(s.updated_at))}
-        </Text>
+        <View style={styles.meta}>
+          {row.unread ? (
+            <View style={[styles.unread, { backgroundColor: t.primary }]} />
+          ) : null}
+          <Text style={[styles.time, { color: t.faint }]}>
+            {compactTimeAgo(fromSqliteTime(s.updated_at))}
+          </Text>
+        </View>
       )}
       {row.workers.length ? (
         <Text style={[styles.time, { color: t.muted }]}>
@@ -95,6 +101,8 @@ const styles = StyleSheet.create({
   name: { fontSize: font.size.md },
   subRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   sub: { fontSize: font.size.xs, flexShrink: 1 },
+  meta: { flexDirection: "row", alignItems: "center", gap: 6 },
+  unread: { width: 7, height: 7, borderRadius: 4 },
   time: { fontSize: font.size.xs, fontVariant: ["tabular-nums"] },
   badge: {
     paddingHorizontal: space.sm,
