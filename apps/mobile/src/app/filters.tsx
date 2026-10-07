@@ -6,6 +6,7 @@ import { setFilters, useFilters } from "~/lib/sessions/filters";
 import { useActiveMachine } from "~/lib/machines/store";
 import { useProjects, useWorkspaces } from "~/lib/sessions/queries";
 import { space, useTheme } from "~/lib/theme";
+import { haptic } from "~/lib/haptics";
 
 export default function FiltersSheet() {
   const t = useTheme();
@@ -17,6 +18,7 @@ export default function FiltersSheet() {
   );
   if (!machine) return null;
   const pick = (next: Parameters<typeof setFilters>[1], close = false) => {
+    haptic.tap();
     setFilters(machine.id, next);
     if (close) router.back();
   };

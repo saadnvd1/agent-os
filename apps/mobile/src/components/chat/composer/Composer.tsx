@@ -1,3 +1,4 @@
+import { GlassView } from "expo-glass-effect";
 import { Image } from "expo-image";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
@@ -9,7 +10,7 @@ import { offeredSuggestion } from "@/lib/chat/suggestion";
 import { Icon } from "~/components/ui/Icon";
 import type { ChatView } from "~/lib/chat/reducer";
 import { haptic } from "~/lib/haptics";
-import { font, HIT, radius, space, useTheme } from "~/lib/theme";
+import { font, glass, HIT, radius, space, useTheme } from "~/lib/theme";
 import { QueueList } from "./QueueList";
 import { useDraft } from "~/lib/chat/draft";
 import { useAttachments } from "./useAttachments";
@@ -66,7 +67,7 @@ export function Composer({
       style={[
         styles.wrap,
         {
-          backgroundColor: t.background,
+          backgroundColor: glass ? "transparent" : t.background,
           paddingBottom: keyboard
             ? space.sm
             : Math.max(insets.bottom, space.sm),
@@ -115,7 +116,12 @@ export function Composer({
           ))}
         </View>
       ) : null}
-      <View style={[styles.box, { backgroundColor: t.card }]}>
+      <Box
+        {...(glass
+          ? { glassEffectStyle: "regular" as const, isInteractive: true }
+          : {})}
+        style={[styles.box, glass ? null : { backgroundColor: t.card }]}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Attach images"
@@ -183,10 +189,12 @@ export function Composer({
             </View>
           </Pressable>
         )}
-      </View>
+      </Box>
     </View>
   );
 }
+
+const Box = glass ? GlassView : View;
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: space.md, paddingTop: space.sm },

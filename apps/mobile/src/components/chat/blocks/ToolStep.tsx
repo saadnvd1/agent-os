@@ -5,6 +5,7 @@ import type { ToolItem } from "@/lib/chat/group";
 import { Icon } from "~/components/ui/Icon";
 import { font, radius, space, useTheme } from "~/lib/theme";
 import { DiffView } from "./DiffView";
+import { haptic } from "~/lib/haptics";
 
 export function ToolStep({ tool }: { tool: ToolItem }) {
   const t = useTheme();
@@ -14,7 +15,10 @@ export function ToolStep({ tool }: { tool: ToolItem }) {
     <View style={{ gap: space.sm }}>
       <Pressable
         disabled={!detail}
-        onPress={() => setOpen((o) => !o)}
+        onPress={() => {
+          haptic.tap();
+          setOpen((o) => !o);
+        }}
         style={styles.row}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}

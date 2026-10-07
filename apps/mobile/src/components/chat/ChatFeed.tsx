@@ -18,10 +18,15 @@ export function ChatFeed({
   items,
   state,
   respond,
+  insetTop = 0,
+  insetBottom = 0,
 }: {
   items: ChatItem[];
   state: ChatState;
   respond: (id: string, d: ApprovalDecision) => void;
+  // Room for the see-through header and the floating composer.
+  insetTop?: number;
+  insetBottom?: number;
 }) {
   const t = useTheme();
   const blocks = useMemo(() => groupTimeline(items), [items]);
@@ -50,7 +55,14 @@ export function ChatFeed({
         maintainVisibleContentPosition
         alignItemsAtEnd
         recycleItems={false}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          {
+            paddingTop: insetTop + space.lg,
+            paddingBottom: insetBottom + space.sm,
+          },
+        ]}
+        scrollIndicatorInsets={{ top: insetTop, bottom: insetBottom }}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         ListFooterComponent={
@@ -80,6 +92,7 @@ export function ChatFeed({
           }}
           style={[
             styles.jump,
+            { bottom: insetBottom + space.md },
             { backgroundColor: t.card, borderColor: t.border },
           ]}
         >
@@ -95,7 +108,6 @@ const styles = StyleSheet.create({
   jump: {
     position: "absolute",
     right: space.lg,
-    bottom: space.md,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -107,11 +119,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
-  list: {
-    paddingHorizontal: space.lg,
-    paddingTop: space.lg,
-    paddingBottom: space.sm,
-  },
+  list: { paddingHorizontal: space.lg },
   item: { paddingBottom: space.lg },
   working: {
     flexDirection: "row",

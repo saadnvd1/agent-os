@@ -1,3 +1,4 @@
+import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { useColorScheme } from "react-native";
 import { dark, light, type Palette } from "./colors";
 
@@ -11,6 +12,8 @@ export const font = {
   mono: "mono",
   size: { xs: 12, sm: 13, md: 15, lg: 17, xl: 20, title: 28 },
 };
+// iOS 26 liquid glass; older systems get a blur or a solid surface.
+export const glass = isLiquidGlassAvailable();
 // Apple's minimum touch target.
 export const HIT = 44;
 
