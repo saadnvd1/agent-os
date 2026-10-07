@@ -3,6 +3,7 @@ import { memo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { font, space, useTheme, type Palette } from "~/lib/theme";
 import { CodeBlock } from "./CodeBlock";
+import { htmlText } from "./html";
 import { Inline } from "./Inline";
 import { parseMarkdown } from "./parse";
 
@@ -59,12 +60,14 @@ function block(n: RootContent, key: number, t: Palette): React.ReactNode {
       );
     case "table":
       return <TableBlock key={key} table={n} t={t} />;
-    case "html":
-      return (
-        <Text key={key} style={[body, { color: t.muted }]}>
-          {n.value}
+    case "html": {
+      const text = htmlText(n.value).trim();
+      return text ? (
+        <Text key={key} selectable style={body}>
+          {text}
         </Text>
-      );
+      ) : null;
+    }
     default:
       return null;
   }
