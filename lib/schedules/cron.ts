@@ -328,7 +328,13 @@ export function clock12(hour: number, minute: number): string {
 
 // "Weekdays at 9:00 AM", or the expression itself.
 export function describeCron(expr: string): string {
-  if (expr.trim() === "* * * * *") return "Every minute";
+  const trimmed = expr.trim().replace(/\s+/g, " ");
+  if (trimmed === "* * * * *") return "Every minute";
+  const every = /^\*\/(\d+) \* \* \* \*$/.exec(trimmed);
+  if (every)
+    return Number(every[1]) === 1
+      ? "Every minute"
+      : `Every ${every[1]} minutes`;
   const p = cronPreset(expr);
   if (!p) return expr.trim();
   const at = clock12(p.hour, p.minute);

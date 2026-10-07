@@ -133,6 +133,19 @@ describe("catch-up", () => {
     });
   });
 
+  it("a slot from before the server started is caught up, however recent", async () => {
+    const { schedule } = seed("0 * * * *");
+    const { deps } = fakeDeps();
+    // Back up at 10:00:40, 40s after the 10:00 slot it missed.
+    const boot = at("2026-10-07T15:00:40Z");
+    await tick(deps, boot, boot - 1000);
+    expect(listRuns(schedule.id)[0]).toMatchObject({
+      slot: "2026-10-07T15:00:00.000Z",
+      trigger: "catch-up",
+      detail: "caught up",
+    });
+  });
+
   it("an on-time slot isn't called caught up", async () => {
     const { schedule } = seed("0 * * * *");
     const { deps } = fakeDeps();

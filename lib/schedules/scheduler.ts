@@ -15,7 +15,8 @@ import {
   type Schedule,
 } from "./store";
 
-// A slot this late counts as caught up rather than on time.
+// A slot from before this process started, or this late (a sleeping
+// machine), counts as caught up rather than on time.
 export const LATE_MS = 90 * 1000;
 
 // The slot a schedule is due to run now, if any.
@@ -37,7 +38,8 @@ export function nextRunAt(schedule: Schedule, now = Date.now()): number | null {
 
 export async function tick(
   deps: RunDeps,
-  now = Date.now()
+  now = Date.now(),
+  upSince = 0
 ): Promise<RunResult[]> {
   const results = await Promise.all(
     listSchedules().map(async (schedule) => {
@@ -52,7 +54,7 @@ export async function tick(
       return runSlot(
         schedule,
         slot,
-        now - slot > LATE_MS ? "catch-up" : "schedule",
+        slot < upSince || now - slot > LATE_MS ? "catch-up" : "schedule",
         deps
       );
     })
@@ -71,11 +73,12 @@ export function startScheduler(deps: RunDeps): { stop: () => void } {
   let timer: NodeJS.Timeout | undefined;
   let busy = false;
   let stopped = false;
+  const upSince = Date.now();
   const run = async () => {
     if (busy) return;
     busy = true;
     try {
-      await tick(deps);
+      await tick(deps, Date.now(), upSince);
     } catch (error) {
       console.error("[schedules] tick failed:", error);
     } finally {

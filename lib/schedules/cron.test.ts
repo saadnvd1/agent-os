@@ -141,7 +141,8 @@ describe("presets", () => {
     expect(describeCron("30 17 * * *")).toBe("Every day at 5:30 PM");
     expect(describeCron("0 0 * * 1")).toBe("Mondays at 12:00 AM");
     expect(describeCron("* * * * *")).toBe("Every minute");
-    expect(describeCron("*/5 * * * *")).toBe("*/5 * * * *");
+    expect(describeCron("*/5 * * * *")).toBe("Every 5 minutes");
+    expect(describeCron("0 */2 * * *")).toBe("0 */2 * * *");
   });
 
   it("explains a bad expression", () => {

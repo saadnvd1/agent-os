@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,7 +74,7 @@ function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="bg-foreground/[0.04] flex flex-wrap gap-1 rounded-lg p-1"
+      className="bg-foreground/[0.04] flex gap-1 rounded-lg p-1"
     >
       {options.map((o) => (
         <button
@@ -84,7 +84,7 @@ function Segmented<T extends string>({
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "min-h-11 flex-1 rounded-md px-3 text-sm font-medium transition-colors md:min-h-8",
+            "min-h-11 min-w-0 flex-1 truncate rounded-md px-1 text-xs font-medium transition-colors md:min-h-8 md:px-3 md:text-sm",
             value === o.value
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -163,7 +163,12 @@ export function ScheduleForm({
       : presetCron({ kind: preset, hour, minute, weekday });
   const tzOk = isTimezone(timezone);
   const cronProblem = cronError(cron);
-  const [openedAt] = useState(() => Date.now());
+  // The preview counts from now, kept fresh while the form is open.
+  const [openedAt, setOpenedAt] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setOpenedAt(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
   const preview = useMemo(
     () => (cronProblem || !tzOk ? [] : nextRuns(cron, openedAt, 3, timezone)),
     [cron, cronProblem, timezone, tzOk, openedAt]
