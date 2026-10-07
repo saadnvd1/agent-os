@@ -36,6 +36,19 @@ describe("SuggestionTrace", () => {
     ]);
   });
 
+  it("keeps a secret the guess repeats out of the log", () => {
+    const { trace, lines } = setup();
+    trace.sent();
+    trace.message({ type: "result" });
+    trace.message({
+      type: "prompt_suggestion",
+      suggestion:
+        "push with GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+    });
+    expect(lines[0]).not.toContain("ghp_abcdefghij");
+    expect(lines[0]).toContain("[redacted]");
+  });
+
   it("logs a turn with no guess when the next message goes in", () => {
     const { trace, lines, at } = setup();
     trace.sent();

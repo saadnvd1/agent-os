@@ -1,3 +1,4 @@
+import { redact } from "../../orchestrator/untrusted";
 import type { ClaudeMessage } from "./claude-mapper";
 
 // One worker-log line per turn about the agent's guess at the next message:
@@ -51,7 +52,7 @@ export class SuggestionTrace {
       const e = this.ended;
       this.ended = null;
       this.log(
-        `[suggestion] turn ${e?.turn ?? "?"}${e ? `, ${this.since(e.at)} after it ended` : ""}: ${JSON.stringify(m.suggestion ?? "")}`
+        `[suggestion] turn ${e?.turn ?? "?"}${e ? `, ${this.since(e.at)} after it ended` : ""}: ${JSON.stringify(redact(m.suggestion ?? "").slice(0, 200))}`
       );
     }
   }
