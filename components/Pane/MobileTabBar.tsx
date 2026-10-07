@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -27,6 +28,8 @@ import {
 import { cn } from "@/lib/utils";
 import type { Session, Project } from "@/lib/db";
 import type { LucideIcon } from "lucide-react";
+import { HostBadge } from "@/components/Hosts/HostBadge";
+import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
 
@@ -193,6 +196,7 @@ export function MobileTabBar({
                     </span>
                   )}
               </span>
+              <HostBadge hostId={session?.host_id} />
               <ChevronDown className="text-muted-foreground h-3 w-3 shrink-0" />
             </button>
           </DropdownMenuTrigger>
@@ -200,6 +204,15 @@ export function MobileTabBar({
             align="center"
             className="max-h-[300px] min-w-[200px] overflow-y-auto"
           >
+            {/* First, so a long session list can't scroll it out of sight. */}
+            {session && (
+              <MoveMenuItems
+                session={session}
+                Item={DropdownMenuItem}
+                After={DropdownMenuSeparator}
+                iconClassName="h-4 w-4"
+              />
+            )}
             {sessions
               .filter((s) => !s.conductor_session_id)
               .map((s) => {

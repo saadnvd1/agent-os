@@ -1,6 +1,7 @@
 /**
  * Tasks that can't move: one waiting on a person (an escalated gate or an
- * open ask), on a LumifyHub card, or in a stack. Their guard state is keyed
+ * open ask), on a LumifyHub card, in a stack, or started by an orchestrator
+ * (its brakes, ceiling and Pause count only what runs here). Their guard state is keyed
  * by this session and wouldn't follow it, so the other machine could merge
  * what's waiting on them.
  */
@@ -28,5 +29,12 @@ export function moveRefusal(session: Session): string | null {
     | undefined;
   if (row?.lh_card_id) return "Card tasks run on this machine only for now";
   if (row?.stacked) return "Stacked tasks run on this machine only for now";
+  const orchestrated = db
+    .prepare(
+      `SELECT 1 FROM orchestrator_starts WHERE kind != 'stack' AND target = ? LIMIT 1`
+    )
+    .get(session.id);
+  if (orchestrated)
+    return "An orchestrator's tasks run on this machine only for now";
   return null;
 }

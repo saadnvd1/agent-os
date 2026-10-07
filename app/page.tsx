@@ -51,6 +51,7 @@ import { newDraft } from "@/stores/drafts";
 import { useOpenOrchestrator } from "@/hooks/useOpenOrchestrator";
 import { paletteActions, paletteUi } from "@/stores/palette";
 import { useAppCommands } from "@/components/CommandPalette/useAppCommands";
+import { useMoveCommands } from "@/components/Tasks/useMoveCommands";
 import dynamic from "next/dynamic";
 import { chatMetaActions } from "@/stores/chatMeta";
 
@@ -113,6 +114,10 @@ const UsageDialog = dynamic(
   () => import("@/components/Usage/UsageDialog").then((m) => m.UsageDialog),
   { ssr: false }
 );
+const MoveDialog = dynamic(
+  () => import("@/components/Tasks/MoveDialog").then((m) => m.MoveDialog),
+  { ssr: false }
+);
 const CommandPalette = dynamic(
   () =>
     import("@/components/CommandPalette/CommandPalette").then(
@@ -135,6 +140,7 @@ const AppDialogs = memo(function AppDialogs() {
       <CleanupDialog />
       <LumifyHubDialogs />
       <UsageDialog />
+      <MoveDialog />
       <CommandPalette />
     </>
   );
@@ -628,6 +634,7 @@ function HomeContent() {
       ? undefined
       : () => setShowNotificationSettings(true),
   });
+  useMoveCommands(activeSession);
 
   const startDevServerProject = startDevServerProjectId
     ? (projects.find((p) => p.id === startDevServerProjectId) ?? null)

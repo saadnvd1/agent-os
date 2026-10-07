@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { Session } from "@/lib/db";
 import { PaneViewToggle } from "./PaneViewToggle";
 import { PaneMenu } from "./PaneMenu";
+import { HostBadge } from "@/components/Hosts/HostBadge";
 import { usePaneBarSlots } from "./PaneBarSlots";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
@@ -152,6 +153,7 @@ export function DesktopTabBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        <HostBadge hostId={session?.host_id} />
         <ContextMeter sessionId={session?.id} />
         <ViewSwitch session={session} />
         {session?.working_directory && (

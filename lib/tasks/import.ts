@@ -17,6 +17,7 @@ import { expandHome } from "./session";
 import { ensureProject } from "./project-ref";
 import { checkoutBranchWorktree } from "./branch-worktree";
 import { rewritePaths, writeTranscript } from "./transcript";
+import { stepProgress } from "./move-progress";
 import {
   arrivalNote,
   InProgressError,
@@ -67,6 +68,7 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
   const projectPath = expandHome(project.working_directory);
   refuseBusyBranch(project.id, bundle.branch);
 
+  stepProgress(bundle.moveId, "worktree");
   const { worktreePath, reused } = await checkoutBranchWorktree(
     projectPath,
     bundle.branch
@@ -77,6 +79,7 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
     }, `setup-moved-${bundle.branch}`);
   }
   const claude = bundle.claude;
+  stepProgress(bundle.moveId, "conversation");
   if (claude) {
     await writeTranscript(
       worktreePath,
@@ -124,6 +127,7 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
     ).run(bundle.prompt, claude?.sessionId ?? null, bundle.moveId, id);
   })();
 
+  stepProgress(bundle.moveId, "resume");
   try {
     await launchClaude({
       sessionId: id,

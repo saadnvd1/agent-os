@@ -47,7 +47,7 @@ export function getHost(hostId: string | null | undefined): Host | null {
 /** A machine by its name (any case) or id. */
 export function hostIdNamed(ref: string): string {
   const want = ref.trim().toLowerCase();
-  if (want === "local" || want === "this machine") return LOCAL_HOST_ID;
+  if (["local", "here", "this machine"].includes(want)) return LOCAL_HOST_ID;
   const host = listRemoteHosts().find(
     (h) => h.id === ref || h.name.toLowerCase() === want
   );

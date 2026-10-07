@@ -24,6 +24,7 @@ import { selectionActions } from "@/stores/sessionSelection";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { useDoneAction } from "./useDoneAction";
 import { useRowContext } from "./RowContext";
+import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 const PARTS = {
   dropdown: {
@@ -134,6 +135,7 @@ export function SessionRowMenu({
           LumifyHub card
         </Item>
       )}
+      <MoveMenuItems session={session} Item={Item} />
       {!session.role && others.length > 0 && (
         <Sub>
           <SubTrigger>
