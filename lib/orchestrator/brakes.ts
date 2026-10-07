@@ -177,6 +177,16 @@ function recordStart(
   ).run(workspaceId, kind, target, iso(Date.now()));
 }
 
+// A start a brake held, with the brake's reason.
+export class BrakeRefused extends Error {
+  constructor(
+    readonly kind: StartKind,
+    readonly reason: string
+  ) {
+    super(`Brake: not starting a ${kind}: ${reason}.`);
+  }
+}
+
 // Runs a start through the brakes: refuses with the reason when one holds,
 // otherwise starts and counts it.
 export function braked<T>(
@@ -187,7 +197,7 @@ export function braked<T>(
 ): Promise<T> {
   return serially(workspaceId, async () => {
     const why = await refusal(workspaceId);
-    if (why) throw new Error(`Brake: not starting a ${kind}: ${why}.`);
+    if (why) throw new BrakeRefused(kind, why);
     const result = await start();
     recordStart(workspaceId, kind, target(result));
     return result;

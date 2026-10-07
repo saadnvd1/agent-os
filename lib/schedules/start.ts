@@ -11,7 +11,8 @@ import { ensureOrchestrator } from "../orchestrator/home";
 import { addNote } from "../orchestrator/notes";
 import { notifyStatusChanged } from "../status/hub";
 import { formatRunTime } from "./cron";
-import { fromLabel, type RunDeps } from "./run";
+import { Braked, fromLabel, type RunDeps } from "./run";
+import { braked, BrakeRefused } from "../orchestrator/brakes";
 import type { Schedule, ScheduleRun } from "./store";
 
 function projectOf(schedule: Schedule) {
@@ -132,12 +133,30 @@ function notify(schedule: Schedule, why: string): void {
   );
 }
 
+// Tasks and sessions start through the orchestrator's brakes, like its own
+// start_task: they count toward its limits and wait when one holds. A
+// message to the orchestrator starts nothing itself; its starts are braked.
+async function throughBrakes(
+  schedule: Schedule,
+  kind: "task" | "session",
+  start: () => Promise<string>
+): Promise<string> {
+  try {
+    return await braked(schedule.workspace_id, kind, start, (id) => id);
+  } catch (error) {
+    if (error instanceof BrakeRefused) throw new Braked(error.reason);
+    throw error;
+  }
+}
+
 export const realDeps: RunDeps = {
   start: (schedule, onSession) =>
     schedule.kind === "task"
-      ? startTask(schedule, onSession)
+      ? throughBrakes(schedule, "task", () => startTask(schedule, onSession))
       : schedule.kind === "session"
-        ? startSession(schedule, onSession)
+        ? throughBrakes(schedule, "session", () =>
+            startSession(schedule, onSession)
+          )
         : postToOrchestrator(schedule, onSession),
   stillRunning,
   notify,

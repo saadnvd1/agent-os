@@ -31,6 +31,22 @@ vi.mock("../chat/runner", () => ({
       })
     ),
 }));
+// Holds every start while `brakeOn` is set, as the orchestrator's brakes do.
+let brakeOn: string | null = null;
+vi.mock("../orchestrator/brakes", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../orchestrator/brakes")>();
+  return {
+    ...real,
+    braked: async (
+      _ws: string,
+      kind: "task" | "session",
+      start: () => Promise<string>
+    ) => {
+      if (brakeOn) throw new real.BrakeRefused(kind, brakeOn);
+      return start();
+    },
+  };
+});
 // Never makes a folder in the real home.
 vi.mock("../orchestrator/home", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../orchestrator/home")>()),
@@ -38,6 +54,7 @@ vi.mock("../orchestrator/home", async (importOriginal) => ({
 }));
 
 const { realDeps, stillRunning, scheduledMessage } = await import("./start");
+const { Braked } = await import("./run");
 const { createWorkspace, setProjectWorkspace } = await import("../workspaces");
 const { createProject } = await import("../projects");
 
@@ -171,5 +188,37 @@ describe("start links the run only once the prompt is in", () => {
     expect(sends[0].text).toMatch(/^\[Scheduled message "Triage" for p-/);
     sends[0].settle(true);
     await run;
+  });
+});
+
+describe("brakes", () => {
+  it("a session start the brakes hold throws Braked with the reason, starting nothing", async () => {
+    sends.length = 0;
+    brakeOn = "4 sessions are running in ws, at its limit of 4";
+    try {
+      const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
+      const project = createProject({
+        name: `p-${randomUUID().slice(0, 6)}`,
+        workingDirectory: "/tmp",
+      });
+      setProjectWorkspace(project.id, ws.id);
+      const s = {
+        id: randomUUID(),
+        name: "Triage",
+        prompt: "Go",
+        kind: "session",
+        workspace_id: ws.id,
+        project_id: project.id,
+        timezone: "America/Chicago",
+      } as Schedule;
+      const run = realDeps.start(s, () => {});
+      await expect(run).rejects.toBeInstanceOf(Braked);
+      await expect(run).rejects.toThrow(
+        "4 sessions are running in ws, at its limit of 4"
+      );
+      expect(sends).toHaveLength(0);
+    } finally {
+      brakeOn = null;
+    }
   });
 });

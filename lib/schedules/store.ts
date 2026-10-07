@@ -220,13 +220,37 @@ export function archiveSchedule(id: string): void {
   ).run(id);
 }
 
+// A braked run keeps its row under this key, so its slot stays due.
+const brakedKey = (slot: string) => `braked:${slot}`;
+
 // Takes a slot, or returns null when it's already taken: the row is the lock.
+// A slot the brakes held takes its own row back, so retrying it each tick
+// leaves one row, not one a minute.
 export function claimSlot(
   scheduleId: string,
   slot: string,
   slotAt: number,
   trigger: RunTrigger
 ): number | null {
+  const held = db
+    .prepare(
+      `SELECT id FROM schedule_runs WHERE schedule_id = ? AND slot = ? AND outcome = 'skipped'`
+    )
+    .get(scheduleId, brakedKey(slot)) as { id: number } | undefined;
+  if (held) {
+    try {
+      const res = db
+        .prepare(
+          `UPDATE schedule_runs SET slot = ?, outcome = 'claimed', trigger = ?, detail = NULL
+           WHERE id = ? AND slot = ?`
+        )
+        .run(slot, trigger, held.id, brakedKey(slot));
+      return res.changes === 1 ? held.id : null;
+    } catch {
+      // Someone claimed the slot itself meanwhile.
+      return null;
+    }
+  }
   const res = db
     .prepare(
       `INSERT OR IGNORE INTO schedule_runs (schedule_id, slot, slot_at, trigger, outcome)
@@ -278,6 +302,14 @@ export function lastStarted(
       )
       .get(scheduleId, beforeId) as ScheduleRun | undefined) ?? null
   );
+}
+
+// A claimed run the brakes held: skipped with why, its slot freed to retry.
+export function brakeRun(runId: number, detail: string): void {
+  db.prepare(
+    `UPDATE schedule_runs SET outcome = 'skipped', detail = ?, slot = 'braked:' || slot
+     WHERE id = ? AND outcome = 'claimed'`
+  ).run(detail.slice(0, 500), runId);
 }
 
 // Links a claimed run to the session it's starting, the moment it exists.

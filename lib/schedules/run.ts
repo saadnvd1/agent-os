@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import {
   attachSession,
+  brakeRun,
   claimSlot,
   finishRun,
   lastRunBefore,
@@ -24,6 +25,10 @@ export interface RunDeps {
   stillRunning: (schedule: Schedule, run: ScheduleRun) => Promise<boolean>;
   notify: (schedule: Schedule, why: string) => void;
 }
+
+// A start the orchestrator's brakes held: the run is skipped, and the slot
+// stays due so the next tick tries it again.
+export class Braked extends Error {}
 
 export interface RunResult {
   runId: number;
@@ -112,6 +117,15 @@ export async function runSlot(
     );
     return done("started", caughtUp, sessionId);
   } catch (error) {
+    if (error instanceof Braked) {
+      brakeRun(runId, `braked: ${error.message}`);
+      return {
+        runId,
+        outcome: "skipped",
+        detail: `braked: ${error.message}`,
+        sessionId: null,
+      };
+    }
     return fail(message(error));
   }
 }

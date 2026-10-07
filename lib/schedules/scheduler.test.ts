@@ -8,7 +8,7 @@ import {
 } from "../workspaces";
 import { createProject } from "../projects";
 import { setPaused } from "../orchestrator/pause";
-import { runSlot, type RunDeps } from "./run";
+import { Braked, runSlot, type RunDeps } from "./run";
 import { dueSlot, tick } from "./scheduler";
 import {
   createSchedule,
@@ -233,6 +233,75 @@ describe("overlap", () => {
     expect(r?.outcome).toBe("started");
     expect(mine(schedule, started)).toHaveLength(2);
     expect(listRuns(schedule.id)[0].slot).toMatch(/^manual:/);
+  });
+});
+
+describe("brakes", () => {
+  it("a braked run is skipped with the reason, and retried next tick in the same row", async () => {
+    const { schedule } = seed("0 9 * * *");
+    const { deps, started } = fakeDeps();
+    const real = deps.start;
+    let held = true;
+    deps.start = async (s, on) => {
+      if (held) throw new Braked("2 sessions are running, at the limit of 2");
+      return real(s, on);
+    };
+    // 9:00 CDT, then three more ticks while braked.
+    for (const t of ["14:00:01", "14:01:01", "14:02:01"])
+      await tick(deps, at(`2026-10-07T${t}Z`));
+    expect(mine(schedule, started)).toHaveLength(0);
+    let runs = listRuns(schedule.id);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      outcome: "skipped",
+      detail: "braked: 2 sessions are running, at the limit of 2",
+      slot: "braked:2026-10-07T14:00:00.000Z",
+    });
+    // The brake lifts: the same slot runs once, in the same row.
+    held = false;
+    await tick(deps, at("2026-10-07T14:03:01Z"));
+    await tick(deps, at("2026-10-07T14:04:01Z"));
+    expect(mine(schedule, started)).toHaveLength(1);
+    runs = listRuns(schedule.id);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      outcome: "started",
+      slot: "2026-10-07T14:00:00.000Z",
+    });
+  });
+
+  it("a braked slot isn't owed once a newer one is due", async () => {
+    const { schedule } = seed("0 * * * *");
+    const { deps, started } = fakeDeps();
+    const real = deps.start;
+    let held = true;
+    deps.start = async (s, on) => {
+      if (held) throw new Braked("starts limit");
+      return real(s, on);
+    };
+    await tick(deps, at("2026-10-07T14:00:01Z"));
+    held = false;
+    await tick(deps, at("2026-10-07T15:00:01Z"));
+    expect(mine(schedule, started)).toHaveLength(1);
+    expect(listRuns(schedule.id).map((r) => [r.slot, r.outcome])).toEqual([
+      ["2026-10-07T15:00:00.000Z", "started"],
+      ["braked:2026-10-07T14:00:00.000Z", "skipped"],
+    ]);
+  });
+
+  it("Run now obeys them, and isn't retried", async () => {
+    const { schedule } = seed();
+    const { deps, started, notified } = fakeDeps();
+    deps.start = async () => {
+      throw new Braked("the usage window runs out before it resets");
+    };
+    const r = await runSlot(schedule, Date.now(), "manual", deps);
+    expect(r).toMatchObject({
+      outcome: "skipped",
+      detail: "braked: the usage window runs out before it resets",
+    });
+    expect(mine(schedule, started)).toHaveLength(0);
+    expect(notified).toEqual([]);
   });
 });
 
