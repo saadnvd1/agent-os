@@ -147,7 +147,21 @@ function getClaudeSessionIdFromFiles(projectPath: string): string | null {
   }
 }
 
+// It rarely changes, and finding it reads a directory: once a minute is plenty.
+const claudeIds = new Map<string, { id: string | null; at: number }>();
+const CLAUDE_ID_MS = 60000;
+
 async function getClaudeSessionId(sessionName: string): Promise<string | null> {
+  const cached = claudeIds.get(sessionName);
+  if (cached && Date.now() - cached.at < CLAUDE_ID_MS) return cached.id;
+  const id = await findClaudeSessionId(sessionName);
+  claudeIds.set(sessionName, { id, at: Date.now() });
+  return id;
+}
+
+async function findClaudeSessionId(
+  sessionName: string
+): Promise<string | null> {
   const envId = await getClaudeSessionIdFromEnv(sessionName);
   if (envId) {
     return envId;
@@ -339,14 +353,15 @@ export function collectStatuses(): Promise<StatusSnapshot> {
 let lastSignature = "";
 
 /**
- * Whether a terminal may have changed since the last call: output, a title
- * or a program changed, or one still looked busy (it goes quiet with no
- * output). One list-sessions per machine, cached for two seconds.
+ * Whether a terminal may have changed since the last call: "changed" when
+ * output, a title or a program did, "busy" when one only still looked busy
+ * (its cooldown ends with no output to say so). One list-sessions per
+ * machine, cached for two seconds.
  */
-export async function terminalsChanged(): Promise<boolean> {
+export async function terminalsChanged(): Promise<"changed" | "busy" | null> {
   await statusDetector.refreshCache();
   const signature = statusDetector.signature();
   const changed = signature !== lastSignature;
   lastSignature = signature;
-  return changed || heuristicBusy;
+  return changed ? "changed" : heuristicBusy ? "busy" : null;
 }

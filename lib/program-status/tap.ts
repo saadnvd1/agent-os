@@ -34,6 +34,7 @@ const SCAN_MS = 3000;
 const MAX_HEADER = 256;
 // The feature-detection reply is typed into the pane: at most this often.
 const REPLY_MS = 1000;
+const REPORTS_PER_SECOND = 50;
 
 interface Tap {
   socket: net.Socket;
@@ -85,11 +86,35 @@ async function handle(name: string, event: OscEvent): Promise<void> {
   if (changed) notifyStatusChanged();
 }
 
-function accept(socket: net.Socket): void {
+// What one pane has said but isn't applied yet: the latest report per
+// record id (and one prompt, one query), so a pane printing reports in a
+// loop costs at most this many tmux calls and writes at a time.
+function eventKey(event: OscEvent): string {
+  return event.type === "report" ? `r:${event.report.id}` : event.type;
+}
+
+// Exported for tests.
+export function acceptTapConnection(socket: net.Socket): void {
   let name: string | null = null;
   let header = "";
-  // Reports from one pane are applied in order.
-  let queue = Promise.resolve();
+  // Reports from one pane are applied in order, coalesced while busy, and
+  // past REPORTS_PER_SECOND the rest of that second's are dropped.
+  let pending = new Map<string, OscEvent>();
+  let draining = false;
+  let windowStart = 0;
+  let inWindow = 0;
+  const drain = async (paneName: string) => {
+    draining = true;
+    while (pending.size > 0) {
+      const batch = [...pending.values()];
+      pending = new Map();
+      for (const event of batch)
+        await handle(paneName, event).catch((err) =>
+          console.error("[osc7501]", err?.message ?? err)
+        );
+    }
+    draining = false;
+  };
   socket.setEncoding("latin1");
   socket.on("error", () => socket.destroy());
   socket.on("data", (chunk: string) => {
@@ -112,11 +137,20 @@ function accept(socket: net.Socket): void {
     }
     const tap = taps.get(name);
     if (!tap || tap.socket !== socket) return void socket.destroy();
-    const paneName = name;
-    for (const event of tap.scanner.push(data))
-      queue = queue
-        .then(() => handle(paneName, event))
-        .catch((err) => console.error("[osc7501]", err?.message ?? err));
+    for (const event of tap.scanner.push(data)) {
+      const now = Date.now();
+      if (now - windowStart >= 1000) {
+        windowStart = now;
+        inWindow = 0;
+      }
+      if (++inWindow > REPORTS_PER_SECOND) continue;
+      // A newer report for the same record replaces the queued one, at its
+      // new place in line.
+      const key = eventKey(event);
+      pending.delete(key);
+      pending.set(key, event);
+    }
+    if (!draining && pending.size > 0) void drain(name);
   });
   socket.on("close", () => {
     if (name && taps.get(name)?.socket === socket) taps.delete(name);
@@ -176,6 +210,10 @@ export function startProgramStatusTap(port: number): {
         if (!owned.has(name)) continue;
         // After a restart, the old pipes write to a socket nobody reads.
         if (piped && !(first && !taps.has(name))) continue;
+        // And whatever it said while nobody read it is lost: a saved
+        // working or blocked may be stale, so the screen decides until it
+        // reports again. Done and error stand.
+        if (first && dropProgramTransient(name)) notifyStatusChanged();
         await tmux(["pipe-pane", "-O", "-t", `=${name}:`, command(name)]).catch(
           () => {}
         );
@@ -197,7 +235,7 @@ export function startProgramStatusTap(port: number): {
   fs.mkdirSync(path.dirname(socketPath), { recursive: true, mode: 0o700 });
   fs.chmodSync(path.dirname(socketPath), 0o700);
   fs.rmSync(socketPath, { force: true });
-  const server = net.createServer(accept);
+  const server = net.createServer(acceptTapConnection);
   server.on("error", (err) =>
     console.error("[osc7501] socket failed:", err.message)
   );

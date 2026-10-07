@@ -25,12 +25,18 @@ export function useStatusStream(): boolean {
 
     const connect = () => {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      ws = new WebSocket(`${protocol}//${window.location.host}/ws/status`);
-      ws.onopen = () => {
+      const sock = new WebSocket(
+        `${protocol}//${window.location.host}/ws/status`
+      );
+      ws = sock;
+      // A socket that's been replaced says nothing more.
+      sock.onopen = () => {
+        if (ws !== sock) return;
         backoff = 1000;
         setConnected(true);
       };
-      ws.onmessage = (event) => {
+      sock.onmessage = (event) => {
+        if (ws !== sock) return;
         try {
           const m = JSON.parse(event.data) as StatusMessage;
           if (m.type === "statuses")
@@ -39,7 +45,8 @@ export function useStatusStream(): boolean {
           // A message this build doesn't understand.
         }
       };
-      ws.onclose = () => {
+      sock.onclose = () => {
+        if (ws !== sock) return;
         setConnected(false);
         if (closed) return;
         retry = setTimeout(connect, backoff);
@@ -57,6 +64,7 @@ export function useStatusStream(): boolean {
       ) {
         clearTimeout(retry);
         backoff = 1000;
+        ws.close();
         connect();
       }
     };

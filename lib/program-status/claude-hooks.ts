@@ -41,16 +41,28 @@ export function claudeStatusSettings(hook = HOOK) {
   };
 }
 
+// Running Claude sessions execute the hook and new ones read the settings at
+// any moment, so a file is replaced whole (rename) and only when it changed.
+function writeAtomic(dest: string, data: Buffer, mode = 0o644): void {
+  try {
+    if (fs.readFileSync(dest).equals(data)) return;
+  } catch {
+    // Not there yet.
+  }
+  const tmp = `${dest}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, data, { mode });
+  fs.renameSync(tmp, dest);
+}
+
 // Copied rather than pointed at, so a settings file every AgentOS on this
 // machine writes the same way never names a checkout that's gone.
 export function installClaudeStatusHooks(): void {
   try {
     fs.mkdirSync(path.dirname(HOOK), { recursive: true });
-    fs.copyFileSync(SOURCE, HOOK);
-    fs.chmodSync(HOOK, 0o755);
-    fs.writeFileSync(
+    writeAtomic(HOOK, fs.readFileSync(SOURCE), 0o755);
+    writeAtomic(
       SETTINGS,
-      JSON.stringify(claudeStatusSettings(), null, 2) + "\n"
+      Buffer.from(JSON.stringify(claudeStatusSettings(), null, 2) + "\n")
     );
   } catch (err) {
     console.error("[osc7501] could not install the Claude hooks:", err);

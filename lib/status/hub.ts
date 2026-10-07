@@ -8,12 +8,13 @@ import type { StatusSnapshot } from "./collect";
 
 type Subscriber = (snapshot: string) => void;
 type Collector = () => Promise<StatusSnapshot>;
+type TerminalCheck = () => Promise<"changed" | "busy" | null>;
 
 interface Hub {
   subscribers: Set<Subscriber>;
   collector: Collector | null;
   // Says whether terminals changed since it was last asked.
-  changed: (() => Promise<boolean>) | null;
+  changed: TerminalCheck | null;
   last: string | null;
   lastAt: number;
   running: boolean;
@@ -41,12 +42,15 @@ const TICK_MS = 1000;
 // Even with no sign of change, look again this often (a seen session, a
 // task, an orchestrator's asks).
 const FULL_MS = 15000;
+// A terminal that only still looks busy is looked at again this often (the
+// screen-reading cooldown is 2s); new output is looked at on the next tick.
+const BUSY_MS = 3000;
 // Changes landing together (a tool call's pre and post hooks) go out once.
 const COALESCE_MS = 50;
 
 export function setStatusSource(
   collector: Collector,
-  changed: () => Promise<boolean>
+  changed: TerminalCheck
 ): void {
   hub.collector = collector;
   hub.changed = changed;
@@ -91,8 +95,14 @@ export function notifyStatusChanged(): void {
 async function tick(): Promise<void> {
   if (hub.running) return;
   try {
-    const due = Date.now() - hub.lastAt >= FULL_MS;
-    if (due || (await hub.changed?.())) await push();
+    const since = Date.now() - hub.lastAt;
+    const terminals = await hub.changed?.();
+    if (
+      since >= FULL_MS ||
+      terminals === "changed" ||
+      (terminals === "busy" && since >= BUSY_MS)
+    )
+      await push();
   } catch (err) {
     console.error("[status] tick failed:", err);
   }

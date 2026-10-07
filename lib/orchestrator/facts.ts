@@ -122,26 +122,22 @@ export async function statusOf(s: Session): Promise<{
   }
   if (!statusDetector.sessionExists(s.tmux_name))
     return { status: "dead", activity: null, needsInput: false };
-  // A program's own report wins over the screen. Its message is untrusted
-  // text and never reaches the orchestrator: only the state does.
-  const program = programSummary(s.tmux_name);
-  if (program) {
-    const status: FactStatus =
-      program.state === "working"
-        ? "running"
-        : program.state === "blocked" || program.state === "error"
-          ? "waiting"
-          : "idle";
-    const info = sessionRowInfo(status, statusDetector.titleFor(s.tmux_name));
-    return {
-      status,
-      activity: info.subtitle,
-      needsInput: program.state === "blocked",
-    };
-  }
-  const raw = await statusDetector.getStatus(s.tmux_name);
+  const screen = await statusDetector.getStatus(s.tmux_name);
+  // A program's own report (OSC 7501) is text it chose, so here it can only
+  // make things more cautious: working or blocked count, but a reported done
+  // never turns a busy screen idle for planDone or `done --all-idle`. Its
+  // message never reaches the orchestrator.
+  const program = programSummary(s.tmux_name)?.state;
+  const raw =
+    screen === "running" || program === "working"
+      ? "running"
+      : program === "blocked"
+        ? "waiting"
+        : screen;
   const status: FactStatus =
-    raw === "waiting" && !needsYou({ ...s, view: "terminal" }, null)
+    raw === "waiting" &&
+    program !== "blocked" &&
+    !needsYou({ ...s, view: "terminal" }, null)
       ? "idle"
       : raw;
   const info = sessionRowInfo(status, statusDetector.titleFor(s.tmux_name));

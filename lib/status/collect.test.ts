@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "@/lib/db";
-import { applyProgramReport, programSummary } from "@/lib/program-status/store";
+import {
+  applyProgramReport,
+  programSummary,
+  reloadProgramStatus,
+} from "@/lib/program-status/store";
 import { collectStatuses } from "./collect";
 
 const SID = "0b5f4c1e-1111-4222-8333-944445555666";
@@ -31,6 +35,7 @@ beforeEach(() => {
   screen.mockClear();
   const db = getDb();
   db.prepare(`DELETE FROM program_status`).run();
+  reloadProgramStatus();
   db.prepare(`DELETE FROM sessions WHERE id = ?`).run(SID);
   db.prepare(
     `INSERT INTO sessions (id, name, tmux_name, working_directory, updated_at, last_seen_at)
@@ -79,11 +84,24 @@ describe("collectStatuses", () => {
     expect(screen).toHaveBeenCalled();
   });
 
-  it("keeps reports across a restart (they're in the database)", () => {
-    applyProgramReport(NAME, { state: "error", id: "" });
-    const rows = getDb()
-      .prepare(`SELECT records FROM program_status WHERE session_name = ?`)
-      .all(NAME) as { records: string }[];
-    expect(JSON.parse(rows[0].records)[""].state).toBe("error");
+  it("keeps reports across a restart (they're in the database)", async () => {
+    applyProgramReport(NAME, { state: "error", id: "", msg: "exit 1" });
+    reloadProgramStatus();
+    expect(programSummary(NAME)).toMatchObject({
+      state: "error",
+      msg: "exit 1",
+    });
+    const { statuses } = await collectStatuses();
+    expect(statuses[SID]).toMatchObject({ status: "error", need: "failed" });
+  });
+
+  it("starts a row it can't read over, empty", () => {
+    getDb()
+      .prepare(
+        `INSERT INTO program_status (session_name, records) VALUES (?, ?)`
+      )
+      .run(NAME, "{not json");
+    reloadProgramStatus();
+    expect(programSummary(NAME)).toBeNull();
   });
 });

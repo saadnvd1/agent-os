@@ -17,8 +17,9 @@ field() {
   printf '%s' "$input" | awk -v k="\"$1\"" '{
     i = index($0, k); if (!i) exit
     s = substr($0, i + length(k))
-    if (match(s, /^ *: *"[^"]*"/)) {
+    if (match(s, /^ *: *"([^"\\]|\\.)*"/)) {
       v = substr(s, RSTART, RLENGTH); sub(/^ *: *"/, "", v); sub(/"$/, "", v)
+      gsub(/\\"/, "\"", v)
       print v
     }
     exit
@@ -32,10 +33,18 @@ report() {
 }
 
 blocked() {
-  msg=$(printf '%s' "$2" | cut -c 1-200 | base64 | tr -d '\n')
+  # One line of at most 200 characters (bytes, for some awks: iconv then
+  # drops a character that was cut in half). No control characters, or the
+  # terminal refuses the whole report.
+  msg=$(printf '%s' "$2" | tr -d '\000-\037\177' |
+    awk '{ printf "%s", substr($0, 1, 200) }' |
+    iconv -c -f UTF-8 -t UTF-8 2>/dev/null | base64 | tr -d '\n')
   report "state=blocked:kind=$1${msg:+:msg=$msg}"
 }
 
+# All of it is read before any of it runs: a file replaced mid-run can't
+# leave a half-parsed script exiting 2, which Claude takes as "block".
+main() {
 case "$event" in
   SessionStart) report "state=idle" ;;
   UserPromptSubmit | PostToolUse) report "state=working" ;;
@@ -66,4 +75,6 @@ case "$event" in
   Stop) report "state=done" ;;
   SessionEnd) report "state=clear" ;;
 esac
+}
+main
 exit 0

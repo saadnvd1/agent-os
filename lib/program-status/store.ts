@@ -53,8 +53,19 @@ const same = (a: ProgramSummary | null, b: ProgramSummary | null) =>
 // Stores the records and says whether the session's status changed. A new
 // working, blocked, done or error state moves the session's updated_at, the
 // same as a terminal starting to wait does, so it sorts up and reads unread.
+// Records as stored, without the times that change on every report.
+const shape = (records: Records) =>
+  JSON.stringify(Object.values(records).map(({ at: _at, ...r }) => r));
+
 function commit(sessionName: string, next: Records): boolean {
   const before = programSummary(sessionName);
+  const current = store.records.get(sessionName) ?? {};
+  // The same report again (a hook firing on every tool call): keep its time
+  // in memory, and touch nothing else.
+  if (Object.keys(next).length > 0 && shape(next) === shape(current)) {
+    store.records.set(sessionName, next);
+    return false;
+  }
   const db = getDb();
   if (Object.keys(next).length === 0) {
     store.records.delete(sessionName);
@@ -114,4 +125,10 @@ export function programSessions(): string[] {
 export function forgetProgramStatus(sessionName: string): void {
   load();
   if (store.records.has(sessionName)) commit(sessionName, {});
+}
+
+/** Forget what's in memory; the next read loads the table again. */
+export function reloadProgramStatus(): void {
+  store.records.clear();
+  store.loaded = false;
 }
