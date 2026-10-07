@@ -7,6 +7,7 @@ import type {
   ChatAccess,
   ChatCommand,
   ChatImage,
+  ChatItem,
   ChatModel,
   DriverEvent,
   UndoPreview,
@@ -44,6 +45,9 @@ export interface UndoResult extends UndoPreview {
 export interface ChatConversation {
   // Returns the provider's id for the message, to undo back to it.
   send(text: string, images?: ChatImage[]): string | undefined;
+  // A command the driver answers itself, without starting a turn (/mcp):
+  // the items to show, or null to send the text as a message.
+  runLocal?(text: string): Promise<ChatItem[]> | null;
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
   setAccess(access: ChatAccess): Promise<void>;

@@ -89,6 +89,8 @@ export class ChatHost {
             `UPDATE sessions SET claude_session_id = ?, chat_resume_at = NULL WHERE id = ?`
           ).run(e.id, this.session.id);
         } else if (e.type === "state") {
+          // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
+          if (e.state === "idle") this.settleStreaming();
           // A stopped turn can still settle an approval after it ended.
           if (e.state !== "running" || this.state !== "idle")
             this.setState(e.state);
@@ -104,11 +106,14 @@ export class ChatHost {
         createdAt: Date.now(),
       });
     } finally {
-      for (const item of this.streaming.values())
-        this.record(settle([item])[0]);
-      this.streaming.clear();
+      this.settleStreaming();
       this.setState("idle");
     }
+  }
+
+  private settleStreaming(): void {
+    for (const item of this.streaming.values()) this.record(settle([item])[0]);
+    this.streaming.clear();
   }
 
   async handle(cmd: WorkerCommand): Promise<void> {
@@ -116,16 +121,35 @@ export class ChatHost {
       case "send": {
         if (this.sent.has(cmd.id)) return;
         this.sent.add(cmd.id);
-        const checkpoint = this.conversation.send(cmd.text, cmd.images);
-        this.record({
+        const user = {
           id: cmd.id,
-          kind: "user",
+          kind: "user" as const,
           text: cmd.text,
           images: cmd.images,
           from: cmd.from,
-          checkpoint,
+          peer: cmd.peer,
           createdAt: Date.now(),
-        });
+        };
+        const local = cmd.images?.length
+          ? null
+          : this.conversation.runLocal?.(cmd.text);
+        if (local) {
+          // Answered on the spot: no turn starts, and one running goes on.
+          this.record(user);
+          try {
+            for (const item of await local) this.record(item);
+          } catch (error) {
+            this.record({
+              id: `error-${Date.now()}`,
+              kind: "error",
+              message: error instanceof Error ? error.message : String(error),
+              createdAt: Date.now(),
+            });
+          }
+          return;
+        }
+        const checkpoint = this.conversation.send(cmd.text, cmd.images);
+        this.record({ ...user, checkpoint });
         this.setState("running");
         db.prepare(
           `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
