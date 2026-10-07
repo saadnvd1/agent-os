@@ -1,17 +1,25 @@
 import { GlassView } from "expo-glass-effect";
 import { Image } from "expo-image";
-import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  View,
+  type TextInput as RNTextInput,
+} from "react-native";
 import { Text, TextInput } from "~/components/ui/Text";
 import { useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { ChatImage } from "@/lib/chat/events";
+import type { ChatAccess, ChatImage, FileSuggestion } from "@/lib/chat/events";
 import { offeredSuggestion } from "@/lib/chat/suggestion";
 import { Icon } from "~/components/ui/Icon";
 import type { ChatView } from "~/lib/chat/reducer";
 import { haptic } from "~/lib/haptics";
 import { font, glass, HIT, radius, space, useTheme } from "~/lib/theme";
+import { Pills, pickModel } from "./Pills";
 import { QueueList } from "./QueueList";
+import { SuggestionList, useSuggestions } from "./Suggest";
 import { useDraft } from "~/lib/chat/draft";
 import { useAttachments } from "./useAttachments";
 
@@ -23,6 +31,10 @@ interface Props {
   interrupt: () => void;
   sendNow: (id: string) => void;
   deleteQueued: (id: string) => void;
+  setModel: (m: string) => void;
+  setAccess: (a: ChatAccess) => void;
+  setPlan: (p: boolean) => void;
+  findFiles: (q: string) => Promise<FileSuggestion[]>;
 }
 
 export function Composer({
@@ -33,6 +45,10 @@ export function Composer({
   interrupt,
   sendNow,
   deleteQueued,
+  setModel,
+  setAccess,
+  setPlan,
+  findFiles,
 }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -48,6 +64,23 @@ export function Composer({
     text,
   });
   const canSend = live && (!!text.trim() || files.items.length > 0);
+  const [caret, setCaret] = useState(0);
+  const input = useRef<RNTextInput>(null);
+  // A pick rewrites the text; iOS would leave the cursor where it was.
+  const moveCaret = (at: number) => {
+    setCaret(at);
+    requestAnimationFrame(() => input.current?.setSelection(at, at));
+  };
+  const caps = view.caps;
+  const suggestions = useSuggestions({
+    text,
+    caret,
+    setText,
+    setCaret: moveCaret,
+    caps,
+    findFiles,
+    openModels: () => caps && pickModel(caps, setModel),
+  });
 
   const submit = () => {
     if (!canSend) return;
@@ -116,25 +149,15 @@ export function Composer({
           ))}
         </View>
       ) : null}
+      <SuggestionList items={suggestions} />
       <Box
         {...(glass
           ? { glassEffectStyle: "regular" as const, isInteractive: true }
           : {})}
         style={[styles.box, glass ? null : { backgroundColor: t.card }]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Attach images"
-          onPress={files.pick}
-          style={styles.side}
-        >
-          {files.busy ? (
-            <ActivityIndicator size="small" color={t.muted} />
-          ) : (
-            <Icon name="plus" size={20} color={t.muted} />
-          )}
-        </Pressable>
         <TextInput
+          ref={input}
           value={text}
           onChangeText={(v) => {
             setText(v);
@@ -150,45 +173,69 @@ export function Composer({
           placeholderTextColor={t.faint}
           multiline
           accessibilityLabel="Message"
+          onSelectionChange={(e) => setCaret(e.nativeEvent.selection.start)}
           style={[styles.input, { color: t.foreground }]}
         />
-        {running && !text.trim() && !files.items.length ? (
+        <View style={styles.toolbar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Stop"
-            onPress={() => {
-              haptic.warn();
-              interrupt();
-            }}
+            accessibilityLabel="Attach images"
+            onPress={files.pick}
             style={styles.side}
           >
-            <View style={[styles.send, { backgroundColor: t.foreground }]}>
-              <Icon name="stop.fill" size={12} color={t.background} />
-            </View>
+            {files.busy ? (
+              <ActivityIndicator size="small" color={t.muted} />
+            ) : (
+              <Icon name="plus" size={20} color={t.muted} />
+            )}
           </Pressable>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={running ? "Queue" : "Send"}
-            onPress={submit}
-            disabled={!canSend}
-            style={styles.side}
-          >
-            <View
-              style={[
-                styles.send,
-                { backgroundColor: canSend ? t.primary : t.secondary },
-              ]}
+          {caps ? (
+            <Pills
+              caps={caps}
+              setModel={setModel}
+              setAccess={setAccess}
+              setPlan={setPlan}
+            />
+          ) : null}
+          <View style={styles.spacer} />
+          {running && !text.trim() && !files.items.length ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Stop"
+              onPress={() => {
+                haptic.warn();
+                interrupt();
+              }}
+              style={styles.side}
             >
-              <Icon
-                name="arrow.up"
-                size={15}
-                color={canSend ? t.onPrimary : t.faint}
-                weight="bold"
-              />
-            </View>
-          </Pressable>
-        )}
+              <View style={[styles.send, { backgroundColor: t.foreground }]}>
+                <Icon name="stop.fill" size={12} color={t.background} />
+              </View>
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={running ? "Queue" : "Send"}
+              onPress={submit}
+              disabled={!canSend}
+              style={styles.side}
+            >
+              <View
+                style={[
+                  styles.send,
+                  { backgroundColor: canSend ? t.primary : t.secondary },
+                ]}
+              >
+                <Icon
+                  name="arrow.up"
+                  size={15}
+                  color={canSend ? t.onPrimary : t.faint}
+                  weight="bold"
+                />
+              </View>
+            </Pressable>
+          )}
+        </View>
       </Box>
     </View>
   );
@@ -223,12 +270,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  box: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    borderRadius: 22,
-    minHeight: HIT,
-  },
+  box: { borderRadius: 20, paddingHorizontal: space.xs },
+  toolbar: { flexDirection: "row", alignItems: "center", gap: 2 },
+  spacer: { flex: 1 },
   side: {
     width: HIT,
     height: HIT,
@@ -236,11 +280,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   input: {
-    flex: 1,
     fontSize: font.size.md,
+    minHeight: 40,
     maxHeight: 140,
+    paddingHorizontal: space.sm,
     paddingTop: 12,
-    paddingBottom: 12,
+    paddingBottom: 4,
   },
   send: {
     width: 30,

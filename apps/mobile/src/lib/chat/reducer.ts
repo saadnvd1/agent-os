@@ -7,12 +7,19 @@ import type {
   QueuedMessage,
 } from "@/lib/chat/events";
 
+// What the composer's pills and slash menu offer for this session.
+export type ChatCaps = Omit<
+  Extract<ChatServerMessage, { type: "capabilities" }>,
+  "type"
+>;
+
 export interface ChatView {
   loaded: boolean;
   items: ChatItem[];
   state: ChatState;
   queue: QueuedMessage[];
   suggestion: string | null;
+  caps: ChatCaps | null;
 }
 
 export const EMPTY_CHAT: ChatView = {
@@ -21,6 +28,7 @@ export const EMPTY_CHAT: ChatView = {
   state: "idle",
   queue: [],
   suggestion: null,
+  caps: null,
 };
 
 function indexOf(items: ChatItem[], id: string): number {
@@ -35,6 +43,7 @@ export function applyChatMessage(
   switch (msg.type) {
     case "snapshot":
       return {
+        ...view,
         loaded: true,
         items: msg.items,
         state: msg.state,
@@ -63,6 +72,10 @@ export function applyChatMessage(
       return { ...view, queue: msg.queue };
     case "suggestion":
       return { ...view, suggestion: msg.text };
+    case "capabilities": {
+      const { type: _type, ...caps } = msg;
+      return { ...view, caps };
+    }
     default:
       return view;
   }

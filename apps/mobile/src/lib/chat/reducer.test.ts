@@ -74,3 +74,33 @@ describe("runningTurn", () => {
     expect(runningTurn({ ...v, state: "idle" })).toBeUndefined();
   });
 });
+
+describe("capabilities", () => {
+  const caps = {
+    type: "capabilities" as const,
+    commands: [{ name: "review", description: "Review the branch" }],
+    models: [{ value: "opus", label: "Opus" }],
+    model: "opus",
+    access: "ask" as const,
+    plan: false,
+  };
+
+  it("keeps what the composer offers, and a later snapshot doesn't drop it", () => {
+    const v = applyChatMessage(snap, caps);
+    expect(v.caps).toEqual({
+      commands: caps.commands,
+      models: caps.models,
+      model: "opus",
+      access: "ask",
+      plan: false,
+    });
+    const again = applyChatMessage(v, {
+      type: "snapshot",
+      items: [],
+      state: "idle",
+      queue: [],
+      suggestion: null,
+    });
+    expect(again.caps?.model).toBe("opus");
+  });
+});

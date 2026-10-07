@@ -75,6 +75,10 @@ export function ChatScreen({
             interrupt={chat.interrupt}
             sendNow={chat.sendNow}
             deleteQueued={chat.deleteQueued}
+            setModel={chat.setModel}
+            setAccess={chat.setAccess}
+            setPlan={chat.setPlan}
+            findFiles={chat.findFiles}
           />
         </View>
       </KeyboardAvoidingView>
