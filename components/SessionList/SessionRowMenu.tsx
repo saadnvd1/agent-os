@@ -3,6 +3,7 @@
 import {
   CheckSquare,
   CircleCheck,
+  Clock,
   Copy,
   ExternalLink,
   FolderInput,
@@ -20,6 +21,7 @@ import * as DM from "@/components/ui/dropdown-menu";
 import * as CM from "@/components/ui/context-menu";
 import type { Session } from "@/lib/db";
 import { selectionActions } from "@/stores/sessionSelection";
+import { schedulesUiActions } from "@/stores/schedulesUi";
 import { useDoneAction } from "./useDoneAction";
 import { useRowContext } from "./RowContext";
 
@@ -60,6 +62,10 @@ export function SessionRowMenu({
   const others = ctx.projects.filter(
     (p) => p.id !== session.project_id && !p.is_uncategorized
   );
+  const workspaceId =
+    session.workspace_id ??
+    ctx.projects.find((p) => p.id === session.project_id)?.workspace_id ??
+    null;
 
   return (
     <>
@@ -146,6 +152,22 @@ export function SessionRowMenu({
           </SubContent>
         </Sub>
       )}
+      {workspaceId &&
+        session.role !== "orchestrator" &&
+        (!session.task_status || session.task_status === "running") && (
+          <Item
+            onClick={() =>
+              schedulesUiActions.openDraft(workspaceId, {
+                kind: "message",
+                targetSessionId: session.id,
+                name: `Check-in: ${session.name}`.slice(0, 80),
+              })
+            }
+          >
+            <Clock className={icon} />
+            Schedule check-ins
+          </Item>
+        )}
       <Item
         onClick={() =>
           selectionActions.toggle(session.id, false, ctx.orderedIds)

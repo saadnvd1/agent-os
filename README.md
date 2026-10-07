@@ -89,7 +89,8 @@ npm run dev  # http://localhost:3011
 - **Visuals in chat** - Agents preview and show charts, tables and HTML pages inline, sandboxed
 - **Live status** - Every session moves between Needs you, Working and Done the moment it changes, including terminal programs that report their own state (OSC 7501)
 - **Tasks that end in a PR** - Hand off work to its own worktree, stack tasks from a board, and let a workspace orchestrator review and merge
-- **Schedules** - Start tasks, chats or orchestrator messages on a timer, with run history
+- **Schedules** - Start tasks, chats or orchestrator messages on a timer, or check in on any session, with run history
+- **Phone notifications** - A failed schedule run, or an agent's `aos notify`, reaches your phone through Telegram or a command of your own
 - **Voice-to-text** - Dictate prompts to your coding sessions hands-free
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
 - **tmux by default** - Every session lives in tmux, so closing the browser never kills your work
@@ -272,13 +273,23 @@ a project and a prompt, and starts one of:
 - **Orchestrator**: the prompt, posted to the workspace's orchestrator as a
   message from "Schedule <name>", marked as a scheduled prompt so it never
   counts as an approval.
+- **Message**: the prompt, sent to a session you pick the way `aos send`
+  does, marked the same way. A chat whose agent has exited (idle chats stop
+  after 30 minutes) is started again to take it. The run records `delivered`,
+  `queued` or why it failed. **Schedule check-ins** in a session's **⋯** menu
+  fills one in. The session is stored by id, so renaming it changes nothing;
+  an archived or deleted one fails the run. The orchestrator isn't a target
+  (it has its own kind). A schedule an agent made with `aos schedule add`
+  stays in that agent's workspace and reaches the session labelled as that
+  agent's request, not yours.
 
 The server checks once a minute and claims each run in SQLite before starting
 it, so a time never runs twice. If AgentOS was off when runs were due, it
 runs only the most recent one when it comes back, marked **caught up**. A run
 is **skipped** while the schedule's previous task or session is still working,
 and while the workspace's orchestrator is paused. A run that fails to start is
-recorded with why and noted in the orchestrator's chat. Every run stays in the
+recorded with why, noted in the orchestrator's chat and sent to your phone
+(see below), once per failing streak: not again until a run starts. Every run stays in the
 schedule's history with a link to what it started. **Run now** runs one
 immediately, even while the last run is still working (Pause still holds it).
 Task and session runs go through the orchestrator's brakes, like its own
@@ -287,12 +298,34 @@ next minute until the brake lifts or a newer run is due (Run now obeys them
 too, once). A schedule whose project has moved to another workspace fails
 until it's edited. Removing a schedule keeps its history.
 
-Task and session schedules run at most hourly, and a task schedule waits
+Task and session schedules run at most hourly, message schedules at most
+every 10 minutes and skip a run (`still working`) while their session is
+still busy, mid-turn or holding a queued message. A task schedule waits
 while any task it started is unfinished (working, waiting on you, in review
 or failing checks), so it can't stack up pull requests. Only one server
 process runs schedules (it holds a lease in the database); a dev server runs
 none unless `AGENTOS_SCHEDULES=on`, and `AGENTOS_SCHEDULES=off` stops them in
 production.
+
+### Phone notifications
+
+Two things reach your phone: a schedule run that failed, and whatever an
+agent sends on purpose with `aos notify "<text>"` (the orchestrator's morning
+report, a real milestone). Status changes don't; that's the in-app Needs-you
+list. Each source sends at most one a minute: anything more inside the minute
+waits and goes out as one message (kept in the database, so a restart
+doesn't lose it; past 20 waiting, more are dropped), and the same text twice
+goes once.
+
+Set it up in **Phone notifications** (⌘K, or the line at the bottom of
+Schedules), one of:
+
+- **Command**: `AGENTOS_NOTIFY_CMD` in the server's environment, a shell
+  command that gets the message on stdin. It wins when set. For example, a
+  Telegram sender on another machine:
+  `AGENTOS_NOTIFY_CMD='ssh -o BatchMode=yes me@box "NOTIFY_SOURCE=agentos ~/bin/notify"'`.
+- **Telegram**: a bot token and your chat id. The token is kept in the
+  database and never shown again, returned by the API or logged.
 
 ## Agent network
 
@@ -315,6 +348,8 @@ aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
 aos schedules                     # every schedule, its next run and last outcome
 aos schedule run <name>           # run a schedule now
+aos schedule add --session <s> --every 30m "prompt"  # check in on a session
+aos notify "text"                 # push a message to your phone
 aos done <session>                # finished: merge through the gates, archive
 aos done --all-idle               # the same for every idle session around you
 aos docs [query]                  # LumifyHub pages, when the workspace is linked
