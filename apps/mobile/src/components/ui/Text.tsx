@@ -9,6 +9,7 @@ import {
   type TextProps,
   type TextStyle,
 } from "react-native";
+import { UITextView as UIText } from "@bsky.app/react-native-uitextview";
 import { font } from "~/lib/theme";
 
 const SANS: Record<string, string> = {
@@ -42,7 +43,7 @@ export function withFont(style: TextProps["style"]): TextProps["style"] {
     return style;
   const mono = flat.fontFamily === font.mono;
   const { fontWeight, fontStyle, ...rest } = flat;
-  // Only Geist Mono's regular italic is loaded: it's what code comments use.
+  // Only the regular italics are loaded: emphasis and code comments use them.
   if (mono && fontStyle === "italic")
     return { ...rest, fontFamily: "GeistMono_400Regular_Italic" };
   return {
@@ -64,3 +65,10 @@ export const TextInput = forwardRef<RNTextInput, TextInputProps>(
     return <RNTextInput ref={ref} style={withFont(style)} {...rest} />;
   }
 );
+
+// Native UITextView text on iOS: a selection can start and end anywhere,
+// across paragraphs, with the system Copy, Look Up, Translate and Share.
+// Spans nested in it must be SelectableText too.
+export function SelectableText({ style, ...rest }: TextProps) {
+  return <UIText selectable uiTextView style={withFont(style)} {...rest} />;
+}

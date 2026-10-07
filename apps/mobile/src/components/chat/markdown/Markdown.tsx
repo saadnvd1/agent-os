@@ -1,13 +1,17 @@
-import type { List, RootContent, Table } from "mdast";
-import { memo } from "react";
+import type { RootContent, Table } from "mdast";
+import { memo, useMemo } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "~/components/ui/Text";
-import { font, space, useTheme, type Palette } from "~/lib/theme";
+import { font, radius, space, useTheme, type Palette } from "~/lib/theme";
+import { chunk, imageUrls, type Chunk } from "./chunks";
 import { CodeBlock } from "./CodeBlock";
-import { htmlBlockText } from "./html";
+import { ImageRow } from "./ImageRow";
 import { Inline } from "./Inline";
 import { parseMarkdown } from "./parse";
+import { Prose } from "./Prose";
 
+// A reply: prose as selectable native text, code, tables, quotes and
+// images as their own views. Only the last chunk can still be streaming.
 export const Markdown = memo(function Markdown({
   text,
   streaming,
@@ -16,106 +20,69 @@ export const Markdown = memo(function Markdown({
   streaming?: boolean;
 }) {
   const t = useTheme();
-  const tree = parseMarkdown(text);
+  const { chunks, images } = useMemo(() => {
+    const tree = parseMarkdown(text);
+    return { chunks: chunk(tree.children), images: imageUrls(tree.children) };
+  }, [text]);
   return (
     <View style={styles.root}>
-      {tree.children.map((n, i) =>
-        block(n, i, t, streaming && i === tree.children.length - 1)
-      )}
+      {chunks.map((c, i) => (
+        <ChunkView
+          key={c.key}
+          chunk={c}
+          t={t}
+          images={images}
+          streaming={streaming && i === chunks.length - 1}
+        />
+      ))}
     </View>
   );
 });
 
-const HEADING = [26, 21, 18, 16, 15, 15];
+function ChunkView({
+  chunk: c,
+  t,
+  images,
+  streaming,
+}: {
+  chunk: Chunk;
+  t: Palette;
+  images: string[];
+  streaming?: boolean;
+}) {
+  if (c.kind === "prose") return <Prose nodes={c.nodes} t={t} />;
+  if (c.kind === "images")
+    return <ImageRow images={c.images.map((img) => img.url)} all={images} />;
+  return <Block node={c.node} t={t} streaming={streaming} />;
+}
 
-function block(
-  n: RootContent,
-  key: number,
-  t: Palette,
-  streaming?: boolean
-): React.ReactNode {
-  const body = [styles.p, { color: t.foreground }];
-  switch (n.type) {
-    case "paragraph":
-      return (
-        <Text key={key} selectable style={body}>
-          <Inline nodes={n.children} t={t} />
-        </Text>
-      );
-    case "heading":
-      return (
-        <Text
-          key={key}
-          style={[
-            body,
-            {
-              fontSize: HEADING[n.depth - 1],
-              fontWeight: "700",
-              marginTop: space.xs,
-            },
-          ]}
-        >
-          <Inline nodes={n.children} t={t} />
-        </Text>
-      );
+function Block({
+  node,
+  t,
+  streaming,
+}: {
+  node: RootContent;
+  t: Palette;
+  streaming?: boolean;
+}) {
+  switch (node.type) {
     case "code":
       return (
-        <CodeBlock
-          key={key}
-          code={n.value}
-          lang={n.lang}
-          streaming={streaming}
-        />
-      );
-    case "blockquote":
-      return (
-        <View key={key} style={[styles.quote, { borderLeftColor: t.border }]}>
-          {n.children.map((c, i) => block(c, i, t))}
-        </View>
-      );
-    case "list":
-      return <ListBlock key={key} list={n} t={t} />;
-    case "thematicBreak":
-      return (
-        <View key={key} style={[styles.rule, { backgroundColor: t.border }]} />
+        <CodeBlock code={node.value} lang={node.lang} streaming={streaming} />
       );
     case "table":
-      return <TableBlock key={key} table={n} t={t} />;
-    case "html": {
-      const text = htmlBlockText(n.value);
-      return text ? (
-        <Text key={key} selectable style={body}>
-          {text}
-        </Text>
-      ) : null;
-    }
+      return <TableBlock table={node} t={t} />;
+    case "blockquote":
+      return (
+        <View style={[styles.quote, { borderLeftColor: t.border }]}>
+          {chunk(node.children).map((c) => (
+            <ChunkView key={c.key} chunk={c} t={t} images={[]} />
+          ))}
+        </View>
+      );
     default:
       return null;
   }
-}
-
-function ListBlock({ list, t }: { list: List; t: Palette }) {
-  const start = list.start ?? 1;
-  return (
-    <View style={styles.list}>
-      {list.children.map((item, i) => (
-        <View key={i} style={styles.item}>
-          <Text style={[styles.p, styles.marker, { color: t.muted }]}>
-            {item.checked != null
-              ? item.checked
-                ? "☑"
-                : "☐"
-              : list.ordered
-                ? `${start + i}.`
-                : "•"}
-          </Text>
-          <View style={styles.itemBody}>
-            {item.children.map((c, n) => block(c, n, t))}
-          </View>
-        </View>
-      ))}
-    </View>
-  );
 }
 
 function TableBlock({ table, t }: { table: Table; t: Palette }) {
@@ -125,11 +92,12 @@ function TableBlock({ table, t }: { table: Table; t: Palette }) {
         {table.children.map((row, r) => (
           <View
             key={r}
-            style={[styles.tr, r === 0 && { backgroundColor: t.codeBg }]}
+            style={[styles.tr, r === 0 && { backgroundColor: t.codeWash }]}
           >
             {row.children.map((cell, c) => (
               <Text
                 key={c}
+                selectable
                 style={[
                   styles.td,
                   {
@@ -150,17 +118,11 @@ function TableBlock({ table, t }: { table: Table; t: Palette }) {
 }
 
 const styles = StyleSheet.create({
-  root: { gap: space.sm },
-  p: { fontSize: font.size.md, lineHeight: 22 },
+  root: { gap: space.md },
   quote: { borderLeftWidth: 3, paddingLeft: space.md, gap: space.sm },
-  rule: { height: StyleSheet.hairlineWidth, marginVertical: space.sm },
-  list: { gap: space.xs },
-  item: { flexDirection: "row", gap: space.sm },
-  marker: { minWidth: 16, textAlign: "right" },
-  itemBody: { flex: 1, gap: space.xs },
   table: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: radius.sm,
     overflow: "hidden",
   },
   tr: { flexDirection: "row" },

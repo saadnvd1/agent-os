@@ -1,18 +1,23 @@
 import * as Linking from "expo-linking";
 import type { PhrasingContent } from "mdast";
 import { type TextStyle } from "react-native";
-import { Text } from "~/components/ui/Text";
+import { useInlineText } from "./InlineText";
 import { font, type Palette } from "~/lib/theme";
 import { htmlText } from "./html";
+import { openImage } from "~/lib/viewer";
 
 export function Inline({ nodes, t }: { nodes: PhrasingContent[]; t: Palette }) {
-  return <>{nodes.map((n, i) => renderInline(n, i, t))}</>;
+  const Text = useInlineText();
+  return <>{nodes.map((n, i) => renderInline(n, i, t, Text))}</>;
 }
+
+type TextKind = ReturnType<typeof useInlineText>;
 
 function renderInline(
   n: PhrasingContent,
   key: number,
-  t: Palette
+  t: Palette,
+  Text: TextKind
 ): React.ReactNode {
   const kids = (style: TextStyle, children: PhrasingContent[]) => (
     <Text key={key} style={style}>
@@ -20,8 +25,10 @@ function renderInline(
     </Text>
   );
   switch (n.type) {
+    // Every string sits in its own Text: the selectable native view only
+    // lays out strings that are Text children.
     case "text":
-      return n.value;
+      return <Text key={key}>{n.value}</Text>;
     case "strong":
       return kids({ fontWeight: "700" }, n.children);
     case "emphasis":
@@ -35,7 +42,7 @@ function renderInline(
           style={{
             fontFamily: font.mono,
             fontSize: font.size.sm,
-            backgroundColor: t.codeBg,
+            backgroundColor: t.codeWash,
             color: t.foreground,
           }}
         >
@@ -53,11 +60,19 @@ function renderInline(
         </Text>
       );
     case "break":
-      return "\n";
+      return <Text key={key}>{"\n"}</Text>;
     case "image":
-      return `[${n.alt || "image"}]`;
+      return (
+        <Text
+          key={key}
+          style={{ color: t.primary }}
+          onPress={() => openImage(n.url)}
+        >
+          {`[${n.alt || "image"}]`}
+        </Text>
+      );
     case "html":
-      return htmlText(n.value);
+      return <Text key={key}>{htmlText(n.value)}</Text>;
     default:
       return "children" in n ? (
         <Inline key={key} nodes={n.children as PhrasingContent[]} t={t} />

@@ -16,10 +16,13 @@
         "tinted": "./assets/icon-tinted.png"
       },
       "infoPlist": {
-        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true },
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
         "NSLocalNetworkUsageDescription": "AgentOS connects to the machines you add, on your network or tailnet.",
         "NSPhotoLibraryUsageDescription": "Attach photos to a message for your agent.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Take a photo to send to your agent."
       }
     },
     "android": {
@@ -53,11 +56,17 @@
       ],
       [
         "expo-image-picker",
-        { "cameraPermission": false, "microphonePermission": false }
+        {
+          "cameraPermission": "Take a photo to send to your agent.",
+          "microphonePermission": false
+        }
       ],
       "expo-image",
-      "expo-font"
+      "expo-font",
+      "expo-sharing"
     ],
-    "experiments": { "typedRoutes": true }
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

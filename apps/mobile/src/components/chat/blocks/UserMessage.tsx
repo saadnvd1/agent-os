@@ -1,14 +1,20 @@
-import { Image } from "expo-image";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Text } from "~/components/ui/Text";
 import type { ChatItem } from "@/lib/chat/events";
 import { font, radius, space, useTheme } from "~/lib/theme";
+import { openImages } from "~/lib/viewer";
+import { InlineImage } from "../markdown/ImageRow";
+import { useMessageActions } from "./MessageActions";
 
 type UserItem = Extract<ChatItem, { kind: "user" }>;
 
 export function UserMessage({ item }: { item: UserItem }) {
   const t = useTheme();
   const text = item.peer?.body ?? item.text;
+  const { menu } = useMessageActions(text);
+  const images = (item.images ?? []).map(
+    (img) => `data:${img.mediaType};base64,${img.data}`
+  );
   return (
     <View style={styles.wrap}>
       {item.from || item.peer ? (
@@ -18,22 +24,25 @@ export function UserMessage({ item }: { item: UserItem }) {
       ) : null}
       {item.images?.length ? (
         <View style={styles.images}>
-          {item.images.map((img, i) => (
-            <Image
+          {images.map((uri, i) => (
+            <InlineImage
               key={i}
-              source={{ uri: `data:${img.mediaType};base64,${img.data}` }}
-              style={styles.image}
-              contentFit="cover"
+              uri={uri}
+              size={120}
+              onPress={() => openImages(images, i)}
             />
           ))}
         </View>
       ) : null}
       {text ? (
-        <View style={[styles.bubble, { backgroundColor: t.bubble }]}>
-          <Text selectable style={[styles.text, { color: t.foreground }]}>
-            {text}
-          </Text>
-        </View>
+        <Pressable
+          onLongPress={menu}
+          delayLongPress={350}
+          accessibilityHint="Touch and hold for Copy, Quote and Share"
+          style={[styles.bubble, { backgroundColor: t.bubble }]}
+        >
+          <Text style={[styles.text, { color: t.foreground }]}>{text}</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -55,5 +64,4 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "flex-end",
   },
-  image: { width: 120, height: 120, borderRadius: radius.md },
 });

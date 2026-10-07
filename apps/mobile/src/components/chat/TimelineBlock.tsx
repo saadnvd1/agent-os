@@ -6,6 +6,7 @@ import type { TimelineBlock as Block } from "@/lib/chat/group";
 import { font, radius, space, useTheme } from "~/lib/theme";
 import { Approval } from "./blocks/Approval";
 import { Line } from "./blocks/Line";
+import { MessageActions } from "./blocks/MessageActions";
 import { Todos } from "./blocks/Todos";
 import { TurnEnd } from "./blocks/TurnEnd";
 import { ToolGroup } from "./blocks/ToolGroup";
@@ -39,7 +40,10 @@ function Item({ item, respond }: { item: ChatItem; respond: Respond }) {
       return <UserMessage item={item} />;
     case "assistant":
       return item.text ? (
-        <Markdown text={item.text} streaming={item.streaming} />
+        <View>
+          <Markdown text={item.text} streaming={item.streaming} />
+          {!item.streaming ? <MessageActions markdown={item.text} /> : null}
+        </View>
       ) : null;
     case "reasoning":
       return item.text ? (

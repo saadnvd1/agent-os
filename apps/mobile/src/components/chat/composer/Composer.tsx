@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { Text, TextInput } from "~/components/ui/Text";
 import { useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,9 +11,11 @@ import type { ChatView } from "~/lib/chat/reducer";
 import { haptic } from "~/lib/haptics";
 import { font, HIT, radius, space, useTheme } from "~/lib/theme";
 import { QueueList } from "./QueueList";
+import { useDraft } from "~/lib/chat/draft";
 import { useAttachments } from "./useAttachments";
 
 interface Props {
+  sessionId: string;
   view: ChatView;
   live: boolean;
   send: (text: string, images?: ChatImage[]) => boolean;
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export function Composer({
+  sessionId,
   view,
   live,
   send,
@@ -34,7 +37,7 @@ export function Composer({
   const insets = useSafeAreaInsets();
   // With the keyboard up there is no home indicator to clear.
   const keyboard = useKeyboardState((s) => s.isVisible);
-  const [text, setText] = useState("");
+  const [text, setText] = useDraft(sessionId);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const files = useAttachments();
   const running = view.state === "running" || view.state === "waiting";
@@ -115,11 +118,15 @@ export function Composer({
       <View style={[styles.box, { backgroundColor: t.card }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Attach photos"
+          accessibilityLabel="Attach images"
           onPress={files.pick}
           style={styles.side}
         >
-          <Icon name="photo.on.rectangle" size={20} color={t.muted} />
+          {files.busy ? (
+            <ActivityIndicator size="small" color={t.muted} />
+          ) : (
+            <Icon name="plus" size={20} color={t.muted} />
+          )}
         </Pressable>
         <TextInput
           value={text}

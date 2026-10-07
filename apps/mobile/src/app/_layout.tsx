@@ -8,6 +8,7 @@ import {
   Geist_500Medium,
   Geist_600SemiBold,
   Geist_700Bold,
+  Geist_400Regular_Italic,
 } from "@expo-google-fonts/geist";
 import {
   GeistMono_400Regular,
@@ -56,6 +57,7 @@ export default function RootLayout() {
     Geist_500Medium,
     Geist_600SemiBold,
     Geist_700Bold,
+    Geist_400Regular_Italic,
     GeistMono_400Regular,
     GeistMono_500Medium,
     GeistMono_600SemiBold,
@@ -109,6 +111,14 @@ export default function RootLayout() {
                   options={{ title: "Add a machine" }}
                 />
                 <Stack.Screen name="session/[id]" options={{ title: "" }} />
+                <Stack.Screen
+                  name="viewer"
+                  options={{
+                    headerShown: false,
+                    presentation: "fullScreenModal",
+                    animation: "fade",
+                  }}
+                />
                 <Stack.Screen
                   name="filters"
                   options={{
