@@ -64,15 +64,17 @@ describe("codexResumeId", () => {
 
 describe("piResumeId", () => {
   it("reads the id from the folder's newest session file", () => {
-    const dir = path.join(home, "pi", "sessions", "--Users-me-app--");
+    const dir = path.join(home, "pi", "sessions", "--home-alice-app--");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, `2026-10-07T10-51-43-913Z_${ID}.jsonl`),
       ""
     );
-    expect(piResumeId("/Users/me/app")).toBe(ID);
-    expect(piResumeId("/Users/me/other")).toBeNull();
-    expect(piResumeId("/Users/me/app", Date.now() + 10 * 60 * 1000)).toBeNull();
+    expect(piResumeId("/home/alice/app")).toBe(ID);
+    expect(piResumeId("/home/alice/other")).toBeNull();
+    expect(
+      piResumeId("/home/alice/app", Date.now() + 10 * 60 * 1000)
+    ).toBeNull();
   });
 });
 
