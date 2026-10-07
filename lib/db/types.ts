@@ -4,6 +4,8 @@ import type { ChatAccess } from "../chat/events";
 export interface Session {
   id: string;
   name: string;
+  // Who named it: never auto-renamed when "user".
+  name_source: "user" | "generated" | "default";
   tmux_name: string;
   created_at: string;
   updated_at: string;
@@ -22,6 +24,11 @@ export interface Session {
   task_prompt: string | null;
   // done: finished without a merge (no PR, or its PR closed).
   task_status: "running" | "merged" | "dropped" | "done" | null;
+  // The task's worktree setup, which its agent waits for.
+  setup_status?: "running" | "held" | "ok" | "failed" | null;
+  setup_ms?: number | null;
+  setup_error?: string | null;
+  task_brief?: string | null;
   // How the session is shown: a chat conversation or a terminal.
   view: "chat" | "terminal";
   chat_access: ChatAccess;

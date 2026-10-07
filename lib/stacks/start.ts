@@ -121,6 +121,7 @@ export async function startItem(
     await createTask({
       projectId: project.id,
       prompt: promptFromCard(card),
+      name: card.title,
       cardId: card.id,
       base,
       onCreated: (sessionId) =>

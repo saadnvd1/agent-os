@@ -69,6 +69,13 @@ const SchedulesDialog = dynamic(
     ),
   { ssr: false }
 );
+const PhoneNotifyDialog = dynamic(
+  () =>
+    import("@/components/PhoneNotify/PhoneNotifyDialog").then(
+      (m) => m.PhoneNotifyDialog
+    ),
+  { ssr: false }
+);
 const MessagesDialog = dynamic(
   () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
   { ssr: false }
@@ -115,6 +122,7 @@ const AppDialogs = memo(function AppDialogs() {
     <>
       <TasksDialog />
       <SchedulesDialog />
+      <PhoneNotifyDialog />
       <NewTaskDialog />
       <MessagesDialog />
       <DevicesDialog />

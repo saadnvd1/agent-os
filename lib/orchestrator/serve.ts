@@ -12,6 +12,7 @@ import {
 import { readCards } from "./cards";
 import { describeSessions } from "./describe";
 import { sessionFacts } from "./facts";
+import { resolveStaleAsks } from "./ask-settle";
 import { addNote } from "./notes";
 import { askSaad } from "./ask-tool";
 import { PAUSED_REFUSAL } from "./pause";
@@ -48,9 +49,12 @@ export async function runTool(
   if (workspace.orch_paused_at && ACTING.has(tool))
     throw new Error(PAUSED_REFUSAL);
   switch (tool) {
-    case "sessions":
+    case "sessions": {
       p(tool, raw);
-      return describeSessions(workspace.name, await sessionFacts(w));
+      const facts = await sessionFacts(w);
+      resolveStaleAsks(w);
+      return describeSessions(workspace.name, facts);
+    }
     case "read": {
       const a = p(tool, raw);
       return readSession(w, a.session, a.lines);
@@ -63,11 +67,11 @@ export async function runTool(
     }
     case "start_task": {
       const a = p(tool, raw);
-      return startTask(w, a.project, a.prompt, a.base);
+      return startTask(w, a.project, a.prompt, a.base, a.name);
     }
     case "start_session": {
       const a = p(tool, raw);
-      return startSession(w, a.project, a.prompt);
+      return startSession(w, a.project, a.prompt, a.name);
     }
     case "stack": {
       const a = p(tool, raw);

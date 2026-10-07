@@ -26,7 +26,11 @@ export function wakeLine(m: {
   body: string;
 }): string {
   const short = m.fromId ? shortId(m.fromId) : null;
-  const who = short ? `"${m.fromName}" (${short})` : "the user (via AgentOS)";
+  const who = short
+    ? `"${m.fromName}" (${short})`
+    : m.fromName === HUMAN
+      ? "the user (via AgentOS)"
+      : `${m.fromName} (via AgentOS)`;
   const oneLine = m.body.replace(/\s*\n\s*/g, " ").trim();
   const text =
     oneLine.length <= INLINE_LIMIT

@@ -120,6 +120,13 @@ export async function statusOf(s: Session): Promise<{
       needsInput: state === "waiting",
     };
   }
+  // A task setting up, or held at launch, has no terminal yet; it isn't
+  // idle, so nothing cleans it up meanwhile.
+  if (
+    s.task_status === "running" &&
+    (s.setup_status === "running" || s.setup_status === "held")
+  )
+    return { status: "running", activity: "setting up", needsInput: false };
   if (!statusDetector.sessionExists(s.tmux_name))
     return { status: "dead", activity: null, needsInput: false };
   const screen = await statusDetector.getStatus(s.tmux_name);

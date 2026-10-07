@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { db } from "../db";
+import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
 import { isPaused } from "../orchestrator/pause";
@@ -7,11 +7,17 @@ import {
   cronError,
   DEFAULT_TIMEZONE,
   isTimezone,
+  MESSAGE_MIN_GAP_MINUTES,
   MIN_GAP_MINUTES,
   minGapMinutes,
 } from "./cron";
 
-export const SCHEDULE_KINDS = ["task", "session", "orchestrator"] as const;
+export const SCHEDULE_KINDS = [
+  "task",
+  "session",
+  "orchestrator",
+  "message",
+] as const;
 export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
 
 export type RunTrigger = "schedule" | "catch-up" | "manual";
@@ -27,6 +33,11 @@ export interface Schedule {
   timezone: string;
   prompt: string;
   kind: ScheduleKind;
+  // A "message" schedule's session. Its id is the address; its name is
+  // only looked up to show.
+  target_session_id: string | null;
+  // The agent session that made it (aos schedule add), or null for Saad.
+  created_by_session_id: string | null;
   enabled: boolean;
   // Epoch ms: only slots after this run (set on create, enable, cron edit).
   armed_at: number;
@@ -56,6 +67,9 @@ export interface ScheduleInput {
   timezone?: string;
   prompt: string;
   kind: ScheduleKind;
+  targetSessionId?: string | null;
+  // Set once, at create: an agent made it.
+  createdBySessionId?: string | null;
   enabled?: boolean;
 }
 
@@ -104,24 +118,74 @@ export function findSchedule(ref: string): Schedule {
   );
 }
 
+export function getSessionRow(id: string): Session | null {
+  return (
+    (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+      | Session
+      | undefined) ?? null
+  );
+}
+
+// The workspace a session belongs to: an orchestrator's own, or its
+// project's.
+export function sessionWorkspace(session: Session): string | null {
+  if (session.workspace_id) return session.workspace_id;
+  return session.project_id
+    ? (getProject(session.project_id)?.workspace_id ?? null)
+    : null;
+}
+
+// Why a session can't take a scheduled message, or null.
+export function sessionTargetProblem(
+  sessionId: string | null,
+  workspaceId: string
+): string | null {
+  if (!sessionId) return "Pick a session to message";
+  const session = getSessionRow(sessionId);
+  if (!session) return "session no longer exists";
+  if (session.archived_at) return "session archived";
+  if (session.role === "orchestrator")
+    return "the orchestrator takes orchestrator schedules, not messages";
+  if (session.task_status && session.task_status !== "running")
+    return "session finished";
+  if (sessionWorkspace(session) !== workspaceId)
+    return `${session.name} isn't in this schedule's workspace`;
+  return null;
+}
+
 function validate(
   input: ScheduleInput,
   selfId?: string
-): Required<ScheduleInput> {
+): Required<Omit<ScheduleInput, "createdBySessionId">> {
   const name = input.name?.trim();
   if (!name) throw new Error("Give the schedule a name");
   if (name.length > 80) throw new Error("Keep the name under 80 characters");
+  // It's quoted inside the scheduled message's label.
+  if (/["[\]\n]/.test(name))
+    throw new Error("A schedule name can't use quotes or [ ]");
   const prompt = input.prompt?.trim();
   if (!prompt) throw new Error("Write the prompt it runs");
   if (!SCHEDULE_KINDS.includes(input.kind))
-    throw new Error("Pick task, session or orchestrator");
+    throw new Error("Pick task, session, orchestrator or message");
   const cron = input.cron?.trim().replace(/\s+/g, " ");
   const bad = cronError(cron ?? "");
   if (bad) throw new Error(bad);
   const timezone = input.timezone?.trim() || DEFAULT_TIMEZONE;
   if (!isTimezone(timezone)) throw new Error(`Unknown time zone "${timezone}"`);
   if (!getWorkspace(input.workspaceId)) throw new Error("Pick a workspace");
-  const projectId = input.projectId || null;
+  const message = input.kind === "message";
+  // A message goes to a session, whatever project it's in.
+  const projectId = message ? null : input.projectId || null;
+  const targetSessionId = message ? input.targetSessionId || null : null;
+  if (message) {
+    const problem = sessionTargetProblem(targetSessionId, input.workspaceId);
+    if (problem)
+      throw new Error(
+        problem === "Pick a session to message"
+          ? problem
+          : `Can't message that session: ${problem}`
+      );
+  }
   if (projectId) {
     const project = getProject(projectId);
     if (!project || project.is_uncategorized) throw new Error("Pick a project");
@@ -129,15 +193,19 @@ function validate(
       throw new Error(`${project.name} isn't in this workspace`);
     if (project.host_id && project.host_id !== "local")
       throw new Error("Schedules run on this machine's projects only");
-  } else if (input.kind !== "orchestrator") {
+  } else if (input.kind === "task" || input.kind === "session") {
     throw new Error("A task or session schedule needs a project");
   }
   if (
-    input.kind !== "orchestrator" &&
+    (input.kind === "task" || input.kind === "session") &&
     minGapMinutes(cron, timezone) < MIN_GAP_MINUTES
   )
     throw new Error(
       "A task or session schedule runs at most once an hour; for more often, post to the orchestrator"
+    );
+  if (message && minGapMinutes(cron, timezone) < MESSAGE_MIN_GAP_MINUTES)
+    throw new Error(
+      `A message schedule runs at most every ${MESSAGE_MIN_GAP_MINUTES} minutes`
     );
   const clash = listSchedules(input.workspaceId).find(
     (s) => s.id !== selfId && s.name.toLowerCase() === name.toLowerCase()
@@ -152,6 +220,7 @@ function validate(
     timezone,
     prompt,
     kind: input.kind,
+    targetSessionId,
     enabled: input.enabled ?? true,
   };
 }
@@ -163,8 +232,8 @@ export function createSchedule(
   const v = validate(input);
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO schedules (id, workspace_id, project_id, name, cron, timezone, prompt, kind, enabled, armed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO schedules (id, workspace_id, project_id, name, cron, timezone, prompt, kind, target_session_id, created_by_session_id, enabled, armed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     v.workspaceId,
@@ -174,6 +243,8 @@ export function createSchedule(
     v.timezone,
     v.prompt,
     v.kind,
+    v.targetSessionId,
+    input.createdBySessionId ?? null,
     v.enabled ? 1 : 0,
     now
   );
@@ -197,6 +268,10 @@ export function updateSchedule(
       timezone: patch.timezone ?? current.timezone,
       prompt: patch.prompt ?? current.prompt,
       kind: patch.kind ?? current.kind,
+      targetSessionId:
+        patch.targetSessionId === undefined
+          ? current.target_session_id
+          : patch.targetSessionId,
       enabled: patch.enabled ?? current.enabled,
     },
     id
@@ -209,7 +284,7 @@ export function updateSchedule(
     (v.enabled && !current.enabled);
   db.prepare(
     `UPDATE schedules SET workspace_id = ?, project_id = ?, name = ?, cron = ?, timezone = ?,
-       prompt = ?, kind = ?, enabled = ?, armed_at = ?, updated_at = datetime('now')
+       prompt = ?, kind = ?, target_session_id = ?, enabled = ?, armed_at = ?, updated_at = datetime('now')
      WHERE id = ?`
   ).run(
     v.workspaceId,
@@ -219,6 +294,7 @@ export function updateSchedule(
     v.timezone,
     v.prompt,
     v.kind,
+    v.targetSessionId,
     v.enabled ? 1 : 0,
     rearm ? now : current.armed_at,
     id
@@ -334,14 +410,17 @@ export function attachSession(runId: number, sessionId: string): void {
   ).run(sessionId, runId);
 }
 
-export function lastRunBefore(
+// The newest run before this one that started or failed: whether the
+// schedule is in a failing streak, whatever it skipped in between.
+export function lastSettledBefore(
   scheduleId: string,
   beforeId: number
 ): ScheduleRun | null {
   return (
     (db
       .prepare(
-        `SELECT * FROM schedule_runs WHERE schedule_id = ? AND id < ? ORDER BY id DESC LIMIT 1`
+        `SELECT * FROM schedule_runs WHERE schedule_id = ? AND id < ?
+           AND outcome IN ('started', 'failed') ORDER BY id DESC LIMIT 1`
       )
       .get(scheduleId, beforeId) as ScheduleRun | undefined) ?? null
   );
@@ -353,6 +432,11 @@ export function lastRunBefore(
 export function targetProblem(schedule: Schedule): string | null {
   if (!getWorkspace(schedule.workspace_id))
     return "Its workspace no longer exists";
+  if (schedule.kind === "message")
+    return sessionTargetProblem(
+      schedule.target_session_id,
+      schedule.workspace_id
+    );
   if (!schedule.project_id) return null;
   const project = getProject(schedule.project_id);
   if (!project) return "Its project no longer exists";

@@ -8,12 +8,9 @@ import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
 import { createWorktree } from "../worktrees";
-import { setupWorktree } from "../env-setup";
 import { getDefaultBranch, isBranchName, slugify } from "../git";
-import { runInBackground } from "../async-operations";
 import { resolveModelForAgent } from "../model-catalog";
 import { getProvider } from "../providers";
-import { launchClaude } from "../agents/launch";
 import { statusDetector } from "../status-detector";
 import { buildTaskBrief, type StackedOn } from "./brief";
 import { run } from "./gh";
@@ -30,6 +27,9 @@ import {
   type TaskState,
 } from "./state";
 import { expandHome, prFor, taskSessions } from "./session";
+import { nameFor } from "../session-titles";
+import { taskSetupOf, type TaskSetup } from "./setup";
+import { finishTaskStart } from "./start";
 
 export * from "./state";
 export { codeReviewRefusal, parseCodeReview } from "./code-review";
@@ -51,17 +51,16 @@ export interface TaskView {
   blocked: string | null;
   // The task's card on the project's LumifyHub board, when it has one.
   cardUrl: string | null;
+  // Its worktree setup, which the agent waits for; null for older tasks.
+  setup: TaskSetup | null;
   createdAt: string;
-}
-
-function taskTitle(prompt: string): string {
-  const line = prompt.trim().split("\n")[0];
-  return line.length > 60 ? `${line.slice(0, 57)}...` : line;
 }
 
 export async function createTask(opts: {
   projectId: string;
   prompt: string;
+  // Its name; generated from the prompt when absent.
+  name?: string;
   model?: string;
   // Started from this LumifyHub card, which the task then moves.
   cardId?: string;
@@ -84,7 +83,8 @@ export async function createTask(opts: {
     throw new Error(`"${opts.baseBranch}" isn't a branch name`);
   const projectPath = expandHome(project.working_directory);
   const id = randomUUID();
-  const feature = `${slugify(prompt.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
+  const naming = await nameFor(prompt, projectPath, opts.name);
+  const feature = `${slugify(naming.name.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
   const baseBranch =
     opts.base?.branch ??
     opts.baseBranch ??
@@ -95,13 +95,6 @@ export async function createTask(opts: {
     baseBranch,
     startPoint: opts.base?.tip,
   });
-
-  runInBackground(async () => {
-    await setupWorktree({
-      worktreePath: wt.worktreePath,
-      sourcePath: projectPath,
-    });
-  }, `setup-task-${id}`);
 
   const provider = getProvider("claude");
   const model = resolveModelForAgent(
@@ -114,7 +107,7 @@ export async function createTask(opts: {
     .createSession(db)
     .run(
       id,
-      taskTitle(prompt),
+      naming.name,
       tmuxName,
       wt.worktreePath,
       null,
@@ -129,23 +122,25 @@ export async function createTask(opts: {
   queries
     .updateSessionWorktree(db)
     .run(wt.worktreePath, wt.branchName, baseBranch, null, id);
+  // Everything the launch needs is on the row, so a restart can resume it.
   db.prepare(
-    `UPDATE sessions SET task_prompt = ?, task_status = 'running' WHERE id = ?`
-  ).run(prompt, id);
-  opts.onCreated?.(id);
-
-  await launchClaude({
-    sessionId: id,
-    tmuxName,
-    cwd: wt.worktreePath,
-    model,
+    `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ? WHERE id = ?`
+  ).run(
     prompt,
-    brief: buildTaskBrief({
+    buildTaskBrief({
       branch: wt.branchName,
       baseBranch,
       stack: opts.base?.stack,
     }),
-  });
+    naming.source,
+    id
+  );
+  opts.onCreated?.(id);
+  void naming.refine?.(id);
+
+  // The agent starts once its dependencies are there, so its first check
+  // doesn't fail on a module still installing; nothing waits on that here.
+  inBackground(`start of task ${id}`, () => finishTaskStart(id));
 
   const session = queries.getSession(db).get(id) as Session;
   inBackground(`card for task ${id}`, () =>
@@ -181,6 +176,7 @@ async function shellOnly(tmuxName: string): Promise<boolean> {
 
 export async function taskView(session: Session): Promise<TaskView> {
   const live = session.task_status === "running";
+  const setup = taskSetupOf(session);
   const [pr, sessionStatus] = await Promise.all([
     prFor(session),
     live
@@ -206,6 +202,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     sessionStatus: agentGone ? "dead" : sessionStatus,
     pr,
     blocked: blocked !== null,
+    settingUp: setup?.status === "running" || setup?.status === "held",
   });
   syncTaskCardInBackground(session, state, pr);
   return {
@@ -221,6 +218,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     pr,
     blocked,
     cardUrl: taskCardUrl(session),
+    setup,
     createdAt: session.created_at,
   };
 }

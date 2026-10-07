@@ -23,6 +23,12 @@ const pr = (over: Partial<TaskPR> = {}): TaskPR => ({
 describe("deriveTaskState", () => {
   const base = { taskStatus: "running" as const, blocked: false, pr: null };
 
+  it("is working, not exited, while its worktree is set up", () => {
+    expect(
+      deriveTaskState({ ...base, sessionStatus: "dead", settingUp: true })
+    ).toBe("working");
+  });
+
   it("tracks the agent until a PR exists", () => {
     expect(deriveTaskState({ ...base, sessionStatus: "running" })).toBe(
       "working"

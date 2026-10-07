@@ -36,14 +36,17 @@ export interface TaskStateInput {
   sessionStatus: "running" | "waiting" | "idle" | "error" | "dead" | undefined;
   pr: TaskPR | null;
   blocked: boolean;
+  // Its worktree is still being set up; the agent hasn't started yet.
+  settingUp?: boolean;
 }
 
 // Ordered by what needs the human first.
 export function deriveTaskState(input: TaskStateInput): TaskState {
-  const { taskStatus, sessionStatus, pr, blocked } = input;
+  const { taskStatus, sessionStatus, pr, blocked, settingUp } = input;
   if (taskStatus === "merged" || pr?.state === "MERGED") return "merged";
   if (taskStatus === "dropped") return "dropped";
   if (taskStatus === "done") return "done";
+  if (settingUp) return "working";
   if (blocked) return "blocked";
   if (pr?.state === "OPEN") {
     return pr.checks === "fail" ? "checks-failing" : "review";

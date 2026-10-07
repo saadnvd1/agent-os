@@ -32,7 +32,7 @@ const { setPaused, isPaused } = await import("./pause");
 const { orchestratorOverview } = await import("./overview");
 const { seedWorkspace } = await import("./testing");
 const { answerAsk, getAsk, openAskCount, openAsks } = await import("./asks");
-const { resolveFinishedTaskAsks } = await import("./ask-approvals");
+const { resolveStaleAsks } = await import("./ask-settle");
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-asks-"));
@@ -227,11 +227,11 @@ describe("de-duplication", () => {
       "https://pr/1",
       "c".repeat(40)
     );
-    expect(resolveFinishedTaskAsks(t.w)).toBe(0);
+    expect(resolveStaleAsks(t.w)).toBe(0);
     db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
       t.task
     );
-    expect(resolveFinishedTaskAsks(t.w)).toBe(1);
+    expect(resolveStaleAsks(t.w)).toBe(1);
     expect(openAsks(t.w)).toEqual([]);
   });
 });

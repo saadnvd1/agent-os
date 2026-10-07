@@ -20,6 +20,8 @@ export interface ClaudeRun {
   // Permission rules within those, e.g. "Bash(git diff:*)".
   allow?: string[];
   timeoutMs?: number;
+  // A model alias or id; the review model (or the CLI's default) otherwise.
+  model?: string;
 }
 
 export type ClaudeRunner = (run: ClaudeRun) => Promise<unknown>;
@@ -52,6 +54,7 @@ export function checkEnv(
 }
 
 export function claudeArgs(run: ClaudeRun): string[] {
+  const model = run.model ?? MODEL;
   return [
     "-p",
     "--output-format",
@@ -77,7 +80,7 @@ export function claudeArgs(run: ClaudeRun): string[] {
     "WebSearch",
     "--json-schema",
     JSON.stringify(run.schema),
-    ...(MODEL ? ["--model", MODEL] : []),
+    ...(model ? ["--model", model] : []),
   ];
 }
 
