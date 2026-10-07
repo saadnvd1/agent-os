@@ -54,6 +54,7 @@ import { collectStatuses, terminalsChanged } from "./lib/status/collect";
 import { startProgramStatusTap } from "./lib/program-status/tap";
 import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
 import os from "os";
+import { resumeHeldStarts, resumeTaskStarts } from "./lib/tasks/start";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -467,6 +468,18 @@ app.prepare().then(() => {
   }
   // Chat turns that kept running through a restart.
   void reattachChats();
+  // Task starts this restart cut off: set up and launch them now.
+  resumeTaskStarts().catch((error) =>
+    console.error("Resuming task starts failed:", error)
+  );
+  // Starts held by Pause or the brakes launch once the hold clears.
+  setInterval(() => {
+    try {
+      resumeHeldStarts();
+    } catch (error) {
+      console.error("Resuming held task starts failed:", error);
+    }
+  }, 60_000);
   // Stacks start their next cards from here; their state is in the database.
   setStartGate(stackStartGate);
   if (process.env.AGENTOS_STACKS !== "off") startStackWatcher();
