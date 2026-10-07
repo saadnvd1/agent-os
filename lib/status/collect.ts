@@ -317,6 +317,11 @@ async function collect(): Promise<StatusSnapshot> {
     "UPDATE sessions SET updated_at = datetime('now') WHERE id = ?"
   );
   const updateClaudeIdStmt = db.prepare(
+    "UPDATE sessions SET claude_session_id = ? WHERE id = ? AND (claude_session_id IS NULL OR claude_session_id != ?)"
+  );
+  // An id found by folder (every agent but Claude, which says its own) is
+  // never one another session already resumes: that one is theirs.
+  const updateFoundIdStmt = db.prepare(
     `UPDATE sessions SET claude_session_id = ? WHERE id = ?
        AND (claude_session_id IS NULL OR claude_session_id != ?)
        AND NOT EXISTS (SELECT 1 FROM sessions o WHERE o.claude_session_id = ? AND o.id != ?)`
@@ -327,17 +332,18 @@ async function collect(): Promise<StatusSnapshot> {
   }
 
   // Update claude_session_id directly here instead of requiring separate API calls
-  for (const { id, claudeSessionId } of results) {
-    if (claudeSessionId) {
-      // Found by folder: one another session already resumes is theirs.
-      updateClaudeIdStmt.run(
+  for (const { id, claudeSessionId, agentType } of results) {
+    if (!claudeSessionId) continue;
+    if (agentType === "claude")
+      updateClaudeIdStmt.run(claudeSessionId, id, claudeSessionId);
+    else
+      updateFoundIdStmt.run(
         claudeSessionId,
         id,
         claudeSessionId,
         claudeSessionId,
         id
       );
-    }
   }
 
   // Chat sessions have no tmux pane: their live conversation is the status.

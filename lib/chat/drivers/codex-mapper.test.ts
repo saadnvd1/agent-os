@@ -5,7 +5,12 @@ import type { ChatItem, DriverEvent } from "../events";
 import { CodexApprovals } from "./codex-approvals";
 import { CodexMapper } from "./codex-mapper";
 import { unifiedToDiff } from "../diff";
-import { CODEX_MODES, codexInput, threadParams } from "./codex-args";
+import {
+  CODEX_MODES,
+  codexInput,
+  openThread,
+  threadParams,
+} from "./codex-args";
 
 type Line = { method: string; id?: number; params: Record<string, unknown> };
 
@@ -155,5 +160,43 @@ describe("codex arguments", () => {
       before: "a\nb",
       after: "a\nc",
     });
+  });
+});
+
+describe("openThread", () => {
+  const options = {
+    cwd: "/w",
+    model: "default",
+    access: "full" as const,
+    env: {},
+    resumeId: "T-old",
+  };
+  const rpc = (resumeError: string) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      rpc: {
+        request: async (method: string) => {
+          calls.push(method);
+          if (method === "thread/resume") throw new Error(resumeError);
+          return { thread: { id: "T-new" } };
+        },
+      } as unknown as Parameters<typeof openThread>[0],
+    };
+  };
+
+  it("starts a new thread only when Codex has no record of the old one", async () => {
+    const gone = rpc("no rollout found for thread id T-old");
+    const r = await openThread(gone.rpc, options, "full");
+    expect(r.thread.id).toBe("T-new");
+    expect(r.note).toMatch(/new one/);
+  });
+
+  it("keeps the old thread when resuming fails for any other reason", async () => {
+    const slow = rpc("Codex didn't answer thread/resume");
+    await expect(openThread(slow.rpc, options, "full")).rejects.toThrow(
+      /didn't answer/
+    );
+    expect(slow.calls).toEqual(["thread/resume"]);
   });
 });

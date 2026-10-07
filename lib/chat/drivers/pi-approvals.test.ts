@@ -26,14 +26,19 @@ beforeAll(async () => {
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-async function call(tool: string, access: string | null, answer = true) {
+async function call(
+  tool: string,
+  access: string | null,
+  answer = true,
+  input: unknown = { command: "rm x" }
+) {
   const accessFile = path.join(dir, "access");
   fs.rmSync(accessFile, { force: true });
   if (access !== null) fs.writeFileSync(accessFile, access);
   process.env.AGENTOS_PI_ACCESS_FILE = accessFile;
   let asked = false;
   const result = await handler(
-    { toolName: tool, input: { command: "rm x" }, toolCallId: "c1" },
+    { toolName: tool, input, toolCallId: "c1" },
     {
       ui: {
         confirm: async (title) => {
@@ -63,7 +68,8 @@ describe("Pi approval extension", () => {
   });
 
   it("lets edits through under 'edits', and everything under 'full'", async () => {
-    expect(await call("edit", "edits")).toEqual({
+    const own = { path: "lib/some-file.ts" };
+    expect(await call("edit", "edits", true, own)).toEqual({
       asked: false,
       blocked: false,
     });
@@ -72,6 +78,17 @@ describe("Pi approval extension", () => {
       asked: false,
       blocked: false,
     });
+  });
+
+  it("asks before an edit outside the folder, or of its own access file", async () => {
+    expect(
+      await call("write", "edits", true, { path: "/etc/hosts" })
+    ).toMatchObject({
+      asked: true,
+    });
+    expect(
+      await call("write", "edits", true, { path: path.join(dir, "access") })
+    ).toMatchObject({ asked: true });
   });
 
   it("never asks to read", async () => {

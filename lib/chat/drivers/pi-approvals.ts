@@ -16,8 +16,27 @@ const MARK = "agentos:";
 // as the conversation's access setting says, read from a file each time so
 // a change applies to the very next call. Reading never asks. Exported for
 // its test.
-export const EXTENSION = `import { readFileSync } from "node:fs";
+export const EXTENSION = `import { readFileSync, realpathSync } from "node:fs";
+import { basename, dirname, resolve, sep } from "node:path";
 const SAFE = new Set(["read", "grep", "find", "ls"]);
+// A path with its links resolved, as far as it exists.
+function real(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    const up = dirname(p);
+    return up === p ? p : resolve(real(up), basename(p));
+  }
+}
+const inside = (p, root) => p === root || p.startsWith(root.endsWith(sep) ? root : root + sep);
+// "Accept edits" covers the conversation's own folder, never AgentOS's
+// files (this gate's access setting among them).
+function ownEdit(input) {
+  const accessFile = process.env.AGENTOS_PI_ACCESS_FILE;
+  if (!accessFile || typeof input?.path !== "string") return false;
+  const target = real(resolve(process.cwd(), input.path));
+  return inside(target, real(process.cwd())) && !inside(target, real(dirname(accessFile)));
+}
 export default function (pi) {
   pi.on("tool_call", async (event, ctx) => {
     // Unreadable or unknown asks: the gate never fails open.
@@ -28,7 +47,7 @@ export default function (pi) {
     } catch {}
     const tool = event.toolName;
     if (access === "full" || SAFE.has(tool)) return;
-    if (access === "edits" && (tool === "edit" || tool === "write")) return;
+    if (access === "edits" && (tool === "edit" || tool === "write") && ownEdit(event.input)) return;
     const ok = await ctx.ui.confirm(
       "${MARK}" + event.toolCallId,
       JSON.stringify({ tool, input: event.input })
@@ -38,8 +57,14 @@ export default function (pi) {
 }
 `;
 
+// Owner-only: the access settings in it are what the gate trusts.
+function ensureDir(): void {
+  fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
+  fs.chmodSync(DIR, 0o700);
+}
+
 export function writeExtension(): string {
-  fs.mkdirSync(DIR, { recursive: true });
+  ensureDir();
   const file = path.join(DIR, "agentos-approvals.mjs");
   if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== EXTENSION)
     fs.writeFileSync(file, EXTENSION);
@@ -55,7 +80,7 @@ export class PiAccess {
   }
 
   set(access: ChatAccess): void {
-    fs.mkdirSync(DIR, { recursive: true });
+    ensureDir();
     fs.writeFileSync(this.file, access, { mode: 0o600 });
   }
 

@@ -57,6 +57,10 @@ export function threadParams(o: ChatStartOptions, access: ChatAccess) {
 
 // Opens the conversation: the one it continues when it can, a new one when
 // it can't (archived ones are brought back first).
+// What Codex says when it has no record of a thread (0.156: "no rollout
+// found for thread id …").
+export const THREAD_GONE = /no rollout found|thread not found|unknown thread/i;
+
 export async function openThread(
   rpc: CodexRpc,
   o: ChatStartOptions,
@@ -78,6 +82,9 @@ export async function openThread(
         await rpc.request("thread/unarchive", { threadId: o.resumeId });
         return { thread: (await resume()).thread };
       }
+      // Anything but gone (a timeout, a passing error) fails this start and
+      // keeps the id, so the next start tries the same conversation again.
+      if (!THREAD_GONE.test(why)) throw error;
       // Gone (its file deleted, never written): a new one, said so, and
       // saved in its place so the next start doesn't fail the same way.
       const { thread } = await rpc.request<{ thread: P }>(
