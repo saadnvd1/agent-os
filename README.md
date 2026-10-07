@@ -643,7 +643,14 @@ npm test             # vitest
 npm run lint         # eslint
 npm run check        # typecheck, lint, format and tests: what CI runs
 scripts/redeploy     # pull, install, build; restarts via $AGENTOS_RESTART only if all of it worked
+scripts/redeploy --rollback  # put the previous build back and restart
 ```
+
+`scripts/redeploy` (and `scripts/autodeploy`, which calls it) builds into
+`.next-build` while the live server keeps serving `.next`. The build is swapped
+in by rename only once it finished with a `BUILD_ID`, right before the restart.
+The build it replaced is kept in `.next-prev` for one rollback, and a failed
+build leaves `.next` as it was.
 
 A pre-commit hook formats and lints staged files, then typechecks and runs the
 tests. CI runs `scripts/check --build` on every pull request and push to main,
