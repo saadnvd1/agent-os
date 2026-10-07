@@ -52,7 +52,8 @@ export function scheduleHistory(id: string, limit = 50): ScheduleRun[] {
   return listRuns(id, limit);
 }
 
-// Run now: its own slot, whatever the time, pause or the last run.
+// Run now: its own slot, whatever the time and while the last run is still
+// working. Pause holds it like any run.
 export async function runNow(
   id: string,
   deps: RunDeps = realDeps

@@ -14,8 +14,8 @@ import {
 
 // How each kind starts its work, and whether a run is still going. Real
 // ones in ./start; tests pass their own. `start` calls onSession as soon as
-// the session it starts exists, before anything slow, so a restart mid-start
-// still knows what the run started.
+// the run's work exists (a task's session, or a prompt confirmed in a chat),
+// so a restart mid-start still knows what the run started.
 export interface RunDeps {
   start: (
     schedule: Schedule,
@@ -103,6 +103,9 @@ export async function runSlot(
     }
   }
 
+  // Again: Saad may have paused while the overlap check waited.
+  if (pausedFor(schedule))
+    return done("skipped", joined(caughtUp, "paused with the orchestrator"));
   try {
     const sessionId = await deps.start(schedule, (id) =>
       attachSession(runId, id)

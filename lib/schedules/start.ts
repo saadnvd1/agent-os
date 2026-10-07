@@ -6,7 +6,7 @@ import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
 import { resolveModelForAgent } from "../model-catalog";
 import { createTask, taskView } from "../tasks";
-import { chatState, sendChat, sendChatConfirmed } from "../chat/runner";
+import { chatState, sendChatConfirmed } from "../chat/runner";
 import { ensureOrchestrator } from "../orchestrator/home";
 import { addNote } from "../orchestrator/notes";
 import { notifyStatusChanged } from "../status/hub";
@@ -62,9 +62,14 @@ async function startSession(
       "local"
     );
   db.prepare(`UPDATE sessions SET view = 'chat' WHERE id = ?`).run(id);
-  onSession(id);
   notifyStatusChanged();
-  await sendChat(id, { text: schedule.prompt, from: fromLabel(schedule) });
+  // Linked once the prompt is in the conversation: a restart before then
+  // records the run as failed, not as started with nothing sent.
+  await sendChatConfirmed(id, {
+    text: schedule.prompt,
+    from: fromLabel(schedule),
+  });
+  onSession(id);
   return id;
 }
 
@@ -83,12 +88,12 @@ async function postToOrchestrator(
   onSession: OnSession
 ): Promise<string> {
   const orchestrator = ensureOrchestrator(schedule.workspace_id);
-  onSession(orchestrator.id);
   const project = schedule.project_id ? getProject(schedule.project_id) : null;
   await sendChatConfirmed(orchestrator.id, {
     text: scheduledMessage(schedule, project?.name ?? null),
     from: fromLabel(schedule),
   });
+  onSession(orchestrator.id);
   return orchestrator.id;
 }
 

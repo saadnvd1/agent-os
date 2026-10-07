@@ -243,7 +243,7 @@ export function finishRun(
   sessionId: string | null = null
 ): void {
   db.prepare(
-    `UPDATE schedule_runs SET outcome = ?, detail = ?, session_id = ? WHERE id = ?`
+    `UPDATE schedule_runs SET outcome = ?, detail = ?, session_id = COALESCE(?, session_id) WHERE id = ?`
   ).run(outcome, detail?.slice(0, 500) ?? null, sessionId, runId);
 }
 

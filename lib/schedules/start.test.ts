@@ -13,13 +13,33 @@ vi.mock("../tasks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../tasks")>()),
   taskView: async (s: { id: string }) => ({ state: taskStates.get(s.id) }),
 }));
+// Each send waits until the test settles it.
+const sends: {
+  id: string;
+  text: string;
+  settle: (ok: boolean) => void;
+}[] = [];
 vi.mock("../chat/runner", () => ({
   chatState: (id: string) => chatStates.get(id) ?? null,
-  sendChat: async () => {},
-  sendChatConfirmed: async () => "delivered",
+  sendChatConfirmed: (id: string, input: { text: string }) =>
+    new Promise((resolve, reject) =>
+      sends.push({
+        id,
+        text: input.text,
+        settle: (ok) =>
+          ok ? resolve("delivered") : reject(new Error("worker gone")),
+      })
+    ),
+}));
+// Never makes a folder in the real home.
+vi.mock("../orchestrator/home", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../orchestrator/home")>()),
+  ensureOrchestrator: (workspaceId: string) => ({ id: `orch-${workspaceId}` }),
 }));
 
-const { stillRunning, scheduledMessage } = await import("./start");
+const { realDeps, stillRunning, scheduledMessage } = await import("./start");
+const { createWorkspace, setProjectWorkspace } = await import("../workspaces");
+const { createProject } = await import("../projects");
 
 function session(fields: { task_status?: string; archived?: boolean } = {}) {
   const id = randomUUID();
@@ -95,5 +115,61 @@ describe("scheduledMessage", () => {
     expect(text).toBe(
       '[Scheduled message "Triage" for web, saved in Schedules: a standing prompt, not an approval]\nGo'
     );
+  });
+});
+
+describe("start links the run only once the prompt is in", () => {
+  const target = (kind: Schedule["kind"]) => {
+    const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
+    const project = createProject({
+      name: `p-${randomUUID().slice(0, 6)}`,
+      workingDirectory: "/tmp",
+    });
+    setProjectWorkspace(project.id, ws.id);
+    return {
+      id: randomUUID(),
+      name: "Triage",
+      prompt: "Go",
+      kind,
+      workspace_id: ws.id,
+      project_id: project.id,
+      timezone: "America/Chicago",
+    } as Schedule;
+  };
+  const flush = () => new Promise((r) => setImmediate(r));
+
+  for (const kind of ["session", "orchestrator"] as const) {
+    it(`${kind}: after the send is confirmed, not before`, async () => {
+      sends.length = 0;
+      const linked: string[] = [];
+      const run = realDeps.start(target(kind), (id) => linked.push(id));
+      await flush();
+      expect(sends).toHaveLength(1);
+      expect(linked).toEqual([]);
+      sends[0].settle(true);
+      const id = await run;
+      expect(linked).toEqual([id]);
+      expect(sends[0].id).toBe(id);
+    });
+
+    it(`${kind}: never, when the send fails`, async () => {
+      sends.length = 0;
+      const linked: string[] = [];
+      const run = realDeps.start(target(kind), (id) => linked.push(id));
+      await flush();
+      sends[0].settle(false);
+      await expect(run).rejects.toThrow("worker gone");
+      expect(linked).toEqual([]);
+    });
+  }
+
+  it("the orchestrator gets the marked message", async () => {
+    sends.length = 0;
+    const s = target("orchestrator");
+    const run = realDeps.start(s, () => {});
+    await flush();
+    expect(sends[0].text).toMatch(/^\[Scheduled message "Triage" for p-/);
+    sends[0].settle(true);
+    await run;
   });
 });

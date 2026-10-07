@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
-import { createWorkspace, setProjectWorkspace } from "../workspaces";
+import { db } from "../db";
+import {
+  createWorkspace,
+  deleteWorkspace,
+  setProjectWorkspace,
+} from "../workspaces";
 import { createProject } from "../projects";
 import { setPaused } from "../orchestrator/pause";
 import { runSlot, type RunDeps } from "./run";
@@ -250,6 +255,23 @@ describe("pause", () => {
     expect(mine(schedule, started)).toHaveLength(1);
   });
 
+  it("holds a run paused while it checked the last one", async () => {
+    const { ws, schedule } = seed();
+    const { deps, started } = fakeDeps();
+    await tick(deps, at("2026-10-07T13:05:01Z"));
+    deps.stillRunning = async () => {
+      setPaused(ws.id, true);
+      return false;
+    };
+    await tick(deps, at("2026-10-07T13:06:01Z"));
+    expect(mine(schedule, started)).toHaveLength(1);
+    expect(listRuns(schedule.id)[0]).toMatchObject({
+      outcome: "skipped",
+      detail: "paused with the orchestrator",
+    });
+    setPaused(ws.id, false);
+  });
+
   it("holds Run now too", async () => {
     const { ws, schedule } = seed();
     const { deps, started } = fakeDeps();
@@ -324,12 +346,15 @@ describe("failures", () => {
     const { schedule } = seed();
     const { deps, started, busy } = fakeDeps();
     // Starts its session, then the process dies before the run is recorded.
+    let reached = () => {};
+    const started_ = new Promise<void>((r) => (reached = r));
     deps.start = (_s, onSession) => {
       onSession("session-crash");
+      reached();
       return new Promise<string>(() => {});
     };
     void tick(deps, at("2026-10-07T13:05:01Z"));
-    await new Promise((r) => setTimeout(r, 10));
+    await started_;
     failAbandonedClaims(-5000);
     expect(listRuns(schedule.id)[0]).toMatchObject({
       outcome: "started",
@@ -344,6 +369,45 @@ describe("failures", () => {
     expect(listRuns(schedule.id)[0]).toMatchObject({
       outcome: "skipped",
       detail: "still running",
+    });
+  });
+
+  it("a deleted project or workspace fails, notifying once", async () => {
+    const a = seed();
+    const b = seed();
+    const { deps, started, notified } = fakeDeps();
+    db.prepare(`DELETE FROM projects WHERE id = ?`).run(a.project.id);
+    deleteWorkspace(b.ws.id);
+    await tick(deps, at("2026-10-07T13:05:01Z"));
+    await tick(deps, at("2026-10-07T13:06:01Z"));
+    expect(mine(a.schedule, started)).toHaveLength(0);
+    expect(mine(b.schedule, started)).toHaveLength(0);
+    expect(listRuns(a.schedule.id)[0]).toMatchObject({
+      outcome: "failed",
+      detail: "Its project no longer exists",
+    });
+    expect(listRuns(b.schedule.id)[0]).toMatchObject({
+      outcome: "failed",
+      detail: "Its workspace no longer exists",
+    });
+    expect(notified.sort()).toEqual([
+      "Its project no longer exists",
+      "Its workspace no longer exists",
+    ]);
+  });
+
+  it("a start that fails after making its session keeps the link", async () => {
+    const { schedule } = seed();
+    const { deps } = fakeDeps();
+    deps.start = async (_s, onSession) => {
+      onSession("session-half");
+      throw new Error("tmux timed out");
+    };
+    await tick(deps, at("2026-10-07T13:05:01Z"));
+    expect(listRuns(schedule.id)[0]).toMatchObject({
+      outcome: "failed",
+      detail: "tmux timed out",
+      session_id: "session-half",
     });
   });
 
