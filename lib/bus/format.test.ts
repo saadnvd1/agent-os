@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { matchesRef, overRateLimit, wakeLine } from "./format";
 
 describe("wakeLine", () => {
-  it("labels agent messages and says how to reply", () => {
+  it("names the sender and has the reply go to its id", () => {
     const line = wakeLine({
-      fromName: "fast-shadow",
-      fromId: "a",
+      fromName: "orchestrator",
+      fromId: "3f2a9c1e-7b6d-4c1a-9e2f-000000000000",
       body: "is the API\nready?",
     });
     expect(line).toBe(
-      '[AgentOS message from agent session "fast-shadow"]: is the API ready?. Reply with: aos send fast-shadow "<message>"'
+      '[AgentOS message from "orchestrator" (3f2a9c1e)]: is the API ready?. Reply with: aos send 3f2a9c1e "<message>"'
     );
   });
 

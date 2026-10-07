@@ -16,23 +16,24 @@ export interface BusMessageView {
 
 const INLINE_LIMIT = 600;
 
+// Enough of a session id to address it (aos send takes a unique prefix).
+export const shortId = (id: string) => id.slice(0, 8);
+
 // Typed into the recipient's terminal. Long bodies are left for `aos inbox`.
 export function wakeLine(m: {
   fromName: string;
   fromId: string | null;
   body: string;
 }): string {
-  const who = m.fromId
-    ? `agent session "${m.fromName}"`
-    : "the user (via AgentOS)";
+  const short = m.fromId ? shortId(m.fromId) : null;
+  const who = short ? `"${m.fromName}" (${short})` : "the user (via AgentOS)";
   const oneLine = m.body.replace(/\s*\n\s*/g, " ").trim();
   const text =
     oneLine.length <= INLINE_LIMIT
       ? `: ${oneLine}`
       : ` (${m.body.length} chars). Read it with: aos inbox`;
-  const reply = m.fromId
-    ? ` Reply with: aos send ${m.fromName} "<message>"`
-    : "";
+  // By id: a reply can't break when either side is renamed.
+  const reply = short ? ` Reply with: aos send ${short} "<message>"` : "";
   return `[AgentOS message from ${who}]${text}.${reply}`;
 }
 
