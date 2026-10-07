@@ -33,11 +33,13 @@ import { listItems, saveItem, settle } from "./store";
 import {
   deleteQueued,
   editQueued,
+  enqueue,
   listQueue,
   moveQueued,
   queuedSessions,
 } from "./queued";
 import { fallbackFileSuggestions } from "./files";
+import { holdsQueue, settingUp } from "../sessions/setup-progress";
 import type { FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
 import { restoreActivity, track } from "./activity";
@@ -109,15 +111,23 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   } else if (e.type === "state") {
     live.state = e.state;
     emit(sessionId, e);
-    // Its turn ended on code from before a redeploy: close it now. Its
-    // queue is empty unless its agent died mid-turn; a current worker then
-    // takes what's left.
+    clearTimeout(live.retiring);
+    live.retiring = undefined;
+    // Its turn ended on code from before a redeploy: it goes, and the next
+    // message starts a current worker. Its guess at that message comes a
+    // few seconds after the turn ends, so it waits for it, unless messages
+    // are queued (its agent died mid-turn) for a current worker to take.
     if (isStaleWorker(live.build, buildId(), e.state)) {
-      stopChat(sessionId);
-      void resumeQueue(sessionId);
+      if (listQueue(sessionId).length) retire(sessionId, live);
+      else
+        live.retiring = setTimeout(
+          () => retire(sessionId, live),
+          SUGGESTION_WAIT_MS
+        );
     }
   } else if (e.type === "suggestion") {
     emit(sessionId, e);
+    if (live.retiring && e.text) retire(sessionId, live);
   } else if (e.type === "queue") {
     emitQueue(sessionId);
   } else if (e.type === "context") {
@@ -148,7 +158,9 @@ function checkChattable(session: Session): void {
 // unless only an existing one will do (reattaching, stopping).
 async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
   const existing = registry.live.get(sessionId);
-  if (existing) return existing;
+  if (existing && !existing.retiring) return existing;
+  // A message for a worker that's on its way out goes to a current one.
+  if (existing) retire(sessionId, existing, false);
   const pending = registry.connecting.get(sessionId);
   if (pending) return pending;
   const connecting = (async () => {
@@ -217,6 +229,16 @@ export async function sendChat(
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
+  // Its worktree is still being set up: the message waits its turn.
+  if (settingUp(sessionId)) {
+    enqueue(sessionId, {
+      id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
+      text,
+      images: input.images,
+    });
+    emitQueue(sessionId);
+    return;
+  }
   const live = await ensureLive(sessionId);
   live.worker.command({
     type: "send",
@@ -255,7 +277,7 @@ const RESUME_EVERY_MS = 60_000;
 const RESUME_WITHIN_MS = 60 * 60 * 1000;
 const resumed = new Map<string, number>();
 async function resumeQueue(sessionId: string): Promise<void> {
-  if (!listQueue(sessionId).length) return;
+  if (!listQueue(sessionId).length || holdsQueue(sessionId)) return;
   // Switched to the terminal: its agent runs there now, and a chat worker
   // on the same conversation would race it. The queue waits on screen.
   const session = db
@@ -285,6 +307,8 @@ export async function sendQueuedNow(
   during?: string
 ) {
   if (!listQueue(sessionId).some((m) => m.id === id)) return;
+  if (settingUp(sessionId))
+    throw new Error("It's sent once the worktree is set up");
   const live = await ensureLive(sessionId);
   if (!live.canQueue)
     throw new Error("Reload to send this: the chat is on an older version");
@@ -431,6 +455,18 @@ export async function interruptChat(sessionId: string): Promise<void> {
 }
 
 // Ends the conversation: its worker closes the agent and exits.
+// How long a worker from an older build waits for its guess at the next
+// message before it goes.
+const SUGGESTION_WAIT_MS = 2 * 60 * 1000;
+
+function retire(sessionId: string, live: Live, resume = true): void {
+  clearTimeout(live.retiring);
+  live.retiring = undefined;
+  if (registry.live.get(sessionId) !== live) return;
+  stopChat(sessionId);
+  if (resume) void resumeQueue(sessionId);
+}
+
 export function stopChat(sessionId: string): void {
   const live = registry.live.get(sessionId);
   if (live) {
@@ -447,6 +483,18 @@ export function stopChat(sessionId: string): void {
 
 export function chatState(sessionId: string): ChatState | null {
   return registry.live.get(sessionId)?.state ?? null;
+}
+
+// The state of a chat whose worker may still be running from before a
+// restart: connects to that worker (never starts one) to ask. Null when no
+// worker runs; throws when one runs but can't be reached.
+export async function chatStateNow(
+  sessionId: string
+): Promise<ChatState | null> {
+  const known = chatState(sessionId);
+  if (known) return known;
+  if (!runningWorkers().includes(sessionId)) return null;
+  return (await ensureLive(sessionId, false)).state;
 }
 
 export function stopChatTask(sessionId: string, taskId: string): void {

@@ -79,3 +79,19 @@ function undoneRanges(items: ChatItem[]): Map<number, number> {
   }
   return new Map(merged);
 }
+
+// Whether a block would render the same as before: items keep their identity
+// until they change, so a streamed delta re-renders only its own block.
+export function sameBlock(a: TimelineBlock, b: TimelineBlock): boolean {
+  if (a === b) return true;
+  if (a.type === "item" && b.type === "item") return a.item === b.item;
+  if (a.type === "tools" && b.type === "tools")
+    return sameItems(a.tools, b.tools);
+  if (a.type === "undone" && b.type === "undone")
+    return a.undo === b.undo && sameItems(a.items, b.items);
+  return false;
+}
+
+function sameItems(a: readonly ChatItem[], b: readonly ChatItem[]): boolean {
+  return a.length === b.length && a.every((item, i) => item === b[i]);
+}

@@ -130,10 +130,8 @@ describe("authorize", () => {
     const strict = { ...policy, requireOnTailnet: true };
     expect(authorize(req("100.64.0.5"), strict).ok).toBe(false);
     expect(
-      authorize(
-        req("100.64.0.5", { cookie: "aos_device=aosd_good" }),
-        strict
-      ).ok
+      authorize(req("100.64.0.5", { cookie: "aos_device=aosd_good" }), strict)
+        .ok
     ).toBe(true);
   });
 

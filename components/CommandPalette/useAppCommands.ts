@@ -5,11 +5,15 @@ import { useTheme } from "next-themes";
 import {
   Archive,
   Bell,
+  Clock,
   Code,
+  FolderGit2,
+  FolderPlus,
   Gauge,
   LayoutGrid,
   ListTodo,
   MessageSquare,
+  MessageSquarePlus,
   MessagesSquare,
   Moon,
   Plus,
@@ -27,7 +31,12 @@ import { devicesUiActions } from "@/stores/devicesUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { tasksUiActions } from "@/stores/tasksUi";
+import { newDraft } from "@/stores/drafts";
+import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
+import { schedulesUiActions } from "@/stores/schedulesUi";
+import { phoneNotifyUiActions } from "@/stores/phoneNotifyUi";
 import { usageUiActions } from "@/stores/usageUi";
+import { DRAFT_KEYS } from "@/lib/drafts";
 
 const LAST_THEME = "agentOS-last-theme-";
 
@@ -49,13 +58,11 @@ function switchMode(current: string | undefined, to: "light" | "dark"): string {
 export function useAppCommands({
   sessions,
   onSelectSession,
-  onNewSession,
   onSearchCode,
   onNotificationSettings,
 }: {
   sessions: Session[];
   onSelectSession: (session: Session) => void;
-  onNewSession: () => void;
   onSearchCode: () => void;
   onNotificationSettings?: () => void;
 }) {
@@ -64,23 +71,51 @@ export function useAppCommands({
   const { workspaceId } = useSnapshot(sidebarUi);
   const current = workspaces.find((w) => w.id === workspaceId) ?? null;
   const dark = resolvedTheme?.startsWith("dark") ?? false;
+  const addProject = useAddProject();
 
   const app: PaletteCommand[] = [
     {
       id: "app.new-session",
-      title: "New session or chat",
+      title: "New session",
       group: "Actions",
-      keywords: ["create", "start"],
+      keywords: ["create", "start", "chat", "draft"],
+      hint: DRAFT_KEYS.current,
       icon: Plus,
-      run: onNewSession,
+      run: () => newDraft({ kind: "current" }),
+    },
+    {
+      id: "app.new-session-in",
+      title: "New session in project…",
+      group: "Actions",
+      keywords: ["create", "start", "choose", "pick"],
+      hint: DRAFT_KEYS.choose,
+      icon: FolderGit2,
+      run: () => newDraft({ kind: "choose" }),
+    },
+    {
+      id: "app.new-scratch",
+      title: "New scratch chat",
+      group: "Actions",
+      keywords: ["create", "no project", "quick"],
+      hint: DRAFT_KEYS.scratch,
+      icon: MessageSquarePlus,
+      run: () => newDraft({ kind: "scratch" }),
     },
     {
       id: "app.new-task",
       title: "New task",
       group: "Actions",
-      keywords: ["background", "pull request"],
+      keywords: ["background", "pull request", "pr"],
       icon: ListTodo,
-      run: tasksUiActions.openNew,
+      run: () => newDraft({ kind: "current", openPr: true }),
+    },
+    {
+      id: "app.add-project",
+      title: "Add project",
+      group: "Actions",
+      keywords: ["clone", "folder", "repository", "new project", "git init"],
+      icon: FolderPlus,
+      run: addProject,
     },
     ...(current
       ? [
@@ -116,6 +151,22 @@ export function useAppCommands({
       group: "Go to",
       icon: ListTodo,
       run: tasksUiActions.openPanel,
+    },
+    {
+      id: "app.schedules",
+      title: "Schedules",
+      group: "Go to",
+      keywords: ["cron", "timer", "recurring", "every day"],
+      icon: Clock,
+      run: () => schedulesUiActions.open(current?.id ?? null),
+    },
+    {
+      id: "app.phone-notifications",
+      title: "Phone notifications",
+      group: "Go to",
+      keywords: ["telegram", "notify", "alerts", "push"],
+      icon: Smartphone,
+      run: () => phoneNotifyUiActions.setOpen(true),
     },
     {
       id: "app.messages",

@@ -49,3 +49,26 @@ export function shortPath(path: string, segments = 3): string {
     ? `…/${parts.slice(-segments).join("/")}`
     : path;
 }
+
+// A unified diff's two sides, as the before and after of a change.
+export function unifiedToDiff(path: string, diff: string, added = false) {
+  if (added) return { path, before: "", after: diff };
+  const before: string[] = [];
+  const after: string[] = [];
+  // Headers (Index:, ===, ---/+++) come before the first hunk.
+  let inHunk = !diff.includes("@@");
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("@@")) {
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk || line.startsWith("\\")) continue;
+    if (line.startsWith("-")) before.push(line.slice(1));
+    else if (line.startsWith("+")) after.push(line.slice(1));
+    else {
+      before.push(line.slice(1));
+      after.push(line.slice(1));
+    }
+  }
+  return { path, before: before.join("\n"), after: after.join("\n") };
+}

@@ -1,4 +1,5 @@
 import { db, type Session } from "../db";
+import { isMirror, remoteTaskAction } from "./remote";
 import { deleteWorktree } from "../worktrees";
 import { settleWorktree, type MergedAs } from "../done/worktree";
 import {
@@ -8,6 +9,7 @@ import {
 import { republishAfterMerge } from "../lumifyhub/publish";
 import { restackAfterMerge } from "../stacks/restack";
 import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
+import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
 import { run } from "./gh";
 import { canSignOff } from "./state";
 import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
@@ -86,6 +88,8 @@ export async function signOffTask(
   const session = getTaskSession(id);
   if (session.task_status !== "running")
     throw new Error(`Task is already ${session.task_status}`);
+  // Its own machine checks the gates and merges.
+  if (isMirror(session)) return remoteTaskAction(session, "merge", opts.head);
   const repo = projectPathFor(session);
   if (!repo) throw new Error("Task has no project");
   const refusal = signOffRefusal(id);
@@ -121,6 +125,12 @@ export async function signOffTask(
     signingOff.delete(id);
   }
   syncTaskCardInBackground(session, "merged", pr);
+  const head = opts.head ?? pr!.head;
+  resolveMergedTaskAsks(
+    id,
+    pr!.url,
+    `PR #${pr!.number} merged${head ? ` at ${head.slice(0, 7)}` : ""} by sign-off`
+  );
   const done = finishMerge(
     session,
     repo,
@@ -140,6 +150,7 @@ export async function dropTask(id: string): Promise<void> {
   const session = getTaskSession(id);
   if (session.task_status !== "running")
     throw new Error(`Task is already ${session.task_status}`);
+  if (isMirror(session)) return remoteTaskAction(session, "drop");
   const repo = projectPathFor(session);
   if (!repo) throw new Error("Task has no project");
   const children = liveChildren(id);

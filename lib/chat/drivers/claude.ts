@@ -11,6 +11,7 @@ import { InputQueue } from "../queue";
 import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
 import { toChatContext, usageTotals } from "../context";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
+import { SuggestionTrace } from "./suggestion-trace";
 import { redact } from "../../orchestrator/untrusted";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
@@ -197,10 +198,20 @@ export const claudeDriver: ChatDriver = {
           preset: "claude_code",
           append: options.systemAppend,
         },
-        env: { ...process.env, ...options.env },
+        env: {
+          ...process.env,
+          ...options.env,
+          // When the agent is done with every turn it had queued: the end
+          // of a turn that never sent its result.
+          CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1",
+        },
       },
     });
     const mapper = new ClaudeMapper();
+    const trace = new SuggestionTrace(
+      (line) => console.error(`${new Date().toISOString()} ${line}`),
+      () => plan
+    );
     let sessionId = options.resumeId ?? null;
 
     // What the agent restored on starting: a resumed conversation's totals
@@ -224,6 +235,7 @@ export const claudeDriver: ChatDriver = {
           const m = message as unknown as ClaudeMessage;
           if (m.session_id) sessionId = m.session_id;
           planFile = writtenPlanFile(m) ?? planFile;
+          trace.message(m);
           for (const e of mapper.map(m)) out.push(e);
           // How full the window is now, for the meter, without holding up
           // the conversation.
@@ -244,8 +256,9 @@ export const claudeDriver: ChatDriver = {
     })();
 
     return {
-      send(text, images) {
+      send(text, images, sendOptions) {
         mapper.sent(text);
+        trace.sent();
         const content = [
           ...(images ?? []).map((img) => ({
             type: "image" as const,
@@ -258,11 +271,19 @@ export const claudeDriver: ChatDriver = {
           { type: "text" as const, text },
         ];
         const checkpoint = randomUUID();
+        // The interrupt goes out first, and the message right behind it,
+        // before the stopped turn has ended: the CLI starts whatever it has
+        // queued the moment a turn ends, and "now" puts this ahead of a
+        // background task's notice already waiting there. Sent after the
+        // stopped turn's result, a notice would take the next turn and the
+        // agent would answer the interruption without having seen this.
+        if (sendOptions?.now) void q.interrupt().catch(() => {});
         input.push({
           type: "user",
           uuid: checkpoint,
           message: { role: "user", content },
           parent_tool_use_id: null,
+          ...(sendOptions?.now && { priority: "now" }),
         } as SDKUserMessage);
         return checkpoint;
       },
@@ -318,6 +339,7 @@ export const claudeDriver: ChatDriver = {
         };
       },
       close() {
+        trace.closed();
         approvals.expireAll();
         input.end();
         q.close();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupTimeline } from "./group";
+import { groupTimeline, sameBlock } from "./group";
 import type { ChatItem } from "./events";
 
 const tool = (id: string): ChatItem => ({
@@ -147,5 +147,69 @@ describe("toolTitle", () => {
     expect(toolTitle("mcp__chrome-devtools__take_screenshot", {})).toBe(
       "chrome-devtools: take screenshot"
     );
+  });
+});
+
+describe("sameBlock", () => {
+  it("keeps every block but the one a streamed delta changed", () => {
+    const items = [text("a"), tool("t1"), tool("t2"), text("b")];
+    const before = groupTimeline(items);
+    const b = items[3] as Extract<ChatItem, { kind: "assistant" }>;
+    const after = groupTimeline([...items.slice(0, 3), { ...b, text: "b!" }]);
+    expect(before.map((x, i) => sameBlock(x, after[i]))).toEqual([
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it("sees a tool group change when one of its calls finishes", () => {
+    const t1 = tool("t1");
+    const running = { ...tool("t2"), status: "running" } as ChatItem;
+    expect(
+      sameBlock(
+        groupTimeline([t1, running])[0],
+        groupTimeline([t1, tool("t2")])[0]
+      )
+    ).toBe(false);
+  });
+
+  it("sees a group that gained a call", () => {
+    const t1 = tool("t1");
+    expect(
+      sameBlock(groupTimeline([t1])[0], groupTimeline([t1, tool("t2")])[0])
+    ).toBe(false);
+  });
+});
+
+describe("sameBlock on undone ranges", () => {
+  const items = [user("u1"), user("u2"), text("a2"), undo("x", "u2")];
+  const undone = (list: ChatItem[]) =>
+    groupTimeline(list).find((b) => b.type === "undone")!;
+
+  it("keeps a range rebuilt from the same items", () => {
+    expect(sameBlock(undone(items), undone([...items]))).toBe(true);
+  });
+
+  it("sees a range whose message changed or whose undo was replaced", () => {
+    const edited = [...items];
+    edited[2] = {
+      ...(items[2] as Extract<ChatItem, { kind: "assistant" }>),
+      text: "a2!",
+    };
+    expect(sameBlock(undone(items), undone(edited))).toBe(false);
+    const redone = [...items.slice(0, 3), { ...items[3] }];
+    expect(sameBlock(undone(items), undone(redone))).toBe(false);
+  });
+
+  it("sees a range that gained an item", () => {
+    const longer = [
+      user("u1"),
+      user("u2"),
+      text("a2"),
+      tool("t"),
+      undo("x", "u2"),
+    ];
+    expect(sameBlock(undone(items), undone(longer))).toBe(false);
   });
 });

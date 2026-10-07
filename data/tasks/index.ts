@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TaskView } from "@/lib/tasks";
 import { sessionKeys } from "../sessions/keys";
+import { taskKeys } from "./keys";
 
-export const taskKeys = {
-  all: ["tasks"] as const,
-  list: () => [...taskKeys.all, "list"] as const,
-};
+export { taskKeys };
+export * from "./move";
 
 async function json<T>(res: Response): Promise<T> {
   const data = await res.json();
@@ -18,11 +17,12 @@ export function useTasksQuery() {
     queryKey: taskKeys.list(),
     queryFn: async () =>
       (await json<{ tasks: TaskView[] }>(await fetch("/api/tasks"))).tasks,
-    refetchInterval: 5000,
+    // Status changes also arrive over /ws/status.
+    refetchInterval: 15000,
   });
 }
 
-function useTaskMutation<V>(fn: (v: V) => Promise<unknown>) {
+function useTaskMutation<V, R = unknown>(fn: (v: V) => Promise<R>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
@@ -35,8 +35,14 @@ function useTaskMutation<V>(fn: (v: V) => Promise<unknown>) {
 
 export function useCreateTask() {
   return useTaskMutation(
-    async (input: { projectId: string; prompt: string; model?: string }) =>
-      json(
+    async (input: {
+      projectId: string;
+      prompt: string;
+      model?: string;
+      baseBranch?: string;
+      hostId?: string;
+    }) =>
+      json<{ session: { id: string } }>(
         await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -55,5 +61,17 @@ export function useSignOffTask() {
 export function useDropTask() {
   return useTaskMutation(async (id: string) =>
     json(await fetch(`/api/tasks/${id}/drop`, { method: "POST" }))
+  );
+}
+
+export function useResumeTask() {
+  return useTaskMutation(async (input: { id: string; force?: boolean }) =>
+    json(
+      await fetch(`/api/tasks/${input.id}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: input.force === true }),
+      })
+    )
   );
 }

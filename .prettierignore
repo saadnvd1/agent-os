@@ -1,4 +1,6 @@
 .next
+.next-build
+.next-prev
 node_modules
 src-tauri/target
 src-tauri/gen

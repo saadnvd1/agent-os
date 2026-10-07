@@ -47,7 +47,14 @@ export interface UndoResult extends UndoPreview {
 
 export interface ChatConversation {
   // Returns the provider's id for the message, to undo back to it.
-  send(text: string, images?: ChatImage[]): string | undefined;
+  // `now`: the running turn stops for it, and it's the very next thing the
+  // agent reads, ahead of anything the agent queued itself (a background
+  // task's notice). That turn still ends on its own, before this one.
+  send(
+    text: string,
+    images?: ChatImage[],
+    options?: { now?: boolean }
+  ): string | undefined;
   // A command the driver answers itself, without starting a turn (/mcp):
   // the items to show, or null to send the text as a message.
   runLocal?(text: string): Promise<ChatItem[]> | null;
@@ -69,6 +76,10 @@ export interface ChatConversation {
 // One per agent CLI that can be driven as chat.
 export interface ChatDriver {
   id: string;
+  // Plan mode, and tools served in-process (mcpServers): both Claude's
+  // unless a driver says otherwise.
+  plan?: boolean;
+  inProcessTools?: boolean;
   start(options: ChatStartOptions): ChatConversation;
   // What the agent offers in a folder (its commands, skills and models),
   // without starting a conversation.

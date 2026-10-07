@@ -69,22 +69,33 @@ npm run dev  # http://localhost:3011
 
 ## Supported Agents
 
-| Agent       | Resume | Fork | Auto-Approve                     |
-| ----------- | ------ | ---- | -------------------------------- |
-| Claude Code | ✅     | ✅   | `--dangerously-skip-permissions` |
-| Codex       | ❌     | ❌   | `--approval-mode full-auto`      |
-| OpenCode    | ❌     | ❌   | Config file                      |
-| Kilo Code   | ✅     | ✅   | Config file                      |
-| Gemini CLI  | ❌     | ❌   | `--yolomode`                     |
-| Aider       | ❌     | ❌   | `--yes`                          |
-| Cursor CLI  | ❌     | ❌   | N/A                              |
-| Amp         | ❌     | ❌   | `--dangerously-allow-all`        |
-| Pi          | ❌     | ❌   | N/A                              |
-| Oh My Pi    | ❌     | ❌   | N/A                              |
+| Agent       | Chat | Resume | Fork | Auto-Approve                                 |
+| ----------- | ---- | ------ | ---- | -------------------------------------------- |
+| Claude Code | ✅   | ✅     | ✅   | `--dangerously-skip-permissions`             |
+| Codex       | ✅   | ✅     | ✅   | `--dangerously-bypass-approvals-and-sandbox` |
+| OpenCode    | ✅   | ✅     | ✅   | `--auto`                                     |
+| Pi          | ✅   | ✅     | ✅   | Never asks                                   |
+| Kilo Code   | ❌   | ✅     | ✅   | Config file                                  |
+| Gemini CLI  | ❌   | ❌     | ❌   | `--yolo`                                     |
+| Aider       | ❌   | ❌     | ❌   | `--yes`                                      |
+| Cursor CLI  | ❌   | ✅     | ❌   | `--force`                                    |
+| Amp         | ❌   | ✅     | ❌   | `--dangerously-allow-all`                    |
+| Oh My Pi    | ❌   | ❌     | ❌   | N/A                                          |
+
+The new-session picker says when an agent isn't installed or needs a sign-in
+first, and what to run (`GET /api/agents/status`).
 
 ## Features
 
 - **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
+- **One keystroke to a new session** - ⌘N opens a draft in the project you're in (⌘⇧N picks one, ⌘⌥N is a scratch chat). Agent, model, access, worktree, base branch and machine are chips on the draft; nothing is created until you send
+- **Chat with your agents** - Streaming replies, inline diffs, plan mode, a queue you can steer, next-prompt suggestions, `@file` mentions, and a context meter
+- **Visuals in chat** - Agents preview and show charts, tables and HTML pages inline, sandboxed
+- **Live status** - Every session moves between Needs you, Working and Done the moment it changes, including terminal programs that report their own state (OSC 7501)
+- **Tasks that end in a PR** - Hand off work to its own worktree, stack tasks from a board, and let a workspace orchestrator review and merge
+- **Schedules** - Start tasks, chats or orchestrator messages on a timer, or check in on any session, with run history
+- **Phone notifications** - A failed schedule run, or an agent's `aos notify`, reaches your phone through Telegram or a command of your own
+- **Machine load** - A gauge in the sidebar, each busy session's cores and memory, a note to agents before they start a full suite or build on a loaded machine, and one phone alert when it stays red
 - **Voice-to-text** - Dictate prompts to your coding sessions hands-free
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
 - **tmux by default** - Every session lives in tmux, so closing the browser never kills your work
@@ -93,7 +104,7 @@ npm run dev  # http://localhost:3011
 - **Command palette** - ⌘K (or the search button on a phone) finds any session and every action: new session, workspaces, orchestrator, plan mode, compact, Usage, Devices, Archived, theme, stop the turn
 - **Code search** - Fast codebase search with syntax-highlighted results (from the palette)
 - **File picker** - Browse and attach files to sessions, with direct upload from mobile
-- **Clone from GitHub** - Clone repos directly from the UI when creating projects
+- **Add project** - From ⌘K: pick a machine, then open a folder on it, clone a URL (with git's progress), or start one from a name (folder, `git init`, first commit; a private GitHub repo only if you click for one)
 - **Git integration** - Status, diffs, commits, PRs from the UI
 - **Git worktrees** - Isolated branches with auto-setup
 - **Dev servers** - Start/stop Node.js and Docker servers
@@ -105,10 +116,14 @@ Sessions open as a chat by default: streaming replies, tool calls folded into
 expandable steps, inline diffs for edits, a plan checklist, highlighted code
 and mermaid diagrams, subagent cards, image attachments (pick, paste or drag
 them in) and a Stop button, all readable on a phone. Chat drives the same
-agent as the terminal (Claude Code through the Agent SDK, with your own Claude
-login). The **Chat /
+agent as the terminal, with your own logins: Claude Code through the Agent
+SDK, Codex through `codex app-server`, OpenCode through its own `opencode
+serve` (loopback only, behind a per-conversation password) and Pi through its
+RPC mode. Pi never asks before a tool, so AgentOS loads a small Pi extension
+that asks the chat as the access setting says. The **Chat /
 Terminal** switch in the tab bar hands the same conversation between the two:
-the terminal resumes it with `claude --resume`, and switching back closes the
+the terminal resumes it (`claude --resume`, `codex resume`, `opencode
+--session`, `pi --session`), and switching back closes the
 terminal so only one side drives it. Each chat conversation runs in its own
 worker process (in tmux, like terminal sessions), so restarting or updating
 AgentOS never cuts off a turn: the server reconnects to running workers when
@@ -145,7 +160,9 @@ it in the composer as a blockquote.
 A message sent while the agent is working waits in a queue above the
 composer, kept on the server so a reload doesn't lose it, and goes when the
 turn ends. Queued messages can be edited, moved or removed, and **Send now**
-stops the turn (as Esc does) and sends that one next.
+stops the turn (as Esc does) and sends that one with the stop, so it's the
+very next thing the agent reads, ahead of a background task's notice it had
+waiting. A message typed right after Esc goes the same way.
 
 **Plan mode** (the **Plan** toggle under the composer, or Shift+Tab) has the
 agent read and plan without changing anything; it's remembered per session.
@@ -201,19 +218,57 @@ under **Ask first** they ask like any other tool. Previews need Chrome, Chromium
 installed (or `AGENTOS_CHROME` pointing at one).
 
 Chat runs on this machine; sessions on other machines use the terminal.
-Drivers for other agent CLIs plug into `lib/chat/drivers`.
+Drivers for other agent CLIs plug into `lib/chat/drivers`; undo, `@file`
+suggestions and visuals are Claude-only for now, and plan mode is Claude and
+OpenCode.
 
 ![A session in terminal view, with the agent asking before it runs a command](screenshots/terminal.png)
 
 ## Tasks
 
-Hand off work and keep going. **Tasks → New task** takes a project and a
-prompt. AgentOS creates a git worktree and branch, starts Claude there in tmux
+Hand off work and keep going. A task is a draft with **Open a PR when
+done** turned on (**New task** in ⌘K, the sidebar's New menu or the Tasks
+panel opens one). AgentOS creates a git worktree and branch, starts Claude there in tmux
 with a brief to finish by pushing and opening a pull request, and tracks it:
 Working, Needs input, Blocked, Ready for review, Checks failing or Agent
 exited. **Sign off & merge** squash-merges the PR (refused while CI is failing
 or pending), then removes the session, worktree and branches. **Drop** closes
 the PR and removes everything. Agents never merge their own work.
+
+## New sessions
+
+⌘N (the **+** on a phone) opens a draft: a composer in the current project, or
+the one you used last. Nothing exists until you send. Then the session is
+made, and with a worktree its setup runs in the chat, stage by stage: fetch,
+worktree, env files, dependencies, the project's setup script, with a log
+tail. The first message waits in the queue until setup is done, so the agent
+never starts on half-installed dependencies, and a restart can't lose it. The
+worktree starts on a temporary branch, renamed from the first message once
+it has a title (it keeps the temporary name if there's nothing to name it
+from).
+
+⌘N reuses the project's empty draft; a draft you've typed in stays in the
+sidebar's **Drafts** until you send or discard it. A new draft takes the
+agent, model and access you were using; a project's own agent and model win.
+Chats with no project run in `~/.agent-os/scratch`.
+
+A task or session started from a prompt gets a short name: the brief's first
+heading at once (when the prompt points at a readable `.md` brief), then a
+2-6 word title from a quick Haiku call a few seconds later. A chat opened as
+"Session 4" is named after its first message. Anything named by hand, a card's
+title, a schedule's name or `--name` is kept as given.
+
+The agent starts once its worktree has its dependencies. On macOS the main
+checkout's `node_modules` (and workspace ones like `apps/web/node_modules`)
+are cloned with `cp -Rc` when the lockfile matches, and a spare clone waits in
+`~/.agent-os/spare` so the next task takes it by rename, in milliseconds.
+Otherwise, and on Linux, the lockfile's frozen install runs (`npm ci`,
+`pnpm/yarn/bun --frozen-lockfile`), then a plain install, always with
+devDependencies even though the server runs with `NODE_ENV=production`. A
+project's `.agent-os/worktrees.json` `setup` commands replace all of this.
+Starting a task returns at once and shows **Setting up** until the agent
+launches; a restart in the middle resumes it. A failed setup shows on the task
+and is in the agent's first prompt (redacted, as data).
 
 Before opening its PR, every task runs `/do-code-review` (the project's
 `.claude/skills/do-code-review`, or Claude Code's `/code-review` where a
@@ -226,6 +281,14 @@ this repository's CI fails one too. The review agents are in
 [.claude/skills](.claude/skills/README.md).
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
+
+Tracking PRs stays inside GitHub's GraphQL quota (5,000 points an hour).
+Only running tasks are asked about: a finished task's PR comes from the
+database. One `gh pr list --state open` per repository a minute covers every
+running task with an open PR, and a branch without one is asked about on its
+own at most every 5 minutes. A merge or sign-off always asks fresh. When gh
+reports a rate limit, every gh call backs off until the limit resets, and gh
+failures are logged as `[gh] ...`, at most once a minute for each kind.
 
 ![Tasks in different states: needs input, ready for review, working, merged](screenshots/tasks.png)
 
@@ -246,6 +309,92 @@ waits for each restacked PR's checks before merging it. A conflict stops on
 that card with the exact command to fix it. How it works:
 [docs/stacks.md](docs/stacks.md).
 
+### Schedules
+
+A schedule starts agent work at set times without you opening AgentOS:
+**Schedules** in the workspace menu, the sidebar's **⋯** menu, or ⌘K. Each has a
+name, a time (presets for hourly, daily, weekdays and weekly, or any
+five-field cron expression, in America/Chicago unless you pick another zone),
+a project and a prompt, and starts one of:
+
+- **Task**: a background task that ends in a pull request, as above.
+- **Session**: a chat session in the project that runs the prompt and stays.
+- **Orchestrator**: the prompt, posted to the workspace's orchestrator as a
+  message from "Schedule <name>", marked as a scheduled prompt so it never
+  counts as an approval.
+- **Message**: the prompt, sent to a session you pick the way `aos send`
+  does, marked the same way. A chat whose agent has exited (idle chats stop
+  after 30 minutes) is started again to take it. The run records `delivered`,
+  `queued` or why it failed. **Schedule check-ins** in a session's **⋯** menu
+  fills one in. The session is stored by id, so renaming it changes nothing;
+  an archived or deleted one fails the run. The orchestrator isn't a target
+  (it has its own kind). A schedule an agent made with `aos schedule add`
+  stays in that agent's workspace and reaches the session labelled as that
+  agent's request, not yours.
+
+The server checks once a minute and claims each run in SQLite before starting
+it, so a time never runs twice. If AgentOS was off when runs were due, it
+runs only the most recent one when it comes back, marked **caught up**. A run
+is **skipped** while the schedule's previous task or session is still working,
+and while the workspace's orchestrator is paused. A run that fails to start is
+recorded with why, noted in the orchestrator's chat and sent to your phone
+(see below), once per failing streak: not again until a run starts. Every run stays in the
+schedule's history with a link to what it started. **Run now** runs one
+immediately, even while the last run is still working (Pause still holds it).
+Task and session runs go through the orchestrator's brakes, like its own
+starts: a braked run is skipped with the brake's reason and tried again on the
+next minute until the brake lifts or a newer run is due (Run now obeys them
+too, once). A schedule whose project has moved to another workspace fails
+until it's edited. Removing a schedule keeps its history.
+
+Task and session schedules run at most hourly, message schedules at most
+every 10 minutes and skip a run (`still working`) while their session is
+still busy, mid-turn or holding a queued message. A task schedule waits
+while any task it started is unfinished (working, waiting on you, in review
+or failing checks), so it can't stack up pull requests. Only one server
+process runs schedules (it holds a lease in the database); a dev server runs
+none unless `AGENTOS_SCHEDULES=on`, and `AGENTOS_SCHEDULES=off` stops them in
+production.
+
+### Machine load
+
+The dot in the sidebar header is the machine's load: green, amber (load
+over 1.5 per core, or memory pressure warning) or red (over 3 per core, or
+critical pressure), with some slack before it drops back. Tap it for the
+numbers and the sessions using the most CPU; a busy session's row shows its
+own share ("3.1 cores · 4.2 GB"), summed over its terminal's process tree
+from one `ps` every 30 seconds.
+
+Nothing is ever stopped, paused or queued. Instead, before an agent starts a
+whole test suite, type check, build, repo-wide lint, `xcodebuild` or
+`pytest`, the Claude hook AgentOS installs tells it what heavy commands are
+already running and how loaded the machine is, so it can narrow the run or
+wait. Targeted runs (`vitest run lib/x.test.ts`) are left alone. `aos heavy
+-- <cmd>` does the same for anything else. When the load stays red for two
+minutes, one message goes to your phone and to each workspace orchestrator,
+naming the top sessions and their heavy commands; the next one waits until
+it has been green for ten minutes. `AGENTOS_LOAD=off` turns it all off.
+
+### Phone notifications
+
+Two things reach your phone: a schedule run that failed, and whatever an
+agent sends on purpose with `aos notify "<text>"` (the orchestrator's morning
+report, a real milestone). Status changes don't; that's the in-app Needs-you
+list. Each source sends at most one a minute: anything more inside the minute
+waits and goes out as one message (kept in the database, so a restart
+doesn't lose it; past 20 waiting, more are dropped), and the same text twice
+goes once.
+
+Set it up in **Phone notifications** (⌘K, or the line at the bottom of
+Schedules), one of:
+
+- **Command**: `AGENTOS_NOTIFY_CMD` in the server's environment, a shell
+  command that gets the message on stdin. It wins when set. For example, a
+  Telegram sender on another machine:
+  `AGENTOS_NOTIFY_CMD='ssh -o BatchMode=yes me@box "NOTIFY_SOURCE=agentos ~/bin/notify"'`.
+- **Telegram**: a bot token and your chat id. The token is kept in the
+  database and never shown again, returned by the API or logged.
+
 ## Agent network
 
 Sessions started by AgentOS can find and talk to each other without you,
@@ -262,8 +411,15 @@ aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
+                                  # (both take --name "..." before the prompt)
+aos move <session> <machine>      # carry a task on there ("here" brings it back)
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
+aos schedules                     # every schedule, its next run and last outcome
+aos schedule run <name>           # run a schedule now
+aos schedule add --session <s> --every 30m "prompt"  # check in on a session
+aos notify "text"                 # push a message to your phone
+aos heavy -- npm test             # run it now; says first what else heavy is running
 aos done <session>                # finished: merge through the gates, archive
 aos done --all-idle               # the same for every idle session around you
 aos docs [query]                  # LumifyHub pages, when the workspace is linked
@@ -450,7 +606,7 @@ approved`). An approval covers that one item only: a held task's approval
   minutes. Agents on this machine reach every route but can't make your
   authenticator sign, and neither `aos` nor the orchestrator's tools can
   answer or resume. Passkeys belong to the host they were made on
-  (localhost, the tailnet's https name, the Connect host), so add one on
+  (localhost or the tailnet's https name), so add one on
   each in Devices. The first one on an install is trusted on first use,
   once: every later one needs a code from a device that has one, even after
   every passkey is revoked. Revoking always needs a passkey, the last one
@@ -501,6 +657,40 @@ the same project.
 On other machines, files, git, worktrees, dev servers and summarize are not
 available yet; the terminal, status, rename and send-keys are.
 
+### Tasks on another machine
+
+A machine that runs its own AgentOS can take tasks. Run AgentOS there (any
+port behind your own front door, or plain 3011 on loopback plus a proxy), then
+press **Link** (the chain icon) next to it in Machines. Linking asks that
+AgentOS for a pairing code over ssh, where its loopback is trusted, and keeps
+the device token it gets back. The token goes straight into this machine's
+database and is never shown.
+
+Once linked:
+
+- **New task → Run on** picks the machine (`aos task --on devbox <project> ...`
+  does the same). That machine creates the worktree, runs the agent and opens
+  the PR on its own. This one lists the task in the sidebar and Tasks with its
+  live state, attaches its terminal over ssh, and sends sign-off and drop to
+  it (pinned to the reviewed commit).
+- **Move** carries a running task between this machine and a linked one,
+  either way. The source stops the agent, commits anything uncommitted as
+  `wip: moving to <machine>`, pushes the branch and hands over Claude's
+  conversation. The target finds the project by its git remote, then by its
+  folder relative to `~`, and clones it when it has neither. It checks the
+  branch out (reusing a worktree still on it), rewrites the conversation's
+  paths and resumes it with `--resume`. The source keeps its row, marked moved.
+  If the target refuses, the agent resumes where it was. If the source can't
+  tell whether it arrived (a timeout, a restart), the task stays **Moving**:
+  press Move again to finish it, or **Resume here**, which first asks the
+  other machine whether it arrived. Tasks waiting on you (an escalated gate or
+  an open ask), card tasks and stacked tasks don't move yet.
+
+Works for any project. Requests to the other machine carry its device token,
+so it can sit behind a proxy that never trusts loopback. Linking needs this
+machine or the tailnet, and only pairs with the ssh target's own host name.
+The orchestrator still starts tasks on its own machine only.
+
 ## Security
 
 AgentOS gives whoever uses it a terminal as you, so it decides who that is:
@@ -536,26 +726,6 @@ and API calls or terminal connections made by another website's page.
 | `AGENTOS_TOKEN`                        | A device token for `aos` and the MCP server when they reach AgentOS over a network that needs pairing. |
 | `AGENTOS_AUTH=off`                     | No pairing, for when your own proxy does the login. Anyone who reaches the port gets a shell.          |
 
-## Connect (in development)
-
-AgentOS Connect will let you reach this machine from anywhere through a
-hosted relay, without opening a port. The client half is here, in
-`lib/connect/`. Connect is off unless `~/.agent-os/connect/connect.json`
-exists.
-
-The relay can't read your sessions, and you can check that in this code
-rather than take it on trust:
-
-- Your machine generates the TLS key for its Connect address and never sends
-  it anywhere (`lib/connect/config.ts`, `serve.ts`). Phones complete TLS with
-  this process, not with the relay.
-- The relay only sees the server name a connection asks for, then passes the
-  encrypted bytes down your machine's tunnel (`lib/connect/frames.ts`,
-  `mux.ts`).
-- Everything that arrives through the tunnel goes through the same
-  paired-device check as Wi-Fi, and is never treated as this machine
-  (`lib/security/auth.test.ts`).
-
 ## Development
 
 ```bash
@@ -565,11 +735,20 @@ npm test             # vitest
 npm run lint         # eslint
 npm run check        # typecheck, lint, format and tests: what CI runs
 scripts/redeploy     # pull, install, build; restarts via $AGENTOS_RESTART only if all of it worked
+scripts/redeploy --rollback  # put the previous build back and restart
 ```
+
+`scripts/redeploy` (and `scripts/autodeploy`, which calls it) builds into
+`.next-build` while the live server keeps serving `.next`. The build is swapped
+in by rename only once it finished with a `BUILD_ID`, right before the restart.
+The build it replaced is kept in `.next-prev` for one rollback, and a failed
+build leaves `.next` as it was.
 
 A pre-commit hook formats and lints staged files, then typechecks and runs the
 tests. CI runs `scripts/check --build` on every pull request and push to main,
-and fails a pull request whose body has no Code review section for its head
+which also holds the app's first-load JavaScript to a budget
+(`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
+it), and fails a pull request whose body has no Code review section for its head
 commit (run `/do-code-review` first; see [Tasks](#tasks)).
 
 ## CLI Commands

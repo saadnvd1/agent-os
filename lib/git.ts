@@ -2,11 +2,12 @@
  * Git utilities for worktree management
  */
 
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Check if a directory is a git repository
@@ -46,7 +47,9 @@ export async function getDefaultBranch(dirPath: string): Promise<string> {
       `git -C "${resolvedPath}" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`,
       { timeout: 5000 }
     );
-    if (stdout.trim()) {
+    // The remote picks this name: anything that isn't a plain branch name
+    // (a "$(...)" a hostile repo could set) is ignored.
+    if (stdout.trim() && isBranchName(stdout.trim())) {
       return stdout.trim();
     }
   } catch {
@@ -160,54 +163,23 @@ export async function remoteBranchExists(
 }
 
 /**
- * Rename a branch locally and optionally on remote
- * Returns the new branch name or throws on error
+ * Rename a local branch that was never pushed. A pushed branch keeps its
+ * name: renaming it on the remote means deleting the old one, which closes
+ * its PR. Throws when it can't rename.
  */
 export async function renameBranch(
   dirPath: string,
   oldBranchName: string,
   newBranchName: string
-): Promise<{ renamed: boolean; remoteRenamed: boolean }> {
+): Promise<void> {
+  if (await remoteBranchExists(dirPath, oldBranchName))
+    throw new Error(`${oldBranchName} is on the remote; keeping its name`);
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  let renamed = false;
-  let remoteRenamed = false;
-
-  // Rename local branch
-  try {
-    await execAsync(
-      `git -C "${resolvedPath}" branch -m "${oldBranchName}" "${newBranchName}"`,
-      { timeout: 10000 }
-    );
-    renamed = true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to rename local branch: ${message}`);
-  }
-
-  // Check if old branch exists on remote and rename there too
-  const hasRemote = await remoteBranchExists(dirPath, oldBranchName);
-  if (hasRemote) {
-    try {
-      // Push new branch to remote
-      await execAsync(
-        `git -C "${resolvedPath}" push origin "${newBranchName}" -u`,
-        { timeout: 30000 }
-      );
-      // Delete old branch from remote
-      await execAsync(
-        `git -C "${resolvedPath}" push origin --delete "${oldBranchName}"`,
-        { timeout: 30000 }
-      );
-      remoteRenamed = true;
-    } catch {
-      // Remote rename failed but local succeeded - that's okay
-      console.error(
-        `Warning: Local branch renamed but remote rename failed for ${oldBranchName}`
-      );
-    }
-  }
-
-  return { renamed, remoteRenamed };
+  await execFileAsync(
+    "git",
+    ["-C", resolvedPath, "branch", "-m", "--", oldBranchName, newBranchName],
+    { timeout: 10000 }
+  );
 }
 
 /**

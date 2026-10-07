@@ -1,17 +1,13 @@
 "use client";
 
-import { DevicesDialog } from "@/components/Devices";
-import { ArchivedDialog, CleanupDialog } from "@/components/Archived";
 import { toast } from "sonner";
 
-import { LumifyHubDialogs } from "@/components/LumifyHub";
 import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
-import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
-import { MessagesDialog } from "@/components/Bus";
+import { useOpenSession } from "@/hooks/useOpenSession";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { memo, useState, useEffect, useCallback, useRef } from "react";
 
 // Debug log buffer - persists even if console is closed
 const debugLogs: string[] = [];
@@ -49,33 +45,124 @@ import { CLAUDE_STATUS_SETTINGS_FLAG } from "@/lib/program-status/claude-flag";
 import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
-import { useQuickStart } from "@/hooks/useQuickStart";
+import { useDraftKeys } from "@/hooks/useDraftKeys";
+import { useDraftRequests } from "@/hooks/useDraftRequests";
+import { newDraft } from "@/stores/drafts";
 import { useOpenOrchestrator } from "@/hooks/useOpenOrchestrator";
-import { CommandPalette, useAppCommands } from "@/components/CommandPalette";
-import { UsageDialog } from "@/components/Usage";
 import { paletteActions, paletteUi } from "@/stores/palette";
+import { useAppCommands } from "@/components/CommandPalette/useAppCommands";
+import { useMoveCommands } from "@/components/Tasks/useMoveCommands";
+import dynamic from "next/dynamic";
 import { chatMetaActions } from "@/stores/chatMeta";
+
+// The app's dialogs open from their stores, so none is needed for the first
+// paint: their code loads right after it.
+const TasksDialog = dynamic(
+  () => import("@/components/Tasks/TasksDialog").then((m) => m.TasksDialog),
+  { ssr: false }
+);
+const AddProjectDialog = dynamic(
+  () =>
+    import("@/components/Projects/AddProject/AddProjectDialog").then(
+      (m) => m.AddProjectDialog
+    ),
+  { ssr: false }
+);
+const SchedulesDialog = dynamic(
+  () =>
+    import("@/components/Schedules/SchedulesDialog").then(
+      (m) => m.SchedulesDialog
+    ),
+  { ssr: false }
+);
+const PhoneNotifyDialog = dynamic(
+  () =>
+    import("@/components/PhoneNotify/PhoneNotifyDialog").then(
+      (m) => m.PhoneNotifyDialog
+    ),
+  { ssr: false }
+);
+const MessagesDialog = dynamic(
+  () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
+  { ssr: false }
+);
+const DevicesDialog = dynamic(
+  () =>
+    import("@/components/Devices/DevicesDialog").then((m) => m.DevicesDialog),
+  { ssr: false }
+);
+const ArchivedDialog = dynamic(
+  () =>
+    import("@/components/Archived/ArchivedDialog").then(
+      (m) => m.ArchivedDialog
+    ),
+  { ssr: false }
+);
+const CleanupDialog = dynamic(
+  () =>
+    import("@/components/Archived/CleanupDialog").then((m) => m.CleanupDialog),
+  { ssr: false }
+);
+const LumifyHubDialogs = dynamic(
+  () =>
+    import("@/components/LumifyHub/LumifyHubDialogs").then(
+      (m) => m.LumifyHubDialogs
+    ),
+  { ssr: false }
+);
+const UsageDialog = dynamic(
+  () => import("@/components/Usage/UsageDialog").then((m) => m.UsageDialog),
+  { ssr: false }
+);
+const MoveDialog = dynamic(
+  () => import("@/components/Tasks/MoveDialog").then((m) => m.MoveDialog),
+  { ssr: false }
+);
+const CommandPalette = dynamic(
+  () =>
+    import("@/components/CommandPalette/CommandPalette").then(
+      (m) => m.CommandPalette
+    ),
+  { ssr: false }
+);
+
+// Held apart from HomeContent, which re-renders on every status push.
+const AppDialogs = memo(function AppDialogs() {
+  return (
+    <>
+      <TasksDialog />
+      <SchedulesDialog />
+      <PhoneNotifyDialog />
+      <AddProjectDialog />
+      <MessagesDialog />
+      <DevicesDialog />
+      <ArchivedDialog />
+      <CleanupDialog />
+      <LumifyHubDialogs />
+      <UsageDialog />
+      <MoveDialog />
+      <CommandPalette />
+    </>
+  );
+});
 
 function HomeContent() {
   // UI State
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
-  const [newSessionProjectId, setNewSessionProjectId] = useState<string | null>(
-    null
-  );
   const [showNotificationSettings, setShowNotificationSettings] =
     useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
 
   // Pane context
-  const { focusedPaneId, attachSession, getActiveTab, addTab } = usePanes();
+  const { focusedPaneId, attachSession, getActiveTab, addTab, openDraft } =
+    usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const { isMobile, isHydrated } = useViewport();
 
   // Data hooks
   const { sessions, fetchSessions } = useSessions();
-  const { projects, fetchProjects } = useProjects();
+  const { projects } = useProjects();
   const {
     startDevServerProjectId,
     setStartDevServerProjectId,
@@ -406,7 +493,8 @@ function HomeContent() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        paletteActions.setOpen(!paletteUi.open);
+        if (paletteUi.open) paletteActions.setOpen(false);
+        else paletteActions.open();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -454,17 +542,27 @@ function HomeContent() {
     ]
   );
 
-  // New session in project handler
+  // A draft in the project, or the current one; sent, it becomes a session.
   const handleNewSessionInProject = useCallback((projectId: string) => {
-    setNewSessionProjectId(projectId || null);
-    setShowNewSessionDialog(true);
+    newDraft(projectId ? { kind: "project", projectId } : { kind: "current" });
   }, []);
+  useDraftKeys();
+  useDraftRequests({
+    sessions,
+    projects,
+    viewing: {
+      session: sessions.find((s) => s.id === focusedActiveTab?.sessionId),
+      draftId: focusedActiveTab?.draftId,
+    },
+    show: (draftId) => {
+      openDraft(focusedPaneId, draftId);
+      if (isMobile) setSidebarOpen(false);
+    },
+  });
 
-  // Session created handler (shared between desktop/mobile)
+  // Opens a session made elsewhere (an orchestrator, a schedule's run).
   const handleSessionCreated = useCallback(
     async (sessionId: string) => {
-      setShowNewSessionDialog(false);
-      setNewSessionProjectId(null);
       await fetchSessions();
 
       const res = await fetch(`/api/sessions/${sessionId}`);
@@ -476,8 +574,6 @@ function HomeContent() {
     [fetchSessions, attachToSession]
   );
 
-  // A project row with no sessions starts one in a tap.
-  useQuickStart(handleSessionCreated);
   // A workspace's orchestrator row opens its chat, made on first open.
   const handleOrchestratorOpened = useCallback(
     (sessionId: string) => {
@@ -487,28 +583,8 @@ function HomeContent() {
     [isMobile, handleSessionCreated]
   );
   useOpenOrchestrator(handleOrchestratorOpened);
-
-  // Project created handler (shared between desktop/mobile)
-  const handleCreateProject = useCallback(
-    async (
-      name: string,
-      workingDirectory: string,
-      agentType?: string
-    ): Promise<string | null> => {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, workingDirectory, agentType }),
-      });
-      const data = await res.json();
-      if (data.project) {
-        await fetchProjects();
-        return data.project.id;
-      }
-      return null;
-    },
-    [fetchProjects]
-  );
+  // A session opened from elsewhere (a schedule's run history).
+  useOpenSession(handleOrchestratorOpened);
 
   // Open terminal in project handler (shell session, not AI agent)
   const handleOpenTerminal = useCallback(
@@ -552,13 +628,13 @@ function HomeContent() {
   useAppCommands({
     sessions,
     onSelectSession: attachToSession,
-    onNewSession: () => setShowNewSessionDialog(true),
     onSearchCode: () => setShowQuickSwitcher(true),
     // Its dialog lives in the desktop bar.
     onNotificationSettings: isMobile
       ? undefined
       : () => setShowNotificationSettings(true),
   });
+  useMoveCommands(activeSession);
 
   const startDevServerProject = startDevServerProjectId
     ? (projects.find((p) => p.id === startDevServerProjectId) ?? null)
@@ -573,9 +649,6 @@ function HomeContent() {
     setSidebarOpen,
     activeSession,
     focusedActiveTab,
-    showNewSessionDialog,
-    setShowNewSessionDialog,
-    newSessionProjectId,
     showNotificationSettings,
     setShowNotificationSettings,
     showQuickSwitcher,
@@ -588,8 +661,6 @@ function HomeContent() {
     openSessionInNewTab,
     handleNewSessionInProject,
     handleOpenTerminal,
-    handleSessionCreated,
-    handleCreateProject,
     handleStartDevServer: startDevServer,
     handleCreateDevServer: createDevServer,
     startDevServerProject,
@@ -604,15 +675,7 @@ function HomeContent() {
       ) : (
         <DesktopView {...viewProps} />
       )}
-      <TasksDialog />
-      <NewTaskDialog />
-      <MessagesDialog />
-      <DevicesDialog />
-      <ArchivedDialog />
-      <CleanupDialog />
-      <LumifyHubDialogs />
-      <UsageDialog />
-      <CommandPalette />
+      <AppDialogs />
     </>
   );
 }

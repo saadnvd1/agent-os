@@ -16,6 +16,8 @@ interface Hub {
   // Says whether terminals changed since it was last asked.
   changed: TerminalCheck | null;
   last: string | null;
+  // The machine-load message (lib/load), resent to each new subscriber.
+  lastLoad?: string | null;
   lastAt: number;
   running: boolean;
   again: boolean;
@@ -92,6 +94,12 @@ export function notifyStatusChanged(): void {
   }, COALESCE_MS);
 }
 
+/** A session was renamed or added: subscribers refetch the list now. */
+export function notifySessionsChanged(): void {
+  const json = JSON.stringify({ type: "sessions" });
+  hub.subscribers.forEach((fn) => fn(json));
+}
+
 async function tick(): Promise<void> {
   if (hub.running) return;
   try {
@@ -108,10 +116,18 @@ async function tick(): Promise<void> {
   }
 }
 
+/** The machine load changed: subscribers get it, and new ones on connect. */
+export function publishLoad(json: string): void {
+  if (json === hub.lastLoad) return;
+  hub.lastLoad = json;
+  hub.subscribers.forEach((fn) => fn(json));
+}
+
 /** Every change from now on; the current map first. */
 export function subscribeStatuses(fn: Subscriber): () => void {
   hub.subscribers.add(fn);
   if (hub.last) fn(hub.last);
+  if (hub.lastLoad) fn(hub.lastLoad);
   notifyStatusChanged();
   hub.ticker ??= setInterval(() => void tick(), TICK_MS);
   return () => {

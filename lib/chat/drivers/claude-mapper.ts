@@ -23,7 +23,16 @@ export type ClaudeMessage = {
   subtype?: string;
   session_id?: string;
   uuid?: string;
-  message?: { id?: string; model?: string; content?: Block[] | string };
+  message?: {
+    id?: string;
+    model?: string;
+    content?: Block[] | string;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_creation_input_tokens?: number;
+    };
+  };
   event?: {
     type: string;
     content_block?: Block;
@@ -56,6 +65,8 @@ export type ClaudeMessage = {
   ambient?: boolean;
   // prompt_suggestion: the agent's guess at the next message.
   suggestion?: string;
+  // session_state_changed.
+  state?: string;
 };
 
 type TaskItem = Extract<ChatItem, { kind: "task" }>;
@@ -110,6 +121,7 @@ export class ClaudeMapper {
   // has shown since: a command that answers with nothing still says so.
   private command: string | null = null;
   private shown = false;
+  private inTurn = false;
 
   sent(text: string): void {
     this.command = leadingCommand(text);
@@ -117,7 +129,18 @@ export class ClaudeMapper {
   }
 
   map(m: ClaudeMessage): DriverEvent[] {
+    if (m.type === "system" && m.subtype === "session_state_changed")
+      return this.sessionState(m.state);
     const out = this.route(m);
+    // Every turn opens with init, ones the agent starts on its own too (a
+    // background task's notice), with nobody having sent a thing. One still
+    // open then ended without its result: it ends here.
+    if (m.type === "system" && m.subtype === "init") {
+      out.unshift({ type: "turn_start" });
+      if (this.inTurn) out.unshift({ type: "state", state: "idle" });
+      this.inTurn = true;
+    }
+    if (m.type === "result") this.inTurn = false;
     if (out.some((e) => e.type === "item" || e.type === "delta"))
       this.shown = true;
     return out;
@@ -144,6 +167,17 @@ export class ClaudeMapper {
       default:
         return [];
     }
+  }
+
+  // The agent going idle (CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS), once it
+  // has run every turn it had queued. A turn still open then had no result:
+  // it ends here, or nothing would end it.
+  private sessionState(state?: string): DriverEvent[] {
+    if (state === "idle" && this.inTurn) {
+      this.inTurn = false;
+      return [{ type: "state", state: "idle" }];
+    }
+    return [];
   }
 
   private pendingText = false;

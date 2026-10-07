@@ -19,6 +19,8 @@ export interface TabData {
   sessionId: string | null;
   attachedTmux: string | null;
   attachedHost?: string | null;
+  // A new session not sent yet (lib/drafts), shown instead of a session.
+  draftId?: string | null;
 }
 
 export interface PaneData {
@@ -43,6 +45,21 @@ export function createTab(): TabData {
     id: generateTabId(),
     sessionId: null,
     attachedTmux: null,
+  };
+}
+
+// Shows a draft in a pane: on the tab already showing it, else on the
+// active tab, in place of what it showed.
+export function showDraft(pane: PaneData, draftId: string): PaneData {
+  const open = pane.tabs.find((t) => t.draftId === draftId);
+  if (open) return { ...pane, activeTabId: open.id };
+  return {
+    ...pane,
+    tabs: pane.tabs.map((t) =>
+      t.id === pane.activeTabId
+        ? { ...t, draftId, sessionId: null, attachedTmux: null }
+        : t
+    ),
   };
 }
 

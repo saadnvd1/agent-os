@@ -9,6 +9,7 @@ import { listWorkspaces } from "../workspaces";
 import { askBinding, openAsks, PRESENCE_KINDS } from "./asks";
 import type { OrchestratorOverview } from "./ask-view";
 import { getOrchestrator } from "./home";
+import { resolveStaleAsks } from "./ask-settle";
 
 export type { AskView, OrchestratorOverview } from "./ask-view";
 
@@ -30,26 +31,30 @@ function inReview(workspaceId: string): number {
 }
 
 export function orchestratorOverview(): OrchestratorOverview[] {
-  return listWorkspaces().map((w) => ({
-    workspaceId: w.id,
-    sessionId: getOrchestrator(w.id)?.id ?? null,
-    paused: !!w.orch_paused_at,
-    inReview: inReview(w.id),
-    asks: openAsks(w.id).map((a) => {
-      const detail = plain(a.detail);
-      return {
-        id: a.id,
-        subject: a.subject,
-        kind: a.kind,
-        title: a.title,
-        why: detail.split("\n")[0] ?? "",
-        detail,
-        link: a.link,
-        sha: a.sha,
-        binding: askBinding(a),
-        presence: PRESENCE_KINDS.includes(a.kind),
-        createdAt: a.created_at,
-      };
-    }),
-  }));
+  return listWorkspaces().map((w) => {
+    // Asks about work that finished elsewhere never reach Saad's list.
+    resolveStaleAsks(w.id);
+    return {
+      workspaceId: w.id,
+      sessionId: getOrchestrator(w.id)?.id ?? null,
+      paused: !!w.orch_paused_at,
+      inReview: inReview(w.id),
+      asks: openAsks(w.id).map((a) => {
+        const detail = plain(a.detail);
+        return {
+          id: a.id,
+          subject: a.subject,
+          kind: a.kind,
+          title: a.title,
+          why: detail.split("\n")[0] ?? "",
+          detail,
+          link: a.link,
+          sha: a.sha,
+          binding: askBinding(a),
+          presence: PRESENCE_KINDS.includes(a.kind),
+          createdAt: a.created_at,
+        };
+      }),
+    };
+  });
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { ChatPanel } from "@/components/Chat";
+import { SetupCard } from "@/components/Chat/SetupCard";
+import type { TabData } from "@/lib/panes";
 import { useRef, useCallback, useEffect, memo, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { usePanes } from "@/contexts/PaneContext";
@@ -17,6 +18,7 @@ import {
   TerminalSkeleton,
   FileExplorerSkeleton,
   GitPanelSkeleton,
+  ChatSkeleton,
 } from "./PaneSkeletons";
 import {
   Panel as ResizablePanel,
@@ -32,6 +34,28 @@ import { fileOpenStore, fileOpenActions } from "@/stores/fileOpen";
 const Terminal = dynamic(
   () => import("@/components/Terminal").then((mod) => mod.Terminal),
   { ssr: false, loading: () => <TerminalSkeleton /> }
+);
+
+// A chat's markdown and highlighting stay out of the first load. They're
+// fetched as soon as the app has painted, so opening a chat later doesn't
+// wait on them; a chat open at load shows the skeleton meanwhile.
+const loadChatPanel = () => import("@/components/Chat/ChatPanel");
+if (typeof window !== "undefined") {
+  if (document.readyState === "complete") void loadChatPanel();
+  else
+    window.addEventListener("load", () => void loadChatPanel(), {
+      once: true,
+    });
+}
+const ChatPanel = dynamic(() => loadChatPanel().then((mod) => mod.ChatPanel), {
+  ssr: false,
+  loading: () => <ChatSkeleton />,
+});
+
+// A draft's panel loads when a tab first shows one.
+const DraftPanel = dynamic(
+  () => import("@/components/Draft/DraftPanel").then((mod) => mod.DraftPanel),
+  { ssr: false }
 );
 
 const FileExplorer = dynamic(
@@ -233,6 +257,63 @@ export const Pane = memo(function Pane({
     [paneId, sessions, onRegisterTerminal, onAttachSession]
   );
 
+  // What a tab shows: a draft, a chat, its setup while a terminal session
+  // waits for its worktree, or its terminal.
+  const tabBody = (tab: TabData, isActive: boolean) => {
+    if (tab.draftId)
+      return (
+        <DraftPanel
+          paneId={paneId}
+          draftId={tab.draftId}
+          projects={projects}
+          active={isActive && isFocused}
+        />
+      );
+    const chat = chatSessionFor(tab);
+    if (chat)
+      return (
+        <ChatPanel
+          sessionId={chat.id}
+          sessionName={chat.name}
+          accessLocked={chat.role === "orchestrator"}
+          orchestratorOf={
+            chat.role === "orchestrator" ? chat.workspace_id : null
+          }
+        />
+      );
+    const own = sessions.find((s) => s.id === tab.sessionId);
+    if (own?.setup_status === "running")
+      return (
+        <div className="mx-auto w-full max-w-3xl p-4">
+          <SetupCard sessionId={own.id} />
+        </div>
+      );
+    const savedState = sessionRegistry.getTerminalState(paneId, tab.id);
+    return (
+      <Terminal
+        ref={getTerminalRef(tab.id)}
+        onConnected={getTerminalConnectedHandler(tab)}
+        onBeforeUnmount={(scrollState) => {
+          sessionRegistry.saveTerminalState(paneId, tab.id, {
+            scrollTop: scrollState.scrollTop,
+            scrollHeight: 0,
+            lastActivity: Date.now(),
+            cursorY: scrollState.cursorY,
+          });
+        }}
+        initialScrollState={
+          savedState
+            ? {
+                scrollTop: savedState.scrollTop,
+                cursorY: savedState.cursorY,
+                baseY: 0,
+              }
+            : undefined
+        }
+      />
+    );
+  };
+
   // Track current tab ID for cleanup
   const activeTabIdRef = useRef<string | null>(null);
   activeTabIdRef.current = activeTab?.id || null;
@@ -299,6 +380,7 @@ export const Pane = memo(function Pane({
       {isMobile ? (
         <MobileTabBar
           session={session}
+          drafting={!!activeTab?.draftId}
           sessions={sessions}
           projects={projects}
           viewMode={viewMode}
@@ -344,57 +426,19 @@ export const Pane = memo(function Pane({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Terminals - one per tab */}
-          {paneData.tabs.map((tab) => {
-            const isActive = tab.id === activeTab?.id;
-            const savedState = sessionRegistry.getTerminalState(paneId, tab.id);
-
-            return (
-              <div
-                key={tab.id}
-                className={
-                  viewMode === "terminal" && isActive
-                    ? "h-full w-full"
-                    : "hidden"
-                }
-              >
-                {chatSessionFor(tab) ? (
-                  <ChatPanel
-                    sessionId={chatSessionFor(tab)!.id}
-                    sessionName={chatSessionFor(tab)!.name}
-                    accessLocked={chatSessionFor(tab)!.role === "orchestrator"}
-                    orchestratorOf={
-                      chatSessionFor(tab)!.role === "orchestrator"
-                        ? chatSessionFor(tab)!.workspace_id
-                        : null
-                    }
-                  />
-                ) : (
-                  <Terminal
-                    ref={getTerminalRef(tab.id)}
-                    onConnected={getTerminalConnectedHandler(tab)}
-                    onBeforeUnmount={(scrollState) => {
-                      sessionRegistry.saveTerminalState(paneId, tab.id, {
-                        scrollTop: scrollState.scrollTop,
-                        scrollHeight: 0,
-                        lastActivity: Date.now(),
-                        cursorY: scrollState.cursorY,
-                      });
-                    }}
-                    initialScrollState={
-                      savedState
-                        ? {
-                            scrollTop: savedState.scrollTop,
-                            cursorY: savedState.cursorY,
-                            baseY: 0,
-                          }
-                        : undefined
-                    }
-                  />
-                )}
-              </div>
-            );
-          })}
+          {/* One per tab: its draft, chat or terminal */}
+          {paneData.tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={
+                viewMode === "terminal" && tab.id === activeTab?.id
+                  ? "h-full w-full"
+                  : "hidden"
+              }
+            >
+              {tabBody(tab, tab.id === activeTab?.id)}
+            </div>
+          ))}
 
           {/* Files */}
           {session?.working_directory && (
@@ -450,66 +494,19 @@ export const Pane = memo(function Pane({
                 minSize={10}
               >
                 <div className="relative h-full">
-                  {/* Terminals - one per tab */}
-                  {paneData.tabs.map((tab) => {
-                    const isActive = tab.id === activeTab?.id;
-                    const savedState = sessionRegistry.getTerminalState(
-                      paneId,
-                      tab.id
-                    );
-
-                    return (
-                      <div
-                        key={tab.id}
-                        className={
-                          viewMode === "terminal" && isActive
-                            ? "h-full"
-                            : "hidden"
-                        }
-                      >
-                        {chatSessionFor(tab) ? (
-                          <ChatPanel
-                            sessionId={chatSessionFor(tab)!.id}
-                            sessionName={chatSessionFor(tab)!.name}
-                            accessLocked={
-                              chatSessionFor(tab)!.role === "orchestrator"
-                            }
-                            orchestratorOf={
-                              chatSessionFor(tab)!.role === "orchestrator"
-                                ? chatSessionFor(tab)!.workspace_id
-                                : null
-                            }
-                          />
-                        ) : (
-                          <Terminal
-                            ref={getTerminalRef(tab.id)}
-                            onConnected={getTerminalConnectedHandler(tab)}
-                            onBeforeUnmount={(scrollState) => {
-                              sessionRegistry.saveTerminalState(
-                                paneId,
-                                tab.id,
-                                {
-                                  scrollTop: scrollState.scrollTop,
-                                  scrollHeight: 0,
-                                  lastActivity: Date.now(),
-                                  cursorY: scrollState.cursorY,
-                                }
-                              );
-                            }}
-                            initialScrollState={
-                              savedState
-                                ? {
-                                    scrollTop: savedState.scrollTop,
-                                    cursorY: savedState.cursorY,
-                                    baseY: 0,
-                                  }
-                                : undefined
-                            }
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
+                  {/* One per tab: its draft, chat or terminal */}
+                  {paneData.tabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      className={
+                        viewMode === "terminal" && tab.id === activeTab?.id
+                          ? "h-full"
+                          : "hidden"
+                      }
+                    >
+                      {tabBody(tab, tab.id === activeTab?.id)}
+                    </div>
+                  ))}
 
                   {/* Files */}
                   {session?.working_directory && (

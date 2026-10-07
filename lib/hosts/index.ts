@@ -3,6 +3,7 @@ import { getDb, type Host } from "../db";
 import {
   LOCAL_HOST_ID,
   isValidSshTarget,
+  runFileOnTarget,
   runOnTarget,
   type ExecResult,
 } from "./ssh";
@@ -23,7 +24,10 @@ export function isRemoteHost(hostId: string | null | undefined): boolean {
 
 export function listRemoteHosts(): Host[] {
   return getDb()
-    .prepare(`SELECT * FROM hosts ORDER BY sort_order, created_at`)
+    .prepare(
+      `SELECT h.*, EXISTS (SELECT 1 FROM host_links l WHERE l.host_id = h.id) AS linked
+         FROM hosts h ORDER BY sort_order, created_at`
+    )
     .all() as Host[];
 }
 
@@ -38,6 +42,17 @@ export function getHost(hostId: string | null | undefined): Host | null {
       | Host
       | undefined) ?? null
   );
+}
+
+/** A machine by its name (any case) or id. */
+export function hostIdNamed(ref: string): string {
+  const want = ref.trim().toLowerCase();
+  if (["local", "here", "this machine"].includes(want)) return LOCAL_HOST_ID;
+  const host = listRemoteHosts().find(
+    (h) => h.id === ref || h.name.toLowerCase() === want
+  );
+  if (!host) throw new Error(`No machine named "${ref}" (see Machines)`);
+  return host.id;
 }
 
 export function createHost(name: string, sshTarget: string): Host {
@@ -68,6 +83,7 @@ export function deleteHost(hostId: string): void {
   if (inUse.n > 0) {
     throw new Error("Move or delete its projects and sessions first");
   }
+  db.prepare(`DELETE FROM host_links WHERE host_id = ?`).run(hostId);
   db.prepare(`DELETE FROM hosts WHERE id = ?`).run(hostId);
 }
 
@@ -84,4 +100,13 @@ export function hostExec(
   timeout?: number
 ): Promise<ExecResult> {
   return runOnTarget(sshTargetFor(hostId), command, timeout);
+}
+
+export function hostExecFile(
+  hostId: string | null | undefined,
+  file: string,
+  args: string[],
+  timeout?: number
+): Promise<ExecResult> {
+  return runFileOnTarget(sshTargetFor(hostId), file, args, timeout);
 }

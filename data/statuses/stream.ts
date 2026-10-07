@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { SessionStatus } from "@/components/views/types";
-import { statusKeys } from "../sessions/keys";
+import type { LoadView } from "@/lib/load/monitor";
+import { sessionKeys, statusKeys } from "../sessions/keys";
+import { loadKeys } from "../load";
 
-interface StatusMessage {
-  type: "statuses";
-  statuses: Record<string, SessionStatus>;
-}
+type StatusMessage =
+  | { type: "statuses"; statuses: Record<string, SessionStatus> }
+  // A session was renamed (a generated title arrived) or added.
+  | { type: "sessions" }
+  // The machine's load and each busy session's share (lib/load).
+  | { type: "load"; load: LoadView };
 
 const MAX_BACKOFF_MS = 30000;
 
@@ -41,6 +45,10 @@ export function useStatusStream(): boolean {
           const m = JSON.parse(event.data) as StatusMessage;
           if (m.type === "statuses")
             queryClient.setQueryData(statusKeys.all, { statuses: m.statuses });
+          else if (m.type === "load")
+            queryClient.setQueryData(loadKeys.all, m.load);
+          else if (m.type === "sessions")
+            void queryClient.invalidateQueries({ queryKey: sessionKeys.all });
         } catch {
           // A message this build doesn't understand.
         }

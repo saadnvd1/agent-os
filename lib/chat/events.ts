@@ -224,6 +224,7 @@ export type DriverEvent =
   | { type: "usage"; totals: UsageTotals } // running totals after a turn
   | { type: "usage_start"; totals: UsageTotals } // the totals it started from
   | { type: "context"; context: ChatContext } // context window use
+  | { type: "turn_start" } // the agent started a turn (maybe one nobody sent)
   | { type: "state"; state: ChatState };
 
 // What the server sends to a browser watching a conversation.

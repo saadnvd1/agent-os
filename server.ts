@@ -28,12 +28,15 @@ import {
   watchChat,
 } from "./lib/chat/runner";
 import { clientSend } from "./lib/chat/client-send";
+import { titleChatFromMessage } from "./lib/session-titles";
 import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
 import { startStackWatcher } from "./lib/stacks";
 import { setStartGate } from "./lib/stacks/tick";
 import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
+import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
+import { resumePhoneOutbox } from "./lib/notify";
 import {
   bindAddresses,
   requestAllowed,
@@ -47,10 +50,17 @@ import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
 import { subscribeStatuses, setStatusSource } from "./lib/status/hub";
+import { loadEnabled, startLoadMonitor } from "./lib/load/monitor";
 import { collectStatuses, terminalsChanged } from "./lib/status/collect";
 import { startProgramStatusTap } from "./lib/program-status/tap";
 import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
 import os from "os";
+import {
+  launchPending,
+  resumeHeldStarts,
+  resumeTaskStarts,
+} from "./lib/tasks/start";
+import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -150,11 +160,12 @@ app.prepare().then(() => {
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
-        if (msg.type === "send")
-          void sendChat(sessionId, { ...clientSend(msg), queue: true }).catch(
-            fail
-          );
-        else if (msg.type === "queue_edit" && typeof msg.text === "string")
+        if (msg.type === "send") {
+          const send = clientSend(msg);
+          void sendChat(sessionId, { ...send, queue: true }).catch(fail);
+          // "Session 4" is named after its first message.
+          void titleChatFromMessage(sessionId, send.text);
+        } else if (msg.type === "queue_edit" && typeof msg.text === "string")
           editQueuedChat(sessionId, String(msg.id), msg.text);
         else if (msg.type === "queue_move")
           moveQueuedChat(sessionId, String(msg.id), msg.by === -1 ? -1 : 1);
@@ -329,6 +340,15 @@ app.prepare().then(() => {
     const attach = (spec: AttachSpec) => {
       try {
         const sshTarget = sshTargetFor(spec.hostId);
+        // A task still setting up gets its tmux session from its launch;
+        // creating it here would start a bare agent without the task.
+        if (spec.sessionId && !sshTarget && launchPending(spec.sessionId)) {
+          send({
+            type: "output",
+            data: "\r\nThis task is still setting up. Open it again once its agent has started.\r\n",
+          });
+          return;
+        }
         // Local sessions join the agent bus: who they are and where AgentOS is.
         if (spec.sessionId && !sshTarget) spec.env = agentEnv(spec.sessionId);
         const { file, args } = buildAttachProcess(spec, sshTarget, shell);
@@ -461,11 +481,30 @@ app.prepare().then(() => {
       "> WARNING: AGENTOS_AUTH=off and listening beyond loopback. Anyone who can reach this port gets a shell."
     );
   }
+  // New sessions whose worktree setup a restart cut off.
+  failInterruptedSetups();
   // Chat turns that kept running through a restart.
   void reattachChats();
+  // Task starts this restart cut off: set up and launch them now.
+  resumeTaskStarts().catch((error) =>
+    console.error("Resuming task starts failed:", error)
+  );
+  // Starts held by Pause or the brakes launch once the hold clears.
+  setInterval(() => {
+    try {
+      resumeHeldStarts();
+    } catch (error) {
+      console.error("Resuming held task starts failed:", error);
+    }
+  }, 60_000);
   // Stacks start their next cards from here; their state is in the database.
   setStartGate(stackStartGate);
   if (process.env.AGENTOS_STACKS !== "off") startStackWatcher();
   // Each workspace's orchestrator hears about its sessions as events.
   if (process.env.AGENTOS_ORCHESTRATOR !== "off") startOrchestratorWatcher();
+  // Schedules tick here, once a minute, and nowhere else.
+  if (schedulesEnabled(process.env)) startScheduler(realDeps);
+  resumePhoneOutbox();
+  // Machine load: a gauge, notes on heavy commands, one alert when red.
+  if (loadEnabled()) startLoadMonitor();
 });

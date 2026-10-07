@@ -3,11 +3,12 @@
 import {
   Archive,
   BookOpen,
-  FolderOpen,
+  Clock,
+  FolderGit2,
   FolderPlus,
   Gauge,
-  GitBranch,
   ListTodo,
+  MessageSquarePlus,
   MessagesSquare,
   MoreHorizontal,
   Pin,
@@ -27,18 +28,20 @@ import { Button } from "@/components/ui/button";
 import type { Workspace } from "@/lib/db";
 import { archivedUiActions } from "@/stores/archivedUi";
 import { tasksUiActions } from "@/stores/tasksUi";
+import { newDraft } from "@/stores/drafts";
+import { schedulesUiActions } from "@/stores/schedulesUi";
 import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { SchedulesButton } from "./SchedulesButton";
+import { LoadGauge } from "./LoadGauge";
 
 interface SidebarHeaderProps {
   workspaces: Workspace[];
   workspace: Workspace | null;
   onNewSession: () => void;
-  onNewProject: () => void;
-  onOpenProject: () => void;
-  onCloneFromGithub: () => void;
+  onAddProject: () => void;
   onKillAll: () => void;
   onManageHosts: () => void;
   // Set when the active session's project has LumifyHub docs.
@@ -55,6 +58,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
         current={props.workspace}
       />
       <div className="flex shrink-0 items-center gap-0.5">
+        <LoadGauge />
         <ADropdownMenu
           trigger={
             <Button
@@ -68,6 +72,11 @@ export function SidebarHeader(props: SidebarHeaderProps) {
           }
           items={[
             menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
+            menuItem(
+              "Schedules",
+              () => schedulesUiActions.open(props.workspace?.id ?? null),
+              { icon: Clock }
+            ),
             menuItem("Messages", busUiActions.open, { icon: MessagesSquare }),
             ...(props.onOpenDocs
               ? [menuItem("Docs", props.onOpenDocs, { icon: BookOpen })]
@@ -95,6 +104,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             }),
           ]}
         />
+        <SchedulesButton workspaceId={props.workspace?.id ?? null} />
         <ADropdownMenu
           trigger={
             <Button
@@ -109,15 +119,19 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             menuItem("New session", props.onNewSession, {
               icon: SquareTerminal,
             }),
-            menuItem("New task", tasksUiActions.openNew, { icon: ListTodo }),
+            menuItem("In project…", () => newDraft({ kind: "choose" }), {
+              icon: FolderGit2,
+            }),
+            menuItem("Scratch chat", () => newDraft({ kind: "scratch" }), {
+              icon: MessageSquarePlus,
+            }),
+            menuItem(
+              "New task",
+              () => newDraft({ kind: "current", openPr: true }),
+              { icon: ListTodo }
+            ),
             separator(),
-            menuItem("New project", props.onNewProject, { icon: FolderPlus }),
-            menuItem("Open project", props.onOpenProject, {
-              icon: FolderOpen,
-            }),
-            menuItem("Clone from GitHub", props.onCloneFromGithub, {
-              icon: GitBranch,
-            }),
+            menuItem("Add project", props.onAddProject, { icon: FolderPlus }),
           ]}
         />
       </div>

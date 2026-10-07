@@ -10,6 +10,8 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       ".next/**",
+      ".next-build/**",
+      ".next-prev/**",
       "src-tauri/**",
       ".claude/**",
       "apps/**",

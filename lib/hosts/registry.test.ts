@@ -3,6 +3,7 @@ import {
   createHost,
   deleteHost,
   getHost,
+  hostIdNamed,
   isValidSshTarget,
   listHosts,
   sshTargetFor,
@@ -11,7 +12,7 @@ import { createProject } from "@/lib/projects";
 
 describe("ssh targets", () => {
   it("accepts user@host and aliases, rejects option injection", () => {
-    expect(isValidSshTarget("alice@box.ts.net")).toBe(true);
+    expect(isValidSshTarget("alice@devbox.example.ts.net")).toBe(true);
     expect(isValidSshTarget("devbox")).toBe(true);
     expect(isValidSshTarget("-oProxyCommand=x")).toBe(false);
     expect(isValidSshTarget("a b")).toBe(false);
@@ -40,5 +41,19 @@ describe("host registry", () => {
 
   it("cannot delete this machine", () => {
     expect(() => deleteHost("local")).toThrow();
+  });
+});
+
+describe("naming a machine", () => {
+  it("reads here, local and this machine as this one, in any case", () => {
+    for (const ref of ["here", " Here ", "local", "This machine"])
+      expect(hostIdNamed(ref)).toBe("local");
+  });
+
+  it("finds a linked machine by name or id, and names one it can't find", () => {
+    const host = createHost("Spare", "me@spare");
+    expect(hostIdNamed("spare")).toBe(host.id);
+    expect(hostIdNamed(host.id)).toBe(host.id);
+    expect(() => hostIdNamed("nowhere")).toThrow(/No machine named "nowhere"/);
   });
 });

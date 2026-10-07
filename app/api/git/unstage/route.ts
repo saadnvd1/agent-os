@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     const path = expandPath(rawPath);
 
-    if (!isGitRepo(path)) {
+    if (!(await isGitRepo(path))) {
       return NextResponse.json(
         { error: "Not a git repository" },
         { status: 400 }
@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
     // Unstage specific files or all
     if (files && files.length > 0) {
       for (const file of files) {
-        unstageFile(path, file);
+        await unstageFile(path, file);
       }
     } else {
-      unstageAll(path);
+      await unstageAll(path);
     }
 
     return NextResponse.json({ success: true });

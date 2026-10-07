@@ -18,6 +18,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const session = await createTask({
       projectId: project.id,
       prompt: promptFromCard(card),
+      name: card.title,
       cardId: card.id,
     });
     return { session };

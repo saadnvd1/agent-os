@@ -8,11 +8,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TasksButton } from "@/components/Tasks/TasksButton";
-import { MessagesButton } from "@/components/Bus";
-import { DocsButton } from "@/components/LumifyHub";
+import { MessagesButton } from "@/components/Bus/MessagesButton";
+import { DocsButton } from "@/components/LumifyHub/Docs/DocsButton";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import type { ViewProps } from "./types";
+import { newDraft } from "@/stores/drafts";
 import { paletteActions } from "@/stores/palette";
+import { DRAFT_KEYS } from "@/lib/drafts";
 
 // Labels collapse to icons when the pane bar carrying these is narrow
 // (a split), via the bar's container query.
@@ -59,7 +61,6 @@ type AppActionsProps = Pick<
   | "activeSession"
   | "showNotificationSettings"
   | "setShowNotificationSettings"
-  | "setShowNewSessionDialog"
   | "notificationSettings"
   | "permissionGranted"
   | "updateSettings"
@@ -73,7 +74,6 @@ export function DesktopAppActions({
   activeSession,
   showNotificationSettings,
   setShowNotificationSettings,
-  setShowNewSessionDialog,
   notificationSettings,
   permissionGranted,
   updateSettings,
@@ -126,9 +126,9 @@ export function DesktopAppActions({
       <Button
         size="sm"
         aria-label="New session"
-        title="New session"
+        title={`New session (${DRAFT_KEYS.current})`}
         className="ml-1 h-7 gap-1 px-2"
-        onClick={() => setShowNewSessionDialog(true)}
+        onClick={() => newDraft({ kind: "current" })}
       >
         <Plus className="h-4 w-4" />
         <span className="hidden @3xl/bar:inline">New session</span>

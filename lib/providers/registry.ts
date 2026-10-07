@@ -36,10 +36,12 @@ export interface ProviderDefinition {
   // Auto-approve configuration
   autoApproveFlag?: string; // Flag to skip permission prompts
 
-  // Session management
+  // Session management: the arguments that continue a conversation, or
+  // start a new one from it. They go first: some CLIs take a subcommand.
   supportsResume: boolean;
   supportsFork: boolean;
-  resumeFlag?: string; // Flag for resuming sessions
+  resumeArgs?: (id: string) => string[];
+  forkArgs?: (id: string) => string[];
 
   // Model configuration
   modelFlag?: string; // Flag for specifying model
@@ -51,6 +53,9 @@ export interface ProviderDefinition {
   // Default arguments
   defaultArgs?: string[]; // Always passed to CLI
 }
+
+// The model value that means "whatever the agent itself defaults to".
+export const AGENT_DEFAULT_MODEL = "default";
 
 /**
  * Provider Registry
@@ -66,7 +71,8 @@ export const PROVIDERS: ProviderDefinition[] = [
     autoApproveFlag: "--dangerously-skip-permissions",
     supportsResume: true,
     supportsFork: true,
-    resumeFlag: "--resume",
+    resumeArgs: (id) => ["--resume", id],
+    forkArgs: (id) => ["--resume", id, "--fork-session"],
     modelFlag: undefined, // Claude doesn't expose model flag
     initialPromptFlag: "", // Positional argument
   },
@@ -77,8 +83,10 @@ export const PROVIDERS: ProviderDefinition[] = [
     cli: "codex",
     configDir: "~/.codex",
     autoApproveFlag: "--dangerously-bypass-approvals-and-sandbox",
-    supportsResume: false,
-    supportsFork: false,
+    supportsResume: true,
+    supportsFork: true,
+    resumeArgs: (id) => ["resume", id],
+    forkArgs: (id) => ["fork", id],
     modelFlag: "--model",
     initialPromptFlag: "", // Positional argument
   },
@@ -87,10 +95,13 @@ export const PROVIDERS: ProviderDefinition[] = [
     name: "OpenCode",
     description: "Multi-provider AI CLI",
     cli: "opencode",
-    configDir: "~/.opencode.json",
-    autoApproveFlag: undefined, // OpenCode manages this via config
-    supportsResume: false,
-    supportsFork: false,
+    configDir: "~/.config/opencode",
+    autoApproveFlag: "--auto",
+    supportsResume: true,
+    supportsFork: true,
+    resumeArgs: (id) => ["--session", id],
+    forkArgs: (id) => ["--session", id, "--fork"],
+    modelFlag: "--model",
     initialPromptFlag: "--prompt",
   },
   {
@@ -102,7 +113,8 @@ export const PROVIDERS: ProviderDefinition[] = [
     autoApproveFlag: undefined, // Kilo manages this via config
     supportsResume: true,
     supportsFork: true,
-    resumeFlag: "--session",
+    resumeArgs: (id) => ["--session", id],
+    forkArgs: (id) => ["--session", id, "--fork"],
     initialPromptFlag: "--prompt",
   },
   {
@@ -115,7 +127,8 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsResume: false,
     supportsFork: false,
     modelFlag: "-m",
-    initialPromptFlag: "-p",
+    // -p answers once and exits; -i answers and stays interactive.
+    initialPromptFlag: "-i",
   },
   {
     id: "aider",
@@ -134,10 +147,12 @@ export const PROVIDERS: ProviderDefinition[] = [
     description: "Cursor's AI agent",
     cli: "cursor-agent",
     configDir: "~/.cursor",
-    autoApproveFlag: undefined, // -p requires a prompt, not auto-approve
-    supportsResume: false,
+    autoApproveFlag: "--force",
+    supportsResume: true,
     supportsFork: false,
+    resumeArgs: (id) => ["--resume", id],
     modelFlag: "--model",
+    initialPromptFlag: "", // Positional argument
   },
   {
     id: "amp",
@@ -146,8 +161,9 @@ export const PROVIDERS: ProviderDefinition[] = [
     cli: "amp",
     configDir: "~/.config/amp",
     autoApproveFlag: "--dangerously-allow-all",
-    supportsResume: false,
+    supportsResume: true,
     supportsFork: false,
+    resumeArgs: (id) => ["threads", "continue", id],
     initialPromptFlag: "", // Positional argument
   },
   {
@@ -156,8 +172,11 @@ export const PROVIDERS: ProviderDefinition[] = [
     description: "Extensible coding harness",
     cli: "pi",
     configDir: "~/.pi/agent",
-    supportsResume: false,
-    supportsFork: false,
+    // Pi never asks before a tool runs.
+    supportsResume: true,
+    supportsFork: true,
+    resumeArgs: (id) => ["--session", id],
+    forkArgs: (id) => ["--fork", id],
     modelFlag: "--model",
     initialPromptFlag: "", // Positional argument
   },

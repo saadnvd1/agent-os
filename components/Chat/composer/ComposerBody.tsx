@@ -64,6 +64,8 @@ export interface ComposerProps {
   requestFiles?: (query: string) => Promise<FileSuggestion[]>;
   // Markdown to put in at the caret (a quote), once per `at`.
   insert?: { text: string; at: number };
+  // Takes the caret once it's ready, and again for each new draftKey.
+  autoFocus?: boolean;
 }
 
 export function ComposerBody({
@@ -88,6 +90,7 @@ export function ComposerBody({
   history = [],
   requestFiles,
   insert,
+  autoFocus,
 }: ComposerProps) {
   const [images, setImages] = useState<ChatImage[]>([]);
   const [files, setFiles] = useState<TextAttachment[]>([]);
@@ -128,6 +131,9 @@ export function ComposerBody({
     setImages(saved?.images ?? []);
     setFiles(saved?.files ?? []);
   }, [draftKey, editor, setText]);
+  useEffect(() => {
+    if (autoFocus && editor) editor.commands.focus("end");
+  }, [autoFocus, editor, draftKey]);
 
   const prefilled = useRef<number | null>(null);
   const inserted = useRef<number | null>(null);

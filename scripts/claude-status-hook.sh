@@ -5,12 +5,11 @@
 # Claude sessions it starts (--settings). Usage: agentos-status <hook event>,
 # the hook's JSON on stdin.
 #
-# It writes to the pane's tty, never to stdout (Claude reads that), and it
-# always exits 0: a hook that fails must never slow down or break Claude.
+# It writes to the pane's tty, and to stdout (which Claude reads) only the
+# heavy-command note below, as hook JSON. It always exits 0: a hook that fails must never slow down or break Claude.
 
 event="$1"
 input=$(cat 2>/dev/null)
-[ -n "$TMUX_PANE" ] || exit 0
 
 # The first "key": "value" string in the hook's one-line JSON.
 field() {
@@ -27,6 +26,7 @@ field() {
 }
 
 report() {
+  [ -n "$TMUX_PANE" ] || return 0
   tty=$(tmux display-message -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null)
   [ -n "$tty" ] && [ -w "$tty" ] || return 0
   printf '\033]7501;%s:app=claude-code\033\\' "$1" >"$tty" 2>/dev/null
@@ -56,16 +56,49 @@ asking() {
   esac
 }
 
+# A Bash call that may be a whole test suite, type check or build goes to
+# AgentOS (lib/load), which answers with a note for Claude when other heavy
+# commands are running or the load is red. Advisory: the command runs either
+# way, at once. A slow or missing server means no note.
+heavy() {
+  [ "$(field tool_name)" = Bash ] || return 0
+  # The command only: a description saying "build" isn't one.
+  case "$(field command)" in
+    *vitest* | *tsc* | *"next build"* | *eslint* | *xcodebuild* | *pytest* | \
+      *jest* | *" test"* | *typecheck* | *lint* | *build*) ;;
+    *) return 0 ;;
+  esac
+  where="${AGENTOS_URL:-http://127.0.0.1:3011}/api/load/hook?event=$1&session=$AGENTOS_SESSION_ID"
+  # The token goes in through a config on fd 3, never argv (ps shows argv).
+  auth=
+  [ -z "$AGENTOS_TOKEN" ] ||
+    auth="header = \"Authorization: Bearer $AGENTOS_TOKEN\""
+  out=$(printf '%s' "$input" | curl -s --max-time 0.05 -K /dev/fd/3 \
+    -H 'Content-Type: application/json' --data-binary @- "$where" 2>/dev/null 3<<EOF
+$auth
+EOF
+)
+  [ "$1" = PreToolUse ] || return 0
+  case "$out" in '{"hookSpecificOutput"'*) printf '%s\n' "$out" ;; esac
+}
+
 # All of it is read before any of it runs: a file replaced mid-run can't
 # leave a half-parsed script exiting 2, which Claude takes as "block".
 main() {
 case "$event" in
   SessionStart) report "state=idle" ;;
-  UserPromptSubmit | PostToolUse) report "state=working" ;;
+  UserPromptSubmit) report "state=working" ;;
+  PostToolUse)
+    report "state=working"
+    heavy PostToolUse
+    ;;
   PreToolUse)
     case "$(field tool_name)" in
       AskUserQuestion | ExitPlanMode) asking ;;
-      *) report "state=working" ;;
+      *)
+        report "state=working"
+        heavy PreToolUse
+        ;;
     esac
     ;;
   # Claude asks permission for its own questions too: still a question.

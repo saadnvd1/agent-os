@@ -9,6 +9,7 @@ import { useDropTask, useSignOffTask } from "@/data/tasks";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { cn } from "@/lib/utils";
+import { MoveTaskButton } from "./MoveTaskButton";
 
 const STATE: Record<TaskState, { label: string; tone: string }> = {
   working: { label: "Working", tone: "text-muted-foreground" },
@@ -23,14 +24,24 @@ const STATE: Record<TaskState, { label: string; tone: string }> = {
   merged: { label: "Merged", tone: "text-emerald-600 dark:text-emerald-400" },
   dropped: { label: "Dropped", tone: "text-muted-foreground/60" },
   done: { label: "Done", tone: "text-emerald-600 dark:text-emerald-400" },
+  moving: { label: "Moving", tone: "text-amber-600 dark:text-amber-400" },
 };
 
 export function TaskRow({ task }: { task: TaskView }) {
   const signOff = useSignOffTask();
   const drop = useDropTask();
   const [confirmDrop, setConfirmDrop] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const live = !isFinished(task.state);
-  const error = signOff.error?.message || drop.error?.message;
+  const error =
+    signOff.error?.message ||
+    drop.error?.message ||
+    moveError ||
+    task.hostError;
+  const settingUp = live && task.setup?.status === "running";
+  const held = live && task.setup?.status === "held";
+  const setupFailed =
+    live && (task.setup?.status === "failed" || held) && !!task.setup?.error;
 
   return (
     <div className="bg-foreground/[0.03] space-y-2 rounded-xl px-3 py-3">
@@ -38,6 +49,7 @@ export function TaskRow({ task }: { task: TaskView }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{task.name}</p>
           <p className="text-muted-foreground truncate font-mono text-[11px]">
+            {task.hostName && `${task.hostName} · `}
             {task.projectName} · {task.branch}
           </p>
           {task.cardUrl && (
@@ -55,9 +67,18 @@ export function TaskRow({ task }: { task: TaskView }) {
         <span
           className={cn("shrink-0 text-xs font-medium", STATE[task.state].tone)}
         >
-          {STATE[task.state].label}
+          {settingUp
+            ? "Setting up"
+            : held
+              ? "Waiting to launch"
+              : STATE[task.state].label}
         </span>
       </div>
+      {setupFailed && (
+        <p className="line-clamp-3 text-xs break-words text-amber-600 dark:text-amber-400">
+          Setup: {task.setup?.error}
+        </p>
+      )}
 
       {live && (
         <div className="flex flex-wrap items-center gap-2">
@@ -65,7 +86,7 @@ export function TaskRow({ task }: { task: TaskView }) {
             size="sm"
             variant="outline"
             onClick={() => {
-              tmuxAttachActions.request(task.tmuxName, "local");
+              tmuxAttachActions.request(task.tmuxName, task.hostId ?? "local");
               tasksUiActions.setPanelOpen(false);
             }}
           >
@@ -80,6 +101,7 @@ export function TaskRow({ task }: { task: TaskView }) {
               </a>
             </Button>
           )}
+          <MoveTaskButton task={task} onError={setMoveError} />
           <span className="flex-1" />
           {confirmDrop ? (
             <Button

@@ -3,22 +3,22 @@
 import {
   KanbanSquare,
   LayoutGrid,
+  ListTodo,
   Pencil,
   Plus,
   Server,
   Settings,
   Terminal,
   Trash2,
-  Zap,
 } from "lucide-react";
 import * as DM from "@/components/ui/dropdown-menu";
-import { ProjectBoardItem } from "@/components/LumifyHub";
+import { ProjectBoardItem } from "@/components/LumifyHub/MenuItems";
 import type { ProjectWithRepositories } from "@/lib/projects";
 import {
   useMoveProjectToWorkspace,
   useWorkspacesQuery,
 } from "@/data/workspaces";
-import { quickStartActions } from "@/stores/quickStart";
+import { newDraft } from "@/stores/drafts";
 
 export interface ProjectActionHandlers {
   onNewSession?: (projectId: string) => void;
@@ -47,24 +47,20 @@ export function ProjectActions({
 
   return (
     <>
-      {real && (
-        <Item
-          onClick={() =>
-            quickStartActions.request({
-              projectId: project.id,
-              workingDirectory: project.working_directory,
-              agentType: project.agent_type,
-            })
-          }
-        >
-          <Zap className={icon} />
-          Quick start
-        </Item>
-      )}
       {handlers.onNewSession && (
         <Item onClick={() => handlers.onNewSession?.(project.id)}>
           <Plus className={icon} />
           New session
+        </Item>
+      )}
+      {real && (
+        <Item
+          onClick={() =>
+            newDraft({ kind: "project", projectId: project.id, openPr: true })
+          }
+        >
+          <ListTodo className={icon} />
+          New task
         </Item>
       )}
       {handlers.onOpenTerminal && (

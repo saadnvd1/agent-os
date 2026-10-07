@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { Session } from "@/lib/db";
 import { PaneViewToggle } from "./PaneViewToggle";
 import { PaneMenu } from "./PaneMenu";
+import { HostBadge } from "@/components/Hosts/HostBadge";
 import { usePaneBarSlots } from "./PaneBarSlots";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
@@ -21,6 +22,7 @@ interface Tab {
   id: string;
   sessionId: string | null;
   attachedTmux: string | null;
+  draftId?: string | null;
 }
 
 interface DesktopTabBarProps {
@@ -83,6 +85,7 @@ export function DesktopTabBar({
   const getTabName = (tab: Tab) => {
     if (tab.sessionId)
       return tabSession(tab)?.name || tab.attachedTmux || "Session";
+    if (tab.draftId) return "New session";
     return tab.attachedTmux || "New Tab";
   };
 
@@ -150,6 +153,7 @@ export function DesktopTabBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        <HostBadge hostId={session?.host_id} />
         <ContextMeter sessionId={session?.id} />
         <ViewSwitch session={session} />
         {session?.working_directory && (

@@ -14,6 +14,7 @@ import { needsYou } from "../needs-you";
 import { programSummary } from "../program-status/store";
 import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
+import { storedPR } from "../tasks/session";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -120,6 +121,13 @@ export async function statusOf(s: Session): Promise<{
       needsInput: state === "waiting",
     };
   }
+  // A task setting up, or held at launch, has no terminal yet; it isn't
+  // idle, so nothing cleans it up meanwhile.
+  if (
+    s.task_status === "running" &&
+    (s.setup_status === "running" || s.setup_status === "held")
+  )
+    return { status: "running", activity: "setting up", needsInput: false };
   if (!statusDetector.sessionExists(s.tmux_name))
     return { status: "dead", activity: null, needsInput: false };
   const screen = await statusDetector.getStatus(s.tmux_name);
@@ -148,20 +156,9 @@ export async function statusOf(s: Session): Promise<{
 async function taskFacts(s: Session): Promise<SessionFacts["task"]> {
   if (!s.task_status) return null;
   if (s.task_status !== "running") {
-    const pr: TaskPR | null = s.pr_number
-      ? {
-          number: s.pr_number,
-          url: s.pr_url ?? "",
-          state:
-            s.task_status === "merged"
-              ? "MERGED"
-              : s.pr_status === "open"
-                ? "OPEN"
-                : "CLOSED",
-          checks: "none",
-        }
-      : null;
-    return { state: s.task_status, pr, blocked: null };
+    const pr = storedPR(s);
+    const state = s.task_status === "moved" ? "done" : s.task_status;
+    return { state, pr, blocked: null };
   }
   const view = await taskView(s);
   return { state: view.state, pr: view.pr, blocked: view.blocked };

@@ -4,7 +4,7 @@ import { getDb, type Session } from "@/lib/db";
 import type { ChatConversation, ChatStartOptions } from "../driver";
 import type { ChatItem, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
-import { listItems } from "../store";
+import { listItems, saveItem } from "../store";
 import { enqueue, listQueue } from "../queued";
 import type { WorkerEvent } from "./protocol";
 
@@ -59,7 +59,9 @@ vi.mock("../drivers", () => ({
 
 async function startHost(
   role = "agent",
-  saved?: { resumeId?: string; usage?: object }
+  saved?: { resumeId?: string; usage?: object },
+  // What's saved before the worker starts.
+  seed?: (id: string) => void
 ) {
   const { ChatHost } = await import("./host");
   const id = randomUUID();
@@ -77,6 +79,7 @@ async function startHost(
   const session = getDb()
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(id) as Session;
+  seed?.(id);
   current = fakeConversation();
   const emitted: WorkerEvent[] = [];
   const host = new ChatHost(session, (e) => emitted.push(e));
@@ -264,14 +267,16 @@ describe("ChatHost queue", () => {
     host.close();
   });
 
-  it("send now stops the turn and sends that message ahead of the rest", async () => {
-    const { id, host, conversation } = await startHost();
+  it("send now stops the turn with the message, read before anything else", async () => {
+    const { id, host, conversation, emitted } = await startHost();
     await host.handle({
       type: "send",
       id: "user-1",
       text: "long job",
       queue: true,
     });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
     await host.handle({
       type: "send",
       id: "user-2",
@@ -285,12 +290,279 @@ describe("ChatHost queue", () => {
       queue: true,
     });
     await host.handle({ type: "send_now", id: "user-3", during: "user-1" });
-    expect(conversation.interrupt).toHaveBeenCalledOnce();
-    expect(listQueue(id).map((m) => m.text)).toEqual(["urgent", "later"]);
+    // Handed over with the stop, not after the stopped turn has ended: by
+    // then the agent may have started on a notice it queued itself.
+    expect(conversation.send).toHaveBeenLastCalledWith("urgent", undefined, {
+      now: true,
+    });
+    expect(listQueue(id).map((m) => m.text)).toEqual(["later"]);
+    // Saved at once, shown once the stopped turn has ended, so it reads
+    // after it.
+    expect(listItems(id).filter((i) => i.kind === "user")).toHaveLength(2);
+    expect(emitted).not.toContainEqual({
+      type: "item",
+      item: expect.objectContaining({ id: "user-3" }),
+    });
+    conversation.events.push({
+      type: "item",
+      item: { id: "end-1", kind: "turn_end", interrupted: true, createdAt: 2 },
+    });
+    // The stopped turn's end is not idle: "urgent" runs straight on.
+    emitted.length = 0;
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
-    expect(conversation.send).toHaveBeenLastCalledWith("urgent", undefined);
-    expect(listQueue(id).map((m) => m.text)).toEqual(["later"]);
+    expect(listItems(id).map((i) => i.id)).toEqual([
+      "user-1",
+      "end-1",
+      "user-3",
+    ]);
+    expect(emitted).toContainEqual({
+      type: "item",
+      item: expect.objectContaining({ id: "user-3" }),
+    });
+    expect(host.state).toBe("running");
+    expect(emitted).not.toContainEqual({ type: "state", state: "idle" });
+    expect(conversation.send).toHaveBeenCalledTimes(2);
+    // Its end sends the rest of the queue.
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith("later", undefined);
+    expect(listQueue(id)).toEqual([]);
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("idle");
+    host.close();
+  });
+
+  it("a message typed after Esc, before the turn stopped, goes as if sent now", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "long job" });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "interrupt" });
+    expect(conversation.interrupt).toHaveBeenCalledOnce();
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "do this instead",
+      queue: true,
+    });
+    expect(conversation.send).toHaveBeenLastCalledWith(
+      "do this instead",
+      undefined,
+      { now: true }
+    );
+    expect(listQueue(id)).toEqual([]);
+    // Only the first: a second one waits its turn.
+    await host.handle({
+      type: "send",
+      id: "user-3",
+      text: "and then this",
+      queue: true,
+    });
+    expect(listQueue(id).map((m) => m.text)).toEqual(["and then this"]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("running");
+    expect(conversation.send).toHaveBeenCalledTimes(2);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith(
+      "and then this",
+      undefined
+    );
+    host.close();
+  });
+
+  it("a message typed after the stopped turn ended goes as usual", async () => {
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "long job" });
+    await host.handle({ type: "interrupt" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "next",
+      queue: true,
+    });
+    expect(conversation.send).toHaveBeenLastCalledWith("next", undefined);
+    host.close();
+  });
+
+  it("a message typed while the agent starts on its own straight after Esc goes now", async () => {
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "long job" });
+    await host.handle({ type: "interrupt" });
+    conversation.events.push({ type: "state", state: "idle" });
+    // The agent starts on a background task's notice the moment it stops.
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    expect(host.state).toBe("running");
+    await host.handle({ type: "send", id: "user-2", text: "hey", queue: true });
+    expect(conversation.send).toHaveBeenLastCalledWith("hey", undefined, {
+      now: true,
+    });
+    host.close();
+  });
+
+  it("a turn the agent starts long after Esc isn't stopped for a message", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "long job" });
+    await host.handle({ type: "interrupt" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now + 60_000);
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "hey", queue: true });
+    clock.mockRestore();
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.text)).toEqual(["hey"]);
+    host.close();
+  });
+
+  it("Esc sends what's queued with the stop", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
+    await host.handle({ type: "interrupt" });
+    expect(conversation.send).toHaveBeenLastCalledWith("B", undefined, {
+      now: true,
+    });
+    // The send stops the turn: no second stop on top.
+    expect(conversation.interrupt).not.toHaveBeenCalled();
+    expect(listQueue(id)).toEqual([]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("running");
+    expect(listItems(id).at(-1)?.id).toBe("user-2");
+    host.close();
+  });
+
+  it("another agent's message after Esc waits its turn", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A" });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "interrupt" });
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "from a peer",
+      from: "Session 3",
+      peer: { sessionId: "s3", body: "from a peer" },
+      queue: true,
+    });
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.text)).toEqual(["from a peer"]);
+    host.close();
+  });
+
+  it("a stopped turn the agent never started can't hold the message's own end", async () => {
+    const { host, conversation, emitted } = await startHost();
+    // Sent, and sent now before the agent reports starting on the first.
+    await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
+    await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    expect(emitted).toContainEqual({
+      type: "item",
+      item: expect.objectContaining({ id: "user-2" }),
+    });
+    // The only end that comes is B's: the chat goes idle.
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("idle");
+    host.close();
+  });
+
+  it("a stopped turn that never sends its result can't hold the chat running", async () => {
+    const { ClaudeMapper } = await import("../drivers/claude-mapper");
+    const mapper = new ClaudeMapper();
+    const feed = (m: Parameters<typeof mapper.map>[0]) => {
+      for (const e of mapper.map(m)) conversation.events.push(e);
+    };
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
+    feed({ type: "system", subtype: "init", session_id: "s" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    // A's turn sends no result; B's starts, and ends.
+    feed({ type: "system", subtype: "init", session_id: "s" });
+    feed({ type: "result", subtype: "success", result: "done" });
+    await tick();
+    expect(host.state).toBe("idle");
+    host.close();
+  });
+
+  it("two messages sent now in a row: only the last one's end is idle", async () => {
+    const { host, conversation, emitted } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "T", queue: true });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "A", queue: true });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    await host.handle({ type: "send", id: "user-3", text: "B", queue: true });
+    await host.handle({ type: "send_now", id: "user-3", during: "user-2" });
+    emitted.length = 0;
+    // T stops; A starts and B stops it; B starts and ends.
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("running");
+    expect(emitted).not.toContainEqual({ type: "state", state: "idle" });
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("idle");
+    host.close();
+  });
+
+  it("a handed-over message is saved at once, and shown if the agent goes away", async () => {
+    const { id, host, conversation, emitted } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    expect(listItems(id).map((i) => i.id)).toContain("user-2");
+    conversation.events.end();
+    await host.done;
+    expect(emitted).toContainEqual({
+      type: "item",
+      item: expect.objectContaining({ id: "user-2" }),
+    });
+    // Off the queue, saved once: a worker after this won't send it again.
+    expect(listQueue(id)).toEqual([]);
+    expect(listItems(id).filter((i) => i.id === "user-2")).toHaveLength(1);
+    expect(listItems(id).at(-1)?.id).toBe("user-2");
+    host.close();
+  });
+
+  it("a turn the agent starts itself holds what's sent until it ends", async () => {
+    const { id, host, conversation, emitted } = await startHost();
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    expect(host.state).toBe("running");
+    expect(emitted).toContainEqual({ type: "state", state: "running" });
+    await host.handle({ type: "send", id: "user-1", text: "hi", queue: true });
+    expect(conversation.send).not.toHaveBeenCalled();
+    expect(listQueue(id).map((m) => m.text)).toEqual(["hi"]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith("hi", undefined);
+    // A turn already running is ours: its start changes nothing.
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    expect(host.state).toBe("running");
     host.close();
   });
 
@@ -313,11 +585,13 @@ describe("ChatHost queue", () => {
   });
 
   it("send now from an old client, with no turn named, doesn't interrupt", async () => {
-    const { host, conversation } = await startHost();
+    const { id, host, conversation } = await startHost();
     await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
     await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
     await host.handle({ type: "send_now", id: "user-2" });
     expect(conversation.interrupt).not.toHaveBeenCalled();
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.text)).toEqual(["B"]);
     host.close();
   });
 
@@ -647,5 +921,48 @@ describe("lastUserTask", () => {
       expect(costs(id).map((c) => +c.toFixed(2))).toEqual([0.6, 0.25]);
       host.close();
     });
+  });
+});
+
+describe("ChatHost cut-off tool calls", () => {
+  const tool = (id: string, createdAt = 1) =>
+    ({
+      id,
+      kind: "tool",
+      name: "Bash",
+      title: "Confirm deploy health",
+      input: {},
+      status: "running",
+      createdAt,
+    }) as const;
+
+  it("stops a call a worker before this one left running", async () => {
+    const { id, host } = await startHost("agent", undefined, (id) =>
+      saveItem(id, tool("t-old"))
+    );
+    expect(listItems(id).find((i) => i.id === "t-old")).toMatchObject({
+      status: "stopped",
+    });
+    host.close();
+  });
+
+  it("stops a call with no result when the turn ends", async () => {
+    const { id, host, conversation, emitted } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "deploy" });
+    conversation.events.push({ type: "item", item: tool("t1") });
+    await tick();
+    expect(listItems(id).find((i) => i.id === "t1")).toMatchObject({
+      status: "running",
+    });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(listItems(id).find((i) => i.id === "t1")).toMatchObject({
+      status: "stopped",
+    });
+    expect(emitted).toContainEqual({
+      type: "item",
+      item: expect.objectContaining({ id: "t1", status: "stopped" }),
+    });
+    host.close();
   });
 });

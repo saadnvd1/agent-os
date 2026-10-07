@@ -14,12 +14,14 @@
  * 4. Cooldown - 2s grace period after activity stops
  */
 
-import { hostExec, listHosts } from "./hosts";
+import { hostExecFile, listHosts } from "./hosts";
 import { WORKING_LINE } from "./claude-working-line";
 
 // Configuration constants
 const CONFIG = {
   ACTIVITY_COOLDOWN_MS: 2000, // Grace period after activity
+  // A screen with no new output is read again at least this often anyway.
+  SCREEN_MAX_AGE_MS: 30000,
   SPIKE_WINDOW_MS: 1000, // Window to detect sustained activity
   SUSTAINED_THRESHOLD: 2, // Changes needed to confirm activity
   CACHE_VALIDITY_MS: 2000, // How long tmux cache is valid
@@ -31,9 +33,13 @@ const BUSY_INDICATORS = [
   "esc to interrupt",
   "(esc to interrupt)",
   "· esc to interrupt",
+  // OpenCode's footer while it works.
+  "esc interrupt",
 ];
 
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+const SPINNER_LABEL = new RegExp(`(?:${SPINNER_CHARS.join("|")}) [A-Z][a-z]+`);
 
 const WHIMSICAL_WORDS = [
   "accomplishing",
@@ -139,7 +145,10 @@ const WAITING_PATTERNS = [
   /\(yes\/no\)/i,
   /Do you want to/i,
   /Enter to confirm.*Esc to cancel/i,
-  /[>❯]\s*1\.\s*Yes/,
+  /[>❯›]\s*1\.\s*Yes/,
+  // OpenCode's permission prompt.
+  /Permission required/,
+  /Allow once\s+Allow always\s+Reject/,
   // Claude Code's permission prompt, whose options can wrap past the window.
   /Esc to cancel · Tab to amend/,
   /Yes, allow all/i,
@@ -161,6 +170,9 @@ export interface TmuxSessionInfo {
   name: string;
   hostId: string;
   activity: number;
+  // When the active window last printed (session activity moves only on
+  // keys from a client, not on output).
+  output: number;
   path: string;
   attached: boolean;
   windows: number;
@@ -185,25 +197,35 @@ interface SessionCache {
 }
 
 const LIST_FORMAT =
-  "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_title}";
+  "#{session_name}\t#{session_activity}\t#{window_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_title}";
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
-  const { stdout } = await hostExec(
+  const { stdout } = await hostExecFile(
     hostId,
-    `tmux list-sessions -F '${LIST_FORMAT}' 2>/dev/null || true`,
+    "tmux",
+    ["list-sessions", "-F", LIST_FORMAT],
     8000
-  );
+  ).catch(listingFailure);
   return stdout
     .trim()
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [name, activity, path, attached, windows, command, ...title] =
-        line.split("\t");
+      const [
+        name,
+        activity,
+        output,
+        path,
+        attached,
+        windows,
+        command,
+        ...title
+      ] = line.split("\t");
       return {
         name,
         hostId,
         activity: parseInt(activity, 10) || 0,
+        output: parseInt(output, 10) || 0,
         path: path || "",
         attached: attached !== "0" && !!attached,
         windows: parseInt(windows, 10) || 1,
@@ -211,6 +233,50 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
         title: title.join("\t"),
       };
     });
+}
+
+/**
+ * Whether a screen read earlier still shows the pane. tmux's output time
+ * (window_activity) is in whole seconds, so it holds only when: the listing
+ * that gave `output` began after the read did (output since then would have
+ * moved it), it hasn't moved, the read began after that second ended, and
+ * the read isn't older than SCREEN_MAX_AGE_MS.
+ */
+export function screenStillFresh(
+  cached: { output: number; at: number },
+  output: number,
+  listedAt: number,
+  now: number
+): boolean {
+  return (
+    output > 0 &&
+    cached.output === output &&
+    listedAt >= cached.at &&
+    cached.at >= (output + 1) * 1000 &&
+    now - cached.at < CONFIG.SCREEN_MAX_AGE_MS
+  );
+}
+
+// tmux list-sessions failing: no server yet is an empty list. Anything else
+// (tmux couldn't start, a timeout, ssh's own failure) is the host's error,
+// and the last listing stands.
+const NO_SERVER =
+  /no server running|error connecting|no such file or directory/i;
+
+export function listingFailure(err: {
+  stdout?: string;
+  stderr?: string;
+  killed?: boolean;
+  code?: unknown;
+}): { stdout: string } {
+  if (
+    !err.killed &&
+    typeof err.code === "number" &&
+    err.code !== 255 &&
+    NO_SERVER.test(err.stderr ?? "")
+  )
+    return { stdout: "" };
+  throw err;
 }
 
 // Content analysis helpers
@@ -234,6 +300,10 @@ export function checkBusyIndicators(content: string): boolean {
   // Check spinners in last 5 lines
   const last5 = lines.slice(-5).join("");
   if (SPINNER_CHARS.some((s) => last5.includes(s))) return true;
+
+  // A spinner labelling what it does ("⠋ Working...", "⠹ Thinking") sits
+  // above the input box and footer in Pi and OpenCode.
+  if (SPINNER_LABEL.test(lines.slice(-14).join("\n"))) return true;
 
   return false;
 }
@@ -360,6 +430,10 @@ export function readInputBox(screen: string): string | null {
 class SessionStatusDetector {
   private trackers = new Map<string, StateTracker>();
   private unsent = new Map<string, UnsentTracker>();
+  private screens = new Map<
+    string,
+    { output: number; at: number; text: string }
+  >();
   private cache: SessionCache = {
     data: new Map(),
     hostErrors: new Map(),
@@ -436,29 +510,42 @@ class SessionStatusDetector {
     return Object.fromEntries(this.cache.hostErrors);
   }
 
-  async capturePane(name: string): Promise<string> {
+  // tmux run directly (no shell); "" when the pane is gone.
+  private async capture(name: string, colours: boolean): Promise<string> {
     try {
-      const { stdout } = await hostExec(
-        this.hostFor(name),
-        `tmux capture-pane -t "=${name}:" -p 2>/dev/null || echo ""`
-      );
-      return stdout.trim();
+      const { stdout } = await hostExecFile(this.hostFor(name), "tmux", [
+        "capture-pane",
+        ...(colours ? ["-e"] : []),
+        "-t",
+        `=${name}:`,
+        "-p",
+      ]);
+      return stdout;
     } catch {
       return "";
     }
   }
 
-  // The visible pane with its colours, for screenNeed and getStatus.
-  async captureScreen(name: string): Promise<string> {
-    try {
-      const { stdout } = await hostExec(
-        this.hostFor(name),
-        `tmux capture-pane -e -t "=${name}:" -p 2>/dev/null || echo ""`
-      );
-      return stdout.trimEnd();
-    } catch {
-      return "";
-    }
+  async capturePane(name: string): Promise<string> {
+    return (await this.capture(name, false)).trim();
+  }
+
+  // The visible pane with its colours, for screenNeed and getStatus; read
+  // again only when it may have changed (screenStillFresh), or always when
+  // `fresh` (a reported question is being checked against the screen).
+  async captureScreen(name: string, fresh = false): Promise<string> {
+    const output = this.cache.data.get(name)?.output ?? 0;
+    const cached = this.screens.get(name);
+    const now = Date.now();
+    if (
+      !fresh &&
+      cached &&
+      screenStillFresh(cached, output, this.cache.listedAt, now)
+    )
+      return cached.text;
+    const text = (await this.capture(name, true)).trimEnd();
+    this.screens.set(name, { output, at: now, text });
+    return text;
   }
 
   /**
@@ -647,6 +734,9 @@ class SessionStatusDetector {
     }
     for (const name of this.unsent.keys()) {
       if (!this.sessionExists(name)) this.unsent.delete(name);
+    }
+    for (const name of this.screens.keys()) {
+      if (!this.sessionExists(name)) this.screens.delete(name);
     }
   }
 }

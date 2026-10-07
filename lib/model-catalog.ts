@@ -1,4 +1,5 @@
 import type { AgentType } from "./providers";
+import { AGENT_DEFAULT_MODEL } from "./providers/registry";
 
 export interface ModelOption {
   value: string;
@@ -29,6 +30,12 @@ const GEMINI_MODEL_OPTIONS: ModelOption[] = [
   { value: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite" },
 ];
 
+// Agents whose models depend on the user's own providers and logins
+// (OpenCode, Pi…): the agent picks, and chat lists what it reports.
+const AGENT_DEFAULT_OPTIONS: ModelOption[] = [
+  { value: AGENT_DEFAULT_MODEL, label: "Agent's default" },
+];
+
 const MODEL_OPTIONS_BY_AGENT: Partial<Record<AgentType, ModelOption[]>> = {
   claude: CLAUDE_MODEL_OPTIONS,
   codex: CODEX_MODEL_OPTIONS,
@@ -42,14 +49,14 @@ const DEFAULT_MODEL_BY_AGENT: Partial<Record<AgentType, string>> = {
 };
 
 export function getModelOptions(agentType: AgentType): ModelOption[] {
-  return MODEL_OPTIONS_BY_AGENT[agentType] ?? CLAUDE_MODEL_OPTIONS;
+  return MODEL_OPTIONS_BY_AGENT[agentType] ?? AGENT_DEFAULT_OPTIONS;
 }
 
 export function getDefaultModelForAgent(agentType: AgentType): string {
   return (
     DEFAULT_MODEL_BY_AGENT[agentType] ??
     getModelOptions(agentType)[0]?.value ??
-    "opus"
+    AGENT_DEFAULT_MODEL
   );
 }
 

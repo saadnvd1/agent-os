@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/data/chat/useChat";
 import {
   groupTimeline,
+  sameBlock,
   STANDALONE_TOOLS,
   type TimelineBlock,
 } from "@/lib/chat/group";
@@ -29,6 +30,7 @@ import { McpServers } from "./McpServers";
 import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
 import { ContextMeter } from "./ContextMeter";
+import { SetupCard } from "./SetupCard";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
 import {
@@ -120,25 +122,43 @@ function Timeline({
   blocks: TimelineBlock[];
   actions: ItemActions;
 }) {
-  return blocks.map((b) =>
-    b.type === "tools" ? (
-      <ToolGroup key={b.id} tools={b.tools} />
+  return blocks.map((b) => (
+    <Block
+      key={b.type === "item" ? b.item.id : b.id}
+      block={b}
+      actions={actions}
+    />
+  ));
+}
+
+// One block, re-rendered only when its items or the actions change: a long
+// conversation doesn't redraw every message for each streamed word.
+const Block = memo(
+  function Block({
+    block: b,
+    actions,
+  }: {
+    block: TimelineBlock;
+    actions: ItemActions;
+  }) {
+    const respond = actions.respond;
+    const undoneActions = useMemo(() => ({ respond }), [respond]);
+    return b.type === "tools" ? (
+      <ToolGroup tools={b.tools} />
     ) : b.type === "undone" ? (
       <UndoneBlock
-        key={b.id}
         undo={b.undo}
         count={b.items.filter((i) => i.kind === "user").length}
       >
-        <Timeline
-          blocks={groupTimeline(b.items)}
-          actions={{ respond: actions.respond }}
-        />
+        <Timeline blocks={groupTimeline(b.items)} actions={undoneActions} />
       </UndoneBlock>
     ) : (
-      <Item key={b.item.id} item={b.item} actions={actions} />
-    )
-  );
-}
+      <Item item={b.item} actions={actions} />
+    );
+  },
+  (prev, next) =>
+    prev.actions === next.actions && sameBlock(prev.block, next.block)
+);
 
 export function ChatPanel({
   sessionId,
@@ -225,10 +245,13 @@ export function ChatPanel({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
-  const focusComposer = () =>
-    rootRef.current
-      ?.querySelector<HTMLElement>(".chat-composer [contenteditable]")
-      ?.focus();
+  const focusComposer = useCallback(
+    () =>
+      rootRef.current
+        ?.querySelector<HTMLElement>(".chat-composer [contenteditable]")
+        ?.focus(),
+    []
+  );
   const togglePlan = plan === null ? undefined : () => setPlan(!plan);
   const sendText = (text: string) => {
     pinned.current = true;
@@ -269,14 +292,17 @@ export function ChatPanel({
     focusComposer,
   });
 
-  const blocks = groupTimeline(items);
+  const blocks = useMemo(() => groupTimeline(items), [items]);
   const idle = !running && connected;
-  const actions: ItemActions = {
-    respond,
-    onUndo: idle ? (id) => undo(id, true) : undefined,
-    onCarryPlan: idle ? carryPlan : undefined,
-    onKeepPlanning: focusComposer,
-  };
+  const actions: ItemActions = useMemo(
+    () => ({
+      respond,
+      onUndo: idle ? (id) => undo(id, true) : undefined,
+      onCarryPlan: idle ? carryPlan : undefined,
+      onKeepPlanning: focusComposer,
+    }),
+    [respond, idle, undo, carryPlan, focusComposer]
+  );
 
   return (
     // Focusable, so Esc reaches it from anywhere in the conversation.
@@ -296,7 +322,8 @@ export function ChatPanel({
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5">
-          {blocks.length === 0 && (
+          <SetupCard sessionId={sessionId} />
+          {blocks.length === 0 && !queue.length && (
             <p className="text-muted-foreground py-16 text-center text-sm">
               Ask anything to start.
             </p>

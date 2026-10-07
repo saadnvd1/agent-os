@@ -20,6 +20,7 @@
 - [ ] Attention queue: pin sessions waiting on you to the top
 - [ ] Resume Claude after a reboot from a recorded session id
 - [ ] Replace status polling with tmux hooks/control mode events
+- [ ] Auto balance: when starting a task, pick the machine (this one or a linked one) with the most free CPU and memory
 
 ## Tasks (after V1, 2026-10-05)
 
@@ -86,6 +87,19 @@
 - [ ] WebSocket reconnection handling
 - [ ] Session auto-save/recovery
 
+## Performance (after the 2026-10-07 audit)
+
+- [ ] Virtualize long chats: a 600-item chat mounts ~3,900 DOM nodes and its
+      first render is most of the chat page's LCP (~8s on a throttled phone)
+- [ ] Move the status query out of HomeContent: every push re-renders the page
+      shell, the views and the panes' props (rows and dialogs are memoized now)
+- [ ] Layout shift (CLS ~0.19) on chat and terminal pages as the pane's bars and
+      keybar settle after hydration
+- [ ] Memoize the Composer's props (history, handlers) so a streamed word
+      doesn't re-render its toolbar
+- [ ] The remaining sync git calls (stage, commit, push, history, PR) off the
+      event loop, like the polled status reads
+
 ## Workspaces (inspired by catnip)
 
 - [ ] Project-tied workspaces - Sessions grouped by project, not just folders
@@ -114,6 +128,28 @@
 - [ ] Orchestrator "Start fresh": end the current conversation but keep its asks, notes and in-flight tasks (today each workspace has exactly one orchestrator, forever)
 - [ ] Sidebar phone polish: titles cut off early (move ⋯ to long-press/swipe), shorter orchestrator subtitle, nested worker dot follows its own status, compact inline asks (title + Approve, detail in chat)
 - [ ] PR #98: review the stricter fail-closed code-review gate against what #97 already put on main; merge the new parts or drop it
+- [ ] Move a task between two other machines directly (today a move goes through this one)
+- [ ] Move a plain session (not a task) between machines when it's in its own worktree: push WIP to its branch, recreate it there, resume the conversation. Today only tasks move; a plain session has no task status for the move's claim/resume/mirror to hang on, and one in the project's own checkout has no branch of its own to push
+- [ ] Interactive and chat sessions on a linked machine through its AgentOS, like tasks (still ssh today)
+
+## Other agents in chat
+
+- [ ] Codex plan mode (its collaboration mode is still behind `experimentalApi`)
+- [ ] Undo in Codex chat via `thread/revert`, OpenCode via its session revert
+- [ ] `@file` suggestions for Codex (`fuzzyFileSearch`) and OpenCode (`/find/file`)
+- [ ] One shared `opencode serve` per machine instead of one per conversation, with orphan reaping
+- [ ] Visuals (html_render) for non-Claude agents, as an MCP server they load
+- [ ] Chat drivers for Gemini CLI (`--experimental-acp`), Cursor and Amp (`--stream-json`)
+- [ ] The composer keeps the last session's model list until the new session's arrives
+
+## Draft-first sessions (after V1, 2026-10-07)
+
+- Stream install output into the setup card's log as it prints, not per step.
+- A draft for another machine shows that machine's installed agents (today
+  the install check is this machine's only, so a remote draft shows them all).
+- Folder browser in the project's settings for changing its folder.
+- The chat's access chip reads "Full access" until the worker's capabilities
+  arrive (useChat's default), even when the session is "Accept edits".
 
 ## Mobile app (apps/mobile)
 

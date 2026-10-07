@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Update a running checkout to origin's branch: pull, install, rebuild, and
-# restart only if every step succeeded, so a failed build never takes the
-# running server down. Restart with: AGENTOS_RESTART="<command>" scripts/redeploy
+# Update a running checkout to origin's branch: pull, install, build beside
+# the live server, swap the build in and restart, so neither a build in
+# progress nor a failed one takes the running server down.
+# Restart with: AGENTOS_RESTART="<command>" scripts/redeploy
+# Put the previous build back: AGENTOS_RESTART="<command>" scripts/redeploy --rollback
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=lib/build-swap.sh
+source scripts/lib/build-swap.sh
 
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
   # shellcheck disable=SC1091
@@ -11,13 +15,22 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
   nvm use >/dev/null
 fi
 
-git pull --ff-only
-# The build needs dev dependencies even when the shell runs with
-# NODE_ENV=production (as sessions started by AgentOS do).
-npm install --include=dev --no-audit --no-fund
-node scripts/ensure-native.mjs
-npm run build
-git checkout -- next-env.d.ts 2>/dev/null || true
+acquire_build_lock
+
+if [ "${1:-}" = "--rollback" ]; then
+  rollback_build
+else
+  git pull --ff-only
+  # The build needs dev dependencies even when the shell runs with
+  # NODE_ENV=production (as sessions started by AgentOS do).
+  npm install --include=dev --no-audit --no-fund
+  # Another npm version (on another machine) rewrites the lockfile's flags; a
+  # deploy never changes it, and a dirty lockfile would block the next pull.
+  git checkout -- package-lock.json 2>/dev/null || true
+  node scripts/ensure-native.mjs
+  build_beside
+  swap_build
+fi
 
 if [ -n "${AGENTOS_RESTART:-}" ]; then
   eval "$AGENTOS_RESTART"
@@ -29,7 +42,7 @@ if [ -n "${AGENTOS_RESTART:-}" ]; then
     fi
     sleep 1
   done
-  echo "AgentOS did not come back on $port" >&2
+  echo "AgentOS did not come back on $port; scripts/redeploy --rollback puts the last build back" >&2
   exit 1
 fi
 echo "Built. Restart your AgentOS server to run it."

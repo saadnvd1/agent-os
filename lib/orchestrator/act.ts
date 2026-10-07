@@ -6,7 +6,7 @@
 
 import { sendMessage } from "../bus";
 import { interruptChat } from "../chat/runner";
-import { hostExec } from "../hosts";
+import { hostExec, isRemoteHost } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { spawnSession } from "../agents/spawn";
 import { createTask, dropTask } from "../tasks";
@@ -50,9 +50,15 @@ export async function startTask(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  base?: string
+  base?: string,
+  name?: string
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
+  // Its brakes read this machine's usage, not the other machine's account.
+  if (isRemoteHost(project.host_id))
+    throw new Error(
+      `${project.name} runs on another machine; the orchestrator starts tasks on this one only for now`
+    );
   const task = await braked(
     workspaceId,
     "task",
@@ -60,26 +66,28 @@ export async function startTask(
       createTask({
         projectId: project.id,
         prompt,
+        name,
         baseBranch: base || undefined,
       }),
     (s) => s.id
   );
-  return `Started task "${task.name}" in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
 }
 
 export async function startSession(
   workspaceId: string,
   projectRef: string,
-  prompt: string
+  prompt: string,
+  name?: string
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
   const session = await braked(
     workspaceId,
     "session",
-    () => spawnSession({ project: project.id, prompt }),
+    () => spawnSession({ project: project.id, prompt, name }),
     (s) => s.id
   );
-  return `Started session "${session.name}" in ${project.name}.`;
+  return `Started session "${session.name}" (id ${session.id.slice(0, 8)}) in ${project.name}.`;
 }
 
 function itemLine(i: StackItemView): string {

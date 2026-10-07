@@ -50,6 +50,15 @@ export async function runningCount(
   const running = new Set<string>();
   for (const s of workspaceSessions(workspaceId)) {
     if (s.task_status && s.task_status !== "running") continue;
+    // A task still setting up, or held at launch, has no terminal yet, and
+    // its agent will launch.
+    if (
+      s.task_status === "running" &&
+      (s.setup_status === "running" || s.setup_status === "held")
+    ) {
+      running.add(s.id);
+      continue;
+    }
     const busy =
       s.view === "chat"
         ? chatState(s.id) === "running"
@@ -119,7 +128,12 @@ export function liftBrake(workspaceId: string): void {
 const BRAKE_APPROVAL_MS = 2 * HOUR;
 
 // The reason no start may go now (noted and asked once per brake), or null.
-async function refusal(workspaceId: string): Promise<string | null> {
+// A start that isn't what Saad was asked about (a schedule's) never spends
+// his approval.
+async function refusal(
+  workspaceId: string,
+  spend = true
+): Promise<string | null> {
   if (isPaused(workspaceId)) return "the orchestrator is paused by Saad";
   const on = await brakesOn(workspaceId);
   if (!on.length) {
@@ -134,7 +148,7 @@ async function refusal(workspaceId: string): Promise<string | null> {
     BRAKE_SUBJECT,
     BRAKE_APPROVAL_MS
   );
-  if (approval?.brake_key === key && spendApproval(approval.id)) {
+  if (spend && approval?.brake_key === key && spendApproval(approval.id)) {
     // Spent: the next refusal notes and asks again.
     setBrake(workspaceId, null);
     addNote(
@@ -177,17 +191,28 @@ function recordStart(
   ).run(workspaceId, kind, target, iso(Date.now()));
 }
 
+// A start a brake held, with the brake's reason.
+export class BrakeRefused extends Error {
+  constructor(
+    readonly kind: StartKind,
+    readonly reason: string
+  ) {
+    super(`Brake: not starting a ${kind}: ${reason}.`);
+  }
+}
+
 // Runs a start through the brakes: refuses with the reason when one holds,
 // otherwise starts and counts it.
 export function braked<T>(
   workspaceId: string,
   kind: StartKind,
   start: () => Promise<T>,
-  target: (result: T) => string | null
+  target: (result: T) => string | null,
+  opts: { spendApproval?: boolean } = {}
 ): Promise<T> {
   return serially(workspaceId, async () => {
-    const why = await refusal(workspaceId);
-    if (why) throw new Error(`Brake: not starting a ${kind}: ${why}.`);
+    const why = await refusal(workspaceId, opts.spendApproval !== false);
+    if (why) throw new BrakeRefused(kind, why);
     const result = await start();
     recordStart(workspaceId, kind, target(result));
     return result;

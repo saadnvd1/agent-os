@@ -1,0 +1,38 @@
+  ┃
+  ┃  Run the shell command ls, then write a 200-word poem about rivers.
+  ┃
+
+     + Thought: 10.3s
+
+  ┃
+  ┃  $ ls
+  ┃
+  ┃  a.txt
+  ┃
+
+     ⠹ Thinking
+
+     ▣  Build · Nemotron 3.5 Lightning Free
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃
+  ┃
+  ┃  Build · Nemotron 3.5 Lightning Free OpenCode Zen
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   ⬝⬝⬝⬝⬝⬝⬝■  esc interrupt                                                                 14.6K (6%)  ctrl+p commands

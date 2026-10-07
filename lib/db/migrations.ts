@@ -794,9 +794,179 @@ const migrations: Migration[] = [
         );
       })(),
   },
+  {
+    id: 38,
+    name: "add_schedules",
+    up: (db) => {
+      // Cron schedules that start agent work, and every run they made or
+      // skipped. A run's (schedule, slot) is unique: claiming the row is
+      // what stops a slot from running twice. Runs are never deleted, and a
+      // removed schedule is archived, not deleted, so its history stays.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS schedules (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          project_id TEXT,
+          name TEXT NOT NULL,
+          cron TEXT NOT NULL,
+          timezone TEXT NOT NULL DEFAULT 'America/Chicago',
+          prompt TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          armed_at INTEGER NOT NULL,
+          archived_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS schedule_runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          schedule_id TEXT NOT NULL,
+          slot TEXT NOT NULL,
+          slot_at INTEGER NOT NULL,
+          trigger TEXT NOT NULL,
+          outcome TEXT NOT NULL,
+          detail TEXT,
+          session_id TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE (schedule_id, slot)
+        )
+      `);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule ON schedule_runs(schedule_id, id)`
+      );
+      // Which server process ticks the schedules: one row, renewed each
+      // tick, so a second server on the same database never runs them.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS scheduler_lease (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          owner TEXT NOT NULL,
+          pid INTEGER NOT NULL,
+          heartbeat INTEGER NOT NULL
+        )
+      `);
+    },
+  },
+  {
+    id: 39,
+    name: "add_session_name_source",
+    up: (db) => {
+      // Who named a session: "user" (typed or given explicitly, never
+      // renamed for them), "generated" (a title picked from its prompt) or
+      // "default" ("Session 4", or a placeholder until a title arrives).
+      // One transaction, so a crash part-way leaves nothing to skip.
+      db.transaction(() => {
+        db.exec(
+          `ALTER TABLE sessions ADD COLUMN name_source TEXT NOT NULL DEFAULT 'default'`
+        );
+        // A session renamed by hand before this keeps its name.
+        db.exec(
+          `UPDATE sessions SET name_source = 'user' WHERE id IN (SELECT session_id FROM session_names)`
+        );
+      })();
+    },
+  },
+  {
+    id: 40,
+    name: "add_schedule_targets_and_phone_notify",
+    // One transaction, so a crash part-way leaves nothing to skip as
+    // "duplicate column" on the next start.
+    up: (db) =>
+      db.transaction(() => {
+        // Where phone notifications go. One row; the bot token is never
+        // returned by any route or written to a log.
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS notify_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            telegram_token TEXT,
+            telegram_chat_id TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+          )
+        `);
+        // Every phone notification, sent or waiting out its source's
+        // minute, so one held across a restart still goes.
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS notify_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            text TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            send_after INTEGER NOT NULL,
+            sent_at INTEGER,
+            error TEXT
+          )
+        `);
+        db.exec(
+          `CREATE INDEX IF NOT EXISTS idx_notify_outbox_source ON notify_outbox(source, sent_at)`
+        );
+        // A "message" schedule's session, by id: names change, ids don't.
+        // And the agent session that made a schedule, when one did.
+        db.exec(`ALTER TABLE schedules ADD COLUMN target_session_id TEXT`);
+        db.exec(`ALTER TABLE schedules ADD COLUMN created_by_session_id TEXT`);
+      })(),
+  },
+  {
+    id: 41,
+    name: "add_task_setup",
+    up: (db) => {
+      // How a task's worktree setup (deps, setup commands) went before its
+      // agent started: running, ok or failed, how long, and what failed;
+      // and the brief its launch needs, so a restart can resume it.
+      db.transaction(() => {
+        db.exec(`ALTER TABLE sessions ADD COLUMN setup_status TEXT`);
+        db.exec(`ALTER TABLE sessions ADD COLUMN setup_ms INTEGER`);
+        db.exec(`ALTER TABLE sessions ADD COLUMN setup_error TEXT`);
+        db.exec(`ALTER TABLE sessions ADD COLUMN task_brief TEXT`);
+      })();
+    },
+  },
+  {
+    id: 42,
+    name: "add_host_links_and_moved_tasks",
+    up: (db) => {
+      // How this machine reaches another machine's own AgentOS: its URL and
+      // the device token it paired with. Apart from hosts so the token never
+      // rides along with a host row to the browser.
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS host_links (
+            host_id TEXT PRIMARY KEY REFERENCES hosts(id) ON DELETE CASCADE,
+            url TEXT NOT NULL,
+            token TEXT NOT NULL,
+            linked_at TEXT NOT NULL DEFAULT (datetime('now'))
+          )
+        `);
+        // A task moved to another machine keeps its row, marked where it
+        // went; one that arrived names the session it came from, so the
+        // same move imported twice finds the first.
+        db.exec(`ALTER TABLE sessions ADD COLUMN moved_to TEXT`);
+        db.exec(`ALTER TABLE sessions ADD COLUMN moved_from TEXT`);
+        db.exec(
+          `CREATE INDEX IF NOT EXISTS idx_sessions_moved_from ON sessions(moved_from)`
+        );
+      })();
+    },
+  },
+  {
+    id: 43,
+    name: "scratch_project",
+    up: (db) => {
+      // Chats with no project work in a scratch folder rather than the home
+      // directory. Sessions already made keep their own folders.
+      db.prepare(
+        `UPDATE projects SET name = 'Scratch', working_directory = '~/.agent-os/scratch'
+         WHERE is_uncategorized = 1 AND name = 'Uncategorized' AND working_directory = '~'`
+      ).run();
+    },
+  },
 ];
 
-export function runMigrations(db: Database.Database): void {
+// `upTo`: stop after this id (tests that start from an older database).
+export function runMigrations(
+  db: Database.Database,
+  upTo = Number.POSITIVE_INFINITY
+): void {
   // Create migrations tracking table
   db.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -819,7 +989,7 @@ export function runMigrations(db: Database.Database): void {
   );
 
   for (const migration of migrations) {
-    if (applied.has(migration.id)) continue;
+    if (applied.has(migration.id) || migration.id > upTo) continue;
 
     try {
       migration.up(db);

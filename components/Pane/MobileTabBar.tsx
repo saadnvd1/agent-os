@@ -2,29 +2,34 @@
 
 import { ViewSwitch } from "@/components/Chat/ViewSwitch";
 import { paletteActions } from "@/stores/palette";
+import { newDraft } from "@/stores/drafts";
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Menu,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Terminal as TerminalIcon,
+  Circle,
   FolderOpen,
   GitBranch,
-  Users,
-  ChevronDown,
-  Circle,
+  Menu,
+  Plus,
   Search,
+  Terminal as TerminalIcon,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session, Project } from "@/lib/db";
 import type { LucideIcon } from "lucide-react";
+import { HostBadge } from "@/components/Hosts/HostBadge";
+import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
 
@@ -65,6 +70,8 @@ function ViewModeButton({
 
 interface MobileTabBarProps {
   session: Session | null | undefined;
+  // The tab shows a draft: a session not sent yet.
+  drafting?: boolean;
   sessions: Session[];
   projects: Project[];
   viewMode: ViewMode;
@@ -77,6 +84,7 @@ interface MobileTabBarProps {
 
 export function MobileTabBar({
   session,
+  drafting,
   sessions,
   projects,
   viewMode,
@@ -178,14 +186,17 @@ export function MobileTabBar({
               className="hover:bg-accent active:bg-accent flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 py-1"
             >
               <span className="truncate text-sm font-medium">
-                {session?.name || "No session"}
-                {projectName && projectName !== "Uncategorized" && (
-                  <span className="text-muted-foreground font-normal">
-                    {" "}
-                    [{projectName}]
-                  </span>
-                )}
+                {session?.name || (drafting ? "New session" : "No session")}
+                {projectName &&
+                  projectName !== "Uncategorized" &&
+                  projectName !== "Scratch" && (
+                    <span className="text-muted-foreground font-normal">
+                      {" "}
+                      [{projectName}]
+                    </span>
+                  )}
               </span>
+              <HostBadge hostId={session?.host_id} />
               <ChevronDown className="text-muted-foreground h-3 w-3 shrink-0" />
             </button>
           </DropdownMenuTrigger>
@@ -193,6 +204,15 @@ export function MobileTabBar({
             align="center"
             className="max-h-[300px] min-w-[200px] overflow-y-auto"
           >
+            {/* First, so a long session list can't scroll it out of sight. */}
+            {session && (
+              <MoveMenuItems
+                session={session}
+                Item={DropdownMenuItem}
+                After={DropdownMenuSeparator}
+                iconClassName="h-4 w-4"
+              />
+            )}
             {sessions
               .filter((s) => !s.conductor_session_id)
               .map((s) => {
@@ -219,12 +239,11 @@ export function MobileTabBar({
                       )}
                     />
                     <span className="flex-1 truncate">{s.name}</span>
-                    {sessionProject &&
-                      sessionProject.name !== "Uncategorized" && (
-                        <span className="text-muted-foreground text-xs">
-                          [{sessionProject.name}]
-                        </span>
-                      )}
+                    {sessionProject && !sessionProject.is_uncategorized && (
+                      <span className="text-muted-foreground text-xs">
+                        [{sessionProject.name}]
+                      </span>
+                    )}
                   </DropdownMenuItem>
                 );
               })}
@@ -254,6 +273,18 @@ export function MobileTabBar({
         className="-my-1.5 h-11 w-11 shrink-0"
       >
         <Search className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="New session"
+        onClick={(e) => {
+          e.stopPropagation();
+          newDraft({ kind: "current" });
+        }}
+        className="-my-1.5 h-11 w-11 shrink-0"
+      >
+        <Plus className="h-4 w-4" />
       </Button>
       <ViewSwitch session={session} />
 

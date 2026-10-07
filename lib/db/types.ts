@@ -4,6 +4,8 @@ import type { ChatAccess } from "../chat/events";
 export interface Session {
   id: string;
   name: string;
+  // Who named it: never auto-renamed when "user".
+  name_source: "user" | "generated" | "default";
   tmux_name: string;
   created_at: string;
   updated_at: string;
@@ -21,7 +23,23 @@ export interface Session {
   // Async tasks: a session started from a prompt that ends in a PR
   task_prompt: string | null;
   // done: finished without a merge (no PR, or its PR closed).
-  task_status: "running" | "merged" | "dropped" | "done" | null;
+  // moving: handing it to another machine (moved_to); moved: handed over.
+  task_status:
+    | "running"
+    | "merged"
+    | "dropped"
+    | "done"
+    | "moving"
+    | "moved"
+    | null;
+  moved_to: string | null;
+  // The session on another machine this task arrived from.
+  moved_from: string | null;
+  // The task's worktree setup, which its agent waits for.
+  setup_status?: "running" | "held" | "ok" | "failed" | null;
+  setup_ms?: number | null;
+  setup_error?: string | null;
+  task_brief?: string | null;
   // How the session is shown: a chat conversation or a terminal.
   view: "chat" | "terminal";
   chat_access: ChatAccess;
@@ -168,4 +186,6 @@ export interface Host {
   ssh_target: string;
   sort_order: number;
   created_at: string;
+  // Paired with that machine's own AgentOS (lib/hosts/link.ts); 0/1 from SQLite.
+  linked?: boolean | number;
 }
