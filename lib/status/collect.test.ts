@@ -95,6 +95,35 @@ describe("collectStatuses", () => {
     expect(statuses[SID]).toMatchObject({ status: "error", need: "failed" });
   });
 
+  it("writes nothing for a report repeated as is, and everything for a change", () => {
+    const db = getDb();
+    const row = () =>
+      db
+        .prepare(
+          `SELECT s.updated_at AS touched, p.records
+             FROM sessions s LEFT JOIN program_status p ON p.session_name = ?
+            WHERE s.id = ?`
+        )
+        .get(NAME, SID) as { touched: string; records: string };
+    expect(applyProgramReport(NAME, { state: "working", id: "" })).toBe(true);
+    db.prepare(
+      `UPDATE sessions SET updated_at = '2026-01-02 00:00:00' WHERE id = ?`
+    ).run(SID);
+    const before = row();
+    expect(applyProgramReport(NAME, { state: "working", id: "" })).toBe(false);
+    expect(row()).toEqual(before);
+
+    expect(
+      applyProgramReport(NAME, { state: "blocked", id: "", msg: "a" })
+    ).toBe(true);
+    expect(
+      applyProgramReport(NAME, { state: "blocked", id: "", msg: "b" })
+    ).toBe(true);
+    expect(programSummary(NAME)?.msg).toBe("b");
+    reloadProgramStatus();
+    expect(programSummary(NAME)?.msg).toBe("b");
+  });
+
   it("starts a row it can't read over, empty", () => {
     getDb()
       .prepare(

@@ -35,6 +35,7 @@ const MAX_HEADER = 256;
 // The feature-detection reply is typed into the pane: at most this often.
 const REPLY_MS = 1000;
 const REPORTS_PER_SECOND = 50;
+const MAX_DEFERRED = 66;
 
 interface Tap {
   socket: net.Socket;
@@ -90,16 +91,40 @@ async function handle(name: string, event: OscEvent): Promise<void> {
 // record id (and one prompt, one query), so a pane printing reports in a
 // loop costs at most this many tmux calls and writes at a time.
 function eventKey(event: OscEvent): string {
-  return event.type === "report" ? `r:${event.report.id}` : event.type;
+  if (event.type !== "report") return event.type;
+  const { state, id } = event.report;
+  return `${state === "clear" ? "c" : "r"}:${id}`;
+}
+
+// A clear makes queued reports under it moot.
+function covered(key: string, clear: OscEvent): boolean {
+  if (clear.type !== "report" || clear.report.state !== "clear") return false;
+  const id = clear.report.id;
+  if (!key.startsWith("r:")) return false;
+  const reportId = key.slice(2);
+  return id === "" || reportId === id || reportId.startsWith(id + "/");
 }
 
 // Exported for tests.
 export function acceptTapConnection(socket: net.Socket): void {
   let name: string | null = null;
   let header = "";
-  // Reports from one pane are applied in order, coalesced while busy, and
-  // past REPORTS_PER_SECOND the rest of that second's are dropped.
+  // Reports from one pane are applied in order, coalesced while busy. Past
+  // REPORTS_PER_SECOND, the rest of that second's wait (the newest per
+  // record, a bounded few) and go in when the second ends: a burst can't
+  // lose the report that ends it.
   let pending = new Map<string, OscEvent>();
+  const deferred = new Map<string, OscEvent>();
+  let flush: ReturnType<typeof setTimeout> | null = null;
+  const queue = (into: Map<string, OscEvent>, event: OscEvent) => {
+    // A newer report for the same record replaces the queued one, at its
+    // new place in line.
+    const key = eventKey(event);
+    for (const queued of [...into.keys()])
+      if (covered(queued, event)) into.delete(queued);
+    into.delete(key);
+    into.set(key, event);
+  };
   let draining = false;
   let windowStart = 0;
   let inWindow = 0;
@@ -143,16 +168,28 @@ export function acceptTapConnection(socket: net.Socket): void {
         windowStart = now;
         inWindow = 0;
       }
-      if (++inWindow > REPORTS_PER_SECOND) continue;
-      // A newer report for the same record replaces the queued one, at its
-      // new place in line.
-      const key = eventKey(event);
-      pending.delete(key);
-      pending.set(key, event);
+      if (++inWindow <= REPORTS_PER_SECOND) {
+        queue(pending, event);
+        continue;
+      }
+      queue(deferred, event);
+      if (deferred.size > MAX_DEFERRED)
+        deferred.delete(deferred.keys().next().value!);
+      const paneName = name;
+      flush ??= setTimeout(
+        () => {
+          flush = null;
+          for (const e of deferred.values()) queue(pending, e);
+          deferred.clear();
+          if (!draining && pending.size > 0) void drain(paneName);
+        },
+        Math.max(0, 1000 - (now - windowStart))
+      );
     }
     if (!draining && pending.size > 0) void drain(name);
   });
   socket.on("close", () => {
+    if (flush) clearTimeout(flush);
     if (name && taps.get(name)?.socket === socket) taps.delete(name);
   });
 }

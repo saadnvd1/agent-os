@@ -2,7 +2,15 @@ import net from "node:net";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { getDb } from "@/lib/db";
 import { acceptTapConnection } from "./tap";
 import { programSummary, reloadProgramStatus } from "./store";
@@ -12,7 +20,9 @@ const server = net.createServer(acceptTapConnection);
 const NAME = "shell-tap-test";
 
 beforeAll(() => new Promise<void>((r) => server.listen(path, r)));
-afterAll(() => new Promise<void>((r) => server.close(() => r())));
+afterAll(() => {
+  server.close();
+});
 beforeEach(() => {
   getDb().prepare(`DELETE FROM program_status`).run();
   reloadProgramStatus();
@@ -44,10 +54,12 @@ describe("the tap socket", () => {
       s.write(part);
       await settle();
     }
-    expect(programSummary(NAME)).toMatchObject({
-      state: "done",
-      msg: "finished",
-    });
+    await vi.waitFor(() =>
+      expect(programSummary(NAME)).toMatchObject({
+        state: "done",
+        msg: "finished",
+      })
+    );
     s.destroy();
   });
 
@@ -66,29 +78,44 @@ describe("the tap socket", () => {
 
   it("lets a newer pipe for the pane take over from the old one", async () => {
     const old = await open();
-    old.write(`${NAME}\n`);
-    await settle();
+    old.write(`${NAME}\n${done("old")}`);
+    await vi.waitFor(() => expect(programSummary(NAME)?.msg).toBe("old"));
     const fresh = await open();
     fresh.write(`${NAME}\n${done("new")}`);
     expect(await closed(old)).toBe(true);
-    await settle();
-    expect(programSummary(NAME)?.msg).toBe("new");
+    await vi.waitFor(() => expect(programSummary(NAME)?.msg).toBe("new"));
     fresh.destroy();
   });
 
-  it("drops a flood past 50 reports a second", async () => {
+  it("caps a flood at 50 reports a second, keeping the one that ends it", async () => {
     const s = await open();
     const flood = Array.from(
       { length: 500 },
       (_, i) => `\x1b]7501;state=done:id=r${i}\x1b\\`
     ).join("");
-    s.write(`${NAME}\n${flood}`);
-    await settle();
-    await settle();
-    const rows = getDb()
-      .prepare(`SELECT records FROM program_status WHERE session_name = ?`)
-      .get(NAME) as { records: string };
-    expect(Object.keys(JSON.parse(rows.records)).length).toBe(50);
+    s.write(`${NAME}\n${flood}\x1b]7501;state=clear\x1b\\${done("over")}`);
+    const count = () => {
+      const row = getDb()
+        .prepare(`SELECT records FROM program_status WHERE session_name = ?`)
+        .get(NAME) as { records: string } | undefined;
+      return row ? Object.keys(JSON.parse(row.records)).length : 0;
+    };
+    // The first 50 go in at once; the rest wait for the second to end.
+    await vi.waitFor(() => expect(count()).toBe(50), {
+      timeout: 900,
+      interval: 5,
+    });
+    // Then the clear and the final done land.
+    await vi.waitFor(
+      () =>
+        expect(programSummary(NAME)).toMatchObject({
+          state: "done",
+          msg: "over",
+        }),
+      { timeout: 3000 }
+    );
+    // The clear took the deferred records with it.
+    expect(count()).toBe(1);
     s.destroy();
   });
 });
