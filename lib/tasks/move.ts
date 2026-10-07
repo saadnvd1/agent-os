@@ -48,27 +48,27 @@ export async function claudeIdFor(session: Session): Promise<string | null> {
 /**
  * The task's own branch, as its agent left it. An agent that reworded or
  * squashed commits it had pushed (the wip one a move makes, say) needs a
- * force; the lease is what this machine last saw there, so anything someone
- * else pushed since is never overwritten.
+ * force, but only over commits this branch has had: --force-if-includes
+ * refuses a remote tip that was fetched and never taken in, so someone
+ * else's push is never overwritten. What was pushed is kept under
+ * refs/agentos/pushed/, for the worktree this leaves behind.
  */
+export const pushedRef = (branch: string) => `refs/agentos/pushed/${branch}`;
+
 async function pushOwnBranch(cwd: string, branch: string): Promise<void> {
   const ref = `refs/heads/${branch}`;
-  const seen = await git(
+  const tracked = await git(
     cwd,
     "rev-parse",
     "--verify",
     "-q",
     `refs/remotes/origin/${branch}`
   ).catch(() => "");
-  await git(
-    cwd,
-    "push",
-    "-q",
-    "-u",
-    `--force-with-lease=${ref}:${seen.trim()}`,
-    "origin",
-    `HEAD:${ref}`
-  );
+  const force = tracked.trim()
+    ? [`--force-with-lease=${ref}`, "--force-if-includes"]
+    : [];
+  await git(cwd, "push", "-q", "-u", ...force, "origin", `HEAD:${ref}`);
+  await git(cwd, "update-ref", pushedRef(branch), "HEAD");
 }
 
 /**

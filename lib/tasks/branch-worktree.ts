@@ -9,6 +9,7 @@ import path from "path";
 import { getRepoName, slugify } from "../git";
 import { WORKTREES_DIR } from "../worktrees";
 import { run } from "./gh";
+import { pushedRef } from "./move";
 
 const git = (cwd: string, ...args: string[]) => run("git", args, cwd, 120000);
 
@@ -57,14 +58,29 @@ export async function checkoutBranchWorktree(
       throw new Error(
         `${existing} has uncommitted changes; commit or discard them first`
       );
-    // It was pushed when the task left; the agent elsewhere may have
-    // reworded those commits since. Keep the old tip under a ref, then match
-    // the branch.
+    // Everything it has went out when the task left (pushedRef); the agent
+    // elsewhere may have reworded those commits since, so match the branch.
+    // Anything never pushed stops it instead, and the old tip stays under
+    // its own ref either way.
     const head = (await git(existing, "rev-parse", "HEAD")).trim();
+    const sent = await git(
+      existing,
+      "merge-base",
+      "--is-ancestor",
+      head,
+      pushedRef(branch)
+    ).then(
+      () => true,
+      () => false
+    );
+    if (!sent)
+      throw new Error(
+        `${existing} has commits that never left this machine; push or drop them first`
+      );
     await git(
       projectPath,
       "update-ref",
-      `refs/agentos/before-move/${branch}`,
+      `refs/agentos/before-move/${head}`,
       head
     );
     await git(existing, "reset", "-q", "--hard", `origin/${branch}`);

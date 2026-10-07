@@ -96,13 +96,15 @@ describe("leaving", () => {
       git(f.repo, "log", "-1", "--format=%s", "origin/feature/amended")
     ).toBe("feat: the real change");
 
-    // Someone else pushes to it; this machine hasn't seen that.
+    // Someone else pushes to it, and this machine fetches that without
+    // taking it in (as a sign-off or restack fetch does).
     const other = path.join(f.tmp, "other-clone");
     git(f.tmp, "clone", "-q", "-b", "feature/amended", f.origin, other);
     fs.writeFileSync(path.join(other, "theirs.txt"), "x\n");
     git(other, "add", "-A");
     git(other, "commit", "-q", "-m", "theirs");
     git(other, "push", "-q", "origin", "feature/amended");
+    git(f.repo, "fetch", "-q", "origin");
     db.prepare(
       `UPDATE sessions SET task_status = 'running', moved_to = NULL WHERE id = ?`
     ).run(id);
@@ -188,9 +190,20 @@ describe("arriving", () => {
     git(other, "push", "-q", "-f", "origin", "feature/rewritten");
     await importTask(bundle);
     expect(git(cwd, "log", "-1", "--format=%s")).toBe("feat: reworded");
-    expect(
-      git(f.repo, "rev-parse", "refs/agentos/before-move/feature/rewritten")
-    ).toBe(oldTip);
+    expect(git(f.repo, "rev-parse", `refs/agentos/before-move/${oldTip}`)).toBe(
+      oldTip
+    );
+  });
+
+  it("won't reset away a commit made in the left-behind worktree", async () => {
+    const { id, cwd } = await seedTask("feature/left-behind");
+    const bundle = await exportTask(id, "box");
+    markMoved(id, "box");
+    fs.writeFileSync(path.join(cwd, "late.txt"), "late\n");
+    git(cwd, "add", "-A");
+    git(cwd, "commit", "-q", "-m", "made after it left");
+    await expect(importTask(bundle)).rejects.toThrow(/never left this machine/);
+    expect(git(cwd, "log", "-1", "--format=%s")).toBe("made after it left");
   });
 
   it("makes a fresh worktree and rewrites the conversation to it", async () => {
