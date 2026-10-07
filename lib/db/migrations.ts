@@ -848,9 +848,32 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: 39,
+    name: "add_session_name_source",
+    up: (db) => {
+      // Who named a session: "user" (typed or given explicitly, never
+      // renamed for them), "generated" (a title picked from its prompt) or
+      // "default" ("Session 4", or a placeholder until a title arrives).
+      // One transaction, so a crash part-way leaves nothing to skip.
+      db.transaction(() => {
+        db.exec(
+          `ALTER TABLE sessions ADD COLUMN name_source TEXT NOT NULL DEFAULT 'default'`
+        );
+        // A session renamed by hand before this keeps its name.
+        db.exec(
+          `UPDATE sessions SET name_source = 'user' WHERE id IN (SELECT session_id FROM session_names)`
+        );
+      })();
+    },
+  },
 ];
 
-export function runMigrations(db: Database.Database): void {
+// `upTo`: stop after this id (tests that start from an older database).
+export function runMigrations(
+  db: Database.Database,
+  upTo = Number.POSITIVE_INFINITY
+): void {
   // Create migrations tracking table
   db.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -873,7 +896,7 @@ export function runMigrations(db: Database.Database): void {
   );
 
   for (const migration of migrations) {
-    if (applied.has(migration.id)) continue;
+    if (applied.has(migration.id) || migration.id > upTo) continue;
 
     try {
       migration.up(db);
