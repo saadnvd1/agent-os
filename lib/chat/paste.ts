@@ -89,7 +89,7 @@ export function classifyPaste(paste: Paste): {
   return { kind: "markdown" };
 }
 
-// t3code's naming: pasted-text.txt, pasted-text-2.txt, ...
+// Pasted text files are numbered: pasted-text.txt, pasted-text-2.txt, ...
 const numberOf = (name: string) =>
   name === "pasted-text.txt"
     ? 1
