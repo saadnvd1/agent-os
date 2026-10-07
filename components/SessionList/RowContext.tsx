@@ -12,6 +12,7 @@ export interface RowContextValue {
   projectNames: Map<string, string>;
   workspaceNames: Map<string, string>;
   orchestrators: OrchestratorOverview[];
+  runningByWorkspace: Map<string, number>;
   // Render order, for shift-click range selection.
   orderedIds: string[];
   cardUrl: (sessionId: string) => string | null | undefined;

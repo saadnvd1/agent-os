@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowBadge, RowDot, RowRename } from "./RowParts";
+import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
 
 // One session: status dot, title over its project, and on the right what
@@ -33,11 +34,6 @@ export function SessionRow({
   const active = session.id === ctx.activeSessionId;
   const selecting = selectedIds.size > 0;
   const selected = selectedIds.has(session.id);
-  const subtitle =
-    session.role === "orchestrator"
-      ? `Orchestrator · ${ctx.workspaceNames.get(session.workspace_id ?? "") ?? ""}`
-      : (ctx.projectNames.get(session.project_id ?? "") ?? "");
-
   const onClick = (e: React.MouseEvent) => {
     if (renaming) return;
     if (selecting || e.shiftKey) {
@@ -58,7 +54,13 @@ export function SessionRow({
       tabIndex={0}
       title={session.name}
       onClick={onClick}
-      onKeyDown={(e) => e.key === "Enter" && ctx.onSelect(session.id)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          ctx.onSelect(session.id);
+        }
+      }}
       className={cn(
         "group relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition-colors",
         selected
@@ -97,16 +99,12 @@ export function SessionRow({
             {session.name}
           </span>
         )}
-        {subtitle && (
-          <span className="text-muted-foreground/70 truncate text-xs">
-            {subtitle}
-          </span>
-        )}
+        <RowSubtitle session={session} />
       </span>
       {session.parent_session_id && (
         <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />
       )}
-      <span className="flex shrink-0 items-center gap-2 md:group-hover:invisible">
+      <span className="flex shrink-0 items-center gap-2 [@media(hover:hover)]:md:group-hover:invisible">
         <RowBadge row={row} />
         {!row.need && (
           <span className="text-muted-foreground/70 text-xs tabular-nums">
@@ -121,7 +119,7 @@ export function SessionRow({
               variant="ghost"
               size="icon-sm"
               aria-label="Session actions"
-              className="-mr-1.5 h-11 w-9 shrink-0 md:absolute md:top-1/2 md:right-1.5 md:mr-0 md:h-7 md:w-7 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
+              className="-mr-2.5 h-11 w-11 shrink-0 md:absolute md:top-1/2 md:right-1.5 md:mr-0 md:h-7 md:w-7 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 md:data-[state=open]:opacity-100 [@media(hover:none)]:md:static [@media(hover:none)]:md:translate-y-0 [@media(hover:none)]:md:opacity-100"
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>

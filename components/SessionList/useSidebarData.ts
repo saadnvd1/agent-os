@@ -75,6 +75,20 @@ export function useSidebarData(
     ui.query,
   ]);
 
+  // Per workspace, how many of its project sessions are working: the
+  // orchestrator row's "3 running".
+  const runningByWorkspace = useMemo(() => {
+    const byId = new Map(projects.map((p) => [p.id, p.workspace_id]));
+    const counts = new Map<string, number>();
+    for (const s of sessions) {
+      const ws = byId.get(s.project_id ?? "");
+      if (s.role || !ws || sessionStatuses?.[s.id]?.status !== "running")
+        continue;
+      counts.set(ws, (counts.get(ws) ?? 0) + 1);
+    }
+    return counts;
+  }, [sessions, projects, sessionStatuses]);
+
   const projectNames = useMemo(
     () => new Map(projects.map((p) => [p.id, p.name])),
     [projects]
@@ -86,6 +100,7 @@ export function useSidebarData(
     sessions,
     projects,
     projectNames,
+    runningByWorkspace,
     workspaces,
     workspace,
     workspaceProjects,

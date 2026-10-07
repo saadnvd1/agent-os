@@ -12,7 +12,7 @@ import {
 import { getDb, type Session } from "@/lib/db";
 import { chatState } from "@/lib/chat/runner";
 import { chatActivityLine } from "@/lib/chat/activity";
-import { chatNeed, isUnread, needsYou } from "@/lib/needs-you";
+import { chatNeed, isUnread, needsYou, terminalStatus } from "@/lib/needs-you";
 import type { SessionNeed } from "@/lib/sidebar/shelves";
 import { openAskCount } from "@/lib/orchestrator/asks";
 
@@ -226,22 +226,9 @@ export async function GET() {
       }
       previousStatuses.set(id, status);
 
-      const row = terminalRow(db, id);
-      const terminal = row ? { ...row, view: "terminal" as const } : null;
-      // Waiting counts only when it's news: not a prompt you've seen.
-      const shown =
-        status === "waiting" && terminal && !needsYou(terminal, null)
-          ? "idle"
-          : status;
       statusMap[id] = {
         sessionName,
-        status: shown,
-        need: shown === "waiting" ? "input" : null,
-        unread:
-          shown !== "running" &&
-          shown !== "waiting" &&
-          !!terminal &&
-          isUnread(terminal, null),
+        ...terminalStatus(terminalRow(db, id), status),
         lastLine,
         claudeSessionId,
         agentType,

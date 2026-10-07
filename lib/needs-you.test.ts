@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
 import { saveItem } from "./chat/store";
-import { chatNeed, isUnread, needsYou } from "./needs-you";
+import { chatNeed, isUnread, needsYou, terminalStatus } from "./needs-you";
 
 // A chat that finished a turn you haven't looked at.
 function finishedUnseen(role: "orchestrator" | null) {
@@ -64,6 +64,35 @@ describe("chatNeed", () => {
     const orch = { id: randomUUID(), role: "orchestrator" as const };
     expect(chatNeed(orch, "idle", 2)).toBe("answer");
     expect(chatNeed(orch, "idle", 0)).toBeNull();
+    expect(chatNeed(orch, "waiting", 0)).toBe("answer");
+  });
+
+  it("reads the newest pending approval, not an answered question", () => {
+    const id = randomUUID();
+    saveItem(id, {
+      id: "q1",
+      kind: "approval",
+      createdAt: Date.now(),
+      toolName: "AskUserQuestion",
+      title: "Which?",
+      input: {},
+      canAlways: false,
+      status: "answered",
+      questions: [
+        { question: "Which?", header: "Pick", multiSelect: false, options: [] },
+      ],
+    });
+    saveItem(id, {
+      id: "a2",
+      kind: "approval",
+      createdAt: Date.now(),
+      toolName: "Bash",
+      title: "Run",
+      input: {},
+      canAlways: false,
+      status: "pending",
+    });
+    expect(chatNeed({ id }, "waiting")).toBe("approve");
   });
 });
 
@@ -72,6 +101,7 @@ describe("isUnread", () => {
     const chat = finishedUnseen(null);
     expect(isUnread(chat, "idle")).toBe(true);
     expect(isUnread(chat, "running")).toBe(false);
+    expect(isUnread(chat, "waiting")).toBe(false);
     expect(
       isUnread({ ...chat, last_seen_at: "2999-01-01 00:00:00" }, "idle")
     ).toBe(false);
@@ -88,5 +118,47 @@ describe("isUnread", () => {
     expect(
       isUnread({ ...terminal, last_seen_at: "2026-10-06 13:00:00" }, null)
     ).toBe(false);
+  });
+});
+
+describe("terminalStatus", () => {
+  const row = (seen: string | null) => ({
+    id: randomUUID(),
+    view: "terminal" as const,
+    updated_at: "2026-10-06 12:00:00",
+    last_seen_at: seen,
+  });
+
+  it("asks for input on a prompt you haven't seen", () => {
+    expect(terminalStatus(row("2026-10-06 11:00:00"), "waiting")).toEqual({
+      status: "waiting",
+      need: "input",
+      unread: false,
+    });
+  });
+
+  it("drops a prompt you've seen to idle, read", () => {
+    expect(terminalStatus(row("2026-10-06 13:00:00"), "waiting")).toEqual({
+      status: "idle",
+      need: null,
+      unread: false,
+    });
+  });
+
+  it("never marks a running terminal unread", () => {
+    expect(terminalStatus(row("2026-10-06 11:00:00"), "running").unread).toBe(
+      false
+    );
+    expect(terminalStatus(row("2026-10-06 11:00:00"), "idle").unread).toBe(
+      true
+    );
+  });
+
+  it("has nothing unread without a row", () => {
+    expect(terminalStatus(undefined, "idle")).toEqual({
+      status: "idle",
+      need: null,
+      unread: false,
+    });
   });
 });

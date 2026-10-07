@@ -81,7 +81,7 @@ export function RowRename({
         if (e.key === "Escape") onDone(null);
       }}
       onClick={(e) => e.stopPropagation()}
-      className="border-primary min-w-0 border-b bg-transparent text-sm outline-none"
+      className="border-primary min-w-0 border-b bg-transparent text-base outline-none md:text-sm"
     />
   );
 }

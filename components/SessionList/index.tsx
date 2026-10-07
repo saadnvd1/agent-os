@@ -66,6 +66,7 @@ export function SessionList({
     projectNames: data.projectNames,
     workspaceNames: new Map(data.workspaces.map((w) => [w.id, w.name])),
     orchestrators,
+    runningByWorkspace: data.runningByWorkspace,
     orderedIds,
     cardUrl: data.taskCardUrl,
     onSelect,

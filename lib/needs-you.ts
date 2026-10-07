@@ -92,3 +92,25 @@ export function isUnread(
   }
   return sqliteMs(session.updated_at) > seen;
 }
+
+// A terminal's row in the status map. Waiting counts only when it's news,
+// not a prompt you've seen; a live terminal is never unread.
+export function terminalStatus<S extends string>(
+  row: SeenFields | undefined,
+  status: S
+): { status: S | "idle"; need: SessionNeed | null; unread: boolean } {
+  const terminal = row ? { ...row, view: "terminal" as const } : null;
+  const shown =
+    status === "waiting" && terminal && !needsYou(terminal, null)
+      ? "idle"
+      : status;
+  return {
+    status: shown,
+    need: shown === "waiting" ? "input" : null,
+    unread:
+      shown !== "running" &&
+      shown !== "waiting" &&
+      !!terminal &&
+      isUnread(terminal, null),
+  };
+}

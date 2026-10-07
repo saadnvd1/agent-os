@@ -6,7 +6,7 @@ import { sidebarUiActions } from "@/stores/sidebarUi";
 // Titles and project names. ⌘K lands here on desktop (app/page.tsx).
 export function SidebarSearch({ query }: { query: string }) {
   return (
-    <label className="bg-card text-muted-foreground focus-within:ring-primary/40 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-3 shadow-[0_1px_2px_rgba(0,0,0,0.08)] focus-within:ring-2 md:min-h-9">
+    <label className="bg-card text-muted-foreground focus-within:ring-primary/40 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-3 shadow-xs focus-within:ring-2 md:min-h-9">
       <Search className="h-3.5 w-3.5 shrink-0" />
       <input
         data-sidebar-search
@@ -28,7 +28,7 @@ export function SidebarSearch({ query }: { query: string }) {
           type="button"
           aria-label="Clear search"
           onClick={() => sidebarUiActions.setQuery("")}
-          className="-mr-2 flex h-11 w-9 items-center justify-center md:h-7 md:w-7"
+          className="-mr-3 flex h-11 w-11 items-center justify-center md:h-7 md:w-7"
         >
           <X className="h-3.5 w-3.5" />
         </button>
