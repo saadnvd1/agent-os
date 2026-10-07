@@ -12,7 +12,7 @@ import { NO_PASSKEYS_HERE, passkeysHere } from "@/data/presence";
 import { AsksList } from "./AsksList";
 
 // The top of an orchestrator's chat: the workspace header line, Pause or
-// Resume, and its asks for Saad. Memoized: the chat under it re-renders for
+// Resume, and its asks for the owner. Memoized: the chat under it re-renders for
 // every streamed word.
 export const OrchestratorBar = memo(function OrchestratorBar({
   workspaceId,
