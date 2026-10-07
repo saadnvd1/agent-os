@@ -1,7 +1,7 @@
 import os from "os";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
-import { findPR, findPRStrict } from "./gh";
+import { lookupPR } from "./pr-poll";
 import type { TaskPR } from "./state";
 
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
@@ -38,7 +38,7 @@ export async function prFor(
   if (!repo || !session.branch_name) return null;
   const cached = prCache.get(session.id);
   if (!fresh && cached && Date.now() - cached.at < 20000) return cached.pr;
-  const pr = await (strict ? findPRStrict : findPR)(repo, session.branch_name);
+  const pr = await lookupPR(repo, session.branch_name, { fresh, strict });
   prCache.set(session.id, { at: Date.now(), pr });
   if (pr) {
     db.prepare(
@@ -46,6 +46,22 @@ export async function prFor(
     ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
   }
   return pr;
+}
+
+// A finished task's PR as the database last saw it: no gh call.
+export function storedPR(s: Session): TaskPR | null {
+  if (!s.pr_number) return null;
+  return {
+    number: s.pr_number,
+    url: s.pr_url ?? "",
+    state:
+      s.task_status === "merged" || s.pr_status === "merged"
+        ? "MERGED"
+        : s.pr_status === "open"
+          ? "OPEN"
+          : "CLOSED",
+    checks: "none",
+  };
 }
 
 export function forgetPR(sessionId: string): void {

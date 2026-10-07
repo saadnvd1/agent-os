@@ -26,7 +26,7 @@ import {
   type TaskPR,
   type TaskState,
 } from "./state";
-import { expandHome, prFor, taskSessions } from "./session";
+import { expandHome, prFor, storedPR, taskSessions } from "./session";
 import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
 import { finishTaskStart } from "./start";
@@ -177,8 +177,9 @@ async function shellOnly(tmuxName: string): Promise<boolean> {
 export async function taskView(session: Session): Promise<TaskView> {
   const live = session.task_status === "running";
   const setup = taskSetupOf(session);
+  // A finished task's PR is in the database: only a running one asks gh.
   const [pr, sessionStatus] = await Promise.all([
-    prFor(session),
+    live ? prFor(session) : storedPR(session),
     live
       ? statusDetector.getStatus(session.tmux_name)
       : Promise.resolve(undefined),
@@ -223,6 +224,11 @@ export async function taskView(session: Session): Promise<TaskView> {
   };
 }
 
+// Archived tasks aren't listed.
 export async function listTasks(): Promise<TaskView[]> {
-  return Promise.all(taskSessions().map(taskView));
+  return Promise.all(
+    taskSessions()
+      .filter((s) => !s.archived_at)
+      .map(taskView)
+  );
 }

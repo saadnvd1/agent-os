@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { parseCodeReview } from "./code-review";
+import { assertGhAllowed, noteGhFailure } from "./gh-limit";
 import {
   checksVerdict,
   failingCheck,
@@ -19,12 +20,31 @@ export async function run(
   cwd: string,
   timeout = 60000
 ): Promise<string> {
-  const { stdout } = await execFileAsync(cmd, args, {
-    cwd,
-    timeout,
-    maxBuffer: 4 * 1024 * 1024,
-  });
-  return stdout;
+  if (cmd === "gh") assertGhAllowed(args);
+  try {
+    const { stdout } = await execFileAsync(cmd, args, {
+      cwd,
+      timeout,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    return stdout;
+  } catch (error) {
+    if (cmd === "gh") await noteGhFailure(args, error);
+    throw error;
+  }
+}
+
+// A PR as `gh pr list --json` gives it.
+export interface ListedPR {
+  number: number;
+  url: string;
+  state: TaskPR["state"];
+  headRefOid?: string;
+  statusCheckRollup: RollupEntry[] | null;
+  body?: string;
+  headRefName?: string;
+  isCrossRepository?: boolean;
+  createdAt?: string;
 }
 
 // The branch's PR, null when it has none; throws when gh can't say.
@@ -49,15 +69,11 @@ export async function findPRStrict(
     repoDir,
     15000
   );
-  const [pr] = JSON.parse(out) as Array<{
-    number: number;
-    url: string;
-    state: TaskPR["state"];
-    headRefOid?: string;
-    statusCheckRollup: RollupEntry[] | null;
-    body?: string;
-  }>;
-  if (!pr) return null;
+  const [pr] = JSON.parse(out) as ListedPR[];
+  return pr ? toTaskPR(repoDir, pr) : null;
+}
+
+export async function toTaskPR(repoDir: string, pr: ListedPR): Promise<TaskPR> {
   // A closed PR's checks gate nothing, so they cost no API calls.
   const rollup =
     pr.state === "OPEN"

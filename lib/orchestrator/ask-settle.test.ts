@@ -30,6 +30,7 @@ const {
   parsePRView,
   prKey,
   refreshAskPRs,
+  RECHECK_MS,
   resolveMergedTaskAsks,
   resolveStaleAsks,
   settleStaleAsks,
@@ -187,12 +188,12 @@ describe("asks about work that finished elsewhere", () => {
       "PR #4 was closed without merging",
     ]);
 
-    // An open PR is looked up again only after a minute.
+    // An open PR is looked up again only after 5 minutes.
     gh.asked.length = 0;
     await settleStaleAsks(t.w, gh.view);
     expect(gh.asked).toEqual([]);
     const later = github({ "o/api#5": { state: "MERGED", mergeSha: null } });
-    await refreshAskPRs(t.w, later.view, Date.now() + 61 * 1000);
+    await refreshAskPRs(t.w, later.view, Date.now() + RECHECK_MS + 1000);
     expect(later.asked).toEqual(["o/api#5"]);
     expect(resolveStaleAsks(t.w)).toBe(1);
     expect(openAsks(t.w)).toEqual([]);
@@ -213,7 +214,35 @@ describe("asks about work that finished elsewhere", () => {
     expect(openAsks(t.w).map((a) => a.title)).toEqual(["Re-approve PR #107?"]);
   });
 
-  it("looks up a closed PR again, since it can be reopened", async () => {
+  it("never looks up a closed PR again for the same ask", async () => {
+    const t = workspace();
+    await t.ask("Ship the y PR?", "https://github.com/o/y/pull/2");
+    await t.ask("Ship the z PR?", "https://github.com/o/z/pull/3");
+    const first = github({
+      "o/y#2": { state: "OPEN", mergeSha: null },
+      "o/z#3": { state: "OPEN", mergeSha: null },
+    });
+    await refreshAskPRs(t.w, first.view);
+    // Inside 5 minutes an open PR isn't asked about again.
+    const soon = github({});
+    await refreshAskPRs(t.w, soon.view, Date.now() + RECHECK_MS - 1000);
+    expect(soon.asked).toEqual([]);
+    const later = github({
+      "o/y#2": { state: "CLOSED", mergeSha: null },
+      "o/z#3": { state: "OPEN", mergeSha: null },
+    });
+    await refreshAskPRs(t.w, later.view, Date.now() + RECHECK_MS + 1000);
+    expect(later.asked.sort()).toEqual(["o/y#2", "o/z#3"]);
+    // Closed is final for an ask that already saw it, however long it waits.
+    const much = github({
+      "o/y#2": { state: "CLOSED", mergeSha: null },
+      "o/z#3": { state: "OPEN", mergeSha: null },
+    });
+    await refreshAskPRs(t.w, much.view, Date.now() + 100 * RECHECK_MS);
+    expect(much.asked).toEqual(["o/z#3"]);
+  });
+
+  it("looks up a closed PR again when a new ask links it, since it can be reopened", async () => {
     const t = workspace();
     const link = "https://github.com/o/x/pull/9";
     await t.ask("Merge the x PR?", link);
@@ -223,7 +252,7 @@ describe("asks about work that finished elsewhere", () => {
     );
     await t.ask("Merge the x PR now?", link);
     const reopened = github({ "o/x#9": { state: "OPEN", mergeSha: null } });
-    await refreshAskPRs(t.w, reopened.view, Date.now() + 61 * 1000);
+    await refreshAskPRs(t.w, reopened.view, Date.now() + RECHECK_MS + 1000);
     expect(reopened.asked).toEqual(["o/x#9"]);
     expect(resolveStaleAsks(t.w)).toBe(0);
     expect(openAsks(t.w).map((a) => a.title)).toEqual(["Merge the x PR now?"]);
