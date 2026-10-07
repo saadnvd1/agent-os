@@ -11,8 +11,9 @@ import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
 import type { ChatConversation, ChatStartOptions } from "../driver";
-import type { ChatItem, ChatState } from "../events";
+import type { ChatItem, ChatState, UsageTotals } from "../events";
 import { listItems, saveItem, settle } from "../store";
+import { recordTurn, startingTotals } from "../../usage/turns";
 import {
   VISUALS_BRIEF,
   VISUALS_SERVER,
@@ -25,6 +26,14 @@ export class ChatHost {
   readonly streaming = new Map<string, ChatItem>();
   private conversation: ChatConversation;
   private sent = new Set<string>();
+  // The agent's running totals at its last turn, to tell what the next one
+  // cost. It starts from what the agent says it restored; failing that, a
+  // resumed conversation's saved totals.
+  private usage: UsageTotals | null;
+  private turnsRecorded = 0;
+  // A permission mode change still on its way to the agent: a message sent
+  // right after it (carrying out a plan) must not overtake it.
+  private modeChange: Promise<void> = Promise.resolve();
   readonly done: Promise<void>;
 
   constructor(
@@ -40,6 +49,7 @@ export class ChatHost {
       | "permissionMode"
     > = {}
   ) {
+    this.usage = startingTotals(session.id, !!session.claude_session_id);
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
@@ -71,6 +81,7 @@ export class ChatHost {
       resumeId: session.claude_session_id,
       resumeAt: session.chat_resume_at,
       access: session.chat_access ?? "full",
+      plan: !!session.chat_plan,
       systemAppend: [extras.systemAppend, BUS_BRIEF, visuals && VISUALS_BRIEF]
         .filter(Boolean)
         .join("\n\n"),
@@ -116,6 +127,18 @@ export class ChatHost {
           db.prepare(
             `UPDATE sessions SET claude_session_id = ?, chat_resume_at = NULL WHERE id = ?`
           ).run(e.id, this.session.id);
+        } else if (e.type === "usage") {
+          this.usage = recordTurn(this.session, this.usage, e.totals);
+          this.turnsRecorded++;
+        } else if (e.type === "usage_start") {
+          // Too late once a turn was measured without it.
+          if (!this.turnsRecorded) this.usage = e.totals;
+        } else if (e.type === "context") {
+          db.prepare(`UPDATE sessions SET chat_context = ? WHERE id = ?`).run(
+            JSON.stringify(e.context),
+            this.session.id
+          );
+          this.emit(e);
         } else if (e.type === "state") {
           // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
           if (e.state === "idle") this.settleStreaming();
@@ -149,6 +172,7 @@ export class ChatHost {
       case "send": {
         if (this.sent.has(cmd.id)) return;
         this.sent.add(cmd.id);
+        await this.modeChange.catch(() => {});
         const user = {
           id: cmd.id,
           kind: "user" as const,
@@ -189,7 +213,9 @@ export class ChatHost {
       case "set_model":
         return this.conversation.setModel(cmd.model);
       case "set_access":
-        return this.conversation.setAccess(cmd.access);
+        return (this.modeChange = this.conversation.setAccess(cmd.access));
+      case "set_plan":
+        return (this.modeChange = this.conversation.setPlan(cmd.plan));
       case "respond":
         return this.conversation.respond(cmd.id, cmd);
       case "stop_task":

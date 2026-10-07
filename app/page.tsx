@@ -51,6 +51,10 @@ import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
 import { useQuickStart } from "@/hooks/useQuickStart";
 import { useOpenOrchestrator } from "@/hooks/useOpenOrchestrator";
+import { CommandPalette, useAppCommands } from "@/components/CommandPalette";
+import { UsageDialog } from "@/components/Usage";
+import { paletteActions, paletteUi } from "@/stores/palette";
+import { chatMetaActions } from "@/stores/chatMeta";
 
 function HomeContent() {
   // UI State
@@ -397,17 +401,12 @@ function HomeContent() {
     if (isHydrated && !isMobile) setSidebarOpen(true);
   }, [isMobile, isHydrated]);
 
-  // Cmd+K: the sidebar's search when it's on screen, else the quick switcher
+  // Cmd+K: the command palette, which searches sessions too.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        const search = document.querySelector<HTMLInputElement>(
-          "[data-sidebar-search]"
-        );
-        const rect = search?.getBoundingClientRect();
-        if (search && rect && rect.width > 0 && rect.right > 0) search.focus();
-        else setShowQuickSwitcher(true);
+        paletteActions.setOpen(!paletteUi.open);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -546,6 +545,21 @@ function HomeContent() {
   const activeSession = sessions.find(
     (s) => s.id === focusedActiveTab?.sessionId
   );
+  useEffect(() => {
+    chatMetaActions.setActive(focusedActiveTab?.sessionId ?? null);
+  }, [focusedActiveTab?.sessionId]);
+
+  useAppCommands({
+    sessions,
+    onSelectSession: attachToSession,
+    onNewSession: () => setShowNewSessionDialog(true),
+    onSearchCode: () => setShowQuickSwitcher(true),
+    // Its dialog lives in the desktop bar.
+    onNotificationSettings: isMobile
+      ? undefined
+      : () => setShowNotificationSettings(true),
+  });
+
   const startDevServerProject = startDevServerProjectId
     ? (projects.find((p) => p.id === startDevServerProjectId) ?? null)
     : null;
@@ -597,6 +611,8 @@ function HomeContent() {
       <ArchivedDialog />
       <CleanupDialog />
       <LumifyHubDialogs />
+      <UsageDialog />
+      <CommandPalette />
     </>
   );
 }
