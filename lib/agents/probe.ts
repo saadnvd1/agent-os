@@ -17,7 +17,8 @@ import { pathFor, resolveCli } from "./cli-path";
 
 const run = promisify(execFile);
 const PROBE_MS = 15_000;
-const CACHE_MS = 5 * 60 * 1000;
+// Short, so installing or signing in shows up within a minute.
+const CACHE_MS = 60 * 1000;
 
 export type AgentAuth = "ready" | "needs-login" | "unknown";
 
@@ -156,7 +157,7 @@ export async function probeAgent(
 let cache: { at: number; probes: Promise<Record<string, AgentProbe>> } | null =
   null;
 
-// Every agent at once, at most every few minutes.
+// Every agent at once, at most once a minute.
 export function probeAgents(
   fresh = false
 ): Promise<Record<string, AgentProbe>> {

@@ -15,6 +15,8 @@ export function useAgentStatusQuery() {
       return ((await res.json()) as { agents: Record<string, AgentProbe> })
         .agents;
     },
-    staleTime: 5 * 60 * 1000,
+    // Checked again each time the picker opens.
+    staleTime: 30_000,
+    refetchOnMount: "always",
   });
 }

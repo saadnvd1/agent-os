@@ -1,11 +1,11 @@
 import type { ChatConversation, ChatDriver } from "../driver";
-import type { ChatImage, ChatQuestion, DriverEvent } from "../events";
+import type { ChatImage, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
 import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
 import { OpenCodeMapper } from "./opencode-mapper";
-import { openCodeRules, permissionCard } from "./opencode-rules";
+import { openCodeRules } from "./opencode-rules";
 import { OpenCodeServer } from "./opencode-server";
-import { answersInOrder, PendingApprovals } from "./pending-approvals";
+import { OpenCodeApprovals } from "./opencode-approvals";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -38,8 +38,6 @@ const canChat = (m: P) => {
   const c = (m.capabilities ?? {}) as P;
   return c.toolcall !== false && (c.output as P | undefined)?.text !== false;
 };
-
-const REPLY = { allow: "once", always: "always", deny: "reject" } as const;
 
 export const openCodeDriver: ChatDriver = {
   id: "opencode",
@@ -86,11 +84,12 @@ export const openCodeDriver: ChatDriver = {
     let sessionId: string | null = null;
     const children = new Set<string>();
     const mapper = new OpenCodeMapper(() => sessionId, emit);
-    const approvals = new PendingApprovals(emit);
+    const approvals = new OpenCodeApprovals(emit, server, (e) => fail(e));
     let access = options.access;
     let plan = !!options.plan;
     let model = openCodeModel(options.model);
-    let afterStop: { text: string; images?: ChatImage[] } | null = null;
+    // Sent now: each goes, in order, once the stopped turn has ended.
+    const held: { text: string; images?: ChatImage[] }[] = [];
     const stream = new AbortController();
     let closed = false;
 
@@ -102,74 +101,18 @@ export const openCodeDriver: ChatDriver = {
       const info = p.info as P | undefined;
       if (e.type === "session.created" && info && ours(info.parentID))
         children.add(str(info.id));
-      if (e.type === "permission.asked" && ours(p.sessionID))
-        void permission(p);
-      else if (e.type === "question.asked" && ours(p.sessionID))
-        void question(p);
-      else if (
-        (e.type === "permission.replied" || e.type === "question.replied") &&
-        approvals.has(`approval-${str(p.requestID)}`)
-      )
-        approvals.respond(`approval-${str(p.requestID)}`, {
-          decision: "expired",
-        });
+      if (ours(p.sessionID)) approvals.handle(e.type, p);
       const wasInTurn = mapper.items.inTurn;
       mapper.map(e);
-      if (wasInTurn && !mapper.items.inTurn && afterStop) {
-        const next = afterStop;
-        afterStop = null;
+      if (wasInTurn && !mapper.items.inTurn && held.length) {
+        const next = held.shift()!;
         void prompt(next.text, next.images);
       }
     }
 
-    async function permission(p: P) {
-      const o = await approvals.ask({
-        id: `approval-${str(p.id)}`,
-        ...permissionCard(p),
-        canAlways: ((p.always as unknown[]) ?? []).length > 0,
-      });
-      if (o.decision === "expired" || o.decision === "answer") return;
-      await server
-        .call("POST", `/permission/${str(p.id)}/reply`, {
-          reply: REPLY[o.decision],
-        })
-        .catch(fail);
-    }
-
-    async function question(p: P) {
-      const questions: ChatQuestion[] = ((p.questions as P[]) ?? []).map(
-        (q) => ({
-          question: str(q.question),
-          header: str(q.header),
-          multiSelect: !!q.multiple,
-          options: ((q.options as P[]) ?? []).map((o) => ({
-            label: str(o.label),
-            description: str(o.description),
-          })),
-        })
-      );
-      const o = await approvals.ask({
-        id: `approval-${str(p.id)}`,
-        toolName: "AskUserQuestion",
-        title: "Questions",
-        input: { questions },
-        questions,
-        canAlways: false,
-      });
-      if (o.decision === "expired") return;
-      const path = `/question/${str(p.id)}`;
-      await (
-        o.decision === "answer"
-          ? server.call("POST", `${path}/reply`, {
-              answers: answersInOrder(questions, o.answers),
-            })
-          : server.call("POST", `${path}/reject`)
-      ).catch(fail);
-    }
-
     // Continues the conversation it was given, or starts one.
     const ready = (async () => {
-      void server.events(onEvent, stream.signal);
+      void server.events(onEvent, stream.signal).catch(() => {});
       if (options.resumeId) {
         const found = await server
           .call<P>("GET", `/session/${encodeURIComponent(options.resumeId)}`)
@@ -195,7 +138,7 @@ export const openCodeDriver: ChatDriver = {
     });
     server.onExit((error) => {
       if (closed) return;
-      approvals.expireAll();
+      approvals.pending.expireAll();
       mapper.items.endTurn({ error });
       close();
     });
@@ -243,7 +186,7 @@ export const openCodeDriver: ChatDriver = {
     function close() {
       if (closed) return;
       closed = true;
-      approvals.expireAll();
+      approvals.pending.expireAll();
       stream.abort();
       server.close();
       out.end();
@@ -252,13 +195,13 @@ export const openCodeDriver: ChatDriver = {
     return {
       send(text, images, sendOptions) {
         if (sendOptions?.now && mapper.items.inTurn) {
-          afterStop = { text, images };
+          held.push({ text, images });
           void abort();
         } else void prompt(text, images);
         return undefined;
       },
+      // Stops the turn only: a message already sent still goes after it.
       async interrupt() {
-        afterStop = null;
         await abort();
       },
       async setModel(next) {
@@ -273,7 +216,7 @@ export const openCodeDriver: ChatDriver = {
         plan = next;
       },
       respond(id, answer) {
-        approvals.respond(id, answer);
+        approvals.pending.respond(id, answer);
       },
       async stopTask() {},
       async undo() {

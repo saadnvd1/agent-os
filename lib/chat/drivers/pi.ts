@@ -75,7 +75,7 @@ export const piDriver: ChatDriver = {
     const dialogs = new PiDialogs(emit);
     const access = new PiAccess(options.access);
     // Sent now: goes once the stopped run has ended.
-    let afterStop: { text: string; images?: ChatImage[] } | null = null;
+    const held: { text: string; images?: ChatImage[] }[] = [];
     const rpc: PiRpc = new PiRpc(
       piArgs(options, writeExtension()),
       {
@@ -160,17 +160,20 @@ export const piDriver: ChatDriver = {
     return {
       send(text, images, sendOptions) {
         if (sendOptions?.now && mapper.items.inTurn) {
-          afterStop = { text, images };
-          void rpc.request("abort", {}, 0).then(() => {
-            const next = afterStop;
-            afterStop = null;
-            if (next) void prompt(next.text, next.images);
-          });
+          held.push({ text, images });
+          // Abort answers once the run has stopped; what was held goes then.
+          void rpc
+            .request("abort", {}, 0)
+            .catch((error: Error) => mapper.items.error(error.message))
+            .then(() => {
+              for (const next of held.splice(0))
+                void prompt(next.text, next.images);
+            });
         } else void prompt(text, images);
         return undefined;
       },
+      // Stops the run only: a message already sent still goes after it.
       async interrupt() {
-        afterStop = null;
         await rpc.request("abort", {}, 0);
       },
       async setModel(model) {
@@ -191,7 +194,6 @@ export const piDriver: ChatDriver = {
       close() {
         dialogs.pending.expireAll();
         rpc.close();
-        access.remove();
         out.end();
       },
       events: out,

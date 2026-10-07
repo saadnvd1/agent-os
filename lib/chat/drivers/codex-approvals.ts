@@ -1,6 +1,6 @@
 import type { ChatQuestion, DriverEvent } from "../events";
 import { toolTitle } from "../tools";
-import { changeDiff, shellCommand, type CodexChange } from "./codex-mapper";
+import { changeDiff, shellCommand, type CodexChange } from "./codex-tools";
 import { answersInOrder, PendingApprovals } from "./pending-approvals";
 
 type P = Record<string, unknown>;

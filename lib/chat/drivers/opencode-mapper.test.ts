@@ -141,6 +141,39 @@ describe("OpenCode permissions", () => {
     expect(card.diff).toEqual({ path: "/w/a.ts", before: "a\n", after: "b\n" });
   });
 
+  // OpenCode's own matching: the last rule whose permission and pattern
+  // match decides.
+  const decide = (
+    access: "ask" | "edits" | "full",
+    permission: string,
+    target = "*"
+  ) => {
+    const glob = (p: string) =>
+      new RegExp(
+        `^${p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`
+      );
+    return openCodeRules(access)
+      .filter(
+        (r) =>
+          (r.permission === "*" || r.permission === permission) &&
+          glob(r.pattern).test(target)
+      )
+      .at(-1)?.action;
+  };
+
+  it("asks before reading .env files, whatever else reads freely", () => {
+    for (const access of ["ask", "edits"] as const) {
+      expect(decide(access, "read", ".env")).toBe("ask");
+      expect(decide(access, "read", ".env.local")).toBe("ask");
+      expect(decide(access, "read", ".env.example")).toBe("allow");
+      expect(decide(access, "read", "a.ts")).toBe("allow");
+      expect(decide(access, "bash", "ls")).toBe("ask");
+      expect(decide(access, "external_directory")).toBe("ask");
+    }
+    expect(decide("full", "bash", "ls")).toBe("allow");
+    expect(decide("full", "external_directory")).toBe("allow");
+  });
+
   it("lets the last rule win: edits allowed only in 'edits'", () => {
     const last = (access: "ask" | "edits") =>
       openCodeRules(access)

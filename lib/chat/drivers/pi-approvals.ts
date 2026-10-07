@@ -14,14 +14,17 @@ const MARK = "agentos:";
 
 // Pi runs every tool without asking. This extension asks the chat first,
 // as the conversation's access setting says, read from a file each time so
-// a change applies to the very next call. Reading never asks.
-const EXTENSION = `import { readFileSync } from "node:fs";
+// a change applies to the very next call. Reading never asks. Exported for
+// its test.
+export const EXTENSION = `import { readFileSync } from "node:fs";
 const SAFE = new Set(["read", "grep", "find", "ls"]);
 export default function (pi) {
   pi.on("tool_call", async (event, ctx) => {
-    let access = "full";
+    // Unreadable or unknown asks: the gate never fails open.
+    let access = "ask";
     try {
-      access = readFileSync(process.env.AGENTOS_PI_ACCESS_FILE, "utf8").trim();
+      const value = readFileSync(process.env.AGENTOS_PI_ACCESS_FILE, "utf8").trim();
+      if (value === "full" || value === "edits") access = value;
     } catch {}
     const tool = event.toolName;
     if (access === "full" || SAFE.has(tool)) return;

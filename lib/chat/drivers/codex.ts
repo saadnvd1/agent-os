@@ -1,87 +1,12 @@
-import type { ChatConversation, ChatDriver, ChatStartOptions } from "../driver";
-import type { ChatAccess, ChatImage, DriverEvent } from "../events";
+import type { ChatConversation, ChatDriver } from "../driver";
+import type { ChatImage, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
-import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
+import { CODEX_MODES, codexInput, modelOf, openThread } from "./codex-args";
 import { CodexApprovals } from "./codex-approvals";
 import { CodexMapper } from "./codex-mapper";
 import { CodexRpc } from "./codex-rpc";
 
 type P = Record<string, unknown>;
-
-// What Codex may do without asking, as its approval policy and sandbox
-// (kebab-case when a thread starts, an object on each turn).
-export const CODEX_MODES: Record<
-  ChatAccess,
-  { approvalPolicy: string; sandbox: string; sandboxPolicy: { type: string } }
-> = {
-  // Asks before anything not known to be safe; what's approved may write
-  // in the workspace (a read-only sandbox would refuse it and ask again).
-  ask: {
-    approvalPolicy: "untrusted",
-    sandbox: "workspace-write",
-    sandboxPolicy: { type: "workspaceWrite" },
-  },
-  edits: {
-    approvalPolicy: "on-request",
-    sandbox: "workspace-write",
-    sandboxPolicy: { type: "workspaceWrite" },
-  },
-  full: {
-    approvalPolicy: "never",
-    sandbox: "danger-full-access",
-    sandboxPolicy: { type: "dangerFullAccess" },
-  },
-};
-
-export function codexInput(text: string, images?: ChatImage[]) {
-  return [
-    ...(images ?? []).map((i) => ({
-      type: "image",
-      url: `data:${i.mediaType};base64,${i.data}`,
-    })),
-    { type: "text", text },
-  ];
-}
-
-const modelOf = (m: string) => (m && m !== AGENT_DEFAULT_MODEL ? m : undefined);
-
-export function threadParams(o: ChatStartOptions, access: ChatAccess) {
-  return {
-    cwd: o.cwd,
-    model: modelOf(o.model),
-    approvalPolicy: CODEX_MODES[access].approvalPolicy,
-    sandbox: CODEX_MODES[access].sandbox,
-    developerInstructions: o.systemAppend || undefined,
-    // The todo list is opt-in since 0.152.
-    config: { "tools.update_plan.enabled": true },
-  };
-}
-
-// Opens the conversation: the one it continues when it can, a new one when
-// it can't (archived ones are brought back first).
-async function openThread(
-  rpc: CodexRpc,
-  o: ChatStartOptions,
-  access: ChatAccess
-) {
-  const params = threadParams(o, access);
-  if (o.resumeId) {
-    const resume = () =>
-      rpc.request<{ thread: P }>("thread/resume", {
-        ...params,
-        threadId: o.resumeId,
-        excludeTurns: true,
-      });
-    try {
-      return (await resume()).thread;
-    } catch (error) {
-      if (!/archived/i.test((error as Error).message)) throw error;
-      await rpc.request("thread/unarchive", { threadId: o.resumeId });
-      return (await resume()).thread;
-    }
-  }
-  return (await rpc.request<{ thread: P }>("thread/start", params)).thread;
-}
 
 export const codexDriver: ChatDriver = {
   id: "codex",
@@ -119,8 +44,8 @@ export const codexDriver: ChatDriver = {
     let access = options.access;
     let model = modelOf(options.model);
     let threadId: string | null = null;
-    // A message that can't join the running turn waits for it to end.
-    let afterStop: { text: string; images?: ChatImage[] } | null = null;
+    // Messages that can't join the running turn wait for it to end, in order.
+    const held: { text: string; images?: ChatImage[] }[] = [];
     // Asked for, and not yet started: Codex can't stop a turn before then.
     let starting = false;
     let stopOnStart = false;
@@ -137,10 +62,9 @@ export const codexDriver: ChatDriver = {
               void stop().catch(fail);
             }
           }
-          if (method === "turn/completed" && afterStop) {
-            const next = afterStop;
-            afterStop = null;
-            void startTurn(next.text, next.images);
+          if (method === "turn/completed" && held.length) {
+            const next = held.shift()!;
+            void startTurn(next.text, next.images).catch(fail);
           }
         },
         request(id, method, params) {
@@ -168,7 +92,8 @@ export const codexDriver: ChatDriver = {
       },
     });
     const ready = rpc.initialize().then(async () => {
-      const thread = await openThread(rpc, options, access);
+      const { thread, note } = await openThread(rpc, options, access);
+      if (note) mapper.items.error(note);
       threadId = String(thread.id);
       emit({ type: "resume_id", id: threadId });
     });
@@ -215,7 +140,7 @@ export const codexDriver: ChatDriver = {
         if (!turn && !starting) {
           void startTurn(text, images).catch(fail);
         } else if (sendOptions?.now || !turn) {
-          afterStop = { text, images };
+          held.push({ text, images });
           if (sendOptions?.now) void stop().catch(fail);
         } else {
           // Folded into the running turn, as the agent's next input.
@@ -226,14 +151,14 @@ export const codexDriver: ChatDriver = {
               input: codexInput(text, images),
             })
             .catch(() => {
-              if (mapper.activeTurn) afterStop = { text, images };
+              if (mapper.activeTurn) held.push({ text, images });
               else void startTurn(text, images).catch(fail);
             });
         }
         return undefined;
       },
+      // Stops the turn only: a message already sent still goes after it.
       async interrupt() {
-        afterStop = null;
         await stop();
       },
       async setModel(next) {

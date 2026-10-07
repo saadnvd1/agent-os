@@ -5,7 +5,7 @@ import type { ChatItem, DriverEvent } from "../events";
 import { CodexApprovals } from "./codex-approvals";
 import { CodexMapper } from "./codex-mapper";
 import { unifiedToDiff } from "../diff";
-import { CODEX_MODES, codexInput, threadParams } from "./codex";
+import { CODEX_MODES, codexInput, threadParams } from "./codex-args";
 
 type Line = { method: string; id?: number; params: Record<string, unknown> };
 

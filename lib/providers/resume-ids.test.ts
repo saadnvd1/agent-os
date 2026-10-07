@@ -2,7 +2,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { codexResumeId, piResumeId } from "./resume-ids";
+import Database from "better-sqlite3";
+import { codexResumeId, opencodeResumeId, piResumeId } from "./resume-ids";
 
 let home: string;
 const saved = { ...process.env };
@@ -15,7 +16,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env = { ...saved };
+  // In place: a replaced process.env no longer reaches os.homedir().
+  for (const k of Object.keys(process.env))
+    if (!(k in saved)) delete process.env[k];
+  Object.assign(process.env, saved);
   fs.rmSync(home, { recursive: true, force: true });
 });
 
@@ -39,11 +43,14 @@ function rollout(cwd: string, id: string, at: Date) {
 }
 
 describe("codexResumeId", () => {
-  it("finds today's conversation that ran in the folder", () => {
+  it("finds today's conversation that ran in the folder, not just the newest", () => {
     const now = new Date();
+    const mine = rollout("/w", ID, now);
     rollout("/elsewhere", OTHER, now);
-    rollout("/w", ID, now);
+    const older = (now.getTime() - 60 * 1000) / 1000;
+    fs.utimesSync(mine, older, older);
     expect(codexResumeId("/w", now.getTime())).toBe(ID);
+    expect(codexResumeId("/elsewhere", now.getTime())).toBe(OTHER);
   });
 
   it("ignores a conversation nobody has written to lately", () => {
@@ -65,5 +72,26 @@ describe("piResumeId", () => {
     );
     expect(piResumeId("/Users/me/app")).toBe(ID);
     expect(piResumeId("/Users/me/other")).toBeNull();
+    expect(piResumeId("/Users/me/app", Date.now() + 10 * 60 * 1000)).toBeNull();
+  });
+});
+
+describe("opencodeResumeId", () => {
+  it("takes the folder's main session written lately, not a subagent's", () => {
+    process.env.XDG_DATA_HOME = home;
+    fs.mkdirSync(path.join(home, "opencode"));
+    const db = new Database(path.join(home, "opencode", "opencode.db"));
+    db.exec(
+      `CREATE TABLE session (id TEXT, parent_id TEXT, directory TEXT, time_updated INTEGER)`
+    );
+    const now = Date.now();
+    const add = db.prepare(`INSERT INTO session VALUES (?, ?, ?, ?)`);
+    add.run("ses_main", null, "/w", now - 60_000);
+    add.run("ses_child", "ses_main", "/w", now);
+    add.run("ses_old", null, "/w", now - 3_600_000);
+    add.run("ses_other", null, "/elsewhere", now);
+    db.close();
+    expect(opencodeResumeId("/w", now)).toBe("ses_main");
+    expect(opencodeResumeId("/nowhere", now)).toBeNull();
   });
 });

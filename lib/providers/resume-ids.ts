@@ -15,30 +15,32 @@ const RECENT_MS = 5 * 60 * 1000;
 
 const recent = (mtimeMs: number, now: number) => now - mtimeMs < RECENT_MS;
 
-function newestFile(
-  dir: string,
-  pattern: RegExp,
-  now: number
-): { file: string; mtimeMs: number } | null {
-  let best: { file: string; mtimeMs: number } | null = null;
+type Found = { file: string; mtimeMs: number };
+
+// The folder's files written in the last few minutes, newest first.
+function recentFiles(dir: string, pattern: RegExp, now: number): Found[] {
   let names: string[];
   try {
     names = fs.readdirSync(dir);
   } catch {
-    return null;
+    return [];
   }
+  const found: Found[] = [];
   for (const name of names) {
     if (!pattern.test(name)) continue;
     try {
       const { mtimeMs } = fs.statSync(path.join(dir, name));
-      if (recent(mtimeMs, now) && (!best || mtimeMs > best.mtimeMs))
-        best = { file: path.join(dir, name), mtimeMs };
+      if (recent(mtimeMs, now))
+        found.push({ file: path.join(dir, name), mtimeMs });
     } catch {
       // Gone since the listing.
     }
   }
-  return best;
+  return found.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
+
+const newestFile = (dir: string, pattern: RegExp, now: number) =>
+  recentFiles(dir, pattern, now)[0] ?? null;
 
 const UUID =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\.jsonl$)/;
@@ -69,10 +71,12 @@ export function codexResumeId(cwd: string, now = Date.now()): string | null {
     "sessions"
   );
   // Today's folder and yesterday's, for a session running past midnight.
+  // Every conversation written lately, today's folder and yesterday's (for
+  // one running past midnight): another folder's may be newer than this one.
   const candidates = [0, 1]
     .map((d) => new Date(now - d * 86400000))
-    .map((d) =>
-      newestFile(
+    .flatMap((d) =>
+      recentFiles(
         path.join(
           root,
           String(d.getFullYear()),
@@ -83,7 +87,6 @@ export function codexResumeId(cwd: string, now = Date.now()): string | null {
         now
       )
     )
-    .filter((f): f is { file: string; mtimeMs: number } => !!f)
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
   for (const { file } of candidates) {
     if (rolloutCwd(file) === cwd) return file.match(UUID)?.[0] ?? null;
