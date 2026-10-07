@@ -90,6 +90,8 @@ class FakeClaude implements Pane {
   }
 }
 
+const LEFT =
+  "; it is left in its input and goes out with the next message, so don't send it again";
 const fast = { sleep: async () => {}, waitMs: 20, pollMs: 5 };
 
 describe("deliverToPane", () => {
@@ -133,7 +135,7 @@ describe("deliverToPane", () => {
     const r = await deliverToPane(pane, LINE, fast);
     expect(r).toEqual({
       state: "failed",
-      why: "the text is in its input but Enter didn't send it; it goes out with the next message, so don't send it again",
+      why: `Enter didn't send it${LEFT}`,
     });
   });
 
@@ -146,7 +148,7 @@ describe("deliverToPane", () => {
     });
     expect(r).toEqual({
       state: "failed",
-      why: "a menu or prompt opened before Enter",
+      why: `a menu or prompt opened before Enter${LEFT}`,
     });
     expect(pane.keys).toEqual(["type"]);
   });
@@ -237,6 +239,41 @@ describe("deliverToPane", () => {
       state: "queued",
     });
     expect(pane.transcript).toEqual([`> ${earlier}`]);
+    expect(pane.queued).toEqual([`  ${LINE}`]);
+  });
+
+  it("never flushes an earlier message into a prompt that just opened", async () => {
+    const pane = new FakeClaude();
+    pane.input = wakeLine({ fromName: "x", fromId: "b", body: "earlier" });
+    const view = pane.view.bind(pane);
+    let views = 0;
+    pane.view = async () => {
+      if (++views === 2) pane.o.menu = true;
+      return view();
+    };
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({
+      state: "failed",
+      why: "a menu or prompt opened before Enter",
+    });
+    expect(pane.keys).toEqual([]);
+  });
+
+  it("leaves part of a message unsent and says not to resend it", async () => {
+    const pane = new FakeClaude();
+    pane.type = async (t) => {
+      pane.keys.push("type");
+      pane.input += t.slice(0, 25);
+    };
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({
+      state: "failed",
+      why: `only part of the text reached its input${LEFT}`,
+    });
+    expect(pane.keys).toEqual(["type"]);
+
+    // The next delivery sends what was left first, then its own: once each.
+    pane.type = FakeClaude.prototype.type.bind(pane);
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({ state: "queued" });
+    expect(pane.transcript).toEqual([`> ${LINE.slice(0, 25)}`]);
     expect(pane.queued).toEqual([`  ${LINE}`]);
   });
 

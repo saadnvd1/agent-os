@@ -142,38 +142,41 @@ export async function deliverToPane(
   }
   const wasBusy = busy(v.text);
 
+  // Any failure from here may leave this message in the input, where the
+  // next delivery sends it: say so, or a resend reaches the agent twice.
+  const failed = async (why: string, left = false): Promise<Delivery> => ({
+    state: "failed",
+    why:
+      left || ours(await pane.view())
+        ? `${why}; it is left in its input and goes out with the next message, so don't send it again`
+        : why,
+  });
+
   await pane.type(line);
   if (!(await until(inInput))) {
     const after = await pane.view();
     if (menuShown(after.text))
-      return { state: "failed", why: "a menu opened as the text was typed" };
+      return failed("a menu opened as the text was typed");
     // Typed text that shows up late must not get a pasted twin.
     if (!ours(after)) {
       await pane.paste(line);
       if (!(await until(inInput)))
-        return {
-          state: "failed",
-          why: "the text never showed up in its input (typed, then pasted)",
-        };
+        return failed(
+          "the text never showed up in its input (typed, then pasted)"
+        );
     } else if (!(await until(inInput)))
-      return {
-        state: "failed",
-        why: "only part of the text reached its input; it was not sent",
-      };
+      return failed("only part of the text reached its input");
   }
 
   // Enter straight after the text can be read as part of the paste.
   await sleep(pollMs);
   let sent = false;
   for (let i = 0; i < 2 && !sent; i++) {
-    if (!(await safeEnter())) return { state: "failed", why: MENU_OPENED };
+    // The text was seen in the input; a menu over it hides it, not clears it.
+    if (!(await safeEnter())) return failed(MENU_OPENED, true);
     sent = await until((x) => !inInput(x));
   }
-  if (!sent)
-    return {
-      state: "failed",
-      why: "the text is in its input but Enter didn't send it; it goes out with the next message, so don't send it again",
-    };
+  if (!sent) return failed("Enter didn't send it");
   // Busy when it went in, or Claude says it's holding it: queued for
   // after this turn.
   const after = await pane.view();

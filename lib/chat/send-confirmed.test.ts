@@ -61,11 +61,19 @@ describe("sendChatConfirmed", () => {
     await expect(sendChatConfirmed(id, { text: "hi" })).resolves.toBe("queued");
   });
 
-  it("ignores other items and trusts the stored row when the event is missed", async () => {
-    const { id } = fakeWorker("idle", (sid, cmd) => {
-      emit(sid, { type: "item", item: { ...userItem(cmd), id: "other" } });
-      saveItem(sid, userItem(cmd));
-    });
+  it("isn't confirmed by some other item", async () => {
+    const { id } = fakeWorker("idle", (sid, cmd) =>
+      emit(sid, { type: "item", item: { ...userItem(cmd), id: "other" } })
+    );
+    await expect(sendChatConfirmed(id, { text: "hi" }, 30)).rejects.toThrow(
+      "didn't take it within"
+    );
+  });
+
+  it("trusts the stored row when the event was missed", async () => {
+    const { id } = fakeWorker("idle", (sid, cmd) =>
+      saveItem(sid, userItem(cmd))
+    );
     await expect(sendChatConfirmed(id, { text: "hi" }, 30)).resolves.toBe(
       "delivered"
     );

@@ -63,7 +63,13 @@ export function MessagesDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <Select value={filter} onValueChange={setFilter}>
+        <Select
+          value={filter}
+          onValueChange={(v) => {
+            send.reset();
+            setFilter(v);
+          }}
+        >
           <SelectTrigger
             aria-label="Filter by session"
             className="w-full sm:w-72"
