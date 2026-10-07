@@ -150,3 +150,4 @@
 - Folder browser in the project's settings for changing its folder.
 - The chat's access chip reads "Full access" until the worker's capabilities
   arrive (useChat's default), even when the session is "Accept edits".
+- Task smoke test, 2026-10-07 (this PR is closed unmerged).
