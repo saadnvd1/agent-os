@@ -292,6 +292,28 @@ describe("sign_off", () => {
     expect(listNotes(t.w).at(-1)?.text).toMatch(/Merged add-a \(PR #7/);
   });
 
+  it("closes asks about the PR once the sign-off merges it", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    await runTool(t.w, "ask_saad", {
+      title: "Re-approve PR #7 after the merge with main?",
+      detail: "main moved",
+      kind: "decision",
+      link: "https://github.com/o/r/pull/7",
+    });
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(openAsks(t.w)).toEqual([]);
+    const row = db
+      .prepare(
+        `SELECT status, answer FROM orchestrator_asks WHERE workspace_id = ?`
+      )
+      .get(t.w);
+    expect(row).toEqual({
+      status: "resolved",
+      answer: `PR #7 merged at ${t.sha.slice(0, 7)} by sign-off`,
+    });
+  });
+
   it("refuses a PR whose body has no code review of its head", async () => {
     const t = setup();
     await reviewNow(t.w);
