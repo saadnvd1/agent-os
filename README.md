@@ -128,8 +128,14 @@ Type `/` in the composer for every slash command and skill the agent knows,
 yours included, filtered as you type. Commands such as `/compact`, `/usage`
 and `/context` run in chat and show their output inline; skills the agent
 invokes on its own appear as a chip. `/model` (or the picker under the
-composer) switches the model mid-conversation. Commands that only make sense
-in a terminal, such as `/vim`, are left out.
+composer) switches the model mid-conversation. `/mcp` lists the session's MCP
+servers with their status and tools, without spending a turn. Commands that
+only make sense in a terminal, such as `/vim`, are left out, and say so if
+typed anyway.
+
+**Esc** stops a running turn, as it does in Claude Code's terminal, unless a
+menu, dialog or the command list is open (those close first). On a phone the
+Stop button does the same. A stopped turn keeps what it wrote.
 
 The access picker under the composer sets what the agent may do on its own:
 **Ask first** (an approval card in the chat for anything not already allowed),
@@ -200,6 +206,9 @@ that card with the exact command to fix it. How it works:
 Sessions started by AgentOS can find and talk to each other without you,
 through the `aos` command on their PATH (any agent CLI can use it; Claude is
 also briefed on it):
+
+In a chat, a message from another session shows as theirs, with the
+sender's name, rather than as one you typed.
 
 ```bash
 aos peers                         # sessions, their project, what each is doing

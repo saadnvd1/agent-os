@@ -10,6 +10,7 @@ import { hostExec } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { statusDetector } from "../status-detector";
 import { sendChat } from "../chat/runner";
+import type { PeerMessage } from "../chat/events";
 import { sessionRowInfo } from "../session-meta";
 import {
   HUMAN,
@@ -124,12 +125,13 @@ function pairTimestamps(a: string | null, b: string): number[] {
 async function deliver(
   to: Session,
   line: string,
-  fromName: string
+  from: { name: string; peer?: PeerMessage }
 ): Promise<boolean> {
-  // Chat sessions get the message as their next prompt.
+  // Chat sessions get the message as their next prompt, tagged with who
+  // sent it so chat shows it as theirs.
   if (to.view === "chat") {
     try {
-      await sendChat(to.id, { text: line, from: fromName });
+      await sendChat(to.id, { text: line, from: from.name, peer: from.peer });
       return true;
     } catch (error) {
       console.error("Could not deliver to chat:", error);
@@ -181,11 +183,10 @@ export async function sendMessage(opts: {
 
   await statusDetector.refreshCache();
   if (
-    await deliver(
-      to,
-      wakeLine({ fromName, fromId: from?.id ?? null, body }),
-      fromName
-    )
+    await deliver(to, wakeLine({ fromName, fromId: from?.id ?? null, body }), {
+      name: fromName,
+      peer: from ? { sessionId: from.id, body } : undefined,
+    })
   ) {
     db.prepare(
       `UPDATE bus_messages SET delivered_at = datetime('now') WHERE id = ?`

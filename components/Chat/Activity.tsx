@@ -69,7 +69,7 @@ export function ActivityLine({
           type="button"
           onClick={onStop}
           aria-label="Stop"
-          className="hover:text-foreground hover:bg-foreground/[0.06] flex h-9 shrink-0 items-center gap-1 rounded-md px-2 md:h-7"
+          className="hover:text-foreground hover:bg-foreground/[0.06] -my-1 flex h-11 shrink-0 items-center gap-1 rounded-md px-2 md:my-0 md:h-7"
         >
           <Square className="h-3 w-3 fill-current" />
           Stop

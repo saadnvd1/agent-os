@@ -8,6 +8,7 @@ import {
   type TimelineBlock,
 } from "@/lib/chat/group";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
+import { escapeInterrupts, OVERLAY_SELECTOR } from "@/lib/chat/escape";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { ActivityLine } from "./Activity";
 import { Approval } from "./Approval";
@@ -16,10 +17,12 @@ import { SubagentCard } from "./Subagent";
 import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
 import { ToolGroup } from "./Tools";
+import { McpServers } from "./McpServers";
 import {
   AssistantMessage,
   CommandOutput,
   Compacted,
+  PeerMessage,
   SkillChip,
   ErrorMessage,
   NoteLine,
@@ -38,6 +41,7 @@ interface ItemActions {
 function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
   switch (item.kind) {
     case "user":
+      if (item.peer) return <PeerMessage item={item} peer={item.peer} />;
       return (
         <UserMessage
           item={item}
@@ -60,6 +64,8 @@ function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
       return <ErrorMessage item={item} />;
     case "command_output":
       return <CommandOutput item={item} />;
+    case "mcp":
+      return <McpServers item={item} />;
     case "compacted":
       return <Compacted item={item} />;
     case "note":
@@ -149,6 +155,23 @@ export function ChatPanel({
   }, [items]);
 
   const running = state === "running" || state === "waiting";
+
+  // Esc stops the turn (lib/chat/escape), from anywhere in this panel.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const escape = useRef({ running, interrupt });
+  useEffect(() => {
+    escape.current = { running, interrupt };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) return;
+      const overlay = !!document.querySelector(OVERLAY_SELECTOR);
+      if (escapeInterrupts(e, escape.current.running, overlay))
+        escape.current.interrupt();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   const blocks = groupTimeline(items);
   const actions: ItemActions = {
     respond,
@@ -156,7 +179,12 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    // Focusable, so Esc reaches it from anywhere in the conversation.
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      className="flex h-full min-h-0 flex-col outline-none"
+    >
       {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
       <div
         ref={scrollRef}
