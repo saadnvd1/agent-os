@@ -54,7 +54,11 @@ import { collectStatuses, terminalsChanged } from "./lib/status/collect";
 import { startProgramStatusTap } from "./lib/program-status/tap";
 import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
 import os from "os";
-import { resumeHeldStarts, resumeTaskStarts } from "./lib/tasks/start";
+import {
+  launchPending,
+  resumeHeldStarts,
+  resumeTaskStarts,
+} from "./lib/tasks/start";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -334,6 +338,15 @@ app.prepare().then(() => {
     const attach = (spec: AttachSpec) => {
       try {
         const sshTarget = sshTargetFor(spec.hostId);
+        // A task still setting up gets its tmux session from its launch;
+        // creating it here would start a bare agent without the task.
+        if (spec.sessionId && !sshTarget && launchPending(spec.sessionId)) {
+          send({
+            type: "output",
+            data: "\r\nThis task is still setting up. Open it again once its agent has started.\r\n",
+          });
+          return;
+        }
         // Local sessions join the agent bus: who they are and where AgentOS is.
         if (spec.sessionId && !sshTarget) spec.env = agentEnv(spec.sessionId);
         const { file, args } = buildAttachProcess(spec, sshTarget, shell);

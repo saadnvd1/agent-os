@@ -33,7 +33,8 @@ export function TaskRow({ task }: { task: TaskView }) {
   const error = signOff.error?.message || drop.error?.message;
   const settingUp = live && task.setup?.status === "running";
   const held = live && task.setup?.status === "held";
-  const setupFailed = live && (task.setup?.status === "failed" || held);
+  const setupFailed =
+    live && (task.setup?.status === "failed" || held) && !!task.setup?.error;
 
   return (
     <div className="bg-foreground/[0.03] space-y-2 rounded-xl px-3 py-3">
