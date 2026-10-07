@@ -3,7 +3,9 @@
 import { isValidElement, memo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { imageType, imageUrl } from "@/lib/artifacts/image-paths";
 import { CodeBlock } from "./Code";
+import { ImageThumb } from "./ImageThumb";
 
 function textOf(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -11,6 +13,14 @@ function textOf(node: ReactNode): string {
   if (isValidElement<{ children?: ReactNode }>(node))
     return textOf(node.props.children);
   return "";
+}
+
+function LocalImage({ path }: { path: string }) {
+  return (
+    <span className="my-1 block">
+      <ImageThumb src={imageUrl(path)} alt={path.split("/").pop()} />
+    </span>
+  );
 }
 
 const components: Components = {
@@ -29,11 +39,39 @@ const components: Components = {
       />
     );
   },
+  // A file the agent wrote, by its absolute path, shows as the image.
   a({ href, children }) {
+    const local = href && imageType(href);
     return (
-      <a href={href} target="_blank" rel="noreferrer">
-        {children}
-      </a>
+      <>
+        <a
+          href={local ? imageUrl(href) : href}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {children}
+        </a>
+        {local && <LocalImage path={href} />}
+      </>
+    );
+  },
+  img({ src, alt }) {
+    if (typeof src !== "string") return null;
+    return (
+      <ImageThumb
+        src={imageType(src) ? imageUrl(src) : src}
+        alt={alt ?? ""}
+        className="my-1"
+      />
+    );
+  },
+  code({ className, children }) {
+    const text = textOf(children);
+    return (
+      <>
+        <code className={className}>{children}</code>
+        {!className && imageType(text) && <LocalImage path={text} />}
+      </>
     );
   },
   table({ children }) {

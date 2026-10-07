@@ -13,6 +13,12 @@ import { chatDriverFor } from "../drivers";
 import type { ChatConversation, ChatStartOptions } from "../driver";
 import type { ChatItem, ChatState } from "../events";
 import { listItems, saveItem, settle } from "../store";
+import {
+  VISUALS_BRIEF,
+  VISUALS_SERVER,
+  VISUALS_TOOLS,
+  visualsTools,
+} from "../../artifacts/tools";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
 export class ChatHost {
@@ -38,19 +44,43 @@ export class ChatHost {
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
+    const cwd = session.working_directory.replace(/^~/, os.homedir());
+    const env = agentEnv(session.id);
+    // Every chat can show visuals, without asking. Not an orchestrator: it
+    // reads other sessions' text, and a browser would be a way out for it.
+    const visuals =
+      session.role === "orchestrator"
+        ? null
+        : visualsTools({
+            sessionId: session.id,
+            cwd,
+            onRender: (artifact, height) =>
+              this.record({
+                id: `artifact-${artifact.id}`,
+                kind: "artifact",
+                artifactId: artifact.id,
+                title: artifact.title,
+                height,
+                createdAt: Date.now(),
+              }),
+          });
     this.conversation = driver.start({
-      cwd: session.working_directory.replace(/^~/, os.homedir()),
+      cwd,
       model:
         session.model?.trim() || resolveModelForAgent(session.agent_type, null),
       resumeId: session.claude_session_id,
       resumeAt: session.chat_resume_at,
       access: session.chat_access ?? "full",
-      systemAppend: [extras.systemAppend, BUS_BRIEF]
+      systemAppend: [extras.systemAppend, BUS_BRIEF, visuals && VISUALS_BRIEF]
         .filter(Boolean)
         .join("\n\n"),
-      env: agentEnv(session.id),
-      mcpServers: extras.mcpServers,
-      allowedTools: extras.allowedTools,
+      env,
+      mcpServers: visuals
+        ? { ...extras.mcpServers, [VISUALS_SERVER]: visuals }
+        : extras.mcpServers,
+      allowedTools: visuals
+        ? [...(extras.allowedTools ?? []), ...VISUALS_TOOLS]
+        : extras.allowedTools,
       disallowedTools: extras.disallowedTools,
       permissionMode: extras.permissionMode,
     });
