@@ -58,12 +58,16 @@ export async function findPRStrict(
     body?: string;
   }>;
   if (!pr) return null;
-  const rollup = await settledRollup(
-    repoDir,
-    pr.url,
-    pr.headRefOid,
-    pr.statusCheckRollup ?? []
-  );
+  // A closed PR's checks gate nothing, so they cost no API calls.
+  const rollup =
+    pr.state === "OPEN"
+      ? await settledRollup(
+          repoDir,
+          pr.url,
+          pr.headRefOid,
+          pr.statusCheckRollup ?? []
+        )
+      : (pr.statusCheckRollup ?? []);
   return {
     number: pr.number,
     url: pr.url,
@@ -76,9 +80,16 @@ export async function findPRStrict(
   };
 }
 
+// What the API said about each run attempt. A run's event and commit never
+// change and its start changes only with a new attempt, which changes the
+// key, so an answer stays good for the life of the process. Failures aren't
+// kept, so a rate-limited lookup is retried on the next poll.
+const runCache = new Map<string, ActionsRun>();
+const RUN_CACHE_MAX = 2000;
+
 // The rollup with stale reruns dropped. Only a check that ran more than once
-// costs an API call, one per workflow run. A run outside the PR's repo, or one
-// the API can't describe, leaves its check unsettled.
+// costs an API call, one per workflow run attempt. A run outside the PR's
+// repo, or one the API can't describe, leaves its check unsettled.
 async function settledRollup(
   repoDir: string,
   prUrl: string,
@@ -90,11 +101,18 @@ async function settledRollup(
   )?.[1];
   const runs = new Map<string, ActionsRun | null>();
   await Promise.all(
-    rerunsToLookUp(rollup).map(async ({ repo, id }) => {
-      runs.set(
-        `${repo}#${id}`,
-        repo === prRepo ? await actionsRun(repoDir, repo, id) : null
-      );
+    rerunsToLookUp(rollup).map(async ({ repo, id, attempt }) => {
+      if (repo !== prRepo) return runs.set(`${repo}#${id}`, null);
+      const key = attempt && `${repo}#${id}@${attempt}`;
+      let info = (key && runCache.get(key)) || null;
+      if (!info) {
+        info = await actionsRun(repoDir, repo, id);
+        if (info && key) {
+          if (runCache.size >= RUN_CACHE_MAX) runCache.clear();
+          runCache.set(key, info);
+        }
+      }
+      runs.set(`${repo}#${id}`, info);
     })
   );
   return settleReruns(rollup, head, runs);
@@ -113,7 +131,7 @@ async function actionsRun(
         "api",
         `repos/${repo}/actions/runs/${id}`,
         "--jq",
-        "{event, headSha: .head_sha, startedAt: .run_started_at}",
+        "{event, headSha: .head_sha, startedAt: .run_started_at, workflowId: .workflow_id}",
       ],
       repoDir,
       15000
@@ -121,7 +139,8 @@ async function actionsRun(
     const r = JSON.parse(out) as Partial<ActionsRun>;
     return typeof r.event === "string" &&
       typeof r.headSha === "string" &&
-      typeof r.startedAt === "string"
+      typeof r.startedAt === "string" &&
+      typeof r.workflowId === "number"
       ? (r as ActionsRun)
       : null;
   } catch {

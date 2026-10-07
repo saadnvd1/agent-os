@@ -126,7 +126,12 @@ function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
 }
 
 // What the Actions API says started a workflow run (its latest attempt).
-export type ActionsRun = { event: string; headSha: string; startedAt: string };
+export type ActionsRun = {
+  event: string;
+  headSha: string;
+  startedAt: string;
+  workflowId: number;
+};
 
 const ACTIONS_RUN =
   /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/actions\/runs\/(\d+)(?:[/?#]|$)/;
@@ -150,16 +155,40 @@ const groupByCheck = <T extends RollupEntry>(rollup: T[]) => {
 };
 
 // The Actions runs settleReruns needs: only checks that ran more than once.
+// `attempt` names what the rollup shows of a run: the latest start of its
+// jobs, which a rerun changes. It is null while any of its jobs hasn't
+// started, when the rollup can't tell one attempt from the next.
 export function rerunsToLookUp(
   rollup: RollupEntry[]
-): Array<{ repo: string; id: string }> {
-  const runs = new Map<string, { repo: string; id: string }>();
+): Array<{ repo: string; id: string; attempt: string | null }> {
+  const wanted = new Set<string>();
   for (const group of groupByCheck(rollup).values()) {
     if (group.length < 2) continue;
     for (const c of group) {
       const run = actionsRunOf(c);
-      if (run) runs.set(`${run.repo}#${run.id}`, run);
+      if (run) wanted.add(`${run.repo}#${run.id}`);
     }
+  }
+  const runs = new Map<
+    string,
+    { repo: string; id: string; attempt: string | null }
+  >();
+  for (const c of rollup) {
+    const run = actionsRunOf(c);
+    const key = run && `${run.repo}#${run.id}`;
+    if (!run || !key || !wanted.has(key)) continue;
+    const started = at(c.startedAt);
+    const seen = runs.get(key);
+    const latest =
+      seen === undefined
+        ? started
+        : seen.attempt === null || started === null
+          ? null
+          : Math.max(Number(seen.attempt), started);
+    runs.set(key, {
+      ...run,
+      attempt: latest === null ? null : String(latest),
+    });
   }
   return [...runs.values()];
 }
@@ -216,6 +245,12 @@ function staleRuns(
   head: string | null | undefined
 ): RollupEntry[] | null {
   if (!head || runs.some((r) => !r.info)) return null;
+  // Workflows can share a display name; only one workflow's runs compare.
+  if (new Set(runs.map((r) => r.info!.workflowId)).size > 1) return null;
+  // A run on another commit never vouches for the head, but a failure the
+  // head's rollup shows can't be explained away by it either: wait.
+  const foreign = runs.filter((r) => r.info!.headSha !== head);
+  if (foreign.some((r) => outcome(r.c) !== "SUCCESS")) return null;
   const mine = runs.filter((r) => r.info!.headSha === head);
   if (!mine.length || new Set(mine.map((r) => r.id)).size < mine.length)
     return null;

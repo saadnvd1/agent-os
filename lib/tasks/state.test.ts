@@ -181,8 +181,9 @@ describe("reruns of the same check", () => {
   const run = (
     event: string,
     startedAt: string,
-    headSha = HEAD
-  ): ActionsRun => ({ event, headSha, startedAt });
+    headSha = HEAD,
+    workflowId = 1
+  ): ActionsRun => ({ event, headSha, startedAt, workflowId });
   const runs = (byId: Record<number, ActionsRun | null>) =>
     new Map(Object.entries(byId).map(([id, r]) => [`o/r#${id}`, r]));
   const judge = (
@@ -205,9 +206,41 @@ describe("reruns of the same check", () => {
     expect(
       rerunsToLookUp([ci, review(1, "FAILURE"), review(2, "SUCCESS")])
     ).toEqual([
-      { repo: "o/r", id: "1" },
-      { repo: "o/r", id: "2" },
+      { repo: "o/r", id: "1", attempt: null },
+      { repo: "o/r", id: "2", attempt: null },
     ]);
+    // An attempt is named by its jobs' latest start, across every check of
+    // the run, and isn't named while one of them hasn't started.
+    const started = (c: object, startedAt: string) => ({ ...c, startedAt });
+    const sameRunJob = {
+      ...ci,
+      detailsUrl: "https://github.com/o/r/actions/runs/1/job/11",
+    };
+    expect(
+      rerunsToLookUp([
+        started(review(1, "FAILURE"), "2026-10-07T02:47:40Z"),
+        started(sameRunJob, "2026-10-07T02:51:30Z"),
+        started(review(2, "SUCCESS"), "2026-10-07T02:48:35Z"),
+      ])
+    ).toEqual([
+      {
+        repo: "o/r",
+        id: "1",
+        attempt: String(Date.parse("2026-10-07T02:51:30Z")),
+      },
+      {
+        repo: "o/r",
+        id: "2",
+        attempt: String(Date.parse("2026-10-07T02:48:35Z")),
+      },
+    ]);
+    expect(
+      rerunsToLookUp([
+        started(review(1, "FAILURE"), "2026-10-07T02:47:40Z"),
+        started(sameRunJob, "0001-01-01T00:00:00Z"),
+        started(review(2, "SUCCESS"), "2026-10-07T02:48:35Z"),
+      ])[0].attempt
+    ).toBeNull();
   });
 
   it("passes on PR #102: a body edit's green run, then the rerun's green", () => {
@@ -281,17 +314,41 @@ describe("reruns of the same check", () => {
     ).toBe("pass");
   });
 
-  it("ignores a run for another commit", () => {
+  it("never lets a run for another commit count toward a pass", () => {
     const byId = {
       1: run("pull_request", "2026-10-07T02:50:00Z", "0ldc0mm1t"),
       2: run("pull_request", "2026-10-07T02:47:33Z"),
     };
+    // Its pass doesn't hide the head's failure, though it started later.
     expect(
       judge([review(1, "SUCCESS"), review(2, "FAILURE")], byId).checks
     ).toBe("fail");
     expect(
-      judge([review(1, "FAILURE"), review(2, "SUCCESS")], byId).checks
+      judge([review(1, "SUCCESS"), review(2, "SUCCESS")], byId).checks
     ).toBe("pass");
+    // Its failure, shown on the head, can't be judged stale: wait.
+    expect(judge([review(1, "FAILURE"), review(2, "SUCCESS")], byId)).toEqual({
+      checks: "pending",
+      failing: null,
+    });
+  });
+
+  it("doesn't compare runs of two workflows that share a name", () => {
+    const byId = {
+      1: run("push", "2026-10-07T02:47:33Z", HEAD, 1),
+      2: run("pull_request", "2026-10-07T02:50:00Z", HEAD, 2),
+    };
+    expect(
+      judge([review(1, "FAILURE"), review(2, "SUCCESS")], byId).checks
+    ).toBe("pending");
+  });
+
+  it("can't order two entries of one run, so waits", () => {
+    const byId = { 1: run("pull_request", "2026-10-07T02:51:28Z") };
+    expect(judge([review(1, "FAILURE"), review(1, "SUCCESS")], byId)).toEqual({
+      checks: "pending",
+      failing: null,
+    });
   });
 
   it("fails closed when the API couldn't describe a run", () => {
