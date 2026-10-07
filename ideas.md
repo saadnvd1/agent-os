@@ -20,6 +20,7 @@
 - [ ] Attention queue: pin sessions waiting on you to the top
 - [ ] Resume Claude after a reboot from a recorded session id
 - [ ] Replace status polling with tmux hooks/control mode events
+- [ ] Auto balance: when starting a task, pick the machine (this one or a linked one) with the most free CPU and memory
 
 ## Tasks (after V1, 2026-10-05)
 
