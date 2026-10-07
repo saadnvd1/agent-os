@@ -155,6 +155,21 @@ wait never looks like nothing is happening.
 
 ![The slash-command menu open in a chat](screenshots/commands.png)
 
+**Visuals.** Every chat agent (not an orchestrator, which reads other
+sessions' text and gets no browser) has two tools: `html_preview` renders a page in
+headless Chrome and hands back a screenshot plus the console, so it can check
+its own work, and `html_render` shows the finished page (a chart, a table, a
+mockup) inline as its own card, with full screen and "open in new tab". Pages
+are kept under `~/.agent-os/artifacts/<session>/` with a row in SQLite, so
+they survive reloads and restarts (`GET /api/sessions/<id>/artifacts` lists
+them). They're served behind the same device gate with a CSP sandbox and no
+same-origin access, so a page can't read AgentOS cookies or call its API; the
+preview browser gets an empty profile and a proxy that only reaches public
+addresses. An image or SVG file the agent writes shows inline when its reply
+links to it by absolute path. The tools read files and reach the web, so
+under **Ask first** they ask like any other tool. Previews need Chrome, Chromium, Brave or Edge
+installed (or `AGENTOS_CHROME` pointing at one).
+
 Chat runs on this machine; sessions on other machines use the terminal.
 Drivers for other agent CLIs plug into `lib/chat/drivers`.
 
