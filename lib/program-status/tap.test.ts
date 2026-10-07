@@ -12,7 +12,7 @@ import {
   vi,
 } from "vitest";
 import { getDb } from "@/lib/db";
-import { acceptTapConnection } from "./tap";
+import { acceptTapConnection, covered, eventKey } from "./tap";
 import { programSummary, reloadProgramStatus } from "./store";
 
 const path = join(mkdtempSync(join(tmpdir(), "osc7501-tap-")), "t.sock");
@@ -117,5 +117,28 @@ describe("the tap socket", () => {
     // The clear took the deferred records with it.
     expect(count()).toBe(1);
     s.destroy();
+  });
+});
+
+describe("queued reports and clears", () => {
+  const clear = (id: string) =>
+    ({ type: "report", report: { state: "clear", id } }) as const;
+  const key = (id: string) =>
+    eventKey({ type: "report", report: { state: "done", id } });
+
+  it("gives a clear its own key", () => {
+    expect(eventKey(clear(""))).not.toBe(key(""));
+  });
+
+  it("drops what a clear covers, and nothing else", () => {
+    expect(covered(key("a"), clear(""))).toBe(true);
+    expect(covered(key("a"), clear("a"))).toBe(true);
+    expect(covered(key("a/x"), clear("a"))).toBe(true);
+    expect(covered(key("ab"), clear("a"))).toBe(false);
+    expect(covered(key("b"), clear("a"))).toBe(false);
+    expect(covered(eventKey(clear("a")), clear(""))).toBe(false);
+    expect(
+      covered(key("a"), { type: "report", report: { state: "done", id: "" } })
+    ).toBe(false);
   });
 });

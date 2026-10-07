@@ -90,14 +90,14 @@ async function handle(name: string, event: OscEvent): Promise<void> {
 // What one pane has said but isn't applied yet: the latest report per
 // record id (and one prompt, one query), so a pane printing reports in a
 // loop costs at most this many tmux calls and writes at a time.
-function eventKey(event: OscEvent): string {
+export function eventKey(event: OscEvent): string {
   if (event.type !== "report") return event.type;
   const { state, id } = event.report;
   return `${state === "clear" ? "c" : "r"}:${id}`;
 }
 
 // A clear makes queued reports under it moot.
-function covered(key: string, clear: OscEvent): boolean {
+export function covered(key: string, clear: OscEvent): boolean {
   if (clear.type !== "report" || clear.report.state !== "clear") return false;
   const id = clear.report.id;
   if (!key.startsWith("r:")) return false;
@@ -167,14 +167,23 @@ export function acceptTapConnection(socket: net.Socket): void {
       if (now - windowStart >= 1000) {
         windowStart = now;
         inWindow = 0;
+        // Last second's leftovers go first, ahead of anything newer, even
+        // if their timer hasn't fired yet.
+        if (flush) clearTimeout(flush);
+        flush = null;
+        for (const e of deferred.values()) queue(pending, e);
+        deferred.clear();
       }
       if (++inWindow <= REPORTS_PER_SECOND) {
         queue(pending, event);
         continue;
       }
       queue(deferred, event);
-      if (deferred.size > MAX_DEFERRED)
-        deferred.delete(deferred.keys().next().value!);
+      // Over the bound, the oldest report goes; a clear never does.
+      if (deferred.size > MAX_DEFERRED) {
+        const oldest = [...deferred.keys()].find((k) => k.startsWith("r:"));
+        if (oldest) deferred.delete(oldest);
+      }
       const paneName = name;
       flush ??= setTimeout(
         () => {
