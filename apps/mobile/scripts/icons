@@ -24,4 +24,11 @@ svg "" "$(mark '#FFFFFF' "$INK" 0.6)" android-icon-foreground.png 512
 svg "<rect width='512' height='512' fill='$PURPLE'/>" "" android-icon-background.png 512
 svg "" "$(mark '#FFFFFF' 'none' 0.6)" android-icon-monochrome.png 512
 svg "<rect width='512' height='512' rx='116' fill='$PURPLE'/>" "$(mark '#FFFFFF' "$INK" 0.86)" favicon.png 64
+# Google Play's feature graphic (1024x500): the mark and the name.
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">%s%s%s%s</svg>' \
+  "<rect width='1024' height='500' fill='$PURPLE'/>" \
+  "<g transform='translate(120 102) scale(0.58)'>$(mark '#FFFFFF' "$INK" 1)</g>" \
+  "<text x='470' y='250' font-family='Helvetica Neue, Helvetica, Arial' font-weight='700' font-size='92' fill='#FFFFFF'>AgentOS</text>" \
+  "<text x='474' y='316' font-family='Helvetica Neue, Helvetica, Arial' font-size='34' fill='#EDE9FE'>Your coding agents, in your pocket</text>" |
+  rsvg-convert -w 1024 -h 500 -o ../store/play/feature-graphic.png
 echo "✓ icons written to $(pwd)"

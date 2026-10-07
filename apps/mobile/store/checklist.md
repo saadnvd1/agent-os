@@ -1,0 +1,42 @@
+# Store checklist
+
+Everything that can be prepared in the repo is here. Nothing has been built for the stores, uploaded or submitted. Each item below that needs the owner says so.
+
+## Ready in the repo
+
+- [x] Bundle id / package: `com.runagentos.app` (`app.json`)
+- [x] Version `0.1.0`, build 1; EAS keeps build numbers after that (`eas.json`, `appVersionSource: remote`, `autoIncrement`)
+- [x] Export compliance: `ITSAppUsesNonExemptEncryption: false` (HTTPS/TLS only)
+- [x] Privacy manifest: no tracking, no collected data, required-reason APIs declared (`ios.privacyManifests`)
+- [x] Usage strings: local network, photo library, camera
+- [x] iPhone only for the first release (`supportsTablet: false`), so no iPad screenshots are needed
+- [x] Icons: light, dark and tinted iOS icons, Android adaptive layers (`scripts/icons`)
+- [x] EAS profiles: `development` (simulator), `preview` (internal), `production` (store), and `submit.production` for both stores
+- [x] Listing drafts: `store/listing.md` (App Store and Play)
+- [x] Screenshots with demo data: `store/screenshots/` (see below)
+- [x] Play feature graphic: `store/play/feature-graphic.png`
+
+## Needs the owner
+
+1. **Expo account.** `eas login`, then `eas init` in `apps/mobile` (adds the EAS project id to `app.json`).
+2. **Apple Developer account.** Register the App ID `com.runagentos.app` and create the App Store Connect app record named AgentOS. Then put its Apple ID (the number) in `eas.json` → `submit.production.ios.ascAppId`.
+3. **Privacy policy and support pages.** The listing needs both URLs. A short page at the product site is enough: the app collects nothing and talks only to the user's own server. Fill `SET_PRIVACY_URL` and `SET_SUPPORT_URL` in `listing.md`.
+4. **A demo server for App Review.** Reviewers can't reach anyone's own machine. Run an AgentOS demo instance reachable over HTTPS with only demo sessions, then fill `SET_DEMO_ADDRESS` and make a fresh pairing code (`SET_DEMO_CODE`) right before submitting.
+5. **App Transport Security.** The app allows plain HTTP for tailnet and LAN IP addresses. The review notes explain why; Apple may still ask. The alternative is HTTPS only (tailnet HTTPS and Connect), which drops plain tailnet IPs.
+6. **Google Play.** A Play Console developer account (one-time registration fee), the app record, the Data safety and content rating forms (answers in `listing.md`), and a service account key for `eas submit`. Play needs Android screenshots, and the Android build hasn't been checked yet (`ideas.md`).
+7. **Final go.** Only after the owner's yes:
+   ```bash
+   cd apps/mobile
+   eas build --platform ios --profile production
+   eas submit --platform ios --profile production
+   ```
+
+## app-check
+
+Run from the prebuilt native project (`npx expo prebuild --platform ios`, then `app-check --dir ios`). Result:
+
+SET_APP_CHECK_RESULT
+
+## Screenshots
+
+`store/screenshots/ios-6.9/`: 1320×2868 (iPhone 17 Pro Max), dark and light, against a demo server with made-up sessions. App Store Connect scales them for smaller iPhones.
