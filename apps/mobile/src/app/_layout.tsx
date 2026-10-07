@@ -1,9 +1,13 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  focusManager,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { LogBox } from "react-native";
+import { AppState, LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { loadMachines, useMachines } from "~/lib/machines/store";
@@ -14,6 +18,12 @@ export const unstable_settings = { initialRouteName: "(tabs)" };
 
 // React Native warns when a socket we already closed reports its close.
 LogBox.ignoreLogs(["Sending `websocketClosed` with no listeners registered"]);
+
+// React Query can't see app focus on its own: refetch on return, and pause
+// polling while the app is in the background.
+AppState.addEventListener("change", (s) =>
+  focusManager.setFocused(s === "active")
+);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 loadMachines();

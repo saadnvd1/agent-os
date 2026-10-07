@@ -104,6 +104,7 @@ export function AskCard({ ask, workspaceId, workspaceName, machine }: Props) {
             value={text}
             onChangeText={setText}
             placeholder="Your answer"
+            accessibilityLabel="Your answer"
             placeholderTextColor={t.faint}
             style={[
               styles.input,

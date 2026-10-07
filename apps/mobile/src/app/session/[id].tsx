@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams } from "expo-router";
 import { ChatScreen } from "~/components/chat/ChatScreen";
 import { TerminalScreen } from "~/components/terminal/TerminalScreen";
+import { Button } from "~/components/ui/Button";
 import { Empty } from "~/components/ui/Empty";
 import { SkeletonRows } from "~/components/ui/Skeleton";
 import { useActiveMachine } from "~/lib/machines/store";
@@ -17,6 +18,18 @@ export default function SessionScreen() {
       <Stack.Screen options={{ title: session?.name ?? name ?? "" }} />
       {!machine ? null : sessions.isPending ? (
         <SkeletonRows count={5} />
+      ) : sessions.isError && !session ? (
+        <Empty
+          icon="wifi.exclamationmark"
+          title="Can't reach this machine"
+          body={sessions.error.message}
+        >
+          <Button
+            label="Try again"
+            variant="secondary"
+            onPress={() => sessions.refetch()}
+          />
+        </Empty>
       ) : session?.view === "terminal" ? (
         <TerminalScreen machine={machine} sessionId={id} />
       ) : session ? (

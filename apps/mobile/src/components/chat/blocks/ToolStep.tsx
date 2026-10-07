@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    minHeight: 32,
+    minHeight: 44,
   },
   icon: { width: 16, alignItems: "center" },
   title: { flex: 1, fontSize: font.size.sm, fontFamily: font.mono },

@@ -45,7 +45,11 @@ export function DiffView({ diff }: { diff: FileDiff }) {
         </View>
       </ScrollView>
       {lines.length > FOLDED && !all ? (
-        <Pressable onPress={() => setAll(true)} style={styles.more}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setAll(true)}
+          style={styles.more}
+        >
           <Text
             style={{
               color: t.primary,
@@ -84,7 +88,7 @@ const styles = StyleSheet.create({
   },
   lines: { flexGrow: 1 },
   more: {
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: "center",
     paddingHorizontal: space.md,
   },

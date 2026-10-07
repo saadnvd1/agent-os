@@ -74,5 +74,5 @@ const styles = StyleSheet.create({
   },
   text: { flex: 1, fontSize: font.size.sm },
   now: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.sm },
-  x: { width: 36, height: 44, alignItems: "center", justifyContent: "center" },
+  x: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 });

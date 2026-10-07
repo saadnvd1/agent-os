@@ -10,6 +10,7 @@ import { AskCard } from "~/components/asks/AskCard";
 import { useMachineAsks } from "~/components/asks/useMachineAsks";
 import { SessionRow } from "~/components/sessions/SessionRow";
 import { useShelves } from "~/components/sessions/useShelves";
+import { Button } from "~/components/ui/Button";
 import { Empty } from "~/components/ui/Empty";
 import { SkeletonRows } from "~/components/ui/Skeleton";
 import { useWorkspaces } from "~/lib/sessions/queries";
@@ -40,7 +41,15 @@ export default function NeedsScreen() {
       contentContainerStyle={{ paddingBottom: space.xxl, gap: space.md }}
     >
       {loading ? <SkeletonRows count={4} /> : null}
-      {!loading && !asks.length && !blocked.length ? (
+      {query.isError || sessions.isError ? (
+        <Empty
+          icon="wifi.exclamationmark"
+          title="Can't reach this machine"
+          body={(query.error ?? sessions.error)?.message}
+        >
+          <Button label="Try again" variant="secondary" onPress={refresh} />
+        </Empty>
+      ) : !loading && !asks.length && !blocked.length ? (
         <Empty
           icon="checkmark.seal"
           title="Nothing needs you"

@@ -68,6 +68,7 @@ export default function MachinesScreen() {
             selected={active?.id === m.id}
             onPress={() => setActiveMachine(m.id)}
             onLongPress={() => confirmRemove(m)}
+            longPressLabel="Forget machine"
           />
         ))}
       </Group>

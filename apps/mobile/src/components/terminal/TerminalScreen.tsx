@@ -27,18 +27,13 @@ export function TerminalScreen({
 
   return (
     <View style={[styles.fill, { backgroundColor: t.background }]}>
-      <View
-        style={[
-          styles.pane,
-          { backgroundColor: t.scheme === "dark" ? "#000" : "#111117" },
-        ]}
-      >
+      <View style={[styles.pane, { backgroundColor: t.termBg }]}>
         {preview.isPending ? (
           <SkeletonRows count={8} />
         ) : (
           <ScrollView ref={scroll} contentContainerStyle={styles.content}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Text selectable style={styles.text}>
+              <Text selectable style={[styles.text, { color: t.termFg }]}>
                 {lines.length ? lines.join("\n") : "The pane is empty."}
               </Text>
             </ScrollView>
@@ -80,7 +75,6 @@ const styles = StyleSheet.create({
     fontFamily: font.mono,
     fontSize: 11.5,
     lineHeight: 16,
-    color: "#E6E6EB",
   },
   actions: {
     paddingHorizontal: space.lg,

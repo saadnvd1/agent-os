@@ -21,3 +21,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: scripts/check --build
+
+  mobile:
+    # apps/mobile has its own toolchain; this keeps the app compiling against
+    # the shared lib/ protocol types whenever either side changes.
+    name: Mobile app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - run: scripts/check

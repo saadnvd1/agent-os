@@ -10,12 +10,15 @@ export function OptionRow({
   selected,
   onPress,
   onLongPress,
+  longPressLabel,
 }: {
   label: string;
   detail?: string;
   selected?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
+  // What the long press does, offered to VoiceOver as an action.
+  longPressLabel?: string;
 }) {
   const t = useTheme();
   return (
@@ -27,6 +30,14 @@ export function OptionRow({
         onPress();
       }}
       onLongPress={onLongPress}
+      accessibilityActions={
+        onLongPress && longPressLabel
+          ? [{ name: "longpress", label: longPressLabel }]
+          : undefined
+      }
+      onAccessibilityAction={(e) =>
+        e.nativeEvent.actionName === "longpress" && onLongPress?.()
+      }
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: pressed ? t.secondary : t.card },

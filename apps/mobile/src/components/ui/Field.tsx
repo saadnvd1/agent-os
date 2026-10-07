@@ -20,6 +20,7 @@ export const Field = forwardRef<TextInput, Props>(function Field(
       <Text style={[styles.label, { color: t.muted }]}>{label}</Text>
       <TextInput
         ref={ref}
+        accessibilityLabel={label}
         placeholderTextColor={t.faint}
         autoCapitalize="none"
         autoCorrect={false}

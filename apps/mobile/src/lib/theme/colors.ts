@@ -19,6 +19,9 @@ export interface Palette {
   codeBg: string;
   diffAdd: string;
   diffDel: string;
+  // The terminal pane stays dark in both themes, like the web terminal.
+  termBg: string;
+  termFg: string;
 }
 
 export const light: Palette = {
@@ -41,6 +44,8 @@ export const light: Palette = {
   codeBg: "hsl(240, 16%, 96%)",
   diffAdd: "hsla(152, 65%, 40%, 0.12)",
   diffDel: "hsla(352, 80%, 56%, 0.1)",
+  termBg: "hsl(240, 18%, 8%)",
+  termFg: "hsl(240, 10%, 90%)",
 };
 
 export const dark: Palette = {
@@ -63,4 +68,6 @@ export const dark: Palette = {
   codeBg: "hsl(240, 12%, 8%)",
   diffAdd: "hsla(152, 70%, 52%, 0.14)",
   diffDel: "hsla(352, 85%, 62%, 0.14)",
+  termBg: "hsl(0, 0%, 0%)",
+  termFg: "hsl(240, 10%, 90%)",
 };

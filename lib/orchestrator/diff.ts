@@ -70,7 +70,7 @@ const SENSITIVE: { why: string; test: RegExp }[] = [
   },
   {
     why: "build and hook scripts",
-    test: /(^|\/)(package\.json|makefile|gnumakefile|\.gitmodules|lefthook(-local)?\.ya?ml|\.lefthook\/.*|\.pre-commit-config\.ya?ml)$|^(\.husky|\.githooks)\//i,
+    test: /(^|\/)(package\.json|\.npmrc|gemfile(\.lock)?|podfile|(metro|babel|app)\.config\.[cm]?[jt]s|makefile|gnumakefile|\.gitmodules|lefthook(-local)?\.ya?ml|\.lefthook\/.*|\.pre-commit-config\.ya?ml)$|^(\.husky|\.githooks)\//i,
   },
   {
     why: "agent config",

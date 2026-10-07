@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ChatImage } from "@/lib/chat/events";
 import { offeredSuggestion } from "@/lib/chat/suggestion";
@@ -30,6 +31,8 @@ export function Composer({
 }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  // With the keyboard up there is no home indicator to clear.
+  const keyboard = useKeyboardState((s) => s.isVisible);
   const [text, setText] = useState("");
   const [dismissed, setDismissed] = useState<string | null>(null);
   const files = useAttachments();
@@ -60,7 +63,9 @@ export function Composer({
         styles.wrap,
         {
           backgroundColor: t.background,
-          paddingBottom: Math.max(insets.bottom, space.sm),
+          paddingBottom: keyboard
+            ? space.sm
+            : Math.max(insets.bottom, space.sm),
         },
       ]}
     >
@@ -76,7 +81,7 @@ export function Composer({
           onLongPress={() => setDismissed(offered)}
           style={[styles.chip, { backgroundColor: t.primarySoft }]}
         >
-          <Icon name="sparkles" size={12} color={t.primary} />
+          <Icon name="arrow.turn.down.right" size={12} color={t.muted} />
           <Text
             numberOfLines={2}
             style={[styles.chipText, { color: t.foreground }]}
@@ -130,6 +135,7 @@ export function Composer({
           }
           placeholderTextColor={t.faint}
           multiline
+          accessibilityLabel="Message"
           style={[styles.input, { color: t.foreground }]}
         />
         {running && !text.trim() && !files.items.length ? (
@@ -182,7 +188,7 @@ const styles = StyleSheet.create({
     gap: space.sm,
     alignSelf: "flex-start",
     maxWidth: "100%",
-    minHeight: 36,
+    minHeight: HIT,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     borderRadius: radius.lg,
