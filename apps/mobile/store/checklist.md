@@ -22,9 +22,10 @@ Everything that can be prepared in the repo is here. Nothing has been built for 
 2. **Apple Developer account.** Register the App ID `com.runagentos.app` and create the App Store Connect app record named AgentOS. Then put its Apple ID (the number) in `eas.json` → `submit.production.ios.ascAppId`.
 3. **Privacy policy and support pages.** The listing needs both URLs. A short page at the product site is enough: the app collects nothing and talks only to the user's own server. Fill `SET_PRIVACY_URL` and `SET_SUPPORT_URL` in `listing.md`.
 4. **A demo server for App Review.** Reviewers can't reach anyone's own machine. Run an AgentOS demo instance reachable over HTTPS with only demo sessions, then fill `SET_DEMO_ADDRESS` and make a fresh pairing code (`SET_DEMO_CODE`) right before submitting.
-5. **App Transport Security.** The app allows plain HTTP for tailnet and LAN IP addresses. The review notes explain why; Apple may still ask. The alternative is HTTPS only (tailnet HTTPS and Connect), which drops plain tailnet IPs.
-6. **Google Play.** A Play Console developer account (one-time registration fee), the app record, the Data safety and content rating forms (answers in `listing.md`), and a service account key for `eas submit`. Play needs Android screenshots, and the Android build hasn't been checked yet (`ideas.md`).
-7. **Final go.** Only after the owner's yes:
+5. **The terminal placeholder.** A terminal session shows a read-only pane, a disabled "Open full terminal" button and "A native terminal you can type in is coming next." App Review rejects features marked as coming soon (guideline 2.1), so hide the button and that line in the store build, or ship the native terminal first.
+6. **App Transport Security.** `app.json` sets `NSAllowsArbitraryLoads`, so the app can reach a machine at a plain-HTTP tailnet or LAN address. The review notes explain why; Apple asks for a justification and may push back. The alternative is HTTPS only (tailnet HTTPS and Connect), which drops plain tailnet IPs.
+7. **Google Play.** A Play Console developer account (one-time registration fee), the app record, the Data safety and content rating forms (answers in `listing.md`), and a service account key for `eas submit`. Play needs Android screenshots, and the Android build hasn't been checked yet (`ideas.md`).
+8. **Final go.** Only after the owner's yes:
    ```bash
    cd apps/mobile
    eas build --platform ios --profile production
@@ -44,4 +45,11 @@ No warnings were reported for the bundle, icons, privacy manifest or Info.plist.
 
 ## Screenshots
 
-`store/screenshots/ios-6.9/`: 1320×2868 (iPhone 17 Pro Max), dark and light, against a demo server with made-up sessions. App Store Connect scales them for smaller iPhones.
+`store/screenshots/ios-6.9/`: 1320×2868 (iPhone 17 Pro Max), dark and light, against the screenshot demo server (`npm run screenshots -- --keep`, made-up sessions and repos) paired as "devbox". App Store Connect scales them for smaller iPhones.
+
+1. `01-sessions`: the session list with its shelves
+2. `02-chat`: a finished conversation with a plan and the composer
+3. `03-diff`: the agent's edits with line numbers
+4. `04-access`: choosing how much the agent may do without asking
+
+The status bar is set to 9:41 with `xcrun simctl status_bar … override`. To retake them: start the demo server, add `http://<name>.localhost:3340` with `AGENTOS_ALLOWED_HOSTS` set to that name so the machine gets a neutral label, and pair with a code from `/api/pair/start`.
