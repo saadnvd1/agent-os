@@ -88,6 +88,8 @@ type RollupEntry = {
   conclusion?: string | null;
   state?: string | null;
   status?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
 };
 
 const FAILED = ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"];
@@ -102,15 +104,40 @@ const checkKey = (c: RollupEntry) => {
   return name ? `${c.__typename ?? ""}|${c.workflowName ?? ""}|${name}` : null;
 };
 
+// When a run started, or null. gh gives a run not finished yet a zero
+// completedAt (0001-01-01), so only a time after the epoch counts.
+const runTime = (c: RollupEntry) => {
+  const t = Date.parse(c.startedAt || c.completedAt || "");
+  return t > 0 ? t : null;
+};
+
 // A concurrency group cancels the stale run on the same sha, so a CANCELLED
 // entry says nothing when the same check also has a run that wasn't cancelled.
+// Of the rest, a check is judged by its newest run: a rerun, or a check
+// re-triggered by an edited PR body, leaves the old run in the rollup.
 function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
   const ran = new Set(
     rollup.filter((c) => outcome(c) !== "CANCELLED").map(checkKey)
   );
-  return rollup.filter((c) => {
+  const live = rollup.filter((c) => {
     const key = checkKey(c);
     return outcome(c) !== "CANCELLED" || key === null || !ran.has(key);
+  });
+  const newest = new Map<string, T>();
+  for (const c of live) {
+    const key = checkKey(c);
+    if (key === null || runTime(c) === null) continue;
+    const seen = newest.get(key);
+    if (!seen || runTime(c)! > runTime(seen)!) newest.set(key, c);
+  }
+  // A check with an undated run keeps all its runs: there's no telling
+  // which is newest.
+  const undated = new Set(
+    live.filter((c) => runTime(c) === null).map(checkKey)
+  );
+  return live.filter((c) => {
+    const key = checkKey(c);
+    return key === null || undated.has(key) || newest.get(key) === c;
   });
 }
 
