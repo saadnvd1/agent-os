@@ -88,6 +88,8 @@ type RollupEntry = {
   conclusion?: string | null;
   state?: string | null;
   status?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
 };
 
 const FAILED = ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"];
@@ -102,15 +104,37 @@ const checkKey = (c: RollupEntry) => {
   return name ? `${c.__typename ?? ""}|${c.workflowName ?? ""}|${name}` : null;
 };
 
+// A time from the rollup, or null. gh gives a run not finished yet a zero
+// completedAt (0001-01-01), so only a time after the epoch counts.
+const at = (time?: string | null) => {
+  const t = Date.parse(time || "");
+  return t > 0 ? t : null;
+};
+
 // A concurrency group cancels the stale run on the same sha, so a CANCELLED
 // entry says nothing when the same check also has a run that wasn't cancelled.
+// A run is also stale once the same check started again after it finished:
+// a rerun, or a check re-triggered by an edited PR body. Runs that overlap,
+// like a push and a pull_request run of one job, all count, as does any run
+// missing a time.
 function liveChecks<T extends RollupEntry>(rollup: T[]): T[] {
   const ran = new Set(
     rollup.filter((c) => outcome(c) !== "CANCELLED").map(checkKey)
   );
-  return rollup.filter((c) => {
+  const live = rollup.filter((c) => {
     const key = checkKey(c);
     return outcome(c) !== "CANCELLED" || key === null || !ran.has(key);
+  });
+  return live.filter((c) => {
+    const key = checkKey(c);
+    const done = at(c.completedAt);
+    return (
+      key === null ||
+      done === null ||
+      !live.some(
+        (o) => o !== c && checkKey(o) === key && (at(o.startedAt) ?? 0) > done
+      )
+    );
   });
 }
 

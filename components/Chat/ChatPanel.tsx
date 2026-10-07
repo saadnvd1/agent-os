@@ -18,6 +18,7 @@ import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
 import { ToolGroup } from "./Tools";
 import { McpServers } from "./McpServers";
+import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
 import { ContextMeter } from "./ContextMeter";
 import { useViewport } from "@/hooks/useViewport";
@@ -77,6 +78,8 @@ function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
       return <Compacted item={item} />;
     case "note":
       return <NoteLine item={item} />;
+    case "artifact":
+      return <ArtifactCard item={item} />;
     case "approval":
       return <Approval item={item} respond={actions.respond} />;
     case "plan":

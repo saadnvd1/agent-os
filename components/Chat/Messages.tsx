@@ -12,8 +12,8 @@ import {
 import type { ChatItem, PeerMessage as Peer } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { CopyButton } from "./CopyButton";
+import { ImageThumb } from "./ImageThumb";
 import { Markdown } from "./Markdown";
 import { UndoButton } from "./Undo";
 
@@ -26,33 +26,6 @@ function UserText({ text }: { text: string }) {
     <>
       <span className="text-primary font-mono">{command}</span>
       {text.slice(command.length)}
-    </>
-  );
-}
-
-function ImageThumb({ src }: { src: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="View image"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" className="max-h-40 rounded-xl object-cover" />
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[95vw] p-2 sm:max-w-5xl">
-          <DialogTitle className="sr-only">Image</DialogTitle>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt=""
-            className="max-h-[85vh] w-full rounded-lg object-contain"
-          />
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

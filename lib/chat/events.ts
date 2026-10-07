@@ -133,6 +133,14 @@ export type ChatItem =
   // A plan the agent proposed from plan mode, and whether it was carried out.
   | (Base & { kind: "plan"; plan: string; carried?: boolean })
   | (Base & { kind: "error"; message: string })
+  // A page the agent showed with html_render, served sandboxed.
+  | (Base & {
+      kind: "artifact";
+      artifactId: string;
+      title: string;
+      // A cap on the frame's height; it fits the page otherwise.
+      height?: number;
+    })
   // A line in an orchestrator's decision log, shown in its chat: a note it
   // wrote, a brake that stopped new starts, something Saad must decide, his
   // answer to an ask, or a pause.
