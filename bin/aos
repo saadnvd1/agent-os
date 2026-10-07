@@ -217,7 +217,11 @@ function heavy(words) {
         "Content-Type": "application/json",
         ...(token && { Authorization: `Bearer ${token}` }),
       },
-      body: JSON.stringify({ session: me, pid: child.pid, command: argv.join(" ") }),
+      body: JSON.stringify({
+        session: me,
+        pid: child.pid,
+        command: argv.join(" "),
+      }),
       signal: AbortSignal.timeout(1000),
     })
       .then((res) => (res.ok ? res.json() : {}))
