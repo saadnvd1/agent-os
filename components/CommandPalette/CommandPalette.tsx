@@ -26,7 +26,7 @@ export function CommandPalette() {
       <DialogContent
         showCloseButton={false}
         // Sized to what the keyboard leaves visible (--app-height), not vh.
-        className="top-[max(env(safe-area-inset-top),1rem)] flex max-h-[min(calc(var(--app-height,100dvh)-env(safe-area-inset-top)-2rem),560px)] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:top-[15vh] sm:max-w-lg"
+        className="top-[max(env(safe-area-inset-top),1rem)] flex max-h-[min(calc(var(--app-height,100dvh)-env(safe-area-inset-top)-2rem),560px)] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:top-[15vh] sm:max-h-[min(calc(var(--app-height,100dvh)-15vh-1rem),560px)] sm:max-w-lg"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <DialogDescription className="sr-only">

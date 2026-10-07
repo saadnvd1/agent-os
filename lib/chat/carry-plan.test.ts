@@ -12,7 +12,7 @@ const { createProject } = await import("../projects");
 
 // A chat in plan mode with a proposed plan, and a worker that records each
 // send once by id, as the real one does.
-function planningChat({ takesSends = true } = {}) {
+function planningChat({ takesSends = true, dedupes = true } = {}) {
   const project = createProject({
     name: `p-${randomUUID().slice(0, 6)}`,
     workingDirectory: "/tmp/p",
@@ -32,7 +32,7 @@ function planningChat({ takesSends = true } = {}) {
       command: (cmd: WorkerCommand) => {
         commands.push(cmd);
         if (cmd.type !== "send" || !takesSends) return;
-        if (listItems(id).some((i) => i.id === cmd.id)) return;
+        if (dedupes && listItems(id).some((i) => i.id === cmd.id)) return;
         const item: ChatItem = {
           id: cmd.id,
           kind: "user",
@@ -86,10 +86,29 @@ describe("carryOutPlan", () => {
   });
 
   it("leaves the card to try again when the worker never takes it", async () => {
-    const { id } = planningChat({ takesSends: false });
-    await expect(carryOutPlan(id, "plan-t1", 30)).rejects.toThrow();
+    const { id, commands } = planningChat({ takesSends: false });
+    await expect(carryOutPlan(id, "plan-t1", 30)).rejects.toThrow(
+      "didn't take it"
+    );
+    expect(commands.some((c) => c.type === "send")).toBe(true);
     const plan = listItems(id).find((i) => i.id === "plan-t1");
     expect(plan).not.toHaveProperty("carried");
+  });
+
+  it("doesn't ask again when the message is already in (a retry after a restart)", async () => {
+    // A fresh worker has no memory of what it was sent before.
+    const { id, commands } = planningChat({ dedupes: false });
+    saveItem(id, {
+      id: "user-carry-plan-t1",
+      kind: "user",
+      text: "Carry out the plan.",
+      createdAt: 2,
+    });
+    await carryOutPlan(id, "plan-t1");
+    expect(commands.some((c) => c.type === "send")).toBe(false);
+    expect(listItems(id).find((i) => i.id === "plan-t1")).toMatchObject({
+      carried: true,
+    });
   });
 
   it("refuses anything that isn't a plan", async () => {

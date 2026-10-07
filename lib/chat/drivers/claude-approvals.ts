@@ -26,24 +26,45 @@ export const SDK_MODE: Record<ChatAccess, PermissionMode> = {
 export const sdkMode = (access: ChatAccess, plan: boolean): PermissionMode =>
   plan ? "plan" : SDK_MODE[access];
 
-// The plan as the call carries it, or else as the agent wrote it to its
-// plan file.
+// A plan is shown whole up to this size; past it, cut short.
+const MAX_PLAN = 256 * 1024;
+
+const capped = (text: string) =>
+  text.length > MAX_PLAN ? `${text.slice(0, MAX_PLAN)}\n\n…` : text;
+
+// The plan as the call carries it, or else as the agent wrote it to its plan
+// file. Only the file this conversation saw it write: a path the call names
+// comes from the model and is never read.
 export function proposedPlan(
   toolInput: unknown,
   planFile?: string
 ): string | null {
   const inline = (toolInput as { plan?: unknown } | undefined)?.plan;
-  if (typeof inline === "string" && inline.trim()) return inline;
-  const named = (toolInput as { planFilePath?: unknown } | undefined)
-    ?.planFilePath;
-  // Only ever a plan file: the call's path comes from the model.
-  const file = isPlanFile(named) ? named : planFile;
-  if (!isPlanFile(file)) return null;
+  if (typeof inline === "string" && inline.trim()) return capped(inline);
+  if (!isPlanFile(planFile)) return null;
+  const text = readPlanFile(planFile);
+  return text?.trim() ? text : null;
+}
+
+// A regular file only (never a link, pipe or device), and no more of it than
+// a plan needs.
+function readPlanFile(file: string): string | null {
+  let fd: number | undefined;
   try {
-    const text = fs.readFileSync(file, "utf8");
-    return text.trim() ? text : null;
+    fd = fs.openSync(
+      file,
+      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+    );
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) return null;
+    const buf = Buffer.alloc(Math.min(st.size, MAX_PLAN));
+    const read = fs.readSync(fd, buf, 0, buf.length, 0);
+    const text = buf.subarray(0, read).toString("utf8");
+    return st.size > MAX_PLAN ? `${text}\n\n…` : text;
   } catch {
     return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
 }
 

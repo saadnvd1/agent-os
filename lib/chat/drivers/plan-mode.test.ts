@@ -73,9 +73,27 @@ describe("proposedPlan", () => {
     expect(isPlanFile(file)).toBe(true);
     expect(proposedPlan({}, file)).toBe("# From the file");
     expect(proposedPlan({ plan: "# Inline" }, file)).toBe("# Inline");
-    expect(proposedPlan({ planFilePath: file })).toBe("# From the file");
+    // A path the call names is the model's: never read.
+    expect(proposedPlan({ planFilePath: file })).toBeNull();
     expect(proposedPlan({}, path.join(dir, "missing.md"))).toBeNull();
     expect(proposedPlan({})).toBeNull();
+  });
+
+  it("reads only a regular plan file, and no more than a plan needs", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plans-"));
+    const plans = path.join(dir, ".claude", "plans");
+    fs.mkdirSync(plans, { recursive: true });
+    const secret = path.join(dir, "secret.key");
+    fs.writeFileSync(secret, "hunter2");
+    const link = path.join(plans, "link.md");
+    fs.symlinkSync(secret, link);
+    expect(proposedPlan({}, link)).toBeNull();
+    const big = path.join(plans, "big.md");
+    fs.writeFileSync(big, "x".repeat(300 * 1024));
+    expect(proposedPlan({}, big)!.length).toBeLessThan(260 * 1024);
+    expect(proposedPlan({ plan: "y".repeat(300 * 1024) })!.length).toBeLessThan(
+      260 * 1024
+    );
   });
 
   it("never reads a file the call names that isn't a plan file", () => {
