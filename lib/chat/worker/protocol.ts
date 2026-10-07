@@ -48,6 +48,9 @@ export type WorkerEvent =
       build?: string;
       state: ChatState;
       streaming: ChatItem[];
+      // Commands it understands beyond the first protocol ("plan"), so the
+      // server never trusts a worker from an older build with one it drops.
+      caps?: string[];
     }
   | Exclude<DriverEvent, { type: "resume_id" | "usage" }>
   | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string };

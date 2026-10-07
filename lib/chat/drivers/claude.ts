@@ -71,12 +71,16 @@ export function mcpView(s: McpServerStatus): McpServerView {
   };
 }
 
-// The plan file an assistant message writes, if it writes one.
-function writtenPlanFile(m: ClaudeMessage): string | undefined {
+// The plan file an assistant message writes, if it writes one. Only writes
+// count: in plan mode the plan file is the one thing the agent may change,
+// while a plans folder it merely reads holds someone else's plans.
+const WRITES = new Set(["Write", "Edit", "MultiEdit"]);
+export function writtenPlanFile(m: ClaudeMessage): string | undefined {
   if (m.type !== "assistant" || !Array.isArray(m.message?.content)) return;
   for (const b of m.message.content) {
     const path = (b.input as { file_path?: unknown } | undefined)?.file_path;
-    if (b.type === "tool_use" && isPlanFile(path)) return path;
+    if (b.type === "tool_use" && WRITES.has(b.name ?? "") && isPlanFile(path))
+      return path;
   }
 }
 

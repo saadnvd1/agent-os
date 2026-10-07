@@ -250,7 +250,8 @@ export function MobileTabBar({
           e.stopPropagation();
           paletteActions.open();
         }}
-        className="h-8 w-8 shrink-0"
+        // A 44px target in a 32px bar row.
+        className="-my-1.5 h-11 w-11 shrink-0"
       >
         <Search className="h-4 w-4" />
       </Button>

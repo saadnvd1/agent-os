@@ -29,6 +29,22 @@ import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { usageUiActions } from "@/stores/usageUi";
 
+const LAST_THEME = "agentOS-last-theme-";
+
+// The other mode, in the variant last used in it (dark purple stays purple).
+function switchMode(current: string | undefined, to: "light" | "dark"): string {
+  try {
+    if (current && current !== "system")
+      localStorage.setItem(
+        LAST_THEME + (to === "dark" ? "light" : "dark"),
+        current
+      );
+    return localStorage.getItem(LAST_THEME + to) ?? to;
+  } catch {
+    return to;
+  }
+}
+
 // The palette's app-wide commands and its session search.
 export function useAppCommands({
   sessions,
@@ -43,7 +59,7 @@ export function useAppCommands({
   onSearchCode: () => void;
   onNotificationSettings?: () => void;
 }) {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const { data: workspaces = [] } = useWorkspacesQuery();
   const { workspaceId } = useSnapshot(sidebarUi);
   const current = workspaces.find((w) => w.id === workspaceId) ?? null;
@@ -142,7 +158,7 @@ export function useAppCommands({
       group: "Settings",
       keywords: ["theme", "dark mode", "light mode", "appearance"],
       icon: dark ? Sun : Moon,
-      run: () => setTheme(dark ? "light" : "dark"),
+      run: () => setTheme(switchMode(theme, dark ? "light" : "dark")),
     },
     ...[null, ...workspaces]
       .filter((w) => (w?.id ?? null) !== workspaceId)

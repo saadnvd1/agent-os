@@ -67,19 +67,30 @@ describe("proposePlan", () => {
 describe("proposedPlan", () => {
   it("reads the plan file when the call doesn't carry the plan", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plans-"));
-    const file = path.join(dir, "plans", "quiet-otter.md");
-    fs.mkdirSync(path.dirname(file));
+    const file = path.join(dir, ".claude", "plans", "quiet-otter.md");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, "# From the file");
     expect(isPlanFile(file)).toBe(true);
     expect(proposedPlan({}, file)).toBe("# From the file");
     expect(proposedPlan({ plan: "# Inline" }, file)).toBe("# Inline");
+    expect(proposedPlan({ planFilePath: file })).toBe("# From the file");
     expect(proposedPlan({}, path.join(dir, "missing.md"))).toBeNull();
     expect(proposedPlan({})).toBeNull();
   });
 
+  it("never reads a file the call names that isn't a plan file", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plans-"));
+    const secret = path.join(dir, "secret.key");
+    fs.writeFileSync(secret, "hunter2");
+    expect(proposedPlan({ planFilePath: secret })).toBeNull();
+    expect(proposedPlan({ planFilePath: "/repo/docs/plans/x.md" })).toBeNull();
+  });
+
   it("knows a plan file from other markdown", () => {
     expect(isPlanFile("/Users/x/.claude/plans/a-b.md")).toBe(true);
+    expect(isPlanFile("/repo/.claude/plans/a-b.md")).toBe(true);
     expect(isPlanFile("/repo/README.md")).toBe(false);
-    expect(isPlanFile("/repo/plans/sub/x.md")).toBe(false);
+    expect(isPlanFile("/repo/docs/plans/x.md")).toBe(false);
+    expect(isPlanFile("/Users/x/.claude/plans/sub/x.md")).toBe(false);
   });
 });

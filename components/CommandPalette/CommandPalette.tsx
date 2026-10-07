@@ -25,7 +25,8 @@ export function CommandPalette() {
     <Dialog open={open} onOpenChange={paletteActions.setOpen}>
       <DialogContent
         showCloseButton={false}
-        className="top-[max(env(safe-area-inset-top),1rem)] max-h-[min(70vh,560px)] translate-y-0 gap-0 overflow-hidden p-0 sm:top-[15vh] sm:max-w-lg"
+        // Sized to what the keyboard leaves visible (--app-height), not vh.
+        className="top-[max(env(safe-area-inset-top),1rem)] flex max-h-[min(calc(var(--app-height,100dvh)-env(safe-area-inset-top)-2rem),560px)] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:top-[15vh] sm:max-w-lg"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <DialogDescription className="sr-only">
@@ -113,7 +114,7 @@ function PaletteBody() {
       <div
         ref={listRef}
         role="listbox"
-        className="max-h-[calc(min(70vh,560px)-3rem)] overflow-y-auto overscroll-contain p-1.5"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5"
       >
         {results.length === 0 && (
           <p className="text-muted-foreground py-8 text-center text-sm">

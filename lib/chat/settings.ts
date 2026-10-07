@@ -150,6 +150,19 @@ export async function setChatPlan(
   plan: boolean
 ): Promise<void> {
   if (!canPlan(getSession(sessionId))) return;
+  const live = registry.live.get(sessionId);
+  if (live && !live.canPlan) {
+    // A worker from an older build would drop the switch: it's retired when
+    // its turn ends, and the next one starts in the saved mode.
+    emitCapabilities(getSession(sessionId));
+    if (live.state === "running" || live.state === "waiting")
+      throw new Error(
+        "Plan mode can change once this turn ends: the agent is still on the previous build"
+      );
+    registry.live.delete(sessionId);
+    live.worker.command({ type: "close" });
+    live.worker.detach();
+  }
   db.prepare(`UPDATE sessions SET chat_plan = ? WHERE id = ?`).run(
     plan ? 1 : 0,
     sessionId

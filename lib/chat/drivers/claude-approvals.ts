@@ -34,10 +34,11 @@ export function proposedPlan(
 ): string | null {
   const inline = (toolInput as { plan?: unknown } | undefined)?.plan;
   if (typeof inline === "string" && inline.trim()) return inline;
-  const file =
-    (toolInput as { planFilePath?: unknown } | undefined)?.planFilePath ??
-    planFile;
-  if (typeof file !== "string") return null;
+  const named = (toolInput as { planFilePath?: unknown } | undefined)
+    ?.planFilePath;
+  // Only ever a plan file: the call's path comes from the model.
+  const file = isPlanFile(named) ? named : planFile;
+  if (!isPlanFile(file)) return null;
   try {
     const text = fs.readFileSync(file, "utf8");
     return text.trim() ? text : null;
@@ -46,10 +47,12 @@ export function proposedPlan(
   }
 }
 
-// Where the agent keeps its plan in plan mode: a markdown file in a plans
-// folder (~/.claude/plans by default).
+// Where the agent keeps its plan in plan mode: a markdown file in its own
+// plans folder (~/.claude/plans, or a project's .claude/plans). Nothing else
+// is ever read as a plan, whatever path a call names.
 export const isPlanFile = (path: unknown): path is string =>
-  typeof path === "string" && /[\\/]plans[\\/][^\\/]+\.md$/.test(path);
+  typeof path === "string" &&
+  /[\\/]\.claude[\\/]plans[\\/][^\\/]+\.md$/.test(path);
 
 // Words the CLI itself uses for a refused tool, so the call reads as stopped.
 const DENIED = "The user doesn't want to proceed with this tool use.";

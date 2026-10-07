@@ -19,6 +19,8 @@ export interface Live {
   activity: ChatActivity;
   // The build its worker runs (lib/build).
   build?: string;
+  // Whether it can switch plan mode (a worker from before plan mode can't).
+  canPlan: boolean;
 }
 
 export interface ChatActivity {
