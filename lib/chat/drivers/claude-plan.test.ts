@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The SDK's query, as a stub that records the options it was started with
 // and each permission mode switch.
@@ -69,6 +69,10 @@ describe("plan mode in the driver", () => {
 });
 
 describe("the totals a conversation starts from", () => {
+  afterEach(() => {
+    calls.usage = () => new Promise(() => {});
+  });
+
   it("reports what the agent restored", async () => {
     calls.usage = async () => ({
       session: {
@@ -108,7 +112,6 @@ describe("the totals a conversation starts from", () => {
     const quiet = new Promise((r) => setTimeout(() => r("nothing"), 20));
     expect(await Promise.race([next, quiet])).toBe("nothing");
     c.close();
-    calls.usage = () => new Promise(() => {});
   });
 });
 

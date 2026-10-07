@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildId } from "../build";
 import type { WorkerCommand } from "./worker/protocol";
 
@@ -77,6 +77,13 @@ describe("reattaching to a running worker", () => {
 });
 
 describe("carrying out a plan right after a restart", () => {
+  afterEach(() => {
+    for (const id of workers.running) registry.live.delete(id);
+    workers.state = "running";
+    workers.onSend = () => {};
+    workers.running = [];
+  });
+
   it("goes ahead with an idle worker it attaches to", async () => {
     const project = createProject({
       name: `p-${Math.random().toString(36).slice(2, 8)}`,
@@ -110,9 +117,6 @@ describe("carrying out a plan right after a restart", () => {
     expect(listItems(id).find((i) => i.id === "plan-t1")).toMatchObject({
       carried: true,
     });
-    registry.live.delete(id);
-    workers.state = "running";
-    workers.onSend = () => {};
   });
 
   for (const state of ["running", "waiting"]) {
@@ -158,8 +162,6 @@ describe("carrying out a plan right after a restart", () => {
       expect(listItems(id).find((i) => i.id === "plan-t1")).not.toHaveProperty(
         "carried"
       );
-      registry.live.delete(id);
-      workers.state = "running";
     });
   }
 });
