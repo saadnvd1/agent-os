@@ -3,6 +3,9 @@
 import { AppState, type AppStateStatus } from "react-native";
 import { backoffMs } from "./backoff";
 
+// An address that drops packets never closes the socket by itself.
+const OPEN_TIMEOUT_MS = 10_000;
+
 export type SocketState = "connecting" | "open" | "closed";
 
 export interface SocketOptions<In> {
@@ -35,7 +38,9 @@ export function openSocket<In, Out = unknown>(opts: SocketOptions<In>) {
       headers: opts.headers,
     });
     ws = socket;
+    const opening = setTimeout(() => socket.close(), OPEN_TIMEOUT_MS);
     socket.onopen = () => {
+      clearTimeout(opening);
       attempt = 0;
       opts.onState?.("open");
     };
@@ -47,6 +52,7 @@ export function openSocket<In, Out = unknown>(opts: SocketOptions<In>) {
       }
     };
     socket.onclose = () => {
+      clearTimeout(opening);
       if (ws !== socket) return;
       ws = null;
       opts.onState?.("closed");
