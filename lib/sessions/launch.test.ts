@@ -178,12 +178,12 @@ describe("launchSession (a draft's first send)", () => {
       launchSession({ agentType: "claude", hostId: "nope", prompt: "hi" })
     ).rejects.toThrow(/Unknown machine/);
     db.prepare(
-      `INSERT INTO hosts (id, name, ssh_target) VALUES ('box', 'box', 'alice@box')`
+      `INSERT INTO hosts (id, name, ssh_target) VALUES ('devbox', 'devbox', 'alice@devbox')`
     ).run();
     const remote = createProject({
       name: "remote",
       workingDirectory: "~/dev/remote",
-      hostId: "box",
+      hostId: "devbox",
     });
     await expect(
       launchSession({
