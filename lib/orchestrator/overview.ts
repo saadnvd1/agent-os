@@ -6,33 +6,12 @@
 
 import { db } from "../db";
 import { listWorkspaces } from "../workspaces";
-import { askBinding, openAsks, PRESENCE_KINDS, type AskKind } from "./asks";
+import { askBinding, openAsks, PRESENCE_KINDS } from "./asks";
+import type { OrchestratorOverview } from "./ask-view";
 import { getOrchestrator } from "./home";
 import { resolveStaleAsks } from "./ask-settle";
 
-export interface AskView {
-  id: number;
-  subject: string;
-  kind: AskKind;
-  title: string;
-  why: string;
-  detail: string;
-  link: string | null;
-  // The commit a gate ask is about (shown, so Saad sees what he approves).
-  sha: string | null;
-  // What Approve must send back, and whether it needs a passkey.
-  binding: string;
-  presence: boolean;
-  createdAt: string;
-}
-
-export interface OrchestratorOverview {
-  workspaceId: string;
-  sessionId: string | null;
-  paused: boolean;
-  inReview: number;
-  asks: AskView[];
-}
+export type { AskView, OrchestratorOverview } from "./ask-view";
 
 // The fence around text other sessions wrote is for the orchestrator; Saad
 // reads it plain.
