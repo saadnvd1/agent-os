@@ -3,7 +3,13 @@ import { db } from "../db";
 import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
 import { isPaused } from "../orchestrator/pause";
-import { cronError, DEFAULT_TIMEZONE, isTimezone } from "./cron";
+import {
+  cronError,
+  DEFAULT_TIMEZONE,
+  isTimezone,
+  MIN_GAP_MINUTES,
+  minGapMinutes,
+} from "./cron";
 
 export const SCHEDULE_KINDS = ["task", "session", "orchestrator"] as const;
 export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
@@ -126,6 +132,13 @@ function validate(
   } else if (input.kind !== "orchestrator") {
     throw new Error("A task or session schedule needs a project");
   }
+  if (
+    input.kind !== "orchestrator" &&
+    minGapMinutes(cron, timezone) < MIN_GAP_MINUTES
+  )
+    throw new Error(
+      "A task or session schedule runs at most once an hour; for more often, post to the orchestrator"
+    );
   const clash = listSchedules(input.workspaceId).find(
     (s) => s.id !== selfId && s.name.toLowerCase() === name.toLowerCase()
   );
@@ -246,9 +259,11 @@ export function claimSlot(
         )
         .run(slot, trigger, held.id, brakedKey(slot));
       return res.changes === 1 ? held.id : null;
-    } catch {
+    } catch (error) {
       // Someone claimed the slot itself meanwhile.
-      return null;
+      if ((error as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE")
+        return null;
+      throw error;
     }
   }
   const res = db
@@ -344,6 +359,59 @@ export function targetProblem(schedule: Schedule): string | null {
   if (project.workspace_id !== schedule.workspace_id)
     return `${project.name} moved out of this schedule's workspace; edit the schedule`;
   return null;
+}
+
+// Every session this schedule's runs started, newest first.
+export function startedSessions(scheduleId: string): string[] {
+  return (
+    db
+      .prepare(
+        `SELECT DISTINCT session_id FROM schedule_runs
+         WHERE schedule_id = ? AND outcome = 'started' AND session_id IS NOT NULL
+         ORDER BY id DESC`
+      )
+      .all(scheduleId) as { session_id: string }[]
+  ).map((r) => r.session_id);
+}
+
+export const LEASE_MS = 3 * 60 * 1000;
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as { code?: string }).code === "EPERM";
+  }
+}
+
+// Takes or renews the right to tick schedules. Only one process holds it:
+// another may take it once the holder's heartbeat is stale or its process
+// is gone.
+export function holdLease(
+  owner: string,
+  pid = process.pid,
+  now = Date.now()
+): boolean {
+  db.prepare(
+    `INSERT OR IGNORE INTO scheduler_lease (id, owner, pid, heartbeat) VALUES (1, ?, ?, ?)`
+  ).run(owner, pid, now);
+  const row = db
+    .prepare(`SELECT owner, pid, heartbeat FROM scheduler_lease WHERE id = 1`)
+    .get() as { owner: string; pid: number; heartbeat: number };
+  const free =
+    row.owner === owner ||
+    row.heartbeat < now - LEASE_MS ||
+    (row.pid !== pid && !alive(row.pid));
+  if (!free) return false;
+  return (
+    db
+      .prepare(
+        `UPDATE scheduler_lease SET owner = ?, pid = ?, heartbeat = ?
+         WHERE id = 1 AND owner = ? AND heartbeat = ?`
+      )
+      .run(owner, pid, now, row.owner, row.heartbeat).changes === 1
+  );
 }
 
 export const pausedFor = (schedule: Schedule): boolean =>

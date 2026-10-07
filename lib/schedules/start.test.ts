@@ -8,10 +8,15 @@ import type { Schedule, ScheduleRun } from "./store";
 // What the task view and the chat runner report, per session.
 const taskStates = new Map<string, TaskState>();
 const chatStates = new Map<string, ChatState>();
+const tasksCreated: string[] = [];
 
 vi.mock("../tasks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../tasks")>()),
   taskView: async (s: { id: string }) => ({ state: taskStates.get(s.id) }),
+  createTask: async (o: { projectId: string }) => {
+    tasksCreated.push(o.projectId);
+    return { id: randomUUID() };
+  },
 }));
 // Each send waits until the test settles it.
 const sends: {
@@ -20,7 +25,8 @@ const sends: {
   settle: (ok: boolean) => void;
 }[] = [];
 vi.mock("../chat/runner", () => ({
-  chatState: (id: string) => chatStates.get(id) ?? null,
+  // As after a restart: known only by asking the worker.
+  chatStateNow: async (id: string) => chatStates.get(id) ?? null,
   sendChatConfirmed: (id: string, input: { text: string }) =>
     new Promise((resolve, reject) =>
       sends.push({
@@ -31,22 +37,6 @@ vi.mock("../chat/runner", () => ({
       })
     ),
 }));
-// Holds every start while `brakeOn` is set, as the orchestrator's brakes do.
-let brakeOn: string | null = null;
-vi.mock("../orchestrator/brakes", async (importOriginal) => {
-  const real = await importOriginal<typeof import("../orchestrator/brakes")>();
-  return {
-    ...real,
-    braked: async (
-      _ws: string,
-      kind: "task" | "session",
-      start: () => Promise<string>
-    ) => {
-      if (brakeOn) throw new real.BrakeRefused(kind, brakeOn);
-      return start();
-    },
-  };
-});
 // Never makes a folder in the real home.
 vi.mock("../orchestrator/home", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../orchestrator/home")>()),
@@ -55,8 +45,10 @@ vi.mock("../orchestrator/home", async (importOriginal) => ({
 
 const { realDeps, stillRunning, scheduledMessage } = await import("./start");
 const { Braked } = await import("./run");
+const { claimSlot, createSchedule, finishRun } = await import("./store");
 const { createWorkspace, setProjectWorkspace } = await import("../workspaces");
 const { createProject } = await import("../projects");
+const { setPaused } = await import("../orchestrator/pause");
 
 function session(fields: { task_status?: string; archived?: boolean } = {}) {
   const id = randomUUID();
@@ -72,8 +64,31 @@ function session(fields: { task_status?: string; archived?: boolean } = {}) {
   return id;
 }
 
-const schedule = (kind: Schedule["kind"]) => ({ kind }) as Schedule;
-const run = (session_id: string | null) => ({ session_id }) as ScheduleRun;
+// A real schedule in its own workspace and project.
+function target(kind: Schedule["kind"]) {
+  const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
+  const project = createProject({
+    name: `p-${randomUUID().slice(0, 6)}`,
+    workingDirectory: "/tmp",
+  });
+  setProjectWorkspace(project.id, ws.id);
+  return createSchedule({
+    workspaceId: ws.id,
+    projectId: project.id,
+    name: "Triage",
+    cron: "0 9 * * *",
+    prompt: "Go",
+    kind,
+  });
+}
+
+let slots = 0;
+// A run of the schedule that started this session.
+function started(s: Schedule, sessionId: string): ScheduleRun {
+  const id = claimSlot(s.id, `slot-${++slots}`, slots, "schedule")!;
+  finishRun(id, "started", null, sessionId);
+  return { id, session_id: sessionId } as ScheduleRun;
+}
 
 describe("stillRunning", () => {
   beforeEach(() => {
@@ -81,48 +96,69 @@ describe("stillRunning", () => {
     chatStates.clear();
   });
 
-  it("a task is still going while it works or is blocked on Saad", async () => {
+  it("a task holds the next run until it's finished or its agent exited", async () => {
     for (const [state, busy] of [
       ["working", true],
       ["blocked", true],
-      ["needs-input", false],
-      ["review", false],
+      ["needs-input", true],
+      ["review", true],
+      ["checks-failing", true],
       ["exited", false],
+      ["merged", false],
+      ["done", false],
     ] as const) {
+      const s = target("task");
       const id = session({ task_status: "running" });
       taskStates.set(id, state);
-      expect(await stillRunning(schedule("task"), run(id)), state).toBe(busy);
+      expect(await stillRunning(s, started(s, id)), state).toBe(busy);
     }
   });
 
-  it("a finished or archived task isn't", async () => {
-    const merged = session({ task_status: "merged" });
-    taskStates.set(merged, "working");
-    expect(await stillRunning(schedule("task"), run(merged))).toBe(false);
-    const archived = session({ task_status: "running", archived: true });
-    taskStates.set(archived, "working");
-    expect(await stillRunning(schedule("task"), run(archived))).toBe(false);
-    expect(await stillRunning(schedule("task"), run(null))).toBe(false);
+  it("any unfinished task the schedule started holds it, not just the last", async () => {
+    const s = target("task");
+    const older = session({ task_status: "running" });
+    taskStates.set(older, "review");
+    started(s, older);
+    const newer = session({ task_status: "running" });
+    taskStates.set(newer, "exited");
+    expect(await stillRunning(s, started(s, newer))).toBe(true);
+    taskStates.set(older, "merged");
+    expect(await stillRunning(s, started(s, newer))).toBe(false);
   });
 
-  it("a session is still going while its turn runs or waits on Saad", async () => {
+  it("a finished or archived task doesn't, nor another schedule's", async () => {
+    const s = target("task");
+    const merged = session({ task_status: "merged" });
+    taskStates.set(merged, "working");
+    expect(await stillRunning(s, started(s, merged))).toBe(false);
+    const archived = session({ task_status: "running", archived: true });
+    taskStates.set(archived, "working");
+    expect(await stillRunning(s, started(s, archived))).toBe(false);
+    const other = target("task");
+    const theirs = session({ task_status: "running" });
+    taskStates.set(theirs, "working");
+    started(other, theirs);
+    expect(await stillRunning(s, started(s, merged))).toBe(false);
+  });
+
+  it("a session holds it while its turn runs or waits, asked of the worker", async () => {
     for (const [state, busy] of [
       ["running", true],
       ["waiting", true],
       ["idle", false],
     ] as const) {
+      const s = target("session");
       const id = session();
       chatStates.set(id, state);
-      expect(await stillRunning(schedule("session"), run(id)), state).toBe(
-        busy
-      );
+      expect(await stillRunning(s, started(s, id)), state).toBe(busy);
     }
   });
 
   it("an orchestrator message is done once delivered", async () => {
+    const s = target("orchestrator");
     const id = session();
     chatStates.set(id, "running");
-    expect(await stillRunning(schedule("orchestrator"), run(id))).toBe(false);
+    expect(await stillRunning(s, started(s, id))).toBe(false);
   });
 });
 
@@ -135,26 +171,9 @@ describe("scheduledMessage", () => {
   });
 });
 
-describe("start links the run only once the prompt is in", () => {
-  const target = (kind: Schedule["kind"]) => {
-    const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
-    const project = createProject({
-      name: `p-${randomUUID().slice(0, 6)}`,
-      workingDirectory: "/tmp",
-    });
-    setProjectWorkspace(project.id, ws.id);
-    return {
-      id: randomUUID(),
-      name: "Triage",
-      prompt: "Go",
-      kind,
-      workspace_id: ws.id,
-      project_id: project.id,
-      timezone: "America/Chicago",
-    } as Schedule;
-  };
-  const flush = () => new Promise((r) => setImmediate(r));
+const flush = () => new Promise((r) => setImmediate(r));
 
+describe("start links the run only once the prompt is in", () => {
   for (const kind of ["session", "orchestrator"] as const) {
     it(`${kind}: after the send is confirmed, not before`, async () => {
       sends.length = 0;
@@ -182,8 +201,7 @@ describe("start links the run only once the prompt is in", () => {
 
   it("the orchestrator gets the marked message", async () => {
     sends.length = 0;
-    const s = target("orchestrator");
-    const run = realDeps.start(s, () => {});
+    const run = realDeps.start(target("orchestrator"), () => {});
     await flush();
     expect(sends[0].text).toMatch(/^\[Scheduled message "Triage" for p-/);
     sends[0].settle(true);
@@ -191,34 +209,51 @@ describe("start links the run only once the prompt is in", () => {
   });
 });
 
+// The real brakes: Pause is the one that holds without the brakes switch.
 describe("brakes", () => {
-  it("a session start the brakes hold throws Braked with the reason, starting nothing", async () => {
-    sends.length = 0;
-    brakeOn = "4 sessions are running in ws, at its limit of 4";
-    try {
-      const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
-      const project = createProject({
-        name: `p-${randomUUID().slice(0, 6)}`,
-        workingDirectory: "/tmp",
-      });
-      setProjectWorkspace(project.id, ws.id);
-      const s = {
-        id: randomUUID(),
-        name: "Triage",
-        prompt: "Go",
-        kind: "session",
-        workspace_id: ws.id,
-        project_id: project.id,
-        timezone: "America/Chicago",
-      } as Schedule;
+  const startsIn = (workspaceId: string) =>
+    (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM orchestrator_starts WHERE workspace_id = ?`
+        )
+        .get(workspaceId) as { n: number }
+    ).n;
+
+  it("hold a task or session start with the brake's reason, starting nothing", async () => {
+    for (const kind of ["task", "session"] as const) {
+      sends.length = 0;
+      tasksCreated.length = 0;
+      const s = target(kind);
+      setPaused(s.workspace_id, true);
       const run = realDeps.start(s, () => {});
       await expect(run).rejects.toBeInstanceOf(Braked);
-      await expect(run).rejects.toThrow(
-        "4 sessions are running in ws, at its limit of 4"
-      );
+      await expect(run).rejects.toThrow("the orchestrator is paused by Saad");
       expect(sends).toHaveLength(0);
-    } finally {
-      brakeOn = null;
+      expect(tasksCreated).toEqual([]);
+      expect(startsIn(s.workspace_id)).toBe(0);
     }
+  });
+
+  it("are checked in the schedule's own workspace, and counted there", async () => {
+    tasksCreated.length = 0;
+    const held = target("task");
+    setPaused(held.workspace_id, true);
+    const free = target("task");
+    await realDeps.start(free, () => {});
+    expect(tasksCreated).toEqual([free.project_id]);
+    expect(startsIn(free.workspace_id)).toBe(1);
+    expect(startsIn(held.workspace_id)).toBe(0);
+  });
+
+  it("don't hold a message to the orchestrator, which starts nothing itself", async () => {
+    sends.length = 0;
+    const s = target("orchestrator");
+    setPaused(s.workspace_id, true);
+    const run = realDeps.start(s, () => {});
+    await flush();
+    expect(sends).toHaveLength(1);
+    sends[0].settle(true);
+    await run;
   });
 });

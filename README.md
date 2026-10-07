@@ -259,8 +259,14 @@ Task and session runs go through the orchestrator's brakes, like its own
 starts: a braked run is skipped with the brake's reason and tried again on the
 next minute until the brake lifts or a newer run is due (Run now obeys them
 too, once). A schedule whose project has moved to another workspace fails
-until it's edited. Removing a schedule keeps its history. Set `AGENTOS_SCHEDULES=off` to
-stop the ticker.
+until it's edited. Removing a schedule keeps its history.
+
+Task and session schedules run at most hourly, and a task schedule waits
+while any task it started is unfinished (working, waiting on you, in review
+or failing checks), so it can't stack up pull requests. Only one server
+process runs schedules (it holds a lease in the database); a dev server runs
+none unless `AGENTOS_SCHEDULES=on`, and `AGENTOS_SCHEDULES=off` stops them in
+production.
 
 ## Agent network
 

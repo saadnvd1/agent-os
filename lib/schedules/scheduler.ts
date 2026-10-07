@@ -8,8 +8,10 @@
 
 import { nextRun, prevRun } from "./cron";
 import { runSlot, slotKey, type RunDeps, type RunResult } from "./run";
+import { randomUUID } from "crypto";
 import {
   failAbandonedClaims,
+  holdLease,
   listSchedules,
   slotTaken,
   type Schedule,
@@ -67,17 +69,29 @@ const g = globalThis as unknown as {
 };
 
 // Starts the ticker once per process: a tick now (catching up), then one
-// just after each minute turns.
+// just after each minute turns. Each tick first takes or renews the lease;
+// a process that doesn't hold it (a second server on the same database)
+// ticks nothing.
 export function startScheduler(deps: RunDeps): { stop: () => void } {
   if (g.__agentosScheduler) return g.__agentosScheduler;
   let timer: NodeJS.Timeout | undefined;
   let busy = false;
   let stopped = false;
   const upSince = Date.now();
+  const owner = `${process.pid}-${randomUUID()}`;
+  let holding = false;
   const run = async () => {
     if (busy) return;
     busy = true;
     try {
+      if (!holdLease(owner)) {
+        holding = false;
+        return;
+      }
+      // Newly the ticker: claims the last holder left never started; no
+      // one will finish them now.
+      if (!holding) failAbandonedClaims(0);
+      holding = true;
       await tick(deps, Date.now(), upSince);
     } catch (error) {
       console.error("[schedules] tick failed:", error);
@@ -97,8 +111,6 @@ export function startScheduler(deps: RunDeps): { stop: () => void } {
     );
     timer.unref?.();
   };
-  // Claims the last process left behind never started; nobody will finish them.
-  failAbandonedClaims(0);
   void run();
   schedule();
   g.__agentosScheduler = {

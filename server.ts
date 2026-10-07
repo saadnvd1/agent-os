@@ -432,6 +432,12 @@ app.prepare().then(() => {
   if (process.env.AGENTOS_STACKS !== "off") startStackWatcher();
   // Each workspace's orchestrator hears about its sessions as events.
   if (process.env.AGENTOS_ORCHESTRATOR !== "off") startOrchestratorWatcher();
-  // Schedules tick here, once a minute, and nowhere else.
-  if (process.env.AGENTOS_SCHEDULES !== "off") startScheduler(realDeps);
+  // Schedules tick here, once a minute, and nowhere else. A dev server
+  // ticks only when asked, so it never runs the real schedules.
+  if (
+    dev
+      ? process.env.AGENTOS_SCHEDULES === "on"
+      : process.env.AGENTOS_SCHEDULES !== "off"
+  )
+    startScheduler(realDeps);
 });

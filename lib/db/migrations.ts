@@ -813,6 +813,16 @@ const migrations: Migration[] = [
       db.exec(
         `CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule ON schedule_runs(schedule_id, id)`
       );
+      // Which server process ticks the schedules: one row, renewed each
+      // tick, so a second server on the same database never runs them.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS scheduler_lease (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          owner TEXT NOT NULL,
+          pid INTEGER NOT NULL,
+          heartbeat INTEGER NOT NULL
+        )
+      `);
     },
   },
 ];

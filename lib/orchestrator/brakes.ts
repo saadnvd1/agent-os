@@ -119,7 +119,12 @@ export function liftBrake(workspaceId: string): void {
 const BRAKE_APPROVAL_MS = 2 * HOUR;
 
 // The reason no start may go now (noted and asked once per brake), or null.
-async function refusal(workspaceId: string): Promise<string | null> {
+// A start that isn't what Saad was asked about (a schedule's) never spends
+// his approval.
+async function refusal(
+  workspaceId: string,
+  spend = true
+): Promise<string | null> {
   if (isPaused(workspaceId)) return "the orchestrator is paused by Saad";
   const on = await brakesOn(workspaceId);
   if (!on.length) {
@@ -134,7 +139,7 @@ async function refusal(workspaceId: string): Promise<string | null> {
     BRAKE_SUBJECT,
     BRAKE_APPROVAL_MS
   );
-  if (approval?.brake_key === key && spendApproval(approval.id)) {
+  if (spend && approval?.brake_key === key && spendApproval(approval.id)) {
     // Spent: the next refusal notes and asks again.
     setBrake(workspaceId, null);
     addNote(
@@ -193,10 +198,11 @@ export function braked<T>(
   workspaceId: string,
   kind: StartKind,
   start: () => Promise<T>,
-  target: (result: T) => string | null
+  target: (result: T) => string | null,
+  opts: { spendApproval?: boolean } = {}
 ): Promise<T> {
   return serially(workspaceId, async () => {
-    const why = await refusal(workspaceId);
+    const why = await refusal(workspaceId, opts.spendApproval !== false);
     if (why) throw new BrakeRefused(kind, why);
     const result = await start();
     recordStart(workspaceId, kind, target(result));

@@ -24,6 +24,8 @@ import {
   describeCron,
   formatRunTime,
   isTimezone,
+  MIN_GAP_MINUTES,
+  minGapMinutes,
   nextRuns,
   presetCron,
   type PresetKind,
@@ -192,12 +194,22 @@ export function ScheduleForm({
     else create.mutate(input, opts);
   };
 
+  const tooOften = useMemo(
+    () =>
+      kind !== "orchestrator" &&
+      !cronProblem &&
+      tzOk &&
+      minGapMinutes(cron, timezone, openedAt) < MIN_GAP_MINUTES,
+    [kind, cron, cronProblem, timezone, tzOk, openedAt]
+  );
+
   const ready =
     name.trim() &&
     prompt.trim() &&
     workspace &&
     !cronProblem &&
     tzOk &&
+    !tooOften &&
     (kind === "orchestrator" || project);
 
   return (
@@ -355,6 +367,12 @@ export function ScheduleForm({
           ) : (
             <>
               <p className="font-medium">{describeCron(cron)}</p>
+              {tooOften && (
+                <p className="text-destructive mt-1 text-xs">
+                  A task or session runs at most once an hour. Post to the
+                  orchestrator for more often.
+                </p>
+              )}
               <p className="text-muted-foreground mt-1 text-xs">Next runs</p>
               <ul className="mt-0.5 space-y-0.5 text-xs tabular-nums">
                 {preview.map((t) => (

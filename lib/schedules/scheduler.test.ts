@@ -15,6 +15,8 @@ import {
   failAbandonedClaims,
   claimSlot,
   findSchedule,
+  holdLease,
+  LEASE_MS,
   listRuns,
   updateSchedule,
   type Schedule,
@@ -24,7 +26,9 @@ const at = (s: string) => Date.parse(s);
 // Created at 8:00 CDT on Oct 7; runs every minute unless told otherwise.
 const CREATED = at("2026-10-07T13:00:00Z");
 
-function seed(cron = "* * * * *", kind: Schedule["kind"] = "task") {
+// Orchestrator kind by default: only it may run more than hourly. The fake
+// deps below don't care which kind starts.
+function seed(cron = "* * * * *", kind: Schedule["kind"] = "orchestrator") {
   const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
   const project = createProject({
     name: `p-${randomUUID().slice(0, 6)}`,
@@ -302,6 +306,50 @@ describe("brakes", () => {
     });
     expect(mine(schedule, started)).toHaveLength(0);
     expect(notified).toEqual([]);
+    const [row] = listRuns(schedule.id);
+    expect(row.slot).toMatch(/^braked:manual:/);
+    // The brake lifts: the next tick runs its own slot, never the manual one.
+    const after = fakeDeps();
+    await tick(after.deps, at("2026-10-07T13:05:01Z"));
+    expect(mine(schedule, after.started)).toHaveLength(1);
+    expect(listRuns(schedule.id).find((x) => x.id === row.id)).toMatchObject({
+      outcome: "skipped",
+      slot: row.slot,
+    });
+  });
+
+  it("two ticks retrying a braked slot start it once", async () => {
+    const { schedule } = seed("0 9 * * *");
+    const { deps, started } = fakeDeps();
+    const real = deps.start;
+    let held = true;
+    deps.start = async (s, on) => {
+      if (held) throw new Braked("starts limit");
+      return real(s, on);
+    };
+    await tick(deps, at("2026-10-07T14:00:01Z"));
+    held = false;
+    await Promise.all([
+      tick(deps, at("2026-10-07T14:01:01Z")),
+      tick(deps, at("2026-10-07T14:01:01Z")),
+    ]);
+    expect(mine(schedule, started)).toHaveLength(1);
+    expect(listRuns(schedule.id)).toHaveLength(1);
+  });
+
+  it("a braked row can't be reclaimed once the slot itself is taken", () => {
+    const { schedule } = seed("0 9 * * *");
+    const slot = "2026-10-07T14:00:00.000Z";
+    const id = claimSlot(schedule.id, slot, 1, "schedule")!;
+    db.prepare(
+      `UPDATE schedule_runs SET outcome = 'skipped', slot = 'braked:' || slot WHERE id = ?`
+    ).run(id);
+    // Something claims the plain slot first (not possible through claimSlot
+    // itself, but a constraint, not luck, has to stop the second claimer).
+    db.prepare(
+      `INSERT INTO schedule_runs (schedule_id, slot, slot_at, trigger, outcome) VALUES (?, ?, 1, 'schedule', 'claimed')`
+    ).run(schedule.id, slot);
+    expect(claimSlot(schedule.id, slot, 1, "schedule")).toBeNull();
   });
 });
 
@@ -491,6 +539,32 @@ describe("failures", () => {
   });
 });
 
+describe("lease", () => {
+  it("one process ticks; another takes over when it's stale or gone", () => {
+    const now = Date.now();
+    const a = `a-${randomUUID()}`;
+    const b = `b-${randomUUID()}`;
+    db.prepare(`DELETE FROM scheduler_lease`).run();
+    expect(holdLease(a, process.pid, now)).toBe(true);
+    // A live holder with a fresh heartbeat keeps it.
+    expect(holdLease(b, process.ppid, now + 1000)).toBe(false);
+    expect(holdLease(a, process.pid, now + 60_000)).toBe(true);
+    // Stale: no renewal for longer than the lease.
+    expect(holdLease(b, process.ppid, now + 60_000 + LEASE_MS + 1)).toBe(true);
+    expect(holdLease(a, process.pid, now + 60_000 + LEASE_MS + 2)).toBe(false);
+  });
+
+  it("a holder whose process is gone gives way at once", () => {
+    db.prepare(`DELETE FROM scheduler_lease`).run();
+    const now = Date.now();
+    // No process has this pid.
+    expect(holdLease(`dead-${randomUUID()}`, 2 ** 22 + 12345, now)).toBe(true);
+    expect(holdLease(`live-${randomUUID()}`, process.pid, now + 1000)).toBe(
+      true
+    );
+  });
+});
+
 describe("validation", () => {
   it("refuses a bad cron, a missing project, and a project elsewhere", () => {
     const { ws } = seed();
@@ -514,6 +588,41 @@ describe("validation", () => {
     ).toThrow(/isn't in this workspace/);
     expect(
       createSchedule({ ...base, cron: "0 9 * * *", kind: "orchestrator" }).kind
+    ).toBe("orchestrator");
+  });
+
+  it("a task or session schedule runs at most hourly", () => {
+    const { ws, project } = seed();
+    const base = {
+      workspaceId: ws.id,
+      projectId: project.id,
+      prompt: "p",
+    };
+    for (const kind of ["task", "session"] as const) {
+      expect(() =>
+        createSchedule({ ...base, name: `m-${kind}`, kind, cron: "* * * * *" })
+      ).toThrow(/at most once an hour/);
+      expect(() =>
+        createSchedule({
+          ...base,
+          name: `h-${kind}`,
+          kind,
+          cron: "0,30 9 * * *",
+        })
+      ).toThrow(/at most once an hour/);
+      expect(
+        createSchedule({ ...base, name: `ok-${kind}`, kind, cron: "0 * * * *" })
+          .kind
+      ).toBe(kind);
+    }
+    // The orchestrator kind may run every minute.
+    expect(
+      createSchedule({
+        ...base,
+        name: "minutely",
+        kind: "orchestrator",
+        cron: "* * * * *",
+      }).kind
     ).toBe("orchestrator");
   });
 });

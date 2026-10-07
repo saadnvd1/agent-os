@@ -5,15 +5,15 @@ import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
 import { resolveModelForAgent } from "../model-catalog";
-import { createTask, taskView } from "../tasks";
-import { chatState, sendChatConfirmed } from "../chat/runner";
+import { createTask, isFinished, taskView } from "../tasks";
+import { chatStateNow, sendChatConfirmed } from "../chat/runner";
 import { ensureOrchestrator } from "../orchestrator/home";
 import { addNote } from "../orchestrator/notes";
 import { notifyStatusChanged } from "../status/hub";
 import { formatRunTime } from "./cron";
 import { Braked, fromLabel, type RunDeps } from "./run";
 import { braked, BrakeRefused } from "../orchestrator/brakes";
-import type { Schedule, ScheduleRun } from "./store";
+import { startedSessions, type Schedule, type ScheduleRun } from "./store";
 
 function projectOf(schedule: Schedule) {
   const project = schedule.project_id ? getProject(schedule.project_id) : null;
@@ -98,24 +98,34 @@ async function postToOrchestrator(
   return orchestrator.id;
 }
 
-const TASK_BUSY = new Set(["working", "blocked"]);
+// A task this schedule started still counts until it's finished (merged,
+// dropped, done) or its agent has exited: one waiting for review, input or
+// a fix holds the next run, so a frequent schedule can't stack up PRs.
+async function taskUnfinished(sessionId: string): Promise<boolean> {
+  const session = queries.getSession(db).get(sessionId) as Session | undefined;
+  if (!session || session.archived_at || session.task_status !== "running")
+    return false;
+  const { state } = await taskView(session);
+  return !isFinished(state) && state !== "exited";
+}
 
 export async function stillRunning(
   schedule: Schedule,
   run: ScheduleRun
 ): Promise<boolean> {
-  if (!run.session_id) return false;
-  const session = queries.getSession(db).get(run.session_id) as
-    | Session
-    | undefined;
-  if (!session || session.archived_at) return false;
   switch (schedule.kind) {
     case "task":
-      // Working on it, or blocked on Saad: a second copy wouldn't help.
-      if (session.task_status !== "running") return false;
-      return TASK_BUSY.has((await taskView(session)).state);
+      for (const id of startedSessions(schedule.id))
+        if (await taskUnfinished(id)) return true;
+      return false;
     case "session": {
-      const state = chatState(session.id);
+      if (!run.session_id) return false;
+      const session = queries.getSession(db).get(run.session_id) as
+        | Session
+        | undefined;
+      if (!session || session.archived_at) return false;
+      // Asks a worker still running from before a restart, too.
+      const state = await chatStateNow(session.id);
       return state === "running" || state === "waiting";
     }
     case "orchestrator":
@@ -142,7 +152,9 @@ async function throughBrakes(
   start: () => Promise<string>
 ): Promise<string> {
   try {
-    return await braked(schedule.workspace_id, kind, start, (id) => id);
+    return await braked(schedule.workspace_id, kind, start, (id) => id, {
+      spendApproval: false,
+    });
   } catch (error) {
     if (error instanceof BrakeRefused) throw new Braked(error.reason);
     throw error;

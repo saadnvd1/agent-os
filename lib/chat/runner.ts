@@ -338,6 +338,18 @@ export function chatState(sessionId: string): ChatState | null {
   return registry.live.get(sessionId)?.state ?? null;
 }
 
+// The state of a chat whose worker may still be running from before a
+// restart: connects to that worker (never starts one) to ask. Null when no
+// worker runs; throws when one runs but can't be reached.
+export async function chatStateNow(
+  sessionId: string
+): Promise<ChatState | null> {
+  const known = chatState(sessionId);
+  if (known) return known;
+  if (!runningWorkers().includes(sessionId)) return null;
+  return (await ensureLive(sessionId, false)).state;
+}
+
 export function stopChatTask(sessionId: string, taskId: string): void {
   registry.live.get(sessionId)?.worker.command({ type: "stop_task", taskId });
 }

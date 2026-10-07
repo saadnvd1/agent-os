@@ -256,6 +256,22 @@ export function nextRuns(
   return out;
 }
 
+// Task and session schedules may run no more often than this.
+export const MIN_GAP_MINUTES = 60;
+
+// The shortest gap between runs over the next few weeks of them.
+export function minGapMinutes(
+  cron: string,
+  timezone: string,
+  from = Date.now()
+): number {
+  const runs = nextRuns(cron, from, 200, timezone);
+  let min = Infinity;
+  for (let i = 1; i < runs.length; i++)
+    min = Math.min(min, (runs[i] - runs[i - 1]) / 60_000);
+  return min;
+}
+
 // "Tue, Oct 7, 9:00 AM" in the schedule's zone.
 export function formatRunTime(ms: number, tz = DEFAULT_TIMEZONE): string {
   return new Intl.DateTimeFormat("en-US", {

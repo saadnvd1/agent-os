@@ -304,6 +304,30 @@ describe("a brake on Saad's asks list", () => {
     expect(again[0].id).not.toBe(ask.id);
   });
 
+  it("a start that opts out (a schedule's) never spends Saad's approval", async () => {
+    const ws = workspace();
+    fill(ws);
+    await expect(ws.start("a")).rejects.toThrow(/Brake/);
+    const [ask] = brakeAsks(ws.workspace.id);
+    answerAsk(ws.workspace.id, ask.id, { action: "approve" });
+    const { braked, BrakeRefused } = await import("./brakes");
+    let ran = false;
+    const scheduled = braked(
+      ws.workspace.id,
+      "task",
+      async () => {
+        ran = true;
+        return "x";
+      },
+      () => null,
+      { spendApproval: false }
+    );
+    await expect(scheduled).rejects.toBeInstanceOf(BrakeRefused);
+    expect(ran).toBe(false);
+    // The approval is still there for the start it was asked about.
+    await expect(ws.start("approved one")).resolves.toMatch(/Started/);
+  });
+
   it("binds an approval to its brake, and voids it when the brakes lift", async () => {
     const ws = workspace();
     fill(ws);
