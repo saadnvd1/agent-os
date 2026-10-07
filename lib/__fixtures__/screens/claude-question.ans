@@ -1,0 +1,40 @@
+claude --model haiku
+[1m[32m➜  [36mplay[0m claude --model haiku
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.292[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku[39m [38;5;246m4.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m/…/799f8ae9-fdf0-4006-a2e9-6528d5304ec5/scratchpad/play[39m
+
+
+[38;5;246m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool to ask me which database to use for the cache, with options Postgres, SQLite and Redis. [39m
+  [38;5;231mNothing else.[39m
+[38;5;246m[49m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;16m[48;5;153m ☐ Cache Database [39m[49m
+
+[1m[38;5;231mWhich database should we use for the cache?[0m
+
+[38;5;153m❯[39m [38;5;246m1.[39m [38;5;153mPostgres[39m
+     [38;5;246mFull-featured[39m [38;5;246mrelational database, already used for primary data storage[39m
+  [38;5;246m2.[39m SQLite
+     [38;5;246mLightweight[39m [38;5;246membedded[39m [38;5;246mdatabase,[39m [38;5;246mgood[39m [38;5;246mfor[39m [38;5;246mlocal[39m [38;5;246mcaching[39m
+  [38;5;246m3.[39m Redis
+     [38;5;246mFast[39m [38;5;246min-memory[39m [38;5;246mdata[39m [38;5;246mstore,[39m [38;5;246mideal[39m [38;5;246mfor[39m [38;5;246mhigh-performance[39m [38;5;246mcaching[39m
+  [38;5;246m4.[39m [38;5;246mType[39m [38;5;246msomething.[39m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  5. Chat about this
+
+[38;5;246mEnter[39m [38;5;246mto[39m [38;5;246mselect[39m [38;5;246m·[39m [38;5;246m↑/↓[39m [38;5;246mto[39m [38;5;246mnavigate[39m [38;5;246m·[39m [38;5;246mEsc[39m [38;5;246mto[39m [38;5;246mcancel[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

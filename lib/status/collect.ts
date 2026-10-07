@@ -5,7 +5,13 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { statusDetector, type SessionStatus } from "../status-detector";
+import {
+  findQuestion,
+  plainText,
+  readInputBox,
+  statusDetector,
+  type SessionStatus,
+} from "../status-detector";
 import type { AgentType } from "../providers";
 import {
   getManagedSessionPattern,
@@ -26,7 +32,12 @@ import type { SessionNeed } from "../sidebar/shelves";
 import { openAskCount } from "../orchestrator/asks";
 import { lastUserTask } from "../chat/store";
 import { hostExec, isRemoteHost } from "../hosts";
-import { dropProgramTransient, programSummary } from "../program-status/store";
+import {
+  applyProgramReport,
+  dropProgramTransient,
+  programSummary,
+} from "../program-status/store";
+import type { ProgramSummary } from "../program-status/records";
 
 const execOn = (sessionName: string, command: string) =>
   hostExec(statusDetector.hostFor(sessionName), command);
@@ -178,27 +189,39 @@ async function findClaudeSessionId(
   return null;
 }
 
-async function getLastLine(sessionName: string): Promise<string> {
-  try {
-    const { stdout } = await execOn(
-      sessionName,
-      `tmux capture-pane -t "${sessionName}" -p -S -5 2>/dev/null || echo ""`
-    );
-    const lines = stdout.trim().split("\n").filter(Boolean);
-    return lines.pop() || "";
-  } catch {
-    return "";
-  }
-}
+// The screen's last line of text.
+const lastLineOf = (screen: string) =>
+  plainText(screen).trim().split("\n").filter(Boolean).pop() || "";
 
 // UUID pattern for agent-os managed sessions (derived from registry)
 const UUID_PATTERN = getManagedSessionPattern();
 
 // Track previous statuses to detect changes
 const previousStatuses = new Map<string, SessionStatus>();
+// What each terminal's screen last needed from you, to move updated_at once.
+const previousScreenNeeds = new Map<string, string>();
 // A terminal read from its screen was running at the last look: its
 // cooldown ends with no output to say so.
 let heuristicBusy = false;
+
+// Esc on a Claude Code question fires no hook, so its blocked report
+// outlives the menu. Its input box back with no menu means it's gone. The
+// grace covers the moment before the menu is drawn.
+const QUESTION_GRACE_MS = 3000;
+export function questionDismissed(
+  program: ProgramSummary | null,
+  screen: string,
+  now = Date.now()
+): boolean {
+  return (
+    program?.state === "blocked" &&
+    program.kind === "question" &&
+    program.app === "claude-code" &&
+    now - program.at > QUESTION_GRACE_MS &&
+    findQuestion(screen) === null &&
+    readInputBox(screen) !== null
+  );
+}
 
 function getAgentTypeFromSessionName(sessionName: string): AgentType {
   return getProviderIdFromSessionName(sessionName) || "claude";
@@ -231,12 +254,33 @@ async function collect(): Promise<StatusSnapshot> {
     // Working and blocked end with the program that reported them.
     const fg = statusDetector.foregroundFor(sessionName);
     if (fg) dropProgramTransient(sessionName, fg, statusDetector.listedAt());
-    const program = programSummary(sessionName);
-    const [status, claudeSessionId, lastLine] = await Promise.all([
-      program ? null : statusDetector.getStatus(sessionName),
+    const [screen, claudeSessionId] = await Promise.all([
+      statusDetector.captureScreen(sessionName),
       getClaudeSessionId(sessionName),
-      getLastLine(sessionName),
     ]);
+    let program = programSummary(sessionName);
+    if (questionDismissed(program, screen)) {
+      applyProgramReport(sessionName, {
+        state: "idle",
+        id: "",
+        app: program?.app,
+      });
+      program = programSummary(sessionName);
+    }
+    const status = program
+      ? null
+      : await statusDetector.getStatus(sessionName, screen);
+    // A program that reports working or blocked knows better than its
+    // screen; its own questions come as blocked reports.
+    const busy =
+      program?.state === "working" ||
+      program?.state === "blocked" ||
+      status === "running";
+    // Text typed before a send isn't unsent: forget it while it works.
+    if (busy) statusDetector.clearUnsent(sessionName);
+    const screenNeed = busy
+      ? null
+      : statusDetector.screenNeed(sessionName, screen, { question: !program });
     const id = getSessionIdFromName(sessionName);
     const agentType = getAgentTypeFromSessionName(sessionName);
 
@@ -245,8 +289,9 @@ async function collect(): Promise<StatusSnapshot> {
       id,
       status,
       program,
+      screenNeed,
       claudeSessionId,
-      lastLine,
+      lastLine: lastLineOf(screen),
       agentType,
     };
   });
@@ -259,6 +304,7 @@ async function collect(): Promise<StatusSnapshot> {
     id,
     status,
     program,
+    screenNeed,
     claudeSessionId,
     lastLine,
     agentType,
@@ -271,6 +317,24 @@ async function collect(): Promise<StatusSnapshot> {
       agentType,
       title: statusDetector.titleFor(sessionName),
     };
+    // A question on screen, or a message typed and never sent: it needs you
+    // whether or not you've seen it, like a blocked program.
+    const needKey = screenNeed ? `${screenNeed.need}:${screenNeed.detail}` : "";
+    if (needKey && previousScreenNeeds.get(id) !== needKey)
+      sessionsToUpdate.push(id);
+    if (needKey) previousScreenNeeds.set(id, needKey);
+    else previousScreenNeeds.delete(id);
+    if (screenNeed) {
+      if (!program) previousStatuses.set(id, "waiting");
+      statusMap[id] = {
+        ...shared,
+        status: "waiting",
+        need: screenNeed.need,
+        unread: false,
+        detail: screenNeed.detail,
+      };
+      continue;
+    }
     // A program reporting its own state (OSC 7501) beats reading the screen.
     if (program || !status) {
       previousStatuses.delete(id);
@@ -363,5 +427,11 @@ export async function terminalsChanged(): Promise<"changed" | "busy" | null> {
   const signature = statusDetector.signature();
   const changed = signature !== lastSignature;
   lastSignature = signature;
-  return changed ? "changed" : heuristicBusy ? "busy" : null;
+  // Typed text that just crossed the unsent threshold changes nothing on
+  // screen, so the time alone says to look again.
+  return changed || statusDetector.unsentDue()
+    ? "changed"
+    : heuristicBusy
+      ? "busy"
+      : null;
 }

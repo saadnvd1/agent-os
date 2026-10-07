@@ -42,6 +42,20 @@ blocked() {
   report "state=blocked:kind=$1${msg:+:msg=$msg}"
 }
 
+# A question, a plan to approve, or a tool to allow.
+asking() {
+  tool=$(field tool_name)
+  case "$tool" in
+    AskUserQuestion)
+      # The first question's text; JSON's \n and \t read as spaces.
+      q=$(field question | sed 's/\\[nt]/ /g')
+      blocked question "${q:-Claude has a question}"
+      ;;
+    ExitPlanMode) blocked permission "Approve the plan?" ;;
+    *) blocked permission "Allow ${tool:-a tool}?" ;;
+  esac
+}
+
 # All of it is read before any of it runs: a file replaced mid-run can't
 # leave a half-parsed script exiting 2, which Claude takes as "block".
 main() {
@@ -50,15 +64,12 @@ case "$event" in
   UserPromptSubmit | PostToolUse) report "state=working" ;;
   PreToolUse)
     case "$(field tool_name)" in
-      AskUserQuestion) blocked question "Claude has a question" ;;
-      ExitPlanMode) blocked permission "Approve the plan?" ;;
+      AskUserQuestion | ExitPlanMode) asking ;;
       *) report "state=working" ;;
     esac
     ;;
-  PermissionRequest)
-    tool=$(field tool_name)
-    blocked permission "Allow ${tool:-a tool}?"
-    ;;
+  # Claude asks permission for its own questions too: still a question.
+  PermissionRequest) asking ;;
   Notification)
     message=$(field message)
     # PermissionRequest already said which tool; older Claude Code versions

@@ -1,0 +1,40 @@
+  the vast window of the sea.
+
+  In his sixties, Marcus stopped expecting visitors. The occasional tour group would arrive in summer, clustered and
+  camera-ready, and he'd show them up the stairs, watching their wonder at the view. After they left, he'd dust the
+  gallery and return to his solitude.
+
+  On a November evening, a letter arrived notifying him of his retirement. The lighthouse would be fully automated; his
+  services were no longer required. He was seventy-two. He read the letter three times, then climbed the stairs one
+  final time as an official keeper.
+
+  The sun was setting orange and violent, the way it did in late autumn. Below, the rocks waited, patient and
+  unchanging. Marcus looked at the light, freshly polished and gleaming, ready to spin through another night without
+  him.
+
+  He thought about all the ships that had passed, all the people who'd never known his name, all the nights his beam had
+  become their salvation. He thought about his wife, long remarried, and the life he'd chosen not to live.
+
+  Marcus descended the stairs slowly, his hand trailing the iron rail. At the bottom, he didn't lock the door behind
+  him. He simply walked away, leaving the light to tend itself, as it had learned to do long ago.
+
+  It still burns every night, bright and certain, waiting for someone to notice it's always been keeping the lighthouse,
+  not the other way around.
+
+[38;5;246m✻[39m [38;5;246mCogitated for 12s · done 9:26 PM · 1 monitor still running[39m
+
+[38;5;246m[48;5;237m❯ [38;5;231mRun the bash command: sleep 25[39m
+
+[38;5;211m[49m⏺[39m [1mBash[0m(sleep 25)
+[38;5;246m  ⎿  [38;5;211mError: Blocked: standalone sleep 25. To wait for a condition, use Monitor with an until-loop (e.g. `until <check>;
+[39m     [38;5;211mdo sleep 2; done`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to
+[39m     [38;5;211mwork around this block.[39m
+
+[38;5;174m✢[39m [38;5;174mComposin[38;5;216mg…[38;5;174m [38;5;246m(3s · ↓[39m [38;5;246m162 tokens · thinking)[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;246m❯ [39mthen make it shorter
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [34mplay[38;5;246m |[39m [38;5;246mHaiku[39m [38;5;246m4.5[39m [38;5;246m|[39m [38;5;246mv2.1.292[39m [38;5;246m|[39m [32mctx[39m [32m59k[38;5;246m [90m$0.08[38;5;246m [90m5h[39m [90m21%[38;5;246m [90m↻33m[39m
+  [38;5;211m⏵⏵[39m [38;5;211mbypass[39m [38;5;211mpermissions[39m [38;5;211mon[38;5;246m ·[39m [38;5;44m1[39m [38;5;44mmonitor[39m
+
