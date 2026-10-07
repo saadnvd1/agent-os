@@ -292,6 +292,55 @@ describe("sign_off", () => {
     expect(listNotes(t.w).at(-1)?.text).toMatch(/Merged add-a \(PR #7/);
   });
 
+  it("closes asks about the PR once the sign-off merges it", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    await runTool(t.w, "ask_saad", {
+      title: "Re-approve PR #7 after the merge with main?",
+      detail: "main moved",
+      kind: "decision",
+      link: "https://github.com/o/r/pull/7",
+    });
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(openAsks(t.w)).toEqual([]);
+    const row = db
+      .prepare(
+        `SELECT status, answer FROM orchestrator_asks WHERE workspace_id = ?`
+      )
+      .get(t.w);
+    expect(row).toEqual({
+      status: "resolved",
+      answer: `PR #7 merged at ${t.sha.slice(0, 7)} by sign-off`,
+    });
+  });
+
+  it("still finishes the merge when closing its asks fails", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    await runTool(t.w, "ask_saad", {
+      title: "Re-approve PR #7?",
+      detail: "main moved",
+      kind: "decision",
+      link: "https://github.com/o/r/pull/7",
+    });
+    const trigger = `no_close_${t.w.replace(/\W/g, "")}`;
+    db.exec(
+      `CREATE TRIGGER ${trigger} BEFORE UPDATE ON orchestrator_asks
+       WHEN NEW.workspace_id = '${t.w}' BEGIN SELECT RAISE(ABORT, 'boom'); END`
+    );
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+      expect(
+        db.prepare(`SELECT task_status FROM sessions WHERE id = ?`).get(t.task)
+      ).toEqual({ task_status: "merged" });
+      expect(logged.mock.calls.flat().join(" ")).toMatch(/closing stale asks/);
+    } finally {
+      logged.mockRestore();
+      db.exec(`DROP TRIGGER ${trigger}`);
+    }
+  });
+
   it("refuses a PR whose body has no code review of its head", async () => {
     const t = setup();
     await reviewNow(t.w);
