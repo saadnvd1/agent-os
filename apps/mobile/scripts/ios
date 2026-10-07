@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Build and open the app in the iOS Simulator (default: iPhone 17 Pro).
+#   scripts/ios                 build, install, start Metro
+#   scripts/ios "iPhone 17"     another simulator
+# Pods are installed here through the Gemfile, which pins what CocoaPods 1.16
+# needs on Ruby 3.4; Expo's own pod step would use whatever gems are global.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+DEVICE="${1:-iPhone 17 Pro}"
+
+[ -d node_modules ] || npm ci
+bundle check >/dev/null 2>&1 || bundle install
+[ -d ios ] || npx expo prebuild --platform ios --no-install
+(cd ios && bundle exec pod install)
+exec npx expo run:ios -d "$DEVICE" --no-install

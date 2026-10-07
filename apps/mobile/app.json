@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "AgentOS",
+    "slug": "agentos",
+    "scheme": "agentos",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.saadnaveed.agentos",
+      "supportsTablet": true,
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      },
+      "infoPlist": {
+        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true },
+        "NSLocalNetworkUsageDescription": "AgentOS connects to the machines you add, on your network or tailnet.",
+        "NSPhotoLibraryUsageDescription": "Attach photos to a message for your agent.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.saadnaveed.agentos",
+      "adaptiveIcon": {
+        "backgroundColor": "#7C3AED",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 96,
+          "backgroundColor": "#F1F1F4",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#08080B"
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        { "cameraPermission": false, "microphonePermission": false }
+      ],
+      "expo-image",
+      "expo-font"
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}

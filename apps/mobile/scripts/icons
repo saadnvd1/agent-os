@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Renders the app icon, splash and Android icons from the AgentOS mark
+# (the web app's public/icon.svg): an A over a terminal cursor.
+# Needs rsvg-convert (brew install librsvg).
+set -euo pipefail
+cd "$(dirname "$0")/../assets"
+
+mark() { # fill, cursor fill, scale
+  printf '<g transform="translate(256 256) scale(%s) translate(-256 -252)">' "$3"
+  printf '<path d="M256 104 L400 400 L324 400 L256 254 L188 400 L112 400 Z" fill="%s"/>' "$1"
+  printf '<rect x="226" y="344" width="60" height="56" fill="%s"/></g>' "$2"
+}
+svg() { # background, mark, out, size
+  printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">%s%s</svg>' "$1" "$2" |
+    rsvg-convert -w "$4" -h "$4" -o "$3"
+}
+
+PURPLE="#7C3AED"; INK="#0E0E14"
+svg "<rect width='512' height='512' fill='$PURPLE'/>" "$(mark '#FFFFFF' "$INK" 0.86)" icon.png 1024
+svg "<rect width='512' height='512' fill='#0B0A12'/>" "$(mark '#A78BFA' '#F4F2FA' 0.86)" icon-dark.png 1024
+svg "" "$(mark '#FFFFFF' '#9A9A9A' 0.86)" icon-tinted.png 1024
+svg "<rect width='512' height='512' rx='116' fill='$PURPLE'/>" "$(mark '#FFFFFF' "$INK" 0.86)" splash-icon.png 512
+svg "" "$(mark '#FFFFFF' "$INK" 0.6)" android-icon-foreground.png 512
+svg "<rect width='512' height='512' fill='$PURPLE'/>" "" android-icon-background.png 512
+svg "" "$(mark '#FFFFFF' 'none' 0.6)" android-icon-monochrome.png 512
+svg "<rect width='512' height='512' rx='116' fill='$PURPLE'/>" "$(mark '#FFFFFF' "$INK" 0.86)" favicon.png 64
+echo "✓ icons written to $(pwd)"

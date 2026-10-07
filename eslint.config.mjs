@@ -29,5 +29,6 @@ export default defineConfig([
     "public/**",
     "next-env.d.ts",
     "dist/**",
+    "apps/**",
   ]),
 ]);

@@ -7,7 +7,13 @@ export default defineConfig({
   },
   test: {
     include: ["**/*.test.ts"],
-    exclude: ["**/node_modules/**", ".next/**", "src-tauri/**", ".claude/**"],
+    exclude: [
+      "**/node_modules/**",
+      ".next/**",
+      "src-tauri/**",
+      ".claude/**",
+      "apps/**",
+    ],
     setupFiles: ["./vitest.setup.ts"],
     // Sessions started by AgentOS inherit NODE_ENV=production, which loads
     // React's production build (no act()); tests always run as tests.

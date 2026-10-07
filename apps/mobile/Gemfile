@@ -1,0 +1,6 @@
+source "https://rubygems.org"
+
+# CocoaPods 1.16 fails under the json 3 gem (unknown keyword: quirks_mode).
+gem "cocoapods", "~> 1.16"
+gem "json", "< 3"
+gem "nkf" # kconv left the default gems in Ruby 3.4

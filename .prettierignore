@@ -6,3 +6,4 @@ public
 package-lock.json
 dist
 *.db
+apps

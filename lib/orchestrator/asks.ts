@@ -11,19 +11,9 @@ import { queueEvent } from "./events";
 import { addNote } from "./notes";
 import { cleanTitle, classifyKind, titleSubject } from "./ask-text";
 import { revokePasskey } from "../security/passkeys";
+import type { AskKind } from "./ask-view";
 
-export const ASK_KINDS = [
-  "decision",
-  "public",
-  "money",
-  "irreversible",
-  "credentials",
-  "product",
-  "gate",
-  "brake",
-  "passkey",
-] as const;
-export type AskKind = (typeof ASK_KINDS)[number];
+export { ASK_KINDS, type AskKind } from "./ask-view";
 
 // The kinds the orchestrator raises itself; gate and brake asks come from
 // the gates and brakes.

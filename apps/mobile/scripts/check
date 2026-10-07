@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# The mobile app's own guard; the repo's scripts/check skips apps/.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+step() { printf '\n▸ %s\n' "$1"; }
+
+step "typecheck"; npx tsc --noEmit
+step "lint";      npx eslint . --max-warnings=0
+step "format";    npx prettier --check . --log-level warn
+step "test";      npx vitest run
+printf '\n✓ mobile check passed\n'

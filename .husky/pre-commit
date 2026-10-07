@@ -14,7 +14,8 @@ for nvm_sh in "${NVM_DIR:-$HOME/.nvm}/nvm.sh" /opt/homebrew/opt/nvm/nvm.sh; do
 done
 echo "▸ node $(node -v)"
 
-STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+# apps/ (the mobile app) has its own toolchain and check: apps/mobile/scripts/check.
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -v '^apps/' || true)
 FORMAT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx|json|css|md)$' | grep -v '^package-lock.json$' || true)
 LINT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx)$' || true)
 
