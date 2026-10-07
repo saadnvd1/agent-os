@@ -27,14 +27,21 @@ export async function run(
   return stdout;
 }
 
+export interface FindPROpts {
+  // Only an open PR counts: for a branch found in the worktree rather than
+  // given to the task, which may have been someone's before.
+  openOnly?: boolean;
+  // Only a PR opened at or after this time (ISO): one older than the task
+  // was a branch name's earlier use, not the task's.
+  since?: string;
+}
+
 // The branch's PR in this repository, null when it has none; throws when gh
 // can't say. A PR from a fork whose branch has the same name isn't it.
-// openOnly: a branch found in the worktree rather than given to the task
-// may have been someone's before, so only an open PR counts.
 export async function findPRStrict(
   repoDir: string,
   branch: string,
-  opts: { openOnly?: boolean } = {}
+  opts: FindPROpts = {}
 ): Promise<TaskPR | null> {
   const out = await run(
     "gh",
@@ -48,7 +55,7 @@ export async function findPRStrict(
       "--limit",
       "10",
       "--json",
-      "number,url,state,headRefOid,statusCheckRollup,body,isCrossRepository",
+      "number,url,state,headRefOid,statusCheckRollup,body,isCrossRepository,createdAt",
     ],
     repoDir,
     15000
@@ -62,8 +69,13 @@ export async function findPRStrict(
       statusCheckRollup: RollupEntry[] | null;
       body?: string;
       isCrossRepository?: boolean;
+      createdAt?: string;
     }>
-  ).find((p) => !p.isCrossRepository);
+  ).find(
+    (p) =>
+      !p.isCrossRepository &&
+      (!opts.since || Date.parse(p.createdAt ?? "") >= Date.parse(opts.since))
+  );
   if (!pr) return null;
   // A closed PR's checks gate nothing, so they cost no API calls.
   const rollup =
@@ -158,7 +170,7 @@ async function actionsRun(
 export async function findPR(
   repoDir: string,
   branch: string,
-  opts: { openOnly?: boolean } = {}
+  opts: FindPROpts = {}
 ): Promise<TaskPR | null> {
   return findPRStrict(repoDir, branch, opts).catch(() => null);
 }
