@@ -16,14 +16,14 @@ export async function POST(request: NextRequest) {
 
     const path = expandPath(rawPath);
 
-    if (!isGitRepo(path)) {
+    if (!(await isGitRepo(path))) {
       return NextResponse.json(
         { error: "Not a git repository" },
         { status: 400 }
       );
     }
 
-    discardChanges(path, file);
+    await discardChanges(path, file);
 
     return NextResponse.json({ success: true });
   } catch (error) {

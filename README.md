@@ -688,7 +688,9 @@ build leaves `.next` as it was.
 
 A pre-commit hook formats and lints staged files, then typechecks and runs the
 tests. CI runs `scripts/check --build` on every pull request and push to main,
-and fails a pull request whose body has no Code review section for its head
+which also holds the app's first-load JavaScript to a budget
+(`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
+it), and fails a pull request whose body has no Code review section for its head
 commit (run `/do-code-review` first; see [Tasks](#tasks)).
 
 ## CLI Commands

@@ -8,8 +8,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TasksButton } from "@/components/Tasks/TasksButton";
-import { MessagesButton } from "@/components/Bus";
-import { DocsButton } from "@/components/LumifyHub";
+import { MessagesButton } from "@/components/Bus/MessagesButton";
+import { DocsButton } from "@/components/LumifyHub/Docs/DocsButton";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import type { ViewProps } from "./types";
 import { paletteActions } from "@/stores/palette";

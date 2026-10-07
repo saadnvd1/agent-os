@@ -1,13 +1,11 @@
 "use client";
 
-import { NewSessionDialog } from "@/components/NewSessionDialog";
-import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopAppActions, SidebarToggle } from "./DesktopAppActions";
 import { PaneLayout } from "@/components/PaneLayout";
 import { PaneBarSlotsProvider } from "@/components/Pane/PaneBarSlots";
-import { QuickSwitcher } from "@/components/QuickSwitcher";
 import type { ViewProps } from "./types";
+import { NewSessionDialog, QuickSwitcher, StartServerDialog } from "./lazy";
 import { fileOpenActions } from "@/stores/fileOpen";
 import { useSidebarPinned } from "@/hooks/useSidebarPinned";
 

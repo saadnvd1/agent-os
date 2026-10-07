@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useSnapshot } from "valtio";
 import { CheckSquare, GitFork, MoreHorizontal, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as DM from "@/components/ui/dropdown-menu";
 import * as CM from "@/components/ui/context-menu";
 import { compactTimeAgo, fromSqliteTime } from "@/lib/session-meta";
-import type { SidebarRow } from "@/lib/sidebar/shelves";
+import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
+import { useMinuteTick } from "@/hooks/useMinuteTick";
 import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import { cn } from "@/lib/utils";
 import { useRowContext } from "./RowContext";
@@ -17,8 +18,9 @@ import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
 
 // One session: status dot, title over its project, and on the right what
-// needs you or when it last moved. Workers sit under their conductor.
-export function SessionRow({
+// needs you or when it last moved. Workers sit under their conductor. Drawn
+// again only when its own row changes, not on every status push.
+export const SessionRow = memo(function SessionRow({
   row,
   muted = false,
   nested = false,
@@ -41,7 +43,7 @@ export function SessionRow({
       selectionActions.toggle(
         session.id,
         selecting && e.shiftKey,
-        ctx.orderedIds
+        ctx.orderedIds()
       );
       return;
     }
@@ -106,11 +108,7 @@ export function SessionRow({
       )}
       <span className="flex shrink-0 items-center gap-2 md:group-hover:invisible md:group-has-[:focus-visible]:invisible md:group-has-[[data-state=open]]:invisible">
         <RowBadge row={row} />
-        {!row.need && (
-          <span className="text-muted-foreground/70 text-xs tabular-nums">
-            {compactTimeAgo(fromSqliteTime(session.updated_at))}
-          </span>
-        )}
+        {!row.need && <TimeAgo at={session.updated_at} />}
       </span>
       {!selecting && (
         <DM.DropdownMenu>
@@ -159,5 +157,21 @@ export function SessionRow({
         <SessionRow key={worker.session.id} row={worker} muted={muted} nested />
       ))}
     </div>
+  );
+}, sameRowProps);
+
+function sameRowProps(
+  a: { row: SidebarRow; muted?: boolean; nested?: boolean },
+  b: { row: SidebarRow; muted?: boolean; nested?: boolean }
+) {
+  return a.muted === b.muted && a.nested === b.nested && sameRow(a.row, b.row);
+}
+
+function TimeAgo({ at }: { at: string }) {
+  useMinuteTick();
+  return (
+    <span className="text-muted-foreground/70 text-xs tabular-nums">
+      {compactTimeAgo(fromSqliteTime(at))}
+    </span>
   );
 }
