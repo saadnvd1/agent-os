@@ -146,14 +146,12 @@ describe("tailscaleAddresses (only Tailscale's own interface)", () => {
     expect(tailscaleAddresses(ifaces, [])).toEqual(["100.64.0.1"]);
   });
   it("trusts tailscale0 on Linux", () => {
-    expect(
-      tailscaleAddresses({ tailscale0: [v4("100.64.0.3")] }, [])
-    ).toEqual(["100.64.0.3"]);
+    expect(tailscaleAddresses({ tailscale0: [v4("100.64.0.3")] }, [])).toEqual([
+      "100.64.0.3",
+    ]);
   });
   it("once the CLI has reported this node's IPs, only those count", () => {
     const ifaces = { utun3: [v4("100.64.0.9")], utun4: [v4("100.64.0.1")] };
-    expect(tailscaleAddresses(ifaces, ["100.64.0.1"])).toEqual([
-      "100.64.0.1",
-    ]);
+    expect(tailscaleAddresses(ifaces, ["100.64.0.1"])).toEqual(["100.64.0.1"]);
   });
 });
