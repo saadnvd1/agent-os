@@ -49,7 +49,7 @@ const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
-const { landDeps } = await import("./signoff");
+const { landDeps, refundIfRefused } = await import("./signoff");
 const { review } = await import("./review");
 const { getCheck, putCheck } = await import("./checks");
 const { failureOf } = await import("./gates");
@@ -447,6 +447,27 @@ describe("sign_off", () => {
     await expect(deps.signOff(t.task, pr!.head)).rejects.toThrow(/modified/);
     expect(getAsk(t.w, ask.id)?.used_at).toBeNull();
     expect(merges).toEqual([]);
+  });
+
+  it("keeps the approval spent when the merge happened and a later step failed", async () => {
+    const t = setup();
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const ask = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, ask.id, { action: "approve" });
+
+    const deps = landDeps(t.w);
+    await deps.beforeMerge(t.task);
+    await expect(
+      refundIfRefused(t.task, ask.id, async () => {
+        db.prepare(
+          `UPDATE sessions SET task_status = 'merged' WHERE id = ?`
+        ).run(t.task);
+        throw new Error("restack failed");
+      })
+    ).rejects.toThrow(/restack failed/);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
   });
 
   it("asks again when the head moved after Saad approved", async () => {
