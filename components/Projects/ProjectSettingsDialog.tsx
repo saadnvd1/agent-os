@@ -39,23 +39,11 @@ import {
   getModelOptions,
   isSupportedModelForAgent,
 } from "@/lib/model-catalog";
+import { AGENT_OPTIONS } from "@/lib/agent-options";
 import type {
   ProjectWithRepositories,
   DetectedDevServer,
 } from "@/lib/projects";
-
-const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
-  { value: "claude", label: "Claude Code" },
-  { value: "codex", label: "Codex" },
-  { value: "opencode", label: "OpenCode" },
-  { value: "kilocode", label: "Kilo Code" },
-  { value: "gemini", label: "Gemini CLI" },
-  { value: "aider", label: "Aider" },
-  { value: "cursor", label: "Cursor CLI" },
-  { value: "amp", label: "Amp" },
-  { value: "pi", label: "Pi" },
-  { value: "omp", label: "Oh My Pi" },
-];
 
 interface DevServerConfig {
   id: string;

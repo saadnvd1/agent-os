@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useTasksQuery } from "@/data/tasks";
 import { isFinished, needsHuman } from "@/lib/tasks/state";
 import { tasksUi, tasksUiActions } from "@/stores/tasksUi";
+import { newDraft } from "@/stores/drafts";
 import { TaskRow } from "./TaskRow";
 import { BoardTodoSection } from "@/components/LumifyHub";
 import { StacksSection } from "@/components/Stacks";
@@ -31,7 +32,14 @@ export function TasksDialog() {
       <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto [&>*]:min-w-0">
         <DialogHeader className="flex-row items-center justify-between gap-4 space-y-0">
           <DialogTitle>Tasks</DialogTitle>
-          <Button size="sm" className="mr-6" onClick={tasksUiActions.openNew}>
+          <Button
+            size="sm"
+            className="mr-6"
+            onClick={() => {
+              tasksUiActions.setPanelOpen(false);
+              newDraft({ kind: "current", openPr: true });
+            }}
+          >
             <Plus className="h-4 w-4" />
             New task
           </Button>

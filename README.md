@@ -88,6 +88,7 @@ first, and what to run (`GET /api/agents/status`).
 ## Features
 
 - **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
+- **One keystroke to a new session** - ⌘N opens a draft in the project you're in (⌘⇧N picks one, ⌘⌥N is a scratch chat). Agent, model, access, worktree, base branch and machine are chips on the draft; nothing is created until you send
 - **Chat with your agents** - Streaming replies, inline diffs, plan mode, a queue you can steer, next-prompt suggestions, `@file` mentions, and a context meter
 - **Visuals in chat** - Agents preview and show charts, tables and HTML pages inline, sandboxed
 - **Live status** - Every session moves between Needs you, Working and Done the moment it changes, including terminal programs that report their own state (OSC 7501)
@@ -103,7 +104,7 @@ first, and what to run (`GET /api/agents/status`).
 - **Command palette** - ⌘K (or the search button on a phone) finds any session and every action: new session, workspaces, orchestrator, plan mode, compact, Usage, Devices, Archived, theme, stop the turn
 - **Code search** - Fast codebase search with syntax-highlighted results (from the palette)
 - **File picker** - Browse and attach files to sessions, with direct upload from mobile
-- **Clone from GitHub** - Clone repos directly from the UI when creating projects
+- **Add project** - From ⌘K: pick a machine, then open a folder on it, clone a URL (with git's progress), or start one from a name (folder, `git init`, first commit; a private GitHub repo only if you click for one)
 - **Git integration** - Status, diffs, commits, PRs from the UI
 - **Git worktrees** - Isolated branches with auto-setup
 - **Dev servers** - Start/stop Node.js and Docker servers
@@ -225,13 +226,31 @@ OpenCode.
 
 ## Tasks
 
-Hand off work and keep going. **Tasks → New task** takes a project and a
-prompt. AgentOS creates a git worktree and branch, starts Claude there in tmux
+Hand off work and keep going. A task is a draft with **Open a PR when
+done** turned on (**New task** in ⌘K, the sidebar's New menu or the Tasks
+panel opens one). AgentOS creates a git worktree and branch, starts Claude there in tmux
 with a brief to finish by pushing and opening a pull request, and tracks it:
 Working, Needs input, Blocked, Ready for review, Checks failing or Agent
 exited. **Sign off & merge** squash-merges the PR (refused while CI is failing
 or pending), then removes the session, worktree and branches. **Drop** closes
 the PR and removes everything. Agents never merge their own work.
+
+## New sessions
+
+⌘N (the **+** on a phone) opens a draft: a composer in the current project, or
+the one you used last. Nothing exists until you send. Then the session is
+made, and with a worktree its setup runs in the chat, stage by stage: fetch,
+worktree, env files, dependencies, the project's setup script, with a log
+tail. The first message waits in the queue until setup is done, so the agent
+never starts on half-installed dependencies, and a restart can't lose it. The
+worktree starts on a temporary branch, renamed from the first message once
+it has a title (it keeps the temporary name if there's nothing to name it
+from).
+
+⌘N reuses the project's empty draft; a draft you've typed in stays in the
+sidebar's **Drafts** until you send or discard it. A new draft takes the
+agent, model and access you were using; a project's own agent and model win.
+Chats with no project run in `~/.agent-os/scratch`.
 
 A task or session started from a prompt gets a short name: the brief's first
 heading at once (when the prompt points at a readable `.md` brief), then a

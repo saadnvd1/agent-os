@@ -5,28 +5,22 @@ import { SidebarFooter } from "@/components/SidebarFooter";
 import { PaneLayout } from "@/components/PaneLayout";
 import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
 import type { ViewProps } from "./types";
-import { NewSessionDialog, QuickSwitcher, StartServerDialog } from "./lazy";
+import { QuickSwitcher, StartServerDialog } from "./lazy";
 import { fileOpenActions } from "@/stores/fileOpen";
 
 export function MobileView({
   sessions,
-  projects,
   sessionStatuses,
   sidebarOpen,
   setSidebarOpen,
   activeSession,
   focusedActiveTab,
-  showNewSessionDialog,
-  setShowNewSessionDialog,
-  newSessionProjectId,
   showQuickSwitcher,
   setShowQuickSwitcher,
   attachToSession,
   openSessionInNewTab,
   handleNewSessionInProject,
   handleOpenTerminal,
-  handleSessionCreated,
-  handleCreateProject,
   handleStartDevServer,
   handleCreateDevServer,
   startDevServerProject,
@@ -70,14 +64,6 @@ export function MobileView({
       </div>
 
       {/* Dialogs */}
-      <NewSessionDialog
-        open={showNewSessionDialog}
-        projects={projects}
-        selectedProjectId={newSessionProjectId ?? undefined}
-        onClose={() => setShowNewSessionDialog(false)}
-        onCreated={handleSessionCreated}
-        onCreateProject={handleCreateProject}
-      />
       <QuickSwitcher
         sessions={sessions}
         open={showQuickSwitcher}

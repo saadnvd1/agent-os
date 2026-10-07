@@ -21,6 +21,7 @@ interface Tab {
   id: string;
   sessionId: string | null;
   attachedTmux: string | null;
+  draftId?: string | null;
 }
 
 interface DesktopTabBarProps {
@@ -83,6 +84,7 @@ export function DesktopTabBar({
   const getTabName = (tab: Tab) => {
     if (tab.sessionId)
       return tabSession(tab)?.name || tab.attachedTmux || "Session";
+    if (tab.draftId) return "New session";
     return tab.attachedTmux || "New Tab";
   };
 

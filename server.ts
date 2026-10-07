@@ -60,6 +60,7 @@ import {
   resumeHeldStarts,
   resumeTaskStarts,
 } from "./lib/tasks/start";
+import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -480,6 +481,8 @@ app.prepare().then(() => {
       "> WARNING: AGENTOS_AUTH=off and listening beyond loopback. Anyone who can reach this port gets a shell."
     );
   }
+  // New sessions whose worktree setup a restart cut off.
+  failInterruptedSetups();
   // Chat turns that kept running through a restart.
   void reattachChats();
   // Task starts this restart cut off: set up and launch them now.

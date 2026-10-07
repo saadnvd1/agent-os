@@ -33,11 +33,13 @@ import { listItems, saveItem, settle } from "./store";
 import {
   deleteQueued,
   editQueued,
+  enqueue,
   listQueue,
   moveQueued,
   queuedSessions,
 } from "./queued";
 import { fallbackFileSuggestions } from "./files";
+import { holdsQueue, settingUp } from "../sessions/setup-progress";
 import type { FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
 import { restoreActivity, track } from "./activity";
@@ -227,6 +229,16 @@ export async function sendChat(
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
+  // Its worktree is still being set up: the message waits its turn.
+  if (settingUp(sessionId)) {
+    enqueue(sessionId, {
+      id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
+      text,
+      images: input.images,
+    });
+    emitQueue(sessionId);
+    return;
+  }
   const live = await ensureLive(sessionId);
   live.worker.command({
     type: "send",
@@ -265,7 +277,7 @@ const RESUME_EVERY_MS = 60_000;
 const RESUME_WITHIN_MS = 60 * 60 * 1000;
 const resumed = new Map<string, number>();
 async function resumeQueue(sessionId: string): Promise<void> {
-  if (!listQueue(sessionId).length) return;
+  if (!listQueue(sessionId).length || holdsQueue(sessionId)) return;
   // Switched to the terminal: its agent runs there now, and a chat worker
   // on the same conversation would race it. The queue waits on screen.
   const session = db
@@ -295,6 +307,8 @@ export async function sendQueuedNow(
   during?: string
 ) {
   if (!listQueue(sessionId).some((m) => m.id === id)) return;
+  if (settingUp(sessionId))
+    throw new Error("It's sent once the worktree is set up");
   const live = await ensureLive(sessionId);
   if (!live.canQueue)
     throw new Error("Reload to send this: the chat is on an older version");

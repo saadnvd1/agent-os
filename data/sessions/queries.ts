@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Session, Group } from "@/lib/db";
 import type { AgentType } from "@/lib/providers";
+import type { ChatAccess, ChatImage } from "@/lib/chat/events";
 import { sessionKeys } from "./keys";
 
 interface SessionsResponse {
@@ -174,46 +175,85 @@ export function useMoveSessionToProject() {
   });
 }
 
-export interface CreateSessionInput {
-  name?: string;
-  workingDirectory: string;
+export interface LaunchSessionInput {
   projectId: string | null;
-  model: string;
+  // A scratch chat's machine; a project's sessions run where it lives.
+  hostId?: string;
   agentType: AgentType;
+  model: string;
+  access: ChatAccess;
   useWorktree: boolean;
-  featureName: string | null;
   baseBranch: string | null;
-  autoApprove: boolean;
-  useTmux: boolean;
-  initialPrompt: string | null;
+  prompt: string;
+  images?: ChatImage[];
 }
 
-interface CreateSessionResponse {
+interface LaunchSessionResponse {
   session: Session;
   initialPrompt?: string;
-  error?: string;
 }
 
-export function useCreateSession() {
+// A draft's first send: the session is made now, and shows in the list
+// before its tab switches to it.
+export function useLaunchSession() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (
-      input: CreateSessionInput
-    ): Promise<CreateSessionResponse> => {
+      input: LaunchSessionInput
+    ): Promise<LaunchSessionResponse> => {
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
       const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (!res.ok || data.error)
+        throw new Error(data.error ?? "Couldn't start");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: ({ session }) => {
+      queryClient.setQueryData<SessionsResponse>(sessionKeys.list(), (old) =>
+        old && !old.sessions.some((s) => s.id === session.id)
+          ? { ...old, sessions: [session, ...old.sessions] }
+          : old
+      );
       queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
     },
+  });
+}
+
+export interface SessionSetup {
+  status: "running" | "ok" | "failed";
+  stages: {
+    id: string;
+    label: string;
+    state: "pending" | "running" | "ok" | "failed" | "skipped";
+  }[];
+  log: string[];
+  branch: string | null;
+  error: string | null;
+  startedAt: number | null;
+}
+
+// A new session's worktree setup, polled while it runs.
+export function useSessionSetup(sessionId: string, enabled: boolean) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: [...sessionKeys.all, "setup", sessionId],
+    enabled,
+    queryFn: async () => {
+      const res = await fetch(`/api/sessions/${sessionId}/setup`);
+      if (!res.ok) throw new Error("Couldn't read its setup");
+      const { setup } = (await res.json()) as { setup: SessionSetup | null };
+      // Its row says setup is over: the list catches up now, not in 10s.
+      if (setup?.status !== "running")
+        void queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
+      return setup;
+    },
+    refetchInterval: (q) =>
+      q.state.status !== "error" &&
+      (q.state.data === undefined || q.state.data?.status === "running")
+        ? 1000
+        : false,
   });
 }

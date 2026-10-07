@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 import { getDb, queries, type Session, type Group } from "@/lib/db";
-import { isValidAgentType, type AgentType } from "@/lib/providers";
-import { resolveModelForAgent } from "@/lib/model-catalog";
-import { createWorktree } from "@/lib/worktrees";
-import { setupWorktree, type SetupResult } from "@/lib/env-setup";
-import { findAvailablePort } from "@/lib/ports";
-import { runInBackground } from "@/lib/async-operations";
-import { getProject } from "@/lib/projects";
-import { isRemoteHost } from "@/lib/hosts";
-import { supportsChat } from "@/lib/chat/capabilities";
+import { isValidAgentType } from "@/lib/providers";
+import { clientSend } from "@/lib/chat/client-send";
+import { CHAT_ACCESS } from "@/lib/chat/events";
+import { launchSession } from "@/lib/sessions/launch";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -43,218 +37,73 @@ export async function GET() {
   }
 }
 
-// Generate a unique session name
-function generateSessionName(db: ReturnType<typeof getDb>): string {
-  const sessions = queries.getAllSessions(db).all() as Session[];
-  const existingNumbers = sessions
-    .map((s) => {
-      const match = s.name.match(/^Session (\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    })
-    .filter((n) => n > 0);
-
-  const nextNumber =
-    existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
-  return `Session ${nextNumber}`;
-}
-
-// POST /api/sessions - Create new session
+// POST /api/sessions - Create a session: a draft's first send, a terminal,
+// a fork or an imported conversation.
 export async function POST(request: NextRequest) {
+  let body: Record<string, unknown>;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const str = (v: unknown) => (typeof v === "string" ? v : null);
+  const firstMessage = (b: Record<string, unknown>) => {
+    const { text, images } = clientSend({ text: b.prompt, images: b.images });
+    return { prompt: text, images };
+  };
+  try {
+    const { session, initialPrompt } = await launchSession({
+      projectId: str(body.projectId),
+      workingDirectory: str(body.workingDirectory),
+      agentType:
+        typeof body.agentType === "string" && isValidAgentType(body.agentType)
+          ? body.agentType
+          : "claude",
+      model: str(body.model),
+      autoApprove: body.autoApprove === true,
+      access: CHAT_ACCESS.find((a) => a === body.access),
+      hostId: str(body.hostId),
+      useWorktree: body.useWorktree === true,
+      baseBranch: str(body.baseBranch),
+      ...firstMessage(body),
+      name: str(body.name),
+      view: body.view === "terminal" ? "terminal" : undefined,
+      parentSessionId: str(body.parentSessionId),
+      groupPath: str(body.groupPath) ?? undefined,
+      systemPrompt: str(body.systemPrompt),
+    });
     const db = getDb();
-
-    const {
-      name: providedName,
-      workingDirectory = "~",
-      parentSessionId = null,
-      model: requestedModel = null,
-      systemPrompt = null,
-      groupPath = "sessions",
-      claudeSessionId = null,
-      agentType: rawAgentType = "claude",
-      autoApprove = false,
-      projectId = "uncategorized",
-      // Worktree options
-      useWorktree = false,
-      featureName = null,
-      baseBranch = "main",
-      // Tmux option
-      useTmux = true,
-      // Initial prompt to send when session starts
-      initialPrompt = null,
-    } = body;
-
-    // Validate agent type
-    const agentType: AgentType = isValidAgentType(rawAgentType)
-      ? rawAgentType
-      : "claude";
-    const project = projectId ? getProject(projectId) : null;
-    const hostId = project?.host_id || "local";
-
-    if (useWorktree && isRemoteHost(hostId)) {
-      return NextResponse.json(
-        { error: "Worktrees are not available on other machines yet" },
-        { status: 400 }
-      );
-    }
-    const model = resolveModelForAgent(
-      agentType,
-      (typeof requestedModel === "string" && requestedModel.trim()) ||
-        project?.default_model
-    );
-
-    // Auto-generate name if not provided
-    const name =
-      providedName?.trim() ||
-      (featureName ? featureName : generateSessionName(db));
-
-    const id = randomUUID();
-
-    // Handle worktree creation if requested
-    let worktreePath: string | null = null;
-    let branchName: string | null = null;
-    let actualWorkingDirectory = workingDirectory;
-    let port: number | null = null;
-    const setupResult: SetupResult | null = null;
-
-    if (useWorktree && featureName) {
-      try {
-        const worktreeInfo = await createWorktree({
-          projectPath: workingDirectory,
-          featureName,
-          baseBranch,
-        });
-        worktreePath = worktreeInfo.worktreePath;
-        branchName = worktreeInfo.branchName;
-        actualWorkingDirectory = worktreeInfo.worktreePath;
-
-        // Find an available port for the dev server
-        port = await findAvailablePort();
-
-        // Run environment setup in background (non-blocking)
-        // This allows instant UI feedback while npm install runs async
-        const capturedWorktreePath = worktreeInfo.worktreePath;
-        const capturedSourcePath = workingDirectory;
-        const capturedPort = port;
-        runInBackground(async () => {
-          const result = await setupWorktree({
-            worktreePath: capturedWorktreePath,
-            sourcePath: capturedSourcePath,
-            port: capturedPort,
-          });
-          console.log("Worktree setup completed:", {
-            port: capturedPort,
-            envFilesCopied: result.envFilesCopied,
-            stepsRun: result.steps.length,
-            success: result.success,
-          });
-        }, `setup-worktree-${id}`);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        return NextResponse.json(
-          { error: `Failed to create worktree: ${message}` },
-          { status: 400 }
-        );
-      }
-    }
-
-    const tmuxName = useTmux ? `${agentType}-${id}` : null;
-    queries.createSession(db).run(
-      id,
-      name,
-      tmuxName,
-      actualWorkingDirectory,
-      parentSessionId,
-      model,
-      systemPrompt,
-      groupPath,
-      agentType,
-      autoApprove ? 1 : 0, // SQLite stores booleans as integers
-      projectId,
-      hostId
-    );
-
-    // Chat is the default view wherever the agent can run as chat.
-    const view =
-      body.view === "terminal" ||
-      !supportsChat(agentType) ||
-      isRemoteHost(hostId)
-        ? "terminal"
-        : "chat";
-    // Named by whoever made it, or "Session 4" until its first message.
-    const nameSource = providedName?.trim() || featureName ? "user" : "default";
-    db.prepare(
-      `UPDATE sessions SET view = ?, name_source = ? WHERE id = ?`
-    ).run(view, nameSource, id);
-
-    // Set worktree info if created
-    if (worktreePath) {
-      queries
-        .updateSessionWorktree(db)
-        .run(worktreePath, branchName, baseBranch, port, id);
-    }
-
-    // Set claude_session_id if provided (for importing external sessions)
-    if (claudeSessionId) {
+    const claudeSessionId = str(body.claudeSessionId);
+    // An imported conversation resumes the agent's own session.
+    if (claudeSessionId)
       db.prepare("UPDATE sessions SET claude_session_id = ? WHERE id = ?").run(
         claudeSessionId,
-        id
+        session.id
       );
-    }
-
-    // If forking, copy messages from parent
-    if (parentSessionId) {
+    // A fork starts with its parent's messages.
+    if (session.parent_session_id) {
       const parentMessages = queries
         .getSessionMessages(db)
-        .all(parentSessionId);
-      for (const msg of parentMessages as Array<{
+        .all(session.parent_session_id) as Array<{
         role: string;
         content: string;
         duration_ms: number | null;
-      }>) {
+      }>;
+      for (const msg of parentMessages)
         queries
           .createMessage(db)
-          .run(id, msg.role, msg.content, msg.duration_ms);
-      }
+          .run(session.id, msg.role, msg.content, msg.duration_ms);
     }
-
-    const session = queries.getSession(db).get(id) as Session;
-
-    // Get project's initial prompt if available
-    const projectInitialPrompt = project?.initial_prompt?.trim();
-    const sessionInitialPrompt = initialPrompt?.trim();
-
-    // Combine prompts: project prompt first, then session prompt
-    let combinedPrompt: string | undefined;
-    if (projectInitialPrompt && sessionInitialPrompt) {
-      combinedPrompt = `${projectInitialPrompt}\n\n${sessionInitialPrompt}`;
-    } else if (projectInitialPrompt) {
-      combinedPrompt = projectInitialPrompt;
-    } else if (sessionInitialPrompt) {
-      combinedPrompt = sessionInitialPrompt;
-    }
-
-    // Include setup result and initial prompt in response
-    const response: {
-      session: Session;
-      setup?: SetupResult;
-      initialPrompt?: string;
-    } = { session };
-    if (setupResult) {
-      response.setup = setupResult;
-    }
-    if (combinedPrompt) {
-      response.initialPrompt = combinedPrompt;
-    }
-
-    return NextResponse.json(response, { status: 201 });
-  } catch (error) {
-    console.error("Error creating session:", error);
     return NextResponse.json(
-      { error: "Failed to create session" },
-      { status: 500 }
+      {
+        session: queries.getSession(db).get(session.id) as Session,
+        ...(initialPrompt ? { initialPrompt } : {}),
+      },
+      { status: 201 }
     );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error creating session:", message);
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

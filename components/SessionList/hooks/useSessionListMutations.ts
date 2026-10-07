@@ -87,11 +87,7 @@ export function useSessionListMutations({
   // Project handlers
   const handleDeleteProject = useCallback(
     async (projectId: string) => {
-      if (
-        !confirm(
-          "Delete this project? Sessions will be moved to Uncategorized."
-        )
-      )
+      if (!confirm("Delete this project? Its sessions move to Scratch."))
         return;
       await deleteProjectMutation.mutateAsync(projectId);
     },

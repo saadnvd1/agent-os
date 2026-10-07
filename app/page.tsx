@@ -45,7 +45,9 @@ import { CLAUDE_STATUS_SETTINGS_FLAG } from "@/lib/program-status/claude-flag";
 import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
-import { useQuickStart } from "@/hooks/useQuickStart";
+import { useDraftKeys } from "@/hooks/useDraftKeys";
+import { useDraftRequests } from "@/hooks/useDraftRequests";
+import { newDraft } from "@/stores/drafts";
 import { useOpenOrchestrator } from "@/hooks/useOpenOrchestrator";
 import { paletteActions, paletteUi } from "@/stores/palette";
 import { useAppCommands } from "@/components/CommandPalette/useAppCommands";
@@ -58,8 +60,11 @@ const TasksDialog = dynamic(
   () => import("@/components/Tasks/TasksDialog").then((m) => m.TasksDialog),
   { ssr: false }
 );
-const NewTaskDialog = dynamic(
-  () => import("@/components/Tasks/NewTaskDialog").then((m) => m.NewTaskDialog),
+const AddProjectDialog = dynamic(
+  () =>
+    import("@/components/Projects/AddProject/AddProjectDialog").then(
+      (m) => m.AddProjectDialog
+    ),
   { ssr: false }
 );
 const SchedulesDialog = dynamic(
@@ -123,7 +128,7 @@ const AppDialogs = memo(function AppDialogs() {
       <TasksDialog />
       <SchedulesDialog />
       <PhoneNotifyDialog />
-      <NewTaskDialog />
+      <AddProjectDialog />
       <MessagesDialog />
       <DevicesDialog />
       <ArchivedDialog />
@@ -138,23 +143,20 @@ const AppDialogs = memo(function AppDialogs() {
 function HomeContent() {
   // UI State
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
-  const [newSessionProjectId, setNewSessionProjectId] = useState<string | null>(
-    null
-  );
   const [showNotificationSettings, setShowNotificationSettings] =
     useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
 
   // Pane context
-  const { focusedPaneId, attachSession, getActiveTab, addTab } = usePanes();
+  const { focusedPaneId, attachSession, getActiveTab, addTab, openDraft } =
+    usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const { isMobile, isHydrated } = useViewport();
 
   // Data hooks
   const { sessions, fetchSessions } = useSessions();
-  const { projects, fetchProjects } = useProjects();
+  const { projects } = useProjects();
   const {
     startDevServerProjectId,
     setStartDevServerProjectId,
@@ -485,7 +487,8 @@ function HomeContent() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        paletteActions.setOpen(!paletteUi.open);
+        if (paletteUi.open) paletteActions.setOpen(false);
+        else paletteActions.open();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -533,17 +536,27 @@ function HomeContent() {
     ]
   );
 
-  // New session in project handler
+  // A draft in the project, or the current one; sent, it becomes a session.
   const handleNewSessionInProject = useCallback((projectId: string) => {
-    setNewSessionProjectId(projectId || null);
-    setShowNewSessionDialog(true);
+    newDraft(projectId ? { kind: "project", projectId } : { kind: "current" });
   }, []);
+  useDraftKeys();
+  useDraftRequests({
+    sessions,
+    projects,
+    viewing: {
+      session: sessions.find((s) => s.id === focusedActiveTab?.sessionId),
+      draftId: focusedActiveTab?.draftId,
+    },
+    show: (draftId) => {
+      openDraft(focusedPaneId, draftId);
+      if (isMobile) setSidebarOpen(false);
+    },
+  });
 
-  // Session created handler (shared between desktop/mobile)
+  // Opens a session made elsewhere (an orchestrator, a schedule's run).
   const handleSessionCreated = useCallback(
     async (sessionId: string) => {
-      setShowNewSessionDialog(false);
-      setNewSessionProjectId(null);
       await fetchSessions();
 
       const res = await fetch(`/api/sessions/${sessionId}`);
@@ -555,8 +568,6 @@ function HomeContent() {
     [fetchSessions, attachToSession]
   );
 
-  // A project row with no sessions starts one in a tap.
-  useQuickStart(handleSessionCreated);
   // A workspace's orchestrator row opens its chat, made on first open.
   const handleOrchestratorOpened = useCallback(
     (sessionId: string) => {
@@ -568,28 +579,6 @@ function HomeContent() {
   useOpenOrchestrator(handleOrchestratorOpened);
   // A session opened from elsewhere (a schedule's run history).
   useOpenSession(handleOrchestratorOpened);
-
-  // Project created handler (shared between desktop/mobile)
-  const handleCreateProject = useCallback(
-    async (
-      name: string,
-      workingDirectory: string,
-      agentType?: string
-    ): Promise<string | null> => {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, workingDirectory, agentType }),
-      });
-      const data = await res.json();
-      if (data.project) {
-        await fetchProjects();
-        return data.project.id;
-      }
-      return null;
-    },
-    [fetchProjects]
-  );
 
   // Open terminal in project handler (shell session, not AI agent)
   const handleOpenTerminal = useCallback(
@@ -633,7 +622,6 @@ function HomeContent() {
   useAppCommands({
     sessions,
     onSelectSession: attachToSession,
-    onNewSession: () => setShowNewSessionDialog(true),
     onSearchCode: () => setShowQuickSwitcher(true),
     // Its dialog lives in the desktop bar.
     onNotificationSettings: isMobile
@@ -654,9 +642,6 @@ function HomeContent() {
     setSidebarOpen,
     activeSession,
     focusedActiveTab,
-    showNewSessionDialog,
-    setShowNewSessionDialog,
-    newSessionProjectId,
     showNotificationSettings,
     setShowNotificationSettings,
     showQuickSwitcher,
@@ -669,8 +654,6 @@ function HomeContent() {
     openSessionInNewTab,
     handleNewSessionInProject,
     handleOpenTerminal,
-    handleSessionCreated,
-    handleCreateProject,
     handleStartDevServer: startDevServer,
     handleCreateDevServer: createDevServer,
     startDevServerProject,

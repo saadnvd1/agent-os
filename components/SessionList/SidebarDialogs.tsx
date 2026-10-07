@@ -1,19 +1,14 @@
 "use client";
 
 import { ServerLogsModal } from "@/components/DevServers";
-import { NewProjectDialog, ProjectSettingsDialog } from "@/components/Projects";
-import { FolderPicker } from "@/components/FolderPicker";
+import { ProjectSettingsDialog } from "@/components/Projects";
 import { HostsDialog } from "@/components/Hosts";
 import { WorkspaceNameDialog } from "@/components/Workspaces";
-import { useCreateProject } from "@/data/projects";
 import { useDevServersQuery } from "@/data/dev-servers";
-import { getDefaultModelForAgent } from "@/lib/model-catalog";
 import type { ProjectWithRepositories } from "@/lib/projects";
 import { KillAllConfirm } from "./KillAllConfirm";
 
 export type SidebarDialog =
-  | { kind: "newProject"; mode: "new" | "clone" }
-  | { kind: "openProject" }
   | { kind: "killAll" }
   | { kind: "hosts" }
   | { kind: "logs"; serverId: string }
@@ -30,7 +25,6 @@ export function SidebarDialogs({
   onClose: () => void;
   onRenameProject: (projectId: string, name: string) => void;
 }) {
-  const createProject = useCreateProject();
   const { data: devServers = [] } = useDevServersQuery();
   const logsServer =
     dialog?.kind === "logs"
@@ -50,35 +44,6 @@ export function SidebarDialogs({
         />
       )}
       <HostsDialog open={dialog?.kind === "hosts"} onClose={onClose} />
-      <NewProjectDialog
-        open={dialog?.kind === "newProject"}
-        mode={dialog?.kind === "newProject" ? dialog.mode : "new"}
-        onClose={onClose}
-        onCreated={onClose}
-      />
-      {dialog?.kind === "openProject" && (
-        <FolderPicker
-          initialPath="~"
-          onClose={onClose}
-          onSelect={(path) => {
-            const parts = path.split("/").filter(Boolean);
-            createProject.mutate(
-              {
-                name: parts[parts.length - 1] || "project",
-                workingDirectory: path,
-                agentType: "claude",
-                defaultModel: getDefaultModelForAgent("claude"),
-                devServers: [],
-              },
-              {
-                onSettled: onClose,
-                onError: (err) =>
-                  console.error("Failed to create project:", err),
-              }
-            );
-          }}
-        />
-      )}
       <ProjectSettingsDialog
         project={dialog?.kind === "settings" ? dialog.project : null}
         open={dialog?.kind === "settings"}

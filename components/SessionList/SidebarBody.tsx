@@ -6,6 +6,7 @@ import { ShimmeringLoader } from "@/components/ui/skeleton";
 import type { SidebarData } from "./useSidebarData";
 import { SessionShelves } from "./SessionShelves";
 import { SidebarExtras } from "./SidebarExtras";
+import { DraftShelf } from "./DraftShelf";
 
 function RowsSkeleton() {
   return (
@@ -67,6 +68,7 @@ export function SidebarBody({
 
   return (
     <>
+      <DraftShelf projects={data.projects} />
       {count === 0 &&
         (ui.query ? (
           <Empty text={`No sessions match “${ui.query}”`} />
@@ -76,7 +78,7 @@ export function SidebarBody({
             action={
               <Button onClick={onNewProject} className="h-11 gap-2 md:h-9">
                 <FolderPlus className="h-4 w-4" />
-                New project
+                Add project
               </Button>
             }
           />

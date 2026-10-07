@@ -1,13 +1,14 @@
 export { sessionKeys, statusKeys } from "./keys";
 export {
   useSessionsQuery,
-  useCreateSession,
+  useLaunchSession,
   useDeleteSession,
   useRenameSession,
   useForkSession,
   useSummarizeSession,
   useMoveSessionToGroup,
   useMoveSessionToProject,
+  useSessionSetup,
 } from "./queries";
 export { usePinSession } from "./pin";
-export type { CreateSessionInput } from "./queries";
+export type { LaunchSessionInput, SessionSetup } from "./queries";

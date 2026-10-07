@@ -1,7 +1,8 @@
 import { proxy } from "valtio";
 
-// Open state for the task dialogs, shared by the header and the sidebar menu.
-export const tasksUi = proxy({ panelOpen: false, newOpen: false });
+// The Tasks panel's open state, shared by the header and the sidebar menu.
+// A new task is a draft with "Open a PR when done" (stores/drafts).
+export const tasksUi = proxy({ panelOpen: false });
 
 export const tasksUiActions = {
   openPanel: () => {
@@ -9,15 +10,5 @@ export const tasksUiActions = {
   },
   setPanelOpen: (open: boolean) => {
     tasksUi.panelOpen = open;
-  },
-  openNew: () => {
-    tasksUi.newOpen = true;
-  },
-  closeNew: () => {
-    tasksUi.newOpen = false;
-  },
-  started: () => {
-    tasksUi.newOpen = false;
-    tasksUi.panelOpen = true;
   },
 };

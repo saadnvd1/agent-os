@@ -2,7 +2,7 @@
  * Git Worktree management for isolated feature development
  */
 
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
@@ -16,6 +16,7 @@ import {
 } from "./git";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Base directory for all worktrees
 export const WORKTREES_DIR = path.join(os.homedir(), ".agent-os", "worktrees");
@@ -61,6 +62,15 @@ function generateWorktreeDirName(
   return `${projectName}-${featureSlug}`;
 }
 
+// Where createWorktree puts a feature's worktree, known before it exists.
+export function worktreePathFor(projectPath: string, featureName: string) {
+  const projectName = getRepoName(resolvePath(projectPath));
+  return path.join(
+    WORKTREES_DIR,
+    generateWorktreeDirName(projectName, featureName)
+  );
+}
+
 /**
  * Create a new worktree for a feature branch
  */
@@ -86,8 +96,7 @@ export async function createWorktree(
 
   // Generate worktree path
   const projectName = getRepoName(resolvedProjectPath);
-  const worktreeDirName = generateWorktreeDirName(projectName, featureName);
-  const worktreePath = path.join(WORKTREES_DIR, worktreeDirName);
+  const worktreePath = worktreePathFor(projectPath, featureName);
 
   // Check if worktree path already exists
   if (fs.existsSync(worktreePath)) {
@@ -110,8 +119,19 @@ export async function createWorktree(
   let lastError: Error | null = null;
   for (const ref of refFormats) {
     try {
-      await execAsync(
-        `git -C "${resolvedProjectPath}" worktree add -b "${branchName}" "${worktreePath}" "${ref}"`,
+      await execFileAsync(
+        "git",
+        [
+          "-C",
+          resolvedProjectPath,
+          "worktree",
+          "add",
+          "-b",
+          branchName,
+          "--",
+          worktreePath,
+          ref,
+        ],
         { timeout: 30000 }
       );
       lastError = null;

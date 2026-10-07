@@ -47,7 +47,9 @@ export async function getDefaultBranch(dirPath: string): Promise<string> {
       `git -C "${resolvedPath}" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`,
       { timeout: 5000 }
     );
-    if (stdout.trim()) {
+    // The remote picks this name: anything that isn't a plain branch name
+    // (a "$(...)" a hostile repo could set) is ignored.
+    if (stdout.trim() && isBranchName(stdout.trim())) {
       return stdout.trim();
     }
   } catch {
