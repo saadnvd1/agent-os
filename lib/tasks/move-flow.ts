@@ -8,16 +8,13 @@
 import os from "os";
 import { db, type Session } from "../db";
 import { isRemoteHost } from "../hosts";
-import { hostApi, requireHostLink, type HostLink } from "../hosts/remote-api";
+import { requireHostLink } from "../hosts/remote-api";
 import { getTaskSession } from "./session";
 import { exportOrResume, markMoved, resumeTask, type TaskBundle } from "./move";
-import { importTask } from "./import";
-import {
-  forgetHostTasks,
-  mirrorTask,
-  postIdempotent,
-  unknownOutcome,
-} from "./remote";
+import { moveRefusal } from "./move-guard";
+import { arrived as arrivedHere, importTask } from "./import";
+import { forgetHostTasks, postIdempotent, unknownOutcome } from "./remote";
+import { arrivedThere, settleMovedOut, tell } from "./move-recover";
 
 const LIVE = new Set(["running", "moving"]);
 
@@ -34,6 +31,8 @@ export async function moveTask(id: string, toHostId: string): Promise<Session> {
         : "It's already on this machine"
     );
   }
+  const refusal = moveRefusal(session);
+  if (refusal) throw new Error(refusal);
   return toRemote ? moveOut(session, toHostId) : moveIn(session);
 }
 
@@ -44,10 +43,17 @@ const unconfirmed = (where: string, err: unknown) =>
 
 async function moveOut(session: Session, hostId: string): Promise<Session> {
   const link = requireHostLink(hostId);
+  // A retry: if an earlier try arrived, it runs there now.
+  if (session.task_status === "moving") {
+    const there = await arrivedThere(link, session.id).catch((err) => {
+      throw unconfirmed(link.hostName, err);
+    });
+    if (there) return settleMovedOut(session, hostId, link.hostName, there);
+  }
   const bundle = await exportOrResume(session.id, link.hostName);
-  let arrived: Session;
+  let there: Session;
   try {
-    ({ session: arrived } = await postIdempotent<{ session: Session }>(
+    ({ session: there } = await postIdempotent<{ session: Session }>(
       link,
       "/api/tasks/import",
       bundle,
@@ -59,59 +65,44 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
     await resumeTask(session.id);
     throw err;
   }
-  db.transaction(() => {
-    markMoved(session.id, link.hostName);
-    mirrorTask(hostId, session.project_id, arrived);
-  })();
-  forgetHostTasks(hostId);
-  return db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
-    .get(arrived.id) as Session;
-}
-
-async function tell(link: HostLink, path: string): Promise<void> {
-  for (let i = 0; ; i++) {
-    try {
-      await hostApi(link, path, { body: { to: os.hostname() } });
-      return;
-    } catch (err) {
-      if (!unknownOutcome(err) || i === 2) throw err;
-    }
-  }
+  return settleMovedOut(session, hostId, link.hostName, there);
 }
 
 async function moveIn(mirror: Session): Promise<Session> {
   const link = requireHostLink(mirror.host_id);
   const path = `/api/tasks/${encodeURIComponent(mirror.id)}`;
-  // That machine resumes the agent itself if its half fails there.
-  let bundle: TaskBundle;
-  try {
-    ({ bundle } = await postIdempotent<{ bundle: TaskBundle }>(
-      link,
-      `${path}/export`,
-      { to: os.hostname() },
-      300000
-    ));
-  } catch (err) {
-    if (unknownOutcome(err)) throw unconfirmed(link.hostName, err);
-    throw err;
-  }
-  let arrived: Session;
-  try {
-    arrived = await importTask(bundle);
-  } catch (err) {
-    await tell(link, `${path}/resume`).catch((e) => {
-      throw new Error(
-        `${(err as Error).message}; and ${link.hostName} didn't resume it: ${e.message}`
-      );
-    });
-    throw err;
+  // A retry after it arrived here but that machine didn't hear: tidy up.
+  let here = arrivedHere(mirror.id);
+  if (!here) {
+    // That machine resumes the agent itself if its half fails there.
+    let bundle: TaskBundle;
+    try {
+      ({ bundle } = await postIdempotent<{ bundle: TaskBundle }>(
+        link,
+        `${path}/export`,
+        { to: os.hostname() },
+        300000
+      ));
+    } catch (err) {
+      if (unknownOutcome(err)) throw unconfirmed(link.hostName, err);
+      throw err;
+    }
+    try {
+      here = await importTask(bundle);
+    } catch (err) {
+      await tell(link, `${path}/resume`, { force: true }).catch((e) => {
+        throw new Error(
+          `${(err as Error).message}; and ${link.hostName} didn't resume it: ${e.message}`
+        );
+      });
+      throw err;
+    }
   }
   // It runs here now. Until that machine marks its row moved (it stays
   // "moving" there, which nothing can sign off), the mirror stays, so Move
-  // here again repeats this and finds the task that already arrived.
+  // here again comes back to this.
   try {
-    await tell(link, `${path}/moved`);
+    await tell(link, `${path}/moved`, { to: os.hostname() });
   } catch (err) {
     throw new Error(
       `It's running here now, but ${link.hostName} didn't confirm (${(err as Error).message}). Press Move here again to tidy up.`
@@ -119,5 +110,7 @@ async function moveIn(mirror: Session): Promise<Session> {
   }
   markMoved(mirror.id, os.hostname());
   forgetHostTasks(link.hostId);
-  return arrived;
+  return db
+    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .get(here.id) as Session;
 }

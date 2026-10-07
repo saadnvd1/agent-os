@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resumeTask } from "@/lib/tasks/move";
+import { resumeHere } from "@/lib/tasks/move-recover";
 
-// POST /api/tasks/:id/resume - start its agent again on its conversation
+// POST /api/tasks/:id/resume {force?} - start its agent again here, on its
+// conversation. A task left moving asks its target first unless forced.
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { force } = await request.json().catch(() => ({}));
   try {
-    await resumeTask((await params).id);
-    return NextResponse.json({ success: true });
+    const result = await resumeHere((await params).id, force === true);
+    return NextResponse.json({ success: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 409 });

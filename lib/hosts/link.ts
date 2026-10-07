@@ -10,6 +10,7 @@ import { getHost, hostExec, isRemoteHost } from "./index";
 import {
   cleanRemoteText,
   hostApi,
+  readCapped,
   saveHostLink,
   type HostLink,
 } from "./remote-api";
@@ -90,7 +91,13 @@ export async function linkHost(
     throw new Error(`Can't reach ${url}: ${err.message}`);
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    const text = await readCapped(res, 64 * 1024).catch(() => "");
+    let data: { error?: unknown } = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {};
+    }
     throw new Error(
       `${host.name} refused the pairing: ${cleanRemoteText(data.error) || res.status}`
     );

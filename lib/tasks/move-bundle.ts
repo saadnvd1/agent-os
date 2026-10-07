@@ -15,6 +15,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const isSessionId = (id: unknown): id is string =>
   typeof id === "string" && UUID.test(id);
 
+/**
+ * Another request is doing this right now. Not a refusal: the caller can't
+ * tell yet whether it will land, so routes answer 503 for it.
+ */
+export class InProgressError extends Error {}
+
+export const statusFor = (err: unknown, refused = 400) =>
+  err instanceof InProgressError ? 503 : refused;
+
 export interface TaskBundle {
   // The source session's id: importing the same move twice finds the first.
   moveId: string;

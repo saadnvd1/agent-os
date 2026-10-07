@@ -15,6 +15,7 @@ vi.mock("./index", async (orig) => ({
 
 import { getDb } from "../db";
 import { createHost, hostExec } from "./index";
+import { readCapped } from "./remote-api";
 import {
   defaultLinkUrl,
   linkHost,
@@ -133,5 +134,19 @@ describe("linkHost", () => {
 
   it("won't link this machine", async () => {
     await expect(linkHost("local")).rejects.toThrow(/another machine/);
+  });
+});
+
+describe("readCapped", () => {
+  it("stops reading past the cap even with no size header", async () => {
+    const body = new ReadableStream({
+      pull(c) {
+        c.enqueue(new Uint8Array(1024));
+      },
+    });
+    await expect(readCapped(new Response(body), 4096)).rejects.toThrow(
+      /too large/
+    );
+    await expect(readCapped(new Response("ok"), 4096)).resolves.toBe("ok");
   });
 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { importTask } from "@/lib/tasks/import";
-import { MAX_BUNDLE_BYTES } from "@/lib/tasks/move-bundle";
+import { MAX_BUNDLE_BYTES, statusFor } from "@/lib/tasks/move-bundle";
 
 // POST /api/tasks/import - a task arriving from another machine (its bundle)
 export async function POST(request: NextRequest) {
@@ -15,6 +15,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: statusFor(error) });
   }
 }

@@ -16,6 +16,7 @@ import { buildTaskBrief } from "./brief";
 import { run } from "./gh";
 import { getTaskSession } from "./session";
 import { projectRef } from "./project-ref";
+import { moveRefusal } from "./move-guard";
 import { MAX_TRANSCRIPT_BYTES, type TaskBundle } from "./move-bundle";
 import {
   isClaudeSessionId,
@@ -44,19 +45,30 @@ export async function claudeIdFor(session: Session): Promise<string | null> {
   return latestSessionId(session.working_directory);
 }
 
-/** running -> moving, or a retry of a move that didn't finish. */
-function claimMoving(id: string, to: string): void {
-  const claimed = db
+/**
+ * running -> moving (fresh), or a retry of a move to the same machine that
+ * didn't finish. Never a retry to another machine: the first may have
+ * arrived, and then it would run on both.
+ */
+function claimMoving(id: string, to: string): { fresh: boolean } {
+  const fresh = db
     .prepare(
       `UPDATE sessions SET task_status = 'moving', moved_to = ?
-         WHERE id = ? AND task_status IN ('running', 'moving')`
+         WHERE id = ? AND task_status = 'running'`
     )
     .run(to, id);
-  if (claimed.changes !== 1) {
-    const { task_status } = getTaskSession(id);
-    throw new Error(`Task is already ${task_status}`);
-  }
+  if (fresh.changes === 1) return { fresh: true };
+  const { task_status, moved_to } = getTaskSession(id);
+  if (task_status === "moving" && moved_to === to) return { fresh: false };
+  throw new Error(
+    task_status === "moving"
+      ? `It's partway through moving to ${moved_to}; finish that first`
+      : `Task is already ${task_status}`
+  );
 }
+
+// Set by exportTask: did this call stop a running agent, or retry a move?
+const freshClaims = new Set<string>();
 
 /**
  * Stops the agent and pushes everything. On failure the task stays moving;
@@ -69,8 +81,11 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
     throw new Error("Only a task with its own worktree and branch can move");
   if (exporting.has(id)) throw new Error("It's already moving");
   exporting.add(id);
+  freshClaims.delete(id);
   try {
-    claimMoving(id, to);
+    const refusal = moveRefusal(session);
+    if (refusal) throw new Error(refusal);
+    if (claimMoving(id, to).fresh) freshClaims.add(id);
     const cwd = session.working_directory;
     await stopAgent(session.tmux_name);
     if ((await git(cwd, "status", "--porcelain")).trim()) {
@@ -116,16 +131,23 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
   }
 }
 
-/** Export; if that fails here, nothing left, so the agent carries on here. */
+/**
+ * Export; if this call stopped the agent and then failed, nothing left, so
+ * the agent carries on here. A failed retry leaves it moving: an earlier try
+ * may have arrived.
+ */
 export async function exportOrResume(
   id: string,
   to: string
 ): Promise<TaskBundle> {
   try {
-    return await exportTask(id, to);
+    const bundle = await exportTask(id, to);
+    freshClaims.delete(id);
+    return bundle;
   } catch (err) {
-    // A concurrent request's refusal leaves that move alone.
-    if (getTaskSession(id).task_status === "moving" && !exporting.has(id))
+    // Refused because another request is moving it: that one decides.
+    if (exporting.has(id)) throw err;
+    if (freshClaims.delete(id))
       await resumeTask(id).catch((e) => {
         throw new Error(
           `${(err as Error).message}; resuming it here failed too: ${e.message}`
@@ -142,12 +164,36 @@ export function markMoved(id: string, to: string): void {
   ).run(to, id);
 }
 
-/** Start the agent again in its worktree, resuming its conversation. */
+/**
+ * moving -> running: start the agent again in its worktree on its
+ * conversation. Already running means a repeat of a resume that worked, so
+ * it leaves that agent alone.
+ */
 export async function resumeTask(id: string, note?: string): Promise<void> {
-  const session = getTaskSession(id);
-  if (session.task_status !== "running" && session.task_status !== "moving")
-    throw new Error(`Task is already ${session.task_status}`);
   if (exporting.has(id)) throw new Error("It's moving right now");
+  const claimed = db
+    .prepare(
+      `UPDATE sessions SET task_status = 'running' WHERE id = ? AND task_status = 'moving'`
+    )
+    .run(id);
+  const session = getTaskSession(id);
+  if (claimed.changes !== 1) {
+    if (session.task_status === "running") return;
+    throw new Error(`Task is already ${session.task_status}`);
+  }
+  try {
+    await relaunch(session, note);
+  } catch (err) {
+    db.prepare(
+      `UPDATE sessions SET task_status = 'moving' WHERE id = ? AND task_status = 'running'`
+    ).run(id);
+    throw err;
+  }
+  db.prepare(`UPDATE sessions SET moved_to = NULL WHERE id = ?`).run(id);
+}
+
+async function relaunch(session: Session, note?: string): Promise<void> {
+  const id = session.id;
   const claudeId = await claudeIdFor(session);
   await stopAgent(session.tmux_name);
   await launchClaude({
@@ -167,8 +213,4 @@ export async function resumeTask(id: string, note?: string): Promise<void> {
         })
       : undefined,
   });
-  db.prepare(
-    `UPDATE sessions SET task_status = 'running', moved_to = NULL
-       WHERE id = ? AND task_status IN ('running', 'moving')`
-  ).run(id);
 }

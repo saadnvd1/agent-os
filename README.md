@@ -622,10 +622,16 @@ Once linked:
   folder relative to `~`, and clones it when it has neither. It checks the
   branch out (reusing a worktree still on it), rewrites the conversation's
   paths and resumes it with `--resume`. The source keeps its row, marked moved.
-  If the target refuses, the agent resumes where it was.
+  If the target refuses, the agent resumes where it was. If the source can't
+  tell whether it arrived (a timeout, a restart), the task stays **Moving**:
+  press Move again to finish it, or **Resume here**, which first asks the
+  other machine whether it arrived. Tasks waiting on you (an escalated gate or
+  an open ask), card tasks and stacked tasks don't move yet.
 
 Works for any project. Requests to the other machine carry its device token,
-so it can sit behind a proxy that never trusts loopback.
+so it can sit behind a proxy that never trusts loopback. Linking needs this
+machine or the tailnet, and only pairs with the ssh target's own host name.
+The orchestrator still starts tasks on its own machine only.
 
 ## Security
 

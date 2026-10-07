@@ -86,6 +86,30 @@ export class HostApiError extends Error {
 
 const MAX_RESPONSE_BYTES = 80 * 1024 * 1024;
 
+/** The body as text, read no further than max bytes whatever it claims. */
+export async function readCapped(
+  res: Response,
+  max = MAX_RESPONSE_BYTES
+): Promise<string> {
+  if (Number(res.headers.get("content-length")) > max)
+    throw new Error("its answer is too large");
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error("its answer is too large");
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 /** A JSON call to the other machine's AgentOS; its error text on failure. */
 export async function hostApi<T>(
   link: HostLink,
@@ -110,11 +134,7 @@ export async function hostApi<T>(
       signal: AbortSignal.timeout(opts.timeout ?? 15000),
       redirect: "error",
     });
-    if (Number(res.headers.get("content-length")) > MAX_RESPONSE_BYTES)
-      throw new Error("its answer is too large");
-    text = await res.text();
-    if (text.length > MAX_RESPONSE_BYTES)
-      throw new Error("its answer is too large");
+    text = await readCapped(res);
   } catch (err) {
     throw unknown(err);
   }

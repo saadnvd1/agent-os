@@ -27,6 +27,7 @@ import {
   type TaskState,
 } from "./state";
 import { expandHome, prFor, taskSessions } from "./session";
+import { InProgressError } from "./move-bundle";
 import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
 import { finishTaskStart } from "./start";
@@ -88,7 +89,8 @@ export async function createTask(opts: {
     const existing = queries.getSession(db).get(opts.id) as Session | undefined;
     if (existing?.task_status) return existing;
     if (existing) throw new Error("That id is taken");
-    if (starting.has(opts.id)) throw new Error("That task is starting already");
+    if (starting.has(opts.id))
+      throw new InProgressError("That task is starting already");
     starting.add(opts.id);
     try {
       return await startTask(opts, opts.id);

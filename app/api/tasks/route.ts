@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTask, listTasks, movedTasks } from "@/lib/tasks";
 import { TASK_CAPABILITIES } from "@/lib/tasks/remote";
 import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
-import { isSessionId } from "@/lib/tasks/move-bundle";
+import { isSessionId, statusFor } from "@/lib/tasks/move-bundle";
 
 // moved and capabilities are for another machine that mirrors these tasks.
 export async function GET() {
@@ -36,6 +36,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: statusFor(error) });
   }
 }

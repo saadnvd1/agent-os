@@ -107,6 +107,14 @@ describe("starting a task on a linked machine", () => {
     await expect(
       createTask({ projectId: f.projectId, prompt: "x", hostId, cardId: "c" })
     ).rejects.toThrow(/this machine only/);
+    const base = {
+      branch: "feature/parent",
+      tip: "a".repeat(40),
+      stack: { parentName: "p", parentBranch: "feature/parent" },
+    } as unknown as Parameters<typeof createTask>[0]["base"];
+    await expect(
+      createTask({ projectId: f.projectId, prompt: "x", hostId, base })
+    ).rejects.toThrow(/this machine only/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

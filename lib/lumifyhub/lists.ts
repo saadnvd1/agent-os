@@ -27,6 +27,7 @@ export function cardTargetFor(state: TaskState | "queued"): CardTarget {
     case "working":
     case "needs-input":
     case "blocked":
+    case "moving":
       return "in_progress";
     case "review":
     case "checks-failing":

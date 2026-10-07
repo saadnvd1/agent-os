@@ -86,7 +86,9 @@ describe("leaving", () => {
     // Worktrees share the repo's config: put origin back for the next tests.
     git(cwd, "remote", "set-url", "origin", path.join(f.tmp, "missing.git"));
     try {
-      await expect(exportOrResume(id, "box")).rejects.toThrow();
+      await expect(exportOrResume(id, "box")).rejects.toThrow(
+        /missing\.git|push/
+      );
     } finally {
       git(cwd, "remote", "set-url", "origin", f.origin);
     }
@@ -95,6 +97,22 @@ describe("leaving", () => {
       sessionId: id,
       resume: CLAUDE_ID,
     });
+  });
+
+  it("a failed retry leaves it moving: an earlier try may have arrived", async () => {
+    const { id, cwd } = await seedTask("feature/retry-fails");
+    await exportTask(id, "box");
+    git(cwd, "remote", "set-url", "origin", path.join(f.tmp, "missing.git"));
+    try {
+      fs.writeFileSync(path.join(cwd, "more.txt"), "x\n");
+      await expect(exportOrResume(id, "box")).rejects.toThrow(
+        /missing\.git|push/
+      );
+    } finally {
+      git(cwd, "remote", "set-url", "origin", f.origin);
+    }
+    expect(row(id).task_status).toBe("moving");
+    expect(launchClaude).not.toHaveBeenCalled();
   });
 
   it("a failed resume leaves it moving, so nothing signs off a stopped agent", async () => {

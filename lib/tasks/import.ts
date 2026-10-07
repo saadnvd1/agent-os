@@ -17,13 +17,19 @@ import { expandHome } from "./session";
 import { ensureProject } from "./project-ref";
 import { checkoutBranchWorktree } from "./branch-worktree";
 import { rewritePaths, writeTranscript } from "./transcript";
-import { arrivalNote, validateBundle, type TaskBundle } from "./move-bundle";
+import {
+  arrivalNote,
+  InProgressError,
+  validateBundle,
+  type TaskBundle,
+} from "./move-bundle";
 
 // Imports in flight in this process, by move id.
 const g = globalThis as unknown as { __agentosImporting?: Set<string> };
 const importing = (g.__agentosImporting ??= new Set());
 
-const arrived = (moveId: string) =>
+/** The task a move made here, if it arrived. */
+export const arrived = (moveId: string) =>
   db
     .prepare(
       `SELECT * FROM sessions WHERE moved_from = ? AND host_id = 'local'
@@ -46,7 +52,8 @@ export async function importTask(input: TaskBundle): Promise<Session> {
   const bundle = validateBundle(input);
   const done = arrived(bundle.moveId);
   if (done) return done;
-  if (importing.has(bundle.moveId)) throw new Error("It's arriving already");
+  if (importing.has(bundle.moveId))
+    throw new InProgressError("It's arriving already");
   importing.add(bundle.moveId);
   try {
     return await arrive(bundle);
