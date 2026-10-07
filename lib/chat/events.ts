@@ -48,6 +48,21 @@ export type ApprovalDecision =
   | { decision: "allow" | "always" | "deny" }
   | { decision: "answer"; answers: Record<string, string> };
 
+export interface PeerMessage {
+  sessionId: string;
+  body: string;
+}
+
+export interface McpServerView {
+  name: string;
+  status: "connected" | "failed" | "needs-auth" | "pending" | "disabled";
+  // Where it's configured: user, project, local, plugin, claudeai…
+  scope?: string;
+  version?: string;
+  error?: string;
+  tools: { name: string; description?: string }[];
+}
+
 interface Base {
   id: string;
   createdAt: number;
@@ -58,9 +73,11 @@ export type ChatItem =
       kind: "user";
       text: string;
       images?: ChatImage[];
+      // Who sent it through the agent bus, when not typed here.
       from?: string;
-      // The sending session, when another session sent it.
-      fromId?: string;
+      // Sent by another agent session: shown as its body, while the agent
+      // gets the full text with how to reply.
+      peer?: PeerMessage;
       // The provider's id for this message, to undo file changes back to it.
       checkpoint?: string;
     })
@@ -91,6 +108,8 @@ export type ChatItem =
       interrupted?: boolean;
     })
   | (Base & { kind: "command_output"; text: string })
+  // The conversation's MCP servers, as /mcp reports them.
+  | (Base & { kind: "mcp"; servers: McpServerView[] })
   | (Base & { kind: "compacted"; trigger?: "manual" | "auto" })
   | (Base & { kind: "error"; message: string })
   // A line in an orchestrator's decision log, shown in its chat: a note it

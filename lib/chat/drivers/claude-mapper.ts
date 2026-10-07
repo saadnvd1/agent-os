@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { ChatCommand, ChatItem, DriverEvent } from "../events";
 import { clipOutput, toolDiff, toolTitle } from "../tools";
+import { leadingCommand } from "../commands";
 
 // Loose views of the SDK's message shapes: only what the mapper reads.
 type Block = {
@@ -29,6 +30,7 @@ export type ClaudeMessage = {
   };
   parent_tool_use_id?: string | null;
   duration_ms?: number;
+  num_turns?: number;
   total_cost_usd?: number;
   is_error?: boolean;
   errors?: string[];
@@ -87,14 +89,37 @@ function resultText(content: unknown): string {
   return "";
 }
 
+// What a command that printed nothing did, so it never looks ignored.
+export function silentCommandText(command: string): string {
+  if (command === "/clear")
+    return "Context cleared. The agent starts fresh from the next message.";
+  return `${command} ran, with nothing to show.`;
+}
+
 // Turns Claude Agent SDK messages into provider-neutral chat events.
 export class ClaudeMapper {
   private streamingText: ChatItem | null = null;
   private streamingThinking: ChatItem | null = null;
   private tools = new Map<string, Extract<ChatItem, { kind: "tool" }>>();
   private tasks = new Map<string, TaskItem>();
+  // The slash command the last message opened with, and whether anything
+  // has shown since: a command that answers with nothing still says so.
+  private command: string | null = null;
+  private shown = false;
+
+  sent(text: string): void {
+    this.command = leadingCommand(text);
+    this.shown = false;
+  }
 
   map(m: ClaudeMessage): DriverEvent[] {
+    const out = this.route(m);
+    if (out.some((e) => e.type === "item" || e.type === "delta"))
+      this.shown = true;
+    return out;
+  }
+
+  private route(m: ClaudeMessage): DriverEvent[] {
     // Subagent traffic stays inside its parent tool call.
     if (m.parent_tool_use_id) return [];
     switch (m.type) {
@@ -351,6 +376,19 @@ export class ClaudeMapper {
         },
       });
     }
+    const silent = this.command && !this.shown && !m.num_turns && !m.result;
+    if (silent && !m.is_error) {
+      out.push({
+        type: "item",
+        item: {
+          id: randomUUID(),
+          kind: "command_output",
+          text: silentCommandText(this.command!),
+          createdAt: now(),
+        },
+      });
+    }
+    this.command = null;
     out.push({
       type: "item",
       item: {

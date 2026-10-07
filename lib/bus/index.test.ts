@@ -21,9 +21,8 @@ vi.mock("@/lib/bus/delivery", async (importOriginal) => ({
   },
 }));
 
-vi.mock("@/lib/chat/runner", () => ({
-  sendChatConfirmed: () => chatResult(),
-}));
+const sendChatConfirmed = vi.fn((..._args: unknown[]) => chatResult());
+vi.mock("@/lib/chat/runner", () => ({ sendChatConfirmed }));
 
 const { db } = await import("@/lib/db");
 const { seedSession } = await import("@/lib/orchestrator/testing");
@@ -171,5 +170,45 @@ describe("the bus after a rename", () => {
     await expect(
       bus.sendMessage({ fromId: sender, to: `twin-${tag}`, body: "hi" })
     ).rejects.toThrow(/matches 2 sessions/);
+  });
+});
+
+describe("sendMessage to a chat session", () => {
+  it("tags another session's message as theirs, with the full line for the agent", async () => {
+    const { project, sender } = setup();
+    const to = seedSession({
+      projectId: project.id,
+      name: `chat-${randomUUID().slice(0, 6)}`,
+      view: "chat",
+    });
+    sendChatConfirmed.mockClear();
+    await bus.sendMessage({ fromId: sender, to, body: "rebased, tests green" });
+    const name = (
+      db.prepare(`SELECT name FROM sessions WHERE id = ?`).get(sender) as {
+        name: string;
+      }
+    ).name;
+    expect(sendChatConfirmed).toHaveBeenCalledWith(to, {
+      text: expect.stringContaining(
+        `Reply with: aos send ${sender.slice(0, 8)}`
+      ),
+      from: name,
+      peer: { sessionId: sender, body: "rebased, tests green" },
+    });
+  });
+
+  it("leaves a message from the user untagged", async () => {
+    const { project } = setup();
+    const to = seedSession({
+      projectId: project.id,
+      name: `chat-${randomUUID().slice(0, 6)}`,
+      view: "chat",
+    });
+    sendChatConfirmed.mockClear();
+    await bus.sendMessage({ fromId: null, to, body: "hello" });
+    expect(sendChatConfirmed).toHaveBeenCalledWith(
+      to,
+      expect.objectContaining({ peer: undefined })
+    );
   });
 });

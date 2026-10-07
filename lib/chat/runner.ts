@@ -11,6 +11,7 @@ import type {
   ApprovalDecision,
   ChatImage,
   ChatState,
+  PeerMessage,
   UndoPreview,
 } from "./events";
 import {
@@ -123,7 +124,12 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
 
 export async function sendChat(
   sessionId: string,
-  input: { text: string; images?: ChatImage[]; from?: string }
+  input: {
+    text: string;
+    images?: ChatImage[];
+    from?: string;
+    peer?: PeerMessage;
+  }
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
@@ -134,6 +140,7 @@ export async function sendChat(
     text,
     images: input.images,
     from: input.from,
+    peer: input.peer,
   });
 }
 
@@ -141,7 +148,7 @@ export async function sendChat(
 // only then has it accepted it. "queued" when a turn was already running.
 export async function sendChatConfirmed(
   sessionId: string,
-  input: { text: string; from?: string; fromId?: string },
+  input: { text: string; from?: string; peer?: PeerMessage },
   timeoutMs = 10_000
 ): Promise<"delivered" | "queued"> {
   const text = input.text.trim();
@@ -176,7 +183,7 @@ export async function sendChatConfirmed(
       id,
       text,
       from: input.from,
-      fromId: input.fromId,
+      peer: input.peer,
     });
     await accepted;
   } finally {

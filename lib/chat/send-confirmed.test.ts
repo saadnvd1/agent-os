@@ -39,7 +39,7 @@ const userItem = (cmd: Send): ChatItem => ({
   kind: "user",
   text: cmd.text,
   from: cmd.from,
-  fromId: cmd.fromId,
+  peer: cmd.peer,
   createdAt: Date.now(),
 });
 
@@ -49,9 +49,17 @@ describe("sendChatConfirmed", () => {
       setTimeout(() => emit(sid, { type: "item", item: userItem(cmd) }), 5)
     );
     await expect(
-      sendChatConfirmed(id, { text: "hi", from: "orch", fromId: "o-1" })
+      sendChatConfirmed(id, {
+        text: "hi",
+        from: "orch",
+        peer: { sessionId: "o-1", body: "hi" },
+      })
     ).resolves.toBe("delivered");
-    expect(sent[0]).toMatchObject({ text: "hi", from: "orch", fromId: "o-1" });
+    expect(sent[0]).toMatchObject({
+      text: "hi",
+      from: "orch",
+      peer: { sessionId: "o-1", body: "hi" },
+    });
   });
 
   it("is queued when a turn was already running", async () => {

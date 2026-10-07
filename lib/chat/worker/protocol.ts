@@ -13,6 +13,7 @@ import type {
   ChatItem,
   ChatState,
   DriverEvent,
+  PeerMessage,
 } from "../events";
 import type { UndoResult } from "../driver";
 
@@ -27,7 +28,7 @@ export type WorkerCommand =
       text: string;
       images?: ChatImage[];
       from?: string;
-      fromId?: string;
+      peer?: PeerMessage;
     }
   | { type: "interrupt" }
   | { type: "set_model"; model: string }

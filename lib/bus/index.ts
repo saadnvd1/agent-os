@@ -8,6 +8,7 @@ import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { statusDetector } from "../status-detector";
 import { sendChatConfirmed } from "../chat/runner";
+import type { PeerMessage } from "../chat/events";
 import { sessionRowInfo } from "../session-meta";
 import { previousNames } from "../session-names";
 import { deliverToPane, type Delivery } from "./delivery";
@@ -144,14 +145,16 @@ function pairTimestamps(a: string | null, b: string): number[] {
 async function deliver(
   to: Session,
   line: string,
-  from: { name: string; id: string | null }
+  from: { name: string; peer?: PeerMessage }
 ): Promise<Delivery> {
+  // Chat sessions get the message as their next prompt, tagged with who
+  // sent it so chat shows it as theirs.
   if (to.view === "chat") {
     try {
       const state = await sendChatConfirmed(to.id, {
         text: line,
         from: from.name,
-        fromId: from.id ?? undefined,
+        peer: from.peer,
       });
       return { state };
     } catch (error) {
@@ -203,7 +206,7 @@ export async function sendMessage(opts: {
   const delivery = await deliver(
     to,
     wakeLine({ fromName, fromId: from?.id ?? null, body }),
-    { name: fromName, id: from?.id ?? null }
+    { name: fromName, peer: from ? { sessionId: from.id, body } : undefined }
   );
   if (delivery.state !== "failed") {
     db.prepare(
