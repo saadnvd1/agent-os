@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { tmpdir } from "os";
 import { execFileSync } from "child_process";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getProject } from "../projects";
 import {
   getCloneJob,
@@ -21,6 +21,16 @@ async function until(check: () => boolean, ms = 15_000) {
     await new Promise((r) => setTimeout(r, 25));
   }
 }
+
+// No git identity, global config or hooks from the machine running this.
+const saved = { ...process.env };
+beforeAll(() => {
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+  process.env.GIT_CONFIG_NOSYSTEM = "1";
+});
+afterAll(() => {
+  process.env = saved;
+});
 
 describe("adding a project", () => {
   it("names a repository from its URL", () => {
@@ -57,9 +67,14 @@ describe("adding a project", () => {
     expect(getProject(project.id)?.name).toBe("new-thing");
   });
 
-  it("refuses names a shell or a path could misread", async () => {
+  it("refuses names a shell or a path could misread, making nothing", async () => {
+    const parent = temp();
     for (const name of ["../up", "a b", "-rf", "x;rm", ""])
-      await expect(initProject("local", temp(), name)).rejects.toThrow();
+      await expect(initProject("local", parent, name)).rejects.toThrow(
+        /letters, numbers, dots/
+      );
+    expect(fs.readdirSync(parent)).toEqual([]);
+    expect(fs.existsSync(path.join(parent, "..", "up"))).toBe(false);
   });
 
   it("refuses a URL that isn't a repository's", () => {
@@ -81,6 +96,8 @@ describe("adding a project", () => {
     expect(job.status).toBe("running");
     await until(() => getCloneJob(job.id)?.status !== "running");
     expect(getCloneJob(job.id)?.status).toBe("failed");
-    expect(getCloneJob(job.id)?.error).toBeTruthy();
+    expect(getCloneJob(job.id)?.error).toMatch(
+      /unable to access|Failed to connect|Could not resolve|Connection refused/i
+    );
   });
 });

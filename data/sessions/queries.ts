@@ -232,6 +232,7 @@ export interface SessionSetup {
   log: string[];
   branch: string | null;
   error: string | null;
+  warning?: string | null;
   startedAt: number | null;
 }
 
@@ -251,7 +252,8 @@ export function useSessionSetup(sessionId: string, enabled: boolean) {
       return setup;
     },
     refetchInterval: (q) =>
-      q.state.data === undefined || q.state.data?.status === "running"
+      q.state.status !== "error" &&
+      (q.state.data === undefined || q.state.data?.status === "running")
         ? 1000
         : false,
   });

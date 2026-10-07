@@ -5,6 +5,7 @@
  * mid-setup is recorded there as a failure.
  */
 
+import { db } from "../db";
 import type { SetupStage, SetupStep } from "../env-setup";
 
 export type StageId = "fetch" | "worktree" | SetupStage;
@@ -23,6 +24,8 @@ export interface SetupView {
   log: string[];
   branch: string | null;
   error: string | null;
+  // Went ahead, but worth knowing (the fetch failed: the base may be old).
+  warning: string | null;
   startedAt: number;
 }
 
@@ -47,6 +50,7 @@ export function startSetup(sessionId: string, branch: string): SetupView {
     log: [],
     branch,
     error: null,
+    warning: null,
     startedAt: Date.now(),
   };
   setups.set(sessionId, view);
@@ -57,8 +61,29 @@ export function getSetup(sessionId: string): SetupView | null {
   return setups.get(sessionId) ?? null;
 }
 
+// Read from the row too: after a restart the map is empty, and the row
+// still says what happened. (A task's setup is lib/tasks/start's.)
+function savedSetup(sessionId: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT setup_status FROM sessions WHERE id = ? AND task_status IS NULL`
+    )
+    .get(sessionId) as { setup_status: string | null } | undefined;
+  return row?.setup_status ?? null;
+}
+
 export function settingUp(sessionId: string): boolean {
-  return setups.get(sessionId)?.status === "running";
+  if (setups.has(sessionId)) return setups.get(sessionId)!.status === "running";
+  return savedSetup(sessionId) === "running";
+}
+
+// Whether its queue may be sent without the person asking: never while
+// setup runs, nor after it failed (the agent would start in the project's
+// own checkout, or on half-installed dependencies). Send now still works.
+export function holdsQueue(sessionId: string): boolean {
+  if (settingUp(sessionId)) return true;
+  const live = setups.get(sessionId);
+  return (live ? live.status : savedSetup(sessionId)) === "failed";
 }
 
 // Starting a stage finishes the one before it.

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTask, listTasks } from "@/lib/tasks";
+import { getProject } from "@/lib/projects";
 
 export async function GET() {
   return NextResponse.json({ tasks: await listTasks() });

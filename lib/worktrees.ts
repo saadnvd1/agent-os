@@ -2,7 +2,7 @@
  * Git Worktree management for isolated feature development
  */
 
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
@@ -16,6 +16,7 @@ import {
 } from "./git";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Base directory for all worktrees
 const WORKTREES_DIR = path.join(os.homedir(), ".agent-os", "worktrees");
@@ -118,8 +119,19 @@ export async function createWorktree(
   let lastError: Error | null = null;
   for (const ref of refFormats) {
     try {
-      await execAsync(
-        `git -C "${resolvedProjectPath}" worktree add -b "${branchName}" "${worktreePath}" "${ref}"`,
+      await execFileAsync(
+        "git",
+        [
+          "-C",
+          resolvedProjectPath,
+          "worktree",
+          "add",
+          "-b",
+          branchName,
+          "--",
+          worktreePath,
+          ref,
+        ],
         { timeout: 30000 }
       );
       lastError = null;

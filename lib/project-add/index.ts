@@ -57,6 +57,11 @@ export async function addFolder(
   });
 }
 
+// A machine with no git identity still gets its first commit, under a
+// name set on this repo only.
+const IDENTITY =
+  "{ git config user.email >/dev/null || git config user.email agentos@localhost; } && { git config user.name >/dev/null || git config user.name AgentOS; }";
+
 // A new folder under `parent`, a git repo with a first commit.
 export async function initProject(
   hostId: string,
@@ -68,7 +73,7 @@ export async function initProject(
     throw new Error("Use letters, numbers, dots, dashes or underscores");
   const out = await run(
     hostId,
-    `cd ${shellPath(parent || "~")} && mkdir ${shellQuote(name)} && cd ${shellQuote(name)} && git init -q && printf '# %s\\n' ${shellQuote(name)} > README.md && git add README.md && git commit -qm 'Initial commit' && pwd`
+    `cd ${shellPath(parent || "~")} && mkdir ${shellQuote(name)} && cd ${shellQuote(name)} && git init -q && ${IDENTITY} && printf '# %s\\n' ${shellQuote(name)} > README.md && git add README.md && git commit -qm 'Initial commit' && pwd`
   );
   return createProject({
     name,
@@ -99,6 +104,8 @@ const g = globalThis as { __agentosClones?: Map<string, CloneJob> };
 const jobs = (g.__agentosClones ??= new Map());
 const LOG_LINES = 30;
 const CLONE_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_CLONES = 4;
+const KEEP_FINISHED_MS = 10 * 60 * 1000;
 
 export const getCloneJob = (id: string) => jobs.get(id) ?? null;
 
@@ -113,6 +120,11 @@ export function startClone(
   if (!REPO_URL.test(url)) throw new Error("That isn't a repository URL");
   const name = repoNameOf(url);
   if (!name) throw new Error("Couldn't tell the repository's name");
+  if (
+    [...jobs.values()].filter((j) => j.status === "running").length >=
+    MAX_CLONES
+  )
+    throw new Error("Too many clones running; try again when one finishes");
   const job: CloneJob = {
     id: randomUUID(),
     status: "running",
@@ -142,12 +154,18 @@ export function startClone(
     }
     job.log.splice(0, Math.max(0, job.log.length - LOG_LINES));
   });
+  // A finished job is read by its dialog's next poll or two, then dropped.
+  const forget = () =>
+    setTimeout(() => jobs.delete(job.id), KEEP_FINISHED_MS).unref?.();
   child.on("error", (error) => {
+    clearTimeout(timer);
+    forget();
     job.status = "failed";
     job.error = error.message;
   });
   child.on("close", (code) => {
     clearTimeout(timer);
+    forget();
     if (job.status !== "running") return;
     if (code !== 0) {
       job.status = "failed";

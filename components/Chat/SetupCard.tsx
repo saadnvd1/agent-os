@@ -83,6 +83,11 @@ export function SetupCard({ sessionId }: { sessionId: string }) {
           })}
         </ol>
       )}
+      {setup.warning && (
+        <p className="mt-2 text-xs break-words text-amber-600 dark:text-amber-400">
+          {setup.warning}
+        </p>
+      )}
       {setup.error && (
         <p className="text-destructive mt-2 text-xs break-words">
           {setup.error}

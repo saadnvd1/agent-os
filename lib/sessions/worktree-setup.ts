@@ -6,12 +6,17 @@
  * nothing.
  */
 
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import { db } from "../db";
 import { createWorktree } from "../worktrees";
 import { setupWorktree } from "../env-setup";
-import { generateBranchName, getDefaultBranch, renameBranch } from "../git";
+import {
+  generateBranchName,
+  getDefaultBranch,
+  isBranchName,
+  renameBranch,
+} from "../git";
 import { findAvailablePort } from "../ports";
 import { notifySessionsChanged } from "../status/hub";
 import {
@@ -29,7 +34,7 @@ import {
   type SetupView,
 } from "./setup-progress";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface WorktreeSetupInput {
   sessionId: string;
@@ -43,15 +48,27 @@ export interface WorktreeSetupInput {
   onReady: (note: string) => Promise<void>;
 }
 
+const git = (cwd: string, args: string[], timeout = 60_000) =>
+  execFileAsync("git", ["-C", cwd, ...args], { timeout });
+
+// No remote: nothing to fetch. A fetch that failed is said, on the card and
+// to the agent, since the worktree is then cut from a base that may be old.
 async function fetchBase(view: SetupView, cwd: string, base: string) {
   enterStage(view, "fetch");
   try {
-    await execAsync(`git -C "${cwd}" fetch origin "${base}"`, {
-      timeout: 60_000,
-    });
+    await git(cwd, ["remote", "get-url", "origin"], 5_000);
+  } catch {
+    return;
+  }
+  try {
+    await git(cwd, ["fetch", "origin", "--", base]);
   } catch (error) {
-    // Offline or no remote: the worktree is cut from what's here.
-    view.log.push(`fetch skipped: ${(error as Error).message.split("\n")[0]}`);
+    const why = (
+      (error as Error).message.trim().split("\n").pop() ?? ""
+    ).replace(/^fatal: /, "");
+    view.stages[0].state = "failed";
+    view.warning = `Fetching ${base} failed, so the worktree was cut from the last fetched ${base}: ${why}`;
+    view.log.push(`fetch failed: ${why}`);
   }
 }
 
@@ -86,6 +103,8 @@ export async function setUpWorktree(input: WorktreeSetupInput): Promise<void> {
   try {
     const baseBranch =
       input.baseBranch ?? (await getDefaultBranch(projectPath));
+    if (!isBranchName(baseBranch))
+      throw new Error(`"${baseBranch}" isn't a branch name`);
     await fetchBase(view, projectPath, baseBranch);
     enterStage(view, "worktree");
     const wt = await createWorktree({
@@ -135,7 +154,10 @@ export async function setUpWorktree(input: WorktreeSetupInput): Promise<void> {
   finishSetup(sessionId, view, setup.status === "failed" ? setup.error : null);
   recordSetup(db, sessionId, setup);
   notifySessionsChanged();
-  await input.onReady(setupNote(setup));
+  const stale = view.warning
+    ? `\n\n---\nNote from AgentOS: ${view.warning}. Rebase on origin if you need the latest.`
+    : "";
+  await input.onReady(setupNote(setup) + stale);
 }
 
 // A session's setup this server was running when it stopped: the agent never
@@ -146,7 +168,7 @@ export function failInterruptedSetups(): number {
     .prepare(
       `UPDATE sessions SET setup_status = 'failed',
          working_directory = CASE WHEN worktree_path IS NULL
-           THEN (SELECT working_directory FROM projects WHERE id = sessions.project_id)
+           THEN COALESCE((SELECT working_directory FROM projects WHERE id = sessions.project_id), working_directory)
            ELSE working_directory END,
          setup_error = 'AgentOS restarted before setup finished. Your message is still queued: send it when you are ready.'
        WHERE setup_status = 'running' AND task_status IS NULL`

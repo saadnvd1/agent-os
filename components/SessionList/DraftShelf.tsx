@@ -49,7 +49,7 @@ export function DraftShelf({ projects }: { projects: Project[] }) {
             type="button"
             aria-label="Discard draft"
             onClick={() => draftsActions.remove(d.id)}
-            className="text-muted-foreground hover:text-foreground flex h-11 w-11 shrink-0 items-center justify-center md:h-9 md:w-9 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+            className="text-muted-foreground hover:text-foreground flex h-11 w-11 shrink-0 items-center justify-center md:h-9 md:w-9 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11 [@media(hover:none)]:md:opacity-100"
           >
             <X className="h-3.5 w-3.5" />
           </button>

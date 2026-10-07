@@ -39,7 +39,7 @@ import {
   queuedSessions,
 } from "./queued";
 import { fallbackFileSuggestions } from "./files";
-import { settingUp } from "../sessions/setup-progress";
+import { holdsQueue, settingUp } from "../sessions/setup-progress";
 import type { FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
 import { restoreActivity, track } from "./activity";
@@ -277,7 +277,7 @@ const RESUME_EVERY_MS = 60_000;
 const RESUME_WITHIN_MS = 60 * 60 * 1000;
 const resumed = new Map<string, number>();
 async function resumeQueue(sessionId: string): Promise<void> {
-  if (!listQueue(sessionId).length || settingUp(sessionId)) return;
+  if (!listQueue(sessionId).length || holdsQueue(sessionId)) return;
   // Switched to the terminal: its agent runs there now, and a chat worker
   // on the same conversation would race it. The queue waits on screen.
   const session = db

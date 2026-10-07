@@ -26,7 +26,7 @@ import { db, type Session } from "../db";
 import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
 import { launchSession, SCRATCH_DIR } from "./launch";
-import { settingUp } from "./setup-progress";
+import { holdsQueue, settingUp } from "./setup-progress";
 import { failInterruptedSetups } from "./worktree-setup";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -150,6 +150,58 @@ describe("launchSession (a draft's first send)", () => {
     expect(row(session.id).view).toBe("terminal");
     expect(initialPrompt).toBe("Hello");
     expect(listQueue(session.id)).toHaveLength(0);
+  });
+
+  it("refuses a bad branch, an unknown machine and a remote worktree, making nothing", async () => {
+    const repo = makeRepo();
+    const project = createProject({ name: "repo4", workingDirectory: repo });
+    const before = (
+      db.prepare(`SELECT COUNT(*) AS n FROM sessions`).get() as { n: number }
+    ).n;
+    await expect(
+      launchSession({
+        projectId: project.id,
+        agentType: "claude",
+        useWorktree: true,
+        baseBranch: "x; touch /tmp/p",
+        prompt: "hi",
+      })
+    ).rejects.toThrow(/isn't a branch name/);
+    await expect(
+      launchSession({ agentType: "claude", hostId: "nope", prompt: "hi" })
+    ).rejects.toThrow(/Unknown machine/);
+    db.prepare(
+      `INSERT INTO hosts (id, name, ssh_target) VALUES ('box', 'box', 'alice@box')`
+    ).run();
+    const remote = createProject({
+      name: "remote",
+      workingDirectory: "~/dev/remote",
+      hostId: "box",
+    });
+    await expect(
+      launchSession({
+        projectId: remote.id,
+        agentType: "claude",
+        useWorktree: true,
+        prompt: "hi",
+      })
+    ).rejects.toThrow(/not available on other machines/);
+    expect(
+      (db.prepare(`SELECT COUNT(*) AS n FROM sessions`).get() as { n: number })
+        .n
+    ).toBe(before);
+  });
+
+  it("holds a queue whose setup failed or was cut off, until it's sent by hand", () => {
+    db.prepare(
+      `INSERT INTO sessions (id, name, working_directory, setup_status)
+       VALUES ('held', 'held', '/tmp', 'failed'), ('busy', 'busy', '/tmp', 'running')`
+    ).run();
+    expect(holdsQueue("held")).toBe(true);
+    expect(settingUp("held")).toBe(false);
+    // After a restart the in-memory setups are gone; the row still says.
+    expect(settingUp("busy")).toBe(true);
+    expect(holdsQueue("busy")).toBe(true);
   });
 
   it("marks a setup a restart cut off as failed, in the project's folder", () => {
