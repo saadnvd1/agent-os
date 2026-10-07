@@ -13,6 +13,7 @@ import { deleteItems } from "@/lib/chat/store";
 import { clearQueue } from "@/lib/chat/queued";
 import { recordPreviousName } from "@/lib/session-names";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
+import { forgetPR } from "@/lib/tasks/session";
 import { runInBackground } from "@/lib/async-operations";
 
 // Sanitize a name for use as tmux session name
@@ -138,6 +139,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
               currentBranch,
               newBranchName
             );
+            // Only once git has it: the row names the branch the task's PR
+            // is looked up by.
+            updates.push("branch_name = ?");
+            values.push(newBranchName);
+            forgetPR(id);
             console.log(
               `Renamed branch ${currentBranch} → ${newBranchName}`,
               result.remoteRenamed ? "(also on remote)" : "(local only)"

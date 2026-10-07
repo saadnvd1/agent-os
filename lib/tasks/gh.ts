@@ -27,10 +27,14 @@ export async function run(
   return stdout;
 }
 
-// The branch's PR, null when it has none; throws when gh can't say.
+// The branch's PR in this repository, null when it has none; throws when gh
+// can't say. A PR from a fork whose branch has the same name isn't it.
+// openOnly: a branch found in the worktree rather than given to the task
+// may have been someone's before, so only an open PR counts.
 export async function findPRStrict(
   repoDir: string,
-  branch: string
+  branch: string,
+  opts: { openOnly?: boolean } = {}
 ): Promise<TaskPR | null> {
   const out = await run(
     "gh",
@@ -40,23 +44,26 @@ export async function findPRStrict(
       "--head",
       branch,
       "--state",
-      "all",
+      opts.openOnly ? "open" : "all",
       "--limit",
-      "1",
+      "10",
       "--json",
-      "number,url,state,headRefOid,statusCheckRollup,body",
+      "number,url,state,headRefOid,statusCheckRollup,body,isCrossRepository",
     ],
     repoDir,
     15000
   );
-  const [pr] = JSON.parse(out) as Array<{
-    number: number;
-    url: string;
-    state: TaskPR["state"];
-    headRefOid?: string;
-    statusCheckRollup: RollupEntry[] | null;
-    body?: string;
-  }>;
+  const pr = (
+    JSON.parse(out) as Array<{
+      number: number;
+      url: string;
+      state: TaskPR["state"];
+      headRefOid?: string;
+      statusCheckRollup: RollupEntry[] | null;
+      body?: string;
+      isCrossRepository?: boolean;
+    }>
+  ).find((p) => !p.isCrossRepository);
   if (!pr) return null;
   // A closed PR's checks gate nothing, so they cost no API calls.
   const rollup =
@@ -150,7 +157,8 @@ async function actionsRun(
 
 export async function findPR(
   repoDir: string,
-  branch: string
+  branch: string,
+  opts: { openOnly?: boolean } = {}
 ): Promise<TaskPR | null> {
-  return findPRStrict(repoDir, branch).catch(() => null);
+  return findPRStrict(repoDir, branch, opts).catch(() => null);
 }
