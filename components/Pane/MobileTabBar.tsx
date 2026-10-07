@@ -204,6 +204,15 @@ export function MobileTabBar({
             align="center"
             className="max-h-[300px] min-w-[200px] overflow-y-auto"
           >
+            {/* First, so a long session list can't scroll it out of sight. */}
+            {session && (
+              <MoveMenuItems
+                session={session}
+                Item={DropdownMenuItem}
+                After={DropdownMenuSeparator}
+                iconClassName="h-4 w-4"
+              />
+            )}
             {sessions
               .filter((s) => !s.conductor_session_id)
               .map((s) => {
@@ -238,14 +247,6 @@ export function MobileTabBar({
                   </DropdownMenuItem>
                 );
               })}
-            {session && (
-              <MoveMenuItems
-                session={session}
-                Item={DropdownMenuItem}
-                Before={DropdownMenuSeparator}
-                iconClassName="h-4 w-4"
-              />
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
