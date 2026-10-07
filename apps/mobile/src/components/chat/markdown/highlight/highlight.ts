@@ -9,6 +9,17 @@ export interface Token {
 export type Line = Token[];
 
 const ALIASES: Record<string, string> = {
+  tsx: "tsx",
+  jsx: "jsx",
+  mjs: "javascript",
+  cjs: "javascript",
+  mts: "typescript",
+  cts: "typescript",
+  rs: "rust",
+  kt: "kotlin",
+  h: "c",
+  hpp: "cpp",
+  cc: "cpp",
   sh: "bash",
   shell: "bash",
   zsh: "bash",
