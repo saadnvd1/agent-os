@@ -4,6 +4,7 @@ import { HostBadge } from "@/components/Hosts";
 import type { Session } from "@/lib/db";
 import { headerParts } from "@/lib/orchestrator/header-line";
 import { cn } from "@/lib/utils";
+import { usageLabel, useSessionUsage } from "@/data/load";
 import { useRowContext } from "./RowContext";
 
 const ATTENTION = (part: string) => part === "paused" || /\basks?$/.test(part);
@@ -20,6 +21,8 @@ export function RowSubtitle({
   detail?: string | null;
 }) {
   const ctx = useRowContext();
+  // What its processes use, on a busy session: "3.1 cores · 4.2 GB".
+  const usage = useSessionUsage(session.id);
   if (session.role === "orchestrator") {
     const ws = session.workspace_id ?? "";
     const overview = ctx.orchestrators.find((o) => o.workspaceId === ws);
@@ -49,9 +52,11 @@ export function RowSubtitle({
   const project = ctx.projectNames.get(session.project_id ?? "");
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      {(project || detail) && (
+      {(project || detail || usage) && (
         <span className="text-muted-foreground/70 truncate text-xs">
-          {[detail?.slice(0, 200), project].filter(Boolean).join(" · ")}
+          {[usage && usageLabel(usage), detail?.slice(0, 200), project]
+            .filter(Boolean)
+            .join(" · ")}
         </span>
       )}
       <HostBadge hostId={session.host_id} />

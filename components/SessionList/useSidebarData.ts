@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useSnapshot } from "valtio";
 import type { Session } from "@/lib/db";
 import { buildShelves, inWorkspace } from "@/lib/sidebar/shelves";
@@ -12,6 +12,9 @@ import { useWorkspacesQuery } from "@/data/workspaces";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import type { SessionStatus } from "./SessionList.types";
 
+// One empty list for queries still loading, so memos below hold.
+const NONE: never[] = [];
+
 // Everything the flat list needs: the current workspace's sessions, sorted
 // onto shelves by the remembered filters.
 export function useSidebarData(
@@ -22,8 +25,8 @@ export function useSidebarData(
 
   const sessionsQuery = useSessionsQuery();
   const projectsQuery = useProjectsQuery();
-  const { data: workspaces = [] } = useWorkspacesQuery();
-  const { data: tasks = [] } = useTasksQuery();
+  const { data: workspaces = NONE } = useWorkspacesQuery();
+  const { data: tasks = NONE } = useTasksQuery();
 
   const sessions = useMemo(
     () => sessionsQuery.data?.sessions ?? [],
@@ -77,7 +80,9 @@ export function useSidebarData(
 
   // Per workspace, how many of its project sessions are working: the
   // orchestrator row's "3 running".
-  const runningByWorkspace = useMemo(() => {
+  // Keyed by its counts, so the same counts keep the same map and rows
+  // don't redraw for a push that changed nothing they show.
+  const runningKey = useMemo(() => {
     const byId = new Map(projects.map((p) => [p.id, p.workspace_id]));
     const counts = new Map<string, number>();
     for (const s of sessions) {
@@ -86,8 +91,17 @@ export function useSidebarData(
         continue;
       counts.set(ws, (counts.get(ws) ?? 0) + 1);
     }
-    return counts;
+    return JSON.stringify([...counts].sort());
   }, [sessions, projects, sessionStatuses]);
+  const runningByWorkspace = useMemo(
+    () => new Map<string, number>(JSON.parse(runningKey)),
+    [runningKey]
+  );
+
+  const taskCardUrl = useCallback(
+    (id: string) => tasks.find((t) => t.id === id)?.cardUrl,
+    [tasks]
+  );
 
   const projectNames = useMemo(
     () => new Map(projects.map((p) => [p.id, p.name])),
@@ -105,7 +119,7 @@ export function useSidebarData(
     workspace,
     workspaceProjects,
     project,
-    taskCardUrl: (id: string) => tasks.find((t) => t.id === id)?.cardUrl,
+    taskCardUrl,
     isPending: sessionsQuery.isPending || projectsQuery.isPending,
     error: sessionsQuery.error ?? projectsQuery.error,
     refetch: () => {

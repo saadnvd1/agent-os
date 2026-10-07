@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   const path = expandPath(rawPath);
 
-  if (!isGitRepo(path)) {
+  if (!(await isGitRepo(path))) {
     return NextResponse.json(
       { error: "Not a git repository" },
       { status: 400 }
@@ -31,13 +31,13 @@ export async function GET(request: NextRequest) {
     if (filePath) {
       const isUntracked = searchParams.get("untracked") === "true";
       const diff = isUntracked
-        ? getUntrackedFileDiff(path, filePath)
-        : getFileDiff(path, filePath, staged);
+        ? await getUntrackedFileDiff(path, filePath)
+        : await getFileDiff(path, filePath, staged);
       return NextResponse.json({ diff });
     }
 
     // Otherwise return full status
-    const status = getGitStatus(path);
+    const status = await getGitStatus(path);
     return NextResponse.json(status);
   } catch (error) {
     return NextResponse.json(

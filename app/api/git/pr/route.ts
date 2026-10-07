@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Path is required" }, { status: 400 });
   }
 
-  if (!isGitRepo(path)) {
+  if (!(await isGitRepo(path))) {
     return NextResponse.json(
       { error: "Not a git repository" },
       { status: 400 }
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
-    if (!isGitRepo(path)) {
+    if (!(await isGitRepo(path))) {
       return NextResponse.json(
         { error: "Not a git repository" },
         { status: 400 }

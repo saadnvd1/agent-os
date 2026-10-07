@@ -1,20 +1,13 @@
 "use client";
 
-import { DevicesDialog } from "@/components/Devices";
-import { ArchivedDialog, CleanupDialog } from "@/components/Archived";
 import { toast } from "sonner";
 
-import { LumifyHubDialogs } from "@/components/LumifyHub";
 import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
-import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
-import { MessagesDialog } from "@/components/Bus";
-import { SchedulesDialog } from "@/components/Schedules";
-import { PhoneNotifyDialog } from "@/components/PhoneNotify/PhoneNotifyDialog";
 import { useOpenSession } from "@/hooks/useOpenSession";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { memo, useState, useEffect, useCallback, useRef } from "react";
 
 // Debug log buffer - persists even if console is closed
 const debugLogs: string[] = [];
@@ -54,10 +47,93 @@ import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
 import { useQuickStart } from "@/hooks/useQuickStart";
 import { useOpenOrchestrator } from "@/hooks/useOpenOrchestrator";
-import { CommandPalette, useAppCommands } from "@/components/CommandPalette";
-import { UsageDialog } from "@/components/Usage";
 import { paletteActions, paletteUi } from "@/stores/palette";
+import { useAppCommands } from "@/components/CommandPalette/useAppCommands";
+import dynamic from "next/dynamic";
 import { chatMetaActions } from "@/stores/chatMeta";
+
+// The app's dialogs open from their stores, so none is needed for the first
+// paint: their code loads right after it.
+const TasksDialog = dynamic(
+  () => import("@/components/Tasks/TasksDialog").then((m) => m.TasksDialog),
+  { ssr: false }
+);
+const NewTaskDialog = dynamic(
+  () => import("@/components/Tasks/NewTaskDialog").then((m) => m.NewTaskDialog),
+  { ssr: false }
+);
+const SchedulesDialog = dynamic(
+  () =>
+    import("@/components/Schedules/SchedulesDialog").then(
+      (m) => m.SchedulesDialog
+    ),
+  { ssr: false }
+);
+const PhoneNotifyDialog = dynamic(
+  () =>
+    import("@/components/PhoneNotify/PhoneNotifyDialog").then(
+      (m) => m.PhoneNotifyDialog
+    ),
+  { ssr: false }
+);
+const MessagesDialog = dynamic(
+  () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
+  { ssr: false }
+);
+const DevicesDialog = dynamic(
+  () =>
+    import("@/components/Devices/DevicesDialog").then((m) => m.DevicesDialog),
+  { ssr: false }
+);
+const ArchivedDialog = dynamic(
+  () =>
+    import("@/components/Archived/ArchivedDialog").then(
+      (m) => m.ArchivedDialog
+    ),
+  { ssr: false }
+);
+const CleanupDialog = dynamic(
+  () =>
+    import("@/components/Archived/CleanupDialog").then((m) => m.CleanupDialog),
+  { ssr: false }
+);
+const LumifyHubDialogs = dynamic(
+  () =>
+    import("@/components/LumifyHub/LumifyHubDialogs").then(
+      (m) => m.LumifyHubDialogs
+    ),
+  { ssr: false }
+);
+const UsageDialog = dynamic(
+  () => import("@/components/Usage/UsageDialog").then((m) => m.UsageDialog),
+  { ssr: false }
+);
+const CommandPalette = dynamic(
+  () =>
+    import("@/components/CommandPalette/CommandPalette").then(
+      (m) => m.CommandPalette
+    ),
+  { ssr: false }
+);
+
+// Held apart from HomeContent, which re-renders on every status push.
+const AppDialogs = memo(function AppDialogs() {
+  return (
+    <>
+      <TasksDialog />
+      <SchedulesDialog />
+      <PhoneNotifyDialog />
+      <NewTaskDialog />
+      <MessagesDialog />
+      <DevicesDialog />
+      <ArchivedDialog />
+      <CleanupDialog />
+      <LumifyHubDialogs />
+      <UsageDialog />
+      <CommandPalette />
+    </>
+  );
+});
 
 function HomeContent() {
   // UI State
@@ -609,17 +685,7 @@ function HomeContent() {
       ) : (
         <DesktopView {...viewProps} />
       )}
-      <TasksDialog />
-      <SchedulesDialog />
-      <PhoneNotifyDialog />
-      <NewTaskDialog />
-      <MessagesDialog />
-      <DevicesDialog />
-      <ArchivedDialog />
-      <CleanupDialog />
-      <LumifyHubDialogs />
-      <UsageDialog />
-      <CommandPalette />
+      <AppDialogs />
     </>
   );
 }

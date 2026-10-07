@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The full guard, the same run locally and in CI:
 #   scripts/check            typecheck, lint, format, tests
-#   scripts/check --build    ...and a production build
+#   scripts/check --build    ...and a production build, held to its JS budget
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,5 +13,6 @@ step "format";    npx prettier --check . --log-level warn
 step "test";      npx vitest run
 if [ "${1:-}" = "--build" ]; then
   step "build";   npx next build
+  step "bundle";  node scripts/check-bundle.mjs
 fi
 printf '\n✓ check passed\n'

@@ -3,6 +3,8 @@
 # redeploy the live instance and publish the same commit to npm. Runs in the
 # background; chat turns live in workers, so the restart interrupts nothing.
 #   sm add agentos-autodeploy "scripts/autodeploy" --cron "* * * * *"
+# Another machine (a server) runs it with AGENTOS_PUBLISH=0: deploy
+# only, and its own AGENTOS_RESTART. Only one machine publishes to npm.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,6 +30,7 @@ git fetch -q origin main
 head=$(git rev-parse origin/main)
 deployed=$(cat "$state/deployed" 2>/dev/null || true)
 published=$(cat "$state/published" 2>/dev/null || true)
+[ "${AGENTOS_PUBLISH:-1}" = 0 ] && published=$head
 [ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
 log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
 
