@@ -11,6 +11,14 @@ export function saveItem(sessionId: string, item: ChatItem): void {
   ).run(sessionId, item.id, sessionId, JSON.stringify(item));
 }
 
+// Moves an item after every other, as if first written now.
+export function moveToEnd(sessionId: string, itemId: string): void {
+  db.prepare(
+    `UPDATE chat_items SET seq = (SELECT MAX(seq) + 1 FROM chat_items WHERE session_id = ?)
+     WHERE session_id = ? AND item_id = ?`
+  ).run(sessionId, sessionId, itemId);
+}
+
 export function listItems(sessionId: string): ChatItem[] {
   return (
     db

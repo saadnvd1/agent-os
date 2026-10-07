@@ -18,7 +18,7 @@ import type {
   PeerMessage,
   UsageTotals,
 } from "../events";
-import { listItems, runningTools, saveItem, settle } from "../store";
+import { listItems, moveToEnd, runningTools, saveItem, settle } from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
 import { recordTurn, startingTotals } from "../../usage/turns";
 import {
@@ -50,11 +50,16 @@ export class ChatHost {
   // A permission mode change still on its way to the agent: a message sent
   // right after it (carrying out a plan) must not overtake it.
   private modeChange: Promise<void> = Promise.resolve();
-  // Turns stopping for a message sent now: that message's turn follows
-  // straight on, so their end isn't idle.
-  private handover = 0;
-  // Their messages, shown once the turn they stopped has ended, so they
-  // read after it rather than in the middle of it.
+  // Turns the agent said it started, and how many of them have ended.
+  private turnsStarted = 0;
+  private turnsEnded = 0;
+  // A message sent now stops the turns started up to here: their ends
+  // aren't idle, since its turn follows straight on. Counted by the turns
+  // the agent reports, so one that never started or never sends its result
+  // can't swallow the end of the message's own turn.
+  private stopsUpTo = 0;
+  // Those messages: saved at once, and shown (moved after the stopped turn)
+  // once it has ended, so they don't read as part of it.
   private handedOver: ChatItem[] = [];
   // Esc stopped the running turn ("turn"), or it has ended ("after", until
   // the next turn ends): a message sent while the stopped turn, or one the
@@ -176,6 +181,7 @@ export class ChatHost {
           );
           this.emit(e);
         } else if (e.type === "turn_start") {
+          this.turnsStarted++;
           // A turn the agent started itself (a background task's notice)
           // runs like any other: what's sent meanwhile waits for it.
           if (this.state === "idle" && !this.closed) {
@@ -192,11 +198,12 @@ export class ChatHost {
             this.closeTools();
             this.stopping = this.stopping === "turn" ? "after" : null;
             this.stoppedAt = Date.now();
+            let stoppedTurn = false;
+            if (this.turnsEnded < this.turnsStarted)
+              stoppedTurn = ++this.turnsEnded <= this.stopsUpTo;
             // The message sent now is already the agent's next turn.
-            if (this.handover) {
-              this.handover--;
-              const user = this.handedOver.shift();
-              if (user) this.record(user);
+            if (stoppedTurn) {
+              if (this.turnsEnded === this.stopsUpTo) this.showHandedOver();
               continue;
             }
             // The next queued message goes straight on, with no idle in
@@ -227,7 +234,7 @@ export class ChatHost {
     } finally {
       this.settleStreaming();
       this.closeTools();
-      for (const user of this.handedOver.splice(0)) this.record(user);
+      this.showHandedOver();
       this.setState("idle");
     }
   }
@@ -270,9 +277,10 @@ export class ChatHost {
     this.sent.add(m.id);
     this.currentTurn = m.id;
     // Sent now, it stops the running turn, which still ends after this.
-    if (now && this.busy()) {
-      this.handover++;
-    } else now = false;
+    if (!this.busy()) now = false;
+    // A turn the agent has started and not ended is what stops.
+    const handOver = now && this.turnsStarted > this.turnsEnded;
+    if (handOver) this.stopsUpTo = this.turnsStarted;
     this.stopping = null;
     const checkpoint = now
       ? this.conversation.send(m.text, m.images, { now })
@@ -287,14 +295,23 @@ export class ChatHost {
       createdAt: Date.now(),
       checkpoint,
     };
-    if (now) this.handedOver.push(user);
-    else this.record(user);
+    if (handOver) {
+      saveItem(this.session.id, user);
+      this.handedOver.push(user);
+    } else this.record(user);
     this.setState("running");
     // A new turn makes the last guess stale.
     if (this.suggestion !== null) this.setSuggestion(null);
     db.prepare(
       `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
     ).run(this.session.id);
+  }
+
+  private showHandedOver(): void {
+    for (const user of this.handedOver.splice(0)) {
+      moveToEnd(this.session.id, user.id);
+      this.emit({ type: "item", item: user });
+    }
   }
 
   // At a turn's end nothing is running: a tool call with no result was cut

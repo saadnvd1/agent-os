@@ -5,12 +5,20 @@ import { describe, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   order: [] as string[],
   prompt: null as AsyncIterable<{ priority?: string }> | null,
+  env: {} as Record<string, string | undefined>,
 }));
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   getSessionMessages: vi.fn(),
-  query: ({ prompt }: { prompt: AsyncIterable<{ priority?: string }> }) => {
+  query: ({
+    prompt,
+    options,
+  }: {
+    prompt: AsyncIterable<{ priority?: string }>;
+    options: { env: Record<string, string | undefined> };
+  }) => {
     calls.prompt = prompt;
+    calls.env = options.env;
     return {
       interrupt: async () => {
         calls.order.push("interrupt");
@@ -48,6 +56,17 @@ describe("claude driver send now", () => {
       "interrupt",
       "message:now",
     ]);
+    c.close();
+  });
+
+  it("has the agent say when it's done with every turn, whatever the env", () => {
+    const c = claudeDriver.start({
+      cwd: "/tmp",
+      model: "sonnet",
+      access: "full",
+      env: { CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "0" },
+    });
+    expect(calls.env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS).toBe("1");
     c.close();
   });
 });
