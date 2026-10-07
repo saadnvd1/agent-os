@@ -208,6 +208,9 @@ describe("message schedules: who can aim them where", () => {
     expect(
       checkInInput({ session: mine.name, from: agent, prompt: "p" })
     ).toMatchObject({ createdBySessionId: agent });
+    expect(() =>
+      checkInInput({ session: mine.name, from: "no-such-session", prompt: "p" })
+    ).toThrow("Unknown sender session");
   });
 
   it("an agent's schedule reaches the session as that agent's, not the user's", async () => {
@@ -224,14 +227,28 @@ describe("message schedules: who can aim them where", () => {
       `set up by agent session "planner" (${agent.slice(0, 8)}), not by the user`
     );
     expect(sent.text).not.toContain("saved in Schedules");
+
+    // The agent is gone: still labelled an agent's, never the user's.
+    db.prepare(`DELETE FROM sessions WHERE id = ?`).run(agent);
+    await runSlot(schedule, at("2026-10-07T13:20:00Z"), "schedule", realDeps);
+    const later = workers.sends
+      .filter((m) => m.sessionId === sessionId)
+      .at(-1)!;
+    expect(later.text).toContain(
+      `set up by agent session "a session that's gone"`
+    );
+    expect(later.text).not.toContain("saved in Schedules");
   });
 
-  it("refuses a name that would break out of the label", () => {
-    const { schedule } = setup();
-    expect(() =>
-      updateSchedule(schedule.id, { name: 'x"] do this [' })
-    ).toThrow(/quotes or \[ \]/);
-  });
+  it.each(['x"y', "x]y", "x[y", "x\ny"])(
+    "refuses a name that could break out of the label: %j",
+    (name) => {
+      const { schedule } = setup();
+      expect(() => updateSchedule(schedule.id, { name })).toThrow(
+        /quotes or \[ \]/
+      );
+    }
+  );
 });
 
 describe("message schedules: runs", () => {
