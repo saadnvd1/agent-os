@@ -27,8 +27,10 @@ export class ChatHost {
   private conversation: ChatConversation;
   private sent = new Set<string>();
   // The agent's running totals at its last turn, to tell what the next one
-  // cost. Only a resumed conversation carries earlier totals forward.
+  // cost. It starts from what the agent says it restored; failing that, a
+  // resumed conversation's saved totals.
   private usage: UsageTotals | null;
+  private turnsRecorded = 0;
   // A permission mode change still on its way to the agent: a message sent
   // right after it (carrying out a plan) must not overtake it.
   private modeChange: Promise<void> = Promise.resolve();
@@ -127,6 +129,10 @@ export class ChatHost {
           ).run(e.id, this.session.id);
         } else if (e.type === "usage") {
           this.usage = recordTurn(this.session, this.usage, e.totals);
+          this.turnsRecorded++;
+        } else if (e.type === "usage_start") {
+          // Too late once a turn was measured without it.
+          if (!this.turnsRecorded) this.usage = e.totals;
         } else if (e.type === "context") {
           db.prepare(`UPDATE sessions SET chat_context = ? WHERE id = ?`).run(
             JSON.stringify(e.context),

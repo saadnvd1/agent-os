@@ -207,6 +207,7 @@ export type DriverEvent =
   | { type: "commands"; commands: ChatCommand[] } // the command list changed
   | { type: "terminal_only"; names: string[] } // commands only a terminal can run
   | { type: "usage"; totals: UsageTotals } // running totals after a turn
+  | { type: "usage_start"; totals: UsageTotals } // the totals it started from
   | { type: "context"; context: ChatContext } // context window use
   | { type: "state"; state: ChatState };
 

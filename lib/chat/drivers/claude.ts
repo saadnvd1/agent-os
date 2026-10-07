@@ -9,7 +9,7 @@ import type { ChatDriver, ChatConversation } from "../driver";
 import type { DriverEvent, McpServerView } from "../events";
 import { InputQueue } from "../queue";
 import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
-import { toChatContext } from "../context";
+import { toChatContext, usageTotals } from "../context";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
 import { redact } from "../../orchestrator/untrusted";
 
@@ -166,6 +166,21 @@ export const claudeDriver: ChatDriver = {
     });
     const mapper = new ClaudeMapper();
     let sessionId = options.resumeId ?? null;
+
+    // What the agent restored on starting: a resumed conversation's totals
+    // when its last process saved them, nothing otherwise. Each turn's cost
+    // is measured from here.
+    void q
+      .usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
+        skipBehaviors: true,
+      })
+      .then((u) =>
+        out.push({
+          type: "usage_start",
+          totals: usageTotals(u.session.model_usage, u.session.total_cost_usd),
+        })
+      )
+      .catch(() => {});
 
     void (async () => {
       try {

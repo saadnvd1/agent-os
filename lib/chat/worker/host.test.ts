@@ -281,8 +281,36 @@ describe("lastUserTask", () => {
         usage: totals(0.4),
       });
       conversation.events.push({ type: "usage", totals: totals(1) });
+      conversation.events.push({ type: "usage", totals: totals(1.5) });
       await tick();
-      expect(costs(id)).toEqual([1]);
+      expect(costs(id)).toEqual([1, 0.5]);
+      host.close();
+    });
+
+    it("counts from what the agent restored, not what was saved", async () => {
+      // The last worker died without saving its totals: the agent starts
+      // from nothing although the session saved 0.4.
+      const { id, host, conversation } = await startHost("agent", {
+        resumeId: "conv-1",
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage_start", totals: totals(0) });
+      conversation.events.push({ type: "usage", totals: totals(0.6) });
+      await tick();
+      expect(costs(id)).toEqual([0.6]);
+      host.close();
+    });
+
+    it("ignores a starting point that arrives after a turn was measured", async () => {
+      const { id, host, conversation } = await startHost("agent", {
+        resumeId: "conv-1",
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage", totals: totals(1) });
+      conversation.events.push({ type: "usage_start", totals: totals(0) });
+      conversation.events.push({ type: "usage", totals: totals(1.25) });
+      await tick();
+      expect(costs(id).map((c) => +c.toFixed(2))).toEqual([0.6, 0.25]);
       host.close();
     });
   });

@@ -52,7 +52,7 @@ export type WorkerEvent =
       // server never trusts a worker from an older build with one it drops.
       caps?: string[];
     }
-  | Exclude<DriverEvent, { type: "resume_id" | "usage" }>
+  | Exclude<DriverEvent, { type: "resume_id" | "usage" | "usage_start" }>
   | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string };
 
 // Per database, so a test server's workers never meet the live server's.

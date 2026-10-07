@@ -69,8 +69,9 @@ export async function carryOutPlan(
   if (item?.kind !== "plan") throw new Error("That plan is gone");
   if (item.carried) return;
   // Mid-turn (another tab, a phone reconnecting), leaving plan mode would let
-  // the turn still planning start changing things.
-  const state = registry.live.get(sessionId)?.state;
+  // the turn still planning start changing things. Asked of the worker
+  // itself: just after a restart nothing is attached yet.
+  const { state } = await ensureLive(sessionId);
   if (state === "running" || state === "waiting")
     throw new Error("The plan can be carried out once this turn ends");
   await setChatPlan(sessionId, false);

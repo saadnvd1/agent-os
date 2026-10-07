@@ -15,6 +15,8 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
         calls.modes.push(mode);
       },
       close: () => {},
+      usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: () =>
+        new Promise(() => {}),
       // A conversation that never says anything.
       [Symbol.asyncIterator]: () => ({
         next: () => new Promise(() => {}),
