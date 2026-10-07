@@ -260,6 +260,24 @@ describe("findPRStrict's match", () => {
     expect((await findPRStrict("/repo", "feature/x"))?.number).toBe(8);
   });
 
+  it("skips a PR opened before `since`", async () => {
+    const at = (n: number, createdAt?: string) => ({
+      ...listed(n, false),
+      createdAt,
+    });
+    const since = "2026-06-01T00:00:00Z";
+    prList = [at(8, "2026-01-01T00:00:00Z")];
+    expect(await findPRStrict("/repo", "feature/x", { since })).toBeNull();
+    prList = [at(8)];
+    expect(await findPRStrict("/repo", "feature/x", { since })).toBeNull();
+    prList = [at(8, "2026-01-01T00:00:00Z"), at(12, "2026-06-02T00:00:00Z")];
+    expect((await findPRStrict("/repo", "feature/x", { since }))?.number).toBe(
+      12
+    );
+    prList = [at(8, "2026-01-01T00:00:00Z")];
+    expect((await findPRStrict("/repo", "feature/x"))?.number).toBe(8);
+  });
+
   it("asks for open PRs only when told to", async () => {
     prList = [];
     await findPRStrict("/repo", "feature/x", { openOnly: true });

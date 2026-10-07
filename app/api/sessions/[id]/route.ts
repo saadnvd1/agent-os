@@ -143,6 +143,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             // is looked up by.
             updates.push("branch_name = ?");
             values.push(newBranchName);
+            // Deleting the old remote branch closed its PR.
+            if (result.remoteRenamed)
+              updates.push("pr_number = NULL, pr_url = NULL, pr_status = NULL");
             forgetPR(id);
             console.log(
               `Renamed branch ${currentBranch} → ${newBranchName}`,

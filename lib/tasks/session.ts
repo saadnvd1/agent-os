@@ -51,40 +51,59 @@ const hasBranch = (dir: string, branch: string) =>
     5000
   ).then(
     () => true,
-    () => false
+    // Exit 1 is "no such branch"; a timeout or a lock isn't an answer.
+    (e: { code?: unknown }) => e?.code !== 1
   );
 
-// A branch renamed under a task (from the UI, or by its agent) moves the row
-// with it, so its PR is still found. Only a rename: the old branch is gone,
-// and the new one is a plain name that isn't the base or another session's.
-// A checkout of some other branch leaves the row alone. True when it moved;
-// `session` is updated in place.
-export async function syncBranch(session: Session): Promise<boolean> {
+// A branch renamed under a task (from the UI, or by its agent): the row
+// follows it, so its PR is still found. Only a rename: the old branch is
+// gone, and the new one is a plain name that isn't the base or another
+// session's. A checkout of some other branch is not followed.
+async function renamedBranch(session: Session): Promise<string | null> {
   const current = await worktreeBranch(session);
   const old = session.branch_name;
-  if (!current || current === old || !isBranchName(current)) return false;
-  if (current === session.base_branch) return false;
-  const dir = expandHome(session.worktree_path!);
-  if (old && (await hasBranch(dir, old))) return false;
+  if (!current || current === old || !isBranchName(current)) return null;
+  if (current === session.base_branch) return null;
+  if (old && (await hasBranch(expandHome(session.worktree_path!), old)))
+    return null;
   const owned = db
     .prepare(`SELECT 1 FROM sessions WHERE branch_name = ? AND id != ?`)
     .get(current, session.id);
-  if (owned) return false;
+  return owned ? null : current;
+}
+
+// `session` is updated in place.
+function moveBranch(session: Session, branch: string): void {
+  const old = session.branch_name;
   const { changes } = db
     .prepare(
       `UPDATE sessions SET branch_name = ? WHERE id = ? AND branch_name IS ?`
     )
-    .run(current, session.id, old);
-  if (!changes) return false;
+    .run(branch, session.id, old);
+  if (!changes) return;
   console.log(
-    `[tasks] ${session.id.slice(0, 8)}: branch ${old ?? "(none)"} -> ${current}, renamed in its worktree`
+    `[tasks] ${session.id.slice(0, 8)}: branch ${old ?? "(none)"} -> ${branch}, renamed in its worktree`
   );
-  session.branch_name = current;
-  return true;
+  session.branch_name = branch;
+}
+
+// The commit is in the worktree's history: the task's own work.
+async function inWorktree(session: Session, sha?: string): Promise<boolean> {
+  if (!sha || !/^[0-9a-f]{7,40}$/.test(sha)) return false;
+  return run(
+    "git",
+    ["merge-base", "--is-ancestor", sha, "HEAD"],
+    expandHome(session.worktree_path!),
+    5000
+  ).then(
+    () => true,
+    () => false
+  );
 }
 
 // sqlite's "2026-10-07 11:00:00" (UTC) as ISO.
-const isoUTC = (t: string) => (/[TZ]/.test(t) ? t : `${t.replace(" ", "T")}Z`);
+export const isoUTC = (t: string) =>
+  /[TZ]/.test(t) ? t : `${t.replace(" ", "T")}Z`;
 
 const prCache = new Map<string, { at: number; pr: TaskPR | null }>();
 
@@ -98,19 +117,23 @@ export async function prFor(
   if (!repo) return null;
   const cached = prCache.get(session.id);
   if (!fresh && cached && Date.now() - cached.at < 20000) return cached.pr;
-  const moved = await syncBranch(session);
-  if (!session.branch_name) return null;
-  let pr = await (strict ? findPRStrict : findPR)(repo, session.branch_name, {
-    openOnly: moved,
-    // Until the task has a PR, one older than the task isn't it.
-    since: session.pr_number ? undefined : isoUTC(session.created_at),
+  const renamed = await renamedBranch(session);
+  const branch = renamed ?? session.branch_name;
+  if (!branch) return null;
+  let pr = await (strict ? findPRStrict : findPR)(repo, branch, {
+    openOnly: !!renamed,
+    // A PR older than the task is an earlier use of the branch's name.
+    since: isoUTC(session.created_at),
   });
-  // Once the task has a PR, its branch never hands it a different one.
-  if (pr && session.pr_number && pr.number !== session.pr_number) {
-    const msg = `${session.branch_name} now resolves to PR #${pr.number}, not the task's #${session.pr_number}`;
-    if (strict) throw new Error(msg);
-    console.warn(`[tasks] ${session.id.slice(0, 8)}: ${msg}`);
-    pr = null;
+  if (renamed) {
+    // A PR on the renamed branch is the task's only if its head is the
+    // task's work; else the row stays where it was.
+    if (pr && !(await inWorktree(session, pr.head))) {
+      console.warn(
+        `[tasks] ${session.id.slice(0, 8)}: not following ${renamed}: PR #${pr.number}'s head isn't in its worktree`
+      );
+      pr = null;
+    } else moveBranch(session, renamed);
   }
   prCache.set(session.id, { at: Date.now(), pr });
   if (pr) {

@@ -24,7 +24,7 @@ vi.mock("./gh", async (importOriginal) => {
   };
 });
 
-const { prFor } = await import("./session");
+const { isoUTC, prFor } = await import("./session");
 
 beforeEach(() => {
   prs.clear();
@@ -41,7 +41,10 @@ describe("prFor after the task's branch was renamed", () => {
       wt.dir
     );
     git(wt.dir, "branch", "-m", "feature/schedules-message-a-session-notify");
-    prs.set("feature/schedules-message-a-session-notify", fakePR(114));
+    prs.set(
+      "feature/schedules-message-a-session-notify",
+      fakePR(114, { head: wt.head })
+    );
 
     expect((await prFor(task, true))?.number).toBe(114);
     expect(taskRow(task.id)).toMatchObject({
@@ -77,7 +80,10 @@ describe("prFor after the task's branch was renamed", () => {
     const wt = r.worktree("feature/old");
     const task = seedTask(r.repo, "feature/old", wt.dir);
     git(wt.dir, "branch", "-m", "feature/reused");
-    prs.set("feature/reused", fakePR(40, "MERGED", LONG_AGO));
+    prs.set(
+      "feature/reused",
+      fakePR(40, { state: "MERGED", createdAt: LONG_AGO })
+    );
 
     expect(await prFor(task, true)).toBeNull();
     expect(await prFor(taskRow(task.id), true)).toBeNull();
@@ -121,18 +127,73 @@ describe("prFor after the task's branch was renamed", () => {
     expect(taskRow(task.id).branch_name).toBe("feature/mine");
   });
 
-  it("never swaps a task's PR for another one on its branch", async () => {
+  it("doesn't follow a rename onto a branch whose PR isn't the task's work", async () => {
+    const r = makeRepo();
+    const theirs = r.worktree("feature/theirs", { "theirs.txt": "x\n" });
+    git(r.repo, "worktree", "remove", "--force", theirs.dir);
+    git(r.repo, "branch", "-D", "feature/theirs");
+    const wt = r.worktree("feature/mine");
+    const task = seedTask(r.repo, "feature/mine", wt.dir);
+    git(wt.dir, "branch", "-m", "feature/theirs");
+    prs.set("feature/theirs", fakePR(77, { head: theirs.head }));
+
+    expect(await prFor(task, true)).toBeNull();
+    expect(await prFor(taskRow(task.id), true)).toBeNull();
+    expect(taskRow(task.id)).toMatchObject({
+      branch_name: "feature/mine",
+      pr_number: null,
+    });
+  });
+
+  it("doesn't follow a rename onto the base branch", async () => {
+    const r = makeRepo();
+    const wt = r.worktree("feature/mine");
+    const task = seedTask(r.repo, "feature/mine", wt.dir);
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/base' WHERE id = ?`
+    ).run(task.id);
+    git(wt.dir, "branch", "-m", "feature/base");
+
+    await prFor(taskRow(task.id), true);
+    expect(taskRow(task.id).branch_name).toBe("feature/mine");
+    expect(lookups.map((l) => l.branch)).toEqual(["feature/mine"]);
+  });
+
+  it("doesn't read a worktree path for a session on another host", async () => {
+    const r = makeRepo();
+    const wt = r.worktree("feature/mine");
+    const task = seedTask(r.repo, "feature/mine", wt.dir);
+    db.prepare(`UPDATE sessions SET host_id = 'remote-1' WHERE id = ?`).run(
+      task.id
+    );
+    git(wt.dir, "branch", "-m", "feature/renamed");
+
+    await prFor(taskRow(task.id), true);
+    expect(taskRow(task.id).branch_name).toBe("feature/mine");
+  });
+
+  it("takes a newer PR on the task's branch over a closed one", async () => {
     const r = makeRepo();
     const wt = r.worktree("feature/mine");
     const task = seedTask(r.repo, "feature/mine", wt.dir);
     db.prepare(`UPDATE sessions SET pr_number = 150 WHERE id = ?`).run(task.id);
-    prs.set("feature/mine", fakePR(90, "MERGED", LONG_AGO));
+    prs.set("feature/mine", fakePR(151));
 
-    expect(await prFor(taskRow(task.id), true)).toBeNull();
-    await expect(prFor(taskRow(task.id), true, true)).rejects.toThrow(
-      /PR #90, not the task's #150/
-    );
-    expect(taskRow(task.id).pr_number).toBe(150);
+    expect((await prFor(taskRow(task.id), true))?.number).toBe(151);
+    expect(taskRow(task.id).pr_number).toBe(151);
+  });
+
+  it("asks only for PRs opened since the task started, in UTC", async () => {
+    const r = makeRepo();
+    const wt = r.worktree("feature/mine");
+    const task = seedTask(r.repo, "feature/mine", wt.dir);
+    db.prepare(
+      `UPDATE sessions SET created_at = '2026-10-07 11:00:00', pr_number = 9 WHERE id = ?`
+    ).run(task.id);
+
+    await prFor(taskRow(task.id), true);
+    expect(lookups[0].since).toBe("2026-10-07T11:00:00Z");
+    expect(isoUTC("2026-10-07T11:00:00Z")).toBe("2026-10-07T11:00:00Z");
   });
 
   it("leaves a row alone when its worktree is gone", async () => {
@@ -140,7 +201,7 @@ describe("prFor after the task's branch was renamed", () => {
     const wt = r.worktree("feature/gone");
     const task = seedTask(r.repo, "feature/gone", wt.dir);
     fs.rmSync(wt.dir, { recursive: true, force: true });
-    prs.set("feature/gone", fakePR(5, "MERGED"));
+    prs.set("feature/gone", fakePR(5, { state: "MERGED" }));
 
     expect((await prFor(task, true))?.number).toBe(5);
     expect(taskRow(task.id).branch_name).toBe("feature/gone");
@@ -154,7 +215,7 @@ describe("prFor after the task's branch was renamed", () => {
     const r = makeRepo();
     const wt = r.worktree("feature/same");
     const task = seedTask(r.repo, "feature/same", wt.dir);
-    prs.set("feature/same", fakePR(6, "MERGED"));
+    prs.set("feature/same", fakePR(6, { state: "MERGED" }));
 
     expect((await prFor(task, true))?.number).toBe(6);
     expect(lookups[0]).toMatchObject({

@@ -79,7 +79,10 @@ describe("renaming a task through the API", () => {
     const r = makeRepo();
     const wt = r.worktree("feature/old-name");
     const task = seedTask(r.repo, "feature/old-name", wt.dir);
-    prs.set("feature/fix-login-bug", fakePR(12, "MERGED", LONG_AGO));
+    prs.set(
+      "feature/fix-login-bug",
+      fakePR(12, { state: "MERGED", createdAt: LONG_AGO })
+    );
 
     await rename(task.id, "Fix login bug");
     expect(taskRow(task.id).branch_name).toBe("feature/fix-login-bug");

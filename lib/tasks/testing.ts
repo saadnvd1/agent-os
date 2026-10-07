@@ -28,13 +28,17 @@ export function fakeFindPR(
 
 export const fakePR = (
   number: number,
-  state: TaskPR["state"] = "OPEN",
-  createdAt = new Date(Date.now() + 60_000).toISOString()
+  {
+    state = "OPEN",
+    createdAt = new Date(Date.now() + 60_000).toISOString(),
+    head,
+  }: { state?: TaskPR["state"]; createdAt?: string; head?: string } = {}
 ): FakePR => ({
   number,
   url: `https://github.com/o/r/pull/${number}`,
   state,
   checks: "pass",
+  head,
   createdAt,
 });
 
