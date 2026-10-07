@@ -5,6 +5,8 @@ import type { WorkerCommand } from "./worker/protocol";
 // Workers that are "running" and answer with this hello; every command they
 // get is kept.
 const workers = vi.hoisted(() => ({
+  // Called with each send, as the worker would take it.
+  onSend: (_id: string, _cmd: unknown) => {},
   running: [] as string[],
   caps: undefined as string[] | undefined,
   state: "running" as string,
@@ -16,7 +18,10 @@ vi.mock("./worker/client", () => ({
   waitForExit: async () => {},
   connectWorker: async () => ({
     client: {
-      command: (c: WorkerCommand) => workers.commands.push(c),
+      command: (c: WorkerCommand) => {
+        workers.commands.push(c);
+        if (c.type === "send") workers.onSend(workers.running[0], c);
+      },
       detach: () => {},
     },
     hello: {
@@ -72,6 +77,44 @@ describe("reattaching to a running worker", () => {
 });
 
 describe("carrying out a plan right after a restart", () => {
+  it("goes ahead with an idle worker it attaches to", async () => {
+    const project = createProject({
+      name: `p-${Math.random().toString(36).slice(2, 8)}`,
+      workingDirectory: "/tmp/p",
+    });
+    const id = seedSession({
+      projectId: project.id,
+      name: "chat",
+      view: "chat",
+    });
+    getDb().prepare(`UPDATE sessions SET chat_plan = 1 WHERE id = ?`).run(id);
+    saveItem(id, { id: "plan-t1", kind: "plan", plan: "# Plan", createdAt: 1 });
+    registry.live.delete(id);
+    workers.running = [id];
+    workers.state = "idle";
+    workers.caps = ["plan"];
+    workers.commands = [];
+    workers.onSend = (sid, cmd) => {
+      const c = cmd as { id: string; text: string };
+      saveItem(sid, { id: c.id, kind: "user", text: c.text, createdAt: 2 });
+    };
+    await carryOutPlan(id, "plan-t1", 50);
+    const types = workers.commands.map((c) =>
+      c.type === "set_plan" ? `set_plan:${c.plan}` : c.type
+    );
+    expect(types.indexOf("set_plan:false")).toBeGreaterThan(-1);
+    expect(types.indexOf("set_plan:false")).toBeLessThan(types.indexOf("send"));
+    expect(workers.commands.find((c) => c.type === "send")).toMatchObject({
+      id: "user-carry-plan-t1",
+    });
+    expect(listItems(id).find((i) => i.id === "plan-t1")).toMatchObject({
+      carried: true,
+    });
+    registry.live.delete(id);
+    workers.state = "running";
+    workers.onSend = () => {};
+  });
+
   for (const state of ["running", "waiting"]) {
     it(`asks the worker, and waits while it's ${state}`, async () => {
       const project = createProject({
@@ -92,6 +135,7 @@ describe("carrying out a plan right after a restart", () => {
       });
       // Nothing attached yet: the server has just restarted.
       registry.live.delete(id);
+      workers.running = [id];
       workers.state = state;
       workers.caps = ["plan"];
       workers.commands = [];

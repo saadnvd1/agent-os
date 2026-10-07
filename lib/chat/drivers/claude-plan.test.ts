@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   options: [] as Record<string, unknown>[],
   modes: [] as string[],
+  // What the agent says it restored on starting; never answers by default.
+  usage: () => new Promise<unknown>(() => {}),
 }));
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   getSessionMessages: vi.fn(),
@@ -16,7 +18,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
       },
       close: () => {},
       usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: () =>
-        new Promise(() => {}),
+        calls.usage(),
       // A conversation that never says anything.
       [Symbol.asyncIterator]: () => ({
         next: () => new Promise(() => {}),
@@ -63,6 +65,50 @@ describe("plan mode in the driver", () => {
     await c.setAccess("ask");
     expect(calls.modes).toEqual([]);
     c.close();
+  });
+});
+
+describe("the totals a conversation starts from", () => {
+  it("reports what the agent restored", async () => {
+    calls.usage = async () => ({
+      session: {
+        total_cost_usd: 0.3,
+        model_usage: {
+          sonnet: {
+            inputTokens: 10,
+            outputTokens: 5,
+            cacheReadInputTokens: 100,
+            cacheCreationInputTokens: 20,
+            costUSD: 0.3,
+          },
+        },
+      },
+    });
+    const c = start();
+    const first = await c.events[Symbol.asyncIterator]().next();
+    expect(first.value).toEqual({
+      type: "usage_start",
+      totals: {
+        costUsd: 0.3,
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadTokens: 100,
+        cacheWriteTokens: 20,
+      },
+    });
+    c.close();
+  });
+
+  it("says nothing when the agent can't tell", async () => {
+    calls.usage = async () => {
+      throw new Error("not supported");
+    };
+    const c = start();
+    const next = c.events[Symbol.asyncIterator]().next();
+    const quiet = new Promise((r) => setTimeout(() => r("nothing"), 20));
+    expect(await Promise.race([next, quiet])).toBe("nothing");
+    c.close();
+    calls.usage = () => new Promise(() => {});
   });
 });
 
