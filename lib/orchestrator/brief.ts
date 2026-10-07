@@ -70,8 +70,8 @@ Reading:
 
 Acting:
 - \`${TOOL_NAMES.send}\` (session, message): message a session; it arrives as its next prompt.
-- \`${TOOL_NAMES.start_task}\` (project, prompt, base?): a task in its own worktree that ends in a PR. Write the prompt as a full brief.
-- \`${TOOL_NAMES.start_session}\` (project, prompt): an interactive session.
+- \`${TOOL_NAMES.start_task}\` (project, prompt, base?, name?): a task in its own worktree that ends in a PR. Write the prompt as a full brief; name it in 2-6 words, or it's named from the prompt.
+- \`${TOOL_NAMES.start_session}\` (project, prompt, name?): an interactive session.
 - \`${TOOL_NAMES.stack}\` (target, plan_only?): run a board's open cards as stacked tasks; plan_only shows the plan without starting.
 - \`${TOOL_NAMES.land}\` (id): merge a stack bottom-up through the gates.
 - \`${TOOL_NAMES.drop}\` (task, reason): close a task's PR and remove its worktree.

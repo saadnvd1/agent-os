@@ -4,6 +4,8 @@ import type { ChatAccess } from "../chat/events";
 export interface Session {
   id: string;
   name: string;
+  // Who named it: never auto-renamed when "user".
+  name_source: "user" | "generated" | "default";
   tmux_name: string;
   created_at: string;
   updated_at: string;

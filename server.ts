@@ -28,6 +28,7 @@ import {
   watchChat,
 } from "./lib/chat/runner";
 import { clientSend } from "./lib/chat/client-send";
+import { titleChatFromMessage } from "./lib/session-titles";
 import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
 import { startStackWatcher } from "./lib/stacks";
 import { setStartGate } from "./lib/stacks/tick";
@@ -151,11 +152,12 @@ app.prepare().then(() => {
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
-        if (msg.type === "send")
-          void sendChat(sessionId, { ...clientSend(msg), queue: true }).catch(
-            fail
-          );
-        else if (msg.type === "queue_edit" && typeof msg.text === "string")
+        if (msg.type === "send") {
+          const send = clientSend(msg);
+          void sendChat(sessionId, { ...send, queue: true }).catch(fail);
+          // "Session 4" is named after its first message.
+          void titleChatFromMessage(sessionId, send.text);
+        } else if (msg.type === "queue_edit" && typeof msg.text === "string")
           editQueuedChat(sessionId, String(msg.id), msg.text);
         else if (msg.type === "queue_move")
           moveQueuedChat(sessionId, String(msg.id), msg.by === -1 ? -1 : 1);

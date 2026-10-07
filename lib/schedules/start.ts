@@ -30,6 +30,7 @@ async function startTask(
   const session = await createTask({
     projectId: projectOf(schedule).id,
     prompt: schedule.prompt,
+    name: schedule.name,
     onCreated: onSession,
   });
   return session.id;
@@ -62,7 +63,9 @@ async function startSession(
       project.id,
       "local"
     );
-  db.prepare(`UPDATE sessions SET view = 'chat' WHERE id = ?`).run(id);
+  db.prepare(
+    `UPDATE sessions SET view = 'chat', name_source = 'user' WHERE id = ?`
+  ).run(id);
   notifyStatusChanged();
   // Linked once the prompt is in the conversation: a restart before then
   // records the run as failed, not as started with nothing sent.
