@@ -9,7 +9,9 @@ const [cmd, ...args] = process.argv.slice(2);
 const usage = `aos: talk to other agent sessions in AgentOS
 
   aos peers                          sessions, their project and what each is doing
-  aos send <session> <message...>    message a session (name, project/name or id)
+  aos send <session> <message...>    message a session (name, old name, project/name,
+                                     id or id prefix); says delivered, queued or
+                                     FAILED (exit 2: it waits in their inbox)
   aos inbox                          read messages sent to you
   aos history <session>              your conversation with a session
   aos spawn <project> <prompt...>    start a new agent session in a project
@@ -140,7 +142,10 @@ async function main() {
         if (p.id === me) continue;
         const where = p.projectName ? `${p.projectName}/` : "";
         const state = p.running ? p.doing || "running" : "not running";
-        console.log(`${where}${p.name}  ·  ${state}`);
+        const was = p.was.length ? ` (was ${p.was.join(", ")})` : "";
+        console.log(
+          `${p.id.slice(0, 8)}  ${where}${p.name}${was}  ·  ${state}`
+        );
       }
       return;
     }
@@ -148,12 +153,23 @@ async function main() {
       needMe();
       const [to, ...words] = args;
       if (!to || !words.length) fail("usage: aos send <session> <message...>");
-      const { message } = await post("/api/bus/send", {
+      const { message, delivery, note } = await post("/api/bus/send", {
         from: me,
         to,
         body: words.join(" "),
       });
-      console.log(`sent to ${message.toName}`);
+      if (note) console.log(`note: ${note}`);
+      if (delivery.state === "failed") {
+        console.error(
+          `FAILED: ${delivery.why}. It is saved in ${message.toName}'s inbox (aos inbox).`
+        );
+        process.exit(2);
+      }
+      console.log(
+        delivery.state === "queued"
+          ? `queued for ${message.toName}: it's busy and will see it after this turn`
+          : `delivered to ${message.toName}`
+      );
       return;
     }
     case "inbox": {
@@ -170,11 +186,9 @@ async function main() {
       needMe();
       const [other] = args;
       if (!other) fail("usage: aos history <session>");
-      const { peers } = await call("/api/bus/peers");
-      const peer = peers.find(
-        (p) => p.name.toLowerCase() === other.toLowerCase() || p.id === other
+      const { peer } = await call(
+        `/api/bus/peers?ref=${encodeURIComponent(other)}`
       );
-      if (!peer) fail(`no session called "${other}"`);
       const { messages } = await call(
         `/api/bus/messages?session=${encodeURIComponent(me)}`
       );

@@ -4,7 +4,6 @@
  * the brakes.
  */
 
-import { db } from "../db";
 import { sendMessage } from "../bus";
 import { interruptChat } from "../chat/runner";
 import { hostExec } from "../hosts";
@@ -35,17 +34,16 @@ export async function send(
   message: string
 ): Promise<string> {
   const to = findWorkspaceSession(workspaceId, ref);
-  const sent = await sendMessage({
+  const { delivery } = await sendMessage({
     fromId: orchestratorId(workspaceId),
     to: to.id,
     body: message,
   });
-  const delivered = db
-    .prepare(`SELECT delivered_at FROM bus_messages WHERE id = ?`)
-    .get(sent.id) as { delivered_at: string | null } | undefined;
-  return delivered?.delivered_at
-    ? `Sent to ${to.name}.`
-    : `Sent to ${to.name}, but it isn't running: it'll find it with aos inbox.`;
+  if (delivery.state === "failed")
+    return `FAILED to reach ${to.name}: ${delivery.why}. It's in its inbox (aos inbox).`;
+  return delivery.state === "queued"
+    ? `Queued for ${to.name}: it's busy and will see it after this turn.`
+    : `Delivered to ${to.name}.`;
 }
 
 export async function startTask(

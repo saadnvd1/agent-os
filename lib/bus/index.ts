@@ -6,25 +6,24 @@
 
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
-import { hostExec } from "../hosts";
-import { shellQuote } from "../hosts/ssh";
 import { statusDetector } from "../status-detector";
-import { sendChat } from "../chat/runner";
+import { sendChatConfirmed } from "../chat/runner";
 import type { PeerMessage } from "../chat/events";
 import { sessionRowInfo } from "../session-meta";
-import {
-  HUMAN,
-  matchesRef,
-  overRateLimit,
-  wakeLine,
-  type BusMessageView,
-} from "./format";
+import { previousNames } from "../session-names";
+import { deliverToPane, type Delivery } from "./delivery";
+import { resolveRef, wasNames, type Candidate } from "./resolve";
+import { tmuxPane } from "./tmux-pane";
+import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
 
 export * from "./format";
+export type { Delivery } from "./delivery";
 
 export interface Peer {
   id: string;
   name: string;
+  // Names it had before renames, newest first.
+  was: string[];
   projectName: string | null;
   tmuxName: string;
   hostId: string;
@@ -42,10 +41,23 @@ function liveSessions(): Session[] {
     .all() as Session[];
 }
 
+function candidates(sessions: Session[]): Candidate[] {
+  const old = previousNames();
+  return sessions.map((s) => ({
+    id: s.id,
+    name: s.name,
+    projectName: s.project_id ? (getProject(s.project_id)?.name ?? null) : null,
+    tmuxName: s.tmux_name,
+    previousNames: old.get(s.id) ?? [],
+  }));
+}
+
 export async function listPeers(): Promise<Peer[]> {
   await statusDetector.refreshCache();
+  const sessions = liveSessions();
+  const named = candidates(sessions);
   return Promise.all(
-    liveSessions().map(async (s) => {
+    sessions.map(async (s, i) => {
       const status = statusDetector.sessionExists(s.tmux_name)
         ? await statusDetector.getStatus(s.tmux_name)
         : "dead";
@@ -53,9 +65,8 @@ export async function listPeers(): Promise<Peer[]> {
       return {
         id: s.id,
         name: s.name,
-        projectName: s.project_id
-          ? (getProject(s.project_id)?.name ?? null)
-          : null,
+        was: wasNames(named[i]),
+        projectName: named[i].projectName,
         tmuxName: s.tmux_name,
         hostId: s.host_id,
         running: info.running,
@@ -65,25 +76,23 @@ export async function listPeers(): Promise<Peer[]> {
   );
 }
 
-export function resolveSession(ref: string): Session {
-  const matches = liveSessions().filter((s) =>
-    matchesRef(ref, {
-      id: s.id,
-      name: s.name,
-      projectName: s.project_id
-        ? (getProject(s.project_id)?.name ?? null)
-        : null,
-      tmuxName: s.tmux_name,
-    })
-  );
-  if (matches.length === 0)
-    throw new Error(`No session called "${ref}". Run: aos peers`);
-  if (matches.length > 1) {
+// A live session by name, old name, project/name, id or id prefix. The note
+// says when the name meant something other than its current owner.
+export function resolveTarget(ref: string): {
+  session: Session;
+  note?: string;
+} {
+  const sessions = liveSessions();
+  const r = resolveRef(ref, candidates(sessions));
+  if (!r.ok)
     throw new Error(
-      `"${ref}" matches ${matches.length} sessions; use project/name or the id`
+      r.reason === "none" ? `${r.error}. Run: aos peers` : r.error
     );
-  }
-  return matches[0];
+  return { session: sessions.find((s) => s.id === r.id)!, note: r.note };
+}
+
+export function resolveSession(ref: string): Session {
+  return resolveTarget(ref).session;
 }
 
 type Row = {
@@ -108,6 +117,16 @@ const toView = (r: Row): BusMessageView => ({
   readAt: r.read_at,
 });
 
+// Messages are kept by id; names shown are the sessions' names now, the
+// stored ones only for a session that's gone.
+const SELECT = `SELECT m.id, m.from_id, m.to_id, m.body, m.created_at, m.read_at,
+    CASE WHEN m.from_id IS NULL THEN m.from_name
+         ELSE COALESCE(f.name, m.from_name) END AS from_name,
+    COALESCE(t.name, m.to_name) AS to_name
+  FROM bus_messages m
+  LEFT JOIN sessions f ON f.id = m.from_id
+  LEFT JOIN sessions t ON t.id = m.to_id`;
+
 function pairTimestamps(a: string | null, b: string): number[] {
   const rows = db
     .prepare(
@@ -121,33 +140,35 @@ function pairTimestamps(a: string | null, b: string): number[] {
   );
 }
 
-// Type the message into the recipient's pane. Claude Code queues it if busy.
+// Hands the message to the recipient: a chat session's worker, or typed
+// into a terminal's pane and checked that it went in.
 async function deliver(
   to: Session,
   line: string,
   from: { name: string; peer?: PeerMessage }
-): Promise<boolean> {
+): Promise<Delivery> {
   // Chat sessions get the message as their next prompt, tagged with who
   // sent it so chat shows it as theirs.
   if (to.view === "chat") {
     try {
-      await sendChat(to.id, { text: line, from: from.name, peer: from.peer });
-      return true;
+      const state = await sendChatConfirmed(to.id, {
+        text: line,
+        from: from.name,
+        peer: from.peer,
+      });
+      return { state };
     } catch (error) {
-      console.error("Could not deliver to chat:", error);
-      return false;
+      const why = error instanceof Error ? error.message : String(error);
+      return { state: "failed", why };
     }
   }
-  if (!statusDetector.sessionExists(to.tmux_name)) return false;
-  const target = shellQuote(`=${to.tmux_name}:`);
+  if (!statusDetector.sessionExists(to.tmux_name))
+    return { state: "failed", why: "its terminal isn't running" };
   try {
-    await hostExec(
-      to.host_id,
-      `tmux send-keys -t ${target} -l ${shellQuote(line)} && tmux send-keys -t ${target} Enter`
-    );
-    return true;
-  } catch {
-    return false;
+    return await deliverToPane(tmuxPane(to.host_id, to.tmux_name), line);
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    return { state: "failed", why: `tmux: ${why.split("\n")[0]}` };
   }
 }
 
@@ -155,10 +176,10 @@ export async function sendMessage(opts: {
   fromId: string | null;
   to: string;
   body: string;
-}): Promise<BusMessageView> {
+}): Promise<{ message: BusMessageView; delivery: Delivery; note?: string }> {
   const body = opts.body.trim();
   if (!body) throw new Error("Message is empty");
-  const to = resolveSession(opts.to);
+  const { session: to, note } = resolveTarget(opts.to);
   const from = opts.fromId
     ? (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(opts.fromId) as
         | Session
@@ -182,27 +203,24 @@ export async function sendMessage(opts: {
   const id = Number(lastInsertRowid);
 
   await statusDetector.refreshCache();
-  if (
-    await deliver(to, wakeLine({ fromName, fromId: from?.id ?? null, body }), {
-      name: fromName,
-      peer: from ? { sessionId: from.id, body } : undefined,
-    })
-  ) {
+  const delivery = await deliver(
+    to,
+    wakeLine({ fromName, fromId: from?.id ?? null, body }),
+    { name: fromName, peer: from ? { sessionId: from.id, body } : undefined }
+  );
+  if (delivery.state !== "failed") {
     db.prepare(
       `UPDATE bus_messages SET delivered_at = datetime('now') WHERE id = ?`
     ).run(id);
   }
-  return toView(
-    db.prepare(`SELECT * FROM bus_messages WHERE id = ?`).get(id) as Row
-  );
+  const message = toView(db.prepare(`${SELECT} WHERE m.id = ?`).get(id) as Row);
+  return { message, delivery, note };
 }
 
 // Unread messages for a session, marked read as they're returned.
 export function readInbox(sessionId: string): BusMessageView[] {
   const rows = db
-    .prepare(
-      `SELECT * FROM bus_messages WHERE to_id = ? AND read_at IS NULL ORDER BY id`
-    )
+    .prepare(`${SELECT} WHERE m.to_id = ? AND m.read_at IS NULL ORDER BY m.id`)
     .all(sessionId) as Row[];
   db.prepare(
     `UPDATE bus_messages SET read_at = datetime('now') WHERE to_id = ? AND read_at IS NULL`
@@ -217,11 +235,9 @@ export function listMessages(
   const rows = opts.sessionId
     ? (db
         .prepare(
-          `SELECT * FROM bus_messages WHERE from_id = ? OR to_id = ? ORDER BY id DESC LIMIT ?`
+          `${SELECT} WHERE m.from_id = ? OR m.to_id = ? ORDER BY m.id DESC LIMIT ?`
         )
         .all(opts.sessionId, opts.sessionId, limit) as Row[])
-    : (db
-        .prepare(`SELECT * FROM bus_messages ORDER BY id DESC LIMIT ?`)
-        .all(limit) as Row[]);
+    : (db.prepare(`${SELECT} ORDER BY m.id DESC LIMIT ?`).all(limit) as Row[]);
   return rows.reverse().map(toView);
 }

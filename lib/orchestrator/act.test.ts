@@ -8,6 +8,8 @@ import { seedSession, seedWorkspace } from "./testing";
 
 const hostCalls: string[] = [];
 const started: string[] = [];
+// What typing into a pane comes to; the pane checks have their own tests.
+let paneResult: import("@/lib/bus").Delivery = { state: "delivered" };
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -27,6 +29,10 @@ vi.mock("@/lib/hosts", async (importOriginal) => ({
     hostCalls.push(cmd);
     return { stdout: "" };
   },
+}));
+vi.mock("@/lib/bus/delivery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/bus/delivery")>()),
+  deliverToPane: async () => paneResult,
 }));
 vi.mock("@/lib/tasks/gh", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tasks/gh")>()),
@@ -140,7 +146,7 @@ describe("acting inside the workspace", () => {
       session: "add-auth",
       message: "rebase on main please",
     });
-    expect(text).toMatch(/^Sent to add-auth/);
+    expect(text).toMatch(/^Delivered to add-auth/);
     const row = db
       .prepare(
         `SELECT from_id, to_id FROM bus_messages ORDER BY id DESC LIMIT 1`
@@ -148,6 +154,27 @@ describe("acting inside the workspace", () => {
       .get() as { from_id: string; to_id: string };
     expect(row).toEqual({ from_id: orch.id, to_id: mine.task });
     expect(recentlyMessaged(orch.id, Date.now()).has(mine.task)).toBe(true);
+  });
+
+  it("says when a message didn't land, and leaves it in the inbox", async () => {
+    const { mine } = twoWorkspaces();
+    ensureOrchestrator(mine.workspace.id);
+    paneResult = { state: "failed", why: "it is showing a menu" };
+    try {
+      const text = await runTool(mine.workspace.id, "send", {
+        session: "add-auth",
+        message: "are you there?",
+      });
+      expect(text).toMatch(/^FAILED to reach add-auth: it is showing a menu/);
+      const row = db
+        .prepare(
+          `SELECT delivered_at, read_at FROM bus_messages ORDER BY id DESC LIMIT 1`
+        )
+        .get();
+      expect(row).toEqual({ delivered_at: null, read_at: null });
+    } finally {
+      paneResult = { state: "delivered" };
+    }
   });
 
   it("starts a task and a session in its own projects", async () => {

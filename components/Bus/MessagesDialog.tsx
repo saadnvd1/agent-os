@@ -46,7 +46,14 @@ export function MessagesDialog() {
   const recipient = to || (filter !== ALL ? filter : "");
 
   return (
-    <Dialog open={open} onOpenChange={busUiActions.setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        // A delivery result belongs to that send only.
+        if (!o) send.reset();
+        busUiActions.setOpen(o);
+      }}
+    >
       <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col">
         <DialogHeader>
           <DialogTitle>Messages</DialogTitle>
@@ -56,7 +63,13 @@ export function MessagesDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <Select value={filter} onValueChange={setFilter}>
+        <Select
+          value={filter}
+          onValueChange={(v) => {
+            send.reset();
+            setFilter(v);
+          }}
+        >
           <SelectTrigger
             aria-label="Filter by session"
             className="w-full sm:w-72"
@@ -113,7 +126,13 @@ export function MessagesDialog() {
           }}
           className="space-y-2"
         >
-          <Select value={recipient} onValueChange={setTo}>
+          <Select
+            value={recipient}
+            onValueChange={(v) => {
+              send.reset();
+              setTo(v);
+            }}
+          >
             <SelectTrigger aria-label="Send to">
               <SelectValue placeholder="Send to a session..." />
             </SelectTrigger>
@@ -144,6 +163,11 @@ export function MessagesDialog() {
           </div>
           {send.error && (
             <p className="text-destructive text-xs">{send.error.message}</p>
+          )}
+          {send.data?.delivery.state === "failed" && (
+            <p className="text-destructive text-xs">
+              Saved to its inbox, but not delivered: {send.data.delivery.why}
+            </p>
           )}
         </form>
       </DialogContent>
