@@ -3,10 +3,17 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
+import { LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { loadMachines, useMachines } from "~/lib/machines/store";
 import { useTheme } from "~/lib/theme";
+
+// A link straight to a session still gets the tabs underneath to go back to.
+export const unstable_settings = { initialRouteName: "(tabs)" };
+
+// React Native warns when a socket we already closed reports its close.
+LogBox.ignoreLogs(["Sending `websocketClosed` with no listeners registered"]);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 loadMachines();
@@ -53,7 +60,10 @@ export default function RootLayout() {
                 }}
               >
                 <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="(tabs)"
+                  options={{ headerShown: false, title: "Back" }}
+                />
                 <Stack.Screen
                   name="connect"
                   options={{ title: "Add a machine" }}

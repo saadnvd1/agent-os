@@ -29,6 +29,9 @@ export function AskCard({ ask, workspaceId, workspaceName, machine }: Props) {
   const [replying, setReplying] = useState(false);
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
+  // The detail often opens with the why; show it only when it adds more.
+  const detail =
+    ask.detail && !ask.detail.startsWith(ask.why.trim()) ? ask.detail : "";
   const declineNeedsPasskey = ask.subject.startsWith("passkey:");
 
   const submit = (body: Parameters<typeof answer.mutate>[0]["answer"]) =>
@@ -67,7 +70,7 @@ export function AskCard({ ask, workspaceId, workspaceName, machine }: Props) {
       {ask.why ? (
         <Text style={[styles.why, { color: t.muted }]}>{ask.why}</Text>
       ) : null}
-      {ask.detail ? (
+      {detail ? (
         <Text
           onPress={() => setExpanded((e) => !e)}
           numberOfLines={expanded ? undefined : 4}
@@ -76,7 +79,7 @@ export function AskCard({ ask, workspaceId, workspaceName, machine }: Props) {
             { color: t.foreground, backgroundColor: t.codeBg },
           ]}
         >
-          {ask.detail}
+          {detail}
         </Text>
       ) : null}
       {ask.sha ? (

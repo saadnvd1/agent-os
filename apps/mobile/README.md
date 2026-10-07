@@ -19,6 +19,8 @@ In the app, tap **Add a machine** and enter the address you open AgentOS at:
 - In the simulator, use `http://127.0.0.1:3011`. In a dev build, **Use this Mac (simulator)** fills it in.
 - On a phone, use the tailnet IP (`http://100.x.y.z:3011`), the tailnet HTTPS name (`https://<mac>.<tailnet>.ts.net:3443`), or a Connect address.
 
+A link works too: `agentos://connect?url=<address>&code=<code>` fills both fields and connects, and `agentos://session/<id>` opens a session.
+
 On loopback and the tailnet the server trusts the phone without pairing, so it connects straight away. Anywhere else, the app asks for a pairing code. On the web, open **Devices**, tap **Add a device**, and type the code, or paste the whole pairing link into the address field. The token goes into the iOS keychain, and the app sends it as `Authorization: Bearer` on every request and socket.
 
 ## Checks

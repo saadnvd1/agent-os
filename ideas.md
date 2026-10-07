@@ -114,3 +114,18 @@
 - [ ] Orchestrator "Start fresh": end the current conversation but keep its asks, notes and in-flight tasks (today each workspace has exactly one orchestrator, forever)
 - [ ] Sidebar phone polish: titles cut off early (move ⋯ to long-press/swipe), shorter orchestrator subtitle, nested worker dot follows its own status, compact inline asks (title + Approve, detail in chat)
 - [ ] PR #98: review the stricter fail-closed code-review gate against what #97 already put on main; merge the new parts or drop it
+
+## Mobile app (apps/mobile)
+
+- [ ] Native terminal (libghostty) on `/ws/terminal`, replacing the read-only pane (phase 2)
+- [ ] Push: APNs registration at pairing, and a server sender for needs-you, asks and turn-done
+- [ ] Approve asks with Face ID: a Secure Enclave key registered at pairing signs the approval challenge (needs a security review)
+- [ ] QR pairing with the camera (the web's pair QR links to `<base>/pair#CODE`; the app already accepts that link pasted)
+- [ ] Several addresses per machine with failover (tailnet IP, tailnet HTTPS, Connect)
+- [ ] Downscale photos before sending (expo-image-manipulator); today a picked photo goes at quality 0.7, full size
+- [ ] Mark a chat seen when opened (`POST /api/sessions/:id/seen`), so unread clears like on the web
+- [ ] Composer extras from the web: @file mentions, slash commands, model and access pickers, plan mode, ↑ history, editing queued messages
+- [ ] Background tasks list in the composer, undo, artifacts inline
+- [ ] Start a new session from the phone
+- [ ] Android: cleartext HTTP for tailnet IPs, and a check that it builds
+- [ ] Screenshot script for the app (dark and light), like the web's `npm run screenshots`

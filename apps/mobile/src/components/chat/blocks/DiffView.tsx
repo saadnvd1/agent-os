@@ -23,8 +23,12 @@ export function DiffView({ diff }: { diff: FileDiff }) {
         <Text style={[styles.count, { color: t.success }]}>+{adds}</Text>
         <Text style={[styles.count, { color: t.destructive }]}>−{dels}</Text>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.lines}
+      >
+        <View style={styles.lines}>
           {shown.map((l, i) => (
             <Text
               key={i}
@@ -78,6 +82,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     minWidth: "100%",
   },
+  lines: { flexGrow: 1 },
   more: {
     minHeight: 36,
     justifyContent: "center",

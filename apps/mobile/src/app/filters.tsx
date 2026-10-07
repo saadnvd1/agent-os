@@ -24,6 +24,7 @@ export default function FiltersSheet() {
   return (
     <ScrollView
       style={{ backgroundColor: t.background }}
+      contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ paddingBottom: space.xxl }}
     >
       <GroupTitle>Workspace</GroupTitle>

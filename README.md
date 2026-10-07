@@ -600,6 +600,10 @@ working. `AGENTOS_TAILNET_HTTPS=0` turns it off, and
 `AGENTOS_TAILNET_HTTPS_PORT` moves it. Use Wi-Fi access only on
 networks you trust, because traffic on Wi-Fi is not encrypted.
 
+**Native iOS app (early, simulator and dev builds only):** `apps/mobile` is an
+Expo app that connects to the same server: your sessions, chat, asks and a
+read-only view of terminal panes. See [apps/mobile/README.md](apps/mobile/README.md).
+
 ## Documentation
 
 For configuration and advanced usage, see the [docs](https://www.runagentos.com/docs).
