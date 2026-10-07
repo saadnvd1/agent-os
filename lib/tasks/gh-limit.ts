@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 // GraphQL's bucket as spent) or a secondary limit hit: a minute, doubling
 // with each rate limit in a row, up to 15.
 export const DEFAULT_BACKOFF_MS = 60_000;
-const MAX_BACKOFF_MS = 15 * 60_000;
+export const MAX_BACKOFF_MS = 15 * 60_000;
 const LOG_EVERY_MS = 60_000;
 
 let backoffUntil = 0;

@@ -230,6 +230,33 @@ describe("gh's rate limit", () => {
     );
   });
 
+  it("counts calls in flight when the limit hits as one limit", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-07T12:00:00Z") });
+    spent = false;
+    failWith = "You have exceeded a secondary rate limit";
+    let release!: () => void;
+    hold = new Promise((r) => (release = r));
+    const t0 = Date.now();
+    const pending = ["a", "b", "c", "d"].map((b) =>
+      poll.lookupPR("/repo", b, { fresh: true })
+    );
+    release();
+    await Promise.all(pending);
+    expect(limit.ghBackedOffUntil()).toBe(t0 + limit.DEFAULT_BACKOFF_MS);
+  });
+
+  it("never backs off longer than 15 minutes without a reset", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-07T12:00:00Z") });
+    spent = false;
+    failWith = "You have exceeded a secondary rate limit";
+    for (let i = 0; i < 8; i++) {
+      await poll.lookupPR("/repo", "a", { fresh: true });
+      vi.setSystemTime(limit.ghBackedOffUntil()!);
+    }
+    await poll.lookupPR("/repo", "a", { fresh: true });
+    expect(limit.ghBackedOffUntil()).toBe(Date.now() + limit.MAX_BACKOFF_MS);
+  });
+
   it("logs a kind of failure at most once a minute, and never the command line", async () => {
     failWith = "HTTP 502: Bad Gateway";
     await poll.lookupPR("/repo", "a", { fresh: true });
