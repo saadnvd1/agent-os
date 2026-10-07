@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { parseCodeReview } from "./code-review";
-import { assertGhAllowed, noteGhFailure } from "./gh-limit";
+import { assertGhAllowed, noteGhFailure, noteGhSuccess } from "./gh-limit";
 import {
   checksVerdict,
   failingCheck,
@@ -27,6 +27,7 @@ export async function run(
       timeout,
       maxBuffer: 4 * 1024 * 1024,
     });
+    if (cmd === "gh") noteGhSuccess();
     return stdout;
   } catch (error) {
     if (cmd === "gh") await noteGhFailure(args, error);

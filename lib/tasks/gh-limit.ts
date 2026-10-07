@@ -7,11 +7,15 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-// While no reset time can be read, or a secondary limit hit.
-const DEFAULT_BACKOFF_MS = 60_000;
+// While no reset time can be read (REST's rate_limit doesn't always show
+// GraphQL's bucket as spent) or a secondary limit hit: a minute, doubling
+// with each rate limit in a row, up to 15.
+export const DEFAULT_BACKOFF_MS = 60_000;
+const MAX_BACKOFF_MS = 15 * 60_000;
 const LOG_EVERY_MS = 60_000;
 
 let backoffUntil = 0;
+let limitedInARow = 0;
 const lastLogged = new Map<string, number>();
 
 export class GhBackoffError extends Error {}
@@ -79,17 +83,31 @@ export async function noteGhFailure(
     console.warn(`[gh] ${kind} failed: ${ghMessage(error)}`);
   }
   if (!isRateLimit(error)) return;
-  const until = Math.max((await resetAt()) ?? 0, now + DEFAULT_BACKOFF_MS);
-  if (until > backoffUntil) {
-    backoffUntil = until;
-    console.warn(
-      `[gh] rate limited: backing off until ${new Date(until).toISOString()}`
-    );
-  }
+  // Calls already in flight when the limit hit count as one.
+  if (now >= backoffUntil) limitedInARow++;
+  const wait = Math.min(
+    DEFAULT_BACKOFF_MS * 2 ** (limitedInARow - 1),
+    MAX_BACKOFF_MS
+  );
+  backOffUntil(now + wait);
+  backOffUntil((await resetAt()) ?? 0);
+}
+
+function backOffUntil(until: number): void {
+  if (until <= backoffUntil) return;
+  backoffUntil = until;
+  console.warn(
+    `[gh] rate limited: backing off until ${new Date(until).toISOString()}`
+  );
+}
+
+export function noteGhSuccess(): void {
+  limitedInARow = 0;
 }
 
 // Tests only.
 export function resetGhLimit(): void {
   backoffUntil = 0;
+  limitedInARow = 0;
   lastLogged.clear();
 }

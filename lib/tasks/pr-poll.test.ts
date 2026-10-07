@@ -7,6 +7,10 @@ let prs: Array<Record<string, unknown>> = [];
 let failWith: string | null = null;
 // Resolves gh's answers by hand, when a test holds them.
 let hold: Promise<void> | null = null;
+// Only `--head` lookups fail, when set.
+let failHeadOnly = false;
+// Whether gh's rate_limit shows GraphQL's bucket as spent.
+let spent = true;
 
 vi.mock("child_process", () => ({
   execFile: (
@@ -20,11 +24,11 @@ vi.mock("child_process", () => ({
       if (args[0] === "api" && args[1] === "rate_limit")
         return cb(null, {
           stdout: JSON.stringify({
-            graphql: { remaining: 0, reset: RESET_S },
+            graphql: { remaining: spent ? 0 : 4000, reset: RESET_S },
             core: { remaining: 4000, reset: RESET_S + 999 },
           }),
         });
-      if (failWith)
+      if (failWith && (!failHeadOnly || args.includes("--head")))
         return cb(
           Object.assign(new Error("Command failed"), { stderr: failWith })
         );
@@ -69,6 +73,8 @@ beforeEach(async () => {
   prs = [];
   failWith = null;
   hold = null;
+  spent = true;
+  failHeadOnly = false;
   vi.resetModules();
   poll = await import("./pr-poll");
   limit = await import("./gh-limit");
@@ -156,7 +162,19 @@ describe("lookupPR", () => {
     expect(await poll.lookupPR("/repo", "a")).toBeNull();
     await expect(
       poll.lookupPR("/repo", "b", { strict: true })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ stderr: "HTTP 502" });
+  });
+
+  it("keeps no failure: the next poll asks again", async () => {
+    failWith = "HTTP 502";
+    failHeadOnly = true;
+    expect(await poll.lookupPR("/repo", "gone")).toBeNull();
+    failWith = null;
+    prs = [pr(6, "gone", "MERGED")];
+    // Inside the 5 minutes a found answer would be kept for.
+    expect((await poll.lookupPR("/repo", "gone"))?.state).toBe("MERGED");
+    expect(heads()).toEqual(["gone", "gone"]);
+    expect(lists()).toBe(1);
   });
 });
 
@@ -176,6 +194,40 @@ describe("gh's rate limit", () => {
       poll.lookupPR("/repo", "a", { fresh: true, strict: true })
     ).rejects.toThrow(limit.GhBackoffError);
     expect(calls).toEqual([]);
+  });
+
+  it("lets gh run again once the limit resets", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    failWith = "API rate limit exceeded";
+    await poll.lookupPR("/repo", "a");
+    failWith = null;
+    prs = [pr(1, "a")];
+    vi.setSystemTime(RESET_S * 1000 + 1);
+    expect(limit.ghBackedOffUntil()).toBeNull();
+    expect((await poll.lookupPR("/repo", "a"))?.number).toBe(1);
+  });
+
+  it("backs off a minute, doubling, when no bucket reads as spent", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-07T12:00:00Z") });
+    spent = false;
+    failWith = "You have exceeded a secondary rate limit";
+    const t0 = Date.now();
+    await poll.lookupPR("/repo", "a", { fresh: true });
+    expect(limit.ghBackedOffUntil()).toBe(t0 + limit.DEFAULT_BACKOFF_MS);
+    vi.setSystemTime(t0 + limit.DEFAULT_BACKOFF_MS);
+    await poll.lookupPR("/repo", "a", { fresh: true });
+    expect(limit.ghBackedOffUntil()).toBe(
+      Date.now() + 2 * limit.DEFAULT_BACKOFF_MS
+    );
+    // A call that gets through starts the count again.
+    vi.setSystemTime(Date.now() + 2 * limit.DEFAULT_BACKOFF_MS);
+    failWith = null;
+    await poll.lookupPR("/repo", "a", { fresh: true });
+    failWith = "You have exceeded a secondary rate limit";
+    await poll.lookupPR("/repo", "a", { fresh: true });
+    expect(limit.ghBackedOffUntil()).toBe(
+      Date.now() + limit.DEFAULT_BACKOFF_MS
+    );
   });
 
   it("logs a kind of failure at most once a minute, and never the command line", async () => {
