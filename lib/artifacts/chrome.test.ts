@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { launchChrome } from "./chrome";
 
 describe("launchChrome", () => {
@@ -19,11 +19,12 @@ describe("launchChrome", () => {
     await expect(launchChrome(stub, 1, 1000)).rejects.toThrow(
       /did not start within 1s/
     );
-    await new Promise((r) => setTimeout(r, 200));
-    // Killed before it got as far as writing its pid counts too.
-    if (fs.existsSync(pidFile)) {
-      const pid = Number(fs.readFileSync(pidFile, "utf8"));
-      expect(() => process.kill(pid, 0)).toThrow();
-    }
+    // The stub writes its pid at once, well inside the 1s it was given.
+    const pid = Number(fs.readFileSync(pidFile, "utf8"));
+    // Dead once reaped; a zombie still answers signal 0 for a moment.
+    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), {
+      timeout: 3000,
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });
