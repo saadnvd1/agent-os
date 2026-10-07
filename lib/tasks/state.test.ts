@@ -186,12 +186,25 @@ describe("reruns of the same check", () => {
   ): ActionsRun => ({ event, headSha, startedAt, workflowId });
   const runs = (byId: Record<number, ActionsRun | null>) =>
     new Map(Object.entries(byId).map(([id, r]) => [`o/r#${id}`, r]));
+  // GitHub shows the jobs of a run's latest attempt, which start just after
+  // it; an entry given its own startedAt keeps it.
+  const shown = (
+    rollup: Array<ReturnType<typeof review> & { startedAt?: string }>,
+    byId: Record<number, ActionsRun | null>
+  ) =>
+    rollup.map((c) => {
+      const run = byId[Number(/runs\/(\d+)/.exec(c.detailsUrl)![1])];
+      const t = Date.parse(run?.startedAt ?? "");
+      return c.startedAt !== undefined || !(t > 0)
+        ? c
+        : { ...c, startedAt: new Date(t + 4000).toISOString() };
+    });
   const judge = (
-    rollup: ReturnType<typeof review>[],
+    rollup: Array<ReturnType<typeof review> & { startedAt?: string }>,
     byId: Record<number, ActionsRun | null>,
     head: string | null = HEAD
   ) => {
-    const settled = settleReruns(rollup, head, runs(byId));
+    const settled = settleReruns(shown(rollup, byId), head, runs(byId));
     return { checks: checksVerdict(settled), failing: failingCheck(settled) };
   };
 
@@ -328,6 +341,29 @@ describe("reruns of the same check", () => {
       expect(judge([review(1, "FAILURE"), review(2, later)], byId).checks).toBe(
         "fail"
       );
+  });
+
+  it("waits while the rollup still shows a rerun's previous attempt", () => {
+    // A passed, B failed later; A was then rerun, but the rollup still shows
+    // A's old jobs (started 02:47:14), not the attempt started at 02:55.
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:55:00Z"),
+      2: run("pull_request", "2026-10-07T02:48:00Z"),
+    };
+    const oldA = { ...review(1, "SUCCESS"), startedAt: "2026-10-07T02:47:14Z" };
+    expect(judge([oldA, review(2, "FAILURE")], byId)).toEqual({
+      checks: "pending",
+      failing: null,
+    });
+    // A rerun's job that hasn't started yet: the same.
+    const queued = {
+      ...review(1, "", "QUEUED"),
+      startedAt: "0001-01-01T00:00:00Z",
+    };
+    expect(judge([queued, review(2, "FAILURE")], byId).checks).toBe("pending");
+    // Once the rollup shows the new attempt, it counts.
+    const newA = { ...review(1, "SUCCESS"), startedAt: "2026-10-07T02:55:04Z" };
+    expect(judge([newA, review(2, "FAILURE")], byId).checks).toBe("pass");
   });
 
   it("lets a later pull_request run replace an earlier push run", () => {

@@ -162,41 +162,51 @@ const groupByCheck = <T extends RollupEntry>(rollup: T[]) => {
   return groups;
 };
 
+// What the rollup shows of each Actions run: the latest start of its jobs,
+// which a rerun changes. Null while one of its jobs hasn't started, when the
+// rollup can't tell one attempt from the next.
+function shownAttempts(rollup: RollupEntry[]): Map<string, number | null> {
+  const shown = new Map<string, number | null>();
+  for (const c of rollup) {
+    const run = actionsRunOf(c);
+    if (!run) continue;
+    const key = `${run.repo}#${run.id}`;
+    const started = at(c.startedAt);
+    const seen = shown.get(key);
+    shown.set(
+      key,
+      seen === undefined
+        ? started
+        : seen === null || started === null
+          ? null
+          : Math.max(seen, started)
+    );
+  }
+  return shown;
+}
+
 // The Actions runs settleReruns needs: only checks that ran more than once.
-// `attempt` names what the rollup shows of a run: the latest start of its
-// jobs, which a rerun changes. It is null while any of its jobs hasn't
-// started, when the rollup can't tell one attempt from the next.
+// `attempt` names the attempt the rollup shows (see shownAttempts).
 export function rerunsToLookUp(
   rollup: RollupEntry[]
 ): Array<{ repo: string; id: string; attempt: string | null }> {
-  const wanted = new Set<string>();
-  for (const group of groupByCheck(rollup).values()) {
-    if (group.length < 2) continue;
-    for (const c of group) {
-      const run = actionsRunOf(c);
-      if (run) wanted.add(`${run.repo}#${run.id}`);
-    }
-  }
+  const shown = shownAttempts(rollup);
   const runs = new Map<
     string,
     { repo: string; id: string; attempt: string | null }
   >();
-  for (const c of rollup) {
-    const run = actionsRunOf(c);
-    const key = run && `${run.repo}#${run.id}`;
-    if (!run || !key || !wanted.has(key)) continue;
-    const started = at(c.startedAt);
-    const seen = runs.get(key);
-    const latest =
-      seen === undefined
-        ? started
-        : seen.attempt === null || started === null
-          ? null
-          : Math.max(Number(seen.attempt), started);
-    runs.set(key, {
-      ...run,
-      attempt: latest === null ? null : String(latest),
-    });
+  for (const group of groupByCheck(rollup).values()) {
+    if (group.length < 2) continue;
+    for (const c of group) {
+      const run = actionsRunOf(c);
+      if (!run) continue;
+      const key = `${run.repo}#${run.id}`;
+      const attempt = shown.get(key) ?? null;
+      runs.set(key, {
+        ...run,
+        attempt: attempt === null ? null : String(attempt),
+      });
+    }
   }
   return [...runs.values()];
 }
@@ -215,6 +225,7 @@ export function settleReruns<T extends RollupEntry>(
   head: string | null | undefined,
   runs: Map<string, ActionsRun | null>
 ): RollupEntry[] {
+  const shown = shownAttempts(rollup);
   const drop = new Set<RollupEntry>();
   const unsettled: RollupEntry[] = [];
   for (const group of groupByCheck(rollup).values()) {
@@ -227,6 +238,7 @@ export function settleReruns<T extends RollupEntry>(
         c: l.c,
         id: l.run!.id,
         info: runs.get(`${l.run!.repo}#${l.run!.id}`) ?? null,
+        shown: shown.get(`${l.run!.repo}#${l.run!.id}`) ?? null,
       })),
       head
     );
@@ -249,7 +261,12 @@ export function settleReruns<T extends RollupEntry>(
 
 // The runs of one check that don't count, or null when that can't be told.
 function staleRuns(
-  runs: Array<{ c: RollupEntry; id: string; info: ActionsRun | null }>,
+  runs: Array<{
+    c: RollupEntry;
+    id: string;
+    info: ActionsRun | null;
+    shown: number | null;
+  }>,
   head: string | null | undefined
 ): RollupEntry[] | null {
   if (!head || runs.some((r) => !r.info)) return null;
@@ -264,6 +281,9 @@ function staleRuns(
     return null;
   const timed = mine.map((r) => ({ ...r, at: at(r.info!.startedAt) }));
   if (timed.some((r) => r.at === null)) return null;
+  // Jobs start after their run does. A run that started after every job the
+  // rollup shows of it was rerun, and the rollup still shows the old attempt.
+  if (timed.some((r) => r.shown === null || r.at! > r.shown)) return null;
   // Only a run that passed, failed or is still going says anything about the
   // check; a cancelled, skipped or neutral run replaces nothing.
   const pr = timed.filter(

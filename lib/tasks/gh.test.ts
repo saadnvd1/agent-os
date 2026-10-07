@@ -23,7 +23,7 @@ vi.mock("child_process", () => ({
         url: "https://github.com/o/r/pull/7",
         state: prState,
         headRefOid: "HEAD",
-        statusCheckRollup: rollup,
+        statusCheckRollup: rollup.map(shownJob),
       };
       return cb(null, { stdout: JSON.stringify([pr]) });
     }
@@ -40,6 +40,20 @@ vi.mock("child_process", () => ({
     cb(null, { stdout: JSON.stringify(out) });
   },
 }));
+
+// GitHub shows the jobs of a run's latest attempt, which start just after it;
+// an entry given its own startedAt keeps it.
+function shownJob(c: unknown) {
+  const entry = c as { detailsUrl: string; startedAt?: string };
+  const raw =
+    api[
+      `repos/${/github\.com\/(.+?)\/actions/.exec(entry.detailsUrl)![1]}/actions/runs/${/runs\/(\d+)/.exec(entry.detailsUrl)![1]}`
+    ];
+  const t = Date.parse(String(raw?.run_started_at ?? ""));
+  return entry.startedAt || !(t > 0)
+    ? entry
+    : { ...entry, startedAt: new Date(t + 4000).toISOString() };
+}
 
 let findPRStrict: typeof import("./gh").findPRStrict;
 
@@ -161,7 +175,10 @@ describe("findPRStrict's check runs", () => {
   });
 
   it("doesn't remember a run whose job hasn't started", async () => {
-    rollup = [check(1, "FAILURE"), check(2, "", { startedAt: "" })];
+    rollup = [
+      check(1, "FAILURE"),
+      check(2, "", { startedAt: "0001-01-01T00:00:00Z" }),
+    ];
     api = {
       "repos/o/r/actions/runs/1": run("pull_request", "2026-10-07T02:47:33Z"),
       "repos/o/r/actions/runs/2": run("pull_request", "2026-10-07T02:48:31Z"),
@@ -169,7 +186,7 @@ describe("findPRStrict's check runs", () => {
     await findPRStrict("/repo", "b");
     calls.length = 0;
     await findPRStrict("/repo", "b");
-    expect(apiCalls().length).toBe(2);
+    expect(apiCalls()).toEqual(["repos/o/r/actions/runs/2"]);
   });
 
   it("keeps a failed pull_request run that a later push run followed", async () => {
