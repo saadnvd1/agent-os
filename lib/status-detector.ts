@@ -282,6 +282,10 @@ export function plainText(screen: string, { dropDim = false } = {}): string {
   return out;
 }
 
+// What the last-lines checks read: a pane's blank bottom rows would push the
+// prompt out of their window.
+export const screenText = (screen: string) => plainText(screen).trim();
+
 const clip = (s: string, max: number) =>
   s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 
@@ -472,7 +476,7 @@ class SessionStatusDetector {
     { question = true } = {},
     now = Date.now()
   ): ScreenNeed | null {
-    const text = plainText(screen).trim();
+    const text = screenText(screen);
     const asked = question ? findQuestion(screen) : null;
     const typed =
       asked === null &&
@@ -596,7 +600,7 @@ class SessionStatusDetector {
     const content =
       screen === undefined
         ? await this.capturePane(sessionName)
-        : plainText(screen).trim();
+        : screenText(screen);
 
     // 1. Busy indicators in last 10 lines (highest priority - Claude is actively working)
     // No activity timestamp check needed since we only look at recent terminal lines

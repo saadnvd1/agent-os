@@ -258,4 +258,14 @@ describe("collectStatuses", () => {
     unsentDue.mockReturnValue(true);
     expect(await terminalsChanged()).toBe("changed");
   });
+
+  it("forgets typed text while the program reports working or blocked", async () => {
+    for (const state of ["working", "blocked"] as const) {
+      clearUnsent.mockClear();
+      applyProgramReport(NAME, { state, id: "" }, "claude");
+      await collectStatuses();
+      expect(clearUnsent, state).toHaveBeenCalledWith(NAME);
+      expect(screenNeed).not.toHaveBeenCalled();
+    }
+  });
 });

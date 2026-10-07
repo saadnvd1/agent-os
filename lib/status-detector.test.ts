@@ -7,6 +7,7 @@ import {
   findQuestion,
   plainText,
   readInputBox,
+  screenText,
   statusDetector,
   UNSENT_MS,
 } from "./status-detector";
@@ -166,7 +167,9 @@ describe("screenNeed", () => {
 
   it("leaves a real permission prompt to the waiting patterns", () => {
     const prompt = screen("claude-permission.ans");
-    expect(checkWaitingPatterns(plainText(prompt).trim())).toBe(true);
+    expect(checkWaitingPatterns(screenText(prompt))).toBe(true);
+    // Its blank bottom rows hide the prompt from an untrimmed read.
+    expect(checkWaitingPatterns(plainText(prompt))).toBe(false);
     expect(need("claude-permission.ans", T0)).toBeNull();
     expect(need("claude-permission.ans", T0 + 2 * UNSENT_MS)).toBeNull();
   });
