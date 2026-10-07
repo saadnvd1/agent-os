@@ -20,6 +20,7 @@ import {
   undoChat,
   watchChat,
 } from "./lib/chat/runner";
+import { clientSend } from "./lib/chat/client-send";
 import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
 import { startStackWatcher } from "./lib/stacks";
 import { setStartGate } from "./lib/stacks/tick";
@@ -142,13 +143,8 @@ app.prepare().then(() => {
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
-        // Only what a browser may say: who a message is from is the bus's
-        // to set (lib/bus), never a client's.
         if (msg.type === "send")
-          void sendChat(sessionId, {
-            text: typeof msg.text === "string" ? msg.text : "",
-            images: Array.isArray(msg.images) ? msg.images : undefined,
-          }).catch(fail);
+          void sendChat(sessionId, clientSend(msg)).catch(fail);
         else if (msg.type === "interrupt") void interruptChat(sessionId);
         else if (msg.type === "set_model")
           void setChatModel(sessionId, msg.model);
