@@ -94,7 +94,7 @@ export interface TelegramConfig {
 }
 
 // The command wins: it's set on purpose on the machine, and Saad's routes
-// through the devbox's own sender, which keeps a log of every message.
+// through the owner's own sender, which keeps a log of every message.
 export function selectNotifier(
   env: Record<string, string | undefined>,
   telegram: TelegramConfig | null

@@ -43,7 +43,7 @@ describe("host header (DNS rebinding)", () => {
       "127.0.0.1:3011",
       "[::1]:3011",
       "100.64.0.1:3011",
-      "mac.example.ts.net:3011",
+      "laptop.example.ts.net:3011",
     ]) {
       expect(hostAllowed(h, policy)).toBe(true);
     }
