@@ -15,7 +15,7 @@ describe("ClaudeMapper", () => {
         subtype: "init",
         session_id: "s1",
       })
-    ).toEqual([{ type: "resume_id", id: "s1" }]);
+    ).toEqual([{ type: "turn_start" }, { type: "resume_id", id: "s1" }]);
   });
 
   it("streams text into one item and finalises it with the full message", () => {
@@ -279,6 +279,7 @@ describe("ClaudeMapper", () => {
         terminal_slash_commands: ["statusline"],
       })
     ).toEqual([
+      { type: "turn_start" },
       { type: "resume_id", id: "s" },
       { type: "terminal_only", names: ["statusline"] },
     ]);
@@ -436,5 +437,42 @@ describe("ClaudeMapper prompt suggestions", () => {
     expect(
       new ClaudeMapper().map({ type: "prompt_suggestion", suggestion: " " })
     ).toEqual([]);
+  });
+});
+
+describe("ClaudeMapper turn starts", () => {
+  const init = { type: "system", subtype: "init", session_id: "s1" };
+  const starts = (events: DriverEvent[]) =>
+    events.filter((e) => e.type === "turn_start").length;
+  const idle = {
+    type: "system",
+    subtype: "session_state_changed",
+    state: "idle",
+  };
+
+  it("says when a turn starts, once per turn, whoever started it", () => {
+    const m = new ClaudeMapper();
+    expect(starts(m.map(init))).toBe(1);
+    m.map({ type: "result", subtype: "success", result: "done" });
+    // One the agent began on its own, straight after, nothing having been sent.
+    expect(starts(m.map(init))).toBe(1);
+    m.map({ type: "result", subtype: "success", result: "done" });
+    // The agent idle once it ran them all: they already ended.
+    expect(m.map(idle)).toEqual([]);
+  });
+
+  it("ends a turn that never sent its result when the next one starts", () => {
+    const m = new ClaudeMapper();
+    m.map(init);
+    expect(m.map(init).slice(0, 2)).toEqual([
+      { type: "state", state: "idle" },
+      { type: "turn_start" },
+    ]);
+  });
+
+  it("ends a turn that's over with no result, so it can't run forever", () => {
+    const m = new ClaudeMapper();
+    m.map(init);
+    expect(m.map(idle)).toEqual([{ type: "state", state: "idle" }]);
   });
 });

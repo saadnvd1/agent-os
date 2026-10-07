@@ -11,12 +11,35 @@ export function saveItem(sessionId: string, item: ChatItem): void {
   ).run(sessionId, item.id, sessionId, JSON.stringify(item));
 }
 
+// Moves an item after every other, as if first written now.
+export function moveToEnd(sessionId: string, itemId: string): void {
+  db.prepare(
+    `UPDATE chat_items SET seq = (SELECT MAX(seq) + 1 FROM chat_items WHERE session_id = ?)
+     WHERE session_id = ? AND item_id = ?`
+  ).run(sessionId, sessionId, itemId);
+}
+
 export function listItems(sessionId: string): ChatItem[] {
   return (
     db
       .prepare(`SELECT data FROM chat_items WHERE session_id = ? ORDER BY seq`)
       .all(sessionId) as { data: string }[]
   ).map((r) => JSON.parse(r.data) as ChatItem);
+}
+
+// Tool calls saved as still running.
+export function runningTools(
+  sessionId: string
+): Extract<ChatItem, { kind: "tool" }>[] {
+  return (
+    db
+      .prepare(
+        `SELECT data FROM chat_items WHERE session_id = ?
+         AND json_extract(data, '$.kind') = 'tool'
+         AND json_extract(data, '$.status') = 'running'`
+      )
+      .all(sessionId) as { data: string }[]
+  ).map((r) => JSON.parse(r.data));
 }
 
 export function deleteItems(sessionId: string): void {
