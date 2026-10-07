@@ -8,7 +8,7 @@ const idFrom = (n: string) => n.replace(/^claude-/, "");
 describe("managedPanes", () => {
   it("finds a session whose tmux session was renamed", () => {
     const out = managedPanes(
-      ["mobile-app-expo", "saadnaveed"],
+      ["mobile-app-expo", "scratch"],
       [{ id: uuid, tmux_name: "mobile-app-expo", agent_type: "claude" }],
       isManaged,
       idFrom

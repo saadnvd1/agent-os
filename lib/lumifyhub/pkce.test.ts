@@ -36,7 +36,7 @@ describe("the authorize URL", () => {
         redirectUri: callbackUrl("http://100.64.0.1:3011/"),
         state: "st",
         challenge: "ch",
-        clientName: clientName("saads-mac.local"),
+        clientName: clientName("devbox.local"),
       })
     );
     expect(url.origin + url.pathname).toBe(
@@ -47,7 +47,7 @@ describe("the authorize URL", () => {
       state: "st",
       code_challenge: "ch",
       code_challenge_method: "S256",
-      client_name: "AgentOS on saads-mac",
+      client_name: "AgentOS on devbox",
     });
   });
 
