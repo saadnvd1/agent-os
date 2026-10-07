@@ -16,6 +16,7 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos history <session>              your conversation with a session
   aos spawn <project> <prompt...>    start a new agent session in a project
   aos task <project> <prompt...>     start a background task that ends in a PR
+                                     (--on <machine>: on a linked machine's AgentOS)
                                      (--name "<name>": name it; otherwise it's
                                      named from the prompt)
   aos stack <project> [--plan] [--max N]
@@ -87,6 +88,7 @@ async function stdin() {
 // before the prompt starts, so a prompt may mention --name.
 function parseSpawnArgs(words) {
   let name;
+  let on;
   let project;
   let i = 0;
   for (; i < words.length; i++) {
@@ -95,10 +97,19 @@ function parseSpawnArgs(words) {
       name = words[++i];
       if (name === undefined) fail("--name needs a value");
     } else if (w.startsWith("--name=")) name = w.slice(7);
+    else if (w === "--on") {
+      on = words[++i];
+      if (on === undefined) fail("--on needs a machine");
+    } else if (w.startsWith("--on=")) on = w.slice(5);
     else if (project === undefined) project = w;
     else break;
   }
-  return { name: name?.trim() || undefined, project, prompt: words.slice(i) };
+  return {
+    name: name?.trim() || undefined,
+    on: on?.trim() || undefined,
+    project,
+    prompt: words.slice(i),
+  };
 }
 
 // `doc new "<title>" [--file path]`: the title is every word but the flag.
@@ -260,14 +271,18 @@ async function main() {
     }
     case "spawn":
     case "task": {
-      const { name, project, prompt: words } = parseSpawnArgs(args);
+      const { name, on, project, prompt: words } = parseSpawnArgs(args);
       if (!project || !words.length)
-        fail(`usage: aos ${cmd} <project> [--name "<name>"] <prompt...>`);
+        fail(
+          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>]" : ""} <prompt...>`
+        );
+      if (on && cmd !== "task") fail("--on works for tasks only");
       const { session } = await post("/api/bus/spawn", {
         project,
         prompt: words.join(" "),
         mode: cmd === "task" ? "task" : "session",
         ...(name && { name }),
+        ...(on && { on }),
       });
       console.log(
         `started ${cmd === "task" ? "task" : "session"} "${session.name}"`

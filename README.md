@@ -599,6 +599,40 @@ the same project.
 On other machines, files, git, worktrees, dev servers and summarize are not
 available yet; the terminal, status, rename and send-keys are.
 
+### Tasks on another machine
+
+A machine that runs its own AgentOS can take tasks. Run AgentOS there (any
+port behind your own front door, or plain 3011 on loopback plus a proxy), then
+press **Link** (the chain icon) next to it in Machines. Linking asks that
+AgentOS for a pairing code over ssh, where its loopback is trusted, and keeps
+the device token it gets back. The token goes straight into this machine's
+database and is never shown.
+
+Once linked:
+
+- **New task → Run on** picks the machine (`aos task --on devbox <project> ...`
+  does the same). That machine creates the worktree, runs the agent and opens
+  the PR on its own. This one lists the task in the sidebar and Tasks with its
+  live state, attaches its terminal over ssh, and sends sign-off and drop to
+  it (pinned to the reviewed commit).
+- **Move** carries a running task between this machine and a linked one,
+  either way. The source stops the agent, commits anything uncommitted as
+  `wip: moving to <machine>`, pushes the branch and hands over Claude's
+  conversation. The target finds the project by its git remote, then by its
+  folder relative to `~`, and clones it when it has neither. It checks the
+  branch out (reusing a worktree still on it), rewrites the conversation's
+  paths and resumes it with `--resume`. The source keeps its row, marked moved.
+  If the target refuses, the agent resumes where it was. If the source can't
+  tell whether it arrived (a timeout, a restart), the task stays **Moving**:
+  press Move again to finish it, or **Resume here**, which first asks the
+  other machine whether it arrived. Tasks waiting on you (an escalated gate or
+  an open ask), card tasks and stacked tasks don't move yet.
+
+Works for any project. Requests to the other machine carry its device token,
+so it can sit behind a proxy that never trusts loopback. Linking needs this
+machine or the tailnet, and only pairs with the ssh target's own host name.
+The orchestrator still starts tasks on its own machine only.
+
 ## Security
 
 AgentOS gives whoever uses it a terminal as you, so it decides who that is:

@@ -57,6 +57,8 @@ export async function launchClaude(opts: {
   model: string;
   prompt: string;
   brief?: string;
+  // Continue this Claude conversation; the prompt is its next message.
+  resume?: string;
 }): Promise<void> {
   fs.mkdirSync(PROMPTS_DIR, { recursive: true });
   const promptFile = promptFileFor(opts.sessionId);
@@ -69,7 +71,11 @@ export async function launchClaude(opts: {
 
   const provider = getProvider("claude");
   const flags = provider
-    .buildFlags({ autoApprove: true, model: opts.model })
+    .buildFlags({
+      autoApprove: true,
+      model: opts.model,
+      sessionId: opts.resume,
+    })
     .join(" ");
   const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${provider.command} ${flags} ${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
   await execFileAsync(

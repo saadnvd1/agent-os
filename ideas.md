@@ -115,3 +115,5 @@
 - [ ] Orchestrator "Start fresh": end the current conversation but keep its asks, notes and in-flight tasks (today each workspace has exactly one orchestrator, forever)
 - [ ] Sidebar phone polish: titles cut off early (move ⋯ to long-press/swipe), shorter orchestrator subtitle, nested worker dot follows its own status, compact inline asks (title + Approve, detail in chat)
 - [ ] PR #98: review the stricter fail-closed code-review gate against what #97 already put on main; merge the new parts or drop it
+- [ ] Move a task between two other machines directly (today a move goes through this one)
+- [ ] Interactive and chat sessions on a linked machine through its AgentOS, like tasks (still ssh today)

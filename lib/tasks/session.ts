@@ -11,7 +11,7 @@ export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 export function taskSessions(): Session[] {
   return db
     .prepare(
-      `SELECT * FROM sessions WHERE task_status IS NOT NULL ORDER BY created_at DESC`
+      `SELECT * FROM sessions WHERE task_status IS NOT NULL AND task_status != 'moved' ORDER BY created_at DESC`
     )
     .all() as Session[];
 }

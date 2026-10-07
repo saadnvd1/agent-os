@@ -1,6 +1,12 @@
 import type { CodeReviewSection } from "./code-review";
 
-export type TaskStatus = "running" | "merged" | "dropped" | "done";
+export type TaskStatus =
+  | "running"
+  | "merged"
+  | "dropped"
+  | "done"
+  | "moving"
+  | "moved";
 
 export type ChecksVerdict = "pass" | "fail" | "pending" | "none";
 
@@ -28,7 +34,9 @@ export type TaskState =
   | "exited"
   | "merged"
   | "dropped"
-  | "done";
+  | "done"
+  // Being handed to another machine; stays here if that didn't finish.
+  | "moving";
 
 export interface TaskStateInput {
   taskStatus: TaskStatus;
@@ -45,7 +53,8 @@ export function deriveTaskState(input: TaskStateInput): TaskState {
   const { taskStatus, sessionStatus, pr, blocked, settingUp } = input;
   if (taskStatus === "merged" || pr?.state === "MERGED") return "merged";
   if (taskStatus === "dropped") return "dropped";
-  if (taskStatus === "done") return "done";
+  if (taskStatus === "done" || taskStatus === "moved") return "done";
+  if (taskStatus === "moving") return "moving";
   if (settingUp) return "working";
   if (blocked) return "blocked";
   if (pr?.state === "OPEN") {

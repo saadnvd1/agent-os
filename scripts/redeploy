@@ -24,6 +24,9 @@ else
   # The build needs dev dependencies even when the shell runs with
   # NODE_ENV=production (as sessions started by AgentOS do).
   npm install --include=dev --no-audit --no-fund
+  # Another npm version (on another machine) rewrites the lockfile's flags; a
+  # deploy never changes it, and a dirty lockfile would block the next pull.
+  git checkout -- package-lock.json 2>/dev/null || true
   node scripts/ensure-native.mjs
   build_beside
   swap_build
