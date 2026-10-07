@@ -31,7 +31,7 @@
   ],
   "scripts": {
     "predev": "node scripts/ensure-native.mjs",
-    "dev": "tsx server.ts",
+    "dev": "AGENTOS_DEV=1 tsx server.ts",
     "build": "next build",
     "prestart": "node scripts/ensure-native.mjs",
     "start": "NODE_ENV=production tsx server.ts",

@@ -246,6 +246,41 @@ waits for each restacked PR's checks before merging it. A conflict stops on
 that card with the exact command to fix it. How it works:
 [docs/stacks.md](docs/stacks.md).
 
+### Schedules
+
+A schedule starts agent work at set times without you opening AgentOS:
+**Schedules** in the workspace menu, the sidebar's **⋯** menu, or ⌘K. Each has a
+name, a time (presets for hourly, daily, weekdays and weekly, or any
+five-field cron expression, in America/Chicago unless you pick another zone),
+a project and a prompt, and starts one of:
+
+- **Task**: a background task that ends in a pull request, as above.
+- **Session**: a chat session in the project that runs the prompt and stays.
+- **Orchestrator**: the prompt, posted to the workspace's orchestrator as a
+  message from "Schedule <name>", marked as a scheduled prompt so it never
+  counts as an approval.
+
+The server checks once a minute and claims each run in SQLite before starting
+it, so a time never runs twice. If AgentOS was off when runs were due, it
+runs only the most recent one when it comes back, marked **caught up**. A run
+is **skipped** while the schedule's previous task or session is still working,
+and while the workspace's orchestrator is paused. A run that fails to start is
+recorded with why and noted in the orchestrator's chat. Every run stays in the
+schedule's history with a link to what it started. **Run now** runs one
+immediately, even while the last run is still working (Pause still holds it).
+Task and session runs go through the orchestrator's brakes, like its own
+starts: a braked run is skipped with the brake's reason and tried again on the
+next minute until the brake lifts or a newer run is due (Run now obeys them
+too, once). A schedule whose project has moved to another workspace fails
+until it's edited. Removing a schedule keeps its history.
+
+Task and session schedules run at most hourly, and a task schedule waits
+while any task it started is unfinished (working, waiting on you, in review
+or failing checks), so it can't stack up pull requests. Only one server
+process runs schedules (it holds a lease in the database); a dev server runs
+none unless `AGENTOS_SCHEDULES=on`, and `AGENTOS_SCHEDULES=off` stops them in
+production.
+
 ## Agent network
 
 Sessions started by AgentOS can find and talk to each other without you,
@@ -264,6 +299,8 @@ aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
+aos schedules                     # every schedule, its next run and last outcome
+aos schedule run <name>           # run a schedule now
 aos done <session>                # finished: merge through the gates, archive
 aos done --all-idle               # the same for every idle session around you
 aos docs [query]                  # LumifyHub pages, when the workspace is linked

@@ -3,6 +3,7 @@
 import {
   Archive,
   BookOpen,
+  Clock,
   FolderOpen,
   FolderPlus,
   Gauge,
@@ -27,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import type { Workspace } from "@/lib/db";
 import { archivedUiActions } from "@/stores/archivedUi";
 import { tasksUiActions } from "@/stores/tasksUi";
+import { schedulesUiActions } from "@/stores/schedulesUi";
 import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
 import { usageUiActions } from "@/stores/usageUi";
@@ -68,6 +70,11 @@ export function SidebarHeader(props: SidebarHeaderProps) {
           }
           items={[
             menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
+            menuItem(
+              "Schedules",
+              () => schedulesUiActions.open(props.workspace?.id ?? null),
+              { icon: Clock }
+            ),
             menuItem("Messages", busUiActions.open, { icon: MessagesSquare }),
             ...(props.onOpenDocs
               ? [menuItem("Docs", props.onOpenDocs, { icon: BookOpen })]

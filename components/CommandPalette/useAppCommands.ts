@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import {
   Archive,
   Bell,
+  Clock,
   Code,
   Gauge,
   LayoutGrid,
@@ -27,6 +28,7 @@ import { devicesUiActions } from "@/stores/devicesUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { tasksUiActions } from "@/stores/tasksUi";
+import { schedulesUiActions } from "@/stores/schedulesUi";
 import { usageUiActions } from "@/stores/usageUi";
 
 const LAST_THEME = "agentOS-last-theme-";
@@ -116,6 +118,14 @@ export function useAppCommands({
       group: "Go to",
       icon: ListTodo,
       run: tasksUiActions.openPanel,
+    },
+    {
+      id: "app.schedules",
+      title: "Schedules",
+      group: "Go to",
+      keywords: ["cron", "timer", "recurring", "every day"],
+      icon: Clock,
+      run: () => schedulesUiActions.open(current?.id ?? null),
     },
     {
       id: "app.messages",

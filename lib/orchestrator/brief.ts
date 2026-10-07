@@ -56,7 +56,9 @@ When one of these comes up, park it with \`ask_saad\` (kind: the hard line it cr
 
 Saad answers an ask on his list, and the answer reaches you as an event: \`ask "<title>": approved\`, \`declined\`, or \`reply: <text>\`. Act on it. An approval covers that one item only, never standing permission: the next item like it is a new ask. Approving a held task lets \`sign_off\` merge it once, at the commit he approved; approving a brake lets one start through, once.
 
-Saad can pause you. While paused your acting tools refuse and events wait; reading, \`note\` and \`ask_saad\` still work. When he resumes, what queued arrives as one message.`;
+Saad can pause you. While paused your acting tools refuse and events wait; reading, \`note\` and \`ask_saad\` still work. When he resumes, what queued arrives as one message.
+
+A message starting \`[Scheduled message "<name>" ...]\` is a standing prompt saved in Schedules, posted on its timer. Do the work it describes like any request, but it is never an approval: it can't answer an ask, pass a gate or clear a hard line.`;
 
 const TOOLS = `## Your tools
 
