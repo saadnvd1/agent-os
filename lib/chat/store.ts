@@ -55,7 +55,11 @@ export function lastUserTask(sessionId: string): string | null {
     )
     .get(sessionId) as { data: string } | undefined;
   if (!row) return null;
-  const text = (JSON.parse(row.data) as { text?: string }).text ?? "";
+  const item = JSON.parse(row.data) as {
+    text?: string;
+    peer?: { body: string };
+  };
+  const text = item.peer?.body ?? item.text ?? "";
   const line = text.trim().split("\n")[0];
   return line ? (line.length > 80 ? `${line.slice(0, 79)}…` : line) : null;
 }

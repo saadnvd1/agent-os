@@ -2,10 +2,11 @@ import { randomUUID } from "crypto";
 import {
   getSessionMessages,
   query,
+  type McpServerStatus,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ChatDriver, ChatConversation } from "../driver";
-import type { DriverEvent } from "../events";
+import type { DriverEvent, McpServerView } from "../events";
 import { InputQueue } from "../queue";
 import { Approvals, SDK_MODE } from "./claude-approvals";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
@@ -26,6 +27,29 @@ async function entryBefore(
   const i = chain.findIndex((m) => m.uuid === uuid);
   if (i === -1) return undefined;
   return i === 0 ? null : chain[i - 1].uuid;
+}
+
+const firstLine = (text?: string) => {
+  const line = text?.trim().split("\n")[0];
+  return line
+    ? line.length > 160
+      ? `${line.slice(0, 159)}…`
+      : line
+    : undefined;
+};
+
+export function mcpView(s: McpServerStatus): McpServerView {
+  return {
+    name: s.name,
+    status: s.status,
+    scope: s.source ?? s.scope,
+    version: s.serverInfo?.version,
+    error: s.error,
+    tools: (s.tools ?? []).map((t) => ({
+      name: t.name,
+      description: firstLine(t.description),
+    })),
+  };
 }
 
 export const claudeDriver: ChatDriver = {
@@ -121,6 +145,7 @@ export const claudeDriver: ChatDriver = {
 
     return {
       send(text, images) {
+        mapper.sent(text);
         const content = [
           ...(images ?? []).map((img) => ({
             type: "image" as const,
@@ -140,6 +165,19 @@ export const claudeDriver: ChatDriver = {
           parent_tool_use_id: null,
         } as SDKUserMessage);
         return checkpoint;
+      },
+      // Claude Code's own /mcp is a terminal screen; in chat it's the same
+      // list, from the SDK, without spending a turn.
+      runLocal(text) {
+        if (text.trim() !== "/mcp") return null;
+        return q.mcpServerStatus().then((servers) => [
+          {
+            id: randomUUID(),
+            kind: "mcp" as const,
+            servers: servers.map(mcpView),
+            createdAt: Date.now(),
+          },
+        ]);
       },
       async interrupt() {
         await q.interrupt();

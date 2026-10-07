@@ -375,3 +375,48 @@ describe("ClaudeMapper background tasks", () => {
     expect(tool).toMatchObject({ title: "Run the tests" });
   });
 });
+
+describe("ClaudeMapper slash commands", () => {
+  it("says so when a command answers with nothing (/clear)", () => {
+    const m = new ClaudeMapper();
+    m.sent("/clear");
+    const out = items(
+      m.map({ type: "result", subtype: "success", num_turns: 0, result: "" })
+    );
+    expect(out[0]).toMatchObject({
+      kind: "command_output",
+      text: expect.stringContaining("Context cleared"),
+    });
+    expect(out[1]).toMatchObject({ kind: "turn_end" });
+  });
+
+  it("adds nothing when the command printed its own output", () => {
+    const m = new ClaudeMapper();
+    m.sent("/usage");
+    m.map({
+      type: "assistant",
+      message: {
+        model: "<synthetic>",
+        content: [{ type: "text", text: "Current session: 19% used" }],
+      },
+    });
+    const out = items(
+      m.map({
+        type: "result",
+        subtype: "success",
+        num_turns: 0,
+        result: "Current session: 19% used",
+      })
+    );
+    expect(out.map((i) => i.kind)).toEqual(["turn_end"]);
+  });
+
+  it("adds nothing for an ordinary message", () => {
+    const m = new ClaudeMapper();
+    m.sent("hello");
+    const out = items(
+      m.map({ type: "result", subtype: "success", num_turns: 0, result: "" })
+    );
+    expect(out.map((i) => i.kind)).toEqual(["turn_end"]);
+  });
+});

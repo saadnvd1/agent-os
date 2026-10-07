@@ -11,6 +11,7 @@ import type {
   ApprovalDecision,
   ChatImage,
   ChatState,
+  PeerMessage,
   UndoPreview,
 } from "./events";
 import {
@@ -123,7 +124,12 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
 
 export async function sendChat(
   sessionId: string,
-  input: { text: string; images?: ChatImage[]; from?: string }
+  input: {
+    text: string;
+    images?: ChatImage[];
+    from?: string;
+    peer?: PeerMessage;
+  }
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
@@ -134,6 +140,7 @@ export async function sendChat(
     text,
     images: input.images,
     from: input.from,
+    peer: input.peer,
   });
 }
 
