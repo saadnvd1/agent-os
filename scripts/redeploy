@@ -16,7 +16,6 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
 fi
 
 acquire_build_lock
-trap 'rmdir "$LOCK"' EXIT
 
 if [ "${1:-}" = "--rollback" ]; then
   rollback_build

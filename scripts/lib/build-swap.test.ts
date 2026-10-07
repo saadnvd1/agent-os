@@ -117,8 +117,8 @@ describe("building beside the live server", () => {
 });
 
 describe("the build lock", () => {
-  it("lets one build run at a time and reclaims a dead run's lock", () => {
-    expect(run("acquire_build_lock").status).toBe(0);
+  it("refuses while another build holds it and reclaims a dead run's lock", () => {
+    mkdirSync(join(dir, ".next-build.lock"));
     const second = run("acquire_build_lock");
     expect(second.status).toBe(1);
     expect(second.stderr).toContain("Another redeploy is building");
@@ -129,10 +129,7 @@ describe("the build lock", () => {
   });
 
   it("is released when a build fails", () => {
-    const failed = run(
-      `acquire_build_lock; trap 'rmdir "$LOCK"' EXIT; build_beside`,
-      "exit 1"
-    );
+    const failed = run("acquire_build_lock; build_beside", "exit 1");
     expect(failed.status).toBe(1);
     expect(existsSync(join(dir, ".next-build.lock"))).toBe(false);
   });

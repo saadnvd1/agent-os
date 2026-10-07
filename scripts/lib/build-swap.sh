@@ -16,12 +16,13 @@ LOCK=.next-build.lock
 REWRITTEN=(tsconfig.json next-env.d.ts)
 
 # One build at a time: two would share .next-build. A lock older than 30
-# minutes is from a run that died. The caller releases it on exit.
+# minutes is from a run that died. Released when the shell exits.
 acquire_build_lock() {
   if [ -d "$LOCK" ] && [ -n "$(find "$LOCK" -maxdepth 0 -mmin +30)" ]; then
     rmdir "$LOCK"
   fi
   mkdir "$LOCK" 2>/dev/null || { echo "Another redeploy is building ($LOCK)" >&2; return 1; }
+  trap 'rmdir "$LOCK"' EXIT
 }
 
 build_beside() {
