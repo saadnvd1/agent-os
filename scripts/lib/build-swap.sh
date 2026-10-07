@@ -39,7 +39,12 @@ build_beside() {
     mkdir -p "$NEXT_BUILD"
     cp -R "$clone" "$LIVE/cache" "$NEXT_BUILD/cache" || rm -rf "$NEXT_BUILD/cache"
   fi
+  # tsconfig includes the live build's generated route types too; a route this
+  # build deleted would fail its typecheck against them. The server never reads
+  # them, so hide them for the build.
+  [ -d "$LIVE/types" ] && mv "$LIVE/types" "$LIVE/types.building"
   AGENTOS_DIST_DIR="$NEXT_BUILD" bash -c "$cmd" || status=$?
+  [ -d "$LIVE/types.building" ] && mv "$LIVE/types.building" "$LIVE/types"
   for f in "${REWRITTEN[@]}"; do [ -f "$saved/$f" ] && cp -p "$saved/$f" "$f"; done
   rm -rf "$saved"
   # `next build` exits non-zero on a type error, so a build that got here

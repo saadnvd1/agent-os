@@ -41,6 +41,7 @@ alert() {
   echo "$head" > "$state/alerted"
   log "DEPLOY BLOCKED ${head:0:7}: $1"
   osascript -e "display notification \"$1\" with title \"AgentOS deploy blocked\"" 2>/dev/null || true
+  [ -x bin/aos ] && bin/aos notify "AgentOS deploy blocked (${head:0:7}): $1" >/dev/null 2>&1 || true
 }
 
 if [ "$head" != "$deployed" ]; then

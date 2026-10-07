@@ -79,6 +79,18 @@ describe("building beside the live server", () => {
     expect(read(".next/BUILD_ID")).toBe("old\n");
   });
 
+  it("hides the live build's route types from the build, then restores them", () => {
+    mkdirSync(join(dir, ".next/types"));
+    writeFileSync(join(dir, ".next/types/validator.ts"), "stale\n");
+    const seeTypes = `test -e .next/types && echo visible > types-during-build || echo hidden > types-during-build`;
+    expect(run("build_beside", `${seeTypes}\n${BUILD}`).status).toBe(0);
+    expect(read("types-during-build")).toBe("hidden\n");
+    expect(read(".next/types/validator.ts")).toBe("stale\n");
+
+    expect(run("build_beside", `${seeTypes}\nexit 1`).status).toBe(1);
+    expect(read(".next/types/validator.ts")).toBe("stale\n");
+  });
+
   it("treats a build with no BUILD_ID as failed", () => {
     const built = run("build_beside", `mkdir -p "$AGENTOS_DIST_DIR/server"`);
     expect(built.status).toBe(1);
