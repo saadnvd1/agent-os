@@ -4,13 +4,20 @@ import type { Session } from "@/lib/db/types";
 import type { TaskState } from "@/lib/tasks/state";
 
 // Why a session is blocked on you.
-export type SessionNeed = "approve" | "answer" | "signin" | "input" | "failed";
+export type SessionNeed =
+  | "approve"
+  | "answer"
+  | "signin"
+  | "input"
+  | "unsent"
+  | "failed";
 
 export const NEED_LABEL: Record<SessionNeed, string> = {
   approve: "Approve",
   answer: "Answer",
   signin: "Sign in",
   input: "Input",
+  unsent: "Unsent",
   failed: "Failed",
 };
 

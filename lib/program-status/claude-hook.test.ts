@@ -73,13 +73,47 @@ describe("the Claude Code status hook", () => {
     });
   });
 
-  it("reports a question as blocked", () => {
+  it("reports a question as blocked, with its text, through its permission request", () => {
+    // What Claude Code 2.1 sends, one line, for an AskUserQuestion call.
+    const input = {
+      hook_event_name: "PreToolUse",
+      tool_name: "AskUserQuestion",
+      tool_input: {
+        questions: [
+          {
+            question: "Which color,\nred or blue?",
+            header: "Color choice",
+            options: [
+              { label: "Red", description: "The color red" },
+              { label: "Blue", description: "The color blue" },
+            ],
+            multiSelect: false,
+          },
+        ],
+      },
+    };
+    for (const event of ["PreToolUse", "PermissionRequest"]) {
+      writeFileSync(tty, "");
+      expect(report(run(event, input)), event).toEqual({
+        state: "blocked",
+        id: "",
+        kind: "question",
+        app: "claude-code",
+        msg: "Which color, red or blue?",
+      });
+    }
+    writeFileSync(tty, "");
+    expect(report(run("PostToolUse", input))?.state).toBe("working");
+  });
+
+  it("falls back to a generic question, and approves a plan", () => {
     expect(
       report(run("PreToolUse", { tool_name: "AskUserQuestion" }))
-    ).toMatchObject({
-      state: "blocked",
-      kind: "question",
-    });
+    ).toMatchObject({ kind: "question", msg: "Claude has a question" });
+    writeFileSync(tty, "");
+    expect(
+      report(run("PermissionRequest", { tool_name: "ExitPlanMode" }))
+    ).toMatchObject({ kind: "permission", msg: "Approve the plan?" });
   });
 
   it("keeps a message with quotes and non-ASCII text whole, capped", () => {

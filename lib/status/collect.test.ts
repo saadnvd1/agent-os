@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "@/lib/db";
 import {
@@ -5,15 +7,27 @@ import {
   programSummary,
   reloadProgramStatus,
 } from "@/lib/program-status/store";
-import { collectStatuses } from "./collect";
+import type { ScreenNeed } from "@/lib/status-detector";
+import { collectStatuses, questionDismissed } from "./collect";
 
 const SID = "0b5f4c1e-1111-4222-8333-944445555666";
 const NAME = `claude-${SID}`;
 let fg = "claude";
-const screen = vi.fn(async () => "running" as const);
+const screen = vi.fn(async (): Promise<string> => "running");
+const screenNeed = vi.fn(
+  (_name: string, _screen: string, _opts: object): ScreenNeed | null => null
+);
+let pane = "";
+const fixture = (name: string) =>
+  readFileSync(join(__dirname, "..", "__fixtures__", "screens", name), "utf-8");
 
-vi.mock("@/lib/status-detector", () => ({
+vi.mock("@/lib/status-detector", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/status-detector")>()),
   statusDetector: {
+    captureScreen: async () => pane,
+    screenNeed: (name: string, s: string, opts: object) =>
+      screenNeed(name, s, opts),
+    unsentDue: () => false,
     refreshCache: async () => {},
     listSessions: async () => [{ name: NAME }],
     cleanup: () => {},
@@ -32,7 +46,11 @@ vi.mock("@/lib/hosts", async (importOriginal) => ({
 
 beforeEach(() => {
   fg = "claude";
+  pane = "";
   screen.mockClear();
+  screen.mockResolvedValue("running");
+  screenNeed.mockReset();
+  screenNeed.mockReturnValue(null);
   const db = getDb();
   db.prepare(`DELETE FROM program_status`).run();
   reloadProgramStatus();
@@ -132,5 +150,86 @@ describe("collectStatuses", () => {
       .run(NAME, "{not json");
     reloadProgramStatus();
     expect(programSummary(NAME)).toBeNull();
+  });
+
+  it("shows a question on screen as Answer, and moves updated_at once", async () => {
+    screen.mockResolvedValue("idle");
+    screenNeed.mockReturnValue({ need: "answer", detail: "Which one?" });
+    const { statuses } = await collectStatuses();
+    expect(statuses[SID]).toMatchObject({
+      status: "waiting",
+      need: "answer",
+      detail: "Which one?",
+      unread: false,
+    });
+    expect(screenNeed.mock.calls[0][2]).toEqual({ question: true });
+    const touched = () =>
+      (
+        getDb()
+          .prepare(`SELECT updated_at FROM sessions WHERE id = ?`)
+          .get(SID) as { updated_at: string }
+      ).updated_at;
+    expect(touched() > "2026-01-01 00:00:00").toBe(true);
+    getDb()
+      .prepare(
+        `UPDATE sessions SET updated_at = '2026-01-02 00:00:00' WHERE id = ?`
+      )
+      .run(SID);
+    await collectStatuses();
+    expect(touched()).toBe("2026-01-02 00:00:00");
+  });
+
+  it("shows unsent text on a session whose program is done, not on one working", async () => {
+    applyProgramReport(NAME, { state: "done", id: "", app: "claude-code" });
+    screenNeed.mockReturnValue({ need: "unsent", detail: "fix the test" });
+    const { statuses } = await collectStatuses();
+    expect(statuses[SID]).toMatchObject({
+      status: "waiting",
+      need: "unsent",
+      detail: "fix the test",
+    });
+    // Its own questions come as reports, not from the screen.
+    expect(screenNeed.mock.calls[0][2]).toEqual({ question: false });
+
+    screenNeed.mockClear();
+    applyProgramReport(NAME, { state: "working", id: "" }, "claude");
+    expect((await collectStatuses()).statuses[SID].need).toBeNull();
+    expect(screenNeed).not.toHaveBeenCalled();
+  });
+
+  it("clears a Claude question dismissed with Esc, once its box is back", async () => {
+    applyProgramReport(
+      NAME,
+      {
+        state: "blocked",
+        id: "",
+        kind: "question",
+        app: "claude-code",
+        msg: "Which?",
+      },
+      "claude"
+    );
+    const asked = programSummary(NAME)!;
+    const idle = fixture("claude-idle.ans");
+    expect(questionDismissed(asked, idle, asked.at + 1000)).toBe(false);
+    expect(
+      questionDismissed(asked, fixture("claude-question.ans"), asked.at + 9000)
+    ).toBe(false);
+    expect(questionDismissed(asked, idle, asked.at + 9000)).toBe(true);
+    expect(
+      questionDismissed({ ...asked, kind: "permission" }, idle, asked.at + 9000)
+    ).toBe(false);
+
+    pane = fixture("claude-question.ans");
+    expect((await collectStatuses()).statuses[SID].need).toBe("answer");
+    vi.useFakeTimers({ now: asked.at + 9000, toFake: ["Date"] });
+    try {
+      pane = idle;
+      const { statuses } = await collectStatuses();
+      expect(programSummary(NAME)?.state).toBe("idle");
+      expect(statuses[SID]).toMatchObject({ status: "idle", need: null });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

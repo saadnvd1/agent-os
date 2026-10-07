@@ -236,7 +236,8 @@ Sessions on other machines can receive messages but not yet send them.
 One flat list of every session in the current workspace, each row naming its
 project underneath. Sessions sit on shelves: **Pinned** (pin from a row's ⋯
 menu), **Needs you** (an approval, a question, a terminal waiting for input, a
-failed task, or the orchestrator's open asks, each with a badge), **Working**,
+message typed and never sent, a failed task, or the orchestrator's open asks,
+each with a badge), **Working**,
 and **Done**, newest first, ten at a time. A purple dot marks a session that
 finished or changed since you last opened it. Search (⌘K on desktop) matches
 titles and project names, and the project filter narrows the list to one
@@ -268,6 +269,16 @@ output never passes through this one), Codex and the other agents (Codex only
 notifies when a turn ends, with nothing for "working" or "blocked"; they keep
 reading the screen), and the terminfo
 `Pst` capability (the pane's terminal is tmux's).
+
+The screen covers what no report says. A selection menu at the bottom of a
+terminal (Claude Code's "Enter to select · ↑/↓ to navigate", a Codex "› 1."
+list) lands on Needs you with **Answer** and its question, for sessions
+without the hooks. Text typed into a Claude Code or Codex input box and left
+unchanged for a minute while the agent sits idle lands there with **Unsent**
+and the text, so a message that never got sent doesn't wait for hours. The
+dim suggested prompt in the same box doesn't count. Claude Code fires no hook
+when a question is dismissed with Esc, so a question report clears once its
+input box is back on screen.
 
 ## Workspaces
 

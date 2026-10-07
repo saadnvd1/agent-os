@@ -167,6 +167,12 @@ export interface TmuxSessionInfo {
   title: string;
 }
 
+interface UnsentTracker {
+  text: string;
+  since: number;
+  shown: boolean;
+}
+
 interface SessionCache {
   data: Map<string, TmuxSessionInfo>;
   hostErrors: Map<string, string>;
@@ -238,8 +244,119 @@ export function checkWaitingPatterns(content: string): boolean {
   return WAITING_PATTERNS.some((p) => p.test(recentLines));
 }
 
+// Typed text left in an input box this long is a message that never got
+// sent; anything newer may still be being typed.
+export const UNSENT_MS = 60000;
+
+// What a screen says it needs from you: a question to answer from a menu,
+// or text typed at the prompt and never sent.
+export interface ScreenNeed {
+  need: "answer" | "unsent";
+  detail: string;
+}
+
+const ESCAPE =
+  // CSI, OSC (BEL or ST ended), and two-byte escapes.
+  /\x1b(?:\[([0-9;:?]*)([@-~])|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g;
+
+// The text of a screen captured with its colours (tmux capture-pane -e),
+// dropping what's drawn dim when asked: Claude Code and Codex draw their
+// placeholder and suggested next prompt dim, in the same box as typed text.
+export function plainText(screen: string, { dropDim = false } = {}): string {
+  if (!dropDim) return screen.replace(ESCAPE, "");
+  let out = "";
+  let dim = false;
+  let last = 0;
+  for (const m of screen.matchAll(ESCAPE)) {
+    if (!dim) out += screen.slice(last, m.index);
+    last = m.index + m[0].length;
+    if (m[2] !== "m") continue;
+    for (const p of (m[1] || "0").split(/[;:]/)) {
+      if (p === "2") dim = true;
+      else if (p === "" || p === "0" || p === "22") dim = false;
+    }
+  }
+  if (!dim) out += screen.slice(last);
+  return out;
+}
+
+const clip = (s: string, max: number) =>
+  s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+
+const BORDER = /^\s*─{8,}\s*$/;
+const SELECTED_OPTION = /^\s*[❯›>]\s*\d+\.\s+\S/;
+const OPTION = /^\s*(?:[❯›>]\s*)?(\d+)\.\s+(\S.*)$/;
+// "Enter to select · ↑/↓ to navigate · Esc to cancel" (Claude Code), "enter
+// to confirm", "enter continue · esc quit" (Codex).
+const MENU_FOOTER = /enter (?:to )?(?:select|confirm|continue|submit)|↑\/↓/i;
+// A tab row or a "☐ Header" above a Claude Code question.
+const MENU_HEADER = /^\s*(?:[☐☒✔←→]|☐)/;
+
+/**
+ * The question an active selection menu asks, when the bottom of the screen
+ * is one: a numbered list with a selected option and a footer saying how to
+ * pick. A permission prompt (its first option "Yes") is not a question.
+ */
+export function findQuestion(screen: string): string | null {
+  const lines = plainText(screen).replace(/\s+$/, "").split("\n").slice(-30);
+  const tail = lines.filter((l) => l.trim()).slice(-4);
+  if (!tail.some((l) => MENU_FOOTER.test(l))) return null;
+  if (!lines.some((l) => SELECTED_OPTION.test(l))) return null;
+  const first = lines.findIndex((l) => OPTION.exec(l)?.[1] === "1");
+  if (first < 0) return null;
+  if (/^yes\b/i.test(OPTION.exec(lines[first])?.[2] ?? "")) return null;
+  // The paragraph just above the options.
+  const block: string[] = [];
+  let i = first - 1;
+  while (i >= 0 && !lines[i].trim()) i--;
+  for (; i >= 0; i--) {
+    const line = lines[i];
+    if (!line.trim() || BORDER.test(line) || MENU_HEADER.test(line)) break;
+    block.unshift(line.trim().replace(/^│\s*|\s*│$/g, ""));
+  }
+  return block.join(" ").trim() || "Choose an option";
+}
+
+/**
+ * What's typed into a Claude Code or Codex input box: Claude's "❯" line
+ * between two rules, or Codex's "›" line at the bottom, with their wrapped
+ * lines. "" for an empty box, null when the screen shows none. Dim text
+ * there is a placeholder or a suggestion, not something typed.
+ */
+export function readInputBox(screen: string): string | null {
+  const lines = plainText(screen, { dropDim: true })
+    .replace(/\s+$/, "")
+    .split("\n")
+    .slice(-20);
+  const typed = (prompt: number, end: number) =>
+    [lines[prompt].replace(/^\s*[❯›]\s?/, ""), ...lines.slice(prompt + 1, end)]
+      .map((l) => l.replace(/\u00a0/g, " ").trim())
+      .join(" ")
+      .trim();
+
+  // Claude Code: a rule, "❯ text", wrapped lines, a rule.
+  for (let i = lines.length - 1; i > 0; i--) {
+    if (!/^\s*❯/.test(lines[i]) || !BORDER.test(lines[i - 1])) continue;
+    const end = lines.findIndex((l, j) => j > i && BORDER.test(l));
+    return end < 0 ? null : typed(i, end);
+  }
+
+  // Codex: "› text", wrapped lines, a blank line, at most two footer lines.
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!/^›/.test(lines[i])) continue;
+    if (SELECTED_OPTION.test(lines[i])) return null;
+    let end = i + 1;
+    while (end < lines.length && /^ {2}\S/.test(lines[end])) end++;
+    if (end < lines.length && lines[end].trim()) return null;
+    if (lines.slice(end).filter((l) => l.trim()).length > 2) return null;
+    return typed(i, end);
+  }
+  return null;
+}
+
 class SessionStatusDetector {
   private trackers = new Map<string, StateTracker>();
+  private unsent = new Map<string, UnsentTracker>();
   private cache: SessionCache = {
     data: new Map(),
     hostErrors: new Map(),
@@ -328,6 +445,59 @@ class SessionStatusDetector {
     }
   }
 
+  // The visible pane with its colours, for screenNeed and getStatus.
+  async captureScreen(name: string): Promise<string> {
+    try {
+      const { stdout } = await hostExec(
+        this.hostFor(name),
+        `tmux capture-pane -e -t "=${name}:" -p 2>/dev/null || echo ""`
+      );
+      return stdout.trimEnd();
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * What the screen says the session needs from you. A question menu counts
+   * at once; typed text only once it has sat unchanged for UNSENT_MS, so
+   * text still being typed doesn't. Not while the program works or waits
+   * on something else.
+   */
+  screenNeed(
+    name: string,
+    screen: string,
+    { question = true } = {},
+    now = Date.now()
+  ): ScreenNeed | null {
+    const text = plainText(screen);
+    const asked = question ? findQuestion(screen) : null;
+    const typed =
+      asked === null &&
+      !checkBusyIndicators(text) &&
+      !checkWaitingPatterns(text)
+        ? readInputBox(screen)
+        : null;
+    if (!typed) this.unsent.delete(name);
+    if (asked !== null) return { need: "answer", detail: clip(asked, 200) };
+    if (!typed) return null;
+    const seen = this.unsent.get(name);
+    if (!seen || seen.text !== typed) {
+      this.unsent.set(name, { text: typed, since: now, shown: false });
+      return null;
+    }
+    if (now - seen.since < UNSENT_MS) return null;
+    seen.shown = true;
+    return { need: "unsent", detail: clip(typed, 120) };
+  }
+
+  /** Typed text that has just become unsent, and isn't shown yet. */
+  unsentDue(now = Date.now()): boolean {
+    for (const u of this.unsent.values())
+      if (!u.shown && now - u.since >= UNSENT_MS) return true;
+    return false;
+  }
+
   private getTracker(name: string, timestamp: number): StateTracker {
     let tracker = this.trackers.get(name);
     if (!tracker) {
@@ -403,7 +573,10 @@ class SessionStatusDetector {
     return tracker.acknowledged ? "idle" : "waiting";
   }
 
-  async getStatus(sessionName: string): Promise<SessionStatus> {
+  async getStatus(
+    sessionName: string,
+    screen?: string
+  ): Promise<SessionStatus> {
     await this.refreshCache();
 
     // Dead check
@@ -414,7 +587,10 @@ class SessionStatusDetector {
 
     const timestamp = this.getTimestamp(sessionName);
     const tracker = this.getTracker(sessionName, timestamp);
-    const content = await this.capturePane(sessionName);
+    const content =
+      screen === undefined
+        ? await this.capturePane(sessionName)
+        : plainText(screen);
 
     // 1. Busy indicators in last 10 lines (highest priority - Claude is actively working)
     // No activity timestamp check needed since we only look at recent terminal lines
@@ -461,6 +637,9 @@ class SessionStatusDetector {
   cleanup(): void {
     for (const [name] of this.trackers) {
       if (!this.sessionExists(name)) this.trackers.delete(name);
+    }
+    for (const name of this.unsent.keys()) {
+      if (!this.sessionExists(name)) this.unsent.delete(name);
     }
   }
 }
