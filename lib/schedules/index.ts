@@ -21,7 +21,7 @@ import {
 import { isPaused } from "../orchestrator/pause";
 
 export * from "./store";
-export { startScheduler, tick } from "./scheduler";
+export { schedulesEnabled, startScheduler, tick } from "./scheduler";
 export { realDeps } from "./start";
 
 export interface ScheduleView extends Schedule {

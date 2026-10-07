@@ -9,7 +9,7 @@ import {
 import { createProject } from "../projects";
 import { setPaused } from "../orchestrator/pause";
 import { Braked, runSlot, type RunDeps } from "./run";
-import { dueSlot, tick } from "./scheduler";
+import { dueSlot, schedulesEnabled, startScheduler, tick } from "./scheduler";
 import {
   createSchedule,
   failAbandonedClaims,
@@ -318,7 +318,19 @@ describe("brakes", () => {
     });
   });
 
-  it("two ticks retrying a braked slot start it once", async () => {
+  it("only one claimer gets a braked slot back", () => {
+    const { schedule } = seed("0 9 * * *");
+    const slot = "2026-10-07T14:00:00.000Z";
+    const id = claimSlot(schedule.id, slot, 1, "schedule")!;
+    db.prepare(
+      `UPDATE schedule_runs SET outcome = 'skipped', slot = 'braked:' || slot WHERE id = ?`
+    ).run(id);
+    expect(claimSlot(schedule.id, slot, 1, "schedule")).toBe(id);
+    expect(claimSlot(schedule.id, slot, 1, "schedule")).toBeNull();
+    expect(listRuns(schedule.id)).toHaveLength(1);
+  });
+
+  it("two ticks retrying a braked slot start it once, end to end", async () => {
     const { schedule } = seed("0 9 * * *");
     const { deps, started } = fakeDeps();
     const real = deps.start;
@@ -562,6 +574,76 @@ describe("lease", () => {
     expect(holdLease(`live-${randomUUID()}`, process.pid, now + 1000)).toBe(
       true
     );
+  });
+});
+
+describe("startScheduler", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 50));
+  // A claim left by a process that died, an hour ago.
+  function planted() {
+    const { schedule } = seed("0 9 * * *");
+    const id = claimSlot(schedule.id, `old-${randomUUID()}`, 1, "schedule")!;
+    db.prepare(
+      `UPDATE schedule_runs SET created_at = datetime('now', '-1 hour') WHERE id = ?`
+    ).run(id);
+    return { schedule, id };
+  }
+  const outcome = (s: Schedule, id: number) =>
+    listRuns(s.id).find((r) => r.id === id)?.outcome;
+
+  it("ticks nothing and sweeps nothing while another live process holds the lease", async () => {
+    db.prepare(`DELETE FROM scheduler_lease`).run();
+    expect(holdLease(`other-${randomUUID()}`, process.ppid)).toBe(true);
+    const { schedule, id } = planted();
+    const { deps, started } = fakeDeps();
+    const s = startScheduler(deps);
+    await settle();
+    s.stop();
+    expect(started).toEqual([]);
+    expect(outcome(schedule, id)).toBe("claimed");
+  });
+
+  it("takes a stale lease, then sweeps the old claims and ticks", async () => {
+    db.prepare(`DELETE FROM scheduler_lease`).run();
+    holdLease(`other-${randomUUID()}`, process.ppid);
+    db.prepare(`UPDATE scheduler_lease SET heartbeat = 0`).run();
+    const { schedule, id } = planted();
+    // Every minute, armed ten minutes ago: due on the first tick.
+    const { ws, project } = seed();
+    createSchedule(
+      {
+        workspaceId: ws.id,
+        projectId: project.id,
+        name: "Minutely",
+        cron: "* * * * *",
+        prompt: "p",
+        kind: "orchestrator",
+      },
+      Date.now() - 10 * 60_000
+    );
+    const { deps, started } = fakeDeps();
+    const s = startScheduler(deps);
+    await settle();
+    s.stop();
+    expect(outcome(schedule, id)).toBe("failed");
+    expect(started.length).toBeGreaterThan(0);
+  });
+});
+
+describe("schedulesEnabled", () => {
+  it("production runs them unless off; dev only when on", () => {
+    const prod = { NODE_ENV: "production" };
+    expect(schedulesEnabled(prod)).toBe(true);
+    expect(schedulesEnabled({ ...prod, AGENTOS_SCHEDULES: "off" })).toBe(false);
+    expect(schedulesEnabled({ NODE_ENV: "development" })).toBe(false);
+    expect(
+      schedulesEnabled({ NODE_ENV: "development", AGENTOS_SCHEDULES: "on" })
+    ).toBe(true);
+    // npm run dev from an AgentOS session, which hands down NODE_ENV=production.
+    expect(schedulesEnabled({ ...prod, AGENTOS_DEV: "1" })).toBe(false);
+    expect(
+      schedulesEnabled({ ...prod, AGENTOS_DEV: "1", AGENTOS_SCHEDULES: "on" })
+    ).toBe(true);
   });
 });
 

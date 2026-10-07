@@ -34,7 +34,7 @@ import { setStartGate } from "./lib/stacks/tick";
 import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
-import { realDeps, startScheduler } from "./lib/schedules";
+import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
 import {
   bindAddresses,
   requestAllowed,
@@ -469,12 +469,6 @@ app.prepare().then(() => {
   if (process.env.AGENTOS_STACKS !== "off") startStackWatcher();
   // Each workspace's orchestrator hears about its sessions as events.
   if (process.env.AGENTOS_ORCHESTRATOR !== "off") startOrchestratorWatcher();
-  // Schedules tick here, once a minute, and nowhere else. A dev server
-  // ticks only when asked, so it never runs the real schedules.
-  if (
-    dev
-      ? process.env.AGENTOS_SCHEDULES === "on"
-      : process.env.AGENTOS_SCHEDULES !== "off"
-  )
-    startScheduler(realDeps);
+  // Schedules tick here, once a minute, and nowhere else.
+  if (schedulesEnabled(process.env)) startScheduler(realDeps);
 });

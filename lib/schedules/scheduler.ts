@@ -64,6 +64,16 @@ export async function tick(
   return results.filter((r): r is RunResult => r !== null);
 }
 
+// Whether this server runs schedules. A dev server (`npm run dev` sets
+// AGENTOS_DEV, since NODE_ENV can arrive as "production" from an AgentOS
+// session) runs them only when asked, so it never fires the real ones.
+export function schedulesEnabled(
+  env: Record<string, string | undefined>
+): boolean {
+  const dev = env.AGENTOS_DEV === "1" || env.NODE_ENV !== "production";
+  return dev ? env.AGENTOS_SCHEDULES === "on" : env.AGENTOS_SCHEDULES !== "off";
+}
+
 const g = globalThis as unknown as {
   __agentosScheduler?: { stop: () => void };
 };
