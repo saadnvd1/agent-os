@@ -37,15 +37,15 @@ describe("SuggestionTrace", () => {
   });
 
   it("keeps a secret the guess repeats out of the log", () => {
+    const fake = "ghp_" + "a".repeat(36);
     const { trace, lines } = setup();
     trace.sent();
     trace.message({ type: "result" });
     trace.message({
       type: "prompt_suggestion",
-      suggestion:
-        "push with GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+      suggestion: `push with GITHUB_TOKEN=${fake}`,
     });
-    expect(lines[0]).not.toContain("ghp_abcdefghij");
+    expect(lines[0]).not.toContain(fake);
     expect(lines[0]).toContain("[redacted]");
   });
 
