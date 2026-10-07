@@ -5,6 +5,7 @@ import { probeMachine } from "~/lib/api/pairing";
 import {
   endpointsFrom,
   failoverOrder,
+  trusted,
   firstAnswering,
   type NetworkInfo,
 } from "./endpoints";
@@ -37,7 +38,13 @@ export function failover(id: string): Promise<Machine | null> {
     return Promise.resolve(getMachine(id));
   lastTry.set(id, Date.now());
   const run = (async () => {
-    const order = failoverOrder(machine.endpoints!, machine.url);
+    // Only addresses that pass `trusted` (or the one the user chose) get the token.
+    const order = failoverOrder(
+      machine.endpoints!.filter(
+        (e) => e === machine.id || e === machine.url || trusted(e)
+      ),
+      machine.url
+    );
     const url = await firstAnswering(
       order,
       async (u) => (await probeMachine(u, machine.token)).state === "trusted"
