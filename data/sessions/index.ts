@@ -9,4 +9,5 @@ export {
   useMoveSessionToGroup,
   useMoveSessionToProject,
 } from "./queries";
+export { usePinSession } from "./pin";
 export type { CreateSessionInput } from "./queries";

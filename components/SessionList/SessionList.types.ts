@@ -1,4 +1,4 @@
-import type { Session } from "@/lib/db";
+import type { SessionNeed } from "@/lib/sidebar/shelves";
 
 export interface SessionStatus {
   sessionName: string;
@@ -7,6 +7,8 @@ export interface SessionStatus {
   title?: string;
   task?: string | null;
   asks?: number;
+  need?: SessionNeed | null;
+  unread?: boolean;
 }
 
 export interface SessionListProps {
@@ -29,9 +31,4 @@ export interface SessionListProps {
     isPinned: boolean;
     onTogglePin: () => void;
   };
-}
-
-export interface SessionHoverHandlers {
-  onHoverStart: (session: Session, rect: DOMRect) => void;
-  onHoverEnd: () => void;
 }

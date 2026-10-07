@@ -29,6 +29,8 @@ export interface Session {
   last_seen_at: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;
+  // On the sidebar's Pinned shelf (0/1 from SQLite).
+  pinned: boolean;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
   // An orchestrator's tool-call secret.
