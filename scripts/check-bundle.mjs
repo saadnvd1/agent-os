@@ -19,7 +19,11 @@ for (const [route, budget] of Object.entries(BUDGETS)) {
   }
   const bytes = entry.firstLoadUncompressedJsBytes;
   const kb = (n) => `${Math.round(n / 1024)} KB`;
-  if (bytes > budget) {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes)) {
+    // A Next.js upgrade that renames the field must not pass by default.
+    console.error(`bundle: no firstLoadUncompressedJsBytes for ${route}`);
+    failed = true;
+  } else if (bytes > budget) {
     console.error(
       `bundle: ${route} loads ${kb(bytes)} of JS first, over its ${kb(budget)} budget.\n` +
         "  Load the heavy part with next/dynamic or import(); see what's in it with\n" +

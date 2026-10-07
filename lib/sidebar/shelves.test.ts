@@ -215,6 +215,19 @@ describe("sameRow", () => {
       ).toBe(false);
   });
 
+  it("sees asks and unread change on their own", () => {
+    const asking = shelves(sessions, {
+      a: { status: "idle", need: "answer", asks: 1 },
+    });
+    const moreAsks = shelves(sessions, {
+      a: { status: "idle", need: "answer", asks: 2 },
+    });
+    expect(sameRow(rowOf(asking, "a"), rowOf(moreAsks, "a"))).toBe(false);
+    const read = shelves(sessions, { a: { status: "idle", unread: false } });
+    const unread = shelves(sessions, { a: { status: "idle", unread: true } });
+    expect(sameRow(rowOf(read, "a"), rowOf(unread, "a"))).toBe(false);
+  });
+
   it("sees a renamed session", () => {
     const before = shelves(sessions);
     const after = shelves([

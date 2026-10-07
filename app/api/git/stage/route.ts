@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
     // Stage specific files or all
     if (files && files.length > 0) {
       for (const file of files) {
-        stageFile(path, file);
+        await stageFile(path, file);
       }
     } else {
-      stageAll(path);
+      await stageAll(path);
     }
 
     return NextResponse.json({ success: true });

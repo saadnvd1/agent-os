@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    discardChanges(path, file);
+    await discardChanges(path, file);
 
     return NextResponse.json({ success: true });
   } catch (error) {

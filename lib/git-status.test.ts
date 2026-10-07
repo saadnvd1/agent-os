@@ -8,6 +8,8 @@ import {
   getGitStatus,
   getUntrackedFileDiff,
   isGitRepo,
+  stageFile,
+  unstageFile,
 } from "./git-status";
 
 let repo: string;
@@ -19,6 +21,7 @@ beforeAll(() => {
   git("init", "-q", "-b", "main");
   git("config", "user.email", "t@example.com");
   git("config", "user.name", "t");
+  git("config", "commit.gpgsign", "false");
   fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
   git("add", "a.txt");
   git("commit", "-q", "-m", "first");
@@ -28,7 +31,10 @@ beforeAll(() => {
   git("add", "c.txt");
 });
 
-afterAll(() => fs.rmSync(repo, { recursive: true, force: true }));
+afterAll(() => {
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(`${repo}-origin.git`, { recursive: true, force: true });
+});
 
 describe("git status, off the event loop", () => {
   it("knows a repository from a plain directory", async () => {
@@ -50,6 +56,32 @@ describe("git status, off the event loop", () => {
     expect(await getFileDiff(repo, "c.txt", true)).toContain("+staged");
     // git exits 1 when an untracked file differs from /dev/null.
     expect(await getUntrackedFileDiff(repo, "b.txt")).toContain("+new");
+  });
+
+  it("counts commits ahead of and behind the upstream", async () => {
+    const origin = `${repo}-origin.git`;
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin]);
+    git("remote", "add", "origin", origin);
+    git("push", "-q", "-u", "origin", "main");
+    git("commit", "-q", "-m", "second");
+    git("commit", "-q", "--allow-empty", "-m", "third");
+    expect(await getGitStatus(repo)).toMatchObject({ ahead: 2, behind: 0 });
+    git("push", "-q");
+    git("reset", "-q", "--soft", "HEAD~1");
+    expect(await getGitStatus(repo)).toMatchObject({ ahead: 0, behind: 1 });
+  });
+
+  it("stages and unstages a file whose name is shell syntax, as a name", async () => {
+    const name = "$(id>pwned)`id>pwned2`.txt";
+    fs.writeFileSync(path.join(repo, name), "x\n");
+    await stageFile(repo, name);
+    expect((await getGitStatus(repo)).staged.map((f) => f.path)).toContain(
+      name
+    );
+    await unstageFile(repo, name);
+    expect(fs.existsSync(path.join(repo, "pwned"))).toBe(false);
+    expect(fs.existsSync(path.join(repo, "pwned2"))).toBe(false);
+    fs.rmSync(path.join(repo, name));
   });
 
   it("fails loudly outside a repository", async () => {

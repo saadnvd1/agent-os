@@ -181,3 +181,35 @@ describe("sameBlock", () => {
     ).toBe(false);
   });
 });
+
+describe("sameBlock on undone ranges", () => {
+  const items = [user("u1"), user("u2"), text("a2"), undo("x", "u2")];
+  const undone = (list: ChatItem[]) =>
+    groupTimeline(list).find((b) => b.type === "undone")!;
+
+  it("keeps a range rebuilt from the same items", () => {
+    expect(sameBlock(undone(items), undone([...items]))).toBe(true);
+  });
+
+  it("sees a range whose message changed or whose undo was replaced", () => {
+    const edited = [...items];
+    edited[2] = {
+      ...(items[2] as Extract<ChatItem, { kind: "assistant" }>),
+      text: "a2!",
+    };
+    expect(sameBlock(undone(items), undone(edited))).toBe(false);
+    const redone = [...items.slice(0, 3), { ...items[3] }];
+    expect(sameBlock(undone(items), undone(redone))).toBe(false);
+  });
+
+  it("sees a range that gained an item", () => {
+    const longer = [
+      user("u1"),
+      user("u2"),
+      text("a2"),
+      tool("t"),
+      undo("x", "u2"),
+    ];
+    expect(sameBlock(undone(items), undone(longer))).toBe(false);
+  });
+});

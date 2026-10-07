@@ -16,6 +16,7 @@ import {
   TerminalSkeleton,
   FileExplorerSkeleton,
   GitPanelSkeleton,
+  ChatSkeleton,
 } from "./PaneSkeletons";
 import {
   Panel as ResizablePanel,
@@ -33,12 +34,21 @@ const Terminal = dynamic(
   { ssr: false, loading: () => <TerminalSkeleton /> }
 );
 
-// A chat's markdown and highlighting load with the first chat opened, not
-// with the app.
-const ChatPanel = dynamic(
-  () => import("@/components/Chat/ChatPanel").then((mod) => mod.ChatPanel),
-  { ssr: false }
-);
+// A chat's markdown and highlighting stay out of the first load. They're
+// fetched as soon as the app has painted, so opening a chat later doesn't
+// wait on them; a chat open at load shows the skeleton meanwhile.
+const loadChatPanel = () => import("@/components/Chat/ChatPanel");
+if (typeof window !== "undefined") {
+  if (document.readyState === "complete") void loadChatPanel();
+  else
+    window.addEventListener("load", () => void loadChatPanel(), {
+      once: true,
+    });
+}
+const ChatPanel = dynamic(() => loadChatPanel().then((mod) => mod.ChatPanel), {
+  ssr: false,
+  loading: () => <ChatSkeleton />,
+});
 
 const FileExplorer = dynamic(
   () => import("@/components/FileExplorer").then((mod) => mod.FileExplorer),

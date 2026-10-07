@@ -13,6 +13,9 @@ async function git(cwd: string, args: string[]): Promise<string> {
     cwd,
     encoding: "utf-8",
     maxBuffer: 10 * 1024 * 1024,
+    // A hung git (a stalled mount, a stuck hook) fails the request instead.
+    timeout: 30_000,
+    killSignal: "SIGKILL",
   });
   return stdout;
 }
@@ -193,62 +196,55 @@ export async function getUntrackedFileDiff(
   return gitOutput(workingDir, ["diff", "--no-index", "/dev/null", filePath]);
 }
 
+// File paths come from the repository's own file names: they go to git as
+// arguments, never through a shell.
+
 /**
  * Stage a file
  */
-export function stageFile(workingDir: string, filePath: string): void {
-  execSync(`git add -- "${filePath}"`, {
-    cwd: workingDir,
-    encoding: "utf-8",
-  });
+export async function stageFile(
+  workingDir: string,
+  filePath: string
+): Promise<void> {
+  await git(workingDir, ["add", "--", filePath]);
 }
 
 /**
  * Stage all files
  */
-export function stageAll(workingDir: string): void {
-  execSync("git add -A", {
-    cwd: workingDir,
-    encoding: "utf-8",
-  });
+export async function stageAll(workingDir: string): Promise<void> {
+  await git(workingDir, ["add", "-A"]);
 }
 
 /**
  * Unstage a file
  */
-export function unstageFile(workingDir: string, filePath: string): void {
-  execSync(`git reset HEAD -- "${filePath}"`, {
-    cwd: workingDir,
-    encoding: "utf-8",
-  });
+export async function unstageFile(
+  workingDir: string,
+  filePath: string
+): Promise<void> {
+  await git(workingDir, ["reset", "HEAD", "--", filePath]);
 }
 
 /**
  * Unstage all files
  */
-export function unstageAll(workingDir: string): void {
-  execSync("git reset HEAD", {
-    cwd: workingDir,
-    encoding: "utf-8",
-  });
+export async function unstageAll(workingDir: string): Promise<void> {
+  await git(workingDir, ["reset", "HEAD"]);
 }
 
 /**
  * Discard changes to a file (checkout for tracked, delete for untracked)
  */
-export function discardChanges(workingDir: string, filePath: string): void {
+export async function discardChanges(
+  workingDir: string,
+  filePath: string
+): Promise<void> {
   // Check if file is tracked by git
   try {
-    execSync(`git ls-files --error-unmatch "${filePath}"`, {
-      cwd: workingDir,
-      encoding: "utf-8",
-      stdio: "pipe",
-    });
+    await git(workingDir, ["ls-files", "--error-unmatch", "--", filePath]);
     // File is tracked - use checkout
-    execSync(`git checkout -- "${filePath}"`, {
-      cwd: workingDir,
-      encoding: "utf-8",
-    });
+    await git(workingDir, ["checkout", "--", filePath]);
   } catch {
     // File is untracked - delete it
     unlinkSync(join(workingDir, filePath));
