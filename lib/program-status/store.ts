@@ -85,8 +85,8 @@ function commit(sessionName: string, next: Records): boolean {
   if (same(before, after)) return false;
   if (after && after.state !== "idle" && after.state !== before?.state)
     db.prepare(
-      `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
-    ).run(getSessionIdFromName(sessionName));
+      `UPDATE sessions SET updated_at = datetime('now') WHERE tmux_name = ? OR id = ?`
+    ).run(sessionName, getSessionIdFromName(sessionName));
   return true;
 }
 
