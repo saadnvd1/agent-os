@@ -6,9 +6,9 @@ import { readFileSync } from "fs";
 // Bytes, uncompressed. 1.04 MB when this was set (2026-10-07), down from 2.07.
 const BUDGETS = { "/": 1_200_000 };
 
-const stats = JSON.parse(
-  readFileSync(".next/diagnostics/route-bundle-stats.json", "utf-8")
-);
+const statsPath =
+  process.argv[2] ?? ".next/diagnostics/route-bundle-stats.json";
+const stats = JSON.parse(readFileSync(statsPath, "utf-8"));
 let failed = false;
 for (const [route, budget] of Object.entries(BUDGETS)) {
   const entry = stats.find((r) => r.route === route);

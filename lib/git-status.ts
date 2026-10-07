@@ -1,7 +1,7 @@
 import { execFile, execSync } from "child_process";
 import { promisify } from "util";
-import { unlinkSync } from "fs";
-import { join } from "path";
+import { realpathSync, unlinkSync } from "fs";
+import { basename, dirname, join, resolve, sep } from "path";
 import { homedir } from "os";
 
 const execFileAsync = promisify(execFile);
@@ -240,15 +240,21 @@ export async function discardChanges(
   workingDir: string,
   filePath: string
 ): Promise<void> {
-  // Check if file is tracked by git
-  try {
-    await git(workingDir, ["ls-files", "--error-unmatch", "--", filePath]);
-    // File is tracked - use checkout
+  // Tracked or not is read from what git lists, not from a failed command:
+  // a checkout that failed (a held lock, a timeout) must not fall through to
+  // deleting a tracked file. A path outside the repo fails here too.
+  const tracked = await git(workingDir, ["ls-files", "-z", "--", filePath]);
+  if (tracked) {
     await git(workingDir, ["checkout", "--", filePath]);
-  } catch {
-    // File is untracked - delete it
-    unlinkSync(join(workingDir, filePath));
+    return;
   }
+  // Untracked: delete it, only inside the repository.
+  const root = realpathSync(workingDir);
+  const target = resolve(root, filePath);
+  const inside = join(realpathSync(dirname(target)), basename(target));
+  if (!inside.startsWith(root + sep))
+    throw new Error("Path outside repository");
+  unlinkSync(inside);
 }
 
 /**

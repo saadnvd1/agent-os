@@ -7,6 +7,7 @@ import {
   getFileDiff,
   getGitStatus,
   getUntrackedFileDiff,
+  discardChanges,
   isGitRepo,
   stageFile,
   unstageFile,
@@ -82,6 +83,53 @@ describe("git status, off the event loop", () => {
     expect(fs.existsSync(path.join(repo, "pwned"))).toBe(false);
     expect(fs.existsSync(path.join(repo, "pwned2"))).toBe(false);
     fs.rmSync(path.join(repo, name));
+  });
+
+  it("discards a tracked change, deletes an untracked file, and nothing outside", async () => {
+    fs.writeFileSync(path.join(repo, "d.txt"), "keep\n");
+    git("add", "d.txt");
+    git("commit", "-q", "-m", "d");
+    fs.writeFileSync(path.join(repo, "d.txt"), "changed\n");
+    await discardChanges(repo, "d.txt");
+    expect(fs.readFileSync(path.join(repo, "d.txt"), "utf-8")).toBe("keep\n");
+
+    fs.writeFileSync(path.join(repo, "e.txt"), "scratch\n");
+    await discardChanges(repo, "e.txt");
+    expect(fs.existsSync(path.join(repo, "e.txt"))).toBe(false);
+
+    const outside = `${repo}-outside.txt`;
+    fs.writeFileSync(outside, "mine\n");
+    await expect(
+      discardChanges(repo, `../${path.basename(outside)}`)
+    ).rejects.toThrow();
+    expect(fs.existsSync(outside)).toBe(true);
+    fs.rmSync(outside);
+  });
+
+  it("restores a tracked file with shell syntax in its name, running nothing", async () => {
+    const name = "$(id>pwned3)`id>pwned4`.txt";
+    fs.writeFileSync(path.join(repo, name), "keep\n");
+    git("add", "--", name);
+    git("commit", "-q", "-m", "odd name");
+    fs.writeFileSync(path.join(repo, name), "changed\n");
+    await discardChanges(repo, name);
+    expect(fs.readFileSync(path.join(repo, name), "utf-8")).toBe("keep\n");
+    expect(fs.existsSync(path.join(repo, "pwned3"))).toBe(false);
+    expect(fs.existsSync(path.join(repo, "pwned4"))).toBe(false);
+  });
+
+  it("keeps a tracked file when its checkout fails", async () => {
+    fs.writeFileSync(path.join(repo, "d.txt"), "changed again\n");
+    const lock = path.join(repo, ".git", "index.lock");
+    fs.writeFileSync(lock, "");
+    try {
+      await expect(discardChanges(repo, "d.txt")).rejects.toThrow();
+    } finally {
+      fs.rmSync(lock);
+    }
+    expect(fs.readFileSync(path.join(repo, "d.txt"), "utf-8")).toBe(
+      "changed again\n"
+    );
   });
 
   it("fails loudly outside a repository", async () => {
