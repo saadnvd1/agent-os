@@ -44,6 +44,25 @@ describe("checkBusyIndicators", () => {
 const screen = (name: string) =>
   readFileSync(join(__dirname, "__fixtures__", "screens", name), "utf-8");
 
+// Panes captured from Codex 0.156, OpenCode 1.18 and Pi 0.73 (2026-10-07).
+describe("other agents' screens", () => {
+  const agents = ["codex", "opencode", "pi"];
+
+  it.each(agents)("sees %s working", (agent) => {
+    expect(checkBusyIndicators(screen(`${agent}-working.txt`))).toBe(true);
+  });
+
+  it.each(agents)("doesn't call %s idle screen working", (agent) => {
+    const idle = screen(`${agent}-idle.txt`);
+    expect(checkBusyIndicators(idle)).toBe(false);
+    expect(checkWaitingPatterns(idle)).toBe(false);
+  });
+
+  it.each(["codex", "opencode"])("sees %s asking for approval", (agent) => {
+    expect(checkWaitingPatterns(screen(`${agent}-approval.txt`))).toBe(true);
+  });
+});
+
 describe("findQuestion", () => {
   it("reads the question a Claude Code AskUserQuestion menu asks", () => {
     expect(findQuestion(screen("claude-question.ans"))).toBe(

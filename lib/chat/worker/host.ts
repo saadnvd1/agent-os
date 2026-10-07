@@ -96,7 +96,7 @@ export class ChatHost {
     // setting (they read files and reach the web). Not an orchestrator: it
     // reads other sessions' text, and a browser would be a way out for it.
     const visuals =
-      session.role === "orchestrator"
+      session.role === "orchestrator" || driver.inProcessTools === false
         ? null
         : visualsTools({
             sessionId: session.id,

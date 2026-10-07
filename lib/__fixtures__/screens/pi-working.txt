@@ -1,0 +1,40 @@
+ entries when ~/.pi/agent/skills points to ~/.agents/skills (#3417 (https://github.com/badlogic/pi-mono/pull/3417) by
+ @rwachtler (https://github.com/rwachtler))
+ - Fixed OpenRouter request attribution to include Pi app headers (HTTP-Referer: https://pi.dev, X-OpenRouter-Title:
+ pi, X-OpenRouter-Categories: cli-agent) when sessions are created through the coding-agent SDK and install telemetry
+ is enabled (#3414 (https://github.com/badlogic/pi-mono/issues/3414))
+ - Fixed custom-model compat schema/docs to support cacheControlFormat: "anthropic" for OpenAI-compatible providers
+ that expose Anthropic-style prompt caching via cache_control markers (#3392
+ (https://github.com/badlogic/pi-mono/issues/3392))
+ - Fixed Cloud Code Assist tool schemas to strip JSON Schema meta-declaration keys before provider translation,
+ avoiding validation failures for tool-enabled sessions that use $schema, $defs, and related metadata (#3412
+ (https://github.com/badlogic/pi-mono/pull/3412) by @vladlearns (https://github.com/vladlearns))
+ - Fixed direct Bedrock sessions to honor model.baseUrl as the runtime client endpoint, restoring support for custom
+ Bedrock VPC or proxy routes (#3402 (https://github.com/badlogic/pi-mono/pull/3402) by @wirjo
+ (https://github.com/wirjo))
+ - Fixed the edit tool to coerce stringified edits JSON before validation, so models that send the array payload as a
+ JSON string no longer fall back to ad-hoc shell edits (#3370 (https://github.com/badlogic/pi-mono/pull/3370) by
+ @dannote (https://github.com/dannote))
+ - Fixed package manifest positive glob entries to expand before loading packaged resources, restoring manifest
+ patterns such as skills/**/*.md (#3350 (https://github.com/badlogic/pi-mono/pull/3350) by @neonspectra
+ (https://github.com/neonspectra))
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+ Run the shell command ls, then write a 150-word poem about rivers.
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 1.0.4 is available. Run pi update
+ Changelog: https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/CHANGELOG.md
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ⠋ Working...
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/w
+0.0%/1.0M (auto)                                                                      (google) gemini-2.5-flash • medium

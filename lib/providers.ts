@@ -1,14 +1,16 @@
 /**
  * Agent Provider Abstraction
  *
- * Defines interfaces and implementations for different AI coding CLI tools
- * (Claude Code, Codex, OpenCode, etc.)
- *
- * Uses centralized provider registry from lib/providers/registry.ts
+ * How AgentOS launches each AI coding CLI in a terminal. What each CLI
+ * accepts lives in the registry (lib/providers/registry.ts); this turns it
+ * into a command line.
  */
 
 import {
+  AGENT_DEFAULT_MODEL,
+  type ProviderDefinition,
   type ProviderId,
+  getAllProviderDefinitions,
   getProviderDefinition,
   isValidProviderId,
 } from "./providers/registry";
@@ -16,29 +18,15 @@ import {
 export type AgentType = ProviderId;
 
 export interface AgentProvider {
-  // Metadata
   id: AgentType;
   name: string;
   description: string;
   command: string;
-
-  // Session management
   supportsResume: boolean;
   supportsFork: boolean;
-
-  // Build the CLI command flags
-  buildFlags(options: BuildFlagsOptions): string[];
-
-  // Status detection patterns
-  waitingPatterns: RegExp[];
-  runningPatterns: RegExp[];
-  idlePatterns: RegExp[];
-
-  // Session ID detection (optional - not all CLIs support this)
-  getSessionId?: (projectPath: string) => string | null;
-
-  // Config directory
   configDir: string;
+  // The CLI's arguments, each already quoted for the shell.
+  buildFlags(options: BuildFlagsOptions): string[];
 }
 
 export interface BuildFlagsOptions {
@@ -46,617 +34,68 @@ export interface BuildFlagsOptions {
   parentSessionId?: string | null; // For fork
   skipPermissions?: boolean;
   autoApprove?: boolean; // Use auto-approve flag from registry
-  model?: string;
+  model?: string | null;
   initialPrompt?: string; // Initial prompt to send to agent
 }
 
-// Common spinner characters used across CLIs
-const SPINNER_CHARS = /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/;
-
-/**
- * Claude Code Provider
- * Anthropic's official CLI for Claude
- */
-export const claudeProvider: AgentProvider = {
-  id: "claude",
-  name: "Claude Code",
-  description: "Anthropic's official CLI",
-  command: "claude",
-  configDir: "~/.claude",
-
-  supportsResume: true,
-  supportsFork: true,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("claude");
-    const flags: string[] = [];
-
-    // Auto-approve flag from registry
-    if (
-      (options.skipPermissions || options.autoApprove) &&
-      def.autoApproveFlag
-    ) {
-      flags.push(def.autoApproveFlag);
-    }
-
-    // Resume/fork
-    if (options.sessionId && def.resumeFlag) {
-      flags.push(`${def.resumeFlag} ${options.sessionId}`);
-    } else if (options.parentSessionId && def.resumeFlag) {
-      flags.push(`${def.resumeFlag} ${options.parentSessionId}`);
-      flags.push("--fork-session");
-    }
-
-    // Initial prompt (positional argument for Claude)
-    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
-      const prompt = options.initialPrompt.trim();
-      // Shell-escape the prompt
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /Allow\?/i,
-    /Approve\?/i,
-    /Continue\?/i,
-    /Press Enter/i,
-    /waiting for/i,
-    /\(yes\/no\)/i,
-    /Do you want to/i,
-    /Esc to cancel/i,
-    />\s*1\.\s*Yes/, // Claude's approval menu
-    /Yes, allow all/i,
-    /allow all edits/i,
-    /allow all commands/i,
-  ],
-
-  runningPatterns: [
-    /thinking/i,
-    /Working/i,
-    /Reading/i,
-    /Writing/i,
-    /Searching/i,
-    /Running/i,
-    /Executing/i,
-    SPINNER_CHARS,
-  ],
-
-  idlePatterns: [
-    /^>\s*$/m,
-    /claude.*>\s*$/im,
-    /✻\s*Sautéed/i, // Claude finished processing
-    /✻\s*Done/i,
-  ],
-};
-
-/**
- * Codex Provider
- * OpenAI's CLI for code generation
- */
-export const codexProvider: AgentProvider = {
-  id: "codex",
-  name: "Codex",
-  description: "OpenAI's CLI",
-  command: "codex",
-  configDir: "~/.codex",
-
-  supportsResume: false, // Codex doesn't have explicit resume
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("codex");
-    const flags: string[] = [];
-
-    // Auto-approve flag from registry
-    if (
-      (options.skipPermissions || options.autoApprove) &&
-      def.autoApproveFlag
-    ) {
-      flags.push(def.autoApproveFlag);
-    }
-
-    if (options.model && def.modelFlag) {
-      flags.push(`${def.modelFlag} ${options.model}`);
-    }
-
-    // Initial prompt (positional argument for Codex)
-    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
-      const prompt = options.initialPrompt.trim();
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /approve/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [/thinking/i, /processing/i, /generating/i, SPINNER_CHARS],
-
-  idlePatterns: [/^>\s*$/m, /codex.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * OpenCode Provider
- * Open-source AI coding CLI with multi-provider support
- */
-export const opencodeProvider: AgentProvider = {
-  id: "opencode",
-  name: "OpenCode",
-  description: "Multi-provider AI CLI",
-  command: "opencode",
-  configDir: "~/.opencode.json",
-
-  supportsResume: false, // OpenCode manages sessions internally via SQLite
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("opencode");
-    const flags: string[] = [];
-
-    // OpenCode uses --prompt for non-interactive, but we want interactive mode
-    // So we typically don't add flags for interactive use
-
-    if (options.skipPermissions) {
-      // OpenCode doesn't have a skip permissions flag
-      // It manages this via config
-    }
-
-    // Initial prompt (uses --prompt flag)
-    if (options.initialPrompt?.trim() && def.initialPromptFlag) {
-      const prompt = options.initialPrompt.trim();
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      flags.push(def.initialPromptFlag);
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
-
-  idlePatterns: [/^>\s*$/m, /opencode.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Kilo Code Provider
- * Kilo's AI coding CLI
- */
-export const kilocodeProvider: AgentProvider = {
-  id: "kilocode",
-  name: "Kilo Code",
-  description: "Kilo's AI coding CLI",
-  command: "kilo",
-  configDir: "~/.config/kilo/kilo.json",
-
-  supportsResume: true,
-  supportsFork: true,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("kilocode");
-    const flags: string[] = [];
-
-    // AgentOS launches the interactive TUI; approval-bypass flags are only
-    // documented for `kilo run`, so interactive approvals are managed via config.
-    if (options.skipPermissions) {
-      // No documented skip-permissions flag for interactive mode.
-    }
-
-    if (options.sessionId && def.resumeFlag) {
-      flags.push(def.resumeFlag);
-      flags.push(options.sessionId);
-    } else if (options.parentSessionId && def.resumeFlag) {
-      flags.push(def.resumeFlag);
-      flags.push(options.parentSessionId);
-      flags.push("--fork");
-    }
-
-    if (options.initialPrompt?.trim() && def.initialPromptFlag) {
-      const prompt = options.initialPrompt.trim();
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      flags.push(def.initialPromptFlag);
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
-
-  idlePatterns: [/^>\s*$/m, /kilo(?:code)?.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Gemini CLI Provider
- * Google's AI coding CLI powered by Gemini models
- */
-export const geminiProvider: AgentProvider = {
-  id: "gemini",
-  name: "Gemini CLI",
-  description: "Google's AI CLI",
-  command: "gemini",
-  configDir: "~/.gemini",
-
-  supportsResume: false,
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("gemini");
-    const flags: string[] = [];
-
-    // Auto-approve flag from registry
-    if (
-      (options.skipPermissions || options.autoApprove) &&
-      def.autoApproveFlag
-    ) {
-      flags.push(def.autoApproveFlag);
-    }
-
-    if (options.model && def.modelFlag) {
-      flags.push(`${def.modelFlag} ${options.model}`);
-    }
-
-    // Initial prompt (uses -p flag)
-    if (options.initialPrompt?.trim() && def.initialPromptFlag) {
-      const prompt = options.initialPrompt.trim();
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      flags.push(def.initialPromptFlag);
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /approve/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-    /Do you want to/i,
-  ],
-
-  runningPatterns: [
-    /thinking/i,
-    /processing/i,
-    /working/i,
-    /generating/i,
-    SPINNER_CHARS,
-  ],
-
-  idlePatterns: [/^>\s*$/m, /gemini.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Aider Provider
- * Open-source AI pair programming in the terminal
- */
-export const aiderProvider: AgentProvider = {
-  id: "aider",
-  name: "Aider",
-  description: "AI pair programming",
-  command: "aider",
-  configDir: "~/.aider",
-
-  supportsResume: false,
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("aider");
-    const flags: string[] = [];
-
-    // Auto-approve flag from registry
-    if (
-      (options.skipPermissions || options.autoApprove) &&
-      def.autoApproveFlag
-    ) {
-      flags.push(def.autoApproveFlag);
-    }
-
-    if (options.model && def.modelFlag) {
-      flags.push(`${def.modelFlag} ${options.model}`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    />\s*$/m,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [
-    /thinking/i,
-    /processing/i,
-    /working/i,
-    /Committing/i,
-    SPINNER_CHARS,
-  ],
-
-  idlePatterns: [/^>\s*$/m, /aider.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Cursor CLI Provider
- * Cursor's AI agent in the terminal
- */
-export const cursorProvider: AgentProvider = {
-  id: "cursor",
-  name: "Cursor CLI",
-  description: "Cursor's AI agent",
-  command: "cursor-agent",
-  configDir: "~/.cursor",
-
-  supportsResume: false,
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("cursor");
-    const flags: string[] = [...(def.defaultArgs || [])];
-
-    // Auto-approve flag from registry
-    if (
-      (options.skipPermissions || options.autoApprove) &&
-      def.autoApproveFlag
-    ) {
-      flags.push(def.autoApproveFlag);
-    }
-
-    if (options.model && def.modelFlag) {
-      flags.push(`${def.modelFlag} ${options.model}`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /approve/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [
-    /thinking/i,
-    /processing/i,
-    /working/i,
-    /writing/i,
-    SPINNER_CHARS,
-  ],
-
-  idlePatterns: [/^>\s*$/m, /cursor.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Amp Provider
- * Multi-model coding agent CLI
- */
-export const ampProvider: AgentProvider = {
-  id: "amp",
-  name: "Amp",
-  description: "Multi-model coding agent",
-  command: "amp",
-  configDir: "~/.config/amp",
-
-  supportsResume: false,
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("amp");
-    const flags: string[] = [];
-
-    // Auto-approve flag from registry
-    if (
-      (options.skipPermissions || options.autoApprove) &&
-      def.autoApproveFlag
-    ) {
-      flags.push(def.autoApproveFlag);
-    }
-
-    // Initial prompt (positional argument for Amp)
-    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
-      const prompt = options.initialPrompt.trim();
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /approve/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
-
-  idlePatterns: [/^>\s*$/m, /amp.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Pi Provider
- * Extensible terminal coding harness
- */
-export const piProvider: AgentProvider = {
-  id: "pi",
-  name: "Pi",
-  description: "Extensible coding harness",
-  command: "pi",
-  configDir: "~/.pi/agent",
-
-  supportsResume: false,
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("pi");
-    const flags: string[] = [];
-
-    if (options.model && def.modelFlag) {
-      flags.push(`${def.modelFlag} ${options.model}`);
-    }
-
-    // Initial prompt (positional argument for Pi)
-    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
-      const prompt = options.initialPrompt.trim();
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /approve/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
-
-  idlePatterns: [/^>\s*$/m, /pi.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Oh My Pi Provider
- * Enhanced Pi coding harness with multi-agent orchestration
- */
-export const ompProvider: AgentProvider = {
-  id: "omp",
-  name: "Oh My Pi",
-  description: "Enhanced Pi coding harness",
-  command: "omp",
-  configDir: "~/.omp",
-
-  supportsResume: false,
-  supportsFork: false,
-
-  buildFlags(options: BuildFlagsOptions): string[] {
-    const def = getProviderDefinition("omp");
-    const flags: string[] = [];
-
-    if (options.model && def.modelFlag) {
-      flags.push(`${def.modelFlag} ${options.model}`);
-    }
-
-    if (options.initialPrompt?.trim() && def.initialPromptFlag !== undefined) {
-      const prompt = options.initialPrompt.trim();
-      const escapedPrompt = prompt.replace(/'/g, "'\\'");
-      flags.push(`'${escapedPrompt}'`);
-    }
-
-    return flags;
-  },
-
-  waitingPatterns: [
-    /\[Y\/n\]/i,
-    /\[y\/N\]/i,
-    /approve/i,
-    /confirm/i,
-    /Press Enter/i,
-    /\(yes\/no\)/i,
-  ],
-
-  runningPatterns: [/thinking/i, /processing/i, /working/i, SPINNER_CHARS],
-
-  idlePatterns: [/^>\s*$/m, /omp.*>\s*$/im, /\$\s*$/m],
-};
-
-/**
- * Shell Provider
- * Plain terminal without any AI CLI
- */
-export const shellProvider: AgentProvider = {
-  id: "shell",
-  name: "Terminal",
-  description: "Plain shell terminal",
-  command: "", // No command - just shell
-  configDir: "",
-
-  supportsResume: false,
-  supportsFork: false,
-
-  buildFlags(): string[] {
-    return []; // No flags for shell
-  },
-
-  waitingPatterns: [],
-  runningPatterns: [],
-  idlePatterns: [/\$\s*$/m, />\s*$/m, /%\s*$/m],
-};
-
-// Provider registry
-export const providers: Record<AgentType, AgentProvider> = {
-  claude: claudeProvider,
-  codex: codexProvider,
-  opencode: opencodeProvider,
-  kilocode: kilocodeProvider,
-  gemini: geminiProvider,
-  aider: aiderProvider,
-  cursor: cursorProvider,
-  amp: ampProvider,
-  pi: piProvider,
-  omp: ompProvider,
-  shell: shellProvider,
-};
-
-// Get provider by ID
-export function getProvider(agentType: AgentType): AgentProvider {
-  return providers[agentType] || claudeProvider;
+// The arguments for one CLI, in the order it needs them: resume or fork
+// first (Codex and Amp take them as subcommands), the prompt last.
+export function buildArgs(
+  def: ProviderDefinition,
+  options: BuildFlagsOptions
+): string[] {
+  const args: string[] = [];
+  if (options.sessionId && def.resumeArgs) {
+    args.push(...def.resumeArgs(options.sessionId));
+  } else if (options.parentSessionId && def.forkArgs) {
+    args.push(...def.forkArgs(options.parentSessionId));
+  }
+  args.push(...(def.defaultArgs ?? []));
+  if ((options.skipPermissions || options.autoApprove) && def.autoApproveFlag)
+    args.push(def.autoApproveFlag);
+  const model = options.model?.trim();
+  if (model && model !== AGENT_DEFAULT_MODEL && def.modelFlag)
+    args.push(def.modelFlag, model);
+  const prompt = options.initialPrompt?.trim();
+  if (prompt && def.initialPromptFlag !== undefined) {
+    if (def.initialPromptFlag) args.push(def.initialPromptFlag);
+    args.push(prompt);
+  }
+  return args;
 }
 
-// Get all providers as array
+// Imported by the browser too, so no Node modules here.
+const SAFE_ARG = /^[\w@%+=:,./-]+$/;
+const quoteArg = (arg: string) =>
+  SAFE_ARG.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+
+function toProvider(def: ProviderDefinition): AgentProvider {
+  return {
+    id: def.id,
+    name: def.name,
+    description: def.description,
+    command: def.cli,
+    supportsResume: def.supportsResume,
+    supportsFork: def.supportsFork,
+    configDir: def.configDir,
+    buildFlags: (options) => buildArgs(def, options).map(quoteArg),
+  };
+}
+
+export const providers = Object.fromEntries(
+  getAllProviderDefinitions().map((def) => [def.id, toProvider(def)])
+) as Record<AgentType, AgentProvider>;
+
+export function getProvider(agentType: AgentType): AgentProvider {
+  return providers[agentType] || providers.claude;
+}
+
 export function getAllProviders(): AgentProvider[] {
   return Object.values(providers);
 }
 
-// Type guard (use registry)
 export function isValidAgentType(value: string): value is AgentType {
   return isValidProviderId(value);
 }
 
-// Export registry functions for convenience
-export {
-  getProviderDefinition,
-  getAllProviderDefinitions,
-} from "./providers/registry";
+export { getProviderDefinition, getAllProviderDefinitions };
