@@ -179,8 +179,10 @@ export function useChat(
   const queueDelete = useCallback((id: string) => {
     wsRef.current?.send(JSON.stringify({ type: "queue_delete", id }));
   }, []);
-  const queueSendNow = useCallback((id: string) => {
-    wsRef.current?.send(JSON.stringify({ type: "queue_send_now", id }));
+  // Stops the turn the reader sees running (its opening message), and only
+  // that one: a turn that started since isn't theirs to stop.
+  const queueSendNow = useCallback((id: string, during?: string) => {
+    wsRef.current?.send(JSON.stringify({ type: "queue_send_now", id, during }));
   }, []);
 
   // The files and folders an @mention could mean; empty when the socket is

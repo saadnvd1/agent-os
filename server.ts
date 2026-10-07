@@ -159,7 +159,11 @@ app.prepare().then(() => {
         else if (msg.type === "queue_delete")
           deleteQueuedChat(sessionId, String(msg.id));
         else if (msg.type === "queue_send_now")
-          void sendQueuedNow(sessionId, String(msg.id)).catch(fail);
+          void sendQueuedNow(
+            sessionId,
+            String(msg.id),
+            typeof msg.during === "string" ? msg.during : undefined
+          ).catch(fail);
         else if (msg.type === "files" && typeof msg.query === "string")
           void chatFileSuggestions(sessionId, msg.query.slice(0, 200))
             .then((files) =>

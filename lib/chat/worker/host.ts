@@ -27,6 +27,8 @@ export class ChatHost {
   private conversation: ChatConversation;
   private sent = new Set<string>();
   private suggestion: string | null;
+  // The user message the running turn began with (or last took in).
+  private currentTurn: string | null = null;
   private closed = false;
   readonly done: Promise<void>;
 
@@ -185,6 +187,7 @@ export class ChatHost {
     peer?: PeerMessage;
   }): void {
     this.sent.add(m.id);
+    this.currentTurn = m.id;
     const checkpoint = this.conversation.send(m.text, m.images);
     this.record({
       id: m.id,
@@ -255,7 +258,13 @@ export class ChatHost {
         // To the front; a running turn stops, and its end sends it.
         if (!moveToFront(this.session.id, cmd.id)) return;
         this.emit({ type: "queue" });
-        if (this.busy()) return this.conversation.interrupt();
+        // The turn the reader asked to stop, not one that started since:
+        // that one ends on its own, and this goes after it.
+        if (this.busy()) {
+          if (cmd.during && cmd.during === this.currentTurn)
+            return this.conversation.interrupt();
+          return;
+        }
         this.sendQueued();
         return;
       case "drain":

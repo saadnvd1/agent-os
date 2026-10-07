@@ -200,6 +200,12 @@ const RESUME_WITHIN_MS = 60 * 60 * 1000;
 const resumed = new Map<string, number>();
 async function resumeQueue(sessionId: string): Promise<void> {
   if (!listQueue(sessionId).length) return;
+  // Switched to the terminal: its agent runs there now, and a chat worker
+  // on the same conversation would race it. The queue waits on screen.
+  const session = db
+    .prepare(`SELECT view, archived_at FROM sessions WHERE id = ?`)
+    .get(sessionId) as { view: string; archived_at: string | null } | undefined;
+  if (session?.view !== "chat" || session.archived_at) return;
   const last = resumed.get(sessionId) ?? 0;
   if (Date.now() - last < RESUME_EVERY_MS) return;
   resumed.set(sessionId, Date.now());
@@ -215,10 +221,16 @@ async function resumeQueue(sessionId: string): Promise<void> {
 }
 
 // Sends a queued message now: a running turn stops for it, as on Esc.
-export async function sendQueuedNow(sessionId: string, id: string) {
+// `during`: the user message whose turn the reader saw running, so a turn
+// that started since (the next queued one) isn't the one stopped.
+export async function sendQueuedNow(
+  sessionId: string,
+  id: string,
+  during?: string
+) {
   if (!listQueue(sessionId).some((m) => m.id === id)) return;
   const live = await ensureLive(sessionId);
-  live.worker.command({ type: "send_now", id });
+  live.worker.command({ type: "send_now", id, during });
 }
 
 // Files and folders for an @mention: the agent's own matching when its

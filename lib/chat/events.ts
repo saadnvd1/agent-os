@@ -239,7 +239,8 @@ export type ChatClientMessage =
   | { type: "queue_edit"; id: string; text: string }
   | { type: "queue_move"; id: string; by: -1 | 1 }
   | { type: "queue_delete"; id: string }
-  | { type: "queue_send_now"; id: string }
+  // `during`: the user message whose turn was running when it was tapped.
+  | { type: "queue_send_now"; id: string; during?: string }
   | { type: "files"; reqId: string; query: string }
   | { type: "interrupt" }
   | { type: "set_model"; model: string }

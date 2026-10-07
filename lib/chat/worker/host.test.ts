@@ -274,13 +274,40 @@ describe("ChatHost queue", () => {
       text: "urgent",
       queue: true,
     });
-    await host.handle({ type: "send_now", id: "user-3" });
+    await host.handle({ type: "send_now", id: "user-3", during: "user-1" });
     expect(conversation.interrupt).toHaveBeenCalledOnce();
     expect(listQueue(id).map((m) => m.text)).toEqual(["urgent", "later"]);
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
     expect(conversation.send).toHaveBeenLastCalledWith("urgent", undefined);
     expect(listQueue(id).map((m) => m.text)).toEqual(["later"]);
+    host.close();
+  });
+
+  it("send now leaves alone a turn that started after the tap", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
+    await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
+    await host.handle({ type: "send", id: "user-3", text: "C", queue: true });
+    // A ends and B starts while the tap on C's Send now is on its way.
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({ type: "send_now", id: "user-3", during: "user-1" });
+    expect(conversation.interrupt).not.toHaveBeenCalled();
+    // C still goes next, once B has had its reply.
+    expect(listQueue(id).map((m) => m.text)).toEqual(["C"]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith("C", undefined);
+    host.close();
+  });
+
+  it("send now from an old client, with no turn named, doesn't interrupt", async () => {
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
+    await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
+    await host.handle({ type: "send_now", id: "user-2" });
+    expect(conversation.interrupt).not.toHaveBeenCalled();
     host.close();
   });
 
@@ -349,8 +376,8 @@ describe("ChatHost queue across turns", () => {
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
     // user-2 is running now; a late tap on its Send now changes nothing.
-    await host.handle({ type: "send_now", id: "user-2" });
-    await host.handle({ type: "send_now", id: "user-gone" });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-2" });
+    await host.handle({ type: "send_now", id: "user-gone", during: "user-2" });
     expect(conversation.interrupt).not.toHaveBeenCalled();
     expect(conversation.send).toHaveBeenCalledTimes(2);
     host.close();

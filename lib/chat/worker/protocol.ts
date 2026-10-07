@@ -35,7 +35,9 @@ export type WorkerCommand =
       queue?: boolean;
     }
   // A queued message goes next: the running turn stops for it.
-  | { type: "send_now"; id: string }
+  // `during`: the user message whose turn the reader saw running; only that
+  // turn is stopped for it.
+  | { type: "send_now"; id: string; during?: string }
   // Send the queue if no turn is running; a running one sends it as it ends.
   | { type: "drain" }
   | { type: "files"; reqId: string; query: string }

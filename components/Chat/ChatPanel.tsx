@@ -253,7 +253,12 @@ export function ChatPanel({
           onEdit={queueEdit}
           onMove={queueMove}
           onDelete={queueDelete}
-          onSendNow={queueSendNow}
+          onSendNow={(id) =>
+            queueSendNow(
+              id,
+              running ? items.findLast((i) => i.kind === "user")?.id : undefined
+            )
+          }
         />
         <Composer
           draftKey={sessionId}

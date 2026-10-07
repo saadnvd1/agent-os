@@ -40,6 +40,8 @@ describe("chat queue", () => {
     enqueue(id, { id: "user-1", text: "look", images });
     expect(listQueue(id)[0]).toMatchObject({ text: "look", imageCount: 1 });
     expect(JSON.stringify(listQueue(id))).not.toContain("AAAA");
+    enqueue(id, { id: "user-2", text: "none" });
+    expect(listQueue(id)[1].imageCount).toBeUndefined();
     expect(claimNext(id)?.images).toEqual(images);
   });
 

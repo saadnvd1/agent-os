@@ -236,6 +236,24 @@ describe("a worker that goes away with messages queued", () => {
   });
 });
 
+describe("a session switched to the terminal", () => {
+  it("keeps its queue on screen, and never gets a chat worker for it", async () => {
+    db.prepare(`DELETE FROM chat_queue`).run();
+    const id = session();
+    enqueue(id, { id: "user-1", text: "queued" });
+    db.prepare(`UPDATE sessions SET view = 'terminal' WHERE id = ?`).run(id);
+    const t0 = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"], now: t0 });
+    try {
+      await reattachChats();
+      expect(workers.started.filter((w) => w.sessionId === id)).toEqual([]);
+      expect(listQueue(id).map((m) => m.text)).toEqual(["queued"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("a worker from an older build", () => {
   it("hands what its dead agent left queued to a current worker", async () => {
     db.prepare(`DELETE FROM chat_queue`).run();

@@ -17,24 +17,25 @@ interface Row {
   created_at: number;
 }
 
-// The queue as watchers see it: images counted, not sent along each time.
+// The queue as watchers see it: images counted, never read, since a
+// message's images can run to megabytes.
 export function listQueue(sessionId: string): QueuedMessage[] {
   return (
     db
       .prepare(
-        `SELECT id, text, json_array_length(images) AS image_count, created_at
+        `SELECT id, text, image_count, created_at
          FROM chat_queue WHERE session_id = ? ORDER BY position, created_at`
       )
       .all(sessionId) as {
       id: string;
       text: string;
-      image_count: number | null;
+      image_count: number;
       created_at: number;
     }[]
   ).map((r) => ({
     id: r.id,
     text: r.text,
-    imageCount: r.image_count ?? undefined,
+    imageCount: r.image_count || undefined,
     createdAt: r.created_at,
   }));
 }
@@ -55,9 +56,17 @@ export function enqueue(
   if (n >= MAX_QUEUED)
     throw new Error(`The queue is full (${MAX_QUEUED} messages)`);
   db.prepare(
-    `INSERT OR IGNORE INTO chat_queue (id, session_id, position, text, images, created_at)
-     VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM chat_queue WHERE session_id = ?), ?, ?, ?)`
-  ).run(m.id, sessionId, sessionId, m.text, images, Date.now());
+    `INSERT OR IGNORE INTO chat_queue (id, session_id, position, text, images, image_count, created_at)
+     VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM chat_queue WHERE session_id = ?), ?, ?, ?, ?)`
+  ).run(
+    m.id,
+    sessionId,
+    sessionId,
+    m.text,
+    images,
+    m.images?.length ?? 0,
+    Date.now()
+  );
 }
 
 // Takes the first message off the queue: once claimed, it's this caller's
@@ -142,14 +151,15 @@ export function clearQueue(sessionId: string): void {
   db.prepare(`DELETE FROM chat_queue WHERE session_id = ?`).run(sessionId);
 }
 
-// Live sessions with something queued since `since` (ms).
+// Chat sessions (not archived, not switched to the terminal) with something
+// queued since `since` (ms).
 export function queuedSessions(since = 0): string[] {
   return (
     db
       .prepare(
         `SELECT DISTINCT q.session_id AS id FROM chat_queue q
          JOIN sessions s ON s.id = q.session_id
-         WHERE s.archived_at IS NULL AND q.created_at >= ?`
+         WHERE s.archived_at IS NULL AND s.view = 'chat' AND q.created_at >= ?`
       )
       .all(since) as { id: string }[]
   ).map((r) => r.id);
