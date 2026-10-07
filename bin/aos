@@ -27,6 +27,9 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos schedule add --session <session> --every 30m [--name N] <prompt...>
                                      message a session on a timer (at most every
                                      10 minutes); skips while it's still working
+  aos heavy -- <command...>          run a test suite, type check or build now; says
+                                     first if other heavy commands are running or
+                                     the machine is loaded (never waits or blocks)
   aos notify <text...>               push a message to the owner's phone (or text
                                      on stdin); at most one a minute, the rest
                                      wait and go together
@@ -192,8 +195,40 @@ async function scheduleAdd(words) {
   );
 }
 
+// `aos heavy -- <cmd>`: starts the command at once, then registers it and
+// prints the server's note, if any. A server that's down says nothing.
+function heavy(words) {
+  const argv = words[0] === "--" ? words.slice(1) : words;
+  if (!argv.length) fail("usage: aos heavy -- <command...>");
+  const { spawn } = require("child_process");
+  // One argument is a shell command line ("npm test && npm run build").
+  const child =
+    argv.length === 1
+      ? spawn(argv[0], { stdio: "inherit", shell: true })
+      : spawn(argv[0], argv.slice(1), { stdio: "inherit" });
+  child.on("error", (err) => fail(`can't run ${argv[0]}: ${err.message}`));
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"])
+    process.on(sig, () => child.kill(sig));
+  child.on("exit", (code, signal) => process.exit(signal ? 1 : (code ?? 1)));
+  if (child.pid)
+    fetch(url + "/api/load/heavy", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify({ session: me, pid: child.pid, command: argv.join(" ") }),
+      signal: AbortSignal.timeout(1000),
+    })
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data) => data.note && console.error(data.note))
+      .catch(() => {});
+}
+
 async function main() {
   switch (cmd) {
+    case "heavy":
+      return heavy(args);
     case "peers": {
       const { peers } = await call("/api/bus/peers");
       for (const p of peers) {

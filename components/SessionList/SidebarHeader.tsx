@@ -33,6 +33,7 @@ import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { LoadGauge } from "./LoadGauge";
 
 interface SidebarHeaderProps {
   workspaces: Workspace[];
@@ -57,6 +58,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
         current={props.workspace}
       />
       <div className="flex shrink-0 items-center gap-0.5">
+        <LoadGauge />
         <ADropdownMenu
           trigger={
             <Button
