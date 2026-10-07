@@ -11,7 +11,8 @@ import { promisify } from "util";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { setupWorktree } from "../env-setup";
-import { launchClaude } from "../agents/launch";
+import { launchClaude, promptFileFor } from "../agents/launch";
+import * as fs from "fs";
 import { isPaused } from "../orchestrator/pause";
 import { brakesEnabled } from "../orchestrator/brakes";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
@@ -45,7 +46,24 @@ export function launchHold(sessionId: string): string | null {
   return window ? `held by the brakes: ${window}` : null;
 }
 
-export async function finishTaskStart(sessionId: string): Promise<TaskSetup> {
+// A task whose agent hasn't launched yet: opening it must not create its
+// tmux session, or the launch would find a bare agent in its place.
+export function launchPending(sessionId: string): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 FROM sessions WHERE id = ? AND task_status = 'running'
+         AND setup_status IN ('running', 'held')`
+    )
+    .get(sessionId);
+  return !!row;
+}
+
+// `earlier` is a setup already done (a held start resuming): it isn't run again,
+// since project setup commands (migrations, seeds) needn't be idempotent.
+export async function finishTaskStart(
+  sessionId: string,
+  earlier?: TaskSetup
+): Promise<TaskSetup> {
   const session = db
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(sessionId) as Session | undefined;
@@ -53,23 +71,21 @@ export async function finishTaskStart(sessionId: string): Promise<TaskSetup> {
   const project = session.project_id ? getProject(session.project_id) : null;
   const done = (setup: TaskSetup) => (recordSetup(db, sessionId, setup), setup);
 
-  const setup = project
-    ? setupOutcome(
-        await setupWorktree({
-          worktreePath: session.worktree_path,
-          sourcePath: expandHome(project.working_directory),
-        }).catch(asError)
-      )
-    : setupOutcome(new Error("its project no longer exists"));
+  const setup = earlier
+    ? earlier
+    : project
+      ? setupOutcome(
+          await setupWorktree({
+            worktreePath: session.worktree_path,
+            sourcePath: expandHome(project.working_directory),
+          }).catch(asError)
+        )
+      : setupOutcome(new Error("its project no longer exists"));
 
   const held = launchHold(sessionId);
   // Held, not failed: resumeHeldStarts launches it once the hold clears.
-  if (held)
-    return done({
-      status: "held",
-      ms: setup.ms,
-      error: `Waiting to launch: ${held}`,
-    });
+  // The setup's own error is kept, for the agent's prompt when it launches.
+  if (held) return done({ ...setup, status: "held" });
   const now = db
     .prepare(`SELECT task_status, archived_at FROM sessions WHERE id = ?`)
     .get(sessionId) as
@@ -82,6 +98,9 @@ export async function finishTaskStart(sessionId: string): Promise<TaskSetup> {
       error: "Not launched: the task was closed during setup",
     });
   try {
+    // Only this launch creates the task's tmux session; one already there
+    // (opened from an old client, say) is a bare agent without the task.
+    await killTmux(session.tmux_name);
     await launchClaude({
       sessionId,
       tmuxName: session.tmux_name,
@@ -102,6 +121,11 @@ export async function finishTaskStart(sessionId: string): Promise<TaskSetup> {
   return done(setup);
 }
 
+const killTmux = (name: string) =>
+  execFileAsync("tmux", ["kill-session", "-t", `=${name}`], {
+    timeout: 5000,
+  }).catch(() => undefined);
+
 const tmuxAlive = (name: string) =>
   execFileAsync("tmux", ["has-session", "-t", `=${name}`], {
     timeout: 5000,
@@ -111,7 +135,9 @@ const tmuxAlive = (name: string) =>
   );
 
 // Starts a restart cut off: setup is recorded only after the launch, so one
-// still "running" never launched, unless its tmux session says it did.
+// still "running" never launched, unless its tmux session is up and its
+// prompt was written (a session without one isn't the agent, and the launch
+// replaces it).
 export async function resumeTaskStarts(
   alive: (tmuxName: string) => Promise<boolean> = tmuxAlive
 ): Promise<string[]> {
@@ -124,7 +150,7 @@ export async function resumeTaskStarts(
     .all() as { id: string; tmux_name: string }[];
   const resumed = resumeHeldStarts();
   for (const row of rows) {
-    if (await alive(row.tmux_name)) {
+    if (fs.existsSync(promptFileFor(row.id)) && (await alive(row.tmux_name))) {
       recordSetup(db, row.id, { status: "ok", ms: null, error: null });
       continue;
     }
@@ -141,12 +167,16 @@ export async function resumeTaskStarts(
 export function resumeHeldStarts(): string[] {
   const rows = db
     .prepare(
-      `SELECT id FROM sessions WHERE setup_status = 'held'
+      `SELECT id, setup_ms, setup_error FROM sessions WHERE setup_status = 'held'
          AND task_status = 'running' AND archived_at IS NULL`
     )
-    .all() as { id: string }[];
+    .all() as {
+    id: string;
+    setup_ms: number | null;
+    setup_error: string | null;
+  }[];
   const resumed: string[] = [];
-  for (const { id } of rows) {
+  for (const { id, setup_ms, setup_error } of rows) {
     if (launchHold(id)) continue;
     const claimed = db
       .prepare(
@@ -155,7 +185,10 @@ export function resumeHeldStarts(): string[] {
       .run(id).changes;
     if (!claimed) continue;
     resumed.push(id);
-    inBackground(`resume held task ${id}`, () => finishTaskStart(id));
+    const setup: TaskSetup = setup_error
+      ? { status: "failed", ms: setup_ms, error: setup_error }
+      : { status: "ok", ms: setup_ms, error: null };
+    inBackground(`resume held task ${id}`, () => finishTaskStart(id, setup));
   }
   return resumed;
 }

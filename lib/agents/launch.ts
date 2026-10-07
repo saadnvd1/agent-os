@@ -42,6 +42,11 @@ export function envArgs(env: Record<string, string>): string[] {
   return Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 }
 
+// Written just before the agent's tmux session is created: a session with
+// no prompt file is not one launchClaude started.
+export const promptFileFor = (sessionId: string) =>
+  path.join(PROMPTS_DIR, `${sessionId}.prompt.md`);
+
 // Start Claude in a new detached tmux session with a prompt and briefs. The
 // prompt and briefs come from files so no quoting can mangle them, and a
 // shell is left behind so the pane stays usable after the agent exits.
@@ -54,7 +59,7 @@ export async function launchClaude(opts: {
   brief?: string;
 }): Promise<void> {
   fs.mkdirSync(PROMPTS_DIR, { recursive: true });
-  const promptFile = path.join(PROMPTS_DIR, `${opts.sessionId}.prompt.md`);
+  const promptFile = promptFileFor(opts.sessionId);
   const briefFile = path.join(PROMPTS_DIR, `${opts.sessionId}.brief.md`);
   fs.writeFileSync(promptFile, opts.prompt);
   fs.writeFileSync(
