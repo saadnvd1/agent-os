@@ -5,6 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { managedPanes } from "./managed";
 import {
   findQuestion,
   plainText,
@@ -240,13 +241,25 @@ function terminalRow(db: ReturnType<typeof getDb>, id: string) {
 async function collect(): Promise<StatusSnapshot> {
   const sessions = await getTmuxSessions();
 
-  // Get status for agent-os managed sessions
-  const managedSessions = sessions.filter((s) => UUID_PATTERN.test(s));
-
-  // Use the new status detector
-  const statusMap: Record<string, SessionStatusResponse> = {};
-
   const db = getDb();
+  const panes = managedPanes(
+    sessions,
+    db
+      .prepare(
+        `SELECT id, tmux_name, agent_type FROM sessions WHERE archived_at IS NULL AND (view IS NULL OR view != 'chat')`
+      )
+      .all() as {
+      id: string;
+      tmux_name: string | null;
+      agent_type: string | null;
+    }[],
+    (name) => UUID_PATTERN.test(name),
+    getSessionIdFromName
+  );
+  const paneOf = new Map(panes.map((p) => [p.name, p]));
+  const managedSessions = panes.map((p) => p.name);
+
+  const statusMap: Record<string, SessionStatusResponse> = {};
   const sessionsToUpdate: string[] = [];
 
   // Process all sessions in parallel for speed
@@ -281,8 +294,10 @@ async function collect(): Promise<StatusSnapshot> {
     const screenNeed = busy
       ? null
       : statusDetector.screenNeed(sessionName, screen, { question: !program });
-    const id = getSessionIdFromName(sessionName);
-    const agentType = getAgentTypeFromSessionName(sessionName);
+    const pane = paneOf.get(sessionName);
+    const id = pane?.id ?? getSessionIdFromName(sessionName);
+    const agentType =
+      pane?.agentType ?? getAgentTypeFromSessionName(sessionName);
 
     return {
       sessionName,
