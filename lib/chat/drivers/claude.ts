@@ -11,6 +11,7 @@ import { InputQueue } from "../queue";
 import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
 import { toChatContext, usageTotals } from "../context";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
+import { SuggestionTrace } from "./suggestion-trace";
 import { redact } from "../../orchestrator/untrusted";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
@@ -207,6 +208,10 @@ export const claudeDriver: ChatDriver = {
       },
     });
     const mapper = new ClaudeMapper();
+    const trace = new SuggestionTrace(
+      (line) => console.error(`${new Date().toISOString()} ${line}`),
+      () => plan
+    );
     let sessionId = options.resumeId ?? null;
 
     // What the agent restored on starting: a resumed conversation's totals
@@ -230,6 +235,7 @@ export const claudeDriver: ChatDriver = {
           const m = message as unknown as ClaudeMessage;
           if (m.session_id) sessionId = m.session_id;
           planFile = writtenPlanFile(m) ?? planFile;
+          trace.message(m);
           for (const e of mapper.map(m)) out.push(e);
           // How full the window is now, for the meter, without holding up
           // the conversation.
@@ -252,6 +258,7 @@ export const claudeDriver: ChatDriver = {
     return {
       send(text, images, sendOptions) {
         mapper.sent(text);
+        trace.sent();
         const content = [
           ...(images ?? []).map((img) => ({
             type: "image" as const,
@@ -332,6 +339,7 @@ export const claudeDriver: ChatDriver = {
         };
       },
       close() {
+        trace.closed();
         approvals.expireAll();
         input.end();
         q.close();

@@ -23,7 +23,16 @@ export type ClaudeMessage = {
   subtype?: string;
   session_id?: string;
   uuid?: string;
-  message?: { id?: string; model?: string; content?: Block[] | string };
+  message?: {
+    id?: string;
+    model?: string;
+    content?: Block[] | string;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_creation_input_tokens?: number;
+    };
+  };
   event?: {
     type: string;
     content_block?: Block;
