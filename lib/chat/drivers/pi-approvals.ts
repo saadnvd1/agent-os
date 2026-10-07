@@ -19,23 +19,34 @@ const MARK = "agentos:";
 export const EXTENSION = `import { readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, resolve, sep } from "node:path";
 const SAFE = new Set(["read", "grep", "find", "ls"]);
-// A path with its links resolved, as far as it exists.
+// A path with its links resolved, as far as it exists, in the case the
+// disk stores it (macOS matches names in any case).
 function real(p) {
   try {
-    return realpathSync(p);
+    return realpathSync.native(p);
   } catch {
     const up = dirname(p);
     return up === p ? p : resolve(real(up), basename(p));
   }
 }
-const inside = (p, root) => p === root || p.startsWith(root.endsWith(sep) ? root : root + sep);
+const fold = (p) => (process.platform === "darwin" ? p.toLowerCase() : p);
+const inside = (p, root) => {
+  const [a, b] = [fold(p), fold(root)];
+  return a === b || a.startsWith(b.endsWith(sep) ? b : b + sep);
+};
 // "Accept edits" covers the conversation's own folder, never AgentOS's
-// files (this gate's access setting among them).
+// files (this gate's access setting among them) nor Pi's own (.pi holds
+// extensions Pi runs on its next start).
 function ownEdit(input) {
   const accessFile = process.env.AGENTOS_PI_ACCESS_FILE;
   if (!accessFile || typeof input?.path !== "string") return false;
   const target = real(resolve(process.cwd(), input.path));
-  return inside(target, real(process.cwd())) && !inside(target, real(dirname(accessFile)));
+  const parts = fold(target).split(sep);
+  return (
+    inside(target, real(process.cwd())) &&
+    !inside(target, real(dirname(accessFile))) &&
+    !parts.includes(".pi")
+  );
 }
 export default function (pi) {
   pi.on("tool_call", async (event, ctx) => {

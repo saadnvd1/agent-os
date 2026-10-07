@@ -55,12 +55,12 @@ export function threadParams(o: ChatStartOptions, access: ChatAccess) {
   };
 }
 
-// Opens the conversation: the one it continues when it can, a new one when
-// it can't (archived ones are brought back first).
 // What Codex says when it has no record of a thread (0.156: "no rollout
 // found for thread id …").
 export const THREAD_GONE = /no rollout found|thread not found|unknown thread/i;
 
+// Opens the conversation: the one it continues when it can, a new one when
+// it can't (archived ones are brought back first).
 export async function openThread(
   rpc: CodexRpc,
   o: ChatStartOptions,

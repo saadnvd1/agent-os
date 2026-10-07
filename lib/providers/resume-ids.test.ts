@@ -93,7 +93,7 @@ describe("opencodeResumeId", () => {
     db.close();
     expect(opencodeResumeId("/w", now)).toBe("ses_main");
     expect(opencodeResumeId("/nowhere", now)).toBeNull();
-    // Only written to an hour ago: some earlier conversation's.
+    // Last written 11 minutes before: some earlier conversation's.
     expect(opencodeResumeId("/w", now + 10 * 60 * 1000)).toBeNull();
   });
 });

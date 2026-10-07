@@ -89,7 +89,41 @@ describe("Pi approval extension", () => {
     expect(
       await call("write", "edits", true, { path: path.join(dir, "access") })
     ).toMatchObject({ asked: true });
+    expect(
+      await call("write", "edits", true, { path: ".pi/extensions/x.ts" })
+    ).toMatchObject({ asked: true });
   });
+
+  // macOS matches names in any case: ACCESS is the same file as access.
+  it.runIf(process.platform === "darwin")(
+    "asks before writing its access file under another case",
+    async () => {
+      const inCwd = fs.mkdtempSync(path.join(process.cwd(), ".pi-gate-"));
+      try {
+        const accessFile = path.join(inCwd, "access");
+        fs.writeFileSync(accessFile, "edits");
+        process.env.AGENTOS_PI_ACCESS_FILE = accessFile;
+        let asked = false;
+        await handler(
+          {
+            toolName: "write",
+            input: {
+              path: path.join(
+                process.cwd(),
+                path.basename(inCwd).toUpperCase(),
+                "ACCESS"
+              ),
+            },
+            toolCallId: "c1",
+          },
+          { ui: { confirm: async () => (asked = true) } }
+        );
+        expect(asked).toBe(true);
+      } finally {
+        fs.rmSync(inCwd, { recursive: true, force: true });
+      }
+    }
+  );
 
   it("never asks to read", async () => {
     expect(await call("read", "ask")).toEqual({ asked: false, blocked: false });
