@@ -8,18 +8,16 @@ import {
 
 describe("normalizeMachineUrl", () => {
   it("adds http for an IP and keeps the port", () => {
-    expect(normalizeMachineUrl(" 100.64.0.1:3011/ ")).toEqual({
+    expect(normalizeMachineUrl(" 100.64.0.7:3011/ ")).toEqual({
       ok: true,
-      url: "http://100.64.0.1:3011",
+      url: "http://100.64.0.7:3011",
     });
   });
 
   it("adds https for a hostname and drops any path", () => {
-    expect(
-      normalizeMachineUrl("Saads-MacBook-Pro.example.ts.net:3443/pair#x")
-    ).toEqual({
+    expect(normalizeMachineUrl("Devbox.example.ts.net:3443/pair#x")).toEqual({
       ok: true,
-      url: "https://laptop.example.ts.net:3443",
+      url: "https://devbox.example.ts.net:3443",
     });
   });
 
@@ -47,20 +45,20 @@ describe("socketUrl and machineLabel", () => {
   });
 
   it("names a machine by its first host label", () => {
-    expect(
-      machineLabel("https://laptop.example.ts.net:3443")
-    ).toBe("laptop");
-    expect(machineLabel("http://100.64.0.1:3011")).toBe("100.64.0.1");
+    expect(machineLabel("https://devbox.example.ts.net:3443")).toBe("devbox");
+    expect(machineLabel("http://100.64.0.7:3011")).toBe("100.64.0.7");
   });
 });
 
 describe("pairLinkCode", () => {
   it("takes the code from a pairing link", () => {
     expect(
-      pairLinkCode("https://mac.tail.ts.net:3443/pair#abcd-efgh-jkmn-pqrs")
+      pairLinkCode(
+        "https://devbox.example.ts.net:3443/pair#abcd-efgh-jkmn-pqrs"
+      )
     ).toBe("ABCD-EFGH-JKMN-PQRS");
   });
   it("is null for a plain address", () => {
-    expect(pairLinkCode("100.64.0.1:3011")).toBeNull();
+    expect(pairLinkCode("100.64.0.7:3011")).toBeNull();
   });
 });

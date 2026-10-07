@@ -8,14 +8,14 @@ describe("endpointsFrom", () => {
         {
           reach: [
             { kind: "lan", url: "http://192.168.1.5:3011" },
-            { kind: "tailscale", url: "http://100.64.0.1:3011" },
+            { kind: "tailscale", url: "http://100.64.0.7:3011" },
             { kind: "tailscale", url: "https://evil.example.com" },
-            { kind: "tailscale", url: "https://mac.tail.ts.net:3443" },
+            { kind: "tailscale", url: "https://devbox.example.ts.net:3443" },
           ],
         },
         "http://127.0.0.1:3011"
       )
-    ).toEqual(["https://mac.tail.ts.net:3443", "http://127.0.0.1:3011"]);
+    ).toEqual(["https://devbox.example.ts.net:3443", "http://127.0.0.1:3011"]);
   });
 
   it("lists Connect first when it's on, then the reach list, without repeats", () => {
@@ -27,16 +27,16 @@ describe("endpointsFrom", () => {
             hostname: "abcd1234.on.runagentos.com",
           },
           reach: [
-            { kind: "tailscale", url: "https://mac.tail.ts.net:3443" },
-            { kind: "tailscale", url: "http://100.64.0.1:3011" },
+            { kind: "tailscale", url: "https://devbox.example.ts.net:3443" },
+            { kind: "tailscale", url: "http://100.64.0.7:3011" },
           ],
         },
-        "http://100.64.0.1:3011"
+        "http://100.64.0.7:3011"
       )
     ).toEqual([
       "https://abcd1234.on.runagentos.com",
-      "https://mac.tail.ts.net:3443",
-      "http://100.64.0.1:3011",
+      "https://devbox.example.ts.net:3443",
+      "http://100.64.0.7:3011",
     ]);
   });
 
@@ -58,9 +58,12 @@ describe("failover", () => {
     expect(
       failoverOrder(
         ["https://x.on.runagentos.com", "http://127.0.0.1:3011"],
-        "https://mac.tail.ts.net:3443"
+        "https://devbox.example.ts.net:3443"
       )
-    ).toEqual(["https://mac.tail.ts.net:3443", "https://x.on.runagentos.com"]);
+    ).toEqual([
+      "https://devbox.example.ts.net:3443",
+      "https://x.on.runagentos.com",
+    ]);
   });
 
   it("tries the current address first", () => {

@@ -22,7 +22,7 @@ export interface AskView {
   why: string;
   detail: string;
   link: string | null;
-  // The commit a gate ask is about (shown, so Saad sees what he approves).
+  // The commit a gate ask is about (shown, so the approver sees what they approve).
   sha: string | null;
   // What Approve must send back, and whether it needs a passkey.
   binding: string;

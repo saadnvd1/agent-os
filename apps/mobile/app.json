@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.saadnaveed.agentos",
+      "bundleIdentifier": "com.runagentos.app",
       "supportsTablet": true,
       "icon": {
         "light": "./assets/icon.png",
@@ -26,7 +26,7 @@
       }
     },
     "android": {
-      "package": "com.saadnaveed.agentos",
+      "package": "com.runagentos.app",
       "adaptiveIcon": {
         "backgroundColor": "#7C3AED",
         "foregroundImage": "./assets/android-icon-foreground.png",
