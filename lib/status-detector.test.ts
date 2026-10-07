@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   checkBusyIndicators,
+  checkWaitingPatterns,
   findQuestion,
+  plainText,
   readInputBox,
   statusDetector,
   UNSENT_MS,
@@ -60,6 +62,7 @@ describe("findQuestion", () => {
       "claude-unsent.ans",
       "claude-working-typed.ans",
       "codex-unsent.ans",
+      "claude-permission.ans",
     ])
       expect(findQuestion(screen(name)), name).toBeNull();
     expect(
@@ -159,5 +162,18 @@ describe("screenNeed", () => {
     need("codex-unsent.ans", T0);
     need("codex-idle.ans", T0 + 1000);
     expect(need("codex-unsent.ans", T0 + UNSENT_MS)).toBeNull();
+  });
+
+  it("leaves a real permission prompt to the waiting patterns", () => {
+    const prompt = screen("claude-permission.ans");
+    expect(checkWaitingPatterns(plainText(prompt).trim())).toBe(true);
+    expect(need("claude-permission.ans", T0)).toBeNull();
+    expect(need("claude-permission.ans", T0 + 2 * UNSENT_MS)).toBeNull();
+  });
+
+  it("isn't due once the typed text is forgotten", () => {
+    need("claude-unsent.ans", T0);
+    statusDetector.clearUnsent("fx");
+    expect(statusDetector.unsentDue(T0 + 2 * UNSENT_MS)).toBe(false);
   });
 });

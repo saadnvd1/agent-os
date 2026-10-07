@@ -272,14 +272,15 @@ async function collect(): Promise<StatusSnapshot> {
       : await statusDetector.getStatus(sessionName, screen);
     // A program that reports working or blocked knows better than its
     // screen; its own questions come as blocked reports.
-    const screenNeed =
+    const busy =
       program?.state === "working" ||
       program?.state === "blocked" ||
-      status === "running"
-        ? null
-        : statusDetector.screenNeed(sessionName, screen, {
-            question: !program,
-          });
+      status === "running";
+    // Text typed before a send isn't unsent: forget it while it works.
+    if (busy) statusDetector.clearUnsent(sessionName);
+    const screenNeed = busy
+      ? null
+      : statusDetector.screenNeed(sessionName, screen, { question: !program });
     const id = getSessionIdFromName(sessionName);
     const agentType = getAgentTypeFromSessionName(sessionName);
 

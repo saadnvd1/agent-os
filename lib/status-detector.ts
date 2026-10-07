@@ -138,7 +138,9 @@ const WAITING_PATTERNS = [
   /\(yes\/no\)/i,
   /Do you want to/i,
   /Enter to confirm.*Esc to cancel/i,
-  />\s*1\.\s*Yes/,
+  /[>❯]\s*1\.\s*Yes/,
+  // Claude Code's permission prompt, whose options can wrap past the window.
+  /Esc to cancel · Tab to amend/,
   /Yes, allow all/i,
   /allow all edits/i,
   /allow all commands/i,
@@ -470,7 +472,7 @@ class SessionStatusDetector {
     { question = true } = {},
     now = Date.now()
   ): ScreenNeed | null {
-    const text = plainText(screen);
+    const text = plainText(screen).trim();
     const asked = question ? findQuestion(screen) : null;
     const typed =
       asked === null &&
@@ -489,6 +491,10 @@ class SessionStatusDetector {
     if (now - seen.since < UNSENT_MS) return null;
     seen.shown = true;
     return { need: "unsent", detail: clip(typed, 120) };
+  }
+
+  clearUnsent(name: string): void {
+    this.unsent.delete(name);
   }
 
   /** Typed text that has just become unsent, and isn't shown yet. */
@@ -590,7 +596,7 @@ class SessionStatusDetector {
     const content =
       screen === undefined
         ? await this.capturePane(sessionName)
-        : plainText(screen);
+        : plainText(screen).trim();
 
     // 1. Busy indicators in last 10 lines (highest priority - Claude is actively working)
     // No activity timestamp check needed since we only look at recent terminal lines

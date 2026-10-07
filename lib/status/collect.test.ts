@@ -8,7 +8,11 @@ import {
   reloadProgramStatus,
 } from "@/lib/program-status/store";
 import type { ScreenNeed } from "@/lib/status-detector";
-import { collectStatuses, questionDismissed } from "./collect";
+import {
+  collectStatuses,
+  questionDismissed,
+  terminalsChanged,
+} from "./collect";
 
 const SID = "0b5f4c1e-1111-4222-8333-944445555666";
 const NAME = `claude-${SID}`;
@@ -18,6 +22,8 @@ const screenNeed = vi.fn(
   (_name: string, _screen: string, _opts: object): ScreenNeed | null => null
 );
 let pane = "";
+const unsentDue = vi.fn(() => false);
+const clearUnsent = vi.fn((_name: string) => {});
 const fixture = (name: string) =>
   readFileSync(join(__dirname, "..", "__fixtures__", "screens", name), "utf-8");
 
@@ -27,7 +33,9 @@ vi.mock("@/lib/status-detector", async (importOriginal) => ({
     captureScreen: async () => pane,
     screenNeed: (name: string, s: string, opts: object) =>
       screenNeed(name, s, opts),
-    unsentDue: () => false,
+    unsentDue: () => unsentDue(),
+    clearUnsent: (name: string) => clearUnsent(name),
+    signature: () => "same",
     refreshCache: async () => {},
     listSessions: async () => [{ name: NAME }],
     cleanup: () => {},
@@ -50,6 +58,8 @@ beforeEach(() => {
   screen.mockClear();
   screen.mockResolvedValue("running");
   screenNeed.mockReset();
+  clearUnsent.mockClear();
+  unsentDue.mockReturnValue(false);
   screenNeed.mockReturnValue(null);
   const db = getDb();
   db.prepare(`DELETE FROM program_status`).run();
@@ -231,5 +241,21 @@ describe("collectStatuses", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("doesn't read a working terminal's screen for needs, and forgets its typed text", async () => {
+    screen.mockResolvedValue("running");
+    screenNeed.mockReturnValue({ need: "unsent", detail: "x" });
+    const { statuses } = await collectStatuses();
+    expect(statuses[SID]).toMatchObject({ status: "running", need: null });
+    expect(screenNeed).not.toHaveBeenCalled();
+    expect(clearUnsent).toHaveBeenCalledWith(NAME);
+  });
+
+  it("looks again when typed text turns unsent, with nothing new on screen", async () => {
+    await terminalsChanged();
+    expect(await terminalsChanged()).not.toBe("changed");
+    unsentDue.mockReturnValue(true);
+    expect(await terminalsChanged()).toBe("changed");
   });
 });
