@@ -53,21 +53,39 @@ export function briefPathIn(prompt: string): string | null {
   return m ? m[1] : null;
 }
 
-export function readBrief(ref: string, cwd: string): string | null {
+// Its first few KB, or null. Off the event loop, regular files only (a
+// FIFO named x.md would block an open forever), and given up on after a
+// second (a cloud file that isn't downloaded yet).
+export async function readBrief(
+  ref: string,
+  cwd: string,
+  timeoutMs = 1000
+): Promise<string | null> {
   const file = ref.startsWith("~/")
     ? path.join(os.homedir(), ref.slice(2))
     : path.resolve(cwd, ref);
-  try {
-    const fd = fs.openSync(file, "r");
+  const read = async () => {
+    if (!(await fs.promises.stat(file)).isFile()) return null;
+    const fh = await fs.promises.open(
+      file,
+      fs.constants.O_RDONLY | fs.constants.O_NONBLOCK
+    );
     try {
       const buf = Buffer.alloc(BRIEF_BYTES);
-      const n = fs.readSync(fd, buf, 0, BRIEF_BYTES, 0);
-      return buf.subarray(0, n).toString("utf8");
+      const { bytesRead } = await fh.read(buf, 0, BRIEF_BYTES, 0);
+      return buf.subarray(0, bytesRead).toString("utf8");
     } finally {
-      fs.closeSync(fd);
+      await fh.close();
     }
-  } catch {
-    return null;
+  };
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+  });
+  try {
+    return await Promise.race([read().catch(() => null), late]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -169,16 +187,20 @@ export async function generateTitle(
   }
 }
 
-// The same name as a live session already has gets a number, so the bus can
-// still tell them apart by name.
+// A name a live session has, or had before a rename, gets a number: the bus
+// can still tell them apart, and a name someone was told a moment ago never
+// comes to mean a different session.
 function uniqueName(name: string, exceptId: string): string {
   const taken = new Set(
     (
       db
         .prepare(
-          `SELECT name FROM sessions WHERE archived_at IS NULL AND id != ?`
+          `SELECT name FROM sessions WHERE archived_at IS NULL AND id != ?
+           UNION
+           SELECT n.name FROM session_names n JOIN sessions s ON s.id = n.session_id
+           WHERE s.archived_at IS NULL AND s.id != ?`
         )
-        .all(exceptId) as { name: string }[]
+        .all(exceptId, exceptId) as { name: string }[]
     ).map((r) => r.name.toLowerCase())
   );
   if (!taken.has(name.toLowerCase())) return name;
@@ -216,36 +238,37 @@ export interface Naming {
   name: string;
   source: NameSource;
   // Call once the session row exists: looks for a better title in the
-  // background. Absent when the name was given.
-  refine?: (sessionId: string) => void;
+  // background (the promise is for tests; it never rejects). Absent when
+  // the name was given.
+  refine?: (sessionId: string) => Promise<void>;
 }
 
 const enabled = () => process.env.AGENTOS_SESSION_TITLES !== "off";
 
 // How to name a session started from `prompt` in `cwd`, unless it was given
 // `explicit`ly.
-export function nameFor(
+export async function nameFor(
   prompt: string,
   cwd: string,
   explicit?: string | null,
   run: ClaudeRunner = runClaude
-): Naming {
+): Promise<Naming> {
   const given = explicit?.trim();
   if (given) return { name: truncate(given, 100), source: "user" };
   const ref = briefPathIn(prompt);
-  const brief = ref ? readBrief(ref, cwd) : null;
+  const brief = ref ? await readBrief(ref, cwd) : null;
   const name = uniqueName(fallbackTitle(prompt, brief), "");
   return {
     name,
     source: "default",
-    refine: (sessionId) => {
+    refine: async (sessionId) => {
       if (!enabled()) return;
-      void generateTitle(prompt, brief, run).then(
-        (title) => {
-          if (title) applyTitle(sessionId, name, title);
-        },
-        () => {}
-      );
+      try {
+        const title = await generateTitle(prompt, brief, run);
+        if (title) applyTitle(sessionId, name, title);
+      } catch (error) {
+        console.warn("[titles] not applied:", error);
+      }
     },
   };
 }
@@ -282,10 +305,10 @@ export function titleChatFromMessage(
   titling.add(sessionId);
   const cwd = s.working_directory.replace(/^~/, os.homedir());
   const ref = briefPathIn(text);
-  const brief = ref ? readBrief(ref, cwd) : null;
   const from = s.name;
   return (async () => {
     try {
+      const brief = ref ? await readBrief(ref, cwd) : null;
       const title =
         (enabled() ? await generateTitle(text, brief, run) : null) ??
         fallbackTitle(text, brief);

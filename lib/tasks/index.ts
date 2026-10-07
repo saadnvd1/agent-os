@@ -82,7 +82,7 @@ export async function createTask(opts: {
     throw new Error(`"${opts.baseBranch}" isn't a branch name`);
   const projectPath = expandHome(project.working_directory);
   const id = randomUUID();
-  const naming = nameFor(prompt, projectPath, opts.name);
+  const naming = await nameFor(prompt, projectPath, opts.name);
   const feature = `${slugify(naming.name.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
   const baseBranch =
     opts.base?.branch ??
@@ -132,7 +132,7 @@ export async function createTask(opts: {
     `UPDATE sessions SET task_prompt = ?, task_status = 'running', name_source = ? WHERE id = ?`
   ).run(prompt, naming.source, id);
   opts.onCreated?.(id);
-  naming.refine?.(id);
+  void naming.refine?.(id);
 
   await launchClaude({
     sessionId: id,

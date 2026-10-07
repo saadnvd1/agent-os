@@ -2,6 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
+import { execFileSync } from "child_process";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClaudeRunner } from "./orchestrator/claude-cli";
@@ -113,11 +114,9 @@ describe("the fallback title", () => {
 });
 
 describe("naming a session from its prompt", () => {
-  const settle = () => new Promise((r) => setTimeout(r, 20));
-
   it("starts with the brief's heading and takes the generated title", async () => {
     const file = briefFile("# Web performance (Saad)\n\nMake it fast.\n");
-    const naming = t.nameFor(
+    const naming = await t.nameFor(
       `Read and execute the brief at ${file}. Run /do-code-review.`,
       "/tmp",
       undefined,
@@ -126,43 +125,44 @@ describe("naming a session from its prompt", () => {
     expect(naming.name).toMatch(/^Web performance( \d+)?$/);
     expect(naming.source).toBe("default");
     const id = seedSession({ projectId: project.id, name: naming.name });
-    naming.refine!(id);
-    await settle();
+    await naming.refine!(id);
     expect(row(id).name).toMatch(/^Web perf audit /);
     expect(row(id).name_source).toBe("generated");
   });
 
   it("keeps the placeholder when generation fails", async () => {
     const tag = randomUUID().slice(0, 6);
-    const naming = t.nameFor(
+    const run = vi.fn(failing);
+    const naming = await t.nameFor(
       `Please fix the upload test ${tag}.`,
       "/tmp",
       undefined,
-      failing
+      run
     );
     expect(naming.name).toBe(`Fix the upload test ${tag}`);
     const id = seedSession({ projectId: project.id, name: naming.name });
-    naming.refine!(id);
-    await settle();
+    await naming.refine!(id);
+    expect(run).toHaveBeenCalledOnce();
     expect(row(id).name).toBe(`Fix the upload test ${tag}`);
   });
 
   it("keeps the placeholder when the model's answer isn't a title", async () => {
     const tag = randomUUID().slice(0, 6);
-    const naming = t.nameFor(
+    const run = vi.fn(answering("x"));
+    const naming = await t.nameFor(
       `Fix the build ${tag}`,
       "/tmp",
       undefined,
-      answering("x")
+      run
     );
     const id = seedSession({ projectId: project.id, name: naming.name });
-    naming.refine!(id);
-    await settle();
+    await naming.refine!(id);
+    expect(run).toHaveBeenCalledOnce();
     expect(row(id).name).toBe(`Fix the build ${tag}`);
   });
 
-  it("uses an explicit name as given, and never refines it", () => {
-    const naming = t.nameFor(
+  it("uses an explicit name as given, and never refines it", async () => {
+    const naming = await t.nameFor(
       "Read the brief at /tmp/x.md",
       "/tmp",
       " Nightly audit "
@@ -176,6 +176,25 @@ describe("naming a session from its prompt", () => {
     const id = seedSession({ projectId: project.id, name: "placeholder x" });
     expect(t.applyTitle(id, "placeholder x", name)).toBe(true);
     expect(row(id).name).toBe(`${name} 2`);
+  });
+
+  it("never hands out a name a live session had before a rename", () => {
+    const old = `Fix chat ${randomUUID().slice(0, 4)}`;
+    const a = seedSession({ projectId: project.id, name: old });
+    expect(t.applyTitle(a, old, "Fix Send now delivery")).toBe(true);
+    const b = seedSession({ projectId: project.id, name: "placeholder y" });
+    expect(t.applyTitle(b, "placeholder y", old)).toBe(true);
+    expect(row(b).name).toBe(`${old} 2`);
+  });
+
+  it("does nothing while titles are switched off", async () => {
+    process.env.AGENTOS_SESSION_TITLES = "off";
+    const run = vi.fn(answering("Should not apply"));
+    const naming = await t.nameFor("Fix the build", "/tmp", undefined, run);
+    const id = seedSession({ projectId: project.id, name: naming.name });
+    await naming.refine!(id);
+    expect(run).not.toHaveBeenCalled();
+    expect(row(id).name).toBe(naming.name);
   });
 
   it("never renames a session someone named meanwhile", async () => {
@@ -194,6 +213,21 @@ describe("naming a session from its prompt", () => {
       false
     );
     expect(row(id).name).toBe(`My name ${tag}`);
+  });
+});
+
+describe("reading a brief", () => {
+  it("reads a regular file", async () => {
+    const file = briefFile("# Heading\n");
+    expect(await t.readBrief(file, "/")).toBe("# Heading\n");
+  });
+
+  it("returns null for a missing file or a FIFO, without hanging", async () => {
+    expect(await t.readBrief("/nonexistent/x.md", "/")).toBeNull();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fifo-"));
+    const fifo = path.join(dir, "brief.md");
+    execFileSync("mkfifo", [fifo]);
+    expect(await t.readBrief(fifo, "/")).toBeNull();
   });
 });
 
@@ -244,5 +278,41 @@ describe("naming a chat from its first message", () => {
     });
     await t.titleChatFromMessage(id, "anything", answering("Should not apply"));
     expect(row(id).name).toBe("orchestrator");
+  });
+
+  it("leaves a task alone even while it's called Session N", async () => {
+    const name = `Session ${Math.floor(Math.random() * 1e9)}`;
+    const id = seedSession({ projectId: project.id, name, task: true });
+    db.prepare(`UPDATE sessions SET task_prompt = 'x' WHERE id = ?`).run(id);
+    await t.titleChatFromMessage(id, "anything", answering("Should not apply"));
+    expect(row(id).name).toBe(name);
+  });
+
+  it("titles once when two messages arrive together", async () => {
+    const id = seedSession({
+      projectId: project.id,
+      name: `Session ${Math.floor(Math.random() * 1e9)}`,
+      view: "chat",
+    });
+    const run = vi.fn(answering(`Only once ${randomUUID().slice(0, 4)}`));
+    await Promise.all([
+      t.titleChatFromMessage(id, "first", run),
+      t.titleChatFromMessage(id, "second", run),
+    ]);
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("names it from the message without a model while titles are off", async () => {
+    process.env.AGENTOS_SESSION_TITLES = "off";
+    const id = seedSession({
+      projectId: project.id,
+      name: `Session ${Math.floor(Math.random() * 1e9)}`,
+      view: "chat",
+    });
+    const run = vi.fn(answering("Should not apply"));
+    const tag = randomUUID().slice(0, 6);
+    await t.titleChatFromMessage(id, `Please tidy the docs ${tag}.`, run);
+    expect(run).not.toHaveBeenCalled();
+    expect(row(id).name).toBe(`Tidy the docs ${tag}`);
   });
 });

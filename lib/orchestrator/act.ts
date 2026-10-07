@@ -66,7 +66,7 @@ export async function startTask(
       }),
     (s) => s.id
   );
-  return `Started task "${task.name}" in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
 }
 
 export async function startSession(
@@ -82,7 +82,7 @@ export async function startSession(
     () => spawnSession({ project: project.id, prompt, name }),
     (s) => s.id
   );
-  return `Started session "${session.name}" in ${project.name}.`;
+  return `Started session "${session.name}" (id ${session.id.slice(0, 8)}) in ${project.name}.`;
 }
 
 function itemLine(i: StackItemView): string {

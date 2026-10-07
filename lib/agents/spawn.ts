@@ -46,7 +46,7 @@ export async function spawnSession(opts: {
     opts.model || project.default_model
   );
   const cwd = project.working_directory.replace(/^~/, os.homedir());
-  const naming = nameFor(prompt, cwd, opts.name);
+  const naming = await nameFor(prompt, cwd, opts.name);
 
   queries
     .createSession(db)
@@ -68,7 +68,7 @@ export async function spawnSession(opts: {
     naming.source,
     id
   );
-  naming.refine?.(id);
+  void naming.refine?.(id);
   await launchClaude({ sessionId: id, tmuxName, cwd, model, prompt });
   return queries.getSession(db).get(id) as Session;
 }
