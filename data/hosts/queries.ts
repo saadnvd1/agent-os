@@ -74,3 +74,20 @@ export function useTestHost() {
       ),
   });
 }
+
+export function useLinkHost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      json<{ url: string }>(
+        await fetch(`/api/hosts/${id}/link`, { method: "POST" })
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: hostKeys.all }),
+  });
+}
+
+/** Machines whose own AgentOS this one is paired with: tasks can run there. */
+export function useLinkedHosts(): Host[] {
+  const { data: hosts = [] } = useHostsQuery();
+  return hosts.filter((h) => h.id !== "local" && Boolean(h.linked));
+}

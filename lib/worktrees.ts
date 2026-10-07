@@ -18,7 +18,7 @@ import {
 const execAsync = promisify(exec);
 
 // Base directory for all worktrees
-const WORKTREES_DIR = path.join(os.homedir(), ".agent-os", "worktrees");
+export const WORKTREES_DIR = path.join(os.homedir(), ".agent-os", "worktrees");
 
 export interface WorktreeInfo {
   worktreePath: string;
