@@ -254,6 +254,39 @@ describe("a session switched to the terminal", () => {
   });
 });
 
+describe("a worker that goes away from a session no longer in chat", () => {
+  it.each([
+    [
+      "switched to the terminal",
+      `UPDATE sessions SET view = 'terminal' WHERE id = ?`,
+    ],
+    [
+      "archived",
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`,
+    ],
+  ])("isn't replaced when the session was %s", async (_why, change) => {
+    db.prepare(`DELETE FROM chat_queue`).run();
+    const id = session();
+    enqueue(id, { id: "user-1", text: "queued" });
+    const t0 = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"], now: t0 });
+    try {
+      await reattachChats();
+      const mine = () => workers.started.filter((w) => w.sessionId === id);
+      expect(mine()).toHaveLength(1);
+      db.prepare(change).run(id);
+      vi.setSystemTime(t0 + 61_000);
+      mine()[0].handlers.onClose(false);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mine()).toHaveLength(1);
+      expect(listQueue(id).map((m) => m.text)).toEqual(["queued"]);
+    } finally {
+      vi.useRealTimers();
+      registry.live.delete(id);
+    }
+  });
+});
+
 describe("a worker from an older build", () => {
   it("hands what its dead agent left queued to a current worker", async () => {
     db.prepare(`DELETE FROM chat_queue`).run();

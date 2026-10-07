@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
+import { db } from "../db";
 import {
   claimNext,
   deleteQueued,
@@ -40,6 +41,14 @@ describe("chat queue", () => {
     enqueue(id, { id: "user-1", text: "look", images });
     expect(listQueue(id)[0]).toMatchObject({ text: "look", imageCount: 1 });
     expect(JSON.stringify(listQueue(id))).not.toContain("AAAA");
+    // The count comes from its own column: listing never reads the images.
+    db.prepare(
+      `UPDATE chat_queue SET images = 'not json' WHERE id = 'user-1'`
+    ).run();
+    expect(listQueue(id)[0].imageCount).toBe(1);
+    db.prepare(`UPDATE chat_queue SET images = ? WHERE id = 'user-1'`).run(
+      JSON.stringify(images)
+    );
     enqueue(id, { id: "user-2", text: "none" });
     expect(listQueue(id)[1].imageCount).toBeUndefined();
     expect(claimNext(id)?.images).toEqual(images);
