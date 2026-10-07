@@ -124,10 +124,12 @@ export class ClaudeMapper {
       return this.sessionState(m.state);
     const out = this.route(m);
     // Every turn opens with init, ones the agent starts on its own too (a
-    // background task's notice), with nobody having sent a thing.
-    if (m.type === "system" && m.subtype === "init" && !this.inTurn) {
-      this.inTurn = true;
+    // background task's notice), with nobody having sent a thing. One still
+    // open then ended without its result: it ends here.
+    if (m.type === "system" && m.subtype === "init") {
       out.unshift({ type: "turn_start" });
+      if (this.inTurn) out.unshift({ type: "state", state: "idle" });
+      this.inTurn = true;
     }
     if (m.type === "result") this.inTurn = false;
     if (out.some((e) => e.type === "item" || e.type === "delta"))

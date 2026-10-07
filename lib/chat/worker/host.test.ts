@@ -324,10 +324,12 @@ describe("ChatHost queue", () => {
     expect(emitted).not.toContainEqual({ type: "state", state: "idle" });
     expect(conversation.send).toHaveBeenCalledTimes(2);
     // Its end sends the rest of the queue.
+    conversation.events.push({ type: "turn_start" });
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
     expect(conversation.send).toHaveBeenLastCalledWith("later", undefined);
     expect(listQueue(id)).toEqual([]);
+    conversation.events.push({ type: "turn_start" });
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
     expect(host.state).toBe("idle");
@@ -480,6 +482,50 @@ describe("ChatHost queue", () => {
     host.close();
   });
 
+  it("a stopped turn that never sends its result can't hold the chat running", async () => {
+    const { ClaudeMapper } = await import("../drivers/claude-mapper");
+    const mapper = new ClaudeMapper();
+    const feed = (m: Parameters<typeof mapper.map>[0]) => {
+      for (const e of mapper.map(m)) conversation.events.push(e);
+    };
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
+    feed({ type: "system", subtype: "init", session_id: "s" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "B", queue: true });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    // A's turn sends no result; B's starts, and ends.
+    feed({ type: "system", subtype: "init", session_id: "s" });
+    feed({ type: "result", subtype: "success", result: "done" });
+    await tick();
+    expect(host.state).toBe("idle");
+    host.close();
+  });
+
+  it("two messages sent now in a row: only the last one's end is idle", async () => {
+    const { host, conversation, emitted } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "T", queue: true });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "A", queue: true });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    await host.handle({ type: "send", id: "user-3", text: "B", queue: true });
+    await host.handle({ type: "send_now", id: "user-3", during: "user-2" });
+    emitted.length = 0;
+    // T stops; A starts and B stops it; B starts and ends.
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("running");
+    expect(emitted).not.toContainEqual({ type: "state", state: "idle" });
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("idle");
+    host.close();
+  });
+
   it("a handed-over message is saved at once, and shown if the agent goes away", async () => {
     const { id, host, conversation, emitted } = await startHost();
     await host.handle({ type: "send", id: "user-1", text: "A", queue: true });
@@ -494,6 +540,10 @@ describe("ChatHost queue", () => {
       type: "item",
       item: expect.objectContaining({ id: "user-2" }),
     });
+    // Off the queue, saved once: a worker after this won't send it again.
+    expect(listQueue(id)).toEqual([]);
+    expect(listItems(id).filter((i) => i.id === "user-2")).toHaveLength(1);
+    expect(listItems(id).at(-1)?.id).toBe("user-2");
     host.close();
   });
 

@@ -453,13 +453,21 @@ describe("ClaudeMapper turn starts", () => {
   it("says when a turn starts, once per turn, whoever started it", () => {
     const m = new ClaudeMapper();
     expect(starts(m.map(init))).toBe(1);
-    expect(starts(m.map(init))).toBe(0);
     m.map({ type: "result", subtype: "success", result: "done" });
     // One the agent began on its own, straight after, nothing having been sent.
     expect(starts(m.map(init))).toBe(1);
     m.map({ type: "result", subtype: "success", result: "done" });
     // The agent idle once it ran them all: they already ended.
     expect(m.map(idle)).toEqual([]);
+  });
+
+  it("ends a turn that never sent its result when the next one starts", () => {
+    const m = new ClaudeMapper();
+    m.map(init);
+    expect(m.map(init).slice(0, 2)).toEqual([
+      { type: "state", state: "idle" },
+      { type: "turn_start" },
+    ]);
   });
 
   it("ends a turn that's over with no result, so it can't run forever", () => {

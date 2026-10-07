@@ -58,6 +58,9 @@ export class ChatHost {
   // the agent reports, so one that never started or never sends its result
   // can't swallow the end of the message's own turn.
   private stopsUpTo = 0;
+  // Messages sent now whose turn hasn't started: a turn starting while
+  // another is still to come is stopped by it, too.
+  private nowPending = 0;
   // Those messages: saved at once, and shown (moved after the stopped turn)
   // once it has ended, so they don't read as part of it.
   private handedOver: ChatItem[] = [];
@@ -182,6 +185,8 @@ export class ChatHost {
           this.emit(e);
         } else if (e.type === "turn_start") {
           this.turnsStarted++;
+          if (this.nowPending && --this.nowPending)
+            this.stopsUpTo = this.turnsStarted;
           // A turn the agent started itself (a background task's notice)
           // runs like any other: what's sent meanwhile waits for it.
           if (this.state === "idle" && !this.closed) {
@@ -206,6 +211,7 @@ export class ChatHost {
               if (this.turnsEnded === this.stopsUpTo) this.showHandedOver();
               continue;
             }
+            this.nowPending = 0;
             // The next queued message goes straight on, with no idle in
             // between: the server retires a stale worker the moment it
             // hears one, and would cut that turn off.
@@ -281,6 +287,7 @@ export class ChatHost {
     // A turn the agent has started and not ended is what stops.
     const handOver = now && this.turnsStarted > this.turnsEnded;
     if (handOver) this.stopsUpTo = this.turnsStarted;
+    if (now) this.nowPending++;
     this.stopping = null;
     const checkpoint = now
       ? this.conversation.send(m.text, m.images, { now })
