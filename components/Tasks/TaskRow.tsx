@@ -31,6 +31,10 @@ export function TaskRow({ task }: { task: TaskView }) {
   const [confirmDrop, setConfirmDrop] = useState(false);
   const live = !isFinished(task.state);
   const error = signOff.error?.message || drop.error?.message;
+  const settingUp = live && task.setup?.status === "running";
+  const held = live && task.setup?.status === "held";
+  const setupFailed =
+    live && (task.setup?.status === "failed" || held) && !!task.setup?.error;
 
   return (
     <div className="bg-foreground/[0.03] space-y-2 rounded-xl px-3 py-3">
@@ -55,9 +59,18 @@ export function TaskRow({ task }: { task: TaskView }) {
         <span
           className={cn("shrink-0 text-xs font-medium", STATE[task.state].tone)}
         >
-          {STATE[task.state].label}
+          {settingUp
+            ? "Setting up"
+            : held
+              ? "Waiting to launch"
+              : STATE[task.state].label}
         </span>
       </div>
+      {setupFailed && (
+        <p className="line-clamp-3 text-xs break-words text-amber-600 dark:text-amber-400">
+          Setup: {task.setup?.error}
+        </p>
+      )}
 
       {live && (
         <div className="flex flex-wrap items-center gap-2">

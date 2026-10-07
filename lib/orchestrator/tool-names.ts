@@ -28,8 +28,9 @@ export const TOOL_NAMES = {
 // What it may do, fixed by its role: it reads other sessions' text, so it
 // never gets a general shell or file edits. Anything not listed is refused
 // without asking. It acts through its own tools, which are scoped to its
-// workspace and braked; the shell keeps only `aos` commands that read, so
-// `aos send`, `task`, `spawn` and `stack` can't go around them.
+// workspace and braked; the shell keeps only `aos` commands that read, and
+// notify, which reaches only Saad, so `aos send`, `task`, `spawn` and
+// `stack` can't go around them.
 export const ORCHESTRATOR_PERMISSIONS: {
   permissionMode: PermissionMode;
   allowedTools: string[];
@@ -47,6 +48,9 @@ export const ORCHESTRATOR_PERMISSIONS: {
     "Bash(aos inbox:*)",
     "Bash(aos history:*)",
     "Bash(aos stacks:*)",
+    "Bash(aos schedules:*)",
+    // Reaches only Saad's phone, at most once a minute.
+    "Bash(aos notify:*)",
     "Bash(aos docs:*)",
     "Bash(aos doc:*)",
   ],

@@ -109,15 +109,23 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   } else if (e.type === "state") {
     live.state = e.state;
     emit(sessionId, e);
-    // Its turn ended on code from before a redeploy: close it now. Its
-    // queue is empty unless its agent died mid-turn; a current worker then
-    // takes what's left.
+    clearTimeout(live.retiring);
+    live.retiring = undefined;
+    // Its turn ended on code from before a redeploy: it goes, and the next
+    // message starts a current worker. Its guess at that message comes a
+    // few seconds after the turn ends, so it waits for it, unless messages
+    // are queued (its agent died mid-turn) for a current worker to take.
     if (isStaleWorker(live.build, buildId(), e.state)) {
-      stopChat(sessionId);
-      void resumeQueue(sessionId);
+      if (listQueue(sessionId).length) retire(sessionId, live);
+      else
+        live.retiring = setTimeout(
+          () => retire(sessionId, live),
+          SUGGESTION_WAIT_MS
+        );
     }
   } else if (e.type === "suggestion") {
     emit(sessionId, e);
+    if (live.retiring && e.text) retire(sessionId, live);
   } else if (e.type === "queue") {
     emitQueue(sessionId);
   } else if (e.type === "context") {
@@ -148,7 +156,9 @@ function checkChattable(session: Session): void {
 // unless only an existing one will do (reattaching, stopping).
 async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
   const existing = registry.live.get(sessionId);
-  if (existing) return existing;
+  if (existing && !existing.retiring) return existing;
+  // A message for a worker that's on its way out goes to a current one.
+  if (existing) retire(sessionId, existing, false);
   const pending = registry.connecting.get(sessionId);
   if (pending) return pending;
   const connecting = (async () => {
@@ -431,6 +441,18 @@ export async function interruptChat(sessionId: string): Promise<void> {
 }
 
 // Ends the conversation: its worker closes the agent and exits.
+// How long a worker from an older build waits for its guess at the next
+// message before it goes.
+const SUGGESTION_WAIT_MS = 2 * 60 * 1000;
+
+function retire(sessionId: string, live: Live, resume = true): void {
+  clearTimeout(live.retiring);
+  live.retiring = undefined;
+  if (registry.live.get(sessionId) !== live) return;
+  stopChat(sessionId);
+  if (resume) void resumeQueue(sessionId);
+}
+
 export function stopChat(sessionId: string): void {
   const live = registry.live.get(sessionId);
   if (live) {

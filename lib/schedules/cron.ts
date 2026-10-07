@@ -258,6 +258,8 @@ export function nextRuns(
 
 // Task and session schedules may run no more often than this.
 export const MIN_GAP_MINUTES = 60;
+// A message to a session, at most this often.
+export const MESSAGE_MIN_GAP_MINUTES = 10;
 
 // The shortest gap between runs over the next few weeks of them.
 export function minGapMinutes(
@@ -270,6 +272,27 @@ export function minGapMinutes(
   for (let i = 1; i < runs.length; i++)
     min = Math.min(min, (runs[i] - runs[i - 1]) / 60_000);
   return min;
+}
+
+// "30m" or "2h" as a cron that runs that often, on the clock: every 30
+// minutes is :00 and :30.
+export function everyCron(spec: string): string {
+  const m = /^(\d+)\s*(m|min|mins|minutes?|h|hr|hrs|hours?)$/i.exec(
+    spec.trim()
+  );
+  if (!m) throw new Error(`"${spec}" isn't an interval; try 30m or 2h`);
+  const n = Number(m[1]);
+  if (m[2][0].toLowerCase() === "h") {
+    if (n < 1 || n > 23) throw new Error("Pick between 1h and 23h");
+    return n === 1 ? "0 * * * *" : `0 */${n} * * *`;
+  }
+  if (n === 60) return "0 * * * *";
+  if (n < 1 || n > 59) throw new Error("Pick between 1m and 59m, or use hours");
+  if (60 % n !== 0)
+    throw new Error(
+      `${n}m doesn't divide the hour evenly; try 10m, 15m, 20m or 30m`
+    );
+  return `*/${n} * * * *`;
 }
 
 // "Tue, Oct 7, 9:00 AM" in the schedule's zone.
@@ -285,7 +308,7 @@ export function formatRunTime(ms: number, tz = DEFAULT_TIMEZONE): string {
   }).format(new Date(ms));
 }
 
-export type PresetKind = "hourly" | "daily" | "weekdays" | "weekly";
+export type PresetKind = "every" | "hourly" | "daily" | "weekdays" | "weekly";
 
 export interface Preset {
   kind: PresetKind;
@@ -294,10 +317,14 @@ export interface Preset {
   hour: number;
   // 0 = Sunday, for weekly.
   weekday: number;
+  // Minutes between runs, for every.
+  every?: number;
 }
 
 export function presetCron(p: Preset): string {
   switch (p.kind) {
+    case "every":
+      return `*/${p.every ?? 30} * * * *`;
     case "hourly":
       return `${p.minute} * * * *`;
     case "daily":
@@ -311,6 +338,17 @@ export function presetCron(p: Preset): string {
 
 // The preset a cron expression was made from, or null for anything else.
 export function cronPreset(expr: string): Preset | null {
+  const every = /^\*\/(\d+) \* \* \* \*$/.exec(
+    expr.trim().replace(/\s+/g, " ")
+  );
+  if (every)
+    return {
+      kind: "every",
+      every: Number(every[1]),
+      minute: 0,
+      hour: 9,
+      weekday: 1,
+    };
   const parts = expr.trim().split(/\s+/);
   if (parts.length !== 5 || !/^\d+$/.test(parts[0])) return null;
   const [mi, h, dom, mon, dow] = parts;
@@ -355,6 +393,8 @@ export function describeCron(expr: string): string {
   if (!p) return expr.trim();
   const at = clock12(p.hour, p.minute);
   switch (p.kind) {
+    case "every":
+      return `Every ${p.every} minutes`;
     case "hourly":
       return p.minute === 0
         ? "Every hour"

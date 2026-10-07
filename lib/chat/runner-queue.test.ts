@@ -52,7 +52,7 @@ vi.mock("./worker/client", async (original) => ({
 const { registry } = await import("./registry");
 const { db } = await import("../db");
 const { enqueue, listQueue } = await import("./queued");
-const { chatFileSuggestions, editQueuedChat, reattachChats } =
+const { chatFileSuggestions, editQueuedChat, reattachChats, sendChat } =
   await import("./runner");
 const { seedSession } = await import("../orchestrator/testing");
 const { listFiles, LISTERS } = await import("./files");
@@ -326,6 +326,86 @@ describe("a worker from an older build", () => {
     } finally {
       workers.build = undefined;
       workers.state = "idle";
+      vi.useRealTimers();
+      registry.live.delete(id);
+    }
+  });
+});
+
+describe("a worker from an older build whose turn ends", () => {
+  // Attached mid-turn, on code from before a redeploy.
+  async function staleMidTurn() {
+    db.prepare(`DELETE FROM chat_queue`).run();
+    const id = session();
+    workers.running = [id];
+    workers.build = "an-older-build";
+    workers.state = "running";
+    await reattachChats();
+    workers.running = [];
+    workers.build = undefined;
+    workers.state = "idle";
+    const mine = () => workers.started.filter((w) => w.sessionId === id);
+    const closed = (i: number) =>
+      mine()[i].commands.some((c) => (c as { type: string }).type === "close");
+    return { id, mine, closed, worker: mine()[0] };
+  }
+
+  it("stays for its guess at the next message, then goes", async () => {
+    const { id, mine, closed, worker } = await staleMidTurn();
+    try {
+      worker.handlers.onEvent({ type: "state", state: "idle" });
+      expect(closed(0)).toBe(false);
+      worker.handlers.onEvent({ type: "suggestion", text: "run the tests" });
+      expect(closed(0)).toBe(true);
+      expect(registry.live.has(id)).toBe(false);
+      expect(mine()).toHaveLength(1);
+    } finally {
+      registry.live.delete(id);
+    }
+  });
+
+  it("goes after a while when no guess comes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { id, closed, worker } = await staleMidTurn();
+    try {
+      worker.handlers.onEvent({ type: "state", state: "idle" });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(closed(0)).toBe(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(closed(0)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      registry.live.delete(id);
+    }
+  });
+
+  it("hands a message sent meanwhile to a current worker", async () => {
+    const { id, mine, closed, worker } = await staleMidTurn();
+    try {
+      worker.handlers.onEvent({ type: "state", state: "idle" });
+      await sendChat(id, { text: "next" });
+      expect(closed(0)).toBe(true);
+      expect(mine()).toHaveLength(2);
+      expect(mine()[0].commands).not.toContainEqual(
+        expect.objectContaining({ type: "send" })
+      );
+      expect(mine()[1].commands).toContainEqual(
+        expect.objectContaining({ type: "send", text: "next" })
+      );
+    } finally {
+      registry.live.delete(id);
+    }
+  });
+
+  it("keeps a turn the agent starts meanwhile", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { id, closed, worker } = await staleMidTurn();
+    try {
+      worker.handlers.onEvent({ type: "state", state: "idle" });
+      worker.handlers.onEvent({ type: "state", state: "running" });
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(closed(0)).toBe(false);
+    } finally {
       vi.useRealTimers();
       registry.live.delete(id);
     }

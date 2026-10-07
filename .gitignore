@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 .next/
+.next-build/
+.next-build.lock/
+.next-prev/
 out/
 
 # Environment

@@ -16,12 +16,20 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos history <session>              your conversation with a session
   aos spawn <project> <prompt...>    start a new agent session in a project
   aos task <project> <prompt...>     start a background task that ends in a PR
+                                     (--name "<name>": name it; otherwise it's
+                                     named from the prompt)
   aos stack <project> [--plan] [--max N]
                                      run the project's linked board as stacked tasks
                                      (--plan: just show the order, start nothing)
   aos stacks                         every stack and where each card is
   aos schedules                      every schedule, its next run and last outcome
   aos schedule run <name>            run a schedule now (name or id)
+  aos schedule add --session <session> --every 30m [--name N] <prompt...>
+                                     message a session on a timer (at most every
+                                     10 minutes); skips while it's still working
+  aos notify <text...>               push a message to the owner's phone (or text
+                                     on stdin); at most one a minute, the rest
+                                     wait and go together
   aos done <session>                 finished: merge its open PR through the
                                      gates, stop it, archive it (not a rejection);
                                      only sessions in your workspace or project
@@ -73,6 +81,24 @@ async function stdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   return Buffer.concat(chunks).toString("utf8");
+}
+
+// `[--name "x"] <project> [--name "x"] <prompt...>`: the flag counts only
+// before the prompt starts, so a prompt may mention --name.
+function parseSpawnArgs(words) {
+  let name;
+  let project;
+  let i = 0;
+  for (; i < words.length; i++) {
+    const w = words[i];
+    if (w === "--name") {
+      name = words[++i];
+      if (name === undefined) fail("--name needs a value");
+    } else if (w.startsWith("--name=")) name = w.slice(7);
+    else if (project === undefined) project = w;
+    else break;
+  }
+  return { name: name?.trim() || undefined, project, prompt: words.slice(i) };
 }
 
 // `doc new "<title>" [--file path]`: the title is every word but the flag.
@@ -135,6 +161,36 @@ function parseStackArgs(words) {
 
 const show = (m) =>
   `${m.createdAt}  ${m.fromName} → ${m.toName}\n  ${m.body.replace(/\n/g, "\n  ")}`;
+
+// `schedule add --session <ref> --every 30m [--name N] [--cron "..."] <prompt>`
+async function scheduleAdd(words) {
+  const flags = {};
+  const rest = [];
+  for (let i = 0; i < words.length; i++) {
+    const m = /^--(session|every|name|cron|tz)$/.exec(words[i]);
+    if (m) {
+      if (words[i + 1] === undefined) fail(`--${m[1]} needs a value`);
+      flags[m[1]] = words[++i];
+    } else rest.push(words[i]);
+  }
+  const prompt = rest.join(" ").trim();
+  if (!flags.session || !prompt)
+    fail(
+      'usage: aos schedule add --session <id|name> --every 30m [--name N] "<prompt>"'
+    );
+  const { schedule } = await post("/api/schedules", {
+    from: me,
+    session: flags.session,
+    every: flags.every,
+    cron: flags.cron,
+    name: flags.name,
+    timezone: flags.tz,
+    prompt,
+  });
+  console.log(
+    `${schedule.id.slice(0, 8)}  ${schedule.name} · messages ${schedule.targetName ?? schedule.target_session_id} · ${schedule.description}`
+  );
+}
 
 async function main() {
   switch (cmd) {
@@ -204,13 +260,14 @@ async function main() {
     }
     case "spawn":
     case "task": {
-      const [project, ...words] = args;
+      const { name, project, prompt: words } = parseSpawnArgs(args);
       if (!project || !words.length)
-        fail(`usage: aos ${cmd} <project> <prompt...>`);
+        fail(`usage: aos ${cmd} <project> [--name "<name>"] <prompt...>`);
       const { session } = await post("/api/bus/spawn", {
         project,
         prompt: words.join(" "),
         mode: cmd === "task" ? "task" : "session",
+        ...(name && { name }),
       });
       console.log(
         `started ${cmd === "task" ? "task" : "session"} "${session.name}"`
@@ -264,7 +321,11 @@ async function main() {
         const last = s.lastRun
           ? `${s.lastRun.outcome}${s.lastRun.detail ? ` (${s.lastRun.detail})` : ""}`
           : "never run";
-        const target = s.projectName ? ` · ${s.projectName}` : "";
+        const target = s.targetName
+          ? ` → ${s.targetName}`
+          : s.projectName
+            ? ` · ${s.projectName}`
+            : "";
         console.log(
           `${s.id.slice(0, 8)}  ${s.name} · ${s.kind}${target} · ${state}\n  ${s.description} · next ${next} · last ${last}`
         );
@@ -273,8 +334,12 @@ async function main() {
     }
     case "schedule": {
       const [sub, ...words] = args;
+      if (sub === "add") return scheduleAdd(words);
       const ref = words.join(" ").trim();
-      if (sub !== "run" || !ref) fail("usage: aos schedule run <name>");
+      if (sub !== "run" || !ref)
+        fail(
+          "usage: aos schedule run <name> | aos schedule add --session <session> --every 30m <prompt>"
+        );
       const { run, schedule } = await post(
         `/api/schedules/${encodeURIComponent(ref)}/run`,
         {}
@@ -282,6 +347,21 @@ async function main() {
       const why = run.detail ? `: ${run.detail}` : "";
       console.log(`${schedule.name}: ${run.outcome}${why}`);
       if (run.outcome === "failed") process.exit(2);
+      return;
+    }
+    case "notify": {
+      const text = (args.join(" ") || (await stdin())).trim();
+      if (!text) fail('usage: aos notify "<text>" (or text on stdin)');
+      const res = await post("/api/notify", { from: me, text });
+      if (res.state === "sent") console.log("sent");
+      else if (res.state === "duplicate")
+        console.log("already sent this in the last minute; not sent again");
+      else if (res.state === "dropped")
+        console.log("dropped: too many already waiting from you this minute");
+      else if (res.state === "held")
+        console.log(
+          `held: goes out within ${Math.ceil(res.inMs / 1000)}s with anything else sent meanwhile`
+        );
       return;
     }
     case "done": {

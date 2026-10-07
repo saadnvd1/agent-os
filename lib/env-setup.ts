@@ -1,16 +1,14 @@
 /**
  * Environment Setup for Worktrees
  *
- * Handles copying env files, installing dependencies, and running setup scripts
+ * Handles copying env files, bringing dependencies (cloned from the main
+ * checkout when it can, installed when it can't), and running setup scripts
  * when creating new worktrees.
  */
 
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
-
-const execAsync = promisify(exec);
+import { bringDependencies, runCommand } from "./worktree-deps";
 
 export interface WorktreeConfig {
   setup?: string[];
@@ -32,6 +30,7 @@ export interface SetupResult {
   envFilesCopied: string[];
   packageManager?: string;
   port?: number;
+  durationMs: number;
 }
 
 /**
@@ -54,34 +53,6 @@ export async function readWorktreeConfig(
     } catch {
       // Continue to next path
     }
-  }
-
-  return null;
-}
-
-/**
- * Detect package manager from lockfiles
- */
-export function detectPackageManager(projectPath: string): {
-  name: string;
-  installCommand: string;
-} | null {
-  const lockfiles = [
-    { file: "bun.lockb", name: "bun", command: "bun install" },
-    { file: "pnpm-lock.yaml", name: "pnpm", command: "pnpm install" },
-    { file: "yarn.lock", name: "yarn", command: "yarn install" },
-    { file: "package-lock.json", name: "npm", command: "npm install" },
-  ];
-
-  for (const { file, name, command } of lockfiles) {
-    if (fs.existsSync(path.join(projectPath, file))) {
-      return { name, installCommand: command };
-    }
-  }
-
-  // Fallback: check if package.json exists
-  if (fs.existsSync(path.join(projectPath, "package.json"))) {
-    return { name: "npm", installCommand: "npm install" };
   }
 
   return null;
@@ -129,34 +100,6 @@ export async function copyEnvFiles(
 }
 
 /**
- * Run a setup command in the worktree directory
- */
-async function runCommand(
-  command: string,
-  cwd: string,
-  env: Record<string, string> = {}
-): Promise<{ success: boolean; output: string; error?: string }> {
-  try {
-    const { stdout, stderr } = await execAsync(command, {
-      cwd,
-      timeout: 300000, // 5 minutes
-      env: { ...process.env, ...env },
-    });
-    return {
-      success: true,
-      output: stdout + (stderr ? `\n${stderr}` : ""),
-    };
-  } catch (error: unknown) {
-    const err = error as { stdout?: string; stderr?: string; message?: string };
-    return {
-      success: false,
-      output: err.stdout || "",
-      error: err.stderr || err.message || "Unknown error",
-    };
-  }
-}
-
-/**
  * Run setup for a new worktree
  */
 export async function setupWorktree(options: {
@@ -167,11 +110,13 @@ export async function setupWorktree(options: {
 }): Promise<SetupResult> {
   const { worktreePath, sourcePath, port, skipInstall } = options;
 
+  const started = Date.now();
   const result: SetupResult = {
     success: true,
     steps: [],
     envFilesCopied: [],
     port,
+    durationMs: 0,
   };
 
   // 1. Read config if exists
@@ -220,29 +165,10 @@ export async function setupWorktree(options: {
       }
     }
   } else if (!skipInstall) {
-    // 4. Auto-detect and install dependencies
-    const pm = detectPackageManager(sourcePath);
-    if (pm) {
-      result.packageManager = pm.name;
-      const installResult = await runCommand(
-        pm.installCommand,
-        worktreePath,
-        envVars
-      );
-      result.steps.push({
-        name: `Install dependencies (${pm.name})`,
-        command: pm.installCommand,
-        success: installResult.success,
-        output: installResult.output,
-        error: installResult.error,
-      });
-
-      if (!installResult.success) {
-        result.success = false;
-      }
-    }
+    await bringDependencies(result, sourcePath, worktreePath, envVars);
   }
 
+  result.durationMs = Date.now() - started;
   return result;
 }
 

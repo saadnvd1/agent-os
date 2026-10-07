@@ -5,15 +5,28 @@ import { createTask } from "@/lib/tasks";
 // mode "session" starts an interactive agent; "task" starts one that ends in a PR.
 export async function POST(request: NextRequest) {
   try {
-    const { project, prompt, mode = "session", model } = await request.json();
+    const {
+      project,
+      prompt,
+      mode = "session",
+      model,
+      name,
+    } = await request.json();
+    const given = typeof name === "string" ? name : undefined;
     const session =
       mode === "task"
         ? await createTask({
             projectId: findProject(String(project ?? "")).id,
             prompt,
+            name: given,
             model,
           })
-        : await spawnSession({ project: String(project ?? ""), prompt, model });
+        : await spawnSession({
+            project: String(project ?? ""),
+            prompt,
+            name: given,
+            model,
+          });
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

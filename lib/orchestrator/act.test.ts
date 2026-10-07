@@ -185,13 +185,13 @@ describe("acting inside the workspace", () => {
         project: mine.api.name,
         prompt: "add rate limits",
       })
-    ).toMatch(/Started task "add rate limits" in api-/);
+    ).toMatch(/Started task "add rate limits" \(id \w{8}\) in api-/);
     expect(
       await runTool(w, "start_session", {
         project: mine.app.name,
         prompt: "look at logs",
       })
-    ).toMatch(/Started session "look at logs"/);
+    ).toMatch(/Started session "look at logs" \(id \w{8}\)/);
   });
 
   it("stops a terminal session by its own tmux name", async () => {

@@ -50,6 +50,15 @@ export async function runningCount(
   const running = new Set<string>();
   for (const s of workspaceSessions(workspaceId)) {
     if (s.task_status && s.task_status !== "running") continue;
+    // A task still setting up, or held at launch, has no terminal yet, and
+    // its agent will launch.
+    if (
+      s.task_status === "running" &&
+      (s.setup_status === "running" || s.setup_status === "held")
+    ) {
+      running.add(s.id);
+      continue;
+    }
     const busy =
       s.view === "chat"
         ? chatState(s.id) === "running"

@@ -92,6 +92,12 @@ export function notifyStatusChanged(): void {
   }, COALESCE_MS);
 }
 
+/** A session was renamed or added: subscribers refetch the list now. */
+export function notifySessionsChanged(): void {
+  const json = JSON.stringify({ type: "sessions" });
+  hub.subscribers.forEach((fn) => fn(json));
+}
+
 async function tick(): Promise<void> {
   if (hub.running) return;
   try {

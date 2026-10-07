@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  checkInInput,
   createSchedule,
   listScheduleViews,
   scheduleView,
@@ -18,7 +19,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const schedule = createSchedule(await request.json());
+    const body = await request.json();
+    // From the CLI: a session by name and an interval.
+    const input =
+      body.session !== undefined
+        ? checkInInput({
+            session: String(body.session),
+            from: body.from ? String(body.from) : null,
+            every: body.every,
+            cron: body.cron,
+            prompt: String(body.prompt ?? ""),
+            name: body.name,
+            timezone: body.timezone,
+          })
+        : body;
+    const schedule = createSchedule(input);
     return NextResponse.json(
       { schedule: scheduleView(schedule) },
       { status: 201 }
