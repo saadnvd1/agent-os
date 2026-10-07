@@ -9,14 +9,20 @@ const execFileAsync = promisify(execFile);
 // The reads the git panel polls run off the event loop: a slow repo
 // shouldn't stall every terminal and status push while git works.
 async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync("git", args, {
-    cwd,
-    encoding: "utf-8",
-    maxBuffer: 10 * 1024 * 1024,
-    // A hung git (a stalled mount, a stuck hook) fails the request instead.
-    timeout: 30_000,
-    killSignal: "SIGKILL",
-  });
+  // Paths are names, never globs or pathspec magic: "[draft].md" or "*"
+  // must not reach other files.
+  const { stdout } = await execFileAsync(
+    "git",
+    ["--literal-pathspecs", ...args],
+    {
+      cwd,
+      encoding: "utf-8",
+      maxBuffer: 10 * 1024 * 1024,
+      // A hung git (a stalled mount, a stuck hook) fails the request instead.
+      timeout: 30_000,
+      killSignal: "SIGKILL",
+    }
+  );
   return stdout;
 }
 
@@ -248,7 +254,17 @@ export async function discardChanges(
     await git(workingDir, ["checkout", "--", filePath]);
     return;
   }
-  // Untracked: delete it, only inside the repository.
+  // Untracked: delete it only if git lists it as untracked and not ignored
+  // (never .git's own files or an ignored .env), and only inside the repo.
+  const untracked = await git(workingDir, [
+    "ls-files",
+    "-z",
+    "--others",
+    "--exclude-standard",
+    "--",
+    filePath,
+  ]);
+  if (!untracked) throw new Error("Nothing to discard");
   const root = realpathSync(workingDir);
   const target = resolve(root, filePath);
   const inside = join(realpathSync(dirname(target)), basename(target));

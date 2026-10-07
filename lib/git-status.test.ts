@@ -101,7 +101,7 @@ describe("git status, off the event loop", () => {
     fs.writeFileSync(outside, "mine\n");
     await expect(
       discardChanges(repo, `../${path.basename(outside)}`)
-    ).rejects.toThrow();
+    ).rejects.toThrow(/outside repository/);
     expect(fs.existsSync(outside)).toBe(true);
     fs.rmSync(outside);
   });
@@ -119,17 +119,39 @@ describe("git status, off the event loop", () => {
   });
 
   it("keeps a tracked file when its checkout fails", async () => {
-    fs.writeFileSync(path.join(repo, "d.txt"), "changed again\n");
+    fs.writeFileSync(path.join(repo, "lock.txt"), "committed\n");
+    git("add", "lock.txt");
+    git("commit", "-q", "-m", "lock");
+    fs.writeFileSync(path.join(repo, "lock.txt"), "edited\n");
     const lock = path.join(repo, ".git", "index.lock");
     fs.writeFileSync(lock, "");
     try {
-      await expect(discardChanges(repo, "d.txt")).rejects.toThrow();
+      await expect(discardChanges(repo, "lock.txt")).rejects.toThrow();
     } finally {
       fs.rmSync(lock);
     }
-    expect(fs.readFileSync(path.join(repo, "d.txt"), "utf-8")).toBe(
-      "changed again\n"
+    expect(fs.readFileSync(path.join(repo, "lock.txt"), "utf-8")).toBe(
+      "edited\n"
     );
+  });
+
+  it("reads a path as its name, not a pattern, and won't delete git's or ignored files", async () => {
+    fs.writeFileSync(path.join(repo, "d.txt"), "edited\n");
+    fs.writeFileSync(path.join(repo, "[d].txt"), "draft\n");
+    await discardChanges(repo, "[d].txt");
+    expect(fs.existsSync(path.join(repo, "[d].txt"))).toBe(false);
+    expect(fs.readFileSync(path.join(repo, "d.txt"), "utf-8")).toBe("edited\n");
+    await expect(discardChanges(repo, "*")).rejects.toThrow();
+    expect(fs.readFileSync(path.join(repo, "d.txt"), "utf-8")).toBe("edited\n");
+
+    await expect(discardChanges(repo, ".git/config")).rejects.toThrow();
+    expect(fs.existsSync(path.join(repo, ".git", "config"))).toBe(true);
+    fs.writeFileSync(path.join(repo, ".gitignore"), ".env\n");
+    fs.writeFileSync(path.join(repo, ".env"), "SECRET=1\n");
+    await expect(discardChanges(repo, ".env")).rejects.toThrow();
+    expect(fs.existsSync(path.join(repo, ".env"))).toBe(true);
+    fs.rmSync(path.join(repo, ".env"));
+    fs.rmSync(path.join(repo, ".gitignore"));
   });
 
   it("fails loudly outside a repository", async () => {

@@ -40,8 +40,10 @@ describe("the first-load JS budget", () => {
   });
 
   it("fails when the route isn't in the stats", () => {
-    expect(
-      run([{ route: "/pair", firstLoadUncompressedJsBytes: 1 }]).code
-    ).toBe(1);
+    const r = run([{ route: "/pair", firstLoadUncompressedJsBytes: 1 }]);
+    expect([r.code, r.out]).toEqual([
+      1,
+      expect.stringContaining("no stats for /"),
+    ]);
   });
 });
