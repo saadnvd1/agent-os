@@ -84,7 +84,8 @@ export interface Browser {
 
 export function launchChrome(
   executable: string,
-  proxyPort: number
+  proxyPort: number,
+  startTimeoutMs = START_TIMEOUT_MS
 ): Promise<Browser> {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-preview-"));
   const child: ChildProcess = spawn(
@@ -202,8 +203,10 @@ export function launchChrome(
     // Ready once it answers; one that never does is killed, not waited on.
     const timer = setTimeout(() => {
       browser.close();
-      reject(new Error("the browser did not start within 15s"));
-    }, START_TIMEOUT_MS);
+      reject(
+        new Error(`the browser did not start within ${startTimeoutMs / 1000}s`)
+      );
+    }, startTimeoutMs);
     browser.send("Browser.getVersion").then(
       () => {
         clearTimeout(timer);

@@ -3,7 +3,9 @@ import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { beforeAll, describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
 import { GET } from "@/app/api/artifacts/[id]/route";
+import { GET as getImage } from "@/app/api/files/image/route";
 import { artifactHeight } from "@/components/Chat/ArtifactFrame";
 import { createArtifact } from "./store";
 
@@ -53,5 +55,37 @@ describe("the frame's reported height", () => {
       { agentosArtifactHeight: "300" },
     ])
       expect(artifactHeight(data, 720)).toBeNull();
+  });
+});
+
+describe("GET /api/files/image", () => {
+  const image = (p: string) =>
+    getImage(
+      new NextRequest(`http://x/api/files/image?path=${encodeURIComponent(p)}`)
+    );
+
+  it("serves an SVG sandboxed, so its scripts never run as the app", async () => {
+    const dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "agentos-img-"))
+    );
+    const svg = path.join(dir, "a.svg");
+    fs.writeFileSync(svg, "<svg><script>alert(1)</script></svg>");
+    const res = await image(svg);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/svg+xml");
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toMatch(/\bsandbox\b/);
+    expect(csp).toMatch(/default-src 'none'/);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("answers 404 for anything that isn't an image file", async () => {
+    const dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "agentos-img-"))
+    );
+    fs.writeFileSync(path.join(dir, "notes.txt"), "secret");
+    fs.symlinkSync(path.join(dir, "notes.txt"), path.join(dir, "x.png"));
+    expect((await image(path.join(dir, "notes.txt"))).status).toBe(404);
+    expect((await image(path.join(dir, "x.png"))).status).toBe(404);
   });
 });
