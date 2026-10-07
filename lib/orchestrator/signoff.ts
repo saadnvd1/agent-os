@@ -11,6 +11,7 @@ import { prFor } from "../tasks/session";
 import { codeReviewRefusal, signOffTask } from "../tasks";
 import { signOffRefusal } from "../stacks/guard";
 import { getStack, landInBackground } from "../stacks";
+import { LAND_DEFAULTS } from "../stacks/land";
 import { db, stackQueries, type Session } from "../db";
 import { getCheck } from "./checks";
 import { addedLines, changedFiles, ruleBreaks, sensitiveFiles } from "./diff";
@@ -23,7 +24,7 @@ import {
   type GateOutcome,
 } from "./gates";
 import { addNote } from "./notes";
-import { spendApproval } from "./ask-approvals";
+import { refundApproval, spendApproval } from "./ask-approvals";
 import { heldVerdict } from "./held";
 import { isPaused } from "./pause";
 import { commitTime, fetchRefs, repoOf } from "./repo";
@@ -156,7 +157,9 @@ export async function mergeJudged(
 ): Promise<string> {
   if (verdict.approval && !spendApproval(verdict.approval))
     throw new Error(`Saad's approval for ${task.name} was already used`);
-  await signOffTask(task.id, { head: verdict.sha, wait: opts.wait });
+  await refundIfRefused(task.id, verdict.approval, () =>
+    signOffTask(task.id, { head: verdict.sha, wait: opts.wait })
+  );
   addNote(
     workspaceId,
     verdict.approval
@@ -166,23 +169,64 @@ export async function mergeJudged(
   return `Merged ${task.name}: PR #${verdict.pr} squash-merged at ${short(verdict.sha)}.`;
 }
 
+// An approval is claimed before the merge, so two merges can't both use it,
+// and given back when GitHub or the checks refuse that merge: it is spent
+// only on a merge that happened.
+async function refundIfRefused(
+  taskId: string,
+  approval: number | undefined,
+  merge: () => Promise<void>
+): Promise<void> {
+  try {
+    await merge();
+  } catch (e) {
+    const merged = db
+      .prepare(`SELECT 1 FROM sessions WHERE id = ? AND task_status = 'merged'`)
+      .get(taskId);
+    if (approval && !merged) refundApproval(approval);
+    throw e;
+  }
+}
+
 // Asked before each merge of a land: the whole judgement again on the
 // item's head as it is then (a restack moves it), merging only that
 // commit. A head with no review yet gets one started, and the land waits.
-export function landGate(workspaceId: string) {
+export function landGate(
+  workspaceId: string,
+  claimed = new Map<string, number>()
+) {
   return async (
     sessionId: string
   ): Promise<{ head: string } | { wait: string } | { stop: string }> => {
     if (isPaused(workspaceId)) return { wait: "the orchestrator is paused" };
     const task = workspaceTask(workspaceId, sessionId);
     const verdict = await judge(workspaceId, task, true);
-    if (verdict.ok && verdict.approval && !spendApproval(verdict.approval))
-      return { stop: `Saad's approval for ${task.name} was already used` };
+    if (verdict.ok && verdict.approval) {
+      if (!spendApproval(verdict.approval))
+        return { stop: `Saad's approval for ${task.name} was already used` };
+      claimed.set(sessionId, verdict.approval);
+    }
     if (verdict.ok) return { head: verdict.sha };
     if (!verdict.wait) return { stop: verdict.text };
     if (verdict.text.includes("call review"))
       await review(workspaceId, sessionId).catch(() => {});
     return { wait: verdict.text };
+  };
+}
+
+// The land's gate and merge: an approval the gate claims is given back if
+// that merge is then refused.
+export function landDeps(workspaceId: string) {
+  const claimed = new Map<string, number>();
+  return {
+    beforeMerge: landGate(workspaceId, claimed),
+    signOff: async (id: string, head?: string) => {
+      const approval = claimed.get(id);
+      claimed.delete(id);
+      await refundIfRefused(id, approval, () =>
+        LAND_DEFAULTS.signOff(id, head)
+      );
+    },
   };
 }
 
@@ -199,9 +243,7 @@ export async function land(workspaceId: string, ref: string): Promise<string> {
   }
   if (refusals.length)
     throw new Error(`Not landing "${stack.name}":\n${refusals.join("\n")}`);
-  const view = landInBackground(stack.id, {
-    beforeMerge: landGate(workspaceId),
-  });
+  const view = landInBackground(stack.id, landDeps(workspaceId));
   addNote(
     workspaceId,
     `Landing stack "${view.name}": ${open.length} PRs, each through the gates at its own head.`
