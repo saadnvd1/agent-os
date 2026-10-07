@@ -27,7 +27,9 @@ const { seedWorkspace } = await import("./testing");
 const { openAsks, raiseAsk, BRAKE_SUBJECT } = await import("./asks");
 const {
   forgetPRStates,
+  parsePRView,
   prKey,
+  refreshAskPRs,
   resolveMergedTaskAsks,
   resolveStaleAsks,
   settleStaleAsks,
@@ -90,6 +92,34 @@ describe("prKey", () => {
     expect(prKey("https://github.com/o/r/pull/107x")).toBeNull();
     expect(prKey("https://example.com/o/r/pull/1")).toBeNull();
     expect(prKey(null)).toBeNull();
+  });
+});
+
+describe("parsePRView", () => {
+  it("reads gh's answer for merged, closed and open PRs", () => {
+    const oid = "da11b59".padEnd(40, "0");
+    expect(
+      parsePRView(JSON.stringify({ state: "MERGED", mergeCommit: { oid } }))
+    ).toEqual({ state: "MERGED", mergeSha: oid });
+    expect(
+      parsePRView(JSON.stringify({ state: "CLOSED", mergeCommit: null }))
+    ).toEqual({ state: "CLOSED", mergeSha: null });
+    expect(parsePRView(JSON.stringify({ state: "OPEN" }))).toEqual({
+      state: "OPEN",
+      mergeSha: null,
+    });
+  });
+
+  it("throws on anything else, so the ask stays open", () => {
+    expect(() => parsePRView(JSON.stringify({ state: "merged" }))).toThrow(
+      /unknown state/
+    );
+    expect(() => parsePRView("not json")).toThrow();
+    expect(
+      parsePRView(
+        JSON.stringify({ state: "MERGED", mergeCommit: { oid: "-rf; x" } })
+      ).mergeSha
+    ).toBeNull();
   });
 });
 
@@ -161,6 +191,26 @@ describe("asks about work that finished elsewhere", () => {
     gh.asked.length = 0;
     await settleStaleAsks(t.w, gh.view);
     expect(gh.asked).toEqual([]);
+    const later = github({ "o/api#5": { state: "MERGED", mergeSha: null } });
+    await refreshAskPRs(t.w, later.view, Date.now() + 61 * 1000);
+    expect(later.asked).toEqual(["o/api#5"]);
+    expect(resolveStaleAsks(t.w)).toBe(1);
+    expect(openAsks(t.w)).toEqual([]);
+  });
+
+  it("doesn't trust an old \"closed\" once the task's PR is open again", async () => {
+    const t = workspace();
+    t.setTask({ pr_status: "closed" });
+    await t.ask("Reopen PR #107?", PR);
+    const gh = github({
+      "saadnvd1/agent-os#107": { state: "CLOSED", mergeSha: null },
+    });
+    expect(await settleStaleAsks(t.w, gh.view)).toBe(1);
+    // Reopened: the task tracks it as open, so GitHub's last word is stale.
+    t.setTask({ pr_status: "open" });
+    await t.ask("Re-approve PR #107?", PR);
+    expect(resolveStaleAsks(t.w)).toBe(0);
+    expect(openAsks(t.w).map((a) => a.title)).toEqual(["Re-approve PR #107?"]);
   });
 
   it("leaves an ask open when GitHub can't say", async () => {
@@ -201,6 +251,11 @@ describe("asks about work that finished elsewhere", () => {
     escalate(t.w, getSession(t.task), "ci", "no CI", PR, "c".repeat(40));
     db.prepare(`DELETE FROM sessions WHERE id = ?`).run(t.task);
     expect(resolveStaleAsks(t.w)).toBe(1);
+    expect(
+      db
+        .prepare(`SELECT answer FROM orchestrator_asks WHERE workspace_id = ?`)
+        .get(t.w)
+    ).toEqual({ answer: "the task is gone" });
   });
 
   it("leaves asks about anything else alone", async () => {

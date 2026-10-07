@@ -23,8 +23,8 @@ export interface PRState {
   mergeSha: string | null;
 }
 
-// What GitHub last said about each PR an ask links. Merged and closed are
-// final; an open one is looked up again after a minute.
+// What GitHub last said about each PR an ask links. Merged is final; an
+// open or closed one (it can be reopened) is looked up again after a minute.
 const seen = new Map<string, { at: number; pr: PRState }>();
 const RECHECK_MS = 60 * 1000;
 
@@ -81,6 +81,8 @@ export function staleReason(ask: AskRow, idx: Index): string | null {
   if (taskIdOf(ask) && !task) return "the task is gone";
   const key = prKey(ask.link) ?? prKey(task?.pr_url ?? null);
   const gh = key ? seen.get(key)?.pr : undefined;
+  // A task whose PR is open again outranks GitHub's older "closed".
+  const reopened = task?.task_status === "running" && task.pr_status === "open";
   const what = key ? `PR #${key.split("#")[1]}` : "the task";
   if (
     task?.task_status === "merged" ||
@@ -91,7 +93,7 @@ export function staleReason(ask: AskRow, idx: Index): string | null {
       ? `${what} merged as ${short(gh.mergeSha)} elsewhere`
       : `${what} merged elsewhere`;
   if (task?.task_status === "dropped") return "the task was dropped";
-  if (task?.pr_status === "closed" || gh?.state === "CLOSED")
+  if (task?.pr_status === "closed" || (gh?.state === "CLOSED" && !reopened))
     return `${what} was closed without merging`;
   if (task?.task_status === "done") return "the task was done";
   return null;
@@ -112,6 +114,17 @@ function settle(
   return n;
 }
 
+// Closing stale asks is bookkeeping: an error is logged, never thrown into
+// the read or the merge that asked for it.
+function quietly(where: string, close: () => number): number {
+  try {
+    return close();
+  } catch (error) {
+    console.error(`[orchestrator] closing stale asks for ${where}:`, error);
+    return 0;
+  }
+}
+
 // Only the asks about a task or a PR; brake and passkey asks settle
 // their own way, whatever they link.
 const aboutWork = (ask: AskRow) =>
@@ -122,10 +135,12 @@ const aboutWork = (ask: AskRow) =>
 // From what's already known locally (and GitHub's last answers): cheap
 // enough for every read of the asks.
 export function resolveStaleAsks(workspaceId: string): number {
-  const asks = openAsks(workspaceId).filter(aboutWork);
-  if (!asks.length) return 0;
-  const idx = index(workspaceId);
-  return settle(workspaceId, asks, (a) => staleReason(a, idx));
+  return quietly(workspaceId, () => {
+    const asks = openAsks(workspaceId).filter(aboutWork);
+    if (!asks.length) return 0;
+    const idx = index(workspaceId);
+    return settle(workspaceId, asks, (a) => staleReason(a, idx));
+  });
 }
 
 async function viewPR(key: string): Promise<PRState> {
@@ -136,11 +151,24 @@ async function viewPR(key: string): Promise<PRState> {
     os.tmpdir(),
     15000
   );
-  const pr = JSON.parse(out) as {
-    state: PRState["state"];
-    mergeCommit?: { oid?: string } | null;
+  return parsePRView(out);
+}
+
+// `gh pr view --json state,mergeCommit`; anything else throws, so the ask
+// stays open.
+export function parsePRView(json: string): PRState {
+  const pr = JSON.parse(json) as {
+    state?: unknown;
+    mergeCommit?: { oid?: unknown } | null;
   };
-  return { state: pr.state, mergeSha: pr.mergeCommit?.oid ?? null };
+  if (pr.state !== "OPEN" && pr.state !== "MERGED" && pr.state !== "CLOSED")
+    throw new Error(`gh pr view: unknown state ${String(pr.state)}`);
+  const oid = pr.mergeCommit?.oid;
+  return {
+    state: pr.state,
+    mergeSha:
+      typeof oid === "string" && /^[0-9a-f]{7,40}$/.test(oid) ? oid : null,
+  };
 }
 
 // Asks GitHub about the PRs open asks link that no running task already
@@ -160,7 +188,7 @@ export async function refreshAskPRs(
     const key = prKey(ask.link) ?? prKey(task?.pr_url ?? null);
     if (!key) continue;
     const last = seen.get(key);
-    if (last && (last.pr.state !== "OPEN" || now - last.at < RECHECK_MS))
+    if (last && (last.pr.state === "MERGED" || now - last.at < RECHECK_MS))
       continue;
     if (task?.task_status === "running" && task.pr_status === "open") continue;
     keys.add(key);
@@ -192,17 +220,19 @@ export function resolveMergedTaskAsks(
   prUrl: string | null,
   why: string
 ): number {
-  const row = db
-    .prepare(
-      `SELECT p.workspace_id FROM sessions s JOIN projects p ON p.id = s.project_id WHERE s.id = ?`
-    )
-    .get(taskId) as { workspace_id: string | null } | undefined;
-  const workspaceId = row?.workspace_id;
-  if (!workspaceId) return 0;
-  const key = prKey(prUrl);
-  return settle(workspaceId, openAsks(workspaceId).filter(aboutWork), (a) =>
-    taskIdOf(a) === taskId || (key && prKey(a.link) === key) ? why : null
-  );
+  return quietly(`task ${taskId}`, () => {
+    const row = db
+      .prepare(
+        `SELECT p.workspace_id FROM sessions s JOIN projects p ON p.id = s.project_id WHERE s.id = ?`
+      )
+      .get(taskId) as { workspace_id: string | null } | undefined;
+    const workspaceId = row?.workspace_id;
+    if (!workspaceId) return 0;
+    const key = prKey(prUrl);
+    return settle(workspaceId, openAsks(workspaceId).filter(aboutWork), (a) =>
+      taskIdOf(a) === taskId || (key && prKey(a.link) === key) ? why : null
+    );
+  });
 }
 
 export function forgetPRStates(): void {
