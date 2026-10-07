@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const path = expandPath(rawPath);
 
-    if (!isGitRepo(path)) {
+    if (!(await isGitRepo(path))) {
       return NextResponse.json(
         { error: "Not a git repository" },
         { status: 400 }
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if there are staged changes
-    const status = getGitStatus(path);
+    const status = await getGitStatus(path);
     if (status.staged.length === 0) {
       return NextResponse.json(
         { error: "No staged changes to commit" },

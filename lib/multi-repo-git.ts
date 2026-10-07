@@ -46,10 +46,10 @@ export interface MultiRepoGitStatus {
 /**
  * Get aggregated git status from multiple repositories
  */
-export function getMultiRepoGitStatus(
+export async function getMultiRepoGitStatus(
   repositories: ProjectRepository[],
   fallbackPath?: string
-): MultiRepoGitStatus {
+): Promise<MultiRepoGitStatus> {
   const result: MultiRepoGitStatus = {
     repositories: [],
     staged: [],
@@ -78,7 +78,7 @@ export function getMultiRepoGitStatus(
     const expandedPath = expandPath(repo.path);
 
     // Check if it's a valid git repo
-    if (!isGitRepo(expandedPath)) {
+    if (!(await isGitRepo(expandedPath))) {
       result.repositories.push({
         id: repo.id,
         name: repo.name,
@@ -93,7 +93,7 @@ export function getMultiRepoGitStatus(
     }
 
     try {
-      const status = getGitStatus(expandedPath);
+      const status = await getGitStatus(expandedPath);
 
       // Add repository status
       result.repositories.push({

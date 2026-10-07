@@ -33,6 +33,11 @@ export function DraftChips({
 }) {
   const real = projects.filter((p) => !p.is_uncategorized);
   const project = real.find((p) => p.id === draft.projectId) ?? null;
+  // A task runs on another machine through that machine's own AgentOS, so
+  // only linked ones; a scratch chat runs over ssh on any.
+  const machines = draft.openPr
+    ? hosts.filter((h) => h.id === "local" || Boolean(h.linked))
+    : hosts;
   const host = hosts.find((h) => h.id === draft.hostId);
   const local = draft.hostId === "local";
   const base = draft.baseBranch ?? git?.defaultBranch ?? "main";
@@ -79,7 +84,7 @@ export function DraftChips({
         ))}
       </ChipMenu>
 
-      {hosts.length > 1 && (
+      {machines.length > 1 && (
         <ChipMenu
           icon={Monitor}
           name="Machine"
@@ -87,7 +92,7 @@ export function DraftChips({
           disabled={!canMove}
           title={canMove ? undefined : "Runs where the project lives"}
         >
-          {hosts.map((h) => (
+          {machines.map((h) => (
             <ChipItem
               key={h.id}
               checked={h.id === draft.hostId}

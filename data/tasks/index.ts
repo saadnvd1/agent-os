@@ -63,3 +63,27 @@ export function useDropTask() {
     json(await fetch(`/api/tasks/${id}/drop`, { method: "POST" }))
   );
 }
+
+export function useMoveTask() {
+  return useTaskMutation(async (input: { id: string; hostId: string }) =>
+    json(
+      await fetch(`/api/tasks/${input.id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostId: input.hostId }),
+      })
+    )
+  );
+}
+
+export function useResumeTask() {
+  return useTaskMutation(async (input: { id: string; force?: boolean }) =>
+    json(
+      await fetch(`/api/tasks/${input.id}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: input.force === true }),
+      })
+    )
+  );
+}

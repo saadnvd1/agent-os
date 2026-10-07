@@ -1,1 +1,2 @@
-export { TasksDialog, useTasksNeedingYou } from "./TasksDialog";
+export { TasksDialog } from "./TasksDialog";
+export { useTasksNeedingYou } from "./useTasksNeedingYou";

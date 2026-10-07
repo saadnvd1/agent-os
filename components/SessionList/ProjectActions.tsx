@@ -12,7 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import * as DM from "@/components/ui/dropdown-menu";
-import { ProjectBoardItem } from "@/components/LumifyHub";
+import { ProjectBoardItem } from "@/components/LumifyHub/MenuItems";
 import type { ProjectWithRepositories } from "@/lib/projects";
 import {
   useMoveProjectToWorkspace,

@@ -170,7 +170,7 @@ export function SessionRowMenu({
         )}
       <Item
         onClick={() =>
-          selectionActions.toggle(session.id, false, ctx.orderedIds)
+          selectionActions.toggle(session.id, false, ctx.orderedIds())
         }
       >
         <CheckSquare className={icon} />

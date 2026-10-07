@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnSession, findProject } from "@/lib/agents/spawn";
 import { createTask } from "@/lib/tasks";
+import { hostIdNamed } from "@/lib/hosts";
 
 // mode "session" starts an interactive agent; "task" starts one that ends in a PR.
 export async function POST(request: NextRequest) {
@@ -11,6 +12,7 @@ export async function POST(request: NextRequest) {
       mode = "session",
       model,
       name,
+      on,
     } = await request.json();
     const given = typeof name === "string" ? name : undefined;
     const session =
@@ -20,6 +22,7 @@ export async function POST(request: NextRequest) {
             prompt,
             name: given,
             model,
+            hostId: on ? hostIdNamed(String(on)) : undefined,
           })
         : await spawnSession({
             project: String(project ?? ""),

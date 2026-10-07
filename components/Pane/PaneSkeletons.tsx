@@ -1,7 +1,7 @@
 "use client";
 
 import { ShimmeringLoader } from "@/components/ui/skeleton";
-import { Terminal, FolderOpen, GitBranch } from "lucide-react";
+import { Terminal, FolderOpen, GitBranch, MessageSquare } from "lucide-react";
 
 export function TerminalSkeleton() {
   return (
@@ -52,6 +52,14 @@ export function GitPanelSkeleton() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+export function ChatSkeleton() {
+  return (
+    <div className="bg-background flex h-full w-full flex-col items-center justify-center gap-3">
+      <MessageSquare className="text-muted-foreground/50 h-8 w-8 animate-pulse" />
     </div>
   );
 }

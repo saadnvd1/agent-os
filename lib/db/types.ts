@@ -23,7 +23,18 @@ export interface Session {
   // Async tasks: a session started from a prompt that ends in a PR
   task_prompt: string | null;
   // done: finished without a merge (no PR, or its PR closed).
-  task_status: "running" | "merged" | "dropped" | "done" | null;
+  // moving: handing it to another machine (moved_to); moved: handed over.
+  task_status:
+    | "running"
+    | "merged"
+    | "dropped"
+    | "done"
+    | "moving"
+    | "moved"
+    | null;
+  moved_to: string | null;
+  // The session on another machine this task arrived from.
+  moved_from: string | null;
   // The task's worktree setup, which its agent waits for.
   setup_status?: "running" | "held" | "ok" | "failed" | null;
   setup_ms?: number | null;
@@ -175,4 +186,6 @@ export interface Host {
   ssh_target: string;
   sort_order: number;
   created_at: string;
+  // Paired with that machine's own AgentOS (lib/hosts/link.ts); 0/1 from SQLite.
+  linked?: boolean | number;
 }

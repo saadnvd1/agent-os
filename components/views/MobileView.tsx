@@ -1,12 +1,11 @@
 "use client";
 
 import { SessionList } from "@/components/SessionList";
-import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
 import { SidebarFooter } from "@/components/SidebarFooter";
 import { PaneLayout } from "@/components/PaneLayout";
 import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
-import { QuickSwitcher } from "@/components/QuickSwitcher";
 import type { ViewProps } from "./types";
+import { QuickSwitcher, StartServerDialog } from "./lazy";
 import { fileOpenActions } from "@/stores/fileOpen";
 
 export function MobileView({

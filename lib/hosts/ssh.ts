@@ -61,3 +61,20 @@ export async function runOnTarget(
     { timeout }
   );
 }
+
+// A program and its arguments: run directly here (no shell, one process),
+// or as a quoted command line over ssh.
+export async function runFileOnTarget(
+  sshTarget: string | null,
+  file: string,
+  args: string[],
+  timeout = 10000
+): Promise<ExecResult> {
+  if (!sshTarget)
+    return execFileAsync(file, args, { timeout, maxBuffer: 8 << 20 });
+  return runOnTarget(
+    sshTarget,
+    [file, ...args].map(shellQuote).join(" "),
+    timeout
+  );
+}

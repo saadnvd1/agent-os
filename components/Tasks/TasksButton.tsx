@@ -3,7 +3,7 @@
 import { ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { tasksUiActions } from "@/stores/tasksUi";
-import { useTasksNeedingYou } from "./TasksDialog";
+import { useTasksNeedingYou } from "./useTasksNeedingYou";
 
 export function TasksButton({ labelClassName }: { labelClassName?: string }) {
   const waiting = useTasksNeedingYou();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDocsWorkspace } from "@/data/lumifyhub/docs";
@@ -8,6 +8,7 @@ import { usePinSession } from "@/data/sessions";
 import { useOrchestratorsQuery } from "@/data/orchestrators";
 import { docsUiActions } from "@/stores/docsUi";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
+import type { OrchestratorOverview } from "@/lib/orchestrator/overview";
 import { useSessionListMutations } from "./hooks/useSessionListMutations";
 import { useBulkDelete } from "./hooks/useBulkDelete";
 import { useSidebarData } from "./useSidebarData";
@@ -22,6 +23,9 @@ import { SidebarDialogs, type SidebarDialog } from "./SidebarDialogs";
 import type { SessionListProps } from "./SessionList.types";
 
 export type { SessionListProps } from "./SessionList.types";
+
+// Shared, so a query still loading doesn't hand rows a new array each render.
+const NO_ORCHESTRATORS: OrchestratorOverview[] = [];
 
 const flatten = (rows: SidebarRow[]): string[] =>
   rows.flatMap((r) => [r.session.id, ...flatten(r.workers)]);
@@ -43,7 +47,7 @@ export function SessionList({
   const mutations = useSessionListMutations({ onSelectSession: onSelect });
   const bulkDelete = useBulkDelete();
   const pin = usePinSession();
-  const { data: orchestrators = [] } = useOrchestratorsQuery();
+  const { data: orchestrators = NO_ORCHESTRATORS } = useOrchestratorsQuery();
   const [dialog, setDialog] = useState<SidebarDialog | null>(null);
   const addProject = useAddProject();
   const docsWorkspace = useDocsWorkspace(
@@ -61,25 +65,62 @@ export function SessionList({
     [shelves]
   );
 
-  const rowContext: RowContextValue = {
-    activeSessionId,
-    summarizingSessionId: mutations.summarizingSessionId,
-    projects: data.projects,
-    projectNames: data.projectNames,
-    workspaceNames: new Map(data.workspaces.map((w) => [w.id, w.name])),
-    orchestrators,
-    runningByWorkspace: data.runningByWorkspace,
-    orderedIds,
-    cardUrl: data.taskCardUrl,
-    onSelect,
-    onOpenInTab,
-    onRename: mutations.handleRenameSession,
-    onFork: mutations.handleForkSession,
-    onSummarize: mutations.handleSummarize,
-    onDelete: mutations.handleDeleteSession,
-    onMoveToProject: mutations.handleMoveSessionToProject,
-    onPin: (id, pinned) => pin.mutate({ id, pinned }),
-  };
+  // Rows read their handlers through the latest render, so the context only
+  // changes when what rows draw does: a status push redraws the rows it
+  // touched, not the whole list.
+  const latest = useRef({ orderedIds, onSelect, onOpenInTab, mutations, pin });
+  useLayoutEffect(() => {
+    latest.current = { orderedIds, onSelect, onOpenInTab, mutations, pin };
+  });
+  const canOpenInTab = !!onOpenInTab;
+  const handlers = useMemo(
+    () => ({
+      orderedIds: () => latest.current.orderedIds,
+      onSelect: (id: string) => latest.current.onSelect(id),
+      onOpenInTab: canOpenInTab
+        ? (id: string) => latest.current.onOpenInTab?.(id)
+        : undefined,
+      onRename: (id: string, name: string) =>
+        latest.current.mutations.handleRenameSession(id, name),
+      onFork: (id: string) => latest.current.mutations.handleForkSession(id),
+      onSummarize: (id: string) => latest.current.mutations.handleSummarize(id),
+      onDelete: (id: string) =>
+        latest.current.mutations.handleDeleteSession(id),
+      onMoveToProject: (id: string, projectId: string) =>
+        latest.current.mutations.handleMoveSessionToProject(id, projectId),
+      onPin: (id: string, pinned: boolean) =>
+        latest.current.pin.mutate({ id, pinned }),
+    }),
+    [canOpenInTab]
+  );
+  const workspaceNames = useMemo(
+    () => new Map(data.workspaces.map((w) => [w.id, w.name])),
+    [data.workspaces]
+  );
+  const rowContext: RowContextValue = useMemo(
+    () => ({
+      ...handlers,
+      activeSessionId,
+      summarizingSessionId: mutations.summarizingSessionId,
+      projects: data.projects,
+      projectNames: data.projectNames,
+      workspaceNames,
+      orchestrators,
+      runningByWorkspace: data.runningByWorkspace,
+      cardUrl: data.taskCardUrl,
+    }),
+    [
+      handlers,
+      activeSessionId,
+      mutations.summarizingSessionId,
+      data.projects,
+      data.projectNames,
+      workspaceNames,
+      orchestrators,
+      data.runningByWorkspace,
+      data.taskCardUrl,
+    ]
+  );
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
