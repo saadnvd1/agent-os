@@ -40,6 +40,15 @@ export function spendApproval(id: number): boolean {
   );
 }
 
+// Gives back an approval claimed for a merge that was then refused: it is
+// spent only on a merge that happened. A voided one stays void.
+export function refundApproval(id: number): void {
+  db.prepare(
+    `UPDATE orchestrator_asks SET used_at = NULL
+     WHERE id = ? AND used_at IS NOT NULL AND COALESCE(answer, '') != 'approve (void)'`
+  ).run(id);
+}
+
 // Open asks whose task has since been merged, dropped or done (by Saad,
 // or anyone), closed so they stop needing him.
 export function resolveFinishedTaskAsks(workspaceId: string): number {

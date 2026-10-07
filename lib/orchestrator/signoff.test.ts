@@ -10,6 +10,8 @@ import type { ClaudeRun } from "./claude-cli";
 let pr: TaskPR | null = null;
 const merges: string[][] = [];
 let pane = "";
+// What GitHub says when it refuses a merge, or null to merge.
+let refuseMerge: string | null = null;
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
@@ -17,6 +19,7 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
     ...real,
     run: async (cmd: string, args: string[], cwd: string, t?: number) => {
       if (cmd === "gh") {
+        if (refuseMerge) throw new Error(refuseMerge);
         merges.push(args);
         if (pr) pr = { ...pr, state: "MERGED" };
         return "";
@@ -46,6 +49,7 @@ const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
+const { landDeps, refundIfRefused } = await import("./signoff");
 const { review } = await import("./review");
 const { getCheck, putCheck } = await import("./checks");
 const { failureOf } = await import("./gates");
@@ -75,6 +79,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   merges.length = 0;
+  refuseMerge = null;
   // A live terminal at its prompt, nothing waiting.
   pane = "❯ ";
 });
@@ -406,6 +411,63 @@ describe("sign_off", () => {
     ]);
     expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
     expect(listNotes(t.w).at(-1)?.text).toMatch(/on Saad's approval/);
+  });
+
+  it("keeps Saad's approval when GitHub refuses the merge, and spends it on the merge that happens", async () => {
+    const t = setup();
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const ask = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, ask.id, { action: "approve" });
+
+    refuseMerge = 'GraphQL: Required status check "Check" is failing';
+    await expect(t.signOff()).rejects.toThrow(/is failing/);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeNull();
+
+    refuseMerge = null;
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
+  });
+
+  it("gives a land's claimed approval back when that merge is refused", async () => {
+    const t = setup();
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const ask = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, ask.id, { action: "approve" });
+
+    const deps = landDeps(t.w);
+    await expect(deps.beforeMerge(t.task)).resolves.toEqual({
+      head: pr!.head,
+    });
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
+    refuseMerge = "GraphQL: Head branch was modified";
+    await expect(deps.signOff(t.task, pr!.head)).rejects.toThrow(/modified/);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeNull();
+    expect(merges).toEqual([]);
+  });
+
+  it("keeps the approval spent when the merge happened and a later step failed", async () => {
+    const t = setup();
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const ask = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, ask.id, { action: "approve" });
+
+    const deps = landDeps(t.w);
+    await deps.beforeMerge(t.task);
+    await expect(
+      refundIfRefused(t.task, ask.id, async () => {
+        db.prepare(
+          `UPDATE sessions SET task_status = 'merged' WHERE id = ?`
+        ).run(t.task);
+        throw new Error("restack failed");
+      })
+    ).rejects.toThrow(/restack failed/);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
   });
 
   it("asks again when the head moved after Saad approved", async () => {

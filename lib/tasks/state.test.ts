@@ -165,6 +165,103 @@ describe("cancelled check runs", () => {
   });
 });
 
+describe("reruns of the same check", () => {
+  const review = (conclusion: string, startedAt: string, completedAt = "") => ({
+    __typename: "CheckRun",
+    workflowName: "Code review",
+    name: "Code review section",
+    conclusion,
+    startedAt,
+    completedAt,
+  });
+
+  it("judges a check by its newest run, whatever order gh lists them in", () => {
+    const stale = review(
+      "FAILURE",
+      "2026-10-07T02:48:35Z",
+      "2026-10-07T02:48:44Z"
+    );
+    const fresh = review(
+      "SUCCESS",
+      "2026-10-07T02:51:32Z",
+      "2026-10-07T02:51:44Z"
+    );
+    for (const rollup of [
+      [stale, fresh],
+      [fresh, stale],
+    ]) {
+      expect(checksVerdict(rollup)).toBe("pass");
+      expect(failingCheck(rollup)).toBeNull();
+    }
+  });
+
+  it("fails when the newest run failed after an older one passed", () => {
+    const rollup = [
+      review("SUCCESS", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
+      review("FAILURE", "2026-10-07T02:51:32Z"),
+    ];
+    expect(checksVerdict(rollup)).toBe("fail");
+    expect(failingCheck(rollup)).toBe("Code review section");
+  });
+
+  it("pends on a newer run still going, despite gh's zero completedAt", () => {
+    const rollup = [
+      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
+      {
+        ...review("", "2026-10-07T02:51:32Z", "0001-01-01T00:00:00Z"),
+        status: "IN_PROGRESS",
+      },
+    ];
+    expect(checksVerdict(rollup)).toBe("pending");
+    expect(failingCheck(rollup)).toBeNull();
+  });
+
+  it("counts runs that overlap, like a push and a pull_request run of one job", () => {
+    const rollup = [
+      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:50:00Z"),
+      review("SUCCESS", "2026-10-07T02:48:40Z", "2026-10-07T02:49:00Z"),
+    ];
+    expect(checksVerdict(rollup)).toBe("fail");
+    expect(failingCheck(rollup)).toBe("Code review section");
+  });
+
+  it("counts a run with no finish time, or gh's zero one", () => {
+    for (const completedAt of ["", "0001-01-01T00:00:00Z"]) {
+      const rollup = [
+        review("FAILURE", "2026-10-07T02:48:35Z", completedAt),
+        review("SUCCESS", "2026-10-07T02:51:32Z", "2026-10-07T02:51:44Z"),
+      ];
+      expect(checksVerdict(rollup)).toBe("fail");
+    }
+  });
+
+  it("keeps a finished failure when the rerun has gh's zero start time", () => {
+    const rollup = [
+      review("FAILURE", "2026-10-07T02:48:35Z", "2026-10-07T02:48:44Z"),
+      {
+        ...review("", "0001-01-01T00:00:00Z", "0001-01-01T00:00:00Z"),
+        status: "QUEUED",
+      },
+    ];
+    expect(checksVerdict(rollup)).toBe("fail");
+  });
+
+  it("doesn't let a newer run of one check hide another check's failure", () => {
+    const rollup = [
+      review("SUCCESS", "2026-10-07T02:51:32Z"),
+      {
+        __typename: "CheckRun",
+        workflowName: "CI",
+        name: "Check",
+        conclusion: "FAILURE",
+        startedAt: "2026-10-07T02:40:00Z",
+      },
+    ];
+    expect(checksVerdict(rollup)).toBe("fail");
+    expect(failingCheck(rollup)).toBe("Check");
+  });
+});
+
 describe("isBlocked", () => {
   it("spots the agent's BLOCKED line", () => {
     expect(isBlocked("work\n⏺ BLOCKED: need an API key\n> ")).toBe(true);
