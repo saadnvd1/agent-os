@@ -14,6 +14,9 @@ export interface SessionStatus {
   need?: SessionNeed | null;
   unread?: boolean;
   claudeSessionId?: string | null;
+  // From a program's OSC 7501 report: untrusted, rendered as plain text.
+  detail?: string | null;
+  progress?: number | null;
 }
 
 export interface ViewProps {

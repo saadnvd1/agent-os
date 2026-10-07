@@ -1,5 +1,6 @@
 import { db, type Session } from "../db";
 import type { WorkerClient } from "./worker/client";
+import { notifyStatusChanged } from "../status/hub";
 import type {
   ChatCommand,
   ChatItem,
@@ -59,6 +60,10 @@ registry.connecting ??= new Map();
 
 export function emit(sessionId: string, m: ChatServerMessage): void {
   registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
+  // Idle, running, waiting and back, and a finished turn (unread): the
+  // sidebar hears at once.
+  if (m.type === "state" || (m.type === "item" && m.item.kind === "turn_end"))
+    notifyStatusChanged();
 }
 
 export function getSession(sessionId: string): Session {

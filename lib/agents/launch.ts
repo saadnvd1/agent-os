@@ -8,6 +8,7 @@ import { shellQuote } from "../hosts/ssh";
 import { runInBackground } from "../async-operations";
 import { trustPromptKeys } from "../tasks/state";
 import { BUS_BRIEF } from "./brief";
+import { CLAUDE_STATUS_SETTINGS_FLAG } from "../program-status/claude-flag";
 
 const execFileAsync = promisify(execFile);
 const PROMPTS_DIR = path.join(os.homedir(), ".agent-os", "prompts");
@@ -65,7 +66,7 @@ export async function launchClaude(opts: {
   const flags = provider
     .buildFlags({ autoApprove: true, model: opts.model })
     .join(" ");
-  const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${provider.command} ${flags} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
+  const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${provider.command} ${flags} ${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
   await execFileAsync(
     "tmux",
     [

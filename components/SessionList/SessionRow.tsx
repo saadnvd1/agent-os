@@ -99,7 +99,7 @@ export function SessionRow({
             {session.name}
           </span>
         )}
-        <RowSubtitle session={session} />
+        <RowSubtitle session={session} detail={row.status?.detail} />
       </span>
       {session.parent_session_id && (
         <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />

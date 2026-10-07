@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { markRunning } from "../statuses/stream";
 import type {
   ApprovalDecision,
   ChatAccess,
@@ -113,9 +115,16 @@ export function useChat(
     };
   }, [sessionId]);
 
-  const send = useCallback((text: string, images?: ChatImage[]) => {
-    wsRef.current?.send(JSON.stringify({ type: "send", text, images }));
-  }, []);
+  const queryClient = useQueryClient();
+  const send = useCallback(
+    (text: string, images?: ChatImage[]) => {
+      const ws = wsRef.current;
+      if (!ws) return;
+      ws.send(JSON.stringify({ type: "send", text, images }));
+      if (ws.readyState === WebSocket.OPEN) markRunning(queryClient, sessionId);
+    },
+    [queryClient, sessionId]
+  );
 
   const interrupt = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: "interrupt" }));
