@@ -141,9 +141,9 @@ describe("findPRStrict's check runs", () => {
       "repos/o/r/actions/runs/2": run("pull_request", "2026-10-07T02:48:31Z"),
     };
     rollup = first;
-    await findPRStrict("/repo", "b");
+    expect((await findPRStrict("/repo", "b"))?.checks).toBe("pass");
     calls.length = 0;
-    await findPRStrict("/repo", "b");
+    expect((await findPRStrict("/repo", "b"))?.checks).toBe("pass");
     expect(apiCalls()).toEqual([]);
 
     // Run 1 is rerun and fails again: its job's new start misses the cache,

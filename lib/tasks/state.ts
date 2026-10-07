@@ -256,7 +256,10 @@ function staleRuns(
     return null;
   const timed = mine.map((r) => ({ ...r, at: at(r.info!.startedAt) }));
   if (timed.some((r) => r.at === null)) return null;
-  const pr = timed.filter((r) => PR_EVENTS.includes(r.info!.event));
+  // A cancelled run never finished, so it replaces nothing.
+  const pr = timed.filter(
+    (r) => PR_EVENTS.includes(r.info!.event) && outcome(r.c) !== "CANCELLED"
+  );
   const newest = pr.length ? Math.max(...pr.map((r) => r.at!)) : -Infinity;
   if (pr.filter((r) => r.at === newest).length > 1) return null;
   return runs

@@ -304,6 +304,21 @@ describe("reruns of the same check", () => {
     ).toBe("fail");
   });
 
+  it("doesn't let a cancelled pull_request run replace a failure", () => {
+    // A failed, the body edit's run C was cancelled, then push run B passed.
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:47:10Z"),
+      3: run("pull_request", "2026-10-07T02:47:15Z"),
+      2: run("push", "2026-10-07T02:47:20Z"),
+    };
+    expect(
+      judge(
+        [review(1, "FAILURE"), review(3, "CANCELLED"), review(2, "SUCCESS")],
+        byId
+      )
+    ).toEqual({ checks: "fail", failing: "Code review section" });
+  });
+
   it("lets a later pull_request run replace an earlier push run", () => {
     const byId = {
       1: run("push", "2026-10-07T02:47:33Z"),
