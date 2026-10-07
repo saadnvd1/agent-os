@@ -213,6 +213,43 @@ describe("asks about work that finished elsewhere", () => {
     expect(openAsks(t.w).map((a) => a.title)).toEqual(["Re-approve PR #107?"]);
   });
 
+  it("looks up a closed PR again, since it can be reopened", async () => {
+    const t = workspace();
+    const link = "https://github.com/o/x/pull/9";
+    await t.ask("Merge the x PR?", link);
+    await settleStaleAsks(
+      t.w,
+      github({ "o/x#9": { state: "CLOSED", mergeSha: null } }).view
+    );
+    await t.ask("Merge the x PR now?", link);
+    const reopened = github({ "o/x#9": { state: "OPEN", mergeSha: null } });
+    await refreshAskPRs(t.w, reopened.view, Date.now() + 61 * 1000);
+    expect(reopened.asked).toEqual(["o/x#9"]);
+    expect(resolveStaleAsks(t.w)).toBe(0);
+    expect(openAsks(t.w).map((a) => a.title)).toEqual(["Merge the x PR now?"]);
+  });
+
+  it("logs a failure to close an ask instead of throwing it", async () => {
+    const t = workspace();
+    await t.ask("Re-approve PR #107?", PR);
+    t.setTask({ task_status: "merged", pr_status: "merged" });
+    const trigger = `no_close_${t.w.replace(/\W/g, "")}`;
+    db.exec(
+      `CREATE TRIGGER ${trigger} BEFORE UPDATE ON orchestrator_asks
+       WHEN NEW.workspace_id = '${t.w}' BEGIN SELECT RAISE(ABORT, 'boom'); END`
+    );
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(resolveStaleAsks(t.w)).toBe(0);
+      expect(resolveMergedTaskAsks(t.task, PR, "merged")).toBe(0);
+      expect(String(logged.mock.calls[0]?.[0])).toMatch(/closing stale asks/);
+      expect(openAsks(t.w)).toHaveLength(1);
+    } finally {
+      logged.mockRestore();
+      db.exec(`DROP TRIGGER ${trigger}`);
+    }
+  });
+
   it("leaves an ask open when GitHub can't say", async () => {
     const t = workspace();
     await t.ask("Merge the docs PR?", "https://github.com/o/docs/pull/3");
