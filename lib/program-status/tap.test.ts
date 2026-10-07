@@ -120,6 +120,24 @@ describe("the tap socket", () => {
   });
 });
 
+describe("a flood of distinct clears", () => {
+  it("stays bounded and still lands the report after it", async () => {
+    const s = await open();
+    const clears = Array.from(
+      { length: 20000 },
+      (_, i) => `\x1b]7501;state=clear:id=job${i}\x1b\\`
+    ).join("");
+    const started = Date.now();
+    s.write(`${NAME}\n${clears}${done("after")}`);
+    await vi.waitFor(
+      () => expect(programSummary(NAME)).toMatchObject({ msg: "after" }),
+      { timeout: 5000 }
+    );
+    expect(Date.now() - started).toBeLessThan(4000);
+    s.destroy();
+  });
+});
+
 describe("queued reports and clears", () => {
   const clear = (id: string) =>
     ({ type: "report", report: { state: "clear", id } }) as const;

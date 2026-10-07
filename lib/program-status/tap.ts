@@ -179,11 +179,9 @@ export function acceptTapConnection(socket: net.Socket): void {
         continue;
       }
       queue(deferred, event);
-      // Over the bound, the oldest report goes; a clear never does.
-      if (deferred.size > MAX_DEFERRED) {
-        const oldest = [...deferred.keys()].find((k) => k.startsWith("r:"));
-        if (oldest) deferred.delete(oldest);
-      }
+      // Over the bound the oldest goes: the newest, which end the burst, stay.
+      if (deferred.size > MAX_DEFERRED)
+        deferred.delete(deferred.keys().next().value!);
       const paneName = name;
       flush ??= setTimeout(
         () => {
