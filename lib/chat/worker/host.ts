@@ -164,6 +164,9 @@ export class ChatHost {
             this.state = "idle";
             // A plan-mode or access change on its way goes first.
             await this.modeChange.catch(() => {});
+            // A send waiting on the same change may have started a turn
+            // meanwhile: that turn is running, not idle.
+            if (this.busy()) continue;
             if (this.sendQueued()) continue;
           }
           // A stopped turn can still settle an approval after it ended.

@@ -524,6 +524,28 @@ describe("lastUserTask", () => {
     host.close();
   });
 
+  it("doesn't report idle over a turn a waiting send started", async () => {
+    const { host, conversation, emitted } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "first" });
+    let finish = () => {};
+    conversation.setPlan.mockImplementationOnce(
+      () => new Promise<void>((r) => (finish = r))
+    );
+    void host.handle({ type: "set_plan", plan: false });
+    const sending = host.handle({ type: "send", id: "user-2", text: "next" });
+    // The first turn ends while the plan change is still on its way.
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    emitted.length = 0;
+    finish();
+    await sending;
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith("next", undefined);
+    expect(host.state).toBe("running");
+    expect(emitted).not.toContainEqual({ type: "state", state: "idle" });
+    host.close();
+  });
+
   it("records each turn's cost as the difference in running totals", async () => {
     const { id, host, conversation, emitted } = await startHost();
     const totals = (costUsd: number, inputTokens: number) => ({
