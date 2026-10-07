@@ -21,8 +21,10 @@ vi.mock("../worktrees", async (orig) => ({
 vi.mock("../env-setup", () => ({ setupWorktree: vi.fn(async () => ({})) }));
 vi.mock("../agents/launch", () => ({ launchClaude: vi.fn(async () => {}) }));
 
+import { db } from "../db";
 import { createHost } from "../hosts";
 import { saveHostLink } from "../hosts/remote-api";
+import { exportTask, markMoved } from "./move";
 import { moveTask } from "./move-flow";
 import { getProgress } from "./move-progress";
 import {
@@ -111,7 +113,67 @@ describe("a move's progress", () => {
     await expect(moveTask(id, hostId)).rejects.toThrow(/already moving/);
     expect(getProgress(id)?.error).toBeNull();
     land(json({ error: "no" }, 400));
-    await expect(first).rejects.toThrow(/no/);
+    await expect(first).rejects.toThrow(/box: no$/);
     expect(row(id).task_status).toBe("running");
+  });
+
+  it("refuses an orchestrator's task before touching it", async () => {
+    const { id } = await seedTask(f, WT_ROOT, "feature/prog-orch");
+    db.prepare(
+      `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES ('w', 'task', ?, datetime('now'))`
+    ).run(id);
+    await expect(moveTask(id, hostId)).rejects.toThrow(/orchestrator's tasks/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(row(id).task_status).toBe("running");
+  });
+});
+
+describe("a move back here's progress", () => {
+  // A task on the box: its mirror here, and the bundle the box would export.
+  async function onTheBox(branch: string) {
+    const { id: leftHere } = await seedTask(f, WT_ROOT, branch);
+    const bundle = await exportTask(leftHere, "box");
+    markMoved(leftHere, "box");
+    const mirrorId = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status, branch_name, host_id)
+       VALUES (?, 'Fix it', ?, '/home/alice/wt', ?, 'running', ?, ?)`
+    ).run(mirrorId, `claude-${mirrorId}`, f.projectId, branch, hostId);
+    return { mirrorId, bundle: { ...bundle, moveId: mirrorId } };
+  }
+
+  it("reports the arriving half's steps under the mirror", async () => {
+    const { mirrorId, bundle } = await onTheBox("feature/prog-in");
+    fetchMock
+      .mockResolvedValueOnce(json({ bundle }))
+      .mockResolvedValueOnce(json({ success: true }));
+    await moveTask(mirrorId, "local");
+    expect(getProgress(mirrorId)).toMatchObject({
+      finished: true,
+      error: null,
+    });
+    expect(states(mirrorId)).toEqual([
+      "export:done",
+      "worktree:done",
+      "conversation:done",
+      "resume:done",
+      "confirm:done",
+    ]);
+  });
+
+  it("a refused export fails at the first step and leaves the mirror running", async () => {
+    const { mirrorId } = await onTheBox("feature/prog-in-refused");
+    fetchMock.mockResolvedValueOnce(json({ error: "busy" }, 400));
+    await expect(moveTask(mirrorId, "local")).rejects.toThrow(/busy/);
+    expect(states(mirrorId)?.[0]).toBe("export:failed");
+    expect(
+      states(mirrorId)
+        ?.slice(1)
+        .every((s) => s.endsWith(":pending"))
+    ).toBe(true);
+    expect(row(mirrorId)).toMatchObject({
+      task_status: "running",
+      host_id: hostId,
+    });
   });
 });

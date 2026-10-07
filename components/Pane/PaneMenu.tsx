@@ -86,7 +86,7 @@ export function PaneMenu({
             <MoveMenuItems
               session={session}
               Item={DropdownMenuItem}
-              Separator={DropdownMenuSeparator}
+              After={DropdownMenuSeparator}
               iconClassName="h-4 w-4"
             />
           </>

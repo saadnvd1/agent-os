@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -28,6 +29,7 @@ import { cn } from "@/lib/utils";
 import type { Session, Project } from "@/lib/db";
 import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
+import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
 
@@ -236,6 +238,14 @@ export function MobileTabBar({
                   </DropdownMenuItem>
                 );
               })}
+            {session && (
+              <MoveMenuItems
+                session={session}
+                Item={DropdownMenuItem}
+                Before={DropdownMenuSeparator}
+                iconClassName="h-4 w-4"
+              />
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

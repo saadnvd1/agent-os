@@ -12,6 +12,8 @@ export async function POST(request: NextRequest) {
   try {
     const { from = null, session, machine } = await request.json();
     const target = resolveSession(String(session ?? ""));
+    // A script outside any session can already move any task through
+    // /api/tasks/:id/move; an agent is held to its own workspace.
     if (typeof from === "string" && from) {
       const caller = getDoneTarget(from);
       const scope = scopeOf(caller);
