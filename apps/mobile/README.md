@@ -23,6 +23,22 @@ A link works too: `agentos://connect?url=<address>&code=<code>` fills both field
 
 On loopback and the tailnet the server trusts the phone without pairing, so it connects straight away. Anywhere else, the app asks for a pairing code. On the web, open **Devices**, tap **Add a device**, and type the code, or paste the whole pairing link into the address field. The token goes into the iOS keychain, and the app sends it as `Authorization: Bearer` on every request and socket.
 
+## Performance
+
+Build with `EXPO_PUBLIC_PERF=1` and the app logs `[perf]` lines (time to the first sessions list, opening a thread, frame rate while a reply streams). Off, the marks cost nothing.
+
+Measured on a Release build in the iPhone 17 Pro simulator, with the Mac busy (load ~45), against a local AgentOS. Medians of 5:
+
+|                                        | Before                       | After                                                                       |
+| -------------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
+| Launch to the sessions list            | 3.0s                         | 3.0s (2.3s from process start; the app's own work after JS starts is ~0.2s) |
+| Open a 2,124-block thread              | 548ms (list ready in ~100ms) | 542ms                                                                       |
+| Memory with that thread open           | 169 MB                       | 150 MB                                                                      |
+| JS frame rate, streaming and scrolling | 57–60 fps, worst frame 73ms  | same                                                                        |
+| JS bundle (Hermes bytecode)            | 5.07 MB                      | 5.14 MB                                                                     |
+
+The change was Metro's `inlineRequires` (`metro.config.js`): modules run when first used, which saved 19 MB. Launch time is React Native and iOS starting up, and loading the bundle; none of it is the app waiting on the network (the sessions request takes 2ms).
+
 ## Checks
 
 ```bash
@@ -47,7 +63,10 @@ The repo's `scripts/check`, the pre-commit hook, the root `tsconfig`, ESLint, Pr
 
 - **State.** React Query holds server data, keyed per machine. Live status from `/ws/status` is written into the query cache, as the web does. A small external store (`src/lib/store.ts`) holds the machine list and filters.
 - **Sockets.** `src/lib/ws/socket.ts` is a JSON WebSocket that sends the bearer header, backs off from 1s to 30s, and reconnects as soon as the app is back in the foreground. `src/lib/chat/reducer.ts` applies chat messages the same way the web's `useChat` does: a snapshot replaces, an item upserts, a delta appends.
-- **Markdown.** It's parsed with mdast (GFM) and drawn with native `Text`. Code blocks scroll sideways and copy, and tables scroll too.
+- **Markdown.** It's parsed with mdast (GFM) and drawn with native text views, so a selection can run across paragraphs. Code is highlighted with Prism (One Dark and One Light, as on the web), finished lines only while a reply streams. Code blocks and tables scroll sideways. Inline HTML shows as its text and never runs. Mermaid diagrams and `html_render` artifacts draw in sandboxed WebViews; the mermaid script comes from the machine (`/api/vendor/mermaid`), never a CDN.
+- **The feed.** A virtualized list (`@legendapp/list`) in reading order: it opens at the end, follows a streaming reply while you're at the bottom and keeps your place when you scroll up. The header and composer are glass on iOS 26 and the feed scrolls under them.
+- **Composer.** The web's: model, access and plan pills, the agent's slash commands and @file search (both over the chat socket), photos from the library, camera or Files, compressed before sending.
+- **Addresses.** After connecting, the app learns every address the machine answers on (`/api/devices/network`) and moves to another when the current one stops. The device token only goes to HTTPS on Connect or `.ts.net`, or to the address you entered.
 
 ```
 src/app/          routes: (tabs)/sessions, (tabs)/needs, (tabs)/machines, session/[id], connect, filters
@@ -62,13 +81,11 @@ src/lib/          api, machines, sessions, chat, asks, ws, theme
 ## What's next
 
 - **Phase 2:**
-  - a native terminal (libghostty) on `/ws/terminal`, replacing the read-only pane;
-  - the native diff view.
+  - a native terminal (libghostty) on `/ws/terminal`, replacing the read-only pane.
 - **Push:**
   - APNs registration at pairing;
   - a sender on the server for needs-you, asks and turn-done.
 - **Approve with Face ID.** Approving an ask needs a passkey today, and passkeys are tied to a hostname, so the app sends you to the web for now. The plan is a Secure Enclave key the phone registers when it pairs. The server sends a challenge, Face ID unlocks the key, and the key signs the challenge. That works on any address (tailnet, HTTPS, Connect), and it needs a security review before it ships.
-- Several addresses per machine, with failover between them.
 - QR pairing with the camera.
 
 Smaller items are in the repo's `ideas.md`, under "Mobile app".

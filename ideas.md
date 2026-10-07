@@ -121,11 +121,11 @@
 - [ ] Push: APNs registration at pairing, and a server sender for needs-you, asks and turn-done
 - [ ] Approve asks with Face ID: a Secure Enclave key registered at pairing signs the approval challenge (needs a security review)
 - [ ] QR pairing with the camera (the web's pair QR links to `<base>/pair#CODE`; the app already accepts that link pasted)
-- [ ] Several addresses per machine with failover (tailnet IP, tailnet HTTPS, Connect)
-- [ ] Downscale photos before sending (expo-image-manipulator); today a picked photo goes at quality 0.7, full size
 - [ ] Mark a chat seen when opened (`POST /api/sessions/:id/seen`), so unread clears like on the web
-- [ ] Composer extras from the web: @file mentions, slash commands, model and access pickers, plan mode, ↑ history, editing queued messages
-- [ ] Background tasks list in the composer, undo, artifacts inline
+- [ ] Composer extras from the web: ↑ history, editing and reordering queued messages, "carry out plan"
+- [ ] Composer grows only on typing: text a slash/@ pick inserts stays one line tall until the next keystroke
+- [ ] Background tasks list in the composer, undo
 - [ ] Start a new session from the phone
 - [ ] Android: cleartext HTTP for tailnet IPs, and a check that it builds
 - [ ] Screenshot script for the app (dark and light), like the web's `npm run screenshots`
+- [ ] A native UIMenu on session rows (expo-router `Link.Menu` hides the row from VoiceOver today, so rows use an action sheet)

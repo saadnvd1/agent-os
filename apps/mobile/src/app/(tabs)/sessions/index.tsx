@@ -15,6 +15,7 @@ import { useShelves } from "~/components/sessions/useShelves";
 import { Button } from "~/components/ui/Button";
 import { Empty } from "~/components/ui/Empty";
 import { SkeletonRows } from "~/components/ui/Skeleton";
+import { markOnce } from "~/lib/perf";
 import { font, space, useTheme } from "~/lib/theme";
 
 const FIRST_DONE = 10;
@@ -26,6 +27,7 @@ export default function SessionsScreen() {
   const { machine, sessions, shelves, projectNames, live, filters } =
     useShelves(query, doneLimit);
   const [refreshing, setRefreshing] = useState(false);
+  if (sessions.data) markOnce("sessions-ready", sessions.data.length);
 
   const refresh = async () => {
     setRefreshing(true);

@@ -6,6 +6,7 @@ import { groupTimeline, type TimelineBlock as Block } from "@/lib/chat/group";
 import { Icon } from "~/components/ui/Icon";
 import { Text } from "~/components/ui/Text";
 import { haptic } from "~/lib/haptics";
+import { mark, useFps } from "~/lib/perf";
 import { font, space, useTheme } from "~/lib/theme";
 import { TimelineBlock } from "./TimelineBlock";
 
@@ -33,10 +34,17 @@ export function ChatFeed({
   const busy = state === "running" || state === "waiting";
   const list = useRef<LegendListRef>(null);
   const [away, setAway] = useState(false);
+  useFps("stream-fps", state === "running");
   return (
     <View style={styles.fill}>
       <LegendList
         ref={list}
+        onLoad={({ elapsedTimeInMs }) =>
+          mark(
+            "thread-open",
+            `${Math.round(elapsedTimeInMs)}ms ${blocks.length} blocks`
+          )
+        }
         onScroll={() => {
           const near = list.current?.getState().isNearEnd ?? true;
           if (near === away) setAway(!near);

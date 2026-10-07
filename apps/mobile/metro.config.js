@@ -18,4 +18,11 @@ config.resolver.resolveRequest = (context, name, platform) => {
   return (resolve ?? context.resolveRequest)(context, target, platform);
 };
 
+// A module runs when it's first used, not all at launch, so the chat's
+// markdown, highlighting and WebView code wait until a chat opens (19 MB less
+// memory; README "Performance").
+config.transformer.getTransformOptions = async () => ({
+  transform: { experimentalImportSupport: true, inlineRequires: true },
+});
+
 module.exports = config;

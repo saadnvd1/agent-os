@@ -32,6 +32,7 @@ import {
   useMachines,
 } from "~/lib/machines/store";
 import { useTheme } from "~/lib/theme";
+import { markOnce } from "~/lib/perf";
 
 // A link straight to a session still gets the tabs underneath to go back to.
 export const unstable_settings = { initialRouteName: "(tabs)" };
@@ -46,6 +47,7 @@ AppState.addEventListener("change", (s) =>
 );
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+markOnce("js-start");
 loadMachines();
 
 export default function RootLayout() {
@@ -70,6 +72,8 @@ export default function RootLayout() {
     GeistMono_400Regular_Italic,
   });
   const ready = machinesReady && (fontsLoaded || !!fontError);
+  if (machinesReady) markOnce("machines-ready");
+  if (fontsLoaded || fontError) markOnce("fonts-ready");
   const t = useTheme();
   const active = useActiveMachine();
   const activeId = active?.id;
