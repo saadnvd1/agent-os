@@ -41,7 +41,6 @@ export function DraftChips({
   git: GitCheck | undefined;
   onChange: (patch: Partial<Draft>) => void;
 }) {
-  const { data: probes } = useAgentStatusQuery();
   const real = projects.filter((p) => !p.is_uncategorized);
   const project = real.find((p) => p.id === draft.projectId) ?? null;
   // A task runs on another machine through that machine's own AgentOS, so
@@ -51,6 +50,10 @@ export function DraftChips({
     : hosts;
   const host = hosts.find((h) => h.id === draft.hostId);
   const local = draft.hostId === "local";
+  // Which agents are installed and signed in, on this machine: a draft for
+  // another machine shows them all.
+  const { data: localProbes } = useAgentStatusQuery();
+  const probes = local ? localProbes : undefined;
   const base = draft.baseBranch ?? git?.defaultBranch ?? "main";
   // A project's sessions run where it lives; a scratch chat or a task can
   // go anywhere.

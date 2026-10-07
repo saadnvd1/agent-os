@@ -144,6 +144,8 @@
 ## Draft-first sessions (after V1, 2026-10-07)
 
 - Stream install output into the setup card's log as it prints, not per step.
+- A draft for another machine shows that machine's installed agents (today
+  the install check is this machine's only, so a remote draft shows them all).
 - Folder browser in the project's settings for changing its folder.
 - The chat's access chip reads "Full access" until the worker's capabilities
   arrive (useChat's default), even when the session is "Accept edits".
