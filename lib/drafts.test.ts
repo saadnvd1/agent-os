@@ -138,8 +138,18 @@ describe("draftKeyFor", () => {
     expect(key({ altKey: true })).toBe("scratch");
   });
 
-  it("ignores N without the modifier, other keys, and ⌘⌥⇧N", () => {
+  it("routes ⌥N, ⌥⇧N and ⌃⌥N, which browsers pass to the page", () => {
+    expect(key({ mod: false, altKey: true })).toBe("current");
+    expect(key({ mod: false, altKey: true, shiftKey: true })).toBe("choose");
+    expect(key({ mod: false, altKey: true, ctrlKey: true })).toBe("scratch");
+    expect(
+      key({ mod: false, altKey: true, ctrlKey: true, shiftKey: true })
+    ).toBeNull();
+  });
+
+  it("ignores N without a modifier, other keys, and ⌘⌥⇧N", () => {
     expect(key({ mod: false })).toBeNull();
+    expect(key({ mod: false, shiftKey: true })).toBeNull();
     expect(key({ code: "KeyM" })).toBeNull();
     expect(key({ altKey: true, shiftKey: true })).toBeNull();
   });

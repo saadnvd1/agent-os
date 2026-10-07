@@ -14,6 +14,7 @@ import { NotificationSettings } from "@/components/NotificationSettings";
 import type { ViewProps } from "./types";
 import { newDraft } from "@/stores/drafts";
 import { paletteActions } from "@/stores/palette";
+import { DRAFT_KEYS } from "@/lib/drafts";
 
 // Labels collapse to icons when the pane bar carrying these is narrow
 // (a split), via the bar's container query.
@@ -125,7 +126,7 @@ export function DesktopAppActions({
       <Button
         size="sm"
         aria-label="New session"
-        title="New session (⌘N)"
+        title={`New session (${DRAFT_KEYS.current})`}
         className="ml-1 h-7 gap-1 px-2"
         onClick={() => newDraft({ kind: "current" })}
       >

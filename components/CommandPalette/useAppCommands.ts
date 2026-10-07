@@ -36,6 +36,7 @@ import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { phoneNotifyUiActions } from "@/stores/phoneNotifyUi";
 import { usageUiActions } from "@/stores/usageUi";
+import { DRAFT_KEYS } from "@/lib/drafts";
 
 const LAST_THEME = "agentOS-last-theme-";
 
@@ -78,7 +79,7 @@ export function useAppCommands({
       title: "New session",
       group: "Actions",
       keywords: ["create", "start", "chat", "draft"],
-      hint: "⌘N",
+      hint: DRAFT_KEYS.current,
       icon: Plus,
       run: () => newDraft({ kind: "current" }),
     },
@@ -87,7 +88,7 @@ export function useAppCommands({
       title: "New session in project…",
       group: "Actions",
       keywords: ["create", "start", "choose", "pick"],
-      hint: "⌘⇧N",
+      hint: DRAFT_KEYS.choose,
       icon: FolderGit2,
       run: () => newDraft({ kind: "choose" }),
     },
@@ -96,7 +97,7 @@ export function useAppCommands({
       title: "New scratch chat",
       group: "Actions",
       keywords: ["create", "no project", "quick"],
-      hint: "⌘⌥N",
+      hint: DRAFT_KEYS.scratch,
       icon: MessageSquarePlus,
       run: () => newDraft({ kind: "scratch" }),
     },

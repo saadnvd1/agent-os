@@ -1,5 +1,5 @@
 /**
- * Drafts: a new session before its first send. ⌘N opens one in a composer;
+ * Drafts: a new session before its first send. ⌥N opens one in a composer;
  * the session, its worktree and its agent are made only when it's sent.
  */
 
@@ -67,7 +67,7 @@ export function newDraft(
   };
 }
 
-// The draft ⌘N opens for a project: its empty one if it has one (typed ones
+// The draft ⌥N opens for a project: its empty one if it has one (typed ones
 // are kept, reachable from the sidebar), else none and a new one is made.
 export function reusableDraft(
   drafts: Draft[],
@@ -82,7 +82,7 @@ export function reusableDraft(
   );
 }
 
-// The project ⌘N starts in: the one you're in, else the most recently used.
+// The project ⌥N starts in: the one you're in, else the most recently used.
 export function currentProjectId(
   viewing: { projectId: string | null } | null,
   recent: { project_id: string | null; updated_at: string }[],
@@ -99,17 +99,32 @@ export function currentProjectId(
 
 export type DraftKey = "current" | "choose" | "scratch";
 
-// ⌘N: the current project. ⌘⇧N: pick one. ⌘⌥N: a scratch chat. `mod` is
-// ⌘ on a Mac and Ctrl elsewhere. Read by code, since ⌥ changes the key's
-// character.
+// ⌥N: the current project. ⌥⇧N: pick one. ⌃⌥N: a scratch chat. Browsers keep
+// ⌘N, ⌘⇧N and ⌘⌥N for their own windows and never pass them to the page, so
+// those only work where they arrive (an installed app); ⌥ works in a tab too.
+// `mod` is ⌘ on a Mac and Ctrl elsewhere. Read by code, since ⌥ changes the
+// key's character.
 export function draftKeyFor(e: {
   code: string;
   mod: boolean;
   shiftKey: boolean;
   altKey: boolean;
+  ctrlKey?: boolean;
 }): DraftKey | null {
-  if (e.code !== "KeyN" || !e.mod) return null;
-  if (e.altKey && e.shiftKey) return null;
-  if (e.altKey) return "scratch";
+  if (e.code !== "KeyN") return null;
+  if (e.mod) {
+    if (e.altKey && e.shiftKey) return null;
+    if (e.altKey) return "scratch";
+    return e.shiftKey ? "choose" : "current";
+  }
+  if (!e.altKey) return null;
+  if (e.ctrlKey) return e.shiftKey ? null : "scratch";
   return e.shiftKey ? "choose" : "current";
 }
+
+// The keys shown in the app for each kind of draft.
+export const DRAFT_KEYS: Record<DraftKey, string> = {
+  current: "⌥N",
+  choose: "⌥⇧N",
+  scratch: "⌃⌥N",
+};

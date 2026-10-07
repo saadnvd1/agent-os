@@ -1,11 +1,11 @@
 "use client";
 
-import type { Draft } from "@/lib/drafts";
+import { DRAFT_KEYS, type Draft } from "@/lib/drafts";
 
 const KEYS = [
-  ["⌘N", "New session"],
-  ["⌘⇧N", "Pick a project"],
-  ["⌘⌥N", "Scratch chat"],
+  [DRAFT_KEYS.current, "New session"],
+  [DRAFT_KEYS.choose, "Pick a project"],
+  [DRAFT_KEYS.scratch, "Scratch chat"],
 ];
 
 // What sending this draft starts, and the keys for the next one.

@@ -9,7 +9,7 @@ import { draftsActions, draftsStore, newDraft } from "@/stores/drafts";
 
 const firstLine = (text: string) => text.trim().split("\n")[0].slice(0, 80);
 
-// Drafts with something typed in them, kept until sent or discarded: ⌘N
+// Drafts with something typed in them, kept until sent or discarded: ⌥N
 // makes a fresh draft rather than taking over one of these.
 export function DraftShelf({ projects }: { projects: Project[] }) {
   const { drafts } = useSnapshot(draftsStore);
