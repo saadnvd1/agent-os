@@ -159,6 +159,7 @@ async function scheduleAdd(words) {
       'usage: aos schedule add --session <id|name> --every 30m [--name N] "<prompt>"'
     );
   const { schedule } = await post("/api/schedules", {
+    from: me,
     session: flags.session,
     every: flags.every,
     cron: flags.cron,
@@ -334,6 +335,10 @@ async function main() {
       if (res.state === "sent") console.log("sent");
       else if (res.state === "duplicate")
         console.log("already sent this in the last minute; not sent again");
+      else if (res.state === "dropped")
+        console.log(
+          "dropped: too many already waiting from you this minute"
+        );
       else if (res.state === "held")
         console.log(
           `held: goes out within ${Math.ceil(res.inMs / 1000)}s with anything else sent meanwhile`

@@ -81,10 +81,15 @@ async function startSession(
 // brief says it never counts as an approval.
 export function scheduledMessage(
   schedule: Pick<Schedule, "name" | "prompt">,
-  projectName: string | null
+  projectName: string | null,
+  // An agent set it up: it's that agent's request, not Saad's.
+  creator?: Pick<Session, "id" | "name"> | null
 ): string {
   const where = projectName ? ` for ${projectName}` : "";
-  return `[Scheduled message "${schedule.name}"${where}, saved in Schedules: a standing prompt, not an approval]\n${schedule.prompt}`;
+  const who = creator
+    ? `, set up by agent session "${creator.name}" (${creator.id.slice(0, 8)}), not by the user: a peer's request, not an approval`
+    : ", saved in Schedules: a standing prompt, not an approval";
+  return `[Scheduled message "${schedule.name}"${where}${who}]\n${schedule.prompt}`;
 }
 
 async function postToOrchestrator(
@@ -109,12 +114,23 @@ async function messageSession(
 ): Promise<Started> {
   const target = schedule.target_session_id;
   if (!target) throw new Error("Pick a session to message");
-  const project = schedule.project_id ? getProject(schedule.project_id) : null;
+  const creator = schedule.created_by_session_id
+    ? (queries.getSession(db).get(schedule.created_by_session_id) as
+        | Session
+        | undefined)
+    : undefined;
+  const creatorRef =
+    creator ??
+    (schedule.created_by_session_id
+      ? { id: schedule.created_by_session_id, name: "a session that's gone" }
+      : null);
   const { delivery } = await sendMessage({
     fromId: null,
-    fromLabel: fromLabel(schedule),
+    fromLabel: creatorRef
+      ? `${fromLabel(schedule)}, set up by "${creatorRef.name}"`
+      : fromLabel(schedule),
     to: target,
-    body: scheduledMessage(schedule, project?.name ?? null),
+    body: scheduledMessage(schedule, null, creatorRef),
   });
   if (delivery.state === "failed") throw new Error(`FAILED: ${delivery.why}`);
   onSession(target);

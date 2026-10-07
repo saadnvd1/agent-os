@@ -88,7 +88,11 @@ function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="bg-foreground/[0.04] flex gap-1 rounded-lg p-1"
+      className={cn(
+        "bg-foreground/[0.04] grid gap-1 rounded-lg p-1 md:flex",
+        // Wraps on a phone rather than cutting labels short.
+        options.length === 4 ? "grid-cols-2" : "grid-cols-3"
+      )}
     >
       {options.map((o) => (
         <button
@@ -185,6 +189,7 @@ export function ScheduleForm({
     .filter(
       (s) =>
         !s.archived_at &&
+        s.role !== "orchestrator" &&
         (!s.task_status || s.task_status === "running") &&
         (s.workspace_id ??
           (s.project_id ? projectWs.get(s.project_id) : null)) === workspace
@@ -270,7 +275,10 @@ export function ScheduleForm({
           label="What it starts"
           value={kind}
           options={KINDS}
-          onChange={setKind}
+          onChange={(k) => {
+            setKind(k);
+            if (preset === "every" && !frequent(k)) setPreset("daily");
+          }}
         />
         <p className="text-muted-foreground text-xs">
           {KINDS.find((k) => k.value === kind)?.hint}

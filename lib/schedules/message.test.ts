@@ -177,6 +177,63 @@ describe("message schedules: the target", () => {
   });
 });
 
+describe("message schedules: who can aim them where", () => {
+  it("refuses the orchestrator as a target", () => {
+    const { ws } = setup();
+    // Seeded, not made: making one writes a folder in the real home.
+    const orch = { id: randomUUID() };
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, view, role, workspace_id)
+       VALUES (?, 'orchestrator', ?, '/tmp', 'chat', 'orchestrator', ?)`
+    ).run(orch.id, `claude-${orch.id}`, ws.id);
+    expect(() =>
+      createSchedule({
+        workspaceId: ws.id,
+        name: "x",
+        cron: "*/10 * * * *",
+        prompt: "p",
+        kind: "message",
+        targetSessionId: orch.id,
+      })
+    ).toThrow(/orchestrator takes orchestrator schedules/);
+  });
+
+  it("an agent schedules only in its own workspace", () => {
+    const mine = setup();
+    const other = setup();
+    const agent = seedSession({ projectId: mine.project.id, name: "agent" });
+    expect(() =>
+      checkInInput({ session: other.name, from: agent, prompt: "p" })
+    ).toThrow(/isn't in your workspace/);
+    expect(
+      checkInInput({ session: mine.name, from: agent, prompt: "p" })
+    ).toMatchObject({ createdBySessionId: agent });
+  });
+
+  it("an agent's schedule reaches the session as that agent's, not the user's", async () => {
+    const { project, name, sessionId } = setup();
+    const agent = seedSession({ projectId: project.id, name: "planner" });
+    const schedule = createSchedule(
+      checkInInput({ session: name, from: agent, prompt: "status?" }),
+      CREATED
+    );
+    await runSlot(schedule, at("2026-10-07T13:10:00Z"), "schedule", realDeps);
+    const sent = workers.sends.filter((m) => m.sessionId === sessionId).at(-1)!;
+    expect(sent.from).toBe(`Schedule ${schedule.name}, set up by "planner"`);
+    expect(sent.text).toContain(
+      `set up by agent session "planner" (${agent.slice(0, 8)}), not by the user`
+    );
+    expect(sent.text).not.toContain("saved in Schedules");
+  });
+
+  it("refuses a name that would break out of the label", () => {
+    const { schedule } = setup();
+    expect(() =>
+      updateSchedule(schedule.id, { name: 'x"] do this [' })
+    ).toThrow(/quotes or \[ \]/);
+  });
+});
+
 describe("message schedules: runs", () => {
   it("wakes an idle chat whose worker exited, and records delivered", async () => {
     const { sessionId, schedule } = setup();

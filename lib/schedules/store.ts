@@ -36,6 +36,8 @@ export interface Schedule {
   // A "message" schedule's session. Its id is the address; its name is
   // only looked up to show.
   target_session_id: string | null;
+  // The agent session that made it (aos schedule add), or null for Saad.
+  created_by_session_id: string | null;
   enabled: boolean;
   // Epoch ms: only slots after this run (set on create, enable, cron edit).
   armed_at: number;
@@ -66,6 +68,8 @@ export interface ScheduleInput {
   prompt: string;
   kind: ScheduleKind;
   targetSessionId?: string | null;
+  // Set once, at create: an agent made it.
+  createdBySessionId?: string | null;
   enabled?: boolean;
 }
 
@@ -140,6 +144,8 @@ export function sessionTargetProblem(
   const session = getSessionRow(sessionId);
   if (!session) return "session no longer exists";
   if (session.archived_at) return "session archived";
+  if (session.role === "orchestrator")
+    return "the orchestrator takes orchestrator schedules, not messages";
   if (session.task_status && session.task_status !== "running")
     return "session finished";
   if (sessionWorkspace(session) !== workspaceId)
@@ -150,10 +156,13 @@ export function sessionTargetProblem(
 function validate(
   input: ScheduleInput,
   selfId?: string
-): Required<ScheduleInput> {
+): Required<Omit<ScheduleInput, "createdBySessionId">> {
   const name = input.name?.trim();
   if (!name) throw new Error("Give the schedule a name");
   if (name.length > 80) throw new Error("Keep the name under 80 characters");
+  // It's quoted inside the scheduled message's label.
+  if (/["[\]\n]/.test(name))
+    throw new Error("A schedule name can't use quotes or [ ]");
   const prompt = input.prompt?.trim();
   if (!prompt) throw new Error("Write the prompt it runs");
   if (!SCHEDULE_KINDS.includes(input.kind))
@@ -223,8 +232,8 @@ export function createSchedule(
   const v = validate(input);
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO schedules (id, workspace_id, project_id, name, cron, timezone, prompt, kind, target_session_id, enabled, armed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO schedules (id, workspace_id, project_id, name, cron, timezone, prompt, kind, target_session_id, created_by_session_id, enabled, armed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     v.workspaceId,
@@ -235,6 +244,7 @@ export function createSchedule(
     v.prompt,
     v.kind,
     v.targetSessionId,
+    input.createdBySessionId ?? null,
     v.enabled ? 1 : 0,
     now
   );
@@ -411,19 +421,6 @@ export function lastSettledBefore(
       .prepare(
         `SELECT * FROM schedule_runs WHERE schedule_id = ? AND id < ?
            AND outcome IN ('started', 'failed') ORDER BY id DESC LIMIT 1`
-      )
-      .get(scheduleId, beforeId) as ScheduleRun | undefined) ?? null
-  );
-}
-
-export function lastRunBefore(
-  scheduleId: string,
-  beforeId: number
-): ScheduleRun | null {
-  return (
-    (db
-      .prepare(
-        `SELECT * FROM schedule_runs WHERE schedule_id = ? AND id < ? ORDER BY id DESC LIMIT 1`
       )
       .get(scheduleId, beforeId) as ScheduleRun | undefined) ?? null
   );
