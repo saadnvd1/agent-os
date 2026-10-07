@@ -69,18 +69,21 @@ npm run dev  # http://localhost:3011
 
 ## Supported Agents
 
-| Agent       | Resume | Fork | Auto-Approve                     |
-| ----------- | ------ | ---- | -------------------------------- |
-| Claude Code | ✅     | ✅   | `--dangerously-skip-permissions` |
-| Codex       | ❌     | ❌   | `--approval-mode full-auto`      |
-| OpenCode    | ❌     | ❌   | Config file                      |
-| Kilo Code   | ✅     | ✅   | Config file                      |
-| Gemini CLI  | ❌     | ❌   | `--yolomode`                     |
-| Aider       | ❌     | ❌   | `--yes`                          |
-| Cursor CLI  | ❌     | ❌   | N/A                              |
-| Amp         | ❌     | ❌   | `--dangerously-allow-all`        |
-| Pi          | ❌     | ❌   | N/A                              |
-| Oh My Pi    | ❌     | ❌   | N/A                              |
+| Agent       | Chat | Resume | Fork | Auto-Approve                                 |
+| ----------- | ---- | ------ | ---- | -------------------------------------------- |
+| Claude Code | ✅   | ✅     | ✅   | `--dangerously-skip-permissions`             |
+| Codex       | ✅   | ✅     | ✅   | `--dangerously-bypass-approvals-and-sandbox` |
+| OpenCode    | ✅   | ✅     | ✅   | `--auto`                                     |
+| Pi          | ✅   | ✅     | ✅   | Never asks                                   |
+| Kilo Code   | ❌   | ✅     | ✅   | Config file                                  |
+| Gemini CLI  | ❌   | ❌     | ❌   | `--yolo`                                     |
+| Aider       | ❌   | ❌     | ❌   | `--yes`                                      |
+| Cursor CLI  | ❌   | ✅     | ❌   | `--force`                                    |
+| Amp         | ❌   | ✅     | ❌   | `--dangerously-allow-all`                    |
+| Oh My Pi    | ❌   | ❌     | ❌   | N/A                                          |
+
+The new-session picker says when an agent isn't installed or needs a sign-in
+first, and what to run (`GET /api/agents/status`).
 
 ## Features
 
@@ -110,10 +113,14 @@ Sessions open as a chat by default: streaming replies, tool calls folded into
 expandable steps, inline diffs for edits, a plan checklist, highlighted code
 and mermaid diagrams, subagent cards, image attachments (pick, paste or drag
 them in) and a Stop button, all readable on a phone. Chat drives the same
-agent as the terminal (Claude Code through the Agent SDK, with your own Claude
-login). The **Chat /
+agent as the terminal, with your own logins: Claude Code through the Agent
+SDK, Codex through `codex app-server`, OpenCode through its own `opencode
+serve` (loopback only, behind a per-conversation password) and Pi through its
+RPC mode. Pi never asks before a tool, so AgentOS loads a small Pi extension
+that asks the chat as the access setting says. The **Chat /
 Terminal** switch in the tab bar hands the same conversation between the two:
-the terminal resumes it with `claude --resume`, and switching back closes the
+the terminal resumes it (`claude --resume`, `codex resume`, `opencode
+--session`, `pi --session`), and switching back closes the
 terminal so only one side drives it. Each chat conversation runs in its own
 worker process (in tmux, like terminal sessions), so restarting or updating
 AgentOS never cuts off a turn: the server reconnects to running workers when
@@ -208,7 +215,9 @@ under **Ask first** they ask like any other tool. Previews need Chrome, Chromium
 installed (or `AGENTOS_CHROME` pointing at one).
 
 Chat runs on this machine; sessions on other machines use the terminal.
-Drivers for other agent CLIs plug into `lib/chat/drivers`.
+Drivers for other agent CLIs plug into `lib/chat/drivers`; undo, `@file`
+suggestions and visuals are Claude-only for now, and plan mode is Claude and
+OpenCode.
 
 ![A session in terminal view, with the agent asking before it runs a command](screenshots/terminal.png)
 
