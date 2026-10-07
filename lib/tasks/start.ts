@@ -121,6 +121,23 @@ export async function finishTaskStart(
   return done(setup);
 }
 
+interface SetupColumns {
+  setup_ms: number | null;
+  setup_error: string | null;
+}
+
+const OK: TaskSetup = { status: "ok", ms: null, error: null };
+
+// The setup a row already finished, or undefined when it never got that far:
+// a fresh start's row has neither column.
+function earlierSetup(row: SetupColumns): TaskSetup | undefined {
+  if (row.setup_error)
+    return { status: "failed", ms: row.setup_ms, error: row.setup_error };
+  if (row.setup_ms != null)
+    return { status: "ok", ms: row.setup_ms, error: null };
+  return undefined;
+}
+
 const killTmux = (name: string) =>
   execFileAsync("tmux", ["kill-session", "-t", `=${name}`], {
     timeout: 5000,
@@ -143,11 +160,11 @@ export async function resumeTaskStarts(
 ): Promise<string[]> {
   const rows = db
     .prepare(
-      `SELECT id, tmux_name FROM sessions
+      `SELECT id, tmux_name, setup_ms, setup_error FROM sessions
        WHERE setup_status = 'running' AND task_status = 'running'
          AND archived_at IS NULL`
     )
-    .all() as { id: string; tmux_name: string }[];
+    .all() as ({ id: string; tmux_name: string } & SetupColumns)[];
   const resumed = resumeHeldStarts();
   for (const row of rows) {
     if (fs.existsSync(promptFileFor(row.id)) && (await alive(row.tmux_name))) {
@@ -155,8 +172,9 @@ export async function resumeTaskStarts(
       continue;
     }
     resumed.push(row.id);
+    // A held start claimed before the restart already has its setup.
     inBackground(`resume start of task ${row.id}`, () =>
-      finishTaskStart(row.id)
+      finishTaskStart(row.id, earlierSetup(row))
     );
   }
   return resumed;
@@ -170,11 +188,7 @@ export function resumeHeldStarts(): string[] {
       `SELECT id, setup_ms, setup_error FROM sessions WHERE setup_status = 'held'
          AND task_status = 'running' AND archived_at IS NULL`
     )
-    .all() as {
-    id: string;
-    setup_ms: number | null;
-    setup_error: string | null;
-  }[];
+    .all() as ({ id: string } & SetupColumns)[];
   const resumed: string[] = [];
   for (const { id, setup_ms, setup_error } of rows) {
     if (launchHold(id)) continue;
@@ -185,10 +199,9 @@ export function resumeHeldStarts(): string[] {
       .run(id).changes;
     if (!claimed) continue;
     resumed.push(id);
-    const setup: TaskSetup = setup_error
-      ? { status: "failed", ms: setup_ms, error: setup_error }
-      : { status: "ok", ms: setup_ms, error: null };
-    inBackground(`resume held task ${id}`, () => finishTaskStart(id, setup));
+    inBackground(`resume held task ${id}`, () =>
+      finishTaskStart(id, earlierSetup({ setup_ms, setup_error }) ?? OK)
+    );
   }
   return resumed;
 }
