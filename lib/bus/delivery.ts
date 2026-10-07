@@ -176,7 +176,8 @@ export async function deliverToPane(
     if (!(await safeEnter())) return failed(MENU_OPENED, true);
     sent = await until((x) => !inInput(x));
   }
-  if (!sent) return failed("Enter didn't send it");
+  // The last look still had it in the input, even collapsed as a paste.
+  if (!sent) return failed("Enter didn't send it", true);
   // Busy when it went in, or Claude says it's holding it: queued for
   // after this turn.
   const after = await pane.view();
