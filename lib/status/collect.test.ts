@@ -23,6 +23,7 @@ const screenNeed = vi.fn(
 );
 let pane = "";
 const unsentDue = vi.fn(() => false);
+const captured = vi.fn((_name: string, _fresh: boolean) => {});
 const clearUnsent = vi.fn((_name: string) => {});
 const fixture = (name: string) =>
   readFileSync(join(__dirname, "..", "__fixtures__", "screens", name), "utf-8");
@@ -30,7 +31,10 @@ const fixture = (name: string) =>
 vi.mock("@/lib/status-detector", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/status-detector")>()),
   statusDetector: {
-    captureScreen: async () => pane,
+    captureScreen: async (name: string, fresh = false) => {
+      captured(name, fresh);
+      return pane;
+    },
     screenNeed: (name: string, s: string, opts: object) =>
       screenNeed(name, s, opts),
     unsentDue: () => unsentDue(),
@@ -91,6 +95,11 @@ describe("collectStatuses", () => {
       detail: "Apply 3 changes?",
     });
     expect(screen).not.toHaveBeenCalled();
+    // A reported question is checked against the live screen, never a kept one.
+    expect(captured).toHaveBeenLastCalledWith(NAME, true);
+    applyProgramReport(NAME, { state: "working", id: "" }, "claude");
+    await collectStatuses();
+    expect(captured).toHaveBeenLastCalledWith(NAME, false);
   });
 
   it("marks done unread, and moves the session's updated_at", async () => {
