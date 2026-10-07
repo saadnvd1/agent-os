@@ -36,6 +36,7 @@ const MAX_HEADER = 256;
 const REPLY_MS = 1000;
 const REPORTS_PER_SECOND = 50;
 const MAX_DEFERRED = 66;
+const MAX_PENDING = REPORTS_PER_SECOND + MAX_DEFERRED;
 
 interface Tap {
   socket: net.Socket;
@@ -124,6 +125,9 @@ export function acceptTapConnection(socket: net.Socket): void {
       if (covered(queued, event)) into.delete(queued);
     into.delete(key);
     into.set(key, event);
+    // Bounded whatever the drain's pace: the oldest goes.
+    const max = into === deferred ? MAX_DEFERRED : MAX_PENDING;
+    if (into.size > max) into.delete(into.keys().next().value!);
   };
   let draining = false;
   let windowStart = 0;
@@ -179,9 +183,6 @@ export function acceptTapConnection(socket: net.Socket): void {
         continue;
       }
       queue(deferred, event);
-      // Over the bound the oldest goes: the newest, which end the burst, stay.
-      if (deferred.size > MAX_DEFERRED)
-        deferred.delete(deferred.keys().next().value!);
       const paneName = name;
       flush ??= setTimeout(
         () => {
