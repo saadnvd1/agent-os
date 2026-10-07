@@ -10,6 +10,7 @@ import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
 import { NewTaskDialog, TasksDialog } from "@/components/Tasks";
 import { MessagesDialog } from "@/components/Bus";
 import { SchedulesDialog } from "@/components/Schedules";
+import { PhoneNotifyDialog } from "@/components/PhoneNotify/PhoneNotifyDialog";
 import { useOpenSession } from "@/hooks/useOpenSession";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
@@ -610,6 +611,7 @@ function HomeContent() {
       )}
       <TasksDialog />
       <SchedulesDialog />
+      <PhoneNotifyDialog />
       <NewTaskDialog />
       <MessagesDialog />
       <DevicesDialog />
