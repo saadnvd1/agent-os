@@ -38,7 +38,9 @@ function Item({ item, respond }: { item: ChatItem; respond: Respond }) {
     case "user":
       return <UserMessage item={item} />;
     case "assistant":
-      return item.text ? <Markdown text={item.text} /> : null;
+      return item.text ? (
+        <Markdown text={item.text} streaming={item.streaming} />
+      ) : null;
     case "reasoning":
       return item.text ? (
         <Text

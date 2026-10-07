@@ -8,19 +8,32 @@ import { htmlBlockText } from "./html";
 import { Inline } from "./Inline";
 import { parseMarkdown } from "./parse";
 
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({
+  text,
+  streaming,
+}: {
+  text: string;
+  streaming?: boolean;
+}) {
   const t = useTheme();
   const tree = parseMarkdown(text);
   return (
     <View style={styles.root}>
-      {tree.children.map((n, i) => block(n, i, t))}
+      {tree.children.map((n, i) =>
+        block(n, i, t, streaming && i === tree.children.length - 1)
+      )}
     </View>
   );
 });
 
 const HEADING = [26, 21, 18, 16, 15, 15];
 
-function block(n: RootContent, key: number, t: Palette): React.ReactNode {
+function block(
+  n: RootContent,
+  key: number,
+  t: Palette,
+  streaming?: boolean
+): React.ReactNode {
   const body = [styles.p, { color: t.foreground }];
   switch (n.type) {
     case "paragraph":
@@ -46,7 +59,14 @@ function block(n: RootContent, key: number, t: Palette): React.ReactNode {
         </Text>
       );
     case "code":
-      return <CodeBlock key={key} code={n.value} lang={n.lang} />;
+      return (
+        <CodeBlock
+          key={key}
+          code={n.value}
+          lang={n.lang}
+          streaming={streaming}
+        />
+      );
     case "blockquote":
       return (
         <View key={key} style={[styles.quote, { borderLeftColor: t.border }]}>

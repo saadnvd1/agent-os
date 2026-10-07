@@ -1,20 +1,32 @@
 import * as Clipboard from "expo-clipboard";
-import { useState } from "react";
+import { Fragment, memo, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { Text } from "~/components/ui/Text";
 import { Icon } from "~/components/ui/Icon";
+import { Text } from "~/components/ui/Text";
 import { haptic } from "~/lib/haptics";
-import { font, radius, space, useTheme } from "~/lib/theme";
+import { font, HIT, radius, space, useTheme } from "~/lib/theme";
+import { highlight, highlightStreaming } from "./highlight/highlight";
+import { ONE_DARK, ONE_LIGHT, tokenColor } from "./highlight/theme";
 
-export function CodeBlock({
-  code,
-  lang,
-}: {
+interface Props {
   code: string;
   lang?: string | null;
-}) {
+  streaming?: boolean;
+}
+
+// A fenced block, as the web draws it: language, copy, highlighted code.
+export const CodeBlock = memo(function CodeBlock({
+  code,
+  lang,
+  streaming,
+}: Props) {
   const t = useTheme();
   const [copied, setCopied] = useState(false);
+  const lines = useMemo(
+    () => (streaming ? highlightStreaming(code, lang) : highlight(code, lang)),
+    [code, lang, streaming]
+  );
+  const colors = t.scheme === "dark" ? ONE_DARK : ONE_LIGHT;
   const copy = async () => {
     await Clipboard.setStringAsync(code);
     haptic.success();
@@ -22,13 +34,13 @@ export function CodeBlock({
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <View style={[styles.wrap, { backgroundColor: t.codeBg }]}>
+    <View style={[styles.wrap, { backgroundColor: t.codeWash }]}>
       <View style={styles.head}>
         <Text style={[styles.lang, { color: t.muted }]}>{lang || "text"}</Text>
         <Pressable
-          accessibilityLabel="Copy code"
+          accessibilityRole="button"
+          accessibilityLabel={copied ? "Copied" : "Copy code"}
           onPress={copy}
-          hitSlop={12}
           style={styles.copy}
         >
           <Icon
@@ -39,35 +51,51 @@ export function CodeBlock({
         </Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <Text selectable style={[styles.code, { color: t.foreground }]}>
-          {code}
+        <Text selectable style={[styles.code, { color: colors.base }]}>
+          {lines.map((line, i) => (
+            <Fragment key={i}>
+              {line.map((tok, j) => (
+                <Text
+                  key={j}
+                  style={{
+                    color: tokenColor(tok.types, colors),
+                    ...(tok.types.includes("comment")
+                      ? { fontFamily: font.mono, fontStyle: "italic" }
+                      : null),
+                  }}
+                >
+                  {tok.text}
+                </Text>
+              ))}
+              {i < lines.length - 1 ? "\n" : null}
+            </Fragment>
+          ))}
         </Text>
       </ScrollView>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
-  wrap: { borderRadius: radius.md, overflow: "hidden" },
+  wrap: { borderRadius: radius.xl, overflow: "hidden" },
   head: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingLeft: space.md,
-    paddingRight: space.xs,
-    minHeight: 32,
+    minHeight: 36,
   },
-  lang: { fontSize: font.size.xs, fontWeight: "500" },
+  lang: { fontFamily: font.mono, fontSize: 11 },
   copy: {
-    width: 36,
-    height: 32,
+    width: HIT,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
   },
   code: {
     fontFamily: font.mono,
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 20,
     paddingHorizontal: space.md,
     paddingBottom: space.md,
   },

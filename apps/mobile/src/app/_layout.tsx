@@ -14,6 +14,7 @@ import {
   GeistMono_500Medium,
   GeistMono_600SemiBold,
   GeistMono_700Bold,
+  GeistMono_400Regular_Italic,
 } from "@expo-google-fonts/geist-mono";
 import { useFonts } from "expo-font";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
@@ -30,7 +31,7 @@ import { useTheme } from "~/lib/theme";
 export const unstable_settings = { initialRouteName: "(tabs)" };
 
 // React Native warns when a socket we already closed reports its close.
-LogBox.ignoreLogs(["Sending `websocketClosed` with no listeners registered"]);
+LogBox.ignoreLogs([/Sending `websocket(Closed|Failed)` with no listeners/]);
 
 // React Query can't see app focus on its own: refetch on return, and pause
 // polling while the app is in the background.
@@ -59,6 +60,7 @@ export default function RootLayout() {
     GeistMono_500Medium,
     GeistMono_600SemiBold,
     GeistMono_700Bold,
+    GeistMono_400Regular_Italic,
   });
   const ready = machinesReady && (fontsLoaded || !!fontError);
   const t = useTheme();

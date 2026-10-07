@@ -23,6 +23,7 @@ export interface Palette {
   termBg: string;
   // foreground at low alpha, as the web layers its quiet surfaces
   wash: string;
+  codeWash: string;
   bubble: string;
   hairline: string;
   running: string;
@@ -51,6 +52,7 @@ export const light: Palette = {
   diffDel: "hsla(352, 80%, 56%, 0.1)",
   termBg: "hsl(240, 18%, 8%)",
   wash: "hsla(240, 12%, 14%, 0.025)",
+  codeWash: "hsla(240, 12%, 14%, 0.04)",
   bubble: "hsla(240, 12%, 14%, 0.07)",
   hairline: "hsla(240, 12%, 14%, 0.06)",
   running: "hsl(142, 71%, 45%)",
@@ -79,6 +81,7 @@ export const dark: Palette = {
   diffDel: "hsla(352, 85%, 62%, 0.14)",
   termBg: "hsl(0, 0%, 0%)",
   wash: "hsla(240, 10%, 93%, 0.025)",
+  codeWash: "hsla(240, 10%, 93%, 0.04)",
   bubble: "hsla(240, 10%, 93%, 0.07)",
   hairline: "hsla(240, 10%, 93%, 0.06)",
   running: "hsl(142, 71%, 45%)",

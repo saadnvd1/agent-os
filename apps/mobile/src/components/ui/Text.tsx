@@ -40,9 +40,16 @@ export function withFont(style: TextProps["style"]): TextProps["style"] {
     flat.fontFamily === undefined
   )
     return style;
-  const faces = flat.fontFamily === font.mono ? MONO : SANS;
-  const { fontWeight, ...rest } = flat;
-  return { ...rest, fontFamily: faces[weightOf(fontWeight)] };
+  const mono = flat.fontFamily === font.mono;
+  const { fontWeight, fontStyle, ...rest } = flat;
+  // Only Geist Mono's regular italic is loaded: it's what code comments use.
+  if (mono && fontStyle === "italic")
+    return { ...rest, fontFamily: "GeistMono_400Regular_Italic" };
+  return {
+    ...rest,
+    fontStyle,
+    fontFamily: (mono ? MONO : SANS)[weightOf(fontWeight)],
+  };
 }
 
 export const Text = forwardRef<RNText, TextProps>(function Text(
