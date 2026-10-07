@@ -81,6 +81,39 @@ describe("leaving", () => {
     await expect(exportTask(id, "box")).rejects.toThrow(/already moved/);
   });
 
+  it("pushes a branch whose pushed commits the agent rewrote, but never over someone else's push", async () => {
+    const { id, cwd } = await seedTask("feature/amended");
+    await exportTask(id, "box");
+    markMoved(id, "box");
+    db.prepare(
+      `UPDATE sessions SET task_status = 'running', moved_to = NULL WHERE id = ?`
+    ).run(id);
+    // The agent folds the pushed wip commit into its own.
+    git(cwd, "commit", "-q", "--amend", "-m", "feat: the real change");
+    await expect(exportTask(id, "box")).resolves.toMatchObject({ moveId: id });
+    git(f.repo, "fetch", "-q", "origin");
+    expect(
+      git(f.repo, "log", "-1", "--format=%s", "origin/feature/amended")
+    ).toBe("feat: the real change");
+
+    // Someone else pushes to it; this machine hasn't seen that.
+    const other = path.join(f.tmp, "other-clone");
+    git(f.tmp, "clone", "-q", "-b", "feature/amended", f.origin, other);
+    fs.writeFileSync(path.join(other, "theirs.txt"), "x\n");
+    git(other, "add", "-A");
+    git(other, "commit", "-q", "-m", "theirs");
+    git(other, "push", "-q", "origin", "feature/amended");
+    db.prepare(
+      `UPDATE sessions SET task_status = 'running', moved_to = NULL WHERE id = ?`
+    ).run(id);
+    git(cwd, "commit", "-q", "--amend", "-m", "feat: reworded again");
+    await expect(exportTask(id, "box")).rejects.toThrow(/stale info|rejected/);
+    git(f.repo, "fetch", "-q", "origin");
+    expect(
+      git(f.repo, "log", "-1", "--format=%s", "origin/feature/amended")
+    ).toBe("theirs");
+  });
+
   it("a failed export resumes the agent here", async () => {
     const { id, cwd } = await seedTask("feature/nopush");
     // Worktrees share the repo's config: put origin back for the next tests.
@@ -141,6 +174,23 @@ describe("arriving", () => {
       cwd: fs.realpathSync(cwd),
       resume: CLAUDE_ID,
     });
+  });
+
+  it("brings a reused worktree to a branch rewritten elsewhere, keeping the old tip", async () => {
+    const { id, cwd } = await seedTask("feature/rewritten");
+    const bundle = await exportTask(id, "box");
+    markMoved(id, "box");
+    const oldTip = git(cwd, "rev-parse", "HEAD");
+    // Elsewhere, the agent reworded the pushed wip commit.
+    const other = path.join(f.tmp, "rewriter");
+    git(f.tmp, "clone", "-q", "-b", "feature/rewritten", f.origin, other);
+    git(other, "commit", "-q", "--amend", "-m", "feat: reworded");
+    git(other, "push", "-q", "-f", "origin", "feature/rewritten");
+    await importTask(bundle);
+    expect(git(cwd, "log", "-1", "--format=%s")).toBe("feat: reworded");
+    expect(
+      git(f.repo, "rev-parse", "refs/agentos/before-move/feature/rewritten")
+    ).toBe(oldTip);
   });
 
   it("makes a fresh worktree and rewrites the conversation to it", async () => {

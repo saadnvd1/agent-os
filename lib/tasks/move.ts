@@ -46,6 +46,32 @@ export async function claudeIdFor(session: Session): Promise<string | null> {
 }
 
 /**
+ * The task's own branch, as its agent left it. An agent that reworded or
+ * squashed commits it had pushed (the wip one a move makes, say) needs a
+ * force; the lease is what this machine last saw there, so anything someone
+ * else pushed since is never overwritten.
+ */
+async function pushOwnBranch(cwd: string, branch: string): Promise<void> {
+  const ref = `refs/heads/${branch}`;
+  const seen = await git(
+    cwd,
+    "rev-parse",
+    "--verify",
+    "-q",
+    `refs/remotes/origin/${branch}`
+  ).catch(() => "");
+  await git(
+    cwd,
+    "push",
+    "-q",
+    "-u",
+    `--force-with-lease=${ref}:${seen.trim()}`,
+    "origin",
+    `HEAD:${ref}`
+  );
+}
+
+/**
  * running -> moving (fresh), or a retry of a move to the same machine that
  * didn't finish. Never a retry to another machine: the first may have
  * arrived, and then it would run on both.
@@ -99,14 +125,7 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
         `wip: moving to ${to}`
       );
     }
-    await git(
-      cwd,
-      "push",
-      "-q",
-      "-u",
-      "origin",
-      `HEAD:refs/heads/${session.branch_name}`
-    );
+    await pushOwnBranch(cwd, session.branch_name);
 
     const claudeId = await claudeIdFor(session);
     const transcript = claudeId ? await readTranscript(cwd, claudeId) : null;

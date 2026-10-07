@@ -1,7 +1,7 @@
 /**
  * A worktree for a branch that already exists on origin, for a task arriving
  * from another machine. A task moving back finds its old worktree still on
- * the branch and fast-forwards it rather than making a second one.
+ * the branch and brings it to the branch rather than making a second one.
  */
 
 import fs from "fs";
@@ -57,7 +57,17 @@ export async function checkoutBranchWorktree(
       throw new Error(
         `${existing} has uncommitted changes; commit or discard them first`
       );
-    await git(existing, "merge", "--ff-only", `origin/${branch}`);
+    // It was pushed when the task left; the agent elsewhere may have
+    // reworded those commits since. Keep the old tip under a ref, then match
+    // the branch.
+    const head = (await git(existing, "rev-parse", "HEAD")).trim();
+    await git(
+      projectPath,
+      "update-ref",
+      `refs/agentos/before-move/${branch}`,
+      head
+    );
+    await git(existing, "reset", "-q", "--hard", `origin/${branch}`);
     return { worktreePath: existing, reused: true };
   }
   if (existing) await git(projectPath, "worktree", "prune");
