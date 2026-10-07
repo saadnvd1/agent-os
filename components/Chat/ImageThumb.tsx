@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 // An image in the conversation: a thumbnail that opens full size. One that
-// fails to load (a file since deleted) shows nothing.
+// fails to load is tried once more a few seconds later (an agent often names
+// a file before writing it), then shows nothing.
 export function ImageThumb({
   src,
   alt = "",
@@ -16,21 +17,30 @@ export function ImageThumb({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [broken, setBroken] = useState(false);
-  if (broken) return null;
+  // 0 loading or shown, 1 waiting to retry, 2 retrying, 3 gone.
+  const [stage, setStage] = useState(0);
+  if (stage === 3) return null;
+  const shown =
+    stage === 2 ? `${src}${src.includes("?") ? "&" : "?"}retry=1` : src;
+  const onError = () => {
+    if (stage !== 0) return setStage(3);
+    setStage(1);
+    setTimeout(() => setStage(2), 3000);
+  };
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label={alt ? `View ${alt}` : "View image"}
-        className={cn("inline-block", className)}
+        className={cn("inline-block", stage === 1 && "hidden", className)}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
+          key={shown}
+          src={shown}
           alt={alt}
-          onError={() => setBroken(true)}
+          onError={onError}
           className="m-0 max-h-40 rounded-xl object-cover"
         />
       </button>

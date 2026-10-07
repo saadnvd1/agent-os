@@ -21,10 +21,6 @@ import {
 import { previewHtml } from "./preview";
 
 export const VISUALS_SERVER = "visuals";
-export const VISUALS_TOOLS = [
-  `mcp__${VISUALS_SERVER}__html_preview`,
-  `mcp__${VISUALS_SERVER}__html_render`,
-];
 
 export const MIN_FRAME_HEIGHT = 120;
 export const MAX_FRAME_HEIGHT = 1200;

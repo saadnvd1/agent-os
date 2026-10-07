@@ -23,12 +23,13 @@ export interface PreviewResult {
 // The page loads from this made-up origin, served from memory, never from a
 // file; `.localhost` keeps it a secure context that may load http resources.
 const PAGE_ORIGIN = "http://agentos-preview.localhost/";
-const PAGE_URL = `${PAGE_ORIGIN}page.html`;
+export const PAGE_URL = `${PAGE_ORIGIN}page.html`;
 const VIEWPORT_HEIGHT = 800;
 const MAX_CAPTURE_HEIGHT = 4000;
 const MAX_CONSOLE = 30;
 const MAX_CONSOLE_TEXT = 500;
 const LOAD_TIMEOUT_MS = 15_000;
+const PREVIEW_TIMEOUT_MS = 45_000;
 
 const LEVELS: Record<string, ConsoleMessage["level"]> = {
   log: "log",
@@ -73,6 +74,20 @@ export function consoleMessage(
   return undefined;
 }
 
+// What the preview browser does with each request: the page itself from
+// memory, anything else on its made-up origin empty (a favicon), no other
+// document (the frame never navigates away, no iframes) and nothing but
+// http(s), which goes out through the public-only proxy.
+export function routeRequest(
+  url: string,
+  resourceType?: string
+): "page" | "empty" | "fail" | "continue" {
+  if (url === PAGE_URL) return "page";
+  if (url.startsWith(PAGE_ORIGIN)) return "empty";
+  if (resourceType === "Document" || !/^https?:/i.test(url)) return "fail";
+  return "continue";
+}
+
 const SETTLE =
   "document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))))";
 const MEASURE =
@@ -108,44 +123,27 @@ async function render(
         request: { url: string };
         resourceType?: string;
       };
-      const url = e.request.url;
-      const fail = () =>
-        browser.send(
-          "Fetch.failRequest",
-          { requestId: e.requestId, errorReason: "BlockedByClient" },
-          sid
-        );
-      // The page itself, from memory. The frame never navigates elsewhere,
-      // and nothing but http(s) leaves the browser.
-      if (url === PAGE_URL)
-        return void browser
-          .send(
-            "Fetch.fulfillRequest",
-            {
-              requestId: e.requestId,
-              responseCode: 200,
-              responseHeaders: [
-                { name: "Content-Type", value: "text/html; charset=utf-8" },
-              ],
-              body,
-            },
-            sid
-          )
+      const requestId = e.requestId;
+      const send = (method: string, params: object) =>
+        void browser
+          .send(method, { requestId, ...params }, sid)
           .catch(() => {});
-      // Anything else on the page's own origin (a favicon) is empty.
-      if (url.startsWith(PAGE_ORIGIN))
-        return void browser
-          .send(
-            "Fetch.fulfillRequest",
-            { requestId: e.requestId, responseCode: 204 },
-            sid
-          )
-          .catch(() => {});
-      if (e.resourceType === "Document" || !/^https?:/i.test(url))
-        return void fail().catch(() => {});
-      return void browser
-        .send("Fetch.continueRequest", { requestId: e.requestId }, sid)
-        .catch(() => {});
+      switch (routeRequest(e.request.url, e.resourceType)) {
+        case "page":
+          return send("Fetch.fulfillRequest", {
+            responseCode: 200,
+            responseHeaders: [
+              { name: "Content-Type", value: "text/html; charset=utf-8" },
+            ],
+            body,
+          });
+        case "empty":
+          return send("Fetch.fulfillRequest", { responseCode: 204 });
+        case "fail":
+          return send("Fetch.failRequest", { errorReason: "BlockedByClient" });
+        case "continue":
+          return send("Fetch.continueRequest", {});
+      }
     }
     const m = consoleMessage(method, params);
     if (!m) return;
@@ -242,16 +240,25 @@ export async function previewHtml(
   const width = Math.min(1600, Math.max(240, Math.round(opts.width ?? 720)));
   const proxy = await startPublicProxy();
   let browser: Browser | undefined;
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("the preview timed out")),
+      PREVIEW_TIMEOUT_MS
+    );
+  });
   try {
-    browser = await launchChrome(executable, proxy.port);
-    const b = browser;
+    const b = await Promise.race([
+      launchChrome(executable, proxy.port),
+      deadline,
+    ]);
+    browser = b;
     return await Promise.race([
       render(b, html, width, opts.appearance !== "light"),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("the preview timed out")), 40_000)
-      ),
+      deadline,
     ]);
   } finally {
+    clearTimeout(timer);
     browser?.close();
     await proxy.close();
   }

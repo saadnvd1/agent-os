@@ -70,12 +70,14 @@ export function listArtifacts(sessionId: string): Artifact[] {
 }
 
 // The page's HTML, read only from inside the artifacts folder.
-export function readArtifactHtml(artifact: Artifact): string | null {
+export async function readArtifactHtml(
+  artifact: Artifact
+): Promise<string | null> {
   const root = path.resolve(artifactsDir());
   const file = path.resolve(artifact.path);
   if (!file.startsWith(root + path.sep)) return null;
   try {
-    return fs.readFileSync(file, "utf8");
+    return await fs.promises.readFile(file, "utf8");
   } catch {
     return null;
   }

@@ -56,13 +56,13 @@ const components: Components = {
     );
   },
   img({ src, alt }) {
-    if (typeof src !== "string") return null;
+    if (typeof src === "string" && imageType(src))
+      return (
+        <ImageThumb src={imageUrl(src)} alt={alt ?? ""} className="my-1" />
+      );
     return (
-      <ImageThumb
-        src={imageType(src) ? imageUrl(src) : src}
-        alt={alt ?? ""}
-        className="my-1"
-      />
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={typeof src === "string" ? src : undefined} alt={alt ?? ""} />
     );
   },
   code({ className, children }) {

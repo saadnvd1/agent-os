@@ -20,14 +20,14 @@ beforeAll(() => {
 });
 
 describe("artifacts", () => {
-  it("saves the page as a file in the session's folder, with a row", () => {
+  it("saves the page as a file in the session's folder, with a row", async () => {
     const session = randomUUID();
     const a = createArtifact(session, "  Sales\n by month ", "<p>hi</p>");
     expect(a.title).toBe("Sales by month");
     expect(a.path).toBe(path.join(artifactsDir(), session, `${a.id}.html`));
     expect(fs.readFileSync(a.path, "utf8")).toBe("<p>hi</p>");
     expect(getArtifact(a.id)).toEqual(a);
-    expect(readArtifactHtml(a)).toBe("<p>hi</p>");
+    expect(await readArtifactHtml(a)).toBe("<p>hi</p>");
   });
 
   it("lists a session's artifacts oldest first, and only its own", () => {
@@ -41,12 +41,12 @@ describe("artifacts", () => {
     ]);
   });
 
-  it("refuses an id that isn't a uuid, and a path outside the folder", () => {
+  it("refuses an id that isn't a uuid, and a path outside the folder", async () => {
     expect(getArtifact("../../etc/passwd")).toBeUndefined();
     const a = createArtifact(randomUUID(), "x", "x");
-    expect(readArtifactHtml({ ...a, path: "/etc/hosts" })).toBeNull();
+    expect(await readArtifactHtml({ ...a, path: "/etc/hosts" })).toBeNull();
     expect(
-      readArtifactHtml({ ...a, path: `${artifactsDir()}-evil/x.html` })
+      await readArtifactHtml({ ...a, path: `${artifactsDir()}-evil/x.html` })
     ).toBeNull();
   });
 

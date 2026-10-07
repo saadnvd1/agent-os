@@ -16,7 +16,6 @@ import { listItems, saveItem, settle } from "../store";
 import {
   VISUALS_BRIEF,
   VISUALS_SERVER,
-  VISUALS_TOOLS,
   visualsTools,
 } from "../../artifacts/tools";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
@@ -46,7 +45,8 @@ export class ChatHost {
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
     const cwd = session.working_directory.replace(/^~/, os.homedir());
     const env = agentEnv(session.id);
-    // Every chat can show visuals, without asking. Not an orchestrator: it
+    // Every chat can show visuals, asked for like any tool under its access
+    // setting (they read files and reach the web). Not an orchestrator: it
     // reads other sessions' text, and a browser would be a way out for it.
     const visuals =
       session.role === "orchestrator"
@@ -78,9 +78,7 @@ export class ChatHost {
       mcpServers: visuals
         ? { ...extras.mcpServers, [VISUALS_SERVER]: visuals }
         : extras.mcpServers,
-      allowedTools: visuals
-        ? [...(extras.allowedTools ?? []), ...VISUALS_TOOLS]
-        : extras.allowedTools,
+      allowedTools: extras.allowedTools,
       disallowedTools: extras.disallowedTools,
       permissionMode: extras.permissionMode,
     });

@@ -68,6 +68,8 @@ export function findChrome(): string | undefined {
   return playwrightShell();
 }
 
+const START_TIMEOUT_MS = 15_000;
+
 type Listener = (method: string, params: unknown, sessionId?: string) => void;
 
 export interface Browser {
@@ -197,7 +199,21 @@ export function launchChrome(
       cleanup();
       reject(e);
     });
-    // Ready once it answers.
-    browser.send("Browser.getVersion").then(() => resolve(browser), reject);
+    // Ready once it answers; one that never does is killed, not waited on.
+    const timer = setTimeout(() => {
+      browser.close();
+      reject(new Error("the browser did not start within 15s"));
+    }, START_TIMEOUT_MS);
+    browser.send("Browser.getVersion").then(
+      () => {
+        clearTimeout(timer);
+        resolve(browser);
+      },
+      (e) => {
+        clearTimeout(timer);
+        browser.close();
+        reject(e);
+      }
+    );
   });
 }

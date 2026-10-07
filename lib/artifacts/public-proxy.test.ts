@@ -6,30 +6,44 @@ import {
   startPublicProxy,
 } from "./public-proxy";
 
-// A SOCKS5 CONNECT to host:port through the proxy; resolves the reply code.
-function connectThrough(proxyPort: number, host: string, port: number) {
+// A SOCKS5 request through the proxy: resolves the reply's code, or the
+// method byte when the greeting is refused.
+function socks(
+  proxyPort: number,
+  address: Buffer,
+  port: number,
+  { command = 1, methods = [0] } = {}
+) {
   return new Promise<number>((resolve, reject) => {
     const s = net.connect(proxyPort, "127.0.0.1");
-    let stage = 0;
+    let greeted = false;
     s.on("data", (d) => {
-      if (stage === 0) {
-        stage = 1;
-        const name = Buffer.from(host);
-        const req = Buffer.concat([
-          Buffer.from([5, 1, 0, 3, name.length]),
-          name,
-          Buffer.from([port >> 8, port & 0xff]),
-        ]);
-        s.write(req);
+      if (!greeted && d[1] === 0) {
+        greeted = true;
+        s.write(
+          Buffer.concat([
+            Buffer.from([5, command, 0]),
+            address,
+            Buffer.from([port >> 8, port & 0xff]),
+          ])
+        );
       } else {
         resolve(d[1]);
         s.destroy();
       }
     });
     s.on("error", reject);
-    s.write(Buffer.from([5, 1, 0]));
+    s.write(Buffer.from([5, methods.length, ...methods]));
   });
 }
+
+const byName = (host: string) =>
+  Buffer.concat([Buffer.from([3, host.length]), Buffer.from(host)]);
+const ipv4 = (a: string) => Buffer.from([1, ...a.split(".").map(Number)]);
+const ipv6Loopback = Buffer.from([4, ...Array(15).fill(0), 1]);
+
+const connectThrough = (proxyPort: number, host: string, port: number) =>
+  socks(proxyPort, byName(host), port);
 
 describe("the preview's proxy", () => {
   it("counts loopback, private, link-local, CGNAT and mapped addresses as local", () => {
@@ -66,8 +80,30 @@ describe("the preview's proxy", () => {
     try {
       expect(await connectThrough(proxy.port, "127.0.0.1", port)).toBe(2);
       expect(await connectThrough(proxy.port, "localhost", port)).toBe(2);
+      expect(await socks(proxy.port, ipv4("127.0.0.1"), port)).toBe(2);
+      expect(await socks(proxy.port, ipv4("192.168.1.1"), 80)).toBe(2);
+      expect(await socks(proxy.port, ipv6Loopback, port)).toBe(2);
     } finally {
       target.close();
+      await proxy.close();
+    }
+  });
+
+  it("refuses anything but CONNECT, and clients that want authentication", async () => {
+    const proxy = await startPublicProxy();
+    try {
+      // BIND and UDP ASSOCIATE.
+      expect(await socks(proxy.port, ipv4("1.1.1.1"), 80, { command: 2 })).toBe(
+        7
+      );
+      expect(await socks(proxy.port, ipv4("1.1.1.1"), 80, { command: 3 })).toBe(
+        7
+      );
+      // Username/password only: no acceptable method.
+      expect(
+        await socks(proxy.port, ipv4("1.1.1.1"), 80, { methods: [2] })
+      ).toBe(0xff);
+    } finally {
       await proxy.close();
     }
   });

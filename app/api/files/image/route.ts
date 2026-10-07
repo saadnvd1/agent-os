@@ -5,7 +5,7 @@ import { IMAGE_CSP } from "@/lib/artifacts/serve";
 // GET /api/files/image?path=... - an image file an agent wrote, to show in
 // chat. Images only; SVG is served sandboxed.
 export async function GET(request: NextRequest) {
-  const image = readImage(request.nextUrl.searchParams.get("path") ?? "");
+  const image = await readImage(request.nextUrl.searchParams.get("path") ?? "");
   if (!image)
     return NextResponse.json({ error: "Image not found" }, { status: 404 });
   return new NextResponse(new Uint8Array(image.data), {

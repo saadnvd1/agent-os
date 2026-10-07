@@ -70,13 +70,13 @@ async function startHost(role = "agent") {
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 describe("ChatHost", () => {
-  it("gives every chat the visuals tools, allowed without asking", async () => {
+  it("gives every chat the visuals tools, approved like any other", async () => {
     const { host } = await startHost();
     expect(Object.keys(started?.mcpServers ?? {})).toContain("visuals");
-    expect(started?.allowedTools).toEqual([
-      "mcp__visuals__html_preview",
-      "mcp__visuals__html_render",
-    ]);
+    // Not pre-approved: under "ask" they wait for the reader like Read does.
+    expect(started?.allowedTools ?? []).not.toContainEqual(
+      expect.stringContaining("visuals")
+    );
     expect(started?.systemAppend).toMatch(/## Showing visuals/);
     host.close();
   });
