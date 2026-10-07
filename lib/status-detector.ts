@@ -31,9 +31,13 @@ const BUSY_INDICATORS = [
   "esc to interrupt",
   "(esc to interrupt)",
   "· esc to interrupt",
+  // OpenCode's footer while it works.
+  "esc interrupt",
 ];
 
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+const SPINNER_LABEL = new RegExp(`(?:${SPINNER_CHARS.join("|")}) [A-Z][a-z]+`);
 
 const WHIMSICAL_WORDS = [
   "accomplishing",
@@ -139,7 +143,10 @@ const WAITING_PATTERNS = [
   /\(yes\/no\)/i,
   /Do you want to/i,
   /Enter to confirm.*Esc to cancel/i,
-  /[>❯]\s*1\.\s*Yes/,
+  /[>❯›]\s*1\.\s*Yes/,
+  // OpenCode's permission prompt.
+  /Permission required/,
+  /Allow once\s+Allow always\s+Reject/,
   // Claude Code's permission prompt, whose options can wrap past the window.
   /Esc to cancel · Tab to amend/,
   /Yes, allow all/i,
@@ -234,6 +241,10 @@ export function checkBusyIndicators(content: string): boolean {
   // Check spinners in last 5 lines
   const last5 = lines.slice(-5).join("");
   if (SPINNER_CHARS.some((s) => last5.includes(s))) return true;
+
+  // A spinner labelling what it does ("⠋ Working...", "⠹ Thinking") sits
+  // above the input box and footer in Pi and OpenCode.
+  if (SPINNER_LABEL.test(lines.slice(-14).join("\n"))) return true;
 
   return false;
 }
