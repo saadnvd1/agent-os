@@ -1,18 +1,8 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { db } from "@/lib/db";
 import { git, makeRepo } from "@/lib/done/testing";
-import type { FindPROpts } from "./gh";
-import {
-  fakeFindPR,
-  fakePR,
-  LONG_AGO,
-  seedTask,
-  taskRow,
-  type FakePR,
-} from "./testing";
-
-const prs = new Map<string, FakePR>();
-const lookups: ({ branch: string } & FindPROpts)[] = [];
+import { seedTask, taskRow } from "./testing";
 
 // No tmux here, and the test's worktrees aren't under ~/.agent-os.
 vi.mock("@/lib/hosts", async (importOriginal) => ({
@@ -23,17 +13,8 @@ vi.mock("@/lib/worktrees", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/worktrees")>()),
   isAgentOSWorktree: () => true,
 }));
-vi.mock("./gh", async (importOriginal) => {
-  const find = fakeFindPR(prs, lookups);
-  return {
-    ...(await importOriginal<typeof import("./gh")>()),
-    findPR: find,
-    findPRStrict: find,
-  };
-});
 
 const { PATCH } = await import("@/app/api/sessions/[id]/route");
-const { prFor } = await import("./session");
 
 const rename = (id: string, name: string) =>
   PATCH(
@@ -44,13 +25,15 @@ const rename = (id: string, name: string) =>
     { params: Promise.resolve({ id }) }
   );
 
-beforeEach(() => {
-  prs.clear();
-  lookups.length = 0;
-});
+// A worktree session that isn't a task.
+function seedSession(repo: string, branch: string, worktree: string) {
+  const s = seedTask(repo, branch, worktree);
+  db.prepare(`UPDATE sessions SET task_status = NULL WHERE id = ?`).run(s.id);
+  return s.id;
+}
 
-describe("renaming a task through the API", () => {
-  it("moves the row's branch with the git branch, and finds its PR at once", async () => {
+describe("renaming a session through the API", () => {
+  it("never renames a task's branch", async () => {
     const r = makeRepo();
     const wt = r.worktree("feature/read-and-execute-the-brief-at-2582");
     const task = seedTask(
@@ -58,40 +41,44 @@ describe("renaming a task through the API", () => {
       "feature/read-and-execute-the-brief-at-2582",
       wt.dir
     );
-    // A poll before the rename caches "no PR" for the old branch.
-    expect(await prFor(task)).toBeNull();
 
     const res = await rename(task.id, "Schedules: message a session + notify");
     expect(res.status).toBe(200);
     expect(git(wt.dir, "branch", "--show-current")).toBe(
-      "feature/schedules-message-a-session-notify"
+      "feature/read-and-execute-the-brief-at-2582"
     );
-    expect(taskRow(task.id).branch_name).toBe(
-      "feature/schedules-message-a-session-notify"
-    );
-
-    // The cached answer was for the old branch: the next poll asks again.
-    prs.set(
-      "feature/schedules-message-a-session-notify",
-      fakePR(114, { head: wt.head })
-    );
-    expect((await prFor(taskRow(task.id)))?.number).toBe(114);
+    expect(taskRow(task.id)).toMatchObject({
+      name: "Schedules: message a session + notify",
+      branch_name: "feature/read-and-execute-the-brief-at-2582",
+    });
   });
 
-  it("doesn't link a PR the new name had before the task", async () => {
+  it("renames an unpushed session branch and moves the row with it", async () => {
     const r = makeRepo();
-    const wt = r.worktree("feature/old-name");
-    const task = seedTask(r.repo, "feature/old-name", wt.dir);
-    prs.set(
-      "feature/fix-login-bug",
-      fakePR(12, { state: "MERGED", createdAt: LONG_AGO })
-    );
+    const wt = r.worktree("feature/session-3");
+    const id = seedSession(r.repo, "feature/session-3", wt.dir);
 
-    await rename(task.id, "Fix login bug");
-    expect(taskRow(task.id).branch_name).toBe("feature/fix-login-bug");
-    expect(await prFor(taskRow(task.id), true)).toBeNull();
-    expect(await prFor(taskRow(task.id), true)).toBeNull();
-    expect(taskRow(task.id).pr_number).toBeNull();
+    expect((await rename(id, "Try the new parser")).status).toBe(200);
+    expect(git(wt.dir, "branch", "--show-current")).toBe(
+      "feature/try-the-new-parser"
+    );
+    expect(taskRow(id).branch_name).toBe("feature/try-the-new-parser");
+  });
+
+  it("keeps a pushed branch's name, so its PR stays open", async () => {
+    const r = makeRepo();
+    const wt = r.worktree("feature/pushed", { "a.txt": "a\n" });
+    const id = seedSession(r.repo, "feature/pushed", wt.dir);
+
+    expect((await rename(id, "Something else")).status).toBe(200);
+    expect(git(wt.dir, "branch", "--show-current")).toBe("feature/pushed");
+    expect(git(r.repo, "ls-remote", "--heads", "origin")).toContain(
+      "refs/heads/feature/pushed"
+    );
+    expect(taskRow(id)).toMatchObject({
+      name: "Something else",
+      branch_name: "feature/pushed",
+    });
   });
 
   it("keeps the row's branch when git couldn't rename it", async () => {
@@ -99,11 +86,11 @@ describe("renaming a task through the API", () => {
     const wt = r.worktree("feature/old-name");
     // The name the rename would pick is taken.
     git(r.repo, "branch", "feature/taken", "main");
-    const task = seedTask(r.repo, "feature/old-name", wt.dir);
+    const id = seedSession(r.repo, "feature/old-name", wt.dir);
 
-    expect((await rename(task.id, "Taken")).status).toBe(200);
+    expect((await rename(id, "Taken")).status).toBe(200);
     expect(git(wt.dir, "branch", "--show-current")).toBe("feature/old-name");
-    expect(taskRow(task.id)).toMatchObject({
+    expect(taskRow(id)).toMatchObject({
       name: "Taken",
       branch_name: "feature/old-name",
     });

@@ -41,7 +41,9 @@ beforeEach(() => {
 describe("prFor after the task's branch was renamed", () => {
   it("finds the PR on the renamed branch and stores the branch and PR", async () => {
     const r = makeRepo();
-    const wt = r.worktree("feature/read-and-execute-the-brief-at-2582");
+    const wt = r.worktree("feature/read-and-execute-the-brief-at-2582", {
+      "work.txt": "task work\n",
+    });
     const task = seedTask(
       r.repo,
       "feature/read-and-execute-the-brief-at-2582",
@@ -65,7 +67,7 @@ describe("prFor after the task's branch was renamed", () => {
 
   it("repairs a stale row even before the branch has a PR", async () => {
     const r = makeRepo();
-    const wt = r.worktree("feature/old");
+    const wt = r.worktree("feature/old", { "work.txt": "task work\n" });
     const task = seedTask(r.repo, "feature/old", wt.dir);
     git(wt.dir, "branch", "-m", "feature/mobile-app-expo");
 
@@ -228,7 +230,7 @@ describe("prFor after the task's branch was renamed", () => {
 
   it("takes a newer PR on the task's branch over a closed one", async () => {
     const r = makeRepo();
-    const wt = r.worktree("feature/mine");
+    const wt = r.worktree("feature/mine", { "work.txt": "task work\n" });
     const task = seedTask(r.repo, "feature/mine", wt.dir);
     db.prepare(`UPDATE sessions SET pr_number = 150 WHERE id = ?`).run(task.id);
     prs.set("feature/mine", fakePR(151, { head: wt.head }));
@@ -266,7 +268,7 @@ describe("prFor after the task's branch was renamed", () => {
 
   it("finds a merged PR on an unrenamed branch as before", async () => {
     const r = makeRepo();
-    const wt = r.worktree("feature/same");
+    const wt = r.worktree("feature/same", { "work.txt": "task work\n" });
     const task = seedTask(r.repo, "feature/same", wt.dir);
     prs.set("feature/same", fakePR(6, { state: "MERGED", head: wt.head }));
 

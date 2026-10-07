@@ -49,13 +49,8 @@ async function worktreeBranch(session: Session): Promise<string | null> {
   }
 }
 
-const hasBranch = (dir: string, branch: string) =>
-  run(
-    "git",
-    ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`],
-    dir,
-    5000
-  ).then(
+const hasRef = (dir: string, ref: string) =>
+  run("git", ["rev-parse", "--verify", "--quiet", ref], dir, 5000).then(
     () => true,
     // Exit 1 is "no such branch"; a timeout or a lock isn't an answer.
     (e: { code?: unknown }) => e?.code !== 1
@@ -70,7 +65,10 @@ async function renamedBranch(session: Session): Promise<string | null> {
   const old = session.branch_name;
   if (!current || current === old || !isBranchName(current)) return null;
   if (current === session.base_branch) return null;
-  if (old && (await hasBranch(expandHome(session.worktree_path!), old)))
+  if (
+    old &&
+    (await hasRef(expandHome(session.worktree_path!), `refs/heads/${old}`))
+  )
     return null;
   const owned = db
     .prepare(`SELECT 1 FROM sessions WHERE branch_name = ? AND id != ?`)
@@ -93,21 +91,31 @@ function moveBranch(session: Session, branch: string): void {
   session.branch_name = branch;
 }
 
-// The PR's head is in the task's worktree history: the task's own work. A
-// worktree that's gone can't say, and the task's PR was linked by then.
-async function ownWork(session: Session, sha?: string): Promise<boolean> {
+// git merge-base --is-ancestor: exit 0 yes, 1 no, anything else can't say.
+const isAncestor = (dir: string, sha: string, ref: string) =>
+  run("git", ["merge-base", "--is-ancestor", sha, ref], dir, 5000).then(
+    () => true as const,
+    (e: { code?: unknown }) => (e?.code === 1 ? (false as const) : null)
+  );
+
+// Whether the PR's head is the task's own work: on its branch and not
+// already on the base (someone else's PR the task rebased onto). null when
+// git can't say. A worktree that's gone can't either, and the task's PR was
+// linked by then.
+async function ownWork(
+  session: Session,
+  branch: string,
+  sha?: string
+): Promise<boolean | null> {
   const dir = localWorktree(session);
   if (!dir) return true;
   if (!sha || !/^[0-9a-f]{7,40}$/.test(sha)) return false;
-  return run(
-    "git",
-    ["merge-base", "--is-ancestor", sha, "HEAD"],
-    dir,
-    5000
-  ).then(
-    () => true,
-    () => false
-  );
+  const mine = await isAncestor(dir, sha, `refs/heads/${branch}`);
+  if (mine !== true || !session.base_branch) return mine;
+  const base = `refs/remotes/origin/${session.base_branch}`;
+  if (!(await hasRef(dir, base))) return true;
+  const onBase = await isAncestor(dir, sha, base);
+  return onBase === null ? null : !onBase;
 }
 
 // sqlite's "2026-10-07 11:00:00" (UTC) as ISO.
@@ -144,16 +152,15 @@ export async function prFor(
   // A PR becomes the task's only if its head is the task's work; a rename
   // onto a branch with someone else's PR is not followed.
   let refused = false;
-  if (
-    pr &&
-    pr.number !== session.pr_number &&
-    !(await ownWork(session, pr.head))
-  ) {
-    console.warn(
-      `[tasks] ${session.id.slice(0, 8)}: PR #${pr.number} on ${branch} isn't the task's work; not linked`
-    );
-    pr = null;
-    refused = true;
+  if (pr && pr.number !== session.pr_number) {
+    const own = await ownWork(session, branch, pr.head);
+    if (own !== true) {
+      const msg = `PR #${pr.number} on ${branch} ${own === false ? "isn't the task's work" : "can't be checked against its worktree"}; not linked`;
+      if (strict) throw new Error(msg);
+      console.warn(`[tasks] ${session.id.slice(0, 8)}: ${msg}`);
+      pr = null;
+      refused = true;
+    }
   }
   if (renamed && !refused) moveBranch(session, renamed);
   prCache.set(session.id, { at: Date.now(), pr });
