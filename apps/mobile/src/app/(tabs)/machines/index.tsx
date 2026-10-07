@@ -59,7 +59,15 @@ export default function MachinesScreen() {
           <OptionRow
             key={m.id}
             label={m.name}
-            detail={`${m.url.replace(/^https?:\/\//, "")} · ${VIA[m.via ?? "device"]}`}
+            detail={[
+              m.url.replace(/^https?:\/\//, ""),
+              m.token ? "Paired" : VIA[m.via ?? "device"],
+              (m.endpoints?.length ?? 0) > 1
+                ? `${m.endpoints!.length} addresses`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             selected={active?.id === m.id}
             onPress={() => setActiveMachine(m.id)}
             onLongPress={() => confirmRemove(m)}

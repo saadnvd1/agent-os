@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { claimCode, probeMachine } from "~/lib/api/pairing";
+import { claimCode, pairTrusted, probeMachine } from "~/lib/api/pairing";
+import { refreshEndpoints } from "~/lib/machines/reach";
 import { haptic } from "~/lib/haptics";
 import { saveMachine, type Machine } from "~/lib/machines/store";
 import {
@@ -28,14 +29,18 @@ export function useConnect() {
     via: NonNullable<Machine["via"]>,
     token?: string
   ) => {
-    await saveMachine({
+    const key =
+      token ?? (await pairTrusted(url, name.trim() || "iPhone")) ?? undefined;
+    const machine = {
       id: url,
       name: machineLabel(url),
       url,
       via,
-      token,
+      token: key,
       addedAt: Date.now(),
-    });
+    };
+    await saveMachine(machine);
+    void refreshEndpoints(machine);
     haptic.success();
     router.replace("/sessions");
   };

@@ -19,3 +19,8 @@ export function claimResponseBody(
   const native = request.wantsToken === true && !request.origin;
   return { device, ...(native ? { token } : {}) };
 }
+
+// Whether the reply also sets the device cookie: only for a browser. A
+// native app keeps its token itself, and a cookie would sit in its shared
+// jar and ride along to other machines on the same host.
+export const claimSetsCookie = (body: ClaimBody) => !body.token;

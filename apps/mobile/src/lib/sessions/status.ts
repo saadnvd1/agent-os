@@ -8,6 +8,7 @@ import { keys } from "~/lib/api/keys";
 import type { Machine } from "~/lib/machines/store";
 import { socketUrl } from "~/lib/machines/url";
 import { openSocket, type SocketState } from "~/lib/ws/socket";
+import { failover } from "~/lib/machines/reach";
 
 export type Statuses = Record<string, RowStatus | undefined>;
 
@@ -27,6 +28,7 @@ export function useStatuses(machine: Machine | null) {
       url: socketUrl(machine.url, "/ws/status"),
       headers: authHeaders(machine),
       onState: setLink,
+      onStuck: () => void failover(machine.id),
       onMessage: (msg) => {
         if (msg.type === "statuses")
           client.setQueryData(keys.statuses(machine.id), {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { claimResponseBody } from "./claim-response";
+import { claimResponseBody, claimSetsCookie } from "./claim-response";
 
 const device = { id: "d1", name: "iPhone" };
 
@@ -29,5 +29,20 @@ describe("claimResponseBody", () => {
     expect(
       claimResponseBody(device, "tok", { wantsToken: "yes", origin: null })
     ).toEqual({ device });
+  });
+});
+
+describe("claimSetsCookie", () => {
+  it("sets the cookie for a browser and never for a native app", () => {
+    const browser = claimResponseBody(device, "tok", {
+      wantsToken: true,
+      origin: "http://localhost:3011",
+    });
+    const native = claimResponseBody(device, "tok", {
+      wantsToken: true,
+      origin: null,
+    });
+    expect(claimSetsCookie(browser)).toBe(true);
+    expect(claimSetsCookie(native)).toBe(false);
   });
 });

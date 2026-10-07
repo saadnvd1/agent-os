@@ -9,6 +9,7 @@ import { authHeaders } from "~/lib/api/client";
 import type { Machine } from "~/lib/machines/store";
 import { socketUrl } from "~/lib/machines/url";
 import { openSocket, type SocketState } from "~/lib/ws/socket";
+import { failover } from "~/lib/machines/reach";
 import { applyChatMessage, EMPTY_CHAT, runningTurn } from "./reducer";
 
 export function useChat(machine: Machine | null, sessionId: string) {
@@ -27,6 +28,7 @@ export function useChat(machine: Machine | null, sessionId: string) {
       ),
       headers: authHeaders(machine),
       onState: setLink,
+      onStuck: () => void failover(machine.id),
       onMessage: dispatch,
     });
     socket.current = s;

@@ -6,7 +6,9 @@ import { createStore } from "~/lib/store";
 export interface Machine {
   id: string;
   name: string;
+  // The address in use; endpoints are every address it answers at.
   url: string;
+  endpoints?: string[];
   // How it let us in the last time: no token on loopback or the tailnet.
   via?: "loopback" | "tailnet" | "device" | "open";
   token?: string;
@@ -80,6 +82,23 @@ export async function saveMachine(machine: Machine): Promise<void> {
   store.set(next);
   await persist(next);
 }
+
+export async function updateMachine(
+  id: string,
+  patch: Partial<Omit<Machine, "id" | "token">>
+): Promise<void> {
+  const prev = store.get();
+  if (!prev.machines.some((m) => m.id === id)) return;
+  const next = {
+    ...prev,
+    machines: prev.machines.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+  };
+  store.set(next);
+  await persist(next);
+}
+
+export const getMachine = (id: string) =>
+  store.get().machines.find((m) => m.id === id) ?? null;
 
 export async function removeMachine(id: string): Promise<void> {
   await SecureStore.deleteItemAsync(tokenKey(id), opts);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { claimCode, probeMachine } from "./pairing";
+import { claimCode, pairTrusted, probeMachine } from "./pairing";
 
 const URL = "http://100.64.0.1:3011";
 
@@ -22,6 +22,25 @@ describe("probeMachine", () => {
       state: "trusted",
       via: "tailnet",
     });
+  });
+
+  it("pairs rather than ride a credential that isn't ours", async () => {
+    vi.stubGlobal(
+      "fetch",
+      answer(200, { devices: [], current: { via: "device" } })
+    );
+    expect(await probeMachine(URL)).toEqual({ state: "needs-pairing" });
+    expect(await probeMachine(URL, "aosd_x")).toEqual({
+      state: "trusted",
+      via: "device",
+    });
+  });
+
+  it("sends no cookies", async () => {
+    const fetch = answer(200, { current: { via: "tailnet" } });
+    vi.stubGlobal("fetch", fetch);
+    await probeMachine(URL);
+    expect(fetch.mock.calls[0][1]?.credentials).toBe("omit");
   });
 
   it("asks to pair on a 401, and sends the token it has", async () => {
@@ -91,5 +110,54 @@ describe("claimCode", () => {
     await expect(claimCode(URL, "code", "iPhone")).rejects.toThrow(
       /wrong, used or expired/
     );
+  });
+});
+
+describe("pairTrusted", () => {
+  it("pairs a phone the machine already trusts and returns the token", async () => {
+    const fetch = vi.fn(
+      async (url: string) =>
+        new Response(
+          JSON.stringify(
+            url.endsWith("/start")
+              ? { code: "C0DE" }
+              : { device: { id: "d1" }, token: "aosd_t" }
+          ),
+          { status: 200 }
+        )
+    );
+    vi.stubGlobal("fetch", fetch);
+    expect(await pairTrusted(URL, "iPhone")).toBe("aosd_t");
+    expect(fetch.mock.calls.map((c) => c[0])).toEqual([
+      `${URL}/api/pair/start`,
+      `${URL}/api/pair/claim`,
+    ]);
+  });
+
+  it("revokes the device it made when an older server keeps the token", async () => {
+    const fetch = vi.fn(
+      async (url: string, init?: RequestInit) =>
+        new Response(
+          JSON.stringify(
+            url.endsWith("/start")
+              ? { code: "C0DE" }
+              : init?.method === "DELETE"
+                ? {}
+                : { device: { id: "d1" } }
+          ),
+          { status: 200 }
+        )
+    );
+    vi.stubGlobal("fetch", fetch);
+    expect(await pairTrusted(URL, "iPhone")).toBeNull();
+    expect(fetch.mock.calls[2]).toEqual([
+      `${URL}/api/devices/d1`,
+      expect.objectContaining({ method: "DELETE" }),
+    ]);
+  });
+
+  it("gives up quietly when the machine won't start a pairing", async () => {
+    vi.stubGlobal("fetch", answer(403, { error: "local only" }));
+    expect(await pairTrusted(URL, "iPhone")).toBeNull();
   });
 });

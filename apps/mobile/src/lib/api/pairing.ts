@@ -18,7 +18,11 @@ export async function probeMachine(
       "/api/devices",
       { timeoutMs: 8000 }
     );
-    return { state: "trusted", via: res.current?.via ?? "device" };
+    const via = res.current?.via ?? "device";
+    // Let in as a device without a token of ours means someone else's
+    // credential (a stray cookie): pair properly instead.
+    if (via === "device" && !token) return { state: "needs-pairing" };
+    return { state: "trusted", via };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401)
       return { state: "needs-pairing" };
@@ -26,6 +30,35 @@ export async function probeMachine(
       state: "unreachable",
       error: err instanceof Error ? err.message : "Can't reach the machine.",
     };
+  }
+}
+
+// A machine that already trusts this phone (loopback, tailnet) still gets
+// it paired, so the token works where trust doesn't reach, like Connect.
+export async function pairTrusted(
+  url: string,
+  name: string
+): Promise<string | null> {
+  try {
+    const { code } = await api<{ code: string }>({ url }, "/api/pair/start", {
+      method: "POST",
+    });
+    const res = await api<{ device: { id: string }; token?: string }>(
+      { url },
+      "/api/pair/claim",
+      {
+        method: "POST",
+        body: { code, name, token: true },
+      }
+    );
+    if (res.token) return res.token;
+    // An older server paired us but kept the token: don't leave that device behind.
+    await api({ url }, `/api/devices/${encodeURIComponent(res.device.id)}`, {
+      method: "DELETE",
+    }).catch(() => {});
+    return null;
+  } catch {
+    return null;
   }
 }
 

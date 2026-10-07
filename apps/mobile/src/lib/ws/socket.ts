@@ -10,6 +10,8 @@ export interface SocketOptions<In> {
   headers: Record<string, string>;
   onMessage: (msg: In) => void;
   onState?: (state: SocketState) => void;
+  // Called once after a few failed attempts in a row: time to try another address.
+  onStuck?: () => void;
 }
 
 type NativeSocket = new (
@@ -48,7 +50,9 @@ export function openSocket<In, Out = unknown>(opts: SocketOptions<In>) {
       if (ws !== socket) return;
       ws = null;
       opts.onState?.("closed");
-      if (!stopped) timer = setTimeout(connect, backoffMs(attempt++));
+      if (stopped) return;
+      if (attempt === 2) opts.onStuck?.();
+      timer = setTimeout(connect, backoffMs(attempt++));
     };
   };
 

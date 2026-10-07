@@ -3,7 +3,10 @@ import { claimPairing } from "@/lib/security/pairing";
 import { REMOTE_HEADER } from "@/lib/security/auth";
 import { rateLimitKey } from "@/lib/security/rate-limit-key";
 import { deviceCookie, isHttps } from "@/lib/security/cookie";
-import { claimResponseBody } from "@/lib/security/claim-response";
+import {
+  claimResponseBody,
+  claimSetsCookie,
+} from "@/lib/security/claim-response";
 
 // POST /api/pair/claim - reachable without a token; trades a code for one.
 // A native app sends `token: true` to get it in the body too.
@@ -32,13 +35,13 @@ export async function POST(request: NextRequest) {
         : "That code is wrong, used or expired. Make a new one.";
     return NextResponse.json({ error }, { status });
   }
-  const res = NextResponse.json(
-    claimResponseBody(
-      { id: result.device.id, name: result.device.name },
-      result.token,
-      { wantsToken: body.token, origin: request.headers.get("origin") }
-    )
+  const reply = claimResponseBody(
+    { id: result.device.id, name: result.device.name },
+    result.token,
+    { wantsToken: body.token, origin: request.headers.get("origin") }
   );
+  const res = NextResponse.json(reply);
+  if (!claimSetsCookie(reply)) return res;
   const secure = isHttps(
     request.nextUrl.protocol === "https:",
     request.headers.get("x-forwarded-proto")

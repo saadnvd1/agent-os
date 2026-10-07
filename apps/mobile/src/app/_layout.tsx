@@ -25,7 +25,12 @@ import { useEffect, useState } from "react";
 import { AppState, LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { loadMachines, useMachines } from "~/lib/machines/store";
+import { refreshEndpoints } from "~/lib/machines/reach";
+import {
+  loadMachines,
+  useActiveMachine,
+  useMachines,
+} from "~/lib/machines/store";
 import { useTheme } from "~/lib/theme";
 
 // A link straight to a session still gets the tabs underneath to go back to.
@@ -66,6 +71,13 @@ export default function RootLayout() {
   });
   const ready = machinesReady && (fontsLoaded || !!fontError);
   const t = useTheme();
+  const active = useActiveMachine();
+  const activeId = active?.id;
+  // Learn the machine's other addresses (tailnet, HTTPS, Connect) once per run.
+  useEffect(() => {
+    if (active) void refreshEndpoints(active);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {});
