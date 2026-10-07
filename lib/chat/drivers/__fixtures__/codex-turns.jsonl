@@ -1,0 +1,23 @@
+{"method":"turn/started","params":{"threadId":"T1","turn":{"id":"U1","items":[],"status":"inProgress","error":null,"startedAt":1790295404}}}
+{"method":"item/started","params":{"item":{"type":"reasoning","id":"rs_1","summary":[],"content":[]},"threadId":"T1","turnId":"U1"}}
+{"method":"item/reasoning/summaryPartAdded","params":{"threadId":"T1","turnId":"U1","itemId":"rs_1","summaryIndex":0}}
+{"method":"item/reasoning/summaryTextDelta","params":{"threadId":"T1","turnId":"U1","itemId":"rs_1","delta":"**Planning**","summaryIndex":0}}
+{"method":"item/completed","params":{"item":{"type":"reasoning","id":"rs_1","summary":["**Planning**"],"content":[]},"threadId":"T1","turnId":"U1"}}
+{"method":"item/started","params":{"item":{"type":"commandExecution","id":"exec-1","command":"/bin/bash -lc \"printf '%s' 'ok' > probe.txt\"","cwd":"/w","status":"inProgress","commandActions":[],"aggregatedOutput":null,"exitCode":null},"threadId":"T1","turnId":"U1"}}
+{"method":"item/commandExecution/requestApproval","id":0,"params":{"kind":"command","threadId":"T1","turnId":"U1","itemId":"exec-1","reason":"May I create probe.txt?","command":"/bin/bash -lc \"printf '%s' 'ok' > probe.txt\"","cwd":"/w"}}
+{"method":"item/completed","params":{"item":{"type":"commandExecution","id":"exec-1","command":"/bin/bash -lc \"printf '%s' 'ok' > probe.txt\"","cwd":"/w","status":"completed","aggregatedOutput":"","exitCode":0},"threadId":"T1","turnId":"U1"}}
+{"method":"item/started","params":{"item":{"type":"fileChange","id":"call_9","changes":[{"path":"/w/a.ts","kind":{"type":"update","move_path":null},"diff":"@@ -1 +1 @@\n-const a = 1;\n+const a = 2;\n"}],"status":"inProgress"},"threadId":"T1","turnId":"U1"}}
+{"method":"item/fileChange/requestApproval","id":1,"params":{"threadId":"T1","turnId":"U1","itemId":"call_9","reason":null,"grantRoot":null}}
+{"method":"item/completed","params":{"item":{"type":"fileChange","id":"call_9","changes":[{"path":"/w/a.ts","kind":{"type":"update","move_path":null},"diff":"@@ -1 +1 @@\n-const a = 1;\n+const a = 2;\n"}],"status":"completed"},"threadId":"T1","turnId":"U1"}}
+{"method":"turn/plan/updated","params":{"threadId":"T1","turnId":"U1","explanation":null,"plan":[{"step":"Write probe","status":"completed"},{"step":"Edit a.ts","status":"inProgress"}]}}
+{"method":"item/started","params":{"item":{"type":"agentMessage","id":"msg_1","text":"","phase":"final_answer"},"threadId":"T1","turnId":"U1"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"T1","turnId":"U1","itemId":"msg_1","delta":"fixture"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"T1","turnId":"U1","itemId":"msg_1","delta":" simple ok"}}
+{"method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"fixture simple ok","phase":"final_answer"},"threadId":"T1","turnId":"U1"}}
+{"method":"thread/tokenUsage/updated","params":{"threadId":"T1","turnId":"U1","tokenUsage":{"total":{"totalTokens":22726,"inputTokens":22438,"cachedInputTokens":22272,"cacheWriteInputTokens":0,"outputTokens":288,"reasoningOutputTokens":155},"last":{"totalTokens":22726,"inputTokens":22438,"cachedInputTokens":22272,"cacheWriteInputTokens":0,"outputTokens":288,"reasoningOutputTokens":155},"modelContextWindow":258400}}}
+{"method":"thread/tokenUsage/updated","params":{"threadId":"T1","turnId":"U1","tokenUsage":{"total":{"totalTokens":45536,"inputTokens":45221,"cachedInputTokens":44544,"cacheWriteInputTokens":0,"outputTokens":315,"reasoningOutputTokens":155},"last":{"totalTokens":22810,"inputTokens":22783,"cachedInputTokens":22272,"cacheWriteInputTokens":0,"outputTokens":27,"reasoningOutputTokens":0},"modelContextWindow":258400}}}
+{"method":"turn/completed","params":{"threadId":"T1","turn":{"id":"U1","items":[],"status":"completed","error":null,"durationMs":4289}}}
+{"method":"turn/started","params":{"threadId":"T1","turn":{"id":"U2","items":[],"status":"inProgress","error":null}}}
+{"method":"item/started","params":{"item":{"type":"commandExecution","id":"exec-2","command":"sleep 30","cwd":"/w","status":"inProgress"},"threadId":"T1","turnId":"U2"}}
+{"method":"thread/status/changed","params":{"threadId":"T1","status":{"type":"idle"}}}
+{"method":"turn/completed","params":{"threadId":"T1","turn":{"id":"U2","items":[],"status":"interrupted","error":null,"durationMs":1544}}}

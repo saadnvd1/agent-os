@@ -141,7 +141,8 @@ export async function setChatAccess(
 }
 
 // An orchestrator's permission mode is fixed by its role.
-const canPlan = (s: Session) => s.role !== "orchestrator";
+const canPlan = (s: Session) =>
+  s.role !== "orchestrator" && chatDriverFor(s.agent_type)?.plan !== false;
 
 // Plan mode: the agent reads and plans, and changes nothing until the plan
 // is carried out. Now if a conversation is live, and for every next start.
