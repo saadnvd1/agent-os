@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -56,6 +57,7 @@ describe("building beside the live server", () => {
     expect(read(".next/BUILD_ID")).toBe("old\n");
     expect(read(".next-build/BUILD_ID")).toBe("new\n");
     expect(read(".next-build/cache/turbopack/db")).toBe("cache\n");
+    expect(read(".next/cache/turbopack/db")).toBe("cache\n");
     expect(read("tsconfig.json")).toBe("original\n");
 
     expect(run("swap_build").status).toBe(0);
@@ -101,5 +103,37 @@ describe("building beside the live server", () => {
     expect(run("rollback_build").status).toBe(0);
     expect(read(".next/BUILD_ID")).toBe("old\n");
     expect(read(".next-prev/BUILD_ID")).toBe("new\n");
+  });
+
+  it("refuses a rollback with no previous build, leaving the live one", () => {
+    for (const prev of [false, true]) {
+      if (prev) mkdirSync(join(dir, ".next-prev"));
+      const rolled = run("rollback_build");
+      expect(rolled.status).toBe(1);
+      expect(rolled.stderr).toContain("no previous build in .next-prev");
+      expect(read(".next/BUILD_ID")).toBe("old\n");
+    }
+  });
+});
+
+describe("the build lock", () => {
+  it("lets one build run at a time and reclaims a dead run's lock", () => {
+    expect(run("acquire_build_lock").status).toBe(0);
+    const second = run("acquire_build_lock");
+    expect(second.status).toBe(1);
+    expect(second.stderr).toContain("Another redeploy is building");
+
+    const old = new Date(Date.now() - 31 * 60_000);
+    utimesSync(join(dir, ".next-build.lock"), old, old);
+    expect(run("acquire_build_lock").status).toBe(0);
+  });
+
+  it("is released when a build fails", () => {
+    const failed = run(
+      `acquire_build_lock; trap 'rmdir "$LOCK"' EXIT; build_beside`,
+      "exit 1"
+    );
+    expect(failed.status).toBe(1);
+    expect(existsSync(join(dir, ".next-build.lock"))).toBe(false);
   });
 });

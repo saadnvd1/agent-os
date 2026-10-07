@@ -15,14 +15,8 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
   nvm use >/dev/null
 fi
 
-# One build at a time: two would share .next-build. A lock older than 30
-# minutes is from a run that died.
-lock=.next-build.lock
-if [ -d "$lock" ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +30)" ]; then
-  rmdir "$lock"
-fi
-mkdir "$lock" 2>/dev/null || { echo "Another redeploy is building ($lock)" >&2; exit 1; }
-trap 'rmdir "$lock"' EXIT
+acquire_build_lock
+trap 'rmdir "$LOCK"' EXIT
 
 if [ "${1:-}" = "--rollback" ]; then
   rollback_build
