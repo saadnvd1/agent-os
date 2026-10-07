@@ -27,10 +27,18 @@ export async function run(
   return stdout;
 }
 
-// The branch's PR, null when it has none; throws when gh can't say.
+export interface FindPROpts {
+  // Only a PR opened at or after this time (ISO): one older than the task
+  // was a branch name's earlier use, not the task's.
+  since?: string;
+}
+
+// The branch's PR in this repository, null when it has none; throws when gh
+// can't say. A PR from a fork whose branch has the same name isn't it.
 export async function findPRStrict(
   repoDir: string,
-  branch: string
+  branch: string,
+  opts: FindPROpts = {}
 ): Promise<TaskPR | null> {
   const out = await run(
     "gh",
@@ -42,21 +50,29 @@ export async function findPRStrict(
       "--state",
       "all",
       "--limit",
-      "1",
+      "10",
       "--json",
-      "number,url,state,headRefOid,statusCheckRollup,body",
+      "number,url,state,headRefOid,statusCheckRollup,body,isCrossRepository,createdAt",
     ],
     repoDir,
     15000
   );
-  const [pr] = JSON.parse(out) as Array<{
-    number: number;
-    url: string;
-    state: TaskPR["state"];
-    headRefOid?: string;
-    statusCheckRollup: RollupEntry[] | null;
-    body?: string;
-  }>;
+  const pr = (
+    JSON.parse(out) as Array<{
+      number: number;
+      url: string;
+      state: TaskPR["state"];
+      headRefOid?: string;
+      statusCheckRollup: RollupEntry[] | null;
+      body?: string;
+      isCrossRepository?: boolean;
+      createdAt?: string;
+    }>
+  ).find(
+    (p) =>
+      !p.isCrossRepository &&
+      (!opts.since || Date.parse(p.createdAt ?? "") >= Date.parse(opts.since))
+  );
   if (!pr) return null;
   // A closed PR's checks gate nothing, so they cost no API calls.
   const rollup =
@@ -150,7 +166,8 @@ async function actionsRun(
 
 export async function findPR(
   repoDir: string,
-  branch: string
+  branch: string,
+  opts: FindPROpts = {}
 ): Promise<TaskPR | null> {
-  return findPRStrict(repoDir, branch).catch(() => null);
+  return findPRStrict(repoDir, branch, opts).catch(() => null);
 }
