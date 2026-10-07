@@ -31,9 +31,26 @@ published=$(cat "$state/published" 2>/dev/null || true)
 [ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
 log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
 
+# A deploy that can't land says so once per commit, rather than retrying
+# quietly every minute (uncommitted edits in this checkout block the pull).
+alert() {
+  [ "$(cat "$state/alerted" 2>/dev/null)" = "$head" ] && return
+  echo "$head" > "$state/alerted"
+  log "DEPLOY BLOCKED ${head:0:7}: $1"
+  osascript -e "display notification \"$1\" with title \"AgentOS deploy blocked\"" 2>/dev/null || true
+}
+
 if [ "$head" != "$deployed" ]; then
+  dirty=$(git status --porcelain --untracked-files=no | awk '{print $2}' | tr '\n' ' ')
+  if [ -n "$dirty" ]; then
+    alert "uncommitted changes in $(pwd): $dirty"
+    exit 1
+  fi
   log "Deploying ${head:0:7}"
-  AGENTOS_RESTART="${AGENTOS_RESTART:-sm restart agentos}" scripts/redeploy
+  if ! AGENTOS_RESTART="${AGENTOS_RESTART:-sm restart agentos}" scripts/redeploy; then
+    alert "redeploy of ${head:0:7} failed; see sm logs agentos-autodeploy"
+    exit 1
+  fi
   echo "$head" > "$state/deployed"
 fi
 
