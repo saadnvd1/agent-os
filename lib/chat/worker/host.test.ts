@@ -51,7 +51,10 @@ vi.mock("../drivers", () => ({
   }),
 }));
 
-async function startHost(role = "agent") {
+async function startHost(
+  role = "agent",
+  saved?: { resumeId?: string; usage?: object }
+) {
   const { ChatHost } = await import("./host");
   const id = randomUUID();
   getDb()
@@ -59,6 +62,12 @@ async function startHost(role = "agent") {
       `INSERT INTO sessions (id, name, tmux_name, working_directory, role) VALUES (?, 'chat', ?, '/tmp', ?)`
     )
     .run(id, `claude-${id}`, role);
+  if (saved)
+    getDb()
+      .prepare(
+        `UPDATE sessions SET claude_session_id = ?, chat_usage = ? WHERE id = ?`
+      )
+      .run(saved.resumeId ?? null, JSON.stringify(saved.usage), id);
   const session = getDb()
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(id) as Session;
@@ -240,5 +249,41 @@ describe("lastUserTask", () => {
       .get(id) as { chat_context: string };
     expect(JSON.parse(saved.chat_context).percentage).toBe(10);
     host.close();
+  });
+
+  describe("the first turn after a worker starts", () => {
+    const totals = (costUsd: number) => ({
+      costUsd,
+      inputTokens: 10,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+    const costs = (id: string) =>
+      getDb()
+        .prepare(`SELECT cost_usd FROM chat_turns WHERE session_id = ?`)
+        .all(id)
+        .map((r) => (r as { cost_usd: number }).cost_usd);
+
+    it("counts from the saved totals when the conversation resumes", async () => {
+      const { id, host, conversation } = await startHost("agent", {
+        resumeId: "conv-1",
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage", totals: totals(1) });
+      await tick();
+      expect(costs(id)[0]).toBeCloseTo(0.6);
+      host.close();
+    });
+
+    it("counts all of it in a new conversation, whatever an old one left", async () => {
+      const { id, host, conversation } = await startHost("agent", {
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage", totals: totals(1) });
+      await tick();
+      expect(costs(id)).toEqual([1]);
+      host.close();
+    });
   });
 });

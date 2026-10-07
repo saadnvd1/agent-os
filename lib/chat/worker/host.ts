@@ -11,9 +11,9 @@ import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
 import type { ChatConversation, ChatStartOptions } from "../driver";
-import type { ChatItem, ChatState } from "../events";
+import type { ChatItem, ChatState, UsageTotals } from "../events";
 import { listItems, saveItem, settle } from "../store";
-import { recordTurn } from "../../usage/turns";
+import { recordTurn, startingTotals } from "../../usage/turns";
 import {
   VISUALS_BRIEF,
   VISUALS_SERVER,
@@ -26,6 +26,9 @@ export class ChatHost {
   readonly streaming = new Map<string, ChatItem>();
   private conversation: ChatConversation;
   private sent = new Set<string>();
+  // The agent's running totals at its last turn, to tell what the next one
+  // cost. Only a resumed conversation carries earlier totals forward.
+  private usage: UsageTotals | null;
   // A permission mode change still on its way to the agent: a message sent
   // right after it (carrying out a plan) must not overtake it.
   private modeChange: Promise<void> = Promise.resolve();
@@ -44,6 +47,7 @@ export class ChatHost {
       | "permissionMode"
     > = {}
   ) {
+    this.usage = startingTotals(session.id, !!session.claude_session_id);
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
@@ -122,7 +126,7 @@ export class ChatHost {
             `UPDATE sessions SET claude_session_id = ?, chat_resume_at = NULL WHERE id = ?`
           ).run(e.id, this.session.id);
         } else if (e.type === "usage") {
-          recordTurn(this.session, e.totals);
+          this.usage = recordTurn(this.session, this.usage, e.totals);
         } else if (e.type === "context") {
           db.prepare(`UPDATE sessions SET chat_context = ? WHERE id = ?`).run(
             JSON.stringify(e.context),

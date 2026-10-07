@@ -12,7 +12,11 @@ const { createProject } = await import("../projects");
 
 // A chat in plan mode with a proposed plan, and a worker that records each
 // send once by id, as the real one does.
-function planningChat({ takesSends = true, dedupes = true } = {}) {
+function planningChat({
+  takesSends = true,
+  dedupes = true,
+  state = "idle" as "idle" | "running",
+} = {}) {
   const project = createProject({
     name: `p-${randomUUID().slice(0, 6)}`,
     workingDirectory: "/tmp/p",
@@ -43,7 +47,7 @@ function planningChat({ takesSends = true, dedupes = true } = {}) {
         setTimeout(() => emit(id, { type: "item", item }), 1);
       },
     } as never,
-    state: "idle",
+    state,
     streaming: new Map(),
     activity: { tools: new Map(), tasks: new Set() },
     canPlan: true,
@@ -109,6 +113,15 @@ describe("carryOutPlan", () => {
     expect(listItems(id).find((i) => i.id === "plan-t1")).toMatchObject({
       carried: true,
     });
+  });
+
+  it("waits for the planning turn to end before leaving plan mode", async () => {
+    const { id, commands, planMode } = planningChat({ state: "running" });
+    await expect(carryOutPlan(id, "plan-t1")).rejects.toThrow(
+      "once this turn ends"
+    );
+    expect(commands).toEqual([]);
+    expect(planMode()).toBe(1);
   });
 
   it("refuses anything that isn't a plan", async () => {

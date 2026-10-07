@@ -1,14 +1,24 @@
 /**
  * What each chat turn cost, written as its result arrives. The agent only
- * reports running totals, so each turn is the difference from the totals the
- * session last saw.
+ * reports running totals, so each turn is the difference from the totals its
+ * worker last saw (lib/chat/worker/host.ts keeps them).
  */
 
 import { db, type Session } from "../db";
 import type { UsageTotals } from "../chat/events";
 import { totalTokens, turnDelta } from "../chat/context";
 
-function lastTotals(sessionId: string): UsageTotals | null {
+// Where a worker's totals start: a resumed conversation continues from the
+// totals its transcript saved, which the last worker stored; a new one
+// starts from nothing.
+export function startingTotals(
+  sessionId: string,
+  resumed: boolean
+): UsageTotals | null {
+  return resumed ? savedTotals(sessionId) : null;
+}
+
+function savedTotals(sessionId: string): UsageTotals | null {
   const row = db
     .prepare(`SELECT chat_usage FROM sessions WHERE id = ?`)
     .get(sessionId) as { chat_usage: string | null } | undefined;
@@ -20,12 +30,14 @@ function lastTotals(sessionId: string): UsageTotals | null {
   }
 }
 
+// Records the turn and returns the totals to measure the next one from.
 export function recordTurn(
   session: Pick<Session, "id" | "name" | "workspace_id">,
+  prev: UsageTotals | null,
   totals: UsageTotals,
   at = Date.now()
-): void {
-  const turn = turnDelta(lastTotals(session.id), totals);
+): UsageTotals {
+  const turn = turnDelta(prev, totals);
   db.transaction(() => {
     db.prepare(`UPDATE sessions SET chat_usage = ? WHERE id = ?`).run(
       JSON.stringify(totals),
@@ -54,4 +66,5 @@ export function recordTurn(
       turn.cacheWriteTokens
     );
   })();
+  return totals;
 }

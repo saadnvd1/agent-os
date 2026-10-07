@@ -68,6 +68,11 @@ export async function carryOutPlan(
   const item = listItems(sessionId).find((i) => i.id === planId);
   if (item?.kind !== "plan") throw new Error("That plan is gone");
   if (item.carried) return;
+  // Mid-turn (another tab, a phone reconnecting), leaving plan mode would let
+  // the turn still planning start changing things.
+  const state = registry.live.get(sessionId)?.state;
+  if (state === "running" || state === "waiting")
+    throw new Error("The plan can be carried out once this turn ends");
   await setChatPlan(sessionId, false);
   await sendChatConfirmed(
     sessionId,
