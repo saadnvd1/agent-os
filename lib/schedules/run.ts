@@ -4,7 +4,7 @@ import {
   brakeRun,
   claimSlot,
   finishRun,
-  lastRunBefore,
+  lastSettledBefore,
   lastStarted,
   pausedFor,
   targetProblem,
@@ -16,12 +16,15 @@ import {
 // How each kind starts its work, and whether a run is still going. Real
 // ones in ./start; tests pass their own. `start` calls onSession as soon as
 // the run's work exists (a task's session, or a prompt confirmed in a chat),
-// so a restart mid-start still knows what the run started.
+// so a restart mid-start still knows what the run started. A start can say
+// how it went too (a message: delivered or queued), kept as the run's detail.
+export type Started = string | { sessionId: string; detail: string };
+
 export interface RunDeps {
   start: (
     schedule: Schedule,
     onSession: (sessionId: string) => void
-  ) => Promise<string>;
+  ) => Promise<Started>;
   stillRunning: (schedule: Schedule, run: ScheduleRun) => Promise<boolean>;
   notify: (schedule: Schedule, why: string) => void;
 }
@@ -70,9 +73,9 @@ export async function runSlot(
     parts.filter(Boolean).join(": ") || null;
   const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
   const fail = (why: string): RunResult => {
-    // Once per cause: a minutely schedule that keeps failing the same way
-    // notifies the first time, not every minute.
-    if (lastRunBefore(schedule.id, runId)?.detail !== why) {
+    // Once until it works again: a schedule that keeps failing notifies the
+    // first time, not every run.
+    if (lastSettledBefore(schedule.id, runId)?.outcome !== "failed") {
       try {
         deps.notify(schedule, why);
       } catch (e) {
@@ -102,7 +105,10 @@ export async function runSlot(
       if (busy)
         return done(
           "skipped",
-          joined(caughtUp, "still running"),
+          joined(
+            caughtUp,
+            schedule.kind === "message" ? "still working" : "still running"
+          ),
           previous.session_id
         );
     }
@@ -112,10 +118,14 @@ export async function runSlot(
   if (pausedFor(schedule))
     return done("skipped", joined(caughtUp, "paused with the orchestrator"));
   try {
-    const sessionId = await deps.start(schedule, (id) =>
+    const started = await deps.start(schedule, (id) =>
       attachSession(runId, id)
     );
-    return done("started", caughtUp, sessionId);
+    const [sessionId, how] =
+      typeof started === "string"
+        ? [started, null]
+        : [started.sessionId, started.detail];
+    return done("started", joined(caughtUp, how), sessionId);
   } catch (error) {
     if (error instanceof Braked) {
       brakeRun(runId, `braked: ${error.message}`);

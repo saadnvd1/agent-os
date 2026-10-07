@@ -29,6 +29,7 @@ import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { schedulesUiActions } from "@/stores/schedulesUi";
+import { phoneNotifyUiActions } from "@/stores/phoneNotifyUi";
 import { usageUiActions } from "@/stores/usageUi";
 
 const LAST_THEME = "agentOS-last-theme-";
@@ -126,6 +127,14 @@ export function useAppCommands({
       keywords: ["cron", "timer", "recurring", "every day"],
       icon: Clock,
       run: () => schedulesUiActions.open(current?.id ?? null),
+    },
+    {
+      id: "app.phone-notifications",
+      title: "Phone notifications",
+      group: "Go to",
+      keywords: ["telegram", "notify", "alerts", "push"],
+      icon: Smartphone,
+      run: () => phoneNotifyUiActions.setOpen(true),
     },
     {
       id: "app.messages",

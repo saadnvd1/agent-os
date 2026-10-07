@@ -3,6 +3,9 @@
 import os from "os";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
+import { sendMessage } from "../bus";
+import { statusDetector } from "../status-detector";
+import { notifyPhone } from "../notify";
 import { getProject } from "../projects";
 import { resolveModelForAgent } from "../model-catalog";
 import { createTask, isFinished, taskView } from "../tasks";
@@ -11,7 +14,7 @@ import { ensureOrchestrator } from "../orchestrator/home";
 import { addNote } from "../orchestrator/notes";
 import { notifyStatusChanged } from "../status/hub";
 import { formatRunTime } from "./cron";
-import { Braked, fromLabel, type RunDeps } from "./run";
+import { Braked, fromLabel, type RunDeps, type Started } from "./run";
 import { braked, BrakeRefused } from "../orchestrator/brakes";
 import { startedSessions, type Schedule, type ScheduleRun } from "./store";
 
@@ -98,6 +101,45 @@ async function postToOrchestrator(
   return orchestrator.id;
 }
 
+// To an existing session, the way `aos send` does: a chat's worker is
+// started if it has exited, a terminal gets the line typed and checked.
+async function messageSession(
+  schedule: Schedule,
+  onSession: OnSession
+): Promise<Started> {
+  const target = schedule.target_session_id;
+  if (!target) throw new Error("Pick a session to message");
+  const project = schedule.project_id ? getProject(schedule.project_id) : null;
+  const { delivery } = await sendMessage({
+    fromId: null,
+    fromLabel: fromLabel(schedule),
+    to: target,
+    body: scheduledMessage(schedule, project?.name ?? null),
+  });
+  if (delivery.state === "failed") throw new Error(`FAILED: ${delivery.why}`);
+  onSession(target);
+  return { sessionId: target, detail: delivery.state };
+}
+
+// The session is still on the last message (or anything else): a chat
+// mid-turn or holding a queued message, a terminal agent that's working.
+async function sessionBusy(
+  sessionId: string,
+  chatOnly = false
+): Promise<boolean> {
+  const session = queries.getSession(db).get(sessionId) as Session | undefined;
+  if (!session || session.archived_at) return false;
+  if (session.view === "chat" || chatOnly) {
+    // Asks a worker still running from before a restart, too.
+    const state = await chatStateNow(session.id);
+    return state === "running" || state === "waiting";
+  }
+  await statusDetector.refreshCache();
+  if (!statusDetector.sessionExists(session.tmux_name)) return false;
+  const status = await statusDetector.getStatus(session.tmux_name);
+  return status === "running";
+}
+
 // A task this schedule started still counts until it's finished (merged,
 // dropped, done) or its agent has exited: one waiting for review, input or
 // a fix holds the next run, so a frequent schedule can't stack up PRs.
@@ -118,16 +160,13 @@ export async function stillRunning(
       for (const id of startedSessions(schedule.id))
         if (await taskUnfinished(id)) return true;
       return false;
-    case "session": {
-      if (!run.session_id) return false;
-      const session = queries.getSession(db).get(run.session_id) as
-        | Session
-        | undefined;
-      if (!session || session.archived_at) return false;
-      // Asks a worker still running from before a restart, too.
-      const state = await chatStateNow(session.id);
-      return state === "running" || state === "waiting";
-    }
+    case "session":
+      // A chat this schedule made.
+      return run.session_id ? sessionBusy(run.session_id, true) : false;
+    case "message":
+      return schedule.target_session_id
+        ? sessionBusy(schedule.target_session_id)
+        : false;
     case "orchestrator":
       // A message: done once it's delivered.
       return false;
@@ -140,6 +179,10 @@ function notify(schedule: Schedule, why: string): void {
     schedule.workspace_id,
     `Schedule "${schedule.name}" failed to start: ${why}`,
     "escalation"
+  );
+  notifyPhone(
+    `schedule:${schedule.id}`,
+    `Schedule "${schedule.name}" failed: ${why}`
   );
 }
 
@@ -169,7 +212,9 @@ export const realDeps: RunDeps = {
         ? throughBrakes(schedule, "session", () =>
             startSession(schedule, onSession)
           )
-        : postToOrchestrator(schedule, onSession),
+        : schedule.kind === "message"
+          ? messageSession(schedule, onSession)
+          : postToOrchestrator(schedule, onSession),
   stillRunning,
   notify,
 };

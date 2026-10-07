@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useSnapshot } from "valtio";
-import { ArrowLeft, Clock, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock,
+  Pencil,
+  Play,
+  Plus,
+  Smartphone,
+  Trash2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +21,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useWorkspacesQuery } from "@/data/workspaces";
+import { useNotifySettings } from "@/data/notify";
+import { phoneNotifyUiActions } from "@/stores/phoneNotifyUi";
 import {
   useArchiveSchedule,
   useRunSchedule,
@@ -35,7 +45,16 @@ const KIND_LABEL = {
   task: "Task",
   session: "Session",
   orchestrator: "Orchestrator",
+  message: "Message",
 } as const;
+
+// "Task · api", "Message → orchestrator".
+const where = (s: ScheduleView) =>
+  s.kind === "message"
+    ? ` → ${s.targetName ?? "a session that's gone"}`
+    : s.projectName
+      ? ` · ${s.projectName}`
+      : "";
 
 function NextRun({ s }: { s: ScheduleView }) {
   if (!s.enabled) return <>Off</>;
@@ -82,7 +101,7 @@ function ScheduleRow({ s, onOpen }: { s: ScheduleView; onOpen: () => void }) {
           <span className="truncate text-sm font-medium">{s.name}</span>
           <span className="text-muted-foreground shrink-0 text-[11px]">
             {KIND_LABEL[s.kind]}
-            {s.projectName ? ` · ${s.projectName}` : ""}
+            {where(s)}
           </span>
         </div>
         <p className="text-muted-foreground truncate text-xs">
@@ -126,7 +145,7 @@ function Detail({
         </div>
         <p className="text-muted-foreground text-sm">
           {KIND_LABEL[s.kind]}
-          {s.projectName ? ` in ${s.projectName}` : ""} · {s.description}
+          {where(s)} · {s.description}
         </p>
         <p className="text-muted-foreground text-xs">
           <NextRun s={s} /> · {s.timezone}
@@ -189,15 +208,36 @@ function Detail({
   );
 }
 
+// Failed runs reach the phone only when a notifier is set up: say which.
+function PhoneLine() {
+  const { data } = useNotifySettings();
+  if (!data) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => phoneNotifyUiActions.setOpen(true)}
+      className="text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg px-1 text-left text-xs md:min-h-8"
+    >
+      <Smartphone className="h-3.5 w-3.5 shrink-0" />
+      {data.active
+        ? `A failed run notifies your phone (${data.active === "command" ? "notify command" : "Telegram"}).`
+        : "Phone notifications are off. Set them up"}
+    </button>
+  );
+}
+
 export function SchedulesDialog() {
   const snap = useSnapshot(schedulesUi);
-  const [view, setView] = useState<View>({ mode: "list" });
+  const [chosen, setView] = useState<View>({ mode: "list" });
+  // Opened from a session's "Schedule check-ins": straight to the form.
+  const view: View =
+    snap.draft && chosen.mode === "list" ? { mode: "form" } : chosen;
   const { data: schedules = [], isPending } = useSchedulesQuery(
     snap.workspaceId,
     snap.open
   );
   const { data: workspaces = [] } = useWorkspacesQuery();
-  const where = workspaces.find((w) => w.id === snap.workspaceId)?.name;
+  const wsName = workspaces.find((w) => w.id === snap.workspaceId)?.name;
   const editing =
     view.mode === "form" && view.id
       ? schedules.find((s) => s.id === view.id)
@@ -207,10 +247,14 @@ export function SchedulesDialog() {
     schedulesUiActions.setOpen(open);
     if (!open) setView({ mode: "list" });
   };
-  const back =
-    view.mode === "form" && view.id
-      ? () => setView({ mode: "detail", id: view.id! })
-      : () => setView({ mode: "list" });
+  const back = () => {
+    schedulesUiActions.clearDraft();
+    setView(
+      view.mode === "form" && view.id
+        ? { mode: "detail", id: view.id }
+        : { mode: "list" }
+    );
+  };
 
   return (
     <Dialog open={snap.open} onOpenChange={onOpenChange}>
@@ -232,7 +276,7 @@ export function SchedulesDialog() {
               ? view.id
                 ? "Edit schedule"
                 : "New schedule"
-              : `Schedules${where ? ` · ${where}` : ""}`}
+              : `Schedules${wsName ? ` · ${wsName}` : ""}`}
           </DialogTitle>
           {view.mode === "list" && (
             <Button
@@ -262,9 +306,9 @@ export function SchedulesDialog() {
               <div className="flex flex-col items-center gap-2 py-8 text-center">
                 <Clock className="text-primary h-6 w-6" />
                 <p className="text-muted-foreground max-w-xs text-sm">
-                  Nothing scheduled. A schedule starts a task, a session or a
-                  message to the orchestrator at the times you pick, whether
-                  AgentOS is open or not.
+                  Nothing scheduled. A schedule starts a task or a session, or
+                  messages the orchestrator or any session, at the times you
+                  pick, whether AgentOS is open or not.
                 </p>
               </div>
             )}
@@ -275,6 +319,7 @@ export function SchedulesDialog() {
                 onOpen={() => setView({ mode: "detail", id: s.id })}
               />
             ))}
+            {!isPending && <PhoneLine />}
           </div>
         )}
         {view.mode === "detail" && (
@@ -286,10 +331,14 @@ export function SchedulesDialog() {
         )}
         {view.mode === "form" && (!view.id || editing) && (
           <ScheduleForm
-            key={view.id ?? "new"}
+            key={view.id ?? snap.draft?.targetSessionId ?? "new"}
             workspaceId={snap.workspaceId}
             existing={editing}
-            onDone={(id) => setView({ mode: "detail", id })}
+            draft={view.id ? null : snap.draft}
+            onDone={(id) => {
+              schedulesUiActions.clearDraft();
+              setView({ mode: "detail", id });
+            }}
             onCancel={back}
           />
         )}
