@@ -20,6 +20,8 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      run the project's linked board as stacked tasks
                                      (--plan: just show the order, start nothing)
   aos stacks                         every stack and where each card is
+  aos schedules                      every schedule, its next run and last outcome
+  aos schedule run <name>            run a schedule now (name or id)
   aos done <session>                 finished: merge its open PR through the
                                      gates, stop it, archive it (not a rejection);
                                      only sessions in your workspace or project
@@ -241,6 +243,45 @@ async function main() {
           )
         );
       }
+      return;
+    }
+    case "schedules": {
+      const { schedules } = await call("/api/schedules");
+      if (!schedules.length) console.log("no schedules");
+      const when = (ms, tz) =>
+        new Date(ms).toLocaleString("en-US", {
+          timeZone: tz,
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+      for (const s of schedules) {
+        const state = !s.enabled ? "off" : s.paused ? "paused" : "on";
+        const next =
+          s.enabled && s.nextRunAt ? when(s.nextRunAt, s.timezone) : "-";
+        const last = s.lastRun
+          ? `${s.lastRun.outcome}${s.lastRun.detail ? ` (${s.lastRun.detail})` : ""}`
+          : "never run";
+        const target = s.projectName ? ` · ${s.projectName}` : "";
+        console.log(
+          `${s.id.slice(0, 8)}  ${s.name} · ${s.kind}${target} · ${state}\n  ${s.description} · next ${next} · last ${last}`
+        );
+      }
+      return;
+    }
+    case "schedule": {
+      const [sub, ...words] = args;
+      const ref = words.join(" ").trim();
+      if (sub !== "run" || !ref) fail("usage: aos schedule run <name>");
+      const { run, schedule } = await post(
+        `/api/schedules/${encodeURIComponent(ref)}/run`,
+        {}
+      );
+      const why = run.detail ? `: ${run.detail}` : "";
+      console.log(`${schedule.name}: ${run.outcome}${why}`);
+      if (run.outcome === "failed") process.exit(2);
       return;
     }
     case "done": {

@@ -1,0 +1,118 @@
+// What a schedule's run actually starts, by kind.
+
+import os from "os";
+import { randomUUID } from "crypto";
+import { db, queries, type Session } from "../db";
+import { getProject } from "../projects";
+import { resolveModelForAgent } from "../model-catalog";
+import { createTask, taskView } from "../tasks";
+import { chatState, sendChat, sendChatConfirmed } from "../chat/runner";
+import { ensureOrchestrator } from "../orchestrator/home";
+import { addNote } from "../orchestrator/notes";
+import { notifyStatusChanged } from "../status/hub";
+import { formatRunTime } from "./cron";
+import { fromLabel, type RunDeps } from "./run";
+import type { Schedule, ScheduleRun } from "./store";
+
+function projectOf(schedule: Schedule) {
+  const project = schedule.project_id ? getProject(schedule.project_id) : null;
+  if (!project) throw new Error("Its project no longer exists");
+  return project;
+}
+
+async function startTask(schedule: Schedule): Promise<string> {
+  const session = await createTask({
+    projectId: projectOf(schedule).id,
+    prompt: schedule.prompt,
+  });
+  return session.id;
+}
+
+// A chat session in the project that gets the prompt as its first message
+// and stays open afterwards.
+async function startSession(schedule: Schedule): Promise<string> {
+  const project = projectOf(schedule);
+  if (project.host_id && project.host_id !== "local")
+    throw new Error("Schedules run on this machine's projects only");
+  const id = randomUUID();
+  const name = `${schedule.name} · ${formatRunTime(Date.now(), schedule.timezone)}`;
+  queries
+    .createSession(db)
+    .run(
+      id,
+      name,
+      `claude-${id}`,
+      project.working_directory.replace(/^~/, os.homedir()),
+      null,
+      resolveModelForAgent("claude", project.default_model),
+      null,
+      "sessions",
+      "claude",
+      0,
+      project.id,
+      "local"
+    );
+  db.prepare(`UPDATE sessions SET view = 'chat' WHERE id = ?`).run(id);
+  notifyStatusChanged();
+  await sendChat(id, { text: schedule.prompt, from: fromLabel(schedule) });
+  return id;
+}
+
+async function postToOrchestrator(schedule: Schedule): Promise<string> {
+  const orchestrator = ensureOrchestrator(schedule.workspace_id);
+  const project = schedule.project_id ? getProject(schedule.project_id) : null;
+  const text = project
+    ? `${schedule.prompt}\n\n(Project: ${project.name})`
+    : schedule.prompt;
+  await sendChatConfirmed(orchestrator.id, {
+    text,
+    from: fromLabel(schedule),
+  });
+  return orchestrator.id;
+}
+
+const TASK_BUSY = new Set(["working", "blocked"]);
+
+async function stillRunning(
+  schedule: Schedule,
+  run: ScheduleRun
+): Promise<boolean> {
+  if (!run.session_id) return false;
+  const session = queries.getSession(db).get(run.session_id) as
+    | Session
+    | undefined;
+  if (!session || session.archived_at) return false;
+  switch (schedule.kind) {
+    case "task":
+      // Working on it, or blocked on Saad: a second copy wouldn't help.
+      if (session.task_status !== "running") return false;
+      return TASK_BUSY.has((await taskView(session)).state);
+    case "session": {
+      const state = chatState(session.id);
+      return state === "running" || state === "waiting";
+    }
+    case "orchestrator":
+      // A message: done once it's delivered.
+      return false;
+  }
+}
+
+function notify(schedule: Schedule, why: string): void {
+  console.error(`[schedules] ${schedule.name} failed: ${why}`);
+  addNote(
+    schedule.workspace_id,
+    `Schedule "${schedule.name}" failed to start: ${why}`,
+    "escalation"
+  );
+}
+
+export const realDeps: RunDeps = {
+  start: (schedule) =>
+    schedule.kind === "task"
+      ? startTask(schedule)
+      : schedule.kind === "session"
+        ? startSession(schedule)
+        : postToOrchestrator(schedule),
+  stillRunning,
+  notify,
+};

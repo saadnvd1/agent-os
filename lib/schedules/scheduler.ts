@@ -1,0 +1,109 @@
+/**
+ * The ticker: once a minute, in the main server process only, each enabled
+ * schedule runs its latest due slot if nobody has yet. Looking at the latest
+ * slot rather than the current minute is what catches up after downtime: a
+ * server that was off through several slots runs only the most recent one,
+ * once, and records it as caught up.
+ */
+
+import { nextRun, prevRun } from "./cron";
+import { runSlot, slotKey, type RunDeps, type RunResult } from "./run";
+import {
+  failAbandonedClaims,
+  listSchedules,
+  slotTaken,
+  type Schedule,
+} from "./store";
+
+// A slot this late counts as caught up rather than on time.
+export const LATE_MS = 90 * 1000;
+
+// The slot a schedule is due to run now, if any.
+export function dueSlot(schedule: Schedule, now: number): number | null {
+  if (!schedule.enabled || schedule.archived_at) return null;
+  const slot = prevRun(schedule.cron, now, schedule.timezone);
+  if (slot === null || slot <= schedule.armed_at) return null;
+  return slotTaken(schedule.id, slotKey(slot)) ? null : slot;
+}
+
+export function nextRunAt(schedule: Schedule, now = Date.now()): number | null {
+  if (!schedule.enabled) return null;
+  return nextRun(
+    schedule.cron,
+    Math.max(now, schedule.armed_at),
+    schedule.timezone
+  );
+}
+
+export async function tick(
+  deps: RunDeps,
+  now = Date.now()
+): Promise<RunResult[]> {
+  const results = await Promise.all(
+    listSchedules().map(async (schedule) => {
+      let slot: number | null;
+      try {
+        slot = dueSlot(schedule, now);
+      } catch (error) {
+        console.error(`[schedules] ${schedule.name}:`, error);
+        return null;
+      }
+      if (slot === null) return null;
+      return runSlot(
+        schedule,
+        slot,
+        now - slot > LATE_MS ? "catch-up" : "schedule",
+        deps
+      );
+    })
+  );
+  return results.filter((r): r is RunResult => r !== null);
+}
+
+const g = globalThis as unknown as {
+  __agentosScheduler?: { stop: () => void };
+};
+
+// Starts the ticker once per process: a tick now (catching up), then one
+// just after each minute turns.
+export function startScheduler(deps: RunDeps): { stop: () => void } {
+  if (g.__agentosScheduler) return g.__agentosScheduler;
+  let timer: NodeJS.Timeout | undefined;
+  let busy = false;
+  let stopped = false;
+  const run = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      await tick(deps);
+    } catch (error) {
+      console.error("[schedules] tick failed:", error);
+    } finally {
+      busy = false;
+    }
+  };
+  const schedule = () => {
+    if (stopped) return;
+    const now = Date.now();
+    timer = setTimeout(
+      () => {
+        void run();
+        schedule();
+      },
+      60_000 - (now % 60_000) + 1000
+    );
+    timer.unref?.();
+  };
+  // Claims the last process left behind never started; nobody will finish them.
+  failAbandonedClaims(0);
+  void run();
+  schedule();
+  g.__agentosScheduler = {
+    stop: () => {
+      stopped = true;
+      clearTimeout(timer);
+      g.__agentosScheduler = undefined;
+    },
+  };
+  return g.__agentosScheduler;
+}
