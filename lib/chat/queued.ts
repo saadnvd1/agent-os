@@ -72,16 +72,18 @@ export function enqueue(
 // Takes the first message off the queue: once claimed, it's this caller's
 // to send, and an edit or delete racing it finds nothing.
 export function claimNext(
-  sessionId: string
+  sessionId: string,
+  // That message only, if it's still there.
+  id?: string
 ): { id: string; text: string; images?: ChatImage[] } | null {
   const row = db
     .prepare(
       `DELETE FROM chat_queue WHERE session_id = ? AND id = (
-         SELECT id FROM chat_queue WHERE session_id = ?
+         SELECT id FROM chat_queue WHERE session_id = ? AND (? IS NULL OR id = ?)
          ORDER BY position, created_at LIMIT 1
        ) RETURNING id, text, images, created_at`
     )
-    .get(sessionId, sessionId) as Row | undefined;
+    .get(sessionId, sessionId, id ?? null, id ?? null) as Row | undefined;
   if (!row) return null;
   return {
     id: row.id,

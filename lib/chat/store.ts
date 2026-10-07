@@ -19,6 +19,21 @@ export function listItems(sessionId: string): ChatItem[] {
   ).map((r) => JSON.parse(r.data) as ChatItem);
 }
 
+// Tool calls saved as still running.
+export function runningTools(
+  sessionId: string
+): Extract<ChatItem, { kind: "tool" }>[] {
+  return (
+    db
+      .prepare(
+        `SELECT data FROM chat_items WHERE session_id = ?
+         AND json_extract(data, '$.kind') = 'tool'
+         AND json_extract(data, '$.status') = 'running'`
+      )
+      .all(sessionId) as { data: string }[]
+  ).map((r) => JSON.parse(r.data));
+}
+
 export function deleteItems(sessionId: string): void {
   db.prepare(`DELETE FROM chat_items WHERE session_id = ?`).run(sessionId);
 }

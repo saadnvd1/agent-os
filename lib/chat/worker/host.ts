@@ -18,7 +18,7 @@ import type {
   PeerMessage,
   UsageTotals,
 } from "../events";
-import { listItems, saveItem, settle } from "../store";
+import { listItems, runningTools, saveItem, settle } from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
 import { recordTurn, startingTotals } from "../../usage/turns";
 import {
@@ -27,6 +27,11 @@ import {
   visualsTools,
 } from "../../artifacts/tools";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
+
+// How soon after a stopped turn ends a turn the agent starts on its own
+// still counts as part of the stop: the agent starts what it queued the
+// moment a turn ends.
+const AFTER_STOP_MS = 2000;
 
 export class ChatHost {
   state: ChatState = "idle";
@@ -45,6 +50,19 @@ export class ChatHost {
   // A permission mode change still on its way to the agent: a message sent
   // right after it (carrying out a plan) must not overtake it.
   private modeChange: Promise<void> = Promise.resolve();
+  // Turns stopping for a message sent now: that message's turn follows
+  // straight on, so their end isn't idle.
+  private handover = 0;
+  // Their messages, shown once the turn they stopped has ended, so they
+  // read after it rather than in the middle of it.
+  private handedOver: ChatItem[] = [];
+  // Esc stopped the running turn ("turn"), or it has ended ("after", until
+  // the next turn ends): a message sent while the stopped turn, or one the
+  // agent started on its own straight after it, still runs goes as if sent
+  // now. The reader stopped the agent to say something; that's what it
+  // should read next.
+  private stopping: "turn" | "after" | null = null;
+  private stoppedAt = 0;
   readonly done: Promise<void>;
 
   constructor(
@@ -108,6 +126,9 @@ export class ChatHost {
     // Sends that already made it in, from before a reconnect.
     for (const item of listItems(session.id))
       if (item.kind === "user") this.sent.add(item.id);
+    // Nothing runs yet in a worker just started: a tool call still saved as
+    // running was cut off with the last one.
+    this.closeTools();
     this.done = this.pump();
   }
 
@@ -154,10 +175,30 @@ export class ChatHost {
             this.session.id
           );
           this.emit(e);
+        } else if (e.type === "turn_start") {
+          // A turn the agent started itself (a background task's notice)
+          // runs like any other: what's sent meanwhile waits for it.
+          if (this.state === "idle" && !this.closed) {
+            // Only straight after a stop is it the stop's aftermath.
+            if (Date.now() - this.stoppedAt > AFTER_STOP_MS)
+              this.stopping = null;
+            this.currentTurn = null;
+            this.setState("running");
+          }
         } else if (e.type === "state") {
           if (e.state === "idle") {
             // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
             this.settleStreaming();
+            this.closeTools();
+            this.stopping = this.stopping === "turn" ? "after" : null;
+            this.stoppedAt = Date.now();
+            // The message sent now is already the agent's next turn.
+            if (this.handover) {
+              this.handover--;
+              const user = this.handedOver.shift();
+              if (user) this.record(user);
+              continue;
+            }
             // The next queued message goes straight on, with no idle in
             // between: the server retires a stale worker the moment it
             // hears one, and would cut that turn off.
@@ -185,6 +226,8 @@ export class ChatHost {
       });
     } finally {
       this.settleStreaming();
+      this.closeTools();
+      for (const user of this.handedOver.splice(0)) this.record(user);
       this.setState("idle");
     }
   }
@@ -202,28 +245,39 @@ export class ChatHost {
     return this.state === "running" || this.state === "waiting";
   }
 
-  // Sends the first queued message, if no turn is running. Claimed (taken
-  // off the queue) before it's sent, so it can only go once.
-  private sendQueued(): boolean {
-    if (this.busy() || this.closed) return false;
-    const next = claimNext(this.session.id);
+  // Sends the first queued message (or that one), if no turn is running or
+  // it's sent now. Claimed (taken off the queue) before it's sent, so it can
+  // only go once.
+  private sendQueued(now = false, id?: string): boolean {
+    if ((!now && this.busy()) || this.closed) return false;
+    const next = claimNext(this.session.id, id);
     if (!next) return false;
     this.emit({ type: "queue" });
-    this.sendUser({ id: next.id, text: next.text, images: next.images });
+    this.sendUser({ id: next.id, text: next.text, images: next.images }, now);
     return true;
   }
 
-  private sendUser(m: {
-    id: string;
-    text: string;
-    images?: ChatImage[];
-    from?: string;
-    peer?: PeerMessage;
-  }): void {
+  private sendUser(
+    m: {
+      id: string;
+      text: string;
+      images?: ChatImage[];
+      from?: string;
+      peer?: PeerMessage;
+    },
+    now = false
+  ): void {
     this.sent.add(m.id);
     this.currentTurn = m.id;
-    const checkpoint = this.conversation.send(m.text, m.images);
-    this.record({
+    // Sent now, it stops the running turn, which still ends after this.
+    if (now && this.busy()) {
+      this.handover++;
+    } else now = false;
+    this.stopping = null;
+    const checkpoint = now
+      ? this.conversation.send(m.text, m.images, { now })
+      : this.conversation.send(m.text, m.images);
+    const user: ChatItem = {
       id: m.id,
       kind: "user",
       text: m.text,
@@ -232,13 +286,23 @@ export class ChatHost {
       peer: m.peer,
       createdAt: Date.now(),
       checkpoint,
-    });
+    };
+    if (now) this.handedOver.push(user);
+    else this.record(user);
     this.setState("running");
     // A new turn makes the last guess stale.
     if (this.suggestion !== null) this.setSuggestion(null);
     db.prepare(
       `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
     ).run(this.session.id);
+  }
+
+  // At a turn's end nothing is running: a tool call with no result was cut
+  // off (by a stop, or a worker before this one).
+  private closeTools(): void {
+    for (const tool of runningTools(this.session.id))
+      if (!this.streaming.has(tool.id))
+        this.record({ ...tool, status: "stopped", output: undefined });
   }
 
   private settleStreaming(): void {
@@ -279,6 +343,19 @@ export class ChatHost {
           }
           return;
         }
+        // Typed after Esc, while the stopped turn winds down or the agent
+        // starts on something it queued itself: read next, as if sent now.
+        // Another agent's message doesn't speak for the reader.
+        if (
+          this.stopping &&
+          !cmd.from &&
+          !cmd.peer &&
+          this.busy() &&
+          !listQueue(this.session.id).length
+        ) {
+          this.sendUser(cmd, true);
+          return;
+        }
         if (cmd.queue && (this.busy() || listQueue(this.session.id).length)) {
           // Behind the running turn, and behind anything queued before it.
           enqueue(this.session.id, cmd);
@@ -293,14 +370,14 @@ export class ChatHost {
         // To the front; a running turn stops, and its end sends it.
         if (!moveToFront(this.session.id, cmd.id)) return;
         this.emit({ type: "queue" });
+        await this.modeChange.catch(() => {});
         // The turn the reader asked to stop, not one that started since:
         // that one ends on its own, and this goes after it.
         if (this.busy()) {
           if (cmd.during && cmd.during === this.currentTurn)
-            return this.conversation.interrupt();
+            this.sendQueued(true, cmd.id);
           return;
         }
-        await this.modeChange.catch(() => {});
         this.sendQueued();
         return;
       case "drain":
@@ -322,6 +399,12 @@ export class ChatHost {
         }
         return;
       case "interrupt":
+        await this.modeChange.catch(() => {});
+        if (!this.busy()) return this.conversation.interrupt();
+        // What's queued goes on once the turn stops: it goes with the stop,
+        // so it's what the agent reads next.
+        if (this.sendQueued(true)) return;
+        this.stopping = "turn";
         return this.conversation.interrupt();
       case "set_model":
         return this.conversation.setModel(cmd.model);
