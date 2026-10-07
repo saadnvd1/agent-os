@@ -1,6 +1,7 @@
 "use client";
 
 import { ViewSwitch } from "@/components/Chat/ViewSwitch";
+import { ContextMeter } from "@/components/Chat/ContextMeter";
 import { Button } from "@/components/ui/button";
 import { X, Plus } from "lucide-react";
 import {
@@ -149,6 +150,7 @@ export function DesktopTabBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        <ContextMeter sessionId={session?.id} />
         <ViewSwitch session={session} />
         {session?.working_directory && (
           <PaneViewToggle

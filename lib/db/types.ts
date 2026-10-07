@@ -26,6 +26,10 @@ export interface Session {
   view: "chat" | "terminal";
   chat_access: ChatAccess;
   chat_resume_at: string | null;
+  // Plan mode (0/1 from SQLite), and the context meter's last reading (JSON).
+  chat_plan: boolean | number;
+  chat_context: string | null;
+  chat_usage: string | null;
   last_seen_at: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;

@@ -8,7 +8,8 @@ import {
 import type { ChatDriver, ChatConversation } from "../driver";
 import type { DriverEvent, McpServerView } from "../events";
 import { InputQueue } from "../queue";
-import { Approvals, SDK_MODE } from "./claude-approvals";
+import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
+import { toChatContext, usageTotals } from "../context";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
 import { redact } from "../../orchestrator/untrusted";
 
@@ -70,6 +71,19 @@ export function mcpView(s: McpServerStatus): McpServerView {
   };
 }
 
+// The plan file an assistant message writes, if it writes one. Only writes
+// count: in plan mode the plan file is the one thing the agent may change,
+// while a plans folder it merely reads holds someone else's plans.
+const WRITES = new Set(["Write", "Edit", "MultiEdit"]);
+export function writtenPlanFile(m: ClaudeMessage): string | undefined {
+  if (m.type !== "assistant" || !Array.isArray(m.message?.content)) return;
+  for (const b of m.message.content) {
+    const path = (b.input as { file_path?: unknown } | undefined)?.file_path;
+    if (b.type === "tool_use" && WRITES.has(b.name ?? "") && isPlanFile(path))
+      return path;
+  }
+}
+
 export const claudeDriver: ChatDriver = {
   id: "claude",
 
@@ -106,7 +120,13 @@ export const claudeDriver: ChatDriver = {
   start(options): ChatConversation {
     const input = new InputQueue<SDKUserMessage>();
     const out = new InputQueue<DriverEvent>();
-    const approvals = new Approvals((e) => out.push(e));
+    let planFile: string | undefined;
+    const approvals = new Approvals(
+      (e) => out.push(e),
+      () => planFile
+    );
+    let access = options.access;
+    let plan = !options.permissionMode && !!options.plan;
     const q = query({
       prompt: input,
       options: {
@@ -114,7 +134,7 @@ export const claudeDriver: ChatDriver = {
         model: options.model,
         resume: options.resumeId ?? undefined,
         resumeSessionAt: options.resumeAt ?? undefined,
-        permissionMode: options.permissionMode ?? SDK_MODE[options.access],
+        permissionMode: options.permissionMode ?? sdkMode(access, plan),
         allowDangerouslySkipPermissions: true,
         canUseTool: approvals.canUseTool,
         mcpServers: options.mcpServers,
@@ -128,6 +148,7 @@ export const claudeDriver: ChatDriver = {
               // The reader may take a while to answer.
               timeout: 24 * 60 * 60,
             },
+            { matcher: "ExitPlanMode", hooks: [approvals.proposePlan] },
           ],
         },
         enableFileCheckpointing: true,
@@ -146,12 +167,37 @@ export const claudeDriver: ChatDriver = {
     const mapper = new ClaudeMapper();
     let sessionId = options.resumeId ?? null;
 
+    // What the agent restored on starting: a resumed conversation's totals
+    // when its last process saved them, nothing otherwise. Each turn's cost
+    // is measured from here.
+    void q
+      .usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
+        skipBehaviors: true,
+      })
+      .then((u) =>
+        out.push({
+          type: "usage_start",
+          totals: usageTotals(u.session.model_usage, u.session.total_cost_usd),
+        })
+      )
+      .catch(() => {});
+
     void (async () => {
       try {
         for await (const message of q) {
           const m = message as unknown as ClaudeMessage;
           if (m.session_id) sessionId = m.session_id;
+          planFile = writtenPlanFile(m) ?? planFile;
           for (const e of mapper.map(m)) out.push(e);
+          // How full the window is now, for the meter, without holding up
+          // the conversation.
+          if (m.type === "result")
+            void q
+              .getContextUsage({ detail: "summary" })
+              .then((u) =>
+                out.push({ type: "context", context: toChatContext(u) })
+              )
+              .catch(() => {});
         }
       } catch (error) {
         out.fail(error);
@@ -203,9 +249,15 @@ export const claudeDriver: ChatDriver = {
       async setModel(model) {
         await q.setModel(model);
       },
-      async setAccess(access) {
+      async setAccess(next) {
+        access = next;
+        if (options.permissionMode || plan) return;
+        await q.setPermissionMode(sdkMode(access, plan));
+      },
+      async setPlan(next) {
         if (options.permissionMode) return;
-        await q.setPermissionMode(SDK_MODE[access]);
+        plan = next;
+        await q.setPermissionMode(sdkMode(access, plan));
       },
       respond(id, answer) {
         approvals.respond(id, answer);

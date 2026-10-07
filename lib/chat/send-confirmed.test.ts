@@ -30,6 +30,7 @@ function fakeWorker(state: ChatState, onSend: (id: string, cmd: Send) => void) {
     state,
     streaming: new Map(),
     activity: { tools: new Map(), tasks: new Set() },
+    canPlan: true,
   });
   return { id, sent };
 }
