@@ -1,7 +1,15 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { parseCodeReview } from "./code-review";
-import { checksVerdict, failingCheck, type TaskPR } from "./state";
+import {
+  checksVerdict,
+  failingCheck,
+  rerunsToLookUp,
+  settleReruns,
+  type ActionsRun,
+  type RollupEntry,
+  type TaskPR,
+} from "./state";
 
 const execFileAsync = promisify(execFile);
 
@@ -46,20 +54,98 @@ export async function findPRStrict(
     url: string;
     state: TaskPR["state"];
     headRefOid?: string;
-    statusCheckRollup: Parameters<typeof failingCheck>[0] | null;
+    statusCheckRollup: RollupEntry[] | null;
     body?: string;
   }>;
   if (!pr) return null;
+  // A closed PR's checks gate nothing, so they cost no API calls.
+  const rollup =
+    pr.state === "OPEN"
+      ? await settledRollup(
+          repoDir,
+          pr.url,
+          pr.headRefOid,
+          pr.statusCheckRollup ?? []
+        )
+      : (pr.statusCheckRollup ?? []);
   return {
     number: pr.number,
     url: pr.url,
     state: pr.state,
-    checks: checksVerdict(pr.statusCheckRollup ?? []),
+    checks: checksVerdict(rollup),
     head: pr.headRefOid,
-    failing: failingCheck(pr.statusCheckRollup ?? []),
+    failing: failingCheck(rollup),
     checkCount: (pr.statusCheckRollup ?? []).length,
     codeReview: pr.body === undefined ? undefined : parseCodeReview(pr.body),
   };
+}
+
+// What the API said about each run attempt. A run's event and commit never
+// change and its start changes only with a new attempt, which changes the
+// key, so an answer stays good for the life of the process. Failures aren't
+// kept, so a rate-limited lookup is retried on the next poll.
+const runCache = new Map<string, ActionsRun>();
+const RUN_CACHE_MAX = 2000;
+
+// The rollup with stale reruns dropped. Only a check that ran more than once
+// costs an API call, one per workflow run attempt. A run outside the PR's
+// repo, or one the API can't describe, leaves its check unsettled.
+async function settledRollup(
+  repoDir: string,
+  prUrl: string,
+  head: string | undefined,
+  rollup: RollupEntry[]
+): Promise<RollupEntry[]> {
+  const prRepo = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\//.exec(
+    prUrl
+  )?.[1];
+  const runs = new Map<string, ActionsRun | null>();
+  await Promise.all(
+    rerunsToLookUp(rollup).map(async ({ repo, id, attempt }) => {
+      if (repo !== prRepo) return runs.set(`${repo}#${id}`, null);
+      const key = attempt && `${repo}#${id}@${attempt}`;
+      let info = (key && runCache.get(key)) || null;
+      if (!info) {
+        info = await actionsRun(repoDir, repo, id);
+        if (info && key) {
+          if (runCache.size >= RUN_CACHE_MAX) runCache.clear();
+          runCache.set(key, info);
+        }
+      }
+      runs.set(`${repo}#${id}`, info);
+    })
+  );
+  return settleReruns(rollup, head, runs);
+}
+
+// What started a workflow run, or null when gh can't say.
+async function actionsRun(
+  repoDir: string,
+  repo: string,
+  id: string
+): Promise<ActionsRun | null> {
+  try {
+    const out = await run(
+      "gh",
+      [
+        "api",
+        `repos/${repo}/actions/runs/${id}`,
+        "--jq",
+        "{event, headSha: .head_sha, startedAt: .run_started_at, workflowId: .workflow_id}",
+      ],
+      repoDir,
+      15000
+    );
+    const r = JSON.parse(out) as Partial<ActionsRun>;
+    return typeof r.event === "string" &&
+      typeof r.headSha === "string" &&
+      typeof r.startedAt === "string" &&
+      typeof r.workflowId === "number"
+      ? (r as ActionsRun)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function findPR(
