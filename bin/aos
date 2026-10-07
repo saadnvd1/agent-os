@@ -19,6 +19,8 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      (--on <machine>: on a linked machine's AgentOS)
                                      (--name "<name>": name it; otherwise it's
                                      named from the prompt)
+  aos move <session> <machine>       carry a task on on a linked machine, with its
+                                     branch and conversation; "here" brings it back
   aos stack <project> [--plan] [--max N]
                                      run the project's linked board as stacked tasks
                                      (--plan: just show the order, start nothing)
@@ -326,6 +328,22 @@ async function main() {
       console.log(
         `started ${cmd === "task" ? "task" : "session"} "${session.name}"`
       );
+      return;
+    }
+    case "move": {
+      const [session, ...where] = args;
+      const machine = where.join(" ").trim();
+      if (!session || !machine)
+        fail("usage: aos move <session> <machine|here>");
+      console.log(
+        `moving ${session} to ${machine} (this can take a minute)...`
+      );
+      const { summary } = await post("/api/bus/move", {
+        from: me,
+        session,
+        machine,
+      });
+      console.log(summary);
       return;
     }
     case "stack": {

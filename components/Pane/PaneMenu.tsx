@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { writeClipboard } from "@/hooks/useCopyToClipboard";
 import type { Session } from "@/lib/db";
+import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 interface PaneMenuProps {
   session: Session | null | undefined;
@@ -82,6 +83,12 @@ export function PaneMenu({
               Copy session ID
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <MoveMenuItems
+              session={session}
+              Item={DropdownMenuItem}
+              Separator={DropdownMenuSeparator}
+              iconClassName="h-4 w-4"
+            />
           </>
         )}
         {hasAttachedTmux && (

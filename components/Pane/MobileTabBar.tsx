@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Session, Project } from "@/lib/db";
 import type { LucideIcon } from "lucide-react";
+import { HostBadge } from "@/components/Hosts/HostBadge";
 
 type ViewMode = "terminal" | "files" | "git" | "workers";
 
@@ -193,6 +194,7 @@ export function MobileTabBar({
                     </span>
                   )}
               </span>
+              <HostBadge hostId={session?.host_id} />
               <ChevronDown className="text-muted-foreground h-3 w-3 shrink-0" />
             </button>
           </DropdownMenuTrigger>

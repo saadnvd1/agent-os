@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TaskView } from "@/lib/tasks";
 import { sessionKeys } from "../sessions/keys";
+import { taskKeys } from "./keys";
 
-export const taskKeys = {
-  all: ["tasks"] as const,
-  list: () => [...taskKeys.all, "list"] as const,
-};
+export { taskKeys };
+export * from "./move";
 
 async function json<T>(res: Response): Promise<T> {
   const data = await res.json();
@@ -62,18 +61,6 @@ export function useSignOffTask() {
 export function useDropTask() {
   return useTaskMutation(async (id: string) =>
     json(await fetch(`/api/tasks/${id}/drop`, { method: "POST" }))
-  );
-}
-
-export function useMoveTask() {
-  return useTaskMutation(async (input: { id: string; hostId: string }) =>
-    json(
-      await fetch(`/api/tasks/${input.id}/move`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostId: input.hostId }),
-      })
-    )
   );
 }
 

@@ -412,6 +412,7 @@ aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
                                   # (both take --name "..." before the prompt)
+aos move <session> <machine>      # carry a task on there ("here" brings it back)
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
 aos schedules                     # every schedule, its next run and last outcome

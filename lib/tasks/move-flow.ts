@@ -15,8 +15,19 @@ import { moveRefusal } from "./move-guard";
 import { arrived as arrivedHere, importTask } from "./import";
 import { forgetHostTasks, postIdempotent, unknownOutcome } from "./remote";
 import { arrivedThere, settleMovedOut, tell } from "./move-recover";
+import {
+  finishProgress,
+  moveSteps,
+  startProgress,
+  stepProgress,
+} from "./move-progress";
 
 const LIVE = new Set(["running", "moving"]);
+
+// Moves this process is running, so a second press can't reset the first's
+// progress or report its own refusal as the first one failing.
+const g = globalThis as unknown as { __agentosMovesInFlight?: Set<string> };
+const inFlight = (g.__agentosMovesInFlight ??= new Set());
 
 export async function moveTask(id: string, toHostId: string): Promise<Session> {
   const session = getTaskSession(id);
@@ -33,7 +44,20 @@ export async function moveTask(id: string, toHostId: string): Promise<Session> {
   }
   const refusal = moveRefusal(session);
   if (refusal) throw new Error(refusal);
-  return toRemote ? moveOut(session, toHostId) : moveIn(session);
+  if (inFlight.has(id)) throw new Error("It's already moving");
+  inFlight.add(id);
+  try {
+    const moved = toRemote
+      ? await moveOut(session, toHostId)
+      : await moveIn(session);
+    finishProgress(id);
+    return moved;
+  } catch (err) {
+    finishProgress(id, err);
+    throw err;
+  } finally {
+    inFlight.delete(id);
+  }
 }
 
 const unconfirmed = (where: string, err: unknown) =>
@@ -43,6 +67,7 @@ const unconfirmed = (where: string, err: unknown) =>
 
 async function moveOut(session: Session, hostId: string): Promise<Session> {
   const link = requireHostLink(hostId);
+  startProgress(session.id, link.hostName, moveSteps("out", link.hostName));
   // A retry: if an earlier try arrived, it runs there now.
   if (session.task_status === "moving") {
     const there = await arrivedThere(link, session.id).catch((err) => {
@@ -51,6 +76,7 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
     if (there) return settleMovedOut(session, hostId, link.hostName, there);
   }
   const bundle = await exportOrResume(session.id, link.hostName);
+  stepProgress(session.id, "arrive");
   let there: Session;
   try {
     ({ session: there } = await postIdempotent<{ session: Session }>(
@@ -70,11 +96,13 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
 
 async function moveIn(mirror: Session): Promise<Session> {
   const link = requireHostLink(mirror.host_id);
+  startProgress(mirror.id, "this machine", moveSteps("in", link.hostName));
   const path = `/api/tasks/${encodeURIComponent(mirror.id)}`;
   // A retry after it arrived here but that machine didn't hear: tidy up.
   let here = arrivedHere(mirror.id);
   if (!here) {
     // That machine resumes the agent itself if its half fails there.
+    stepProgress(mirror.id, "export");
     let bundle: TaskBundle;
     try {
       ({ bundle } = await postIdempotent<{ bundle: TaskBundle }>(
@@ -98,6 +126,7 @@ async function moveIn(mirror: Session): Promise<Session> {
       throw err;
     }
   }
+  stepProgress(mirror.id, "confirm");
   // It runs here now. Until that machine marks its row moved (it stays
   // "moving" there, which nothing can sign off), the mirror stays, so Move
   // here again comes back to this.

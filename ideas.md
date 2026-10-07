@@ -129,6 +129,8 @@
 - [ ] Sidebar phone polish: titles cut off early (move ⋯ to long-press/swipe), shorter orchestrator subtitle, nested worker dot follows its own status, compact inline asks (title + Approve, detail in chat)
 - [ ] PR #98: review the stricter fail-closed code-review gate against what #97 already put on main; merge the new parts or drop it
 - [ ] Move a task between two other machines directly (today a move goes through this one)
+- [ ] Move a plain session (not a task) between machines when it's in its own worktree: push WIP to its branch, recreate it there, resume the conversation. Today only tasks move; a plain session has no task status for the move's claim/resume/mirror to hang on, and one in the project's own checkout has no branch of its own to push
+- [ ] Move a task from the phone's session switcher too (today: the row's ⋯ menu and ⌘K on phone)
 - [ ] Interactive and chat sessions on a linked machine through its AgentOS, like tasks (still ssh today)
 
 ## Other agents in chat

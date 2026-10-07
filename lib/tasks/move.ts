@@ -18,6 +18,7 @@ import { getTaskSession } from "./session";
 import { projectRef } from "./project-ref";
 import { moveRefusal } from "./move-guard";
 import { MAX_TRANSCRIPT_BYTES, type TaskBundle } from "./move-bundle";
+import { stepProgress } from "./move-progress";
 import {
   isClaudeSessionId,
   latestSessionId,
@@ -113,6 +114,7 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
     if (refusal) throw new Error(refusal);
     if (claimMoving(id, to).fresh) freshClaims.add(id);
     const cwd = session.working_directory;
+    stepProgress(id, "save");
     await stopAgent(session.tmux_name);
     if ((await git(cwd, "status", "--porcelain")).trim()) {
       await git(cwd, "add", "-A");
@@ -125,7 +127,9 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
         `wip: moving to ${to}`
       );
     }
+    stepProgress(id, "push");
     await pushOwnBranch(cwd, session.branch_name);
+    stepProgress(id, "conversation");
 
     const claudeId = await claudeIdFor(session);
     const transcript = claudeId ? await readTranscript(cwd, claudeId) : null;
