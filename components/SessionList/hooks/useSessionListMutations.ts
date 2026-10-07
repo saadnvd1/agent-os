@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   useDeleteSession,
   useRenameSession,
@@ -8,12 +7,7 @@ import {
   useSummarizeSession,
   useMoveSessionToProject,
 } from "@/data/sessions";
-import {
-  useToggleProject,
-  useDeleteProject,
-  useRenameProject,
-} from "@/data/projects";
-import { useToggleGroup, useCreateGroup, useDeleteGroup } from "@/data/groups";
+import { useDeleteProject, useRenameProject } from "@/data/projects";
 import {
   useStopDevServer,
   useRestartDevServer,
@@ -38,14 +32,8 @@ export function useSessionListMutations({
   const moveSessionToProjectMutation = useMoveSessionToProject();
 
   // Project mutations
-  const toggleProjectMutation = useToggleProject();
   const deleteProjectMutation = useDeleteProject();
   const renameProjectMutation = useRenameProject();
-
-  // Group mutations
-  const toggleGroupMutation = useToggleGroup();
-  const createGroupMutation = useCreateGroup();
-  const deleteGroupMutation = useDeleteGroup();
 
   // Dev server mutations
   const stopDevServerMutation = useStopDevServer();
@@ -97,13 +85,6 @@ export function useSessionListMutations({
   );
 
   // Project handlers
-  const handleToggleProject = useCallback(
-    async (projectId: string, expanded: boolean) => {
-      await toggleProjectMutation.mutateAsync({ projectId, expanded });
-    },
-    [toggleProjectMutation]
-  );
-
   const handleDeleteProject = useCallback(
     async (projectId: string) => {
       if (
@@ -122,30 +103,6 @@ export function useSessionListMutations({
       await renameProjectMutation.mutateAsync({ projectId, newName });
     },
     [renameProjectMutation]
-  );
-
-  // Group handlers
-  const handleToggleGroup = useCallback(
-    async (path: string, expanded: boolean) => {
-      await toggleGroupMutation.mutateAsync({ path, expanded });
-    },
-    [toggleGroupMutation]
-  );
-
-  const handleCreateGroup = useCallback(
-    async (name: string, parentPath?: string) => {
-      await createGroupMutation.mutateAsync({ name, parentPath });
-    },
-    [createGroupMutation]
-  );
-
-  const handleDeleteGroup = useCallback(
-    async (path: string) => {
-      if (!confirm("Delete this group? Sessions will be moved to parent."))
-        return;
-      await deleteGroupMutation.mutateAsync(path);
-    },
-    [deleteGroupMutation]
   );
 
   // Dev server handlers
@@ -171,66 +128,6 @@ export function useSessionListMutations({
   );
 
   // Bulk delete handler
-  const handleBulkDelete = useCallback(
-    async (sessionIds: string[]) => {
-      const count = sessionIds.length;
-      const hasWorktrees = sessionIds.length > 0; // Assume some might have worktrees
-
-      // Show toast with progress
-      const toastId = toast.loading(
-        hasWorktrees
-          ? `Deleting ${count} session${count > 1 ? "s" : ""}... cleaning up worktrees in background`
-          : `Deleting ${count} session${count > 1 ? "s" : ""}...`
-      );
-
-      let succeeded = 0;
-      let failed = 0;
-
-      // Delete all sessions in parallel for speed
-      await Promise.allSettled(
-        sessionIds.map(async (sessionId) => {
-          try {
-            const response = await fetch(`/api/sessions/${sessionId}`, {
-              method: "DELETE",
-            });
-            if (response.ok) {
-              succeeded++;
-            } else {
-              failed++;
-            }
-          } catch (error) {
-            console.error(`Failed to delete session ${sessionId}:`, error);
-            failed++;
-          }
-        })
-      );
-
-      // Invalidate cache to refresh UI
-      queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
-
-      // Update toast based on results
-      if (failed === 0) {
-        toast.success(
-          `Deleted ${succeeded} session${succeeded > 1 ? "s" : ""}`,
-          { id: toastId }
-        );
-      } else if (succeeded === 0) {
-        toast.error(
-          `Failed to delete ${failed} session${failed > 1 ? "s" : ""}`,
-          {
-            id: toastId,
-          }
-        );
-      } else {
-        toast.warning(
-          `Deleted ${succeeded}, failed ${failed} session${failed > 1 ? "s" : ""}`,
-          { id: toastId }
-        );
-      }
-    },
-    [queryClient]
-  );
-
   // Refresh handler
   const handleRefresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
@@ -248,14 +145,8 @@ export function useSessionListMutations({
     handleMoveSessionToProject,
 
     // Project handlers
-    handleToggleProject,
     handleDeleteProject,
     handleRenameProject,
-
-    // Group handlers
-    handleToggleGroup,
-    handleCreateGroup,
-    handleDeleteGroup,
 
     // Dev server handlers
     handleStopDevServer,
@@ -263,7 +154,6 @@ export function useSessionListMutations({
     handleRemoveDevServer,
 
     // Bulk operations
-    handleBulkDelete,
     handleRefresh,
   };
 }

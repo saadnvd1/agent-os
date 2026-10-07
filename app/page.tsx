@@ -395,12 +395,17 @@ function HomeContent() {
     if (isHydrated && !isMobile) setSidebarOpen(true);
   }, [isMobile, isHydrated]);
 
-  // Keyboard shortcut: Cmd+K to open quick switcher
+  // Cmd+K: the sidebar's search when it's on screen, else the quick switcher
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setShowQuickSwitcher(true);
+        const search = document.querySelector<HTMLInputElement>(
+          "[data-sidebar-search]"
+        );
+        const rect = search?.getBoundingClientRect();
+        if (search && rect && rect.width > 0 && rect.right > 0) search.focus();
+        else setShowQuickSwitcher(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -450,7 +455,7 @@ function HomeContent() {
 
   // New session in project handler
   const handleNewSessionInProject = useCallback((projectId: string) => {
-    setNewSessionProjectId(projectId);
+    setNewSessionProjectId(projectId || null);
     setShowNewSessionDialog(true);
   }, []);
 

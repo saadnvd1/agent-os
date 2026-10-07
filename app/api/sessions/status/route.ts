@@ -12,7 +12,8 @@ import {
 import { getDb, type Session } from "@/lib/db";
 import { chatState } from "@/lib/chat/runner";
 import { chatActivityLine } from "@/lib/chat/activity";
-import { needsYou } from "@/lib/needs-you";
+import { chatNeed, isUnread, needsYou } from "@/lib/needs-you";
+import type { SessionNeed } from "@/lib/sidebar/shelves";
 import { openAskCount } from "@/lib/orchestrator/asks";
 
 import { lastUserTask } from "@/lib/chat/store";
@@ -32,6 +33,8 @@ interface SessionStatusResponse {
   task?: string | null;
   // An orchestrator's open asks: each counts as one thing needing you.
   asks?: number;
+  need?: SessionNeed | null;
+  unread?: boolean;
 }
 
 async function getTmuxSessions(): Promise<string[]> {
@@ -168,15 +171,14 @@ function getAgentTypeFromSessionName(sessionName: string): AgentType {
   return getProviderIdFromSessionName(sessionName) || "claude";
 }
 
-function terminalNeedsYou(db: ReturnType<typeof getDb>, id: string): boolean {
-  const row = db
+function terminalRow(db: ReturnType<typeof getDb>, id: string) {
+  return db
     .prepare(
       `SELECT id, view, updated_at, last_seen_at FROM sessions WHERE id = ?`
     )
     .get(id) as
     | Pick<Session, "id" | "view" | "updated_at" | "last_seen_at">
     | undefined;
-  return row ? needsYou({ ...row, view: "terminal" }, null) : true;
 }
 
 export async function GET() {
@@ -224,11 +226,22 @@ export async function GET() {
       }
       previousStatuses.set(id, status);
 
+      const row = terminalRow(db, id);
+      const terminal = row ? { ...row, view: "terminal" as const } : null;
+      // Waiting counts only when it's news: not a prompt you've seen.
+      const shown =
+        status === "waiting" && terminal && !needsYou(terminal, null)
+          ? "idle"
+          : status;
       statusMap[id] = {
         sessionName,
-        // Waiting counts only when it's news: not a prompt you've seen.
-        status:
-          status === "waiting" && !terminalNeedsYou(db, id) ? "idle" : status,
+        status: shown,
+        need: shown === "waiting" ? "input" : null,
+        unread:
+          shown !== "running" &&
+          shown !== "waiting" &&
+          !!terminal &&
+          isUnread(terminal, null),
         lastLine,
         claudeSessionId,
         agentType,
@@ -262,6 +275,10 @@ export async function GET() {
       )
       .all() as Session[]) {
       const state = chatState(session.id);
+      const asks =
+        session.role === "orchestrator"
+          ? openAskCount(session.workspace_id)
+          : 0;
       statusMap[session.id] = {
         sessionName: session.tmux_name,
         status:
@@ -272,9 +289,9 @@ export async function GET() {
               : "idle",
         task: chatActivityLine(session.id) ?? lastUserTask(session.id),
         agentType: session.agent_type,
-        ...(session.role === "orchestrator" && {
-          asks: openAskCount(session.workspace_id),
-        }),
+        need: chatNeed(session, state, asks),
+        unread: session.role !== "orchestrator" && isUnread(session, state),
+        ...(session.role === "orchestrator" && { asks }),
       };
     }
 
