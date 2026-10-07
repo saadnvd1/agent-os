@@ -61,6 +61,8 @@ export function listScheduleViews(workspaceId?: string | null): ScheduleView[] {
 // any name aos send takes, stored by id, in that session's workspace.
 export function checkInInput(opts: {
   session: string;
+  // The agent session asking, from `aos`; null for Saad.
+  from?: string | null;
   every?: string;
   cron?: string;
   prompt: string;
@@ -70,6 +72,13 @@ export function checkInInput(opts: {
   const session = resolveSession(opts.session);
   const workspaceId = sessionWorkspace(session);
   if (!workspaceId) throw new Error(`${session.name} isn't in a workspace`);
+  // An agent schedules only inside its own workspace.
+  if (opts.from) {
+    const creator = getSessionRow(opts.from);
+    if (!creator) throw new Error("Unknown sender session");
+    if (sessionWorkspace(creator) !== workspaceId)
+      throw new Error(`${session.name} isn't in your workspace`);
+  }
   const cron = opts.cron?.trim() || everyCron(opts.every ?? "30m");
   return {
     workspaceId,
@@ -79,6 +88,7 @@ export function checkInInput(opts: {
     prompt: opts.prompt,
     kind: "message",
     targetSessionId: session.id,
+    createdBySessionId: opts.from || null,
   };
 }
 

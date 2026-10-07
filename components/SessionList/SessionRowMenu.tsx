@@ -152,20 +152,22 @@ export function SessionRowMenu({
           </SubContent>
         </Sub>
       )}
-      {workspaceId && (
-        <Item
-          onClick={() =>
-            schedulesUiActions.openDraft(workspaceId, {
-              kind: "message",
-              targetSessionId: session.id,
-              name: `Check-in: ${session.name}`.slice(0, 80),
-            })
-          }
-        >
-          <Clock className={icon} />
-          Schedule check-ins
-        </Item>
-      )}
+      {workspaceId &&
+        session.role !== "orchestrator" &&
+        (!session.task_status || session.task_status === "running") && (
+          <Item
+            onClick={() =>
+              schedulesUiActions.openDraft(workspaceId, {
+                kind: "message",
+                targetSessionId: session.id,
+                name: `Check-in: ${session.name}`.slice(0, 80),
+              })
+            }
+          >
+            <Clock className={icon} />
+            Schedule check-ins
+          </Item>
+        )}
       <Item
         onClick={() =>
           selectionActions.toggle(session.id, false, ctx.orderedIds)

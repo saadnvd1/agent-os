@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       body.session !== undefined
         ? checkInInput({
             session: String(body.session),
+            from: body.from ? String(body.from) : null,
             every: body.every,
             cron: body.cron,
             prompt: String(body.prompt ?? ""),

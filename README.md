@@ -272,7 +272,10 @@ a project and a prompt, and starts one of:
   after 30 minutes) is started again to take it. The run records `delivered`,
   `queued` or why it failed. **Schedule check-ins** in a session's **⋯** menu
   fills one in. The session is stored by id, so renaming it changes nothing;
-  an archived or deleted one fails the run.
+  an archived or deleted one fails the run. The orchestrator isn't a target
+  (it has its own kind). A schedule an agent made with `aos schedule add`
+  stays in that agent's workspace and reaches the session labelled as that
+  agent's request, not yours.
 
 The server checks once a minute and claims each run in SQLite before starting
 it, so a time never runs twice. If AgentOS was off when runs were due, it
@@ -280,7 +283,7 @@ runs only the most recent one when it comes back, marked **caught up**. A run
 is **skipped** while the schedule's previous task or session is still working,
 and while the workspace's orchestrator is paused. A run that fails to start is
 recorded with why, noted in the orchestrator's chat and sent to your phone
-(see below), once until the schedule runs again. Every run stays in the
+(see below), once per failing streak: not again until a run starts. Every run stays in the
 schedule's history with a link to what it started. **Run now** runs one
 immediately, even while the last run is still working (Pause still holds it).
 Task and session runs go through the orchestrator's brakes, like its own
@@ -304,7 +307,9 @@ Two things reach your phone: a schedule run that failed, and whatever an
 agent sends on purpose with `aos notify "<text>"` (the orchestrator's morning
 report, a real milestone). Status changes don't; that's the in-app Needs-you
 list. Each source sends at most one a minute: anything more inside the minute
-waits and goes out as one message, and the same text twice goes once.
+waits and goes out as one message (kept in the database, so a restart
+doesn't lose it; past 20 waiting, more are dropped), and the same text twice
+goes once.
 
 Set it up in **Phone notifications** (⌘K, or the line at the bottom of
 Schedules), one of:

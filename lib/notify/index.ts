@@ -5,7 +5,7 @@
  * Needs-you list has those.
  */
 
-import { db } from "../db";
+import { db, type Session } from "../db";
 import { Limiter, type Outcome } from "./limiter";
 import { selectNotifier, type TelegramConfig } from "./notifiers";
 
@@ -67,9 +67,11 @@ export function setTelegram(input: {
 
 const g = globalThis as unknown as { __agentosPhone?: Limiter };
 
-// One limiter per process, whichever copy of this module asks.
+// One limiter per process, whichever copy of this module asks. Made, it
+// re-arms what a previous process left waiting.
 function limiter(): Limiter {
-  g.__agentosPhone ??= new Limiter(
+  if (g.__agentosPhone) return g.__agentosPhone;
+  g.__agentosPhone = new Limiter(
     async (text) => {
       const notifier = selectNotifier(process.env, telegramConfig());
       if (!notifier) throw new Error("no phone notifier is set up");
@@ -83,7 +85,17 @@ function limiter(): Limiter {
         ),
     }
   );
+  g.__agentosPhone.resume();
   return g.__agentosPhone;
+}
+
+// At server start: anything held when the last process stopped goes out.
+export function resumePhoneOutbox(): void {
+  try {
+    limiter();
+  } catch (error) {
+    console.error("[notify] couldn't resume the outbox:", error);
+  }
 }
 
 export class NotConfigured extends Error {
@@ -107,6 +119,26 @@ export async function sendPhone(
   if (outcome.state === "failed")
     console.error(`[notify] ${source} didn't send: ${outcome.why}`);
   return outcome;
+}
+
+// `aos notify` from a session (or the CLI outside one): each sender is its
+// own source for the limit, and its name leads the message.
+export async function notifyFrom(
+  from: string | null,
+  text: string
+): Promise<Outcome> {
+  const session = from
+    ? (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(from) as
+        | Session
+        | undefined)
+    : undefined;
+  if (from && !session) throw new Error("Unknown sender session");
+  const body = text.trim();
+  if (!body) throw new Error("Nothing to send");
+  return sendPhone(
+    session ? `session:${session.id}` : "cli",
+    session ? `${session.name}: ${body}` : body
+  );
 }
 
 // For the server's own alerts: never throws, never waits on the send.

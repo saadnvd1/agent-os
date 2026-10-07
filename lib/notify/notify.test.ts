@@ -1,11 +1,21 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { collapse, Limiter } from "./limiter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../db";
+import { randomUUID } from "crypto";
+import { seedSession } from "../orchestrator/testing";
+import { createProject } from "../projects";
+import { collapse, Limiter, MAX_HELD } from "./limiter";
 import { commandNotifier, selectNotifier, telegramNotifier } from "./notifiers";
 
 const TOKEN = "123456:SECRET-bot-token-abc";
+
+const project = () =>
+  createProject({
+    name: `p-${randomUUID().slice(0, 6)}`,
+    workingDirectory: "/tmp",
+  });
 
 function tmpFile() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-notify-"));
@@ -92,69 +102,150 @@ describe("telegramNotifier", () => {
 });
 
 describe("Limiter", () => {
+  // Each test gets its own sources: the outbox is one table.
   function setup() {
-    let now = 0;
+    let now = 1_000_000;
     const sent: string[] = [];
-    const limiter = new Limiter(
-      async (t) => {
-        sent.push(t);
-      },
-      { now: () => now }
-    );
-    return { limiter, sent, advance: (ms: number) => (now += ms) };
+    const send = async (t: string) => {
+      sent.push(t);
+    };
+    const limiter = new Limiter(send, { now: () => now });
+    const tag = randomUUID().slice(0, 8);
+    return {
+      limiter,
+      send,
+      sent,
+      src: (s: string) => `${s}-${tag}`,
+      now: () => now,
+      advance: (ms: number) => (now += ms),
+    };
   }
   afterEach(() => vi.useRealTimers());
 
   it("sends the first at once and holds the rest of the minute", async () => {
     vi.useFakeTimers();
-    const { limiter, sent, advance } = setup();
-    expect(await limiter.push("a", "one")).toEqual({ state: "sent" });
+    const { limiter, sent, advance, src } = setup();
+    expect(await limiter.push(src("a"), "one")).toEqual({ state: "sent" });
     advance(10_000);
-    expect(await limiter.push("a", "two")).toEqual({
+    expect(await limiter.push(src("a"), "two")).toEqual({
       state: "held",
       inMs: 50_000,
     });
-    expect(await limiter.push("a", "three")).toMatchObject({ state: "held" });
+    expect(await limiter.push(src("a"), "three")).toMatchObject({
+      state: "held",
+    });
     expect(sent).toEqual(["one"]);
-    await limiter.flush("a");
+    await limiter.flush(src("a"));
     expect(sent).toEqual(["one", collapse(["two", "three"])]);
     expect(sent[1]).toBe("2 updates:\n• two\n• three");
   });
 
   it("collapses the same text inside the minute", async () => {
-    const { limiter, sent, advance } = setup();
-    await limiter.push("a", "same");
-    expect(await limiter.push("a", "same")).toEqual({ state: "duplicate" });
+    const { limiter, sent, advance, src } = setup();
+    await limiter.push(src("a"), "same");
+    expect(await limiter.push(src("a"), "same")).toEqual({
+      state: "duplicate",
+    });
     advance(61_000);
-    expect(await limiter.push("a", "same")).toEqual({ state: "sent" });
+    expect(await limiter.push(src("a"), "same")).toEqual({ state: "sent" });
     expect(sent).toEqual(["same", "same"]);
   });
 
   it("limits each source on its own", async () => {
-    const { limiter, sent } = setup();
-    await limiter.push("a", "x");
-    expect(await limiter.push("b", "y")).toEqual({ state: "sent" });
+    const { limiter, sent, src } = setup();
+    await limiter.push(src("a"), "x");
+    expect(await limiter.push(src("b"), "y")).toEqual({ state: "sent" });
     expect(sent).toEqual(["x", "y"]);
   });
 
   it("sends what waited when the minute is up", async () => {
     vi.useFakeTimers();
-    const { limiter, sent, advance } = setup();
-    await limiter.push("a", "one");
-    await limiter.push("a", "two");
+    const { limiter, sent, advance, src } = setup();
+    await limiter.push(src("a"), "one");
+    await limiter.push(src("a"), "two");
     advance(60_000);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(sent).toEqual(["one", "two"]);
+  });
+
+  it("a held message survives a restart", async () => {
+    vi.useFakeTimers();
+    const { limiter, send, sent, now, advance, src } = setup();
+    await limiter.push(src("a"), "one");
+    await limiter.push(src("a"), "held over");
+    // The process dies before its timer fires; a new one starts.
+    const next = new Limiter(send, { now });
+    advance(60_000);
+    next.resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toEqual(["one", "held over"]);
+    // Sent once, not again on a later resume.
+    next.resume();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual(["one", "held over"]);
+    void limiter;
+  });
+
+  it("drops past the cap instead of piling up", async () => {
+    const { limiter, src } = setup();
+    await limiter.push(src("a"), "first");
+    for (let i = 0; i < MAX_HELD; i++)
+      expect((await limiter.push(src("a"), `m${i}`)).state).toBe("held");
+    expect(await limiter.push(src("a"), "one more")).toEqual({
+      state: "dropped",
+    });
   });
 
   it("reports a failed send", async () => {
     const limiter = new Limiter(async () => {
       throw new Error("boom");
     });
-    expect(await limiter.push("a", "x")).toEqual({
+    expect(await limiter.push(`f-${randomUUID()}`, "x")).toEqual({
       state: "failed",
       why: "boom",
     });
+  });
+});
+
+describe("notifyFrom (aos notify)", () => {
+  // The Limiter tests above leave held rows the shared limiter would send.
+  beforeEach(() => db.prepare(`DELETE FROM notify_outbox`).run());
+
+  const withCmd = async (fn: (out: string) => Promise<void>) => {
+    const out = tmpFile();
+    const before = process.env.AGENTOS_NOTIFY_CMD;
+    process.env.AGENTOS_NOTIFY_CMD = `cat >> '${out}'`;
+    try {
+      await fn(out);
+    } finally {
+      if (before === undefined) delete process.env.AGENTOS_NOTIFY_CMD;
+      else process.env.AGENTOS_NOTIFY_CMD = before;
+    }
+  };
+
+  it("leads with the sender's name and limits each sender alone", async () => {
+    const { notifyFrom } = await import(".");
+    const a = seedSession({ projectId: project().id, name: "orchestrator" });
+    const b = seedSession({ projectId: project().id, name: "api-task" });
+    await withCmd(async (out) => {
+      expect(await notifyFrom(a, "morning report")).toEqual({ state: "sent" });
+      expect(await notifyFrom(b, "stack landed")).toEqual({ state: "sent" });
+      expect(fs.readFileSync(out, "utf8")).toBe(
+        "orchestrator: morning reportapi-task: stack landed"
+      );
+      expect((await notifyFrom(a, "another")).state).toBe("held");
+    });
+  });
+
+  it("refuses an unknown sender, empty text, or no notifier", async () => {
+    const { notifyFrom, NotConfigured } = await import(".");
+    await withCmd(async () => {
+      await expect(notifyFrom("no-such-session", "hi")).rejects.toThrow(
+        "Unknown sender session"
+      );
+      await expect(notifyFrom(null, "  ")).rejects.toThrow("Nothing to send");
+    });
+    await expect(notifyFrom(null, "hi")).rejects.toBeInstanceOf(NotConfigured);
   });
 });
 
@@ -184,6 +275,10 @@ describe("settings and logs", () => {
       expect(JSON.stringify(view)).not.toContain(TOKEN);
       const outcome = await sendPhone("test-source", "hi");
       expect(outcome.state).toBe("failed");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(logged.join("\n")).toContain(
+        "Telegram refused it (403: nope <token>)"
+      );
       expect(JSON.stringify(outcome)).not.toContain(TOKEN);
       expect(logged.join("\n")).toContain("test-source didn't send");
       expect(logged.join("\n")).not.toContain(TOKEN);
