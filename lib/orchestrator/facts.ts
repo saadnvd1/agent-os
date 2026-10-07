@@ -11,6 +11,7 @@ import { chatState } from "../chat/runner";
 import { chatActivityLine } from "../chat/activity";
 import { lastUserTask } from "../chat/store";
 import { needsYou } from "../needs-you";
+import { programSummary } from "../program-status/store";
 import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
 
@@ -121,6 +122,23 @@ export async function statusOf(s: Session): Promise<{
   }
   if (!statusDetector.sessionExists(s.tmux_name))
     return { status: "dead", activity: null, needsInput: false };
+  // A program's own report wins over the screen. Its message is untrusted
+  // text and never reaches the orchestrator: only the state does.
+  const program = programSummary(s.tmux_name);
+  if (program) {
+    const status: FactStatus =
+      program.state === "working"
+        ? "running"
+        : program.state === "blocked" || program.state === "error"
+          ? "waiting"
+          : "idle";
+    const info = sessionRowInfo(status, statusDetector.titleFor(s.tmux_name));
+    return {
+      status,
+      activity: info.subtitle,
+      needsInput: program.state === "blocked",
+    };
+  }
   const raw = await statusDetector.getStatus(s.tmux_name);
   const status: FactStatus =
     raw === "waiting" && !needsYou({ ...s, view: "terminal" }, null)

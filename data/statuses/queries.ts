@@ -4,6 +4,7 @@ import type { Session } from "@/lib/db";
 import type { SessionStatus } from "@/components/views/types";
 import { statusKeys } from "../sessions/keys";
 import { useMarkSeen } from "./useMarkSeen";
+import { useStatusStream } from "./stream";
 
 interface StatusResponse {
   statuses: Record<string, SessionStatus>;
@@ -33,11 +34,14 @@ export function useSessionStatusesQuery({
   activeSessionId,
   checkStateChanges,
 }: UseSessionStatusesOptions) {
+  const streaming = useStatusStream();
   const query = useQuery({
     queryKey: statusKeys.all,
     queryFn: fetchStatuses,
     staleTime: 2000,
+    // Changes are pushed; polling only covers a stream that's down.
     refetchInterval: (query) => {
+      if (streaming) return 60000;
       const statuses = query.state.data?.statuses;
       if (!statuses) return 5000;
 

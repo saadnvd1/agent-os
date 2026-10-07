@@ -234,6 +234,32 @@ titles and project names, and the project filter narrows the list to one
 project and holds that project's own actions: new session, terminal, dev
 server, settings, board, workspace.
 
+Rows move the moment a session changes state: the server pushes every change
+over `/ws/status` (behind the same device gate as the terminal). While it's
+connected, polling drops to once a minute; while it's down, polling carries on
+as before and the socket reconnects with backoff.
+
+**AgentOS reads OSC 7501**, the [Program Status
+Protocol](https://www.superlogical.com/rex/docs/build/program-status): a
+program in a terminal session can say it's `working`, `blocked` (on a
+permission, a question or a sign-in), `done`, or failed, and that wins over
+reading the screen. Blocked lands on Needs you with Approve, Answer or Sign in
+and the program's message (plain text, capped); done gets the unread dot.
+
+```sh
+printf '\e]7501;state=blocked:kind=permission:app=me:msg=%s\e\\' "$(printf 'Apply 3 changes?' | base64)"
+```
+
+tmux drops sequences it doesn't know, so AgentOS copies each local terminal
+session's raw output to itself (`tmux pipe-pane`, through a unix socket only
+you can reach; needs `nc`). Claude Code sessions AgentOS starts on this
+machine report through hooks it installs (`~/.agent-os/claude-status-hooks.json`,
+passed with `--settings`). Not covered yet: sessions on other machines (their
+output never passes through this one), Codex and the other agents (Codex only
+notifies when a turn ends, with nothing for "working" or "blocked"; they keep
+reading the screen), and the terminfo
+`Pst` capability (the pane's terminal is tmux's).
+
 ## Workspaces
 
 Group projects into workspaces (e.g. Work, Personal) from the workspace
