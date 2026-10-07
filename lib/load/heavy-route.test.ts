@@ -108,11 +108,11 @@ describe("aos heavy", () => {
     const { port } = server.address() as AddressInfo;
     try {
       const r = await aosHeavy(
-        ["sh", "-c", "sleep 0.3"],
+        ["sh", "-c", "sleep 2"],
         `http://127.0.0.1:${port}`
       );
       expect(r).toMatchObject({ code: 0, stderr: "Note: load is red.\n" });
-      expect(body.command).toBe("sh -c sleep 0.3");
+      expect(body.command).toBe("sh -c sleep 2");
       expect(body.pid).toBeGreaterThan(0);
     } finally {
       server.close();

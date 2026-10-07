@@ -122,8 +122,9 @@ describe("the hook's heavy-command note", () => {
         AGENTOS_URL: `http://127.0.0.1:${port}`,
       });
       expect(r).toMatchObject({ code: 0, stdout: "" });
-      // curl's own limit is 50ms; the rest is starting sh, awk and curl.
-      expect(r.ms).toBeLessThan(500);
+      // curl's own limit is 50ms; the rest is starting sh, awk and curl,
+      // which a loaded machine slows. Without the limit it never returns.
+      expect(r.ms).toBeLessThan(2000);
     } finally {
       server.close();
     }

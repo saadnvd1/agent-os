@@ -14,12 +14,14 @@
  * 4. Cooldown - 2s grace period after activity stops
  */
 
-import { hostExec, listHosts } from "./hosts";
+import { hostExecFile, listHosts } from "./hosts";
 import { WORKING_LINE } from "./claude-working-line";
 
 // Configuration constants
 const CONFIG = {
   ACTIVITY_COOLDOWN_MS: 2000, // Grace period after activity
+  // A screen with no new output is read again at least this often anyway.
+  SCREEN_MAX_AGE_MS: 30000,
   SPIKE_WINDOW_MS: 1000, // Window to detect sustained activity
   SUSTAINED_THRESHOLD: 2, // Changes needed to confirm activity
   CACHE_VALIDITY_MS: 2000, // How long tmux cache is valid
@@ -188,11 +190,17 @@ const LIST_FORMAT =
   "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_title}";
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
-  const { stdout } = await hostExec(
+  // No tmux server (or no tmux) is an empty list; ssh failing (255) or a
+  // timeout is the host's error.
+  const { stdout } = await hostExecFile(
     hostId,
-    `tmux list-sessions -F '${LIST_FORMAT}' 2>/dev/null || true`,
+    "tmux",
+    ["list-sessions", "-F", LIST_FORMAT],
     8000
-  );
+  ).catch((err: { stdout?: string; killed?: boolean; code?: unknown }) => {
+    if (err.killed || err.code === 255) throw err;
+    return { stdout: err.stdout ?? "" };
+  });
   return stdout
     .trim()
     .split("\n")
@@ -360,6 +368,10 @@ export function readInputBox(screen: string): string | null {
 class SessionStatusDetector {
   private trackers = new Map<string, StateTracker>();
   private unsent = new Map<string, UnsentTracker>();
+  private screens = new Map<
+    string,
+    { activity: number; at: number; text: string }
+  >();
   private cache: SessionCache = {
     data: new Map(),
     hostErrors: new Map(),
@@ -436,29 +448,47 @@ class SessionStatusDetector {
     return Object.fromEntries(this.cache.hostErrors);
   }
 
-  async capturePane(name: string): Promise<string> {
+  // tmux run directly (no shell); "" when the pane is gone.
+  private async capture(name: string, colours: boolean): Promise<string> {
     try {
-      const { stdout } = await hostExec(
-        this.hostFor(name),
-        `tmux capture-pane -t "=${name}:" -p 2>/dev/null || echo ""`
-      );
-      return stdout.trim();
+      const { stdout } = await hostExecFile(this.hostFor(name), "tmux", [
+        "capture-pane",
+        ...(colours ? ["-e"] : []),
+        "-t",
+        `=${name}:`,
+        "-p",
+      ]);
+      return stdout;
     } catch {
       return "";
     }
   }
 
-  // The visible pane with its colours, for screenNeed and getStatus.
+  async capturePane(name: string): Promise<string> {
+    return (await this.capture(name, false)).trim();
+  }
+
+  /**
+   * The visible pane with its colours, for screenNeed and getStatus. A
+   * screen with no output since it was read is not read again: tmux's
+   * activity time (whole seconds) hasn't moved, and the read began after
+   * that second ended, so nothing it shows can have changed.
+   */
   async captureScreen(name: string): Promise<string> {
-    try {
-      const { stdout } = await hostExec(
-        this.hostFor(name),
-        `tmux capture-pane -e -t "=${name}:" -p 2>/dev/null || echo ""`
-      );
-      return stdout.trimEnd();
-    } catch {
-      return "";
-    }
+    const activity = this.getTimestamp(name);
+    const cached = this.screens.get(name);
+    const now = Date.now();
+    if (
+      cached &&
+      activity > 0 &&
+      cached.activity === activity &&
+      cached.at >= (activity + 1) * 1000 &&
+      now - cached.at < CONFIG.SCREEN_MAX_AGE_MS
+    )
+      return cached.text;
+    const text = (await this.capture(name, true)).trimEnd();
+    this.screens.set(name, { activity, at: now, text });
+    return text;
   }
 
   /**
@@ -647,6 +677,9 @@ class SessionStatusDetector {
     }
     for (const name of this.unsent.keys()) {
       if (!this.sessionExists(name)) this.unsent.delete(name);
+    }
+    for (const name of this.screens.keys()) {
+      if (!this.sessionExists(name)) this.screens.delete(name);
     }
   }
 }

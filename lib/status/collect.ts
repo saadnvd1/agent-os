@@ -32,7 +32,7 @@ import {
 import type { SessionNeed } from "../sidebar/shelves";
 import { openAskCount } from "../orchestrator/asks";
 import { lastUserTask } from "../chat/store";
-import { hostExec, isRemoteHost } from "../hosts";
+import { hostExecFile, isRemoteHost } from "../hosts";
 import {
   applyProgramReport,
   dropProgramTransient,
@@ -40,8 +40,11 @@ import {
 } from "../program-status/store";
 import type { ProgramSummary } from "../program-status/records";
 
-const execOn = (sessionName: string, command: string) =>
-  hostExec(statusDetector.hostFor(sessionName), command);
+// tmux run directly, no shell; a failure reads as empty output.
+const tmuxOn = (sessionName: string, args: string[]) =>
+  hostExecFile(statusDetector.hostFor(sessionName), "tmux", args).catch(() => ({
+    stdout: "",
+  }));
 
 export interface SessionStatusResponse {
   sessionName: string;
@@ -72,10 +75,13 @@ async function getTmuxSessions(): Promise<string[]> {
 
 async function getTmuxSessionCwd(sessionName: string): Promise<string | null> {
   try {
-    const { stdout } = await execOn(
+    const { stdout } = await tmuxOn(sessionName, [
+      "display-message",
+      "-t",
       sessionName,
-      `tmux display-message -t "${sessionName}" -p "#{pane_current_path}" 2>/dev/null || echo ""`
-    );
+      "-p",
+      "#{pane_current_path}",
+    ]);
     const cwd = stdout.trim();
     return cwd || null;
   } catch {
@@ -88,10 +94,12 @@ async function getClaudeSessionIdFromEnv(
   sessionName: string
 ): Promise<string | null> {
   try {
-    const { stdout } = await execOn(
+    const { stdout } = await tmuxOn(sessionName, [
+      "show-environment",
+      "-t",
       sessionName,
-      `tmux show-environment -t "${sessionName}" CLAUDE_SESSION_ID 2>/dev/null || echo ""`
-    );
+      "CLAUDE_SESSION_ID",
+    ]);
     const line = stdout.trim();
     if (line.startsWith("CLAUDE_SESSION_ID=")) {
       const sessionId = line.replace("CLAUDE_SESSION_ID=", "");

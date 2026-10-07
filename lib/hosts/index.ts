@@ -3,6 +3,7 @@ import { getDb, type Host } from "../db";
 import {
   LOCAL_HOST_ID,
   isValidSshTarget,
+  runFileOnTarget,
   runOnTarget,
   type ExecResult,
 } from "./ssh";
@@ -84,4 +85,13 @@ export function hostExec(
   timeout?: number
 ): Promise<ExecResult> {
   return runOnTarget(sshTargetFor(hostId), command, timeout);
+}
+
+export function hostExecFile(
+  hostId: string | null | undefined,
+  file: string,
+  args: string[],
+  timeout?: number
+): Promise<ExecResult> {
+  return runFileOnTarget(sshTargetFor(hostId), file, args, timeout);
 }
