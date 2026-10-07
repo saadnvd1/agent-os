@@ -11,7 +11,7 @@ import { createProject } from "@/lib/projects";
 
 describe("ssh targets", () => {
   it("accepts user@host and aliases, rejects option injection", () => {
-    expect(isValidSshTarget("alice@box.ts.net")).toBe(true);
+    expect(isValidSshTarget("alice@devbox.example.ts.net")).toBe(true);
     expect(isValidSshTarget("devbox")).toBe(true);
     expect(isValidSshTarget("-oProxyCommand=x")).toBe(false);
     expect(isValidSshTarget("a b")).toBe(false);

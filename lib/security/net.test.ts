@@ -43,7 +43,7 @@ describe("host header (DNS rebinding)", () => {
       "127.0.0.1:3011",
       "[::1]:3011",
       "100.64.0.1:3011",
-      "mac.example.ts.net:3011",
+      "laptop.example.ts.net:3011",
     ]) {
       expect(hostAllowed(h, policy)).toBe(true);
     }
@@ -146,14 +146,12 @@ describe("tailscaleAddresses (only Tailscale's own interface)", () => {
     expect(tailscaleAddresses(ifaces, [])).toEqual(["100.64.0.1"]);
   });
   it("trusts tailscale0 on Linux", () => {
-    expect(
-      tailscaleAddresses({ tailscale0: [v4("100.64.0.3")] }, [])
-    ).toEqual(["100.64.0.3"]);
+    expect(tailscaleAddresses({ tailscale0: [v4("100.64.0.3")] }, [])).toEqual([
+      "100.64.0.3",
+    ]);
   });
   it("once the CLI has reported this node's IPs, only those count", () => {
     const ifaces = { utun3: [v4("100.64.0.9")], utun4: [v4("100.64.0.1")] };
-    expect(tailscaleAddresses(ifaces, ["100.64.0.1"])).toEqual([
-      "100.64.0.1",
-    ]);
+    expect(tailscaleAddresses(ifaces, ["100.64.0.1"])).toEqual(["100.64.0.1"]);
   });
 });

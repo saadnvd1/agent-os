@@ -126,25 +126,31 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
       }
 
-      // If this is a worktree session, also rename the git branch
-      if (existing.worktree_path && isAgentOSWorktree(existing.worktree_path)) {
+      // A worktree session's unpushed branch follows its name. A task's
+      // branch never does: its agent was told the name, and its PR is
+      // looked up by it.
+      if (
+        existing.worktree_path &&
+        !existing.task_status &&
+        isAgentOSWorktree(existing.worktree_path)
+      ) {
         try {
           const currentBranch = await getCurrentBranch(existing.worktree_path);
           const newBranchName = generateBranchName(body.name);
 
           if (currentBranch !== newBranchName) {
-            const result = await renameBranch(
+            await renameBranch(
               existing.worktree_path,
               currentBranch,
               newBranchName
             );
-            console.log(
-              `Renamed branch ${currentBranch} → ${newBranchName}`,
-              result.remoteRenamed ? "(also on remote)" : "(local only)"
-            );
+            // Only once git has it.
+            updates.push("branch_name = ?");
+            values.push(newBranchName);
+            console.log(`Renamed branch ${currentBranch} → ${newBranchName}`);
           }
         } catch (error) {
-          console.error("Failed to rename git branch:", error);
+          console.error("Branch kept its name:", error);
           // Continue with session rename even if branch rename fails
         }
       }
