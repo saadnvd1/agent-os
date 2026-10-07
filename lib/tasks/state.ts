@@ -94,6 +94,14 @@ export type RollupEntry = {
 };
 
 const FAILED = ["FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED"];
+const UNFINISHED = [
+  "",
+  "PENDING",
+  "QUEUED",
+  "IN_PROGRESS",
+  "EXPECTED",
+  "WAITING",
+];
 
 const outcome = (c: RollupEntry) =>
   (c.conclusion || c.state || c.status || "").toUpperCase();
@@ -256,9 +264,12 @@ function staleRuns(
     return null;
   const timed = mine.map((r) => ({ ...r, at: at(r.info!.startedAt) }));
   if (timed.some((r) => r.at === null)) return null;
-  // A cancelled run never finished, so it replaces nothing.
+  // Only a run that passed, failed or is still going says anything about the
+  // check; a cancelled, skipped or neutral run replaces nothing.
   const pr = timed.filter(
-    (r) => PR_EVENTS.includes(r.info!.event) && outcome(r.c) !== "CANCELLED"
+    (r) =>
+      PR_EVENTS.includes(r.info!.event) &&
+      ["SUCCESS", ...FAILED, ...UNFINISHED].includes(outcome(r.c))
   );
   const newest = pr.length ? Math.max(...pr.map((r) => r.at!)) : -Infinity;
   if (pr.filter((r) => r.at === newest).length > 1) return null;
@@ -273,19 +284,7 @@ export function checksVerdict(rollup: RollupEntry[]): ChecksVerdict {
   if (!rollup.length) return "none";
   const outcomes = liveChecks(rollup).map(outcome);
   if (outcomes.some((o) => FAILED.includes(o))) return "fail";
-  if (
-    outcomes.some((o) =>
-      [
-        "",
-        "PENDING",
-        "QUEUED",
-        "IN_PROGRESS",
-        "EXPECTED",
-        "WAITING",
-        "CANCELLED",
-      ].includes(o)
-    )
-  )
+  if (outcomes.some((o) => [...UNFINISHED, "CANCELLED"].includes(o)))
     return "pending";
   return "pass";
 }

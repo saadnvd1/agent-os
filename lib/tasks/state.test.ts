@@ -319,6 +319,17 @@ describe("reruns of the same check", () => {
     ).toEqual({ checks: "fail", failing: "Code review section" });
   });
 
+  it("doesn't let a skipped or neutral pull_request run replace a failure", () => {
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:47:10Z"),
+      2: run("pull_request", "2026-10-07T02:47:15Z"),
+    };
+    for (const later of ["SKIPPED", "NEUTRAL", "STALE", "STARTUP_FAILURE"])
+      expect(judge([review(1, "FAILURE"), review(2, later)], byId).checks).toBe(
+        "fail"
+      );
+  });
+
   it("lets a later pull_request run replace an earlier push run", () => {
     const byId = {
       1: run("push", "2026-10-07T02:47:33Z"),
