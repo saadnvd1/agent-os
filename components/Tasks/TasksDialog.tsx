@@ -63,8 +63,3 @@ export function TasksDialog() {
     </Dialog>
   );
 }
-
-export function useTasksNeedingYou(): number {
-  const { data: tasks = [] } = useTasksQuery();
-  return tasks.filter((t) => needsHuman(t.state)).length;
-}

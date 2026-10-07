@@ -14,7 +14,7 @@ export interface RowContextValue {
   orchestrators: OrchestratorOverview[];
   runningByWorkspace: Map<string, number>;
   // Render order, for shift-click range selection.
-  orderedIds: string[];
+  orderedIds: () => string[];
   cardUrl: (sessionId: string) => string | null | undefined;
   onSelect: (sessionId: string) => void;
   onOpenInTab?: (sessionId: string) => void;

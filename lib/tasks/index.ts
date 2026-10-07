@@ -27,14 +27,19 @@ import {
   type TaskState,
 } from "./state";
 import { expandHome, prFor, storedPR, taskSessions } from "./session";
+import { InProgressError } from "./move-bundle";
 import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
 import { finishTaskStart } from "./start";
+import { isRemoteHost } from "../hosts";
+import { isMirror, startRemoteTask } from "./remote";
+import { remoteTaskViews } from "./remote-views";
 
 export * from "./state";
 export { codeReviewRefusal, parseCodeReview } from "./code-review";
 export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
 export { prFor as taskPR } from "./session";
+export { moveTask } from "./move-flow";
 
 export interface TaskView {
   id: string;
@@ -54,6 +59,11 @@ export interface TaskView {
   // Its worktree setup, which the agent waits for; null for older tasks.
   setup: TaskSetup | null;
   createdAt: string;
+  // The machine running it, when that's not this one.
+  hostId: string | null;
+  hostName: string | null;
+  // Why that machine couldn't say how it's doing.
+  hostError: string | null;
 }
 
 export async function createTask(opts: {
@@ -70,19 +80,59 @@ export async function createTask(opts: {
   baseBranch?: string;
   // Called once the session row exists, before the agent launches.
   onCreated?: (sessionId: string) => void;
+  // Run it on this machine (another one's own AgentOS); default: the project's.
+  hostId?: string;
+  // The caller's key for it: a retry with the same id gets the same task.
+  id?: string;
 }): Promise<Session> {
+  if (opts.id) {
+    const existing = queries.getSession(db).get(opts.id) as Session | undefined;
+    if (existing?.task_status) return existing;
+    if (existing) throw new Error("That id is taken");
+    if (starting.has(opts.id))
+      throw new InProgressError("That task is starting already");
+    starting.add(opts.id);
+    try {
+      return await startTask(opts, opts.id);
+    } finally {
+      starting.delete(opts.id);
+    }
+  }
+  return startTask(opts, randomUUID());
+}
+
+// Tasks being started in this process, by the caller's id.
+const g = globalThis as unknown as { __agentosStartingTasks?: Set<string> };
+const starting = (g.__agentosStartingTasks ??= new Set());
+
+async function startTask(
+  opts: Parameters<typeof createTask>[0],
+  id: string
+): Promise<Session> {
   const prompt = opts.prompt.trim();
   if (!prompt) throw new Error("Describe the task");
   const project = getProject(opts.projectId);
   if (!project || project.is_uncategorized) throw new Error("Pick a project");
-  if (project.host_id && project.host_id !== "local") {
-    throw new Error("Tasks run on this machine only for now");
+  const hostId = opts.hostId ?? project.host_id;
+  if (isRemoteHost(hostId)) {
+    if (opts.base || opts.cardId)
+      throw new Error(
+        "Stacked and card tasks run on this machine only for now"
+      );
+    const session = await startRemoteTask(hostId, project, {
+      id,
+      prompt,
+      name: opts.name,
+      model: opts.model,
+      baseBranch: opts.baseBranch,
+    });
+    opts.onCreated?.(session.id);
+    return session;
   }
 
   if (opts.baseBranch !== undefined && !isBranchName(opts.baseBranch))
     throw new Error(`"${opts.baseBranch}" isn't a branch name`);
   const projectPath = expandHome(project.working_directory);
-  const id = randomUUID();
   const naming = await nameFor(prompt, projectPath, opts.name);
   const feature = `${slugify(naming.name.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
   const baseBranch =
@@ -221,14 +271,31 @@ export async function taskView(session: Session): Promise<TaskView> {
     cardUrl: taskCardUrl(session),
     setup,
     createdAt: session.created_at,
+    hostId: null,
+    hostName: null,
+    hostError: null,
   };
+}
+
+/** Tasks this machine handed to another, for that machine's mirror of them. */
+export function movedTasks(): { id: string; movedTo: string | null }[] {
+  return db
+    .prepare(
+      `SELECT id, moved_to AS movedTo FROM sessions
+         WHERE task_status = 'moved' AND host_id = 'local'
+         ORDER BY updated_at DESC LIMIT 500`
+    )
+    .all() as { id: string; movedTo: string | null }[];
 }
 
 // Archived tasks aren't listed.
 export async function listTasks(): Promise<TaskView[]> {
-  return Promise.all(
-    taskSessions()
-      .filter((s) => !s.archived_at)
-      .map(taskView)
+  const sessions = taskSessions().filter((s) => !s.archived_at);
+  const [local, remote] = await Promise.all([
+    Promise.all(sessions.filter((s) => !isMirror(s)).map(taskView)),
+    remoteTaskViews(sessions.filter(isMirror)),
+  ]);
+  return [...local, ...remote].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
   );
 }

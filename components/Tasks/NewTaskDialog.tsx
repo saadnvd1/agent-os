@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useProjectsQuery } from "@/data/projects";
+import { useLinkedHosts } from "@/data/hosts";
 import { useCreateTask } from "@/data/tasks";
 import { tasksUi, tasksUiActions } from "@/stores/tasksUi";
 
@@ -31,6 +32,12 @@ export function NewTaskDialog() {
   );
   const [projectId, setProjectId] = useState("");
   const [prompt, setPrompt] = useState("");
+  const machines = useLinkedHosts();
+  const [hostChoice, setHostId] = useState("local");
+  // A machine unlinked since it was picked falls back to this one.
+  const hostId = machines.some((h) => h.id === hostChoice)
+    ? hostChoice
+    : "local";
 
   // Default to the first project without an effect.
   const selected = projectId || eligible[0]?.id || "";
@@ -43,7 +50,11 @@ export function NewTaskDialog() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     createTask.mutate(
-      { projectId: selected, prompt },
+      {
+        projectId: selected,
+        prompt,
+        ...(hostId !== "local" && { hostId }),
+      },
       {
         onSuccess: () => {
           setPrompt("");
@@ -79,6 +90,24 @@ export function NewTaskDialog() {
               </SelectContent>
             </Select>
           </div>
+          {machines.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Run on</label>
+              <Select value={hostId} onValueChange={setHostId}>
+                <SelectTrigger aria-label="Run on">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="local">This machine</SelectItem>
+                  {machines.map((h) => (
+                    <SelectItem key={h.id} value={h.id}>
+                      {h.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-medium">Task</label>
             <Textarea

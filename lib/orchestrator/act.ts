@@ -6,7 +6,7 @@
 
 import { sendMessage } from "../bus";
 import { interruptChat } from "../chat/runner";
-import { hostExec } from "../hosts";
+import { hostExec, isRemoteHost } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { spawnSession } from "../agents/spawn";
 import { createTask, dropTask } from "../tasks";
@@ -54,6 +54,11 @@ export async function startTask(
   name?: string
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
+  // Its brakes read this machine's usage, not the other machine's account.
+  if (isRemoteHost(project.host_id))
+    throw new Error(
+      `${project.name} runs on another machine; the orchestrator starts tasks on this one only for now`
+    );
   const task = await braked(
     workspaceId,
     "task",

@@ -157,7 +157,8 @@ async function taskFacts(s: Session): Promise<SessionFacts["task"]> {
   if (!s.task_status) return null;
   if (s.task_status !== "running") {
     const pr = storedPR(s);
-    return { state: s.task_status, pr, blocked: null };
+    const state = s.task_status === "moved" ? "done" : s.task_status;
+    return { state, pr, blocked: null };
   }
   const view = await taskView(s);
   return { state: view.state, pr: view.pr, blocked: view.blocked };

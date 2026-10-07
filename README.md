@@ -91,6 +91,7 @@ npm run dev  # http://localhost:3011
 - **Tasks that end in a PR** - Hand off work to its own worktree, stack tasks from a board, and let a workspace orchestrator review and merge
 - **Schedules** - Start tasks, chats or orchestrator messages on a timer, or check in on any session, with run history
 - **Phone notifications** - A failed schedule run, or an agent's `aos notify`, reaches your phone through Telegram or a command of your own
+- **Machine load** - A gauge in the sidebar, each busy session's cores and memory, a note to agents before they start a full suite or build on a loaded machine, and one phone alert when it stays red
 - **Voice-to-text** - Dictate prompts to your coding sessions hands-free
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
 - **tmux by default** - Every session lives in tmux, so closing the browser never kills your work
@@ -327,6 +328,25 @@ process runs schedules (it holds a lease in the database); a dev server runs
 none unless `AGENTOS_SCHEDULES=on`, and `AGENTOS_SCHEDULES=off` stops them in
 production.
 
+### Machine load
+
+The dot in the sidebar header is the machine's load: green, amber (load
+over 1.5 per core, or memory pressure warning) or red (over 3 per core, or
+critical pressure), with some slack before it drops back. Tap it for the
+numbers and the sessions using the most CPU; a busy session's row shows its
+own share ("3.1 cores · 4.2 GB"), summed over its terminal's process tree
+from one `ps` every 30 seconds.
+
+Nothing is ever stopped, paused or queued. Instead, before an agent starts a
+whole test suite, type check, build, repo-wide lint, `xcodebuild` or
+`pytest`, the Claude hook AgentOS installs tells it what heavy commands are
+already running and how loaded the machine is, so it can narrow the run or
+wait. Targeted runs (`vitest run lib/x.test.ts`) are left alone. `aos heavy
+-- <cmd>` does the same for anything else. When the load stays red for two
+minutes, one message goes to your phone and to each workspace orchestrator,
+naming the top sessions and their heavy commands; the next one waits until
+it has been green for ten minutes. `AGENTOS_LOAD=off` turns it all off.
+
 ### Phone notifications
 
 Two things reach your phone: a schedule run that failed, and whatever an
@@ -370,6 +390,7 @@ aos schedules                     # every schedule, its next run and last outcom
 aos schedule run <name>           # run a schedule now
 aos schedule add --session <s> --every 30m "prompt"  # check in on a session
 aos notify "text"                 # push a message to your phone
+aos heavy -- npm test             # run it now; says first what else heavy is running
 aos done <session>                # finished: merge through the gates, archive
 aos done --all-idle               # the same for every idle session around you
 aos docs [query]                  # LumifyHub pages, when the workspace is linked
@@ -607,6 +628,40 @@ the same project.
 On other machines, files, git, worktrees, dev servers and summarize are not
 available yet; the terminal, status, rename and send-keys are.
 
+### Tasks on another machine
+
+A machine that runs its own AgentOS can take tasks. Run AgentOS there (any
+port behind your own front door, or plain 3011 on loopback plus a proxy), then
+press **Link** (the chain icon) next to it in Machines. Linking asks that
+AgentOS for a pairing code over ssh, where its loopback is trusted, and keeps
+the device token it gets back. The token goes straight into this machine's
+database and is never shown.
+
+Once linked:
+
+- **New task → Run on** picks the machine (`aos task --on devbox <project> ...`
+  does the same). That machine creates the worktree, runs the agent and opens
+  the PR on its own. This one lists the task in the sidebar and Tasks with its
+  live state, attaches its terminal over ssh, and sends sign-off and drop to
+  it (pinned to the reviewed commit).
+- **Move** carries a running task between this machine and a linked one,
+  either way. The source stops the agent, commits anything uncommitted as
+  `wip: moving to <machine>`, pushes the branch and hands over Claude's
+  conversation. The target finds the project by its git remote, then by its
+  folder relative to `~`, and clones it when it has neither. It checks the
+  branch out (reusing a worktree still on it), rewrites the conversation's
+  paths and resumes it with `--resume`. The source keeps its row, marked moved.
+  If the target refuses, the agent resumes where it was. If the source can't
+  tell whether it arrived (a timeout, a restart), the task stays **Moving**:
+  press Move again to finish it, or **Resume here**, which first asks the
+  other machine whether it arrived. Tasks waiting on you (an escalated gate or
+  an open ask), card tasks and stacked tasks don't move yet.
+
+Works for any project. Requests to the other machine carry its device token,
+so it can sit behind a proxy that never trusts loopback. Linking needs this
+machine or the tailnet, and only pairs with the ssh target's own host name.
+The orchestrator still starts tasks on its own machine only.
+
 ## Security
 
 AgentOS gives whoever uses it a terminal as you, so it decides who that is:
@@ -662,7 +717,9 @@ build leaves `.next` as it was.
 
 A pre-commit hook formats and lints staged files, then typechecks and runs the
 tests. CI runs `scripts/check --build` on every pull request and push to main,
-and fails a pull request whose body has no Code review section for its head
+which also holds the app's first-load JavaScript to a budget
+(`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
+it), and fails a pull request whose body has no Code review section for its head
 commit (run `/do-code-review` first; see [Tasks](#tasks)).
 
 ## CLI Commands

@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const expandedFallback = fallbackPath
       ? expandPath(fallbackPath)
       : undefined;
-    const status = getMultiRepoGitStatus(repositories, expandedFallback);
+    const status = await getMultiRepoGitStatus(repositories, expandedFallback);
 
     return NextResponse.json(status);
   } catch (error) {
