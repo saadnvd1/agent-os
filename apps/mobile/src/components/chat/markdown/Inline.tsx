@@ -1,6 +1,7 @@
 import * as Linking from "expo-linking";
 import type { PhrasingContent } from "mdast";
-import { Text, type TextStyle } from "react-native";
+import { type TextStyle } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { font, type Palette } from "~/lib/theme";
 import { htmlText } from "./html";
 

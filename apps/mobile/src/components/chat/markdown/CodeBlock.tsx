@@ -1,6 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { Icon } from "~/components/ui/Icon";
 import { haptic } from "~/lib/haptics";
 import { font, radius, space, useTheme } from "~/lib/theme";

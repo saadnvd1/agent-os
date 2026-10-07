@@ -1,9 +1,10 @@
 import type { List, RootContent, Table } from "mdast";
 import { memo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "~/components/ui/Text";
 import { font, space, useTheme, type Palette } from "~/lib/theme";
 import { CodeBlock } from "./CodeBlock";
-import { htmlText } from "./html";
+import { htmlBlockText } from "./html";
 import { Inline } from "./Inline";
 import { parseMarkdown } from "./parse";
 
@@ -61,7 +62,7 @@ function block(n: RootContent, key: number, t: Palette): React.ReactNode {
     case "table":
       return <TableBlock key={key} table={n} t={t} />;
     case "html": {
-      const text = htmlText(n.value).trim();
+      const text = htmlBlockText(n.value);
       return text ? (
         <Text key={key} selectable style={body}>
           {text}

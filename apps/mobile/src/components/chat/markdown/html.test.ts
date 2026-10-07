@@ -1,34 +1,66 @@
+import type { PhrasingContent, RootContent } from "mdast";
 import { describe, expect, it } from "vitest";
-import { htmlText } from "./html";
+import { htmlBlockText, htmlText } from "./html";
 import { parseMarkdown } from "./parse";
 
-describe("htmlText", () => {
+// What a paragraph shows, the way Inline.tsx turns its nodes into text.
+function shown(markdown: string): string {
+  const first = parseMarkdown(markdown).children[0] as RootContent;
+  const para = first.type === "list" ? first.children[0].children[0] : first;
+  if (para.type !== "paragraph")
+    throw new Error(`expected a paragraph, got ${para.type}`);
+  return para.children
+    .map((n: PhrasingContent) =>
+      n.type === "html" ? htmlText(n.value) : n.type === "text" ? n.value : ""
+    )
+    .join("");
+}
+
+describe("inline HTML in a reply", () => {
   it("drops tags and keeps what they wrapped", () => {
-    expect(htmlText('<span style="color: red;">Red</span>')).toBe("Red");
-    expect(htmlText("<div>\n<b>bold</b><br/>\n</div>")).toBe("\nbold\n");
+    expect(shown('- <span style="color: red;">Red bullet</span>')).toBe(
+      "Red bullet"
+    );
+    expect(shown("a <b>bold</b><br/> word")).toBe("a bold word");
   });
 
-  it("drops comments and script tags without running anything", () => {
+  it("keeps prose that only looks like a tag", () => {
+    expect(shown("Use Array<string> here")).toBe("Use Array<string> here");
+    expect(shown("Render <Component /> or Map<K, V>")).toBe(
+      "Render <Component /> or Map<K, V>"
+    );
+  });
+
+  it("skips a > inside a quoted attribute", () => {
+    expect(htmlText('<span title="a>b">x</span>')).toBe("x");
+    expect(htmlText("<a href='x>y'>link</a>")).toBe("link");
+  });
+
+  it("drops comments and script tags as text, running nothing", () => {
     expect(htmlText("<!-- note -->hi<script>alert(1)</script>")).toBe(
       "hialert(1)"
     );
   });
+});
 
-  it("leaves text that only looks like a comparison", () => {
-    expect(htmlText("a < b and c > d")).toBe("a < b and c > d");
+describe("hostile input", () => {
+  it("strips a reply full of unclosed tags in linear time", () => {
+    for (const evil of [
+      "<div\n" + "<a".repeat(200_000),
+      '<span title="' + "<b".repeat(200_000),
+    ]) {
+      const start = performance.now();
+      htmlText(evil);
+      expect(performance.now() - start).toBeLessThan(250);
+    }
   });
+});
 
-  it("empties each inline html node mdast produces, leaving the text between", () => {
-    const tree = parseMarkdown('- <span style="color: red;">Red bullet</span>');
-    const list = tree.children[0];
-    if (list.type !== "list") throw new Error("expected a list");
-    const para = list.children[0].children[0];
-    if (para.type !== "paragraph") throw new Error("expected a paragraph");
-    const shown = para.children
-      .map((n) =>
-        n.type === "html" ? htmlText(n.value) : n.type === "text" ? n.value : ""
-      )
-      .join("");
-    expect(shown).toBe("Red bullet");
+describe("block HTML in a reply", () => {
+  it("is its text, or nothing when it was only tags", () => {
+    const blocks = parseMarkdown("<div>\n\n</div>\n\n<div>hi</div>").children;
+    expect(
+      blocks.map((b) => (b.type === "html" ? htmlBlockText(b.value) : b.type))
+    ).toEqual([null, null, "hi"]);
   });
 });
