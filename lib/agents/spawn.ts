@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import os from "os";
 import { db, queries, type Session } from "../db";
 import { getProject, getAllProjects } from "../projects";
-import { slugify } from "../git";
 import { resolveModelForAgent } from "../model-catalog";
 import { launchClaude } from "./launch";
+import { nameFor } from "../session-titles";
 
 // "dashboards" or a project id; case-insensitive on name.
 export function findProject(ref: string) {
@@ -27,6 +27,8 @@ export function findProject(ref: string) {
 export async function spawnSession(opts: {
   project: string;
   prompt: string;
+  // Its name; generated from the prompt when absent.
+  name?: string;
   model?: string;
 }): Promise<Session> {
   const prompt = opts.prompt.trim();
@@ -38,19 +40,19 @@ export async function spawnSession(opts: {
   }
 
   const id = randomUUID();
-  const name = `${slugify(prompt.split(/\s+/).slice(0, 4).join(" "))}-${id.slice(0, 3)}`;
   const tmuxName = `claude-${id}`;
   const model = resolveModelForAgent(
     "claude",
     opts.model || project.default_model
   );
   const cwd = project.working_directory.replace(/^~/, os.homedir());
+  const naming = nameFor(prompt, cwd, opts.name);
 
   queries
     .createSession(db)
     .run(
       id,
-      name,
+      naming.name,
       tmuxName,
       cwd,
       null,
@@ -62,6 +64,11 @@ export async function spawnSession(opts: {
       project.id,
       "local"
     );
+  db.prepare(`UPDATE sessions SET name_source = ? WHERE id = ?`).run(
+    naming.source,
+    id
+  );
+  naming.refine?.(id);
   await launchClaude({ sessionId: id, tmuxName, cwd, model, prompt });
   return queries.getSession(db).get(id) as Session;
 }

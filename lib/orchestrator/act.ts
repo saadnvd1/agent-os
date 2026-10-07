@@ -50,7 +50,8 @@ export async function startTask(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  base?: string
+  base?: string,
+  name?: string
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
   const task = await braked(
@@ -60,6 +61,7 @@ export async function startTask(
       createTask({
         projectId: project.id,
         prompt,
+        name,
         baseBranch: base || undefined,
       }),
     (s) => s.id
@@ -70,13 +72,14 @@ export async function startTask(
 export async function startSession(
   workspaceId: string,
   projectRef: string,
-  prompt: string
+  prompt: string,
+  name?: string
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
   const session = await braked(
     workspaceId,
     "session",
-    () => spawnSession({ project: project.id, prompt }),
+    () => spawnSession({ project: project.id, prompt, name }),
     (s) => s.id
   );
   return `Started session "${session.name}" in ${project.name}.`;

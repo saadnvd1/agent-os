@@ -40,8 +40,25 @@ export const TOOL_SHAPES = {
       .regex(BRANCH_NAME, "not a branch name")
       .optional()
       .describe("Branch to cut from (default: the project's default branch)"),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .optional()
+      .describe("A short name, 2-6 words (default: one made from the prompt)"),
   },
-  start_session: { project, prompt: z.string().trim().min(1).max(20000) },
+  start_session: {
+    project,
+    prompt: z.string().trim().min(1).max(20000),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .optional()
+      .describe("A short name, 2-6 words (default: one made from the prompt)"),
+  },
   stack: {
     target: ref("Board or project name"),
     plan_only: z.boolean().optional(),
