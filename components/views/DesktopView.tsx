@@ -1,6 +1,5 @@
 "use client";
 
-import { NewSessionDialog } from "@/components/NewSessionDialog";
 import { StartServerDialog } from "@/components/DevServers/StartServerDialog";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopAppActions, SidebarToggle } from "./DesktopAppActions";
@@ -13,13 +12,9 @@ import { useSidebarPinned } from "@/hooks/useSidebarPinned";
 
 export function DesktopView({
   sessions,
-  projects,
   sessionStatuses,
   activeSession,
   focusedActiveTab,
-  showNewSessionDialog,
-  setShowNewSessionDialog,
-  newSessionProjectId,
   showNotificationSettings,
   setShowNotificationSettings,
   showQuickSwitcher,
@@ -32,8 +27,6 @@ export function DesktopView({
   openSessionInNewTab,
   handleNewSessionInProject,
   handleOpenTerminal,
-  handleSessionCreated,
-  handleCreateProject,
   handleStartDevServer,
   handleCreateDevServer,
   startDevServerProject,
@@ -78,7 +71,6 @@ export function DesktopView({
                 activeSession={activeSession}
                 showNotificationSettings={showNotificationSettings}
                 setShowNotificationSettings={setShowNotificationSettings}
-                setShowNewSessionDialog={setShowNewSessionDialog}
                 notificationSettings={notificationSettings}
                 permissionGranted={permissionGranted}
                 updateSettings={updateSettings}
@@ -93,14 +85,6 @@ export function DesktopView({
       </div>
 
       {/* Dialogs */}
-      <NewSessionDialog
-        open={showNewSessionDialog}
-        projects={projects}
-        selectedProjectId={newSessionProjectId ?? undefined}
-        onClose={() => setShowNewSessionDialog(false)}
-        onCreated={handleSessionCreated}
-        onCreateProject={handleCreateProject}
-      />
       <QuickSwitcher
         sessions={sessions}
         open={showQuickSwitcher}

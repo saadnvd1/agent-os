@@ -8,3 +8,4 @@ export {
   useUpdateProject,
   useDetectDevServers,
 } from "./queries";
+export * from "./add";

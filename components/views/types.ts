@@ -29,9 +29,6 @@ export interface ViewProps {
   focusedActiveTab: TabData | null;
 
   // Dialogs
-  showNewSessionDialog: boolean;
-  setShowNewSessionDialog: (show: boolean) => void;
-  newSessionProjectId: string | null;
   showNotificationSettings: boolean;
   setShowNotificationSettings: (show: boolean) => void;
   showQuickSwitcher: boolean;
@@ -48,12 +45,6 @@ export interface ViewProps {
   openSessionInNewTab: (session: Session) => void;
   handleNewSessionInProject: (projectId: string) => void;
   handleOpenTerminal: (projectId: string) => void;
-  handleSessionCreated: (sessionId: string) => Promise<void>;
-  handleCreateProject: (
-    name: string,
-    workingDirectory: string,
-    agentType?: string
-  ) => Promise<string | null>;
 
   // Dev server (for StartServerDialog)
   handleStartDevServer: (projectId: string) => void;

@@ -61,6 +61,15 @@ function generateWorktreeDirName(
   return `${projectName}-${featureSlug}`;
 }
 
+// Where createWorktree puts a feature's worktree, known before it exists.
+export function worktreePathFor(projectPath: string, featureName: string) {
+  const projectName = getRepoName(resolvePath(projectPath));
+  return path.join(
+    WORKTREES_DIR,
+    generateWorktreeDirName(projectName, featureName)
+  );
+}
+
 /**
  * Create a new worktree for a feature branch
  */
@@ -86,8 +95,7 @@ export async function createWorktree(
 
   // Generate worktree path
   const projectName = getRepoName(resolvedProjectPath);
-  const worktreeDirName = generateWorktreeDirName(projectName, featureName);
-  const worktreePath = path.join(WORKTREES_DIR, worktreeDirName);
+  const worktreePath = worktreePathFor(projectPath, featureName);
 
   // Check if worktree path already exists
   if (fs.existsSync(worktreePath)) {

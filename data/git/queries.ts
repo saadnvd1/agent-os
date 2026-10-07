@@ -25,7 +25,14 @@ export interface PRData {
 
 // --- Git Check ---
 
-async function fetchGitCheck(path: string): Promise<{ isGitRepo: boolean }> {
+export interface GitCheck {
+  isGitRepo: boolean;
+  branches: string[];
+  defaultBranch: string | null;
+  currentBranch: string | null;
+}
+
+async function fetchGitCheck(path: string): Promise<GitCheck> {
   const res = await fetch("/api/git/check", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -41,28 +48,6 @@ export function useGitCheck(path: string) {
     staleTime: 10000,
     enabled: !!path && path !== "~",
   });
-}
-
-// --- Git Clone ---
-
-async function cloneRepo(data: {
-  url: string;
-  directory: string;
-}): Promise<{ path: string; name: string }> {
-  const res = await fetch("/api/git/clone", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || "Failed to clone repository");
-  }
-  return res.json();
-}
-
-export function useCloneRepo() {
-  return useMutation({ mutationFn: cloneRepo });
 }
 
 // --- Git Status ---

@@ -13,6 +13,7 @@ import { useBulkDelete } from "./hooks/useBulkDelete";
 import { useSidebarData } from "./useSidebarData";
 import { RowProvider, type RowContextValue } from "./RowContext";
 import { SidebarHeader } from "./SidebarHeader";
+import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
 import { SidebarSearch } from "./SidebarSearch";
 import { ProjectFilter } from "./ProjectFilter";
 import { SelectionToolbar } from "./SelectionToolbar";
@@ -44,6 +45,7 @@ export function SessionList({
   const pin = usePinSession();
   const { data: orchestrators = [] } = useOrchestratorsQuery();
   const [dialog, setDialog] = useState<SidebarDialog | null>(null);
+  const addProject = useAddProject();
   const docsWorkspace = useDocsWorkspace(
     data.sessions.find((s) => s.id === activeSessionId)?.project_id
   );
@@ -85,11 +87,7 @@ export function SessionList({
         workspaces={data.workspaces}
         workspace={data.workspace}
         onNewSession={() => onNewSessionInProject?.(project?.id ?? "")}
-        onNewProject={() => setDialog({ kind: "newProject", mode: "new" })}
-        onCloneFromGithub={() =>
-          setDialog({ kind: "newProject", mode: "clone" })
-        }
-        onOpenProject={() => setDialog({ kind: "openProject" })}
+        onAddProject={addProject}
         onKillAll={() => setDialog({ kind: "killAll" })}
         onManageHosts={() => setDialog({ kind: "hosts" })}
         onOpenDocs={
@@ -130,9 +128,7 @@ export function SessionList({
           <RowProvider value={rowContext}>
             <SidebarBody
               data={data}
-              onNewProject={() =>
-                setDialog({ kind: "newProject", mode: "new" })
-              }
+              onNewProject={addProject}
               devServerHandlers={{
                 onStop: mutations.handleStopDevServer,
                 onRestart: mutations.handleRestartDevServer,

@@ -22,6 +22,14 @@ export function loadDraft(id: string): Draft | null {
   }
 }
 
+export function clearDraft(id: string): void {
+  try {
+    localStorage.removeItem(keyFor(id));
+  } catch {
+    // Storage unavailable: nothing kept to clear.
+  }
+}
+
 // Keeps what's typed in a session's composer across reloads, in this
 // browser. Images and long pastes are kept too while they fit; text always is.
 export function useSaveDraft(id: string | undefined, draft: Draft): void {

@@ -18,15 +18,25 @@ export interface WorktreeConfig {
   };
 }
 
+export interface SetupStep {
+  name: string;
+  command: string;
+  success: boolean;
+  output?: string;
+  error?: string;
+}
+
+// The stages a worktree's setup goes through, in order, for progress.
+export type SetupStage = "env" | "deps" | "script";
+
+export interface SetupProgress {
+  onStage?: (stage: SetupStage) => void;
+  onStep?: (step: SetupStep) => void;
+}
+
 export interface SetupResult {
   success: boolean;
-  steps: Array<{
-    name: string;
-    command: string;
-    success: boolean;
-    output?: string;
-    error?: string;
-  }>;
+  steps: SetupStep[];
   envFilesCopied: string[];
   packageManager?: string;
   port?: number;
@@ -107,8 +117,9 @@ export async function setupWorktree(options: {
   sourcePath: string;
   port?: number;
   skipInstall?: boolean;
+  progress?: SetupProgress;
 }): Promise<SetupResult> {
-  const { worktreePath, sourcePath, port, skipInstall } = options;
+  const { worktreePath, sourcePath, port, skipInstall, progress } = options;
 
   const started = Date.now();
   const result: SetupResult = {
@@ -118,11 +129,18 @@ export async function setupWorktree(options: {
     port,
     durationMs: 0,
   };
+  // Each step is reported as it finishes, for the chat's setup card.
+  const push = result.steps.push.bind(result.steps);
+  result.steps.push = (...steps: SetupStep[]) => {
+    for (const step of steps) progress?.onStep?.(step);
+    return push(...steps);
+  };
 
   // 1. Read config if exists
   const config = await readWorktreeConfig(sourcePath);
 
   // 2. Copy env files
+  progress?.onStage?.("env");
   result.envFilesCopied = await copyEnvFiles(sourcePath, worktreePath);
   if (result.envFilesCopied.length > 0) {
     result.steps.push({
@@ -144,6 +162,7 @@ export async function setupWorktree(options: {
 
   // 3. Run config setup commands if present
   if (config?.setup && config.setup.length > 0) {
+    progress?.onStage?.("script");
     for (const cmd of config.setup) {
       // Expand variables in command
       let expandedCmd = cmd;
@@ -165,6 +184,7 @@ export async function setupWorktree(options: {
       }
     }
   } else if (!skipInstall) {
+    progress?.onStage?.("deps");
     await bringDependencies(result, sourcePath, worktreePath, envVars);
   }
 

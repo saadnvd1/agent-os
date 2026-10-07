@@ -114,3 +114,12 @@
 - [ ] Orchestrator "Start fresh": end the current conversation but keep its asks, notes and in-flight tasks (today each workspace has exactly one orchestrator, forever)
 - [ ] Sidebar phone polish: titles cut off early (move ⋯ to long-press/swipe), shorter orchestrator subtitle, nested worker dot follows its own status, compact inline asks (title + Approve, detail in chat)
 - [ ] PR #98: review the stricter fail-closed code-review gate against what #97 already put on main; merge the new parts or drop it
+
+## Draft-first sessions (after V1, 2026-10-07)
+
+- Interactive drafts on another machine's AgentOS (today a project draft runs
+  where the project lives; only scratch chats and tasks can move machines).
+- Stream install output into the setup card's log as it prints, not per step.
+- Folder browser in the project's settings for changing its folder.
+- The chat's access chip reads "Full access" until the worker's capabilities
+  arrive (useChat's default), even when the session is "Accept edits".

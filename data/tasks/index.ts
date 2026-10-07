@@ -22,7 +22,7 @@ export function useTasksQuery() {
   });
 }
 
-function useTaskMutation<V>(fn: (v: V) => Promise<unknown>) {
+function useTaskMutation<V, R = unknown>(fn: (v: V) => Promise<R>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
@@ -35,8 +35,14 @@ function useTaskMutation<V>(fn: (v: V) => Promise<unknown>) {
 
 export function useCreateTask() {
   return useTaskMutation(
-    async (input: { projectId: string; prompt: string; model?: string }) =>
-      json(
+    async (input: {
+      projectId: string;
+      prompt: string;
+      model?: string;
+      baseBranch?: string;
+      hostId?: string;
+    }) =>
+      json<{ session: { id: string } }>(
         await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

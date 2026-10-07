@@ -40,7 +40,11 @@ export function CommandPalette() {
 }
 
 function PaletteBody() {
-  const all = usePaletteList();
+  const commands = usePaletteList();
+  // Subscribed for changes, read raw: its items are held by ref.
+  useSnapshot(paletteUi);
+  const picker = paletteUi.picker;
+  const all = picker?.items ?? commands;
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -101,10 +105,17 @@ function PaletteBody() {
             } else if (e.key === "Enter") {
               e.preventDefault();
               run(results[highlighted]);
+            } else if (
+              picker &&
+              (e.metaKey || e.ctrlKey) &&
+              /^[1-9]$/.test(e.key)
+            ) {
+              e.preventDefault();
+              run(picker.items[Number(e.key) - 1]);
             }
           }}
-          placeholder="Search actions and sessions…"
-          aria-label="Search actions and sessions"
+          placeholder={picker?.placeholder ?? "Search actions and sessions…"}
+          aria-label={picker?.placeholder ?? "Search actions and sessions"}
           className="placeholder:text-muted-foreground h-12 min-w-0 flex-1 bg-transparent text-base outline-none sm:text-sm"
         />
         <kbd className="text-muted-foreground hidden font-mono text-[10px] sm:inline">

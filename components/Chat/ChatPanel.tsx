@@ -29,6 +29,7 @@ import { McpServers } from "./McpServers";
 import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
 import { ContextMeter } from "./ContextMeter";
+import { SetupCard } from "./SetupCard";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
 import {
@@ -296,7 +297,8 @@ export function ChatPanel({
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5">
-          {blocks.length === 0 && (
+          <SetupCard sessionId={sessionId} />
+          {blocks.length === 0 && !queue.length && (
             <p className="text-muted-foreground py-16 text-center text-sm">
               Ask anything to start.
             </p>

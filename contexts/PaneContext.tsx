@@ -21,6 +21,7 @@ import {
   countPanes,
   savePaneState,
   loadPaneState,
+  showDraft,
   MAX_PANES,
 } from "@/lib/panes";
 import { useViewport } from "@/hooks/useViewport";
@@ -55,6 +56,7 @@ interface PaneContextValue {
     hostId?: string
   ) => void;
   detachSession: (paneId: string) => void;
+  openDraft: (paneId: string, draftId: string) => void;
   getPaneData: (paneId: string) => PaneData;
   getActiveTab: (paneId: string) => TabData | null;
   // Per-pane view state (viewMode + drawers), lifted so the top bar can drive
@@ -248,6 +250,7 @@ export function PaneProvider({ children }: { children: ReactNode }) {
                 sessionId,
                 attachedTmux: tmuxName,
                 attachedHost: hostId ?? null,
+                draftId: null,
               }
             : tab
         );
@@ -272,7 +275,7 @@ export function PaneProvider({ children }: { children: ReactNode }) {
 
       const newTabs = pane.tabs.map((tab) =>
         tab.id === pane.activeTabId
-          ? { ...tab, sessionId: null, attachedTmux: null }
+          ? { ...tab, sessionId: null, attachedTmux: null, draftId: null }
           : tab
       );
 
@@ -282,6 +285,18 @@ export function PaneProvider({ children }: { children: ReactNode }) {
           ...prev.panes,
           [paneId]: { ...pane, tabs: newTabs },
         },
+      };
+    });
+  }, []);
+
+  const openDraft = useCallback((paneId: string, draftId: string) => {
+    setState((prev) => {
+      const pane = prev.panes[paneId];
+      if (!pane) return prev;
+      return {
+        ...prev,
+        focusedPaneId: paneId,
+        panes: { ...prev.panes, [paneId]: showDraft(pane, draftId) },
       };
     });
   }, []);
@@ -374,6 +389,7 @@ export function PaneProvider({ children }: { children: ReactNode }) {
         switchTab,
         attachSession,
         detachSession,
+        openDraft,
         getPaneData,
         getActiveTab,
         getViewMode,
