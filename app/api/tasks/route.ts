@@ -8,7 +8,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { projectId, prompt, model, name, baseBranch } = await request.json();
+    const { projectId, prompt, model, name, baseBranch, hostId } =
+      await request.json();
+    // Another machine's AgentOS runs a task once remote tasks land; until
+    // then, say so rather than run it here.
+    const home = getProject(String(projectId))?.host_id || "local";
+    if (typeof hostId === "string" && hostId && hostId !== home)
+      return NextResponse.json(
+        { error: "Tasks run where their project lives for now" },
+        { status: 400 }
+      );
     const session = await createTask({
       projectId,
       prompt,

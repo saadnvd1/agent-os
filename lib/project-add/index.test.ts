@@ -81,9 +81,24 @@ describe("adding a project", () => {
     for (const url of [
       "--upload-pack=touch /tmp/x",
       "https://h/o/r'; rm",
+      "https://h/o/$(id)",
       "file:///etc",
     ])
-      expect(() => startClone("local", temp(), url)).toThrow();
+      expect(() => startClone("local", temp(), url)).toThrow(
+        /isn't a repository URL/
+      );
+  });
+
+  it("runs at most four clones at once", async () => {
+    // Port 9 on this machine never answers, so each clone waits there.
+    const hang = "https://127.0.0.1:9/never/r.git";
+    const parent = temp();
+    const running = [1, 2, 3, 4].map(() => startClone("local", parent, hang));
+    expect(() => startClone("local", parent, hang)).toThrow(/Too many clones/);
+    await until(() =>
+      running.every((j) => getCloneJob(j.id)?.status !== "running")
+    );
+    expect(startClone("local", parent, hang).status).toBe("running");
   });
 
   it("follows a clone and reports git's own error when it fails", async () => {

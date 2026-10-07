@@ -51,8 +51,8 @@ export interface WorktreeSetupInput {
 const git = (cwd: string, args: string[], timeout = 60_000) =>
   execFileAsync("git", ["-C", cwd, ...args], { timeout });
 
-// No remote: nothing to fetch. A fetch that failed is said, on the card and
-// to the agent, since the worktree is then cut from a base that may be old.
+// No remote: nothing to fetch. A fetch that fails fails the setup: a
+// worktree cut from an old base would start the agent on stale code.
 async function fetchBase(view: SetupView, cwd: string, base: string) {
   enterStage(view, "fetch");
   try {
@@ -66,9 +66,7 @@ async function fetchBase(view: SetupView, cwd: string, base: string) {
     const why = (
       (error as Error).message.trim().split("\n").pop() ?? ""
     ).replace(/^fatal: /, "");
-    view.stages[0].state = "failed";
-    view.warning = `Fetching ${base} failed, so the worktree was cut from the last fetched ${base}: ${why}`;
-    view.log.push(`fetch failed: ${why}`);
+    throw new Error(`Fetching ${base} failed: ${why}`);
   }
 }
 
@@ -154,10 +152,7 @@ export async function setUpWorktree(input: WorktreeSetupInput): Promise<void> {
   finishSetup(sessionId, view, setup.status === "failed" ? setup.error : null);
   recordSetup(db, sessionId, setup);
   notifySessionsChanged();
-  const stale = view.warning
-    ? `\n\n---\nNote from AgentOS: ${view.warning}. Rebase on origin if you need the latest.`
-    : "";
-  await input.onReady(setupNote(setup) + stale);
+  await input.onReady(setupNote(setup));
 }
 
 // A session's setup this server was running when it stopped: the agent never

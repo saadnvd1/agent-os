@@ -24,8 +24,6 @@ export interface SetupView {
   log: string[];
   branch: string | null;
   error: string | null;
-  // Went ahead, but worth knowing (the fetch failed: the base may be old).
-  warning: string | null;
   startedAt: number;
 }
 
@@ -50,7 +48,6 @@ export function startSetup(sessionId: string, branch: string): SetupView {
     log: [],
     branch,
     error: null,
-    warning: null,
     startedAt: Date.now(),
   };
   setups.set(sessionId, view);
@@ -78,12 +75,18 @@ export function settingUp(sessionId: string): boolean {
 }
 
 // Whether its queue may be sent without the person asking: never while
-// setup runs, nor after it failed (the agent would start in the project's
-// own checkout, or on half-installed dependencies). Send now still works.
+// setup runs, nor after it failed until they've sent a message by hand (the
+// agent would start in the project's own checkout, or on half-installed
+// dependencies). From then on it's an ordinary conversation.
 export function holdsQueue(sessionId: string): boolean {
   if (settingUp(sessionId)) return true;
   const live = setups.get(sessionId);
-  return (live ? live.status : savedSetup(sessionId)) === "failed";
+  if ((live ? live.status : savedSetup(sessionId)) !== "failed") return false;
+  return !db
+    .prepare(
+      `SELECT 1 FROM chat_items WHERE session_id = ? AND item_id LIKE 'user-%' LIMIT 1`
+    )
+    .get(sessionId);
 }
 
 // Starting a stage finishes the one before it.

@@ -25,8 +25,15 @@ vi.mock("../chat/runner", () => ({
 import { db, type Session } from "../db";
 import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
+import { saveItem } from "../chat/store";
+import type { ChatItem } from "../chat/events";
 import { launchSession, SCRATCH_DIR } from "./launch";
-import { holdsQueue, settingUp } from "./setup-progress";
+import {
+  finishSetup,
+  holdsQueue,
+  settingUp,
+  startSetup,
+} from "./setup-progress";
 import { failInterruptedSetups } from "./worktree-setup";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -194,14 +201,53 @@ describe("launchSession (a draft's first send)", () => {
 
   it("holds a queue whose setup failed or was cut off, until it's sent by hand", () => {
     db.prepare(
-      `INSERT INTO sessions (id, name, working_directory, setup_status)
-       VALUES ('held', 'held', '/tmp', 'failed'), ('busy', 'busy', '/tmp', 'running')`
+      `INSERT INTO sessions (id, name, working_directory, setup_status, task_status)
+       VALUES ('held', 'held', '/tmp', 'failed', NULL),
+              ('busy', 'busy', '/tmp', 'running', NULL),
+              ('fine', 'fine', '/tmp', 'ok', NULL),
+              ('plain', 'plain', '/tmp', NULL, NULL),
+              ('task', 'task', '/tmp', 'failed', 'running')`
     ).run();
+    // Set up fine, never had a setup, or a task (lib/tasks/start's): free.
+    for (const id of ["fine", "plain", "task"])
+      expect(holdsQueue(id)).toBe(false);
+    // A setup that failed in this process, before the row says so.
+    const view = startSetup("mem", "b");
+    expect(holdsQueue("mem")).toBe(true);
+    finishSetup("mem", view, "boom");
+    expect(holdsQueue("mem")).toBe(true);
     expect(holdsQueue("held")).toBe(true);
     expect(settingUp("held")).toBe(false);
     // After a restart the in-memory setups are gone; the row still says.
     expect(settingUp("busy")).toBe(true);
     expect(holdsQueue("busy")).toBe(true);
+    // Once they've sent a message by hand, it's an ordinary conversation.
+    saveItem("held", {
+      id: "user-1",
+      kind: "user",
+      text: "go",
+      createdAt: Date.now(),
+    } as ChatItem);
+    expect(holdsQueue("held")).toBe(false);
+  });
+
+  it("fails setup when the fetch fails, rather than cut from an old base", async () => {
+    const repo = makeRepo();
+    git(repo, "remote", "add", "origin", path.join(tmpdir(), "aos-gone.git"));
+    const project = createProject({ name: "repo5", workingDirectory: repo });
+    const { session } = await launchSession({
+      projectId: project.id,
+      agentType: "claude",
+      useWorktree: true,
+      prompt: "Do it",
+    });
+    await until(() => !settingUp(session.id));
+    expect(row(session.id)).toMatchObject({
+      setup_status: "failed",
+      worktree_path: null,
+    });
+    expect(row(session.id).setup_error).toMatch(/^Fetching main failed/);
+    expect(sent).toHaveLength(0);
   });
 
   it("marks a setup a restart cut off as failed, in the project's folder", () => {

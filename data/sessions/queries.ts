@@ -232,7 +232,6 @@ export interface SessionSetup {
   log: string[];
   branch: string | null;
   error: string | null;
-  warning?: string | null;
   startedAt: number | null;
 }
 
