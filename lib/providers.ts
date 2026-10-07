@@ -14,7 +14,6 @@ import {
   getProviderDefinition,
   isValidProviderId,
 } from "./providers/registry";
-import { shellQuote } from "./hosts/ssh";
 
 export type AgentType = ProviderId;
 
@@ -65,8 +64,10 @@ export function buildArgs(
   return args;
 }
 
+// Imported by the browser too, so no Node modules here.
 const SAFE_ARG = /^[\w@%+=:,./-]+$/;
-const quoteArg = (arg: string) => (SAFE_ARG.test(arg) ? arg : shellQuote(arg));
+const quoteArg = (arg: string) =>
+  SAFE_ARG.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
 
 function toProvider(def: ProviderDefinition): AgentProvider {
   return {

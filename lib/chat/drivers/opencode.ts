@@ -32,6 +32,13 @@ export function openCodeParts(text: string, images?: ChatImage[]) {
   ];
 }
 
+// A model that can run a coding turn: speech, image and embedding models
+// can't call tools or answer in text.
+const canChat = (m: P) => {
+  const c = (m.capabilities ?? {}) as P;
+  return c.toolcall !== false && (c.output as P | undefined)?.text !== false;
+};
+
 const REPLY = { allow: "once", always: "always", deny: "reject" } as const;
 
 export const openCodeDriver: ChatDriver = {
@@ -51,11 +58,13 @@ export const openCodeDriver: ChatDriver = {
         models: (providers.all ?? [])
           .filter((p) => connected.has(str(p.id)))
           .flatMap((p) =>
-            Object.values((p.models ?? {}) as Record<string, P>).map((m) => ({
-              value: `${p.id}/${m.id}`,
-              label: str(m.name) || str(m.id),
-              description: str(p.name) || str(p.id),
-            }))
+            Object.values((p.models ?? {}) as Record<string, P>)
+              .filter(canChat)
+              .map((m) => ({
+                value: `${p.id}/${m.id}`,
+                label: str(m.name) || str(m.id),
+                description: str(p.name) || str(p.id),
+              }))
           ),
         commands: (commands ?? []).map((c) => ({
           name: str(c.name),

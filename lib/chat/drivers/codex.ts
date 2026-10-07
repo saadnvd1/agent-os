@@ -14,10 +14,12 @@ export const CODEX_MODES: Record<
   ChatAccess,
   { approvalPolicy: string; sandbox: string; sandboxPolicy: { type: string } }
 > = {
+  // Asks before anything not known to be safe; what's approved may write
+  // in the workspace (a read-only sandbox would refuse it and ask again).
   ask: {
     approvalPolicy: "untrusted",
-    sandbox: "read-only",
-    sandboxPolicy: { type: "readOnly" },
+    sandbox: "workspace-write",
+    sandboxPolicy: { type: "workspaceWrite" },
   },
   edits: {
     approvalPolicy: "on-request",

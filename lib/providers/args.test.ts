@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildArgs, getProvider } from "../providers";
 import { getProviderDefinition, type ProviderId } from "./registry";
@@ -58,4 +60,21 @@ describe("buildFlags", () => {
       getProvider("codex").buildFlags({ initialPrompt: "it's $HOME" })
     ).toEqual([`'it'\\''s $HOME'`]);
   });
+});
+
+describe("browser safety", () => {
+  // The new-session dialog and the terminal launcher import these.
+  it.each(["../providers.ts", "./registry.ts", "../model-catalog.ts"])(
+    "%s imports nothing Node-only",
+    (file) => {
+      const source = readFileSync(join(__dirname, file), "utf8");
+      const imports = [...source.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
+      const allowed = new Set([
+        "./providers/registry",
+        "./registry",
+        "./providers",
+      ]);
+      expect(imports.filter((i) => !allowed.has(i))).toEqual([]);
+    }
+  );
 });
