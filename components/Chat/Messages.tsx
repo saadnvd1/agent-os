@@ -102,7 +102,7 @@ export function PeerMessage({ item, peer }: { item: Of<"user">; peer: Peer }) {
         <span className="text-foreground/80 font-medium">{item.from}</span>
         <span>sent a message</span>
       </span>
-      <div className="bg-primary/[0.07] max-w-[85%] rounded-2xl rounded-tl-md px-3.5 py-2 text-sm whitespace-pre-wrap">
+      <div className="bg-primary/[0.07] max-w-[85%] rounded-2xl rounded-tl-md px-3.5 py-2 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap">
         {peer.body}
       </div>
     </div>

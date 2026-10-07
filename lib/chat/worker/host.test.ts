@@ -104,6 +104,20 @@ describe("ChatHost", () => {
     host.close();
   });
 
+  it("shows a local command's failure without starting a turn", async () => {
+    const { id, host, conversation } = await startHost();
+    conversation.runLocal.mockReturnValueOnce(
+      Promise.reject(new Error("query closed"))
+    );
+    await host.handle({ type: "send", id: "user-1", text: "/mcp" });
+    expect(conversation.send).not.toHaveBeenCalled();
+    expect(host.state).toBe("idle");
+    const items = listItems(id);
+    expect(items.map((i) => i.kind)).toEqual(["user", "error"]);
+    expect(items[1]).toMatchObject({ message: "query closed" });
+    host.close();
+  });
+
   it("stores who sent a peer message, and gives the agent the full text", async () => {
     const { id, host, conversation } = await startHost();
     const text = `[AgentOS message from agent session "Session 3"]: hi. Reply with: aos send Session 3 "<message>"`;
@@ -122,5 +136,28 @@ describe("ChatHost", () => {
       peer: { sessionId: "s3", body: "hi" },
     });
     host.close();
+  });
+});
+
+describe("lastUserTask", () => {
+  it("shows a peer message's body, and survives a malformed one", async () => {
+    const { lastUserTask, saveItem } = await import("../store");
+    const id = randomUUID();
+    saveItem(id, {
+      id: "user-1",
+      kind: "user",
+      text: "[AgentOS message from …] hi. Reply with: …",
+      peer: { sessionId: "s3", body: "hi" },
+      createdAt: 1,
+    });
+    expect(lastUserTask(id)).toBe("hi");
+    saveItem(id, {
+      id: "user-2",
+      kind: "user",
+      text: "fallback",
+      peer: { sessionId: "s3", body: 1 as unknown as string },
+      createdAt: 2,
+    });
+    expect(lastUserTask(id)).toBe("fallback");
   });
 });

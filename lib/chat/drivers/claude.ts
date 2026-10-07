@@ -10,6 +10,7 @@ import type { DriverEvent, McpServerView } from "../events";
 import { InputQueue } from "../queue";
 import { Approvals, SDK_MODE } from "./claude-approvals";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
+import { redact } from "../../orchestrator/untrusted";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
 // Code login. Asks for approval through chat cards unless given full access,
@@ -38,13 +39,30 @@ const firstLine = (text?: string) => {
     : undefined;
 };
 
+// A server's error text can quote its URL, and with it a key: shown and
+// stored redacted, on one line, and short.
+const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^@\s/]+@/gi;
+const SECRET_PARAM =
+  /([?&][\w.-]*(?:key|token|secret|password|auth|sig|code)[\w.-]*=)[^&\s#]+/gi;
+function cleanError(text?: string): string | undefined {
+  if (!text) return undefined;
+  const line = redact(
+    text
+      .replace(URL_USERINFO, "$1[redacted]@")
+      .replace(SECRET_PARAM, "$1[redacted]")
+  )
+    .replace(/[\x00-\x1f\x7f]+/g, " ")
+    .trim();
+  return line.length > 300 ? `${line.slice(0, 299)}…` : line;
+}
+
 export function mcpView(s: McpServerStatus): McpServerView {
   return {
     name: s.name,
     status: s.status,
     scope: s.source ?? s.scope,
     version: s.serverInfo?.version,
-    error: s.error,
+    error: cleanError(s.error),
     tools: (s.tools ?? []).map((t) => ({
       name: t.name,
       description: firstLine(t.description),
