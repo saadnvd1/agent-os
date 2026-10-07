@@ -67,4 +67,12 @@ describe("mermaidHtml", () => {
     expect(html).toContain("\\u003c/script>");
     expect(html).toContain('securityLevel: "strict"');
   });
+
+  it("locks the page down: no fetches, no frames, no remote scripts", () => {
+    const html = mermaidHtml("graph TD; A-->B", false);
+    expect(html).toContain("connect-src 'none'");
+    expect(html).toContain("frame-src 'none'");
+    expect(html).not.toMatch(/<script[^>]+src=/);
+    expect(html).not.toContain("jsdelivr");
+  });
 });
