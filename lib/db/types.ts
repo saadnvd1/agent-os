@@ -26,6 +26,7 @@ export interface Session {
   view: "chat" | "terminal";
   chat_access: ChatAccess;
   chat_resume_at: string | null;
+  chat_suggestion: string | null;
   last_seen_at: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;

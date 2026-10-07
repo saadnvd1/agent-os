@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent } from "@tiptap/react";
+import { CornerDownRight, File, Folder } from "lucide-react";
 import type {
   ChatAccess,
   ChatCommand,
   ChatImage,
   ChatModel,
+  FileSuggestion,
 } from "@/lib/chat/events";
 import {
   nextAttachment,
@@ -16,7 +18,12 @@ import {
 import { insertCommand, rankCommands, slashQuery } from "@/lib/chat/commands";
 import { cn } from "@/lib/utils";
 import { loadDraft, useSaveDraft } from "../useDraft";
-import { CommandMenu } from "../CommandMenu";
+import { ComposerMenu, type MenuOption } from "../ComposerMenu";
+import { offeredSuggestion } from "@/lib/chat/suggestion";
+import { historyStep } from "@/lib/chat/history";
+import { markdownParagraphs } from "@/lib/chat/quote";
+import { useCoarsePointer } from "./useCoarsePointer";
+import { useMentions } from "./useMentions";
 import { Attachments } from "./Attachments";
 import { Toolbar } from "./Toolbar";
 import { useImageDrop } from "./useImageDrop";
@@ -45,6 +52,15 @@ export interface ComposerProps {
   prefill?: { text: string; at: number };
   // Saves what's typed under this key, so a reload doesn't lose it.
   draftKey?: string;
+  // The agent's guess at the next message, unless set aside.
+  suggestion?: string | null;
+  onDismissSuggestion?: (suggestion: string) => void;
+  // Messages sent in this conversation, newest first, for ↑.
+  history?: string[];
+  // Files and folders for an @mention.
+  requestFiles?: (query: string) => Promise<FileSuggestion[]>;
+  // Markdown to put in at the caret (a quote), once per `at`.
+  insert?: { text: string; at: number };
 }
 
 export function ComposerBody({
@@ -61,6 +77,11 @@ export function ComposerBody({
   onSetAccess,
   prefill,
   draftKey,
+  suggestion = null,
+  onDismissSuggestion,
+  history = [],
+  requestFiles,
+  insert,
 }: ComposerProps) {
   const [images, setImages] = useState<ChatImage[]>([]);
   const [files, setFiles] = useState<TextAttachment[]>([]);
@@ -70,11 +91,22 @@ export function ComposerBody({
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const handlers = useRef<ComposerHandlers | null>(null);
-  const { editor, text, setText, plain, setPlain } = useComposerEditor({
+  const coarse = useCoarsePointer();
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  // The editor shows it only while it's empty, as its placeholder.
+  const { editor, text, setText, caret, plain, setPlain } = useComposerEditor({
     placeholder,
+    ghost: coarse ? null : suggestion,
     disabled,
     handlers,
   });
+  // On a keyboard the guess is ghost text; on a touch screen, a chip.
+  const offered = offeredSuggestion({ suggestion, dismissed: null, text });
+  const ghost = offered && !coarse ? offered : null;
+  // Typing anything sets the guess aside.
+  useEffect(() => {
+    if (text && suggestion) onDismissSuggestion?.(suggestion);
+  }, [text, suggestion, onDismissSuggestion]);
 
   const draft = useMemo(() => ({ text, images, files }), [text, images, files]);
   useSaveDraft(draftKey, draft);
@@ -92,13 +124,23 @@ export function ComposerBody({
   }, [draftKey, editor, setText]);
 
   const prefilled = useRef<number | null>(null);
+  const inserted = useRef<number | null>(null);
   useEffect(() => {
     if (!prefill || !editor || prefilled.current === prefill.at) return;
     prefilled.current = prefill.at;
     setText(prefill.text, true);
   }, [prefill, editor, setText]);
 
+  useEffect(() => {
+    if (!insert || !editor || inserted.current === insert.at) return;
+    inserted.current = insert.at;
+    const content = markdownParagraphs(insert.text);
+    if (!content.length) return;
+    editor.chain().focus().insertContent(content).run();
+  }, [insert, editor]);
+
   const query = slashQuery(text);
+  const mentions = useMentions(editor, caret, query === null, requestFiles);
   const matches = useMemo(() => {
     if (query === null) return [];
     const all = [
@@ -107,20 +149,53 @@ export function ComposerBody({
     ];
     return rankCommands(query, all);
   }, [query, commands, onSetModel]);
-  const menuOpen = query !== null && dismissed !== text;
-  const setActive = (index: number) => setActiveAt({ text, index });
+  // One menu at a time: "/" commands at the start, "@" files at the caret.
+  const menuKey = query !== null ? `/${text}` : mentions.key;
+  const menuOpen = menuKey !== null && dismissed !== menuKey;
+  const options: MenuOption[] =
+    query !== null
+      ? matches.map((c, i) => ({
+          key: `${c.name}-${i}`,
+          label: `/${c.name}`,
+          hint: c.argumentHint,
+          description: c.description,
+        }))
+      : mentions.files.map((f) => ({
+          key: `${f.dir ? "d" : "f"}:${f.path}`,
+          // The name first, so two long paths never read the same.
+          label: `${f.path.slice(f.path.lastIndexOf("/") + 1)}${f.dir ? "/" : ""}`,
+          hint: f.path.includes("/")
+            ? f.path.slice(0, f.path.lastIndexOf("/"))
+            : undefined,
+          icon: f.dir ? (
+            <Folder className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <File className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+          ),
+        }));
+  const setActive = (index: number) =>
+    setActiveAt({ text: menuKey ?? "", index });
   const highlighted = Math.min(
-    active.text === text ? active.index : 0,
-    Math.max(matches.length - 1, 0)
+    active.text === menuKey ? active.index : 0,
+    Math.max(options.length - 1, 0)
   );
 
-  const pick = (command: ChatCommand) => {
+  const pickCommand = (command: ChatCommand) => {
     if (command === MODEL_COMMAND) {
       setText("");
       setModelOpen(true);
       return;
     }
     setText(insertCommand(command.name), true);
+  };
+  const pick = (index: number) => {
+    if (query !== null) {
+      if (matches[index]) pickCommand(matches[index]);
+    } else if (mentions.files[index]) mentions.pick(mentions.files[index]);
+  };
+
+  const acceptSuggestion = () => {
+    if (offered) setText(offered, true);
   };
 
   const { dragging, dropProps, addFiles } = useImageDrop((read) =>
@@ -134,24 +209,38 @@ export function ComposerBody({
     setImages([]);
     setFiles([]);
     setText("");
+    setHistoryIndex(-1);
   };
 
   const onMenuKey = (key: MenuKey) => {
-    if (key === "close") setDismissed(text);
-    else if (key === "pick") pick(matches[highlighted]);
+    if (key === "close") setDismissed(menuKey);
+    else if (key === "pick") pick(highlighted);
     else
       setActive(
-        (highlighted + (key === "down" ? 1 : -1) + matches.length) %
-          matches.length
+        (highlighted + (key === "down" ? 1 : -1) + options.length) %
+          options.length
       );
   };
 
   useEffect(() => {
     handlers.current = {
       menuOpen,
-      menuHasMatches: matches.length > 0,
+      menuHasMatches: options.length > 0,
       onMenuKey,
       onSend: submit,
+      suggestion: ghost !== null,
+      onAcceptSuggestion: acceptSuggestion,
+      onHistory: (dir, at) => {
+        if (images.length || files.length) return false;
+        const step = historyStep(
+          { history, index: historyIndex, text, ...at },
+          dir
+        );
+        if (!step) return false;
+        setHistoryIndex(step.index);
+        setText(step.text, true);
+        return true;
+      },
       onImages: (picked) => void addFiles(picked),
       onLongPaste: (pasted, language) => {
         const next = nextAttachment(files, lastPaste.current);
@@ -165,14 +254,26 @@ export function ComposerBody({
   });
 
   return (
-    <div className="relative">
-      {menuOpen && (
-        <CommandMenu
-          commands={matches}
+    <div className="relative" data-composer-ghost={ghost ? "" : undefined}>
+      {menuOpen && (query !== null || !mentions.loading || options.length) ? (
+        <ComposerMenu
+          label={query !== null ? "Commands" : "Files"}
+          empty={query !== null ? "No matching commands" : "No matching files"}
+          options={options}
           active={highlighted}
           onPick={pick}
           onHover={setActive}
         />
+      ) : null}
+      {offered && coarse && !menuOpen && (
+        <button
+          type="button"
+          onClick={acceptSuggestion}
+          className="bg-card popover-surface text-muted-foreground hover:text-foreground mb-2 flex min-h-11 max-w-full items-center gap-2 rounded-full px-3.5 text-left text-sm"
+        >
+          <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 truncate">{offered}</span>
+        </button>
       )}
       <div
         {...dropProps}

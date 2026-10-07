@@ -10,6 +10,7 @@ import type {
   ChatItem,
   ChatModel,
   DriverEvent,
+  FileSuggestion,
   UndoPreview,
 } from "./events";
 
@@ -49,6 +50,8 @@ export interface ChatConversation {
   // the items to show, or null to send the text as a message.
   runLocal?(text: string): Promise<ChatItem[]> | null;
   interrupt(): Promise<void>;
+  // Files and folders matching a partial @mention, as the agent matches them.
+  fileSuggestions?(query: string): Promise<FileSuggestion[]>;
   setModel(model: string): Promise<void>;
   setAccess(access: ChatAccess): Promise<void>;
   respond(id: string, answer: ApprovalDecision): void;

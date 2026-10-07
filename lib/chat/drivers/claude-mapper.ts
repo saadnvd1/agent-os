@@ -52,6 +52,8 @@ export type ClaudeMessage = {
   usage?: { tool_uses?: number };
   skip_transcript?: boolean;
   ambient?: boolean;
+  // prompt_suggestion: the agent's guess at the next message.
+  suggestion?: string;
 };
 
 type TaskItem = Extract<ChatItem, { kind: "task" }>;
@@ -133,6 +135,10 @@ export class ClaudeMapper {
         return this.toolResults(m);
       case "result":
         return this.result(m);
+      case "prompt_suggestion":
+        return m.suggestion?.trim()
+          ? [{ type: "suggestion", text: m.suggestion.trim() }]
+          : [];
       default:
         return [];
     }

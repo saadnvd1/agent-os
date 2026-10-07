@@ -133,6 +133,19 @@ servers with their status and tools, without spending a turn. Commands that
 only make sense in a terminal, such as `/vim`, are left out, and say so if
 typed anyway.
 
+Type `@` for files and folders, matched the way Claude Code matches them
+(ripgrep over the folder until the agent is running), and pick one to insert
+`@path`. After each turn but the first, the agent's guess at your next message
+shows in the empty composer: **Tab** or **→** takes it, typing or **Esc** sets
+it aside; on a phone it's a chip to tap. **↑** and **↓** in an empty composer
+walk back through what you've sent. Select text in a reply and **Quote** puts
+it in the composer as a blockquote.
+
+A message sent while the agent is working waits in a queue above the
+composer, kept on the server so a reload doesn't lose it, and goes when the
+turn ends. Queued messages can be edited, moved or removed, and **Send now**
+stops the turn (as Esc does) and sends that one next.
+
 **Esc** stops a running turn, as it does in Claude Code's terminal, unless a
 menu, dialog or the command list is open (those close first). On a phone the
 Stop button does the same. A stopped turn keeps what it wrote.

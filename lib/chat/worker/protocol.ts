@@ -13,6 +13,7 @@ import type {
   ChatItem,
   ChatState,
   DriverEvent,
+  FileSuggestion,
   PeerMessage,
 } from "../events";
 import type { UndoResult } from "../driver";
@@ -29,7 +30,15 @@ export type WorkerCommand =
       images?: ChatImage[];
       from?: string;
       peer?: PeerMessage;
+      // From the composer: waits its turn behind a running one, in the
+      // queue, rather than joining it.
+      queue?: boolean;
     }
+  // A queued message goes next: the running turn stops for it.
+  | { type: "send_now"; id: string }
+  // Send the queue if no turn is running; a running one sends it as it ends.
+  | { type: "drain" }
+  | { type: "files"; reqId: string; query: string }
   | { type: "interrupt" }
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }
@@ -48,8 +57,18 @@ export type WorkerEvent =
       state: ChatState;
       streaming: ChatItem[];
     }
-  | Exclude<DriverEvent, { type: "resume_id" }>
-  | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string };
+  | Exclude<DriverEvent, { type: "resume_id" } | { type: "suggestion" }>
+  // The agent's guess at the next message, or null once it's stale.
+  | { type: "suggestion"; text: string | null }
+  | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string }
+  | {
+      type: "files_result";
+      reqId: string;
+      files?: FileSuggestion[];
+      error?: string;
+    }
+  // The queue in SQLite changed: re-read it.
+  | { type: "queue" };
 
 // Per database, so a test server's workers never meet the live server's.
 export function workerDir(): string {

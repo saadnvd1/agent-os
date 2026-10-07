@@ -167,6 +167,20 @@ export type ChatItem =
       deletions?: number;
     });
 
+// A message waiting for the running turn to end.
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  imageCount?: number;
+  createdAt: number;
+}
+
+// A file or folder the agent would match for an @mention.
+export interface FileSuggestion {
+  path: string;
+  dir: boolean;
+}
+
 // Waiting: a turn is paused on the reader (an approval or a question).
 export type ChatState = "idle" | "running" | "waiting" | "error";
 
@@ -185,11 +199,26 @@ export type DriverEvent =
   | { type: "resume_id"; id: string } // the provider's own conversation id
   | { type: "commands"; commands: ChatCommand[] } // the command list changed
   | { type: "terminal_only"; names: string[] } // commands only a terminal can run
+  | { type: "suggestion"; text: string } // the agent's guess at the next message
   | { type: "state"; state: ChatState };
 
 // What the server sends to a browser watching a conversation.
 export type ChatServerMessage =
-  | { type: "snapshot"; items: ChatItem[]; state: ChatState }
+  | {
+      type: "snapshot";
+      items: ChatItem[];
+      state: ChatState;
+      queue: QueuedMessage[];
+      suggestion: string | null;
+    }
+  | { type: "queue"; queue: QueuedMessage[] }
+  | { type: "suggestion"; text: string | null }
+  | {
+      type: "files";
+      reqId: string;
+      query: string;
+      files: FileSuggestion[];
+    }
   | { type: "item"; item: ChatItem }
   | { type: "delta"; id: string; text: string }
   | { type: "state"; state: ChatState }
@@ -207,6 +236,11 @@ export type ChatServerMessage =
 // What a browser sends.
 export type ChatClientMessage =
   | { type: "send"; text: string; images?: ChatImage[] }
+  | { type: "queue_edit"; id: string; text: string }
+  | { type: "queue_move"; id: string; by: -1 | 1 }
+  | { type: "queue_delete"; id: string }
+  | { type: "queue_send_now"; id: string }
+  | { type: "files"; reqId: string; query: string }
   | { type: "interrupt" }
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }

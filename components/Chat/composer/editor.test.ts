@@ -47,6 +47,9 @@ const keys = (over: Partial<KeyHandlers> = {}): KeyHandlers => ({
   onSend: () => {},
   onTogglePlain: () => {},
   onPasteAsText: () => {},
+  suggestion: false,
+  onAcceptSuggestion: () => {},
+  onHistory: () => false,
   ...over,
 });
 
@@ -271,5 +274,49 @@ describe("Enter", () => {
     press("Enter", {}, h);
     press("Escape", {}, h);
     expect(got).toEqual(["down", "pick", "close"]);
+  });
+
+  it("Tab takes the ghost text, and → only with the caret at the end", () => {
+    make();
+    let taken = 0;
+    const h = keys({ suggestion: true, onAcceptSuggestion: () => taken++ });
+    press("Tab", {}, h);
+    press("ArrowRight", {}, h);
+    expect(taken).toBe(2);
+    type("ab");
+    editor.commands.setTextSelection(2);
+    press("ArrowRight", {}, h);
+    expect(taken).toBe(2);
+  });
+
+  it("Tab picks from an open menu before taking ghost text", () => {
+    make();
+    const got: string[] = [];
+    const h = keys({
+      menuOpen: true,
+      menuHasMatches: true,
+      onMenuKey: (k) => got.push(k),
+      suggestion: true,
+      onAcceptSuggestion: () => got.push("accept"),
+    });
+    press("Tab", {}, h);
+    expect(got).toEqual(["pick"]);
+  });
+
+  it("↑ and ↓ ask the history, with where the caret is", () => {
+    make();
+    const asked: string[] = [];
+    const h = keys({
+      onHistory: (dir, caret) => {
+        asked.push(`${dir}:${caret.firstLine}:${caret.lastLine}`);
+        return true;
+      },
+    });
+    press("ArrowUp", {}, h);
+    type("one\ntwo");
+    press("ArrowUp", {}, h);
+    editor.commands.setTextSelection(2);
+    press("ArrowDown", {}, h);
+    expect(asked).toEqual(["up:true:true", "up:false:true", "down:true:false"]);
   });
 });

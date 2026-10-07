@@ -12,6 +12,8 @@ import type {
   ChatModel,
   ChatServerMessage,
   ChatState,
+  FileSuggestion,
+  QueuedMessage,
   UndoPreview,
 } from "@/lib/chat/events";
 
@@ -33,6 +35,11 @@ export function useChat(
     from: string;
     preview: UndoPreview | null; // null while it loads
   } | null>(null);
+  const [queue, setQueue] = useState<QueuedMessage[]>([]);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const fileRequests = useRef(
+    new Map<string, (files: FileSuggestion[]) => void>()
+  );
   const [taskOutputs, setTaskOutputs] = useState<Record<string, string | null>>(
     {}
   );
@@ -58,6 +65,15 @@ export function useChat(
         if (m.type === "snapshot") {
           setItems(m.items);
           setState(m.state);
+          setQueue(m.queue ?? []);
+          setSuggestion(m.suggestion ?? null);
+        } else if (m.type === "queue") {
+          setQueue(m.queue);
+        } else if (m.type === "suggestion") {
+          setSuggestion(m.text);
+        } else if (m.type === "files") {
+          fileRequests.current.get(m.reqId)?.(m.files);
+          fileRequests.current.delete(m.reqId);
         } else if (m.type === "state") {
           setState(m.state);
         } else if (m.type === "capabilities") {
@@ -154,6 +170,39 @@ export function useChat(
     wsRef.current?.send(JSON.stringify({ type: "stop_task", taskId }));
   }, []);
 
+  const queueEdit = useCallback((id: string, text: string) => {
+    wsRef.current?.send(JSON.stringify({ type: "queue_edit", id, text }));
+  }, []);
+  const queueMove = useCallback((id: string, by: -1 | 1) => {
+    wsRef.current?.send(JSON.stringify({ type: "queue_move", id, by }));
+  }, []);
+  const queueDelete = useCallback((id: string) => {
+    wsRef.current?.send(JSON.stringify({ type: "queue_delete", id }));
+  }, []);
+  const queueSendNow = useCallback((id: string) => {
+    wsRef.current?.send(JSON.stringify({ type: "queue_send_now", id }));
+  }, []);
+
+  // The files and folders an @mention could mean; empty when the socket is
+  // down or no answer comes.
+  const requestFiles = useCallback((query: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN)
+      return Promise.resolve<FileSuggestion[]>([]);
+    const reqId = Math.random().toString(36).slice(2);
+    return new Promise<FileSuggestion[]>((resolve) => {
+      const timer = setTimeout(() => {
+        fileRequests.current.delete(reqId);
+        resolve([]);
+      }, 8000);
+      fileRequests.current.set(reqId, (files) => {
+        clearTimeout(timer);
+        resolve(files);
+      });
+      ws.send(JSON.stringify({ type: "files", reqId, query }));
+    });
+  }, []);
+
   const loadTaskOutput = useCallback((taskId: string) => {
     wsRef.current?.send(JSON.stringify({ type: "task_output", taskId }));
   }, []);
@@ -177,5 +226,12 @@ export function useChat(
     stopTask,
     loadTaskOutput,
     taskOutputs,
+    queue,
+    queueEdit,
+    queueMove,
+    queueDelete,
+    queueSendNow,
+    suggestion,
+    requestFiles,
   };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mcpView } from "./claude";
+import { mcpView, toFileSuggestions } from "./claude";
 
 describe("mcpView", () => {
   it("keeps what /mcp shows: status, where it's from, tools", () => {
@@ -54,5 +54,32 @@ describe("mcpView errors", () => {
       error: "e".repeat(5000),
     });
     expect(view.error!.length).toBeLessThanOrEqual(300);
+  });
+});
+
+describe("toFileSuggestions", () => {
+  it("reads folders by their trailing slash, and files as they are", () => {
+    expect(
+      toFileSuggestions({
+        suggestions: [{ path: "lib/chat/" }, { path: "lib/chat/queue.ts" }],
+        cwd: "/repo",
+      })
+    ).toEqual([
+      { path: "lib/chat", dir: true },
+      { path: "lib/chat/queue.ts", dir: false },
+    ]);
+  });
+
+  it("drops entries that aren't a path", () => {
+    expect(
+      toFileSuggestions({
+        suggestions: [{ path: 5 }, { path: "" }, { path: "/" }, null, "x"],
+      })
+    ).toEqual([]);
+  });
+
+  it("is empty for an answer of another shape", () => {
+    expect(toFileSuggestions(undefined)).toEqual([]);
+    expect(toFileSuggestions({ suggestions: "a" })).toEqual([]);
   });
 });

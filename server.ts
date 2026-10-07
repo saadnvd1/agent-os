@@ -9,11 +9,16 @@ import { buildAttachProcess, type AttachSpec } from "./lib/hosts/attach";
 import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
 import {
+  chatFileSuggestions,
   chatTaskOutput,
+  deleteQueuedChat,
+  editQueuedChat,
   interruptChat,
+  moveQueuedChat,
   reattachChats,
   respondChat,
   sendChat,
+  sendQueuedNow,
   setChatAccess,
   setChatModel,
   stopChatTask,
@@ -144,7 +149,35 @@ app.prepare().then(() => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
         if (msg.type === "send")
-          void sendChat(sessionId, clientSend(msg)).catch(fail);
+          void sendChat(sessionId, { ...clientSend(msg), queue: true }).catch(
+            fail
+          );
+        else if (msg.type === "queue_edit" && typeof msg.text === "string")
+          editQueuedChat(sessionId, String(msg.id), msg.text);
+        else if (msg.type === "queue_move")
+          moveQueuedChat(sessionId, String(msg.id), msg.by === -1 ? -1 : 1);
+        else if (msg.type === "queue_delete")
+          deleteQueuedChat(sessionId, String(msg.id));
+        else if (msg.type === "queue_send_now")
+          void sendQueuedNow(sessionId, String(msg.id)).catch(fail);
+        else if (msg.type === "files" && typeof msg.query === "string")
+          void chatFileSuggestions(sessionId, msg.query.slice(0, 200))
+            .then((files) =>
+              reply({
+                type: "files",
+                reqId: String(msg.reqId),
+                query: msg.query,
+                files,
+              })
+            )
+            .catch(() =>
+              reply({
+                type: "files",
+                reqId: String(msg.reqId),
+                query: msg.query,
+                files: [],
+              })
+            );
         else if (msg.type === "interrupt") void interruptChat(sessionId);
         else if (msg.type === "set_model")
           void setChatModel(sessionId, msg.model);

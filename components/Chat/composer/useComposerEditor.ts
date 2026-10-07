@@ -26,12 +26,32 @@ const PASTE_AS_TEXT_WINDOW = 1000;
 
 // The composer's TipTap editor. It holds markdown: `text` is what gets sent,
 // and setText puts markdown back in (a draft, an undone message, a command).
+// The text of the line the caret is in, up to the caret: what an @mention
+// is read from.
+export interface CaretText {
+  before: string;
+  pos: number;
+}
+
+const caretText = (ed: Editor): CaretText => {
+  const { $from, empty } = ed.state.selection;
+  return {
+    before: empty
+      ? $from.parent.textBetween(0, $from.parentOffset, undefined, "\n")
+      : "",
+    pos: $from.pos,
+  };
+};
+
 export function useComposerEditor({
   placeholder,
+  ghost,
   disabled,
   handlers,
 }: {
   placeholder: string;
+  // Ghost text in place of the placeholder: the agent's suggestion.
+  ghost?: string | null;
   disabled?: boolean;
   // Read at keypress and paste time, so they always see the latest state.
   handlers: RefObject<ComposerHandlers | null>;
@@ -40,13 +60,14 @@ export function useComposerEditor({
   const [stored, setPlain] = usePlainMode();
   const plain = stored ?? false;
   const [text, setTextState] = useState("");
+  const [caret, setCaret] = useState<CaretText>({ before: "", pos: 0 });
   const pasteAsTextUntil = useRef(0);
   const editorRef = useRef<Editor | null>(null);
-  const placeholderRef = useRef(placeholder);
+  const placeholderRef = useRef(ghost || placeholder);
   useEffect(() => {
-    placeholderRef.current = placeholder;
+    placeholderRef.current = ghost || placeholder;
     editorRef.current?.view.dispatch(editorRef.current.state.tr);
-  }, [placeholder]);
+  }, [placeholder, ghost]);
   const plainRef = useRef(plain);
   useEffect(() => {
     plainRef.current = plain;
@@ -107,7 +128,9 @@ export function useComposerEditor({
       onUpdate: ({ editor: ed, transaction }) => {
         if (!transaction.docChanged) return;
         setTextState(docToMarkdown(ed.getJSON()));
+        setCaret(caretText(ed));
       },
+      onSelectionUpdate: ({ editor: ed }) => setCaret(caretText(ed)),
     },
     [plain]
   );
@@ -136,5 +159,5 @@ export function useComposerEditor({
     [editor, plain]
   );
 
-  return { editor, text, setText, plain, setPlain };
+  return { editor, text, setText, caret, plain, setPlain };
 }

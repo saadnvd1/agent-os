@@ -11,8 +11,9 @@ import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
 import type { ChatConversation, ChatStartOptions } from "../driver";
-import type { ChatItem, ChatState } from "../events";
+import type { ChatImage, ChatItem, ChatState, PeerMessage } from "../events";
 import { listItems, saveItem, settle } from "../store";
+import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
 import {
   VISUALS_BRIEF,
   VISUALS_SERVER,
@@ -25,6 +26,8 @@ export class ChatHost {
   readonly streaming = new Map<string, ChatItem>();
   private conversation: ChatConversation;
   private sent = new Set<string>();
+  private suggestion: string | null;
+  private closed = false;
   readonly done: Promise<void>;
 
   constructor(
@@ -82,6 +85,7 @@ export class ChatHost {
       disallowedTools: extras.disallowedTools,
       permissionMode: extras.permissionMode,
     });
+    this.suggestion = session.chat_suggestion ?? null;
     // Sends that already made it in, from before a reconnect.
     for (const item of listItems(session.id))
       if (item.kind === "user") this.sent.add(item.id);
@@ -116,9 +120,19 @@ export class ChatHost {
           db.prepare(
             `UPDATE sessions SET claude_session_id = ?, chat_resume_at = NULL WHERE id = ?`
           ).run(e.id, this.session.id);
+        } else if (e.type === "suggestion") {
+          // Kept on the session, so it's still there after a reload.
+          this.setSuggestion(e.text);
         } else if (e.type === "state") {
-          // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
-          if (e.state === "idle") this.settleStreaming();
+          if (e.state === "idle") {
+            // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
+            this.settleStreaming();
+            // The next queued message goes straight on, with no idle in
+            // between: the server retires a stale worker the moment it
+            // hears one, and would cut that turn off.
+            this.state = "idle";
+            if (this.sendQueued()) continue;
+          }
           // A stopped turn can still settle an approval after it ended.
           if (e.state !== "running" || this.state !== "idle")
             this.setState(e.state);
@@ -137,6 +151,57 @@ export class ChatHost {
       this.settleStreaming();
       this.setState("idle");
     }
+  }
+
+  private setSuggestion(text: string | null): void {
+    this.suggestion = text;
+    db.prepare(`UPDATE sessions SET chat_suggestion = ? WHERE id = ?`).run(
+      text,
+      this.session.id
+    );
+    this.emit({ type: "suggestion", text });
+  }
+
+  private busy(): boolean {
+    return this.state === "running" || this.state === "waiting";
+  }
+
+  // Sends the first queued message, if no turn is running. Claimed (taken
+  // off the queue) before it's sent, so it can only go once.
+  private sendQueued(): boolean {
+    if (this.busy() || this.closed) return false;
+    const next = claimNext(this.session.id);
+    if (!next) return false;
+    this.emit({ type: "queue" });
+    this.sendUser({ id: next.id, text: next.text, images: next.images });
+    return true;
+  }
+
+  private sendUser(m: {
+    id: string;
+    text: string;
+    images?: ChatImage[];
+    from?: string;
+    peer?: PeerMessage;
+  }): void {
+    this.sent.add(m.id);
+    const checkpoint = this.conversation.send(m.text, m.images);
+    this.record({
+      id: m.id,
+      kind: "user",
+      text: m.text,
+      images: m.images,
+      from: m.from,
+      peer: m.peer,
+      createdAt: Date.now(),
+      checkpoint,
+    });
+    this.setState("running");
+    // A new turn makes the last guess stale.
+    if (this.suggestion !== null) this.setSuggestion(null);
+    db.prepare(
+      `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
+    ).run(this.session.id);
   }
 
   private settleStreaming(): void {
@@ -176,14 +241,40 @@ export class ChatHost {
           }
           return;
         }
-        const checkpoint = this.conversation.send(cmd.text, cmd.images);
-        this.record({ ...user, checkpoint });
-        this.setState("running");
-        db.prepare(
-          `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
-        ).run(this.session.id);
+        if (cmd.queue && (this.busy() || listQueue(this.session.id).length)) {
+          // Behind the running turn, and behind anything queued before it.
+          enqueue(this.session.id, cmd);
+          this.emit({ type: "queue" });
+          this.sendQueued();
+          return;
+        }
+        this.sendUser(cmd);
         return;
       }
+      case "send_now":
+        // To the front; a running turn stops, and its end sends it.
+        if (!moveToFront(this.session.id, cmd.id)) return;
+        this.emit({ type: "queue" });
+        if (this.busy()) return this.conversation.interrupt();
+        this.sendQueued();
+        return;
+      case "drain":
+        this.sendQueued();
+        return;
+      case "files":
+        try {
+          const files = this.conversation.fileSuggestions
+            ? await this.conversation.fileSuggestions(cmd.query)
+            : undefined;
+          this.emit({ type: "files_result", reqId: cmd.reqId, files });
+        } catch (error) {
+          this.emit({
+            type: "files_result",
+            reqId: cmd.reqId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
       case "interrupt":
         return this.conversation.interrupt();
       case "set_model":
@@ -217,6 +308,7 @@ export class ChatHost {
   onClose: () => void = () => {};
 
   close(): void {
+    this.closed = true;
     this.onClose();
     this.conversation.close();
   }
