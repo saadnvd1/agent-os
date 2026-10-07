@@ -2,12 +2,14 @@ import type { ChatDriver } from "../driver";
 import { CHAT_AGENT_TYPES } from "../capabilities";
 import { claudeDriver } from "./claude";
 import { codexDriver } from "./codex";
+import { piDriver } from "./pi";
 
 // One driver per agent CLI. Adding a CLI means a driver here and its agent
 // type in CHAT_AGENT_TYPES.
 const DRIVERS: Record<(typeof CHAT_AGENT_TYPES)[number], ChatDriver> = {
   claude: claudeDriver,
   codex: codexDriver,
+  pi: piDriver,
 };
 
 export function chatDriverFor(agentType: string): ChatDriver | null {

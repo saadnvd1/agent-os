@@ -13,6 +13,28 @@ export interface ToolStart {
   diff?: FileDiff;
 }
 
+// An API's error as its message: providers wrap JSON in JSON.
+export function readableError(text: string): string {
+  let message = text.trim();
+  for (let i = 0; i < 4; i++) {
+    try {
+      const parsed = JSON.parse(message) as {
+        error?: { message?: unknown } | string;
+        message?: unknown;
+      };
+      const inner =
+        typeof parsed.error === "object"
+          ? parsed.error?.message
+          : (parsed.error ?? parsed.message);
+      if (typeof inner !== "string") break;
+      message = inner.trim();
+    } catch {
+      break;
+    }
+  }
+  return message.length > 500 ? `${message.slice(0, 499)}…` : message;
+}
+
 // The provider-neutral items of one conversation, built up as an agent's
 // own events arrive: streamed text, tool calls and the end of each turn.
 // Every driver but Claude's maps its protocol onto these calls.
@@ -128,7 +150,7 @@ export class TurnItems {
       item: {
         id: randomUUID(),
         kind: "error",
-        message,
+        message: readableError(message),
         createdAt: Date.now(),
       },
     });
