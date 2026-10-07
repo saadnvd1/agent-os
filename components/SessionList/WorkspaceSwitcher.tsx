@@ -50,7 +50,7 @@ export function WorkspaceSwitcher({
             className="hover:bg-foreground/[0.04] -ml-1.5 flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 md:min-h-9"
           >
             <span className="truncate text-[15px] font-semibold tracking-tight">
-              {current?.name ?? "AgentOS"}
+              {current?.name ?? "All workspaces"}
             </span>
             <ChevronDown className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
           </button>
