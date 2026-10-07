@@ -145,7 +145,9 @@ it in the composer as a blockquote.
 A message sent while the agent is working waits in a queue above the
 composer, kept on the server so a reload doesn't lose it, and goes when the
 turn ends. Queued messages can be edited, moved or removed, and **Send now**
-stops the turn (as Esc does) and sends that one next.
+stops the turn (as Esc does) and sends that one with the stop, so it's the
+very next thing the agent reads, ahead of a background task's notice it had
+waiting. A message typed right after Esc goes the same way.
 
 **Plan mode** (the **Plan** toggle under the composer, or Shift+Tab) has the
 agent read and plan without changing anything; it's remembered per session.

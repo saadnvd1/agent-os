@@ -197,7 +197,13 @@ export const claudeDriver: ChatDriver = {
           preset: "claude_code",
           append: options.systemAppend,
         },
-        env: { ...process.env, ...options.env },
+        env: {
+          ...process.env,
+          ...options.env,
+          // When the agent is done with every turn it had queued: the end
+          // of a turn that never sent its result.
+          CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1",
+        },
       },
     });
     const mapper = new ClaudeMapper();
@@ -244,7 +250,7 @@ export const claudeDriver: ChatDriver = {
     })();
 
     return {
-      send(text, images) {
+      send(text, images, sendOptions) {
         mapper.sent(text);
         const content = [
           ...(images ?? []).map((img) => ({
@@ -258,11 +264,19 @@ export const claudeDriver: ChatDriver = {
           { type: "text" as const, text },
         ];
         const checkpoint = randomUUID();
+        // The interrupt goes out first, and the message right behind it,
+        // before the stopped turn has ended: the CLI starts whatever it has
+        // queued the moment a turn ends, and "now" puts this ahead of a
+        // background task's notice already waiting there. Sent after the
+        // stopped turn's result, a notice would take the next turn and the
+        // agent would answer the interruption without having seen this.
+        if (sendOptions?.now) void q.interrupt().catch(() => {});
         input.push({
           type: "user",
           uuid: checkpoint,
           message: { role: "user", content },
           parent_tool_use_id: null,
+          ...(sendOptions?.now && { priority: "now" }),
         } as SDKUserMessage);
         return checkpoint;
       },
