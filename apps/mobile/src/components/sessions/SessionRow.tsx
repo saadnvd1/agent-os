@@ -1,10 +1,23 @@
 import { router } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useRef } from "react";
+import {
+  ActionSheetIOS,
+  Alert,
+  Pressable,
+  StyleSheet,
+  View,
+  type PressableProps,
+} from "react-native";
+import Swipeable, {
+  type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 import { Text } from "~/components/ui/Text";
 import { compactTimeAgo, fromSqliteTime } from "@/lib/session-meta";
 import { NEED_LABEL, type SidebarRow } from "@/lib/sidebar/shelves";
 import { Icon } from "~/components/ui/Icon";
 import { haptic } from "~/lib/haptics";
+import { useActiveMachine, type Machine } from "~/lib/machines/store";
+import { useSessionActions } from "~/lib/sessions/actions";
 import { font, radius, space, useTheme } from "~/lib/theme";
 import { StatusDot } from "./StatusDot";
 
@@ -14,7 +27,110 @@ interface Props {
   nested?: boolean;
 }
 
-export function SessionRow({ row, project, nested }: Props) {
+export function SessionRow(props: Props) {
+  const machine = useActiveMachine();
+  // Rows only list a machine's sessions, so there is always one.
+  return machine ? <ActionRow {...props} machine={machine} /> : null;
+}
+
+// Swipe right to pin, left for Done; touch and hold, or VoiceOver actions,
+// for the same.
+function ActionRow({ machine, ...props }: Props & { machine: Machine }) {
+  const t = useTheme();
+  const s = props.row.session;
+  const { pin, done } = useSessionActions(machine);
+  const swipe = useRef<SwipeableMethods>(null);
+  const togglePin = () => {
+    swipe.current?.close();
+    pin.mutate({ id: s.id, pinned: !s.pinned });
+  };
+  const finish = () => {
+    swipe.current?.close();
+    Alert.alert(
+      `Done with “${s.name}”?`,
+      "Stops the agent and archives the session. A task with an open pull request merges first, through the orchestrator's gates.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Done",
+          style: "destructive",
+          onPress: () =>
+            done.mutate(s.id, {
+              onError: (err) => Alert.alert("Not done", err.message),
+            }),
+        },
+      ]
+    );
+  };
+  const pinLabel = s.pinned ? "Unpin" : "Pin";
+  const menu = () => {
+    haptic.press();
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: s.name,
+        options: [pinLabel, "Done", "Cancel"],
+        destructiveButtonIndex: 1,
+        cancelButtonIndex: 2,
+      },
+      (i) => (i === 0 ? togglePin() : i === 1 ? finish() : undefined)
+    );
+  };
+  const action = (
+    label: string,
+    icon: Parameters<typeof Icon>[0]["name"],
+    color: string,
+    onPress: () => void
+  ) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={[styles.action, { backgroundColor: color }]}
+    >
+      <Icon name={icon} size={18} color={t.onPrimary} />
+      <Text style={[styles.actionText, { color: t.onPrimary }]}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <Swipeable
+      ref={swipe}
+      friction={1.5}
+      overshootFriction={8}
+      renderLeftActions={() => action(pinLabel, "pin", t.primary, togglePin)}
+      renderRightActions={() => action("Done", "checkmark", t.success, finish)}
+      onSwipeableWillOpen={() => haptic.tap()}
+    >
+      <RowBody
+        {...props}
+        onPress={() =>
+          router.push({
+            pathname: "/session/[id]",
+            params: { id: s.id, name: s.name },
+          })
+        }
+        onLongPress={menu}
+        accessibilityActions={[
+          { name: "pin", label: pinLabel },
+          { name: "done", label: "Done" },
+        ]}
+        onAccessibilityAction={(e) =>
+          e.nativeEvent.actionName === "pin" ? togglePin() : finish()
+        }
+      />
+    </Swipeable>
+  );
+}
+
+function RowBody({
+  row,
+  project,
+  nested,
+  ...press
+}: Props &
+  Pick<
+    PressableProps,
+    "onPress" | "onLongPress" | "accessibilityActions" | "onAccessibilityAction"
+  >) {
   const t = useTheme();
   const s = row.session;
   const detail = row.status?.detail?.slice(0, 200);
@@ -29,12 +145,10 @@ export function SessionRow({ row, project, nested }: Props) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${s.name}${row.need ? `, ${NEED_LABEL[row.need]}` : ""}`}
-      onPress={() => {
+      {...press}
+      onPress={(e) => {
         haptic.tap();
-        router.push({
-          pathname: "/session/[id]",
-          params: { id: s.id, name: s.name },
-        });
+        press.onPress?.(e);
       }}
       style={({ pressed }) => [
         styles.row,
@@ -88,6 +202,13 @@ export function SessionRow({ row, project, nested }: Props) {
 }
 
 const styles = StyleSheet.create({
+  action: {
+    width: 84,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+  actionText: { fontSize: font.size.xs, fontWeight: "600" },
   row: {
     flexDirection: "row",
     alignItems: "center",
