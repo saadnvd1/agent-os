@@ -222,15 +222,29 @@ Sessions on other machines can receive messages but not yet send them.
 
 ![Messages between agent sessions, and one from you](screenshots/messages.png)
 
+## The sidebar
+
+One flat list of every session in the current workspace, each row naming its
+project underneath. Sessions sit on shelves: **Pinned** (pin from a row's ⋯
+menu), **Needs you** (an approval, a question, a terminal waiting for input, a
+failed task, or the orchestrator's open asks, each with a badge), **Working**,
+and **Done**, newest first, ten at a time. A purple dot marks a session that
+finished or changed since you last opened it. Search (⌘K on desktop) matches
+titles and project names, and the project filter narrows the list to one
+project and holds that project's own actions: new session, terminal, dev
+server, settings, board, workspace.
+
 ## Workspaces
 
-Group projects into workspaces (e.g. Work, Personal) from the **+** menu.
-Each workspace is a collapsible sidebar section showing how many sessions need
-you; move a project in from its menu. Deleting a workspace keeps its projects.
+Group projects into workspaces (e.g. Work, Personal) from the workspace
+switcher at the top of the sidebar, which also picks the workspace the list
+shows and holds the current one's orchestrator, clean-up, Archived and
+LumifyHub link. Move a project in from the project filter's menu. Deleting a
+workspace keeps its projects.
 
 ### Done
 
-**Done** (a session's ⋯ menu, or its project's when it's the only one; `aos
+**Done** (a session's ⋯ menu; `aos
 done`; or the orchestrator's `done` tool) is for finished work, where
 **Stop** keeps everything and **Drop** rejects it. A task with an open PR
 merges first, only through the orchestrator's gates at the judged commit; a
@@ -248,10 +262,11 @@ commit that merged.
 
 Archived sessions leave the sidebar, the needs-you count, session statuses
 and the orchestrator's view, but are never deleted; the **Archived** view
-(each workspace's menu, or ⋯ in the sidebar header for all of them) lists
+(the workspace switcher for one workspace, or ⋯ in the sidebar header for
+all of them) lists
 them with Unarchive, which only puts the entry back.
 
-**Clean up idle sessions** (a workspace's menu) first shows what will happen
+**Clean up idle sessions** (the workspace switcher) first shows what will happen
 to each idle or stopped session, and `aos done --all-idle` does the same
 sweep. A clean-up never merges: open PRs are listed for their own done.
 `aos done` reaches only sessions in the caller's workspace (or project).

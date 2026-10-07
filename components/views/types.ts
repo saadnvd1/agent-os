@@ -1,3 +1,4 @@
+import type { SessionNeed } from "@/lib/sidebar/shelves";
 import type { Session } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import type { NotificationSettings } from "@/lib/notifications";
@@ -10,6 +11,8 @@ export interface SessionStatus {
   title?: string;
   task?: string | null;
   asks?: number;
+  need?: SessionNeed | null;
+  unread?: boolean;
   claudeSessionId?: string | null;
 }
 
