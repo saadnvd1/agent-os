@@ -44,3 +44,30 @@ describe("the load alarm", () => {
     expect(alarm.feed("red", 30 * MIN)).toBe(true);
   });
 });
+
+describe("the alarm across a restart", () => {
+  it("stays disarmed after an alert until the load has been green", async () => {
+    const { feedAlarm, loadAlarmFromDb } = await import("./monitor");
+    const { db } = await import("../db");
+    const saved = () =>
+      (
+        db
+          .prepare(`SELECT value FROM settings WHERE key = 'load.alarm_armed'`)
+          .get() as { value: string } | undefined
+      )?.value;
+    loadAlarmFromDb();
+    feedAlarm("red", 0);
+    expect(feedAlarm("red", 2 * MIN)).toBe(true);
+    expect(saved()).toBe("0");
+    // A restart during the same red stretch.
+    loadAlarmFromDb();
+    feedAlarm("red", 3 * MIN);
+    expect(feedAlarm("red", 6 * MIN)).toBe(false);
+    feedAlarm("green", 7 * MIN);
+    feedAlarm("green", 17 * MIN);
+    expect(saved()).toBe("1");
+    loadAlarmFromDb();
+    feedAlarm("red", 18 * MIN);
+    expect(feedAlarm("red", 20 * MIN)).toBe(true);
+  });
+});

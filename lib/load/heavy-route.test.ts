@@ -1,4 +1,6 @@
 import http from "http";
+import fs from "fs";
+import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import type { AddressInfo } from "net";
@@ -78,16 +80,28 @@ describe("aos heavy", () => {
   });
 
   it("doesn't wait for a server that never answers", async () => {
-    const server = http.createServer(() => {});
+    // The server notes when the registration arrives and never answers;
+    // the command marks when it started. Awaiting the registration first
+    // would start it only once the 1000ms fetch limit gave up.
+    let arrived = 0;
+    const server = http.createServer(() => {
+      arrived ||= Date.now();
+    });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const { port } = server.address() as AddressInfo;
+    const stamp = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), "aos-heavy-")),
+      "started"
+    );
     try {
       const r = await aosHeavy(
-        ["sh", "-c", "exit 0"],
+        ["sh", "-c", `: > '${stamp}'; sleep 0.5`],
         `http://127.0.0.1:${port}`
       );
       expect(r.code).toBe(0);
       expect(r.stderr).toBe("");
+      expect(arrived).toBeGreaterThan(0);
+      expect(fs.statSync(stamp).mtimeMs - arrived).toBeLessThan(800);
     } finally {
       server.closeAllConnections();
       server.close();

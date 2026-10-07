@@ -49,7 +49,7 @@ vi.mock("@/lib/status-detector", async (importOriginal) => ({
 }));
 vi.mock("@/lib/hosts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hosts")>()),
-  hostExec: async () => ({ stdout: "", stderr: "" }),
+  hostExecFile: async () => ({ stdout: "", stderr: "" }),
 }));
 
 beforeEach(() => {

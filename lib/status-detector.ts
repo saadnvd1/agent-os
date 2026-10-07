@@ -163,6 +163,9 @@ export interface TmuxSessionInfo {
   name: string;
   hostId: string;
   activity: number;
+  // When the active window last printed (session activity moves only on
+  // keys from a client, not on output).
+  output: number;
   path: string;
   attached: boolean;
   windows: number;
@@ -187,31 +190,35 @@ interface SessionCache {
 }
 
 const LIST_FORMAT =
-  "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_title}";
+  "#{session_name}\t#{session_activity}\t#{window_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_title}";
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
-  // No tmux server (or no tmux) is an empty list; ssh failing (255) or a
-  // timeout is the host's error.
   const { stdout } = await hostExecFile(
     hostId,
     "tmux",
     ["list-sessions", "-F", LIST_FORMAT],
     8000
-  ).catch((err: { stdout?: string; killed?: boolean; code?: unknown }) => {
-    if (err.killed || err.code === 255) throw err;
-    return { stdout: err.stdout ?? "" };
-  });
+  ).catch(listingFailure);
   return stdout
     .trim()
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [name, activity, path, attached, windows, command, ...title] =
-        line.split("\t");
+      const [
+        name,
+        activity,
+        output,
+        path,
+        attached,
+        windows,
+        command,
+        ...title
+      ] = line.split("\t");
       return {
         name,
         hostId,
         activity: parseInt(activity, 10) || 0,
+        output: parseInt(output, 10) || 0,
         path: path || "",
         attached: attached !== "0" && !!attached,
         windows: parseInt(windows, 10) || 1,
@@ -219,6 +226,50 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
         title: title.join("\t"),
       };
     });
+}
+
+/**
+ * Whether a screen read earlier still shows the pane. tmux's output time
+ * (window_activity) is in whole seconds, so it holds only when: the listing
+ * that gave `output` began after the read did (output since then would have
+ * moved it), it hasn't moved, the read began after that second ended, and
+ * the read isn't older than SCREEN_MAX_AGE_MS.
+ */
+export function screenStillFresh(
+  cached: { output: number; at: number },
+  output: number,
+  listedAt: number,
+  now: number
+): boolean {
+  return (
+    output > 0 &&
+    cached.output === output &&
+    listedAt >= cached.at &&
+    cached.at >= (output + 1) * 1000 &&
+    now - cached.at < CONFIG.SCREEN_MAX_AGE_MS
+  );
+}
+
+// tmux list-sessions failing: no server yet is an empty list. Anything else
+// (tmux couldn't start, a timeout, ssh's own failure) is the host's error,
+// and the last listing stands.
+const NO_SERVER =
+  /no server running|error connecting|no such file or directory/i;
+
+export function listingFailure(err: {
+  stdout?: string;
+  stderr?: string;
+  killed?: boolean;
+  code?: unknown;
+}): { stdout: string } {
+  if (
+    !err.killed &&
+    typeof err.code === "number" &&
+    err.code !== 255 &&
+    NO_SERVER.test(err.stderr ?? "")
+  )
+    return { stdout: "" };
+  throw err;
 }
 
 // Content analysis helpers
@@ -370,7 +421,7 @@ class SessionStatusDetector {
   private unsent = new Map<string, UnsentTracker>();
   private screens = new Map<
     string,
-    { activity: number; at: number; text: string }
+    { output: number; at: number; text: string }
   >();
   private cache: SessionCache = {
     data: new Map(),
@@ -468,26 +519,21 @@ class SessionStatusDetector {
     return (await this.capture(name, false)).trim();
   }
 
-  /**
-   * The visible pane with its colours, for screenNeed and getStatus. A
-   * screen with no output since it was read is not read again: tmux's
-   * activity time (whole seconds) hasn't moved, and the read began after
-   * that second ended, so nothing it shows can have changed.
-   */
-  async captureScreen(name: string): Promise<string> {
-    const activity = this.getTimestamp(name);
+  // The visible pane with its colours, for screenNeed and getStatus; read
+  // again only when it may have changed (screenStillFresh), or always when
+  // `fresh` (a reported question is being checked against the screen).
+  async captureScreen(name: string, fresh = false): Promise<string> {
+    const output = this.cache.data.get(name)?.output ?? 0;
     const cached = this.screens.get(name);
     const now = Date.now();
     if (
+      !fresh &&
       cached &&
-      activity > 0 &&
-      cached.activity === activity &&
-      cached.at >= (activity + 1) * 1000 &&
-      now - cached.at < CONFIG.SCREEN_MAX_AGE_MS
+      screenStillFresh(cached, output, this.cache.listedAt, now)
     )
       return cached.text;
     const text = (await this.capture(name, true)).trimEnd();
-    this.screens.set(name, { activity, at: now, text });
+    this.screens.set(name, { output, at: now, text });
     return text;
   }
 

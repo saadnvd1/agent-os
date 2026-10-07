@@ -275,11 +275,12 @@ async function collect(): Promise<StatusSnapshot> {
     // Working and blocked end with the program that reported them.
     const fg = statusDetector.foregroundFor(sessionName);
     if (fg) dropProgramTransient(sessionName, fg, statusDetector.listedAt());
+    let program = programSummary(sessionName);
+    // A reported question is checked against the screen as it is now.
     const [screen, claudeSessionId] = await Promise.all([
-      statusDetector.captureScreen(sessionName),
+      statusDetector.captureScreen(sessionName, program?.state === "blocked"),
       getClaudeSessionId(sessionName),
     ]);
-    let program = programSummary(sessionName);
     if (questionDismissed(program, screen)) {
       applyProgramReport(sessionName, {
         state: "idle",

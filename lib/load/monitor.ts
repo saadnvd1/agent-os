@@ -95,10 +95,7 @@ async function sample(): Promise<void> {
   };
   state.view = view;
   publishLoad(JSON.stringify({ type: "load", load: view }));
-  const armed = state.alarm.isArmed;
-  const fire = state.alarm.feed(level, Date.now());
-  if (state.alarm.isArmed !== armed) saveArmed(state.alarm.isArmed);
-  if (fire) raiseAlert(alertText(view));
+  if (feedAlarm(level, Date.now())) raiseAlert(alertText(view));
 }
 
 // Whether the alarm may fire, across restarts: a deploy during a long red
@@ -117,6 +114,19 @@ function saveArmed(armed: boolean): void {
     `INSERT INTO settings (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
   ).run(ARMED_KEY, armed ? "1" : "0");
+}
+
+// The alarm, with its armed state saved whenever it changes.
+export function feedAlarm(level: LoadLevel, now: number): boolean {
+  const armed = state.alarm.isArmed;
+  const fire = state.alarm.feed(level, now);
+  if (state.alarm.isArmed !== armed) saveArmed(state.alarm.isArmed);
+  return fire;
+}
+
+// As a restart finds it.
+export function loadAlarmFromDb(): void {
+  state.alarm = new LoadAlarm(readArmed());
 }
 
 async function sampleUsage(): Promise<void> {
@@ -160,7 +170,7 @@ function guarded(fn: () => Promise<void>): () => Promise<void> {
 
 export function startLoadMonitor(): void {
   if (state.timers.length) return;
-  state.alarm = new LoadAlarm(readArmed());
+  loadAlarmFromDb();
   const tickSample = guarded(sample);
   const tickUsage = guarded(async () => {
     await sampleUsage();
