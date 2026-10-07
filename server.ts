@@ -20,6 +20,8 @@ import {
   sendChat,
   sendQueuedNow,
   setChatAccess,
+  setChatPlan,
+  carryOutPlan,
   setChatModel,
   stopChatTask,
   undoChat,
@@ -187,6 +189,10 @@ app.prepare().then(() => {
           void setChatModel(sessionId, msg.model);
         else if (msg.type === "set_access")
           void setChatAccess(sessionId, msg.access);
+        else if (msg.type === "set_plan")
+          void setChatPlan(sessionId, !!msg.plan).catch(fail);
+        else if (msg.type === "carry_plan")
+          void carryOutPlan(sessionId, String(msg.id)).catch(fail);
         else if (msg.type === "respond") respondChat(sessionId, msg.id, msg);
         else if (msg.type === "stop_task") stopChatTask(sessionId, msg.taskId);
         else if (msg.type === "task_output")

@@ -34,7 +34,7 @@ export function ModelPicker({
         <button
           type="button"
           aria-label="Model"
-          className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] flex h-10 max-w-36 shrink-0 items-center gap-1 rounded-lg px-2 text-xs"
+          className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] flex h-10 max-w-36 min-w-0 items-center gap-1 rounded-lg px-2 text-xs"
         >
           <span className="truncate">
             {modelLabel(models, model) || "Model"}

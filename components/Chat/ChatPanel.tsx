@@ -27,6 +27,10 @@ import { QuoteButton } from "./QuoteButton";
 import { ToolGroup } from "./Tools";
 import { McpServers } from "./McpServers";
 import { ArtifactCard } from "./Artifact";
+import { PlanCard } from "./PlanCard";
+import { ContextMeter } from "./ContextMeter";
+import { useViewport } from "@/hooks/useViewport";
+import { useChatCommands } from "./useChatCommands";
 import {
   AssistantMessage,
   CommandOutput,
@@ -43,6 +47,9 @@ import {
 
 interface ItemActions {
   respond: (id: string, answer: ApprovalDecision) => void;
+  // Absent while the agent is working, and inside undone messages.
+  onCarryPlan?: (id: string) => void;
+  onKeepPlanning?: () => void;
   // Absent while the agent is working, and inside undone messages.
   onUndo?: (id: string) => void;
 }
@@ -83,6 +90,18 @@ function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
       return <ArtifactCard item={item} />;
     case "approval":
       return <Approval item={item} respond={actions.respond} />;
+    case "plan":
+      return (
+        <PlanCard
+          item={item}
+          onCarryOut={
+            actions.onCarryPlan
+              ? () => actions.onCarryPlan?.(item.id)
+              : undefined
+          }
+          onKeepPlanning={() => actions.onKeepPlanning?.()}
+        />
+      );
     case "tool":
       return item.name === "Skill" ? (
         <SkillChip item={item} />
@@ -147,6 +166,10 @@ export function ChatPanel({
     setModel,
     access,
     setAccess,
+    plan,
+    setPlan,
+    carryPlan,
+    context,
     respond,
     undo,
     undoPreview,
@@ -162,6 +185,7 @@ export function ChatPanel({
     suggestion,
     requestFiles,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
+  const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
 
@@ -201,10 +225,57 @@ export function ChatPanel({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
+  const focusComposer = () =>
+    rootRef.current
+      ?.querySelector<HTMLElement>(".chat-composer [contenteditable]")
+      ?.focus();
+  const togglePlan = plan === null ? undefined : () => setPlan(!plan);
+  const sendText = (text: string) => {
+    pinned.current = true;
+    send(text);
+  };
+
+  // Shift+Tab switches plan mode from the composer, as in the terminal.
+  const shiftTab = useRef(togglePlan);
+  useEffect(() => {
+    shiftTab.current = togglePlan;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !e.shiftKey || e.metaKey || e.ctrlKey) return;
+      const target = e.target as HTMLElement;
+      if (
+        !shiftTab.current ||
+        !rootRef.current?.contains(target) ||
+        !(target === rootRef.current || target.closest(".chat-composer"))
+      )
+        return;
+      e.preventDefault();
+      shiftTab.current();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  useChatCommands({
+    sessionId,
+    connected,
+    running,
+    context,
+    plan,
+    send: sendText,
+    setPlan,
+    interrupt,
+    focusComposer,
+  });
+
   const blocks = groupTimeline(items);
+  const idle = !running && connected;
   const actions: ItemActions = {
     respond,
-    onUndo: running || !connected ? undefined : (id) => undo(id, true),
+    onUndo: idle ? (id) => undo(id, true) : undefined,
+    onCarryPlan: idle ? carryPlan : undefined,
+    onKeepPlanning: focusComposer,
   };
 
   return (
@@ -281,6 +352,12 @@ export function ChatPanel({
           onSetModel={setModel}
           access={access}
           onSetAccess={accessLocked ? undefined : setAccess}
+          plan={plan}
+          onTogglePlan={togglePlan}
+          // The phone's bar has no room for it; the desktop's carries it.
+          accessory={
+            isMobile ? <ContextMeter sessionId={sessionId} compact /> : null
+          }
           prefill={prefill}
         />
       </div>

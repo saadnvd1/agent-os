@@ -11,9 +11,16 @@ import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
 import type { ChatConversation, ChatStartOptions } from "../driver";
-import type { ChatImage, ChatItem, ChatState, PeerMessage } from "../events";
+import type {
+  ChatImage,
+  ChatItem,
+  ChatState,
+  PeerMessage,
+  UsageTotals,
+} from "../events";
 import { listItems, saveItem, settle } from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
+import { recordTurn, startingTotals } from "../../usage/turns";
 import {
   VISUALS_BRIEF,
   VISUALS_SERVER,
@@ -30,6 +37,14 @@ export class ChatHost {
   // The user message the running turn began with (or last took in).
   private currentTurn: string | null = null;
   private closed = false;
+  // The agent's running totals at its last turn, to tell what the next one
+  // cost. It starts from what the agent says it restored; failing that, a
+  // resumed conversation's saved totals.
+  private usage: UsageTotals | null;
+  private turnsRecorded = 0;
+  // A permission mode change still on its way to the agent: a message sent
+  // right after it (carrying out a plan) must not overtake it.
+  private modeChange: Promise<void> = Promise.resolve();
   readonly done: Promise<void>;
 
   constructor(
@@ -45,6 +60,7 @@ export class ChatHost {
       | "permissionMode"
     > = {}
   ) {
+    this.usage = startingTotals(session.id, !!session.claude_session_id);
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
@@ -76,6 +92,7 @@ export class ChatHost {
       resumeId: session.claude_session_id,
       resumeAt: session.chat_resume_at,
       access: session.chat_access ?? "full",
+      plan: !!session.chat_plan,
       systemAppend: [extras.systemAppend, BUS_BRIEF, visuals && VISUALS_BRIEF]
         .filter(Boolean)
         .join("\n\n"),
@@ -125,6 +142,18 @@ export class ChatHost {
         } else if (e.type === "suggestion") {
           // Kept on the session, so it's still there after a reload.
           this.setSuggestion(e.text);
+        } else if (e.type === "usage") {
+          this.usage = recordTurn(this.session, this.usage, e.totals);
+          this.turnsRecorded++;
+        } else if (e.type === "usage_start") {
+          // Too late once a turn was measured without it.
+          if (!this.turnsRecorded) this.usage = e.totals;
+        } else if (e.type === "context") {
+          db.prepare(`UPDATE sessions SET chat_context = ? WHERE id = ?`).run(
+            JSON.stringify(e.context),
+            this.session.id
+          );
+          this.emit(e);
         } else if (e.type === "state") {
           if (e.state === "idle") {
             // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
@@ -133,6 +162,8 @@ export class ChatHost {
             // between: the server retires a stale worker the moment it
             // hears one, and would cut that turn off.
             this.state = "idle";
+            // A plan-mode or access change on its way goes first.
+            await this.modeChange.catch(() => {});
             if (this.sendQueued()) continue;
           }
           // A stopped turn can still settle an approval after it ended.
@@ -217,6 +248,7 @@ export class ChatHost {
       case "send": {
         if (this.sent.has(cmd.id)) return;
         this.sent.add(cmd.id);
+        await this.modeChange.catch(() => {});
         const user = {
           id: cmd.id,
           kind: "user" as const,
@@ -265,9 +297,11 @@ export class ChatHost {
             return this.conversation.interrupt();
           return;
         }
+        await this.modeChange.catch(() => {});
         this.sendQueued();
         return;
       case "drain":
+        await this.modeChange.catch(() => {});
         this.sendQueued();
         return;
       case "files":
@@ -289,7 +323,9 @@ export class ChatHost {
       case "set_model":
         return this.conversation.setModel(cmd.model);
       case "set_access":
-        return this.conversation.setAccess(cmd.access);
+        return (this.modeChange = this.conversation.setAccess(cmd.access));
+      case "set_plan":
+        return (this.modeChange = this.conversation.setPlan(cmd.plan));
       case "respond":
         return this.conversation.respond(cmd.id, cmd);
       case "stop_task":

@@ -10,6 +10,7 @@ import os from "os";
 import { db, type Session } from "../db";
 import type {
   ApprovalDecision,
+  ChatContext,
   ChatImage,
   ChatState,
   PeerMessage,
@@ -22,7 +23,12 @@ import {
   type Listener,
   type Live,
 } from "./registry";
-import { capsKey, emitCapabilities, sendCapabilities } from "./settings";
+import {
+  capsKey,
+  emitCapabilities,
+  sendCapabilities,
+  setChatPlan,
+} from "./settings";
 import { listItems, saveItem, settle } from "./store";
 import {
   deleteQueued,
@@ -47,7 +53,47 @@ import {
 import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
 
-export { setChatAccess, setChatModel } from "./settings";
+export { setChatAccess, setChatModel, setChatPlan } from "./settings";
+
+function savedContext(sessionId: string): ChatContext | null {
+  const raw = getSession(sessionId).chat_context;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ChatContext;
+  } catch {
+    return null;
+  }
+}
+
+const CARRY_OUT = "Carry out the plan.";
+
+// Leaves plan mode and starts the plan. The message's id comes from the
+// plan, so a second tap or a retry is the same message, which the worker
+// runs once; the card shows it carried out only once the worker has it.
+export async function carryOutPlan(
+  sessionId: string,
+  planId: string,
+  timeoutMs?: number
+): Promise<void> {
+  const item = listItems(sessionId).find((i) => i.id === planId);
+  if (item?.kind !== "plan") throw new Error("That plan is gone");
+  if (item.carried) return;
+  // Mid-turn (another tab, a phone reconnecting), leaving plan mode would let
+  // the turn still planning start changing things. Asked of the worker
+  // itself: just after a restart nothing is attached yet.
+  const { state } = await ensureLive(sessionId);
+  if (state === "running" || state === "waiting")
+    throw new Error("The plan can be carried out once this turn ends");
+  await setChatPlan(sessionId, false);
+  await sendChatConfirmed(
+    sessionId,
+    { id: `user-carry-${planId}`, text: CARRY_OUT },
+    timeoutMs
+  );
+  const carried = { ...item, carried: true };
+  saveItem(sessionId, carried);
+  emit(sessionId, { type: "item", item: carried });
+}
 
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   track(live, e);
@@ -74,6 +120,8 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     emit(sessionId, e);
   } else if (e.type === "queue") {
     emitQueue(sessionId);
+  } else if (e.type === "context") {
+    emit(sessionId, e);
   } else if (e.type === "commands" || e.type === "terminal_only") {
     const session = getSession(sessionId);
     const caps = registry.caps.get(capsKey(session));
@@ -135,8 +183,16 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       streaming: new Map(hello.streaming.map((i) => [i.id, i])),
       activity: restoreActivity(sessionId, hello.state),
       build: hello.build,
+      canPlan: !!hello.caps?.includes("plan"),
+      canQueue: !!hello.caps?.includes("queue"),
     };
     registry.live.set(sessionId, live);
+    // A setting changed while no worker was attached (a restart, a dropped
+    // socket) reaches it now; both are safe to repeat.
+    const saved = getSession(sessionId);
+    client.command({ type: "set_access", access: saved.chat_access });
+    if (live.canPlan)
+      client.command({ type: "set_plan", plan: !!saved.chat_plan });
     emit(sessionId, { type: "state", state: live.state });
     return live;
   })();
@@ -211,7 +267,7 @@ async function resumeQueue(sessionId: string): Promise<void> {
   resumed.set(sessionId, Date.now());
   try {
     const live = await ensureLive(sessionId);
-    live.worker.command({ type: "drain" });
+    if (live.canQueue) live.worker.command({ type: "drain" });
   } catch (error) {
     console.error(
       `Not sending ${sessionId}'s queue:`,
@@ -230,6 +286,8 @@ export async function sendQueuedNow(
 ) {
   if (!listQueue(sessionId).some((m) => m.id === id)) return;
   const live = await ensureLive(sessionId);
+  if (!live.canQueue)
+    throw new Error("Reload to send this: the chat is on an older version");
   live.worker.command({ type: "send_now", id, during });
 }
 
@@ -240,7 +298,9 @@ export async function chatFileSuggestions(
   query: string
 ): Promise<FileSuggestion[]> {
   const live = registry.live.get(sessionId);
-  const fromAgent = live ? await live.worker.fileSuggestions(query) : null;
+  const fromAgent = live?.canQueue
+    ? await live.worker.fileSuggestions(query)
+    : null;
   // Empty while its file index warms up, the first seconds of a worker.
   if (fromAgent?.length) return fromAgent;
   const cwd = getSession(sessionId).working_directory.replace(
@@ -254,14 +314,17 @@ export async function chatFileSuggestions(
 // only then has it accepted it. "queued" when a turn was already running.
 export async function sendChatConfirmed(
   sessionId: string,
-  input: { text: string; from?: string; peer?: PeerMessage },
+  input: { text: string; from?: string; peer?: PeerMessage; id?: string },
   timeoutMs = 10_000
 ): Promise<"delivered" | "queued"> {
   const text = input.text.trim();
   if (!text) throw new Error("Message is empty");
   const live = await ensureLive(sessionId);
   const wasBusy = live.state === "running" || live.state === "waiting";
-  const id = `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
+  const id = input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
+  // Already taken (a retry of the same message): nothing to wait for.
+  if (input.id && listItems(sessionId).some((i) => i.id === id))
+    return "delivered";
   let set = registry.listeners.get(sessionId);
   if (!set) registry.listeners.set(sessionId, (set = new Set()));
   const listeners = set;
@@ -417,6 +480,7 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
     queue: listQueue(sessionId),
     suggestion: getSession(sessionId).chat_suggestion ?? null,
   });
+  listener({ type: "context", context: savedContext(sessionId) });
   void sendCapabilities(sessionId, listener);
   let set = registry.listeners.get(sessionId);
   if (!set) registry.listeners.set(sessionId, (set = new Set()));

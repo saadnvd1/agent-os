@@ -69,6 +69,7 @@ export function emitCapabilities(session: Session, listener?: Listener): void {
     models: caps.models,
     model: chatModel(session),
     access: session.chat_access,
+    plan: canPlan(session) ? !!session.chat_plan : null,
   };
   if (listener) listener(m);
   else emit(session.id, m);
@@ -136,5 +137,36 @@ export async function setChatAccess(
     sessionId
   );
   registry.live.get(sessionId)?.worker.command({ type: "set_access", access });
+  emitCapabilities(getSession(sessionId));
+}
+
+// An orchestrator's permission mode is fixed by its role.
+const canPlan = (s: Session) => s.role !== "orchestrator";
+
+// Plan mode: the agent reads and plans, and changes nothing until the plan
+// is carried out. Now if a conversation is live, and for every next start.
+export async function setChatPlan(
+  sessionId: string,
+  plan: boolean
+): Promise<void> {
+  if (!canPlan(getSession(sessionId))) return;
+  const live = registry.live.get(sessionId);
+  if (live && !live.canPlan) {
+    // A worker from an older build would drop the switch: it's retired when
+    // its turn ends, and the next one starts in the saved mode.
+    emitCapabilities(getSession(sessionId));
+    if (live.state === "running" || live.state === "waiting")
+      throw new Error(
+        "Plan mode can change once this turn ends: the agent is still on the previous build"
+      );
+    registry.live.delete(sessionId);
+    live.worker.command({ type: "close" });
+    live.worker.detach();
+  }
+  db.prepare(`UPDATE sessions SET chat_plan = ? WHERE id = ?`).run(
+    plan ? 1 : 0,
+    sessionId
+  );
+  registry.live.get(sessionId)?.worker.command({ type: "set_plan", plan });
   emitCapabilities(getSession(sessionId));
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { ChatCommand, ChatItem, DriverEvent } from "../events";
 import { clipOutput, toolDiff, toolTitle } from "../tools";
 import { leadingCommand } from "../commands";
+import { usageTotals } from "../context";
 
 // Loose views of the SDK's message shapes: only what the mapper reads.
 type Block = {
@@ -32,6 +33,7 @@ export type ClaudeMessage = {
   duration_ms?: number;
   num_turns?: number;
   total_cost_usd?: number;
+  modelUsage?: Parameters<typeof usageTotals>[0];
   is_error?: boolean;
   errors?: string[];
   result?: string;
@@ -304,6 +306,8 @@ export class ClaudeMapper {
   }
 
   private toolUse(id: string, name: string, input: unknown): DriverEvent[] {
+    // Shown as its plan card (claude-approvals), not as a step.
+    if (name === "ExitPlanMode") return [];
     if (name === "TodoWrite") {
       const todos = (
         (input as { todos?: { content?: string; status?: string }[] })?.todos ??
@@ -405,6 +409,10 @@ export class ClaudeMapper {
         interrupted,
         createdAt: now(),
       },
+    });
+    out.push({
+      type: "usage",
+      totals: usageTotals(m.modelUsage, m.total_cost_usd),
     });
     out.push({ type: "state", state: "idle" });
     return out;

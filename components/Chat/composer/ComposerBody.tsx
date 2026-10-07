@@ -48,6 +48,9 @@ export interface ComposerProps {
   onSetModel?: (model: string) => void;
   access?: ChatAccess;
   onSetAccess?: (access: ChatAccess) => void;
+  plan?: boolean | null;
+  onTogglePlan?: () => void;
+  accessory?: React.ReactNode;
   // Text to put back in the composer (an undone message), once per `at`.
   prefill?: { text: string; at: number };
   // Saves what's typed under this key, so a reload doesn't lose it.
@@ -75,6 +78,9 @@ export function ComposerBody({
   onSetModel,
   access,
   onSetAccess,
+  plan,
+  onTogglePlan,
+  accessory,
   prefill,
   draftKey,
   suggestion = null,
@@ -295,6 +301,9 @@ export function ComposerBody({
           plain={plain}
           onTogglePlain={() => setPlain(!plain)}
           onAddImages={(picked) => void addFiles(picked)}
+          plan={plan}
+          onTogglePlan={onTogglePlan}
+          accessory={accessory}
           access={access}
           onSetAccess={onSetAccess}
           models={models}

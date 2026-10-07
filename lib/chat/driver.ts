@@ -22,6 +22,8 @@ export interface ChatStartOptions {
   // Continue the conversation only up to this entry (after an undo).
   resumeAt?: string | null;
   access: ChatAccess;
+  // Start in plan mode: the agent reads and plans, and changes nothing.
+  plan?: boolean;
   // Extra instructions appended to the provider's own system prompt.
   systemAppend?: string;
   env: Record<string, string>;
@@ -54,6 +56,8 @@ export interface ChatConversation {
   fileSuggestions?(query: string): Promise<FileSuggestion[]>;
   setModel(model: string): Promise<void>;
   setAccess(access: ChatAccess): Promise<void>;
+  // Plan mode on, or back to the access setting.
+  setPlan(plan: boolean): Promise<void>;
   respond(id: string, answer: ApprovalDecision): void;
   stopTask(taskId: string): Promise<void>;
   // Puts files back as they were before a message (dryRun: only say what).

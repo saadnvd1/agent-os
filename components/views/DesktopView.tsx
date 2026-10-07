@@ -78,7 +78,6 @@ export function DesktopView({
                 activeSession={activeSession}
                 showNotificationSettings={showNotificationSettings}
                 setShowNotificationSettings={setShowNotificationSettings}
-                setShowQuickSwitcher={setShowQuickSwitcher}
                 setShowNewSessionDialog={setShowNewSessionDialog}
                 notificationSettings={notificationSettings}
                 permissionGranted={permissionGranted}

@@ -30,6 +30,7 @@ function fakeConversation() {
     interrupt: vi.fn(async () => {}),
     setModel: vi.fn(async () => {}),
     setAccess: vi.fn(async () => {}),
+    setPlan: vi.fn(async (_plan: boolean) => {}),
     respond: vi.fn(),
     stopTask: vi.fn(async () => {}),
     fileSuggestions: vi.fn(async (query: string) =>
@@ -56,7 +57,10 @@ vi.mock("../drivers", () => ({
   }),
 }));
 
-async function startHost(role = "agent") {
+async function startHost(
+  role = "agent",
+  saved?: { resumeId?: string; usage?: object }
+) {
   const { ChatHost } = await import("./host");
   const id = randomUUID();
   getDb()
@@ -64,6 +68,12 @@ async function startHost(role = "agent") {
       `INSERT INTO sessions (id, name, tmux_name, working_directory, role) VALUES (?, 'chat', ?, '/tmp', ?)`
     )
     .run(id, `claude-${id}`, role);
+  if (saved)
+    getDb()
+      .prepare(
+        `UPDATE sessions SET claude_session_id = ?, chat_usage = ? WHERE id = ?`
+      )
+      .run(saved.resumeId ?? null, JSON.stringify(saved.usage), id);
   const session = getDb()
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(id) as Session;
@@ -467,5 +477,153 @@ describe("lastUserTask", () => {
       createdAt: 2,
     });
     expect(lastUserTask(id)).toBe("fallback");
+  });
+
+  it("sends a message only after a plan mode change reaches the agent", async () => {
+    const { host, conversation } = await startHost();
+    let finish = () => {};
+    conversation.setPlan.mockImplementationOnce(
+      () => new Promise<void>((r) => (finish = r))
+    );
+    void host.handle({ type: "set_plan", plan: false });
+    const sending = host.handle({ type: "send", id: "user-1", text: "go" });
+    await tick();
+    expect(conversation.send).not.toHaveBeenCalled();
+    finish();
+    await sending;
+    expect(conversation.send).toHaveBeenCalledOnce();
+    host.close();
+  });
+
+  it("sends a queued message only after a plan mode change reaches the agent", async () => {
+    const { host, conversation } = await startHost();
+    await host.handle({
+      type: "send",
+      id: "user-1",
+      text: "plan",
+      queue: true,
+    });
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "do it",
+      queue: true,
+    });
+    let finish = () => {};
+    conversation.setPlan.mockImplementationOnce(
+      () => new Promise<void>((r) => (finish = r))
+    );
+    // Carry it out: plan mode goes off as the planning turn ends.
+    void host.handle({ type: "set_plan", plan: false });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    finish();
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith("do it", undefined);
+    host.close();
+  });
+
+  it("records each turn's cost as the difference in running totals", async () => {
+    const { id, host, conversation, emitted } = await startHost();
+    const totals = (costUsd: number, inputTokens: number) => ({
+      costUsd,
+      inputTokens,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+    conversation.events.push({ type: "usage", totals: totals(0.5, 100) });
+    conversation.events.push({ type: "usage", totals: totals(0.75, 150) });
+    conversation.events.push({
+      type: "context",
+      context: {
+        usedTokens: 10,
+        maxTokens: 100,
+        percentage: 10,
+        categories: [],
+        at: 1,
+      },
+    });
+    await tick();
+    const turns = getDb()
+      .prepare(
+        `SELECT cost_usd, input_tokens FROM chat_turns WHERE session_id = ? ORDER BY id`
+      )
+      .all(id);
+    expect(turns).toEqual([
+      { cost_usd: 0.5, input_tokens: 100 },
+      { cost_usd: 0.25, input_tokens: 50 },
+    ]);
+    expect(emitted.some((e) => e.type === "context")).toBe(true);
+    const saved = getDb()
+      .prepare(`SELECT chat_context FROM sessions WHERE id = ?`)
+      .get(id) as { chat_context: string };
+    expect(JSON.parse(saved.chat_context).percentage).toBe(10);
+    host.close();
+  });
+
+  describe("the first turn after a worker starts", () => {
+    const totals = (costUsd: number) => ({
+      costUsd,
+      inputTokens: 10,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+    const costs = (id: string) =>
+      getDb()
+        .prepare(`SELECT cost_usd FROM chat_turns WHERE session_id = ?`)
+        .all(id)
+        .map((r) => (r as { cost_usd: number }).cost_usd);
+
+    it("counts from the saved totals when the conversation resumes", async () => {
+      const { id, host, conversation } = await startHost("agent", {
+        resumeId: "conv-1",
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage", totals: totals(1) });
+      await tick();
+      expect(costs(id)[0]).toBeCloseTo(0.6);
+      host.close();
+    });
+
+    it("counts all of it in a new conversation, whatever an old one left", async () => {
+      const { id, host, conversation } = await startHost("agent", {
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage", totals: totals(1) });
+      conversation.events.push({ type: "usage", totals: totals(1.5) });
+      await tick();
+      expect(costs(id)).toEqual([1, 0.5]);
+      host.close();
+    });
+
+    it("counts from what the agent restored, not what was saved", async () => {
+      // The last worker died without saving its totals: the agent starts
+      // from nothing although the session saved 0.4.
+      const { id, host, conversation } = await startHost("agent", {
+        resumeId: "conv-1",
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage_start", totals: totals(0) });
+      conversation.events.push({ type: "usage", totals: totals(0.6) });
+      await tick();
+      expect(costs(id)).toEqual([0.6]);
+      host.close();
+    });
+
+    it("ignores a starting point that arrives after a turn was measured", async () => {
+      const { id, host, conversation } = await startHost("agent", {
+        resumeId: "conv-1",
+        usage: totals(0.4),
+      });
+      conversation.events.push({ type: "usage", totals: totals(1) });
+      conversation.events.push({ type: "usage_start", totals: totals(0) });
+      conversation.events.push({ type: "usage", totals: totals(1.25) });
+      await tick();
+      expect(costs(id).map((c) => +c.toFixed(2))).toEqual([0.6, 0.25]);
+      host.close();
+    });
   });
 });

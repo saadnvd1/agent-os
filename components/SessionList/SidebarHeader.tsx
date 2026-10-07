@@ -5,6 +5,7 @@ import {
   BookOpen,
   FolderOpen,
   FolderPlus,
+  Gauge,
   GitBranch,
   ListTodo,
   MessagesSquare,
@@ -28,6 +29,7 @@ import { archivedUiActions } from "@/stores/archivedUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
+import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 interface SidebarHeaderProps {
@@ -73,6 +75,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             menuItem("Archived", () => archivedUiActions.open(), {
               icon: Archive,
             }),
+            menuItem("Usage", usageUiActions.open, { icon: Gauge }),
             separator(),
             menuItem("Machines", props.onManageHosts, { icon: Server }),
             menuItem("Devices", devicesUiActions.open, { icon: Smartphone }),

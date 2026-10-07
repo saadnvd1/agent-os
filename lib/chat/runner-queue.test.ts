@@ -43,6 +43,7 @@ vi.mock("./worker/client", async (original) => ({
         build: workers.build ?? buildId(),
         state: workers.state,
         streaming: [],
+        caps: ["plan", "queue"],
       },
     };
   },
@@ -94,9 +95,18 @@ function live(id: string, files: FileSuggestion[] | null = null) {
     state: "idle",
     streaming: new Map(),
     activity: { tools: new Map(), tasks: new Set() },
+    canPlan: false,
+    canQueue: true,
   });
   return commands;
 }
+
+// What a fresh worker is told beyond its settings (re-sent first on every
+// connect, so a drained message runs in the session's current mode).
+const queueCommands = (commands: unknown[]) =>
+  commands.filter(
+    (c) => !["set_access", "set_plan"].includes((c as { type: string }).type)
+  );
 
 const paths = (files: FileSuggestion[]) => files.map((f) => f.path);
 
@@ -210,7 +220,8 @@ describe("a worker that goes away with messages queued", () => {
       await reattachChats();
       const mine = () => workers.started.filter((w) => w.sessionId === id);
       expect(mine()).toHaveLength(1);
-      expect(mine()[0].commands).toEqual([{ type: "drain" }]);
+      expect(mine()[0].commands.at(-1)).toEqual({ type: "drain" });
+      expect(queueCommands(mine()[0].commands)).toEqual([{ type: "drain" }]);
 
       // Its agent dies: within the minute, no new one (no restart loop).
       mine()[0].handlers.onClose(false);
@@ -222,7 +233,8 @@ describe("a worker that goes away with messages queued", () => {
       mine()[0].handlers.onClose(false);
       await new Promise((r) => setTimeout(r, 0));
       expect(mine()).toHaveLength(2);
-      expect(mine()[1].commands).toEqual([{ type: "drain" }]);
+      expect(mine()[1].commands.at(-1)).toEqual({ type: "drain" });
+      expect(queueCommands(mine()[1].commands)).toEqual([{ type: "drain" }]);
 
       // One this server let go (stopped, retired) stays stopped.
       vi.setSystemTime(t0 + 122_000);
@@ -309,7 +321,8 @@ describe("a worker from an older build", () => {
       await new Promise((r) => setTimeout(r, 0));
       expect(mine()[0].commands).toContainEqual({ type: "close" });
       expect(mine()).toHaveLength(2);
-      expect(mine()[1].commands).toEqual([{ type: "drain" }]);
+      expect(mine()[1].commands.at(-1)).toEqual({ type: "drain" });
+      expect(queueCommands(mine()[1].commands)).toEqual([{ type: "drain" }]);
     } finally {
       workers.build = undefined;
       workers.state = "idle";
