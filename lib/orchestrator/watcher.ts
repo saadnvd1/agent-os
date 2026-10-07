@@ -13,13 +13,13 @@ import { recordConditions } from "./events";
 import { sessionFacts } from "./facts";
 import { listOrchestrators } from "./home";
 import { BRAKE_SUBJECT, openAsks } from "./asks";
-import { resolveFinishedTaskAsks } from "./ask-approvals";
+import { settleStaleAsks } from "./ask-settle";
 import { brakesOn, liftBrake } from "./brakes";
 
-// Asks that stopped needing Saad: a held task merged or dropped, brakes
-// that lifted with nothing trying to start.
+// Asks that stopped needing Saad: their task or PR finished some other
+// way, or brakes lifted with nothing trying to start.
 async function settleAsks(workspaceId: string): Promise<void> {
-  resolveFinishedTaskAsks(workspaceId);
+  await settleStaleAsks(workspaceId);
   const brake = openAsks(workspaceId).some((a) => a.subject === BRAKE_SUBJECT);
   if (brake && !(await brakesOn(workspaceId)).length) liftBrake(workspaceId);
 }

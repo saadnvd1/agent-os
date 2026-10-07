@@ -8,6 +8,7 @@ import {
 import { republishAfterMerge } from "../lumifyhub/publish";
 import { restackAfterMerge } from "../stacks/restack";
 import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
+import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
 import { run } from "./gh";
 import { canSignOff } from "./state";
 import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
@@ -121,6 +122,12 @@ export async function signOffTask(
     signingOff.delete(id);
   }
   syncTaskCardInBackground(session, "merged", pr);
+  const head = opts.head ?? pr!.head;
+  resolveMergedTaskAsks(
+    id,
+    pr!.url,
+    `PR #${pr!.number} merged${head ? ` at ${head.slice(0, 7)}` : ""} by sign-off`
+  );
   const done = finishMerge(
     session,
     repo,
