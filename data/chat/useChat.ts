@@ -7,6 +7,7 @@ import type {
   ApprovalDecision,
   ChatAccess,
   ChatCommand,
+  ChatContext,
   ChatImage,
   ChatItem,
   ChatModel,
@@ -29,6 +30,8 @@ export function useChat(
   const [models, setModels] = useState<ChatModel[]>([]);
   const [model, setModelState] = useState("");
   const [access, setAccessState] = useState<ChatAccess>("full");
+  const [plan, setPlanState] = useState<boolean | null>(null);
+  const [context, setContext] = useState<ChatContext | null>(null);
   const [undoPreview, setUndoPreview] = useState<{
     from: string;
     preview: UndoPreview | null; // null while it loads
@@ -65,6 +68,9 @@ export function useChat(
           setModels(m.models);
           setModelState(m.model);
           setAccessState(m.access);
+          setPlanState(m.plan);
+        } else if (m.type === "context") {
+          setContext(m.context);
         } else if (m.type === "task_output") {
           setTaskOutputs((prev) => ({ ...prev, [m.taskId]: m.text }));
         } else if (m.type === "undo_preview") {
@@ -140,6 +146,21 @@ export function useChat(
     wsRef.current?.send(JSON.stringify({ type: "set_access", access: value }));
   }, []);
 
+  const setPlan = useCallback((value: boolean) => {
+    setPlanState(value);
+    wsRef.current?.send(JSON.stringify({ type: "set_plan", plan: value }));
+  }, []);
+
+  // Leaves plan mode and starts the plan.
+  const carryPlan = useCallback(
+    (id: string) => {
+      setPlanState((p) => (p === null ? p : false));
+      wsRef.current?.send(JSON.stringify({ type: "carry_plan", id }));
+      markRunning(queryClient, sessionId);
+    },
+    [queryClient, sessionId]
+  );
+
   const respond = useCallback((id: string, answer: ApprovalDecision) => {
     wsRef.current?.send(JSON.stringify({ type: "respond", id, ...answer }));
   }, []);
@@ -170,6 +191,10 @@ export function useChat(
     setModel,
     access,
     setAccess,
+    plan,
+    setPlan,
+    carryPlan,
+    context,
     respond,
     undo,
     undoPreview,

@@ -12,6 +12,7 @@ import { MessagesButton } from "@/components/Bus";
 import { DocsButton } from "@/components/LumifyHub";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import type { ViewProps } from "./types";
+import { paletteActions } from "@/stores/palette";
 
 // Labels collapse to icons when the pane bar carrying these is narrow
 // (a split), via the bar's container query.
@@ -58,7 +59,6 @@ type AppActionsProps = Pick<
   | "activeSession"
   | "showNotificationSettings"
   | "setShowNotificationSettings"
-  | "setShowQuickSwitcher"
   | "setShowNewSessionDialog"
   | "notificationSettings"
   | "permissionGranted"
@@ -73,7 +73,6 @@ export function DesktopAppActions({
   activeSession,
   showNotificationSettings,
   setShowNotificationSettings,
-  setShowQuickSwitcher,
   setShowNewSessionDialog,
   notificationSettings,
   permissionGranted,
@@ -91,15 +90,15 @@ export function DesktopAppActions({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Quick switch"
+            aria-label="Command palette"
             className="h-7 w-7"
-            onClick={() => setShowQuickSwitcher(true)}
+            onClick={paletteActions.open}
           >
             <Command className="h-4 w-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Quick switch</p>
+          <p>Command palette</p>
           <p className="text-muted-foreground text-xs">⌘K</p>
         </TooltipContent>
       </Tooltip>

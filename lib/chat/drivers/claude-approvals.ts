@@ -1,3 +1,4 @@
+import fs from "fs";
 import type {
   CanUseTool,
   HookCallback,
@@ -21,8 +22,64 @@ export const SDK_MODE: Record<ChatAccess, PermissionMode> = {
   full: "bypassPermissions",
 };
 
+// Plan mode sits over the access setting, and leaving it goes back to that.
+export const sdkMode = (access: ChatAccess, plan: boolean): PermissionMode =>
+  plan ? "plan" : SDK_MODE[access];
+
+// A plan is shown whole up to this size; past it, cut short.
+const MAX_PLAN = 256 * 1024;
+
+const capped = (text: string) =>
+  text.length > MAX_PLAN ? `${text.slice(0, MAX_PLAN)}\n\n…` : text;
+
+// The plan as the call carries it, or else as the agent wrote it to its plan
+// file. Only the file this conversation saw it write: a path the call names
+// comes from the model and is never read.
+export function proposedPlan(
+  toolInput: unknown,
+  planFile?: string
+): string | null {
+  const inline = (toolInput as { plan?: unknown } | undefined)?.plan;
+  if (typeof inline === "string" && inline.trim()) return capped(inline);
+  if (!isPlanFile(planFile)) return null;
+  const text = readPlanFile(planFile);
+  return text?.trim() ? text : null;
+}
+
+// A regular file only (never a link, pipe or device), and no more of it than
+// a plan needs.
+function readPlanFile(file: string): string | null {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(
+      file,
+      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+    );
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) return null;
+    const buf = Buffer.alloc(Math.min(st.size, MAX_PLAN));
+    const read = fs.readSync(fd, buf, 0, buf.length, 0);
+    const text = buf.subarray(0, read).toString("utf8");
+    return st.size > MAX_PLAN ? `${text}\n\n…` : text;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+// Where the agent keeps its plan in plan mode: a markdown file in its own
+// plans folder (~/.claude/plans, or a project's .claude/plans). Nothing else
+// is ever read as a plan, whatever path a call names.
+export const isPlanFile = (path: unknown): path is string =>
+  typeof path === "string" &&
+  /[\\/]\.claude[\\/]plans[\\/][^\\/]+\.md$/.test(path);
+
 // Words the CLI itself uses for a refused tool, so the call reads as stopped.
 const DENIED = "The user doesn't want to proceed with this tool use.";
+
+const PLAN_SHOWN =
+  "The plan is now shown to the user as a card they can carry out. Stop here without restating it, and wait for their reply.";
 
 interface Pending {
   item: Approval;
@@ -35,7 +92,12 @@ interface Pending {
 export class Approvals {
   private pending = new Map<string, Pending>();
 
-  constructor(private emit: (e: DriverEvent) => void) {}
+  constructor(
+    private emit: (e: DriverEvent) => void,
+    // The plan file the agent last wrote, for a plan it proposes without
+    // repeating it in the call.
+    private planFile: () => string | undefined = () => undefined
+  ) {}
 
   canUseTool: CanUseTool = (toolName, input, options) => {
     // Already answered on its card by the question hook.
@@ -102,6 +164,31 @@ export class Approvals {
         hookEventName: "PreToolUse",
         permissionDecision: "allow",
         updatedInput: result.updatedInput,
+      },
+    };
+  };
+
+  // The plan the agent proposes on leaving plan mode becomes a plan card.
+  // The tool itself is refused, so the conversation stays in plan mode until
+  // the reader carries it out or asks for changes.
+  proposePlan: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "PreToolUse") return {};
+    const plan = proposedPlan(input.tool_input, this.planFile());
+    if (!plan) return {};
+    this.emit({
+      type: "item",
+      item: {
+        id: `plan-${toolUseID ?? input.tool_use_id}`,
+        kind: "plan",
+        plan,
+        createdAt: Date.now(),
+      },
+    });
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: PLAN_SHOWN,
       },
     };
   };

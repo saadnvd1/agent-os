@@ -90,7 +90,8 @@ npm run dev  # http://localhost:3011
 - **tmux by default** - Every session lives in tmux, so closing the browser never kills your work
 - **Multiple machines** - Run sessions on any machine you can reach with ssh keys, side by side with local ones
 - **Session discovery** - tmux sessions you started yourself, on any machine, show up under the project whose folder they run in
-- **Code search** - Fast codebase search with syntax-highlighted results (Cmd+K)
+- **Command palette** - ⌘K (or the search button on a phone) finds any session and every action: new session, workspaces, orchestrator, plan mode, compact, Usage, Devices, Archived, theme, stop the turn
+- **Code search** - Fast codebase search with syntax-highlighted results (from the palette)
 - **File picker** - Browse and attach files to sessions, with direct upload from mobile
 - **Clone from GitHub** - Clone repos directly from the UI when creating projects
 - **Git integration** - Status, diffs, commits, PRs from the UI
@@ -132,6 +133,22 @@ composer) switches the model mid-conversation. `/mcp` lists the session's MCP
 servers with their status and tools, without spending a turn. Commands that
 only make sense in a terminal, such as `/vim`, are left out, and say so if
 typed anyway.
+
+**Plan mode** (the **Plan** toggle under the composer, or Shift+Tab) has the
+agent read and plan without changing anything; it's remembered per session.
+When the agent has a plan it shows up as a card: **Carry it out** leaves plan
+mode and starts it, **Keep planning** goes back to the composer.
+
+The ring in the tab bar (in the composer on a phone) is how full the
+conversation's context is, measured against the room before auto-compact:
+amber past 60%, red past 85%. Tap it for the breakdown and **Compact now**.
+On a desktop browser the screen button attaches a screenshot of a screen or
+window you pick; on a phone, attach a screenshot as a photo.
+
+**Usage** (the sidebar's ⋯ menu, or the palette) shows the account's 5-hour
+and weekly windows, and what chats cost today, over 7 or 30 days, by day,
+workspace and session. Costs are the agent's own estimates, recorded as each
+turn ends.
 
 **Esc** stops a running turn, as it does in Claude Code's terminal, unless a
 menu, dialog or the command list is open (those close first). On a phone the
@@ -219,7 +236,7 @@ that card with the exact command to fix it. How it works:
 ### Schedules
 
 A schedule starts agent work at set times without you opening AgentOS:
-**Schedules** in the workspace menu (or the sidebar's **⋯** menu). Each has a
+**Schedules** in the workspace menu, the sidebar's **⋯** menu, or ⌘K. Each has a
 name, a time (presets for hourly, daily, weekdays and weekly, or any
 five-field cron expression, in America/Chicago unless you pick another zone),
 a project and a prompt, and starts one of:
@@ -295,7 +312,7 @@ menu), **Needs you** (an approval, a question, a terminal waiting for input, a
 message typed and never sent, a failed task, or the orchestrator's open asks,
 each with a badge), **Working**,
 and **Done**, newest first, ten at a time. A purple dot marks a session that
-finished or changed since you last opened it. Search (⌘K on desktop) matches
+finished or changed since you last opened it. Search matches
 titles and project names, and the project filter narrows the list to one
 project and holds that project's own actions: new session, terminal, dev
 server, settings, board, workspace.
