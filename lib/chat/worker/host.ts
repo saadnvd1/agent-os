@@ -123,6 +123,7 @@ export class ChatHost {
           text: cmd.text,
           images: cmd.images,
           from: cmd.from,
+          fromId: cmd.fromId,
           checkpoint,
           createdAt: Date.now(),
         });

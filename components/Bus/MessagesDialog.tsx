@@ -145,6 +145,11 @@ export function MessagesDialog() {
           {send.error && (
             <p className="text-destructive text-xs">{send.error.message}</p>
           )}
+          {send.data?.delivery.state === "failed" && (
+            <p className="text-destructive text-xs">
+              Saved to its inbox, but not delivered: {send.data.delivery.why}
+            </p>
+          )}
         </form>
       </DialogContent>
     </Dialog>

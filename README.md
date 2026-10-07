@@ -216,7 +216,20 @@ aos docs [query]                  # LumifyHub pages, when the workspace is linke
 ```
 
 Messages are delivered by typing them into the recipient's terminal, labelled
-as coming from another agent, and a rate limit stops two agents looping. The
+as coming from another agent, and a rate limit stops two agents looping.
+Delivery is checked against the pane: the text has to reach the input and
+leave it on Enter (retried once as a bracketed paste), and a menu on screen is
+never typed into. `aos send` says `delivered`, `queued` (the agent was busy and
+will see it after its turn) or `FAILED: <why>` with exit code 2; a chat session
+counts as delivered once its worker records the message. Either way the
+message waits in the recipient's `aos inbox`.
+
+Sessions are addressed by name, `project/name`, id or a unique id prefix, and
+renaming one keeps its old names: a message to "Session 3" still reaches the
+session now called "orchestrator", and `aos peers` shows
+`orchestrator (was Session 3)`. If another session has since taken the old
+name, the current owner wins and `aos send` says so. A name that matches more
+than one session is refused with the candidates listed. The
 **Messages** panel shows every conversation and lets you message any session.
 Sessions on other machines can receive messages but not yet send them.
 

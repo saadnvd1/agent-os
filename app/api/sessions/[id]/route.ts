@@ -10,6 +10,7 @@ import { supportsChat } from "@/lib/chat/capabilities";
 import { stopChat } from "@/lib/chat/runner";
 import { statusDetector } from "@/lib/status-detector";
 import { deleteItems } from "@/lib/chat/store";
+import { recordPreviousName } from "@/lib/session-names";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 import { runInBackground } from "@/lib/async-operations";
 
@@ -147,6 +148,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
       }
 
+      // Messages sent to the old name still find it.
+      recordPreviousName(id, existing.name);
       updates.push("name = ?");
       values.push(body.name);
     }

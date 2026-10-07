@@ -59,6 +59,8 @@ export type ChatItem =
       text: string;
       images?: ChatImage[];
       from?: string;
+      // The sending session, when another session sent it.
+      fromId?: string;
       // The provider's id for this message, to undo file changes back to it.
       checkpoint?: string;
     })

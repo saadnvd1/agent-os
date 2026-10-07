@@ -15,6 +15,7 @@
  */
 
 import { hostExec, listHosts } from "./hosts";
+import { WORKING_LINE } from "./claude-working-line";
 
 // Configuration constants
 const CONFIG = {
@@ -205,10 +206,6 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
 }
 
 // Content analysis helpers
-// Claude Code's working line, whatever word it picks: "✻ Composing… (4m 0s ·
-// ↓ 23.5k tokens)". It sits above the input box and status line, so it can be
-// several lines up from the bottom.
-const WORKING_LINE = /^\s*\S\s+[A-Z][a-z]+(?:ing)?…\s+\(\d+[smh]?\b/m;
 
 export function checkBusyIndicators(content: string): boolean {
   const lines = content.split("\n");

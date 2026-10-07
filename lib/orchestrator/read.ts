@@ -2,7 +2,8 @@ import type { Session } from "../db";
 import type { ChatItem } from "../chat/events";
 import { listItems } from "../chat/store";
 import { statusDetector } from "../status-detector";
-import { matchesRef } from "../bus/format";
+import { resolveRef } from "../bus/resolve";
+import { previousNames } from "../session-names";
 import { hostExec } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { workspaceSessions } from "./facts";
@@ -17,26 +18,25 @@ export function findWorkspaceSession(
   workspaceId: string,
   ref: string
 ): Session & { project_name: string } {
-  const r = ref.trim().toLowerCase();
   const all = workspaceSessions(workspaceId);
-  const matches = all.filter(
-    (s) =>
-      matchesRef(r, {
-        id: s.id,
-        name: s.name,
-        projectName: s.project_name,
-        tmuxName: s.tmux_name,
-      }) ||
-      (r.length >= 6 && s.id.startsWith(r))
+  const old = previousNames();
+  const r = resolveRef(
+    ref,
+    all.map((s) => ({
+      id: s.id,
+      name: s.name,
+      projectName: s.project_name,
+      tmuxName: s.tmux_name,
+      previousNames: old.get(s.id) ?? [],
+    }))
   );
-  if (matches.length === 1) return matches[0];
-  if (!matches.length)
+  if (!r.ok)
     throw new Error(
-      `No session "${ref}" in this workspace. Call sessions to see them.`
+      r.reason === "none"
+        ? `No session "${ref}" in this workspace. Call sessions to see them.`
+        : r.error
     );
-  throw new Error(
-    `"${ref}" matches ${matches.length} sessions; use project/name or the id`
-  );
+  return all.find((s) => s.id === r.id)!;
 }
 
 // The end of a text, keeping whole lines, within the cap.

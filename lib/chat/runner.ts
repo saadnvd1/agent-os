@@ -137,6 +137,55 @@ export async function sendChat(
   });
 }
 
+// Sends, then waits for the worker to record the message as a user item:
+// only then has it accepted it. "queued" when a turn was already running.
+export async function sendChatConfirmed(
+  sessionId: string,
+  input: { text: string; from?: string; fromId?: string },
+  timeoutMs = 10_000
+): Promise<"delivered" | "queued"> {
+  const text = input.text.trim();
+  if (!text) throw new Error("Message is empty");
+  const live = await ensureLive(sessionId);
+  const wasBusy = live.state === "running" || live.state === "waiting";
+  const id = `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
+  let set = registry.listeners.get(sessionId);
+  if (!set) registry.listeners.set(sessionId, (set = new Set()));
+  const listeners = set;
+  let listener: Listener = () => {};
+  let timer: NodeJS.Timeout | undefined;
+  const accepted = new Promise<void>((resolve, reject) => {
+    listener = (m) => {
+      if (m.type === "item" && m.item.id === id) resolve();
+    };
+    timer = setTimeout(() => {
+      // The event can be missed across a reconnect; the row can't.
+      if (listItems(sessionId).some((i) => i.id === id)) resolve();
+      else
+        reject(
+          new Error(
+            `the chat worker didn't take it within ${timeoutMs / 1000}s`
+          )
+        );
+    }, timeoutMs);
+  });
+  listeners.add(listener);
+  try {
+    live.worker.command({
+      type: "send",
+      id,
+      text,
+      from: input.from,
+      fromId: input.fromId,
+    });
+    await accepted;
+  } finally {
+    clearTimeout(timer);
+    listeners.delete(listener);
+  }
+  return wasBusy ? "queued" : "delivered";
+}
+
 export function respondChat(
   sessionId: string,
   id: string,

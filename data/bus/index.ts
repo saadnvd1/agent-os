@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { BusMessageView, Peer } from "@/lib/bus";
+import type { BusMessageView, Delivery, Peer } from "@/lib/bus";
 
 export const busKeys = {
   all: ["bus"] as const,
@@ -41,7 +41,7 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { to: string; body: string }) =>
-      json(
+      json<{ delivery: Delivery; note?: string }>(
         await fetch("/api/bus/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

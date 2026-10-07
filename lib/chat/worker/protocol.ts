@@ -27,6 +27,7 @@ export type WorkerCommand =
       text: string;
       images?: ChatImage[];
       from?: string;
+      fromId?: string;
     }
   | { type: "interrupt" }
   | { type: "set_model"; model: string }
