@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ChatItem, DriverEvent } from "../events";
 import { CodexApprovals } from "./codex-approvals";
-import { CodexMapper, unifiedToDiff } from "./codex-mapper";
+import { CodexMapper } from "./codex-mapper";
+import { unifiedToDiff } from "../diff";
 import { CODEX_MODES, codexInput, threadParams } from "./codex";
 
 type Line = { method: string; id?: number; params: Record<string, unknown> };

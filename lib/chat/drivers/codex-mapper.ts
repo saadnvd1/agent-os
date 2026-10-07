@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { DriverEvent, FileDiff, UsageTotals } from "../events";
 import { toolTitle } from "../tools";
+import { unifiedToDiff } from "../diff";
 import { TurnItems, type ToolStart } from "./turn-items";
 
 type P = Record<string, unknown>;
@@ -10,23 +11,6 @@ export interface CodexChange {
   path: string;
   kind?: { type?: string };
   diff?: string;
-}
-
-// A unified diff's two sides, as the before and after of a change.
-export function unifiedToDiff(path: string, diff: string, added = false) {
-  if (added) return { path, before: "", after: diff };
-  const before: string[] = [];
-  const after: string[] = [];
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("@@") || /^(---|\+\+\+) /.test(line)) continue;
-    if (line.startsWith("-")) before.push(line.slice(1));
-    else if (line.startsWith("+")) after.push(line.slice(1));
-    else {
-      before.push(line.slice(1));
-      after.push(line.slice(1));
-    }
-  }
-  return { path, before: before.join("\n"), after: after.join("\n") };
 }
 
 // The command a shell was asked to run, without the shell around it.
