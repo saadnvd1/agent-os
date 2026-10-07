@@ -85,6 +85,11 @@ npm run dev  # http://localhost:3011
 ## Features
 
 - **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
+- **Chat with your agents** - Streaming replies, inline diffs, plan mode, a queue you can steer, next-prompt suggestions, `@file` mentions, and a context meter
+- **Visuals in chat** - Agents preview and show charts, tables and HTML pages inline, sandboxed
+- **Live status** - Every session moves between Needs you, Working and Done the moment it changes, including terminal programs that report their own state (OSC 7501)
+- **Tasks that end in a PR** - Hand off work to its own worktree, stack tasks from a board, and let a workspace orchestrator review and merge
+- **Schedules** - Start tasks, chats or orchestrator messages on a timer, with run history
 - **Voice-to-text** - Dictate prompts to your coding sessions hands-free
 - **Multi-pane layout** - Run up to 4 sessions side-by-side
 - **tmux by default** - Every session lives in tmux, so closing the browser never kills your work
@@ -489,7 +494,7 @@ approved`). An approval covers that one item only: a held task's approval
   minutes. Agents on this machine reach every route but can't make your
   authenticator sign, and neither `aos` nor the orchestrator's tools can
   answer or resume. Passkeys belong to the host they were made on
-  (localhost, the tailnet's https name, the Connect host), so add one on
+  (localhost or the tailnet's https name), so add one on
   each in Devices. The first one on an install is trusted on first use,
   once: every later one needs a code from a device that has one, even after
   every passkey is revoked. Revoking always needs a passkey, the last one
@@ -574,26 +579,6 @@ and API calls or terminal connections made by another website's page.
 | `AGENTOS_ALLOWED_HOSTS`                | Extra host names to answer to.                                                                         |
 | `AGENTOS_TOKEN`                        | A device token for `aos` and the MCP server when they reach AgentOS over a network that needs pairing. |
 | `AGENTOS_AUTH=off`                     | No pairing, for when your own proxy does the login. Anyone who reaches the port gets a shell.          |
-
-## Connect (in development)
-
-AgentOS Connect will let you reach this machine from anywhere through a
-hosted relay, without opening a port. The client half is here, in
-`lib/connect/`. Connect is off unless `~/.agent-os/connect/connect.json`
-exists.
-
-The relay can't read your sessions, and you can check that in this code
-rather than take it on trust:
-
-- Your machine generates the TLS key for its Connect address and never sends
-  it anywhere (`lib/connect/config.ts`, `serve.ts`). Phones complete TLS with
-  this process, not with the relay.
-- The relay only sees the server name a connection asks for, then passes the
-  encrypted bytes down your machine's tunnel (`lib/connect/frames.ts`,
-  `mux.ts`).
-- Everything that arrives through the tunnel goes through the same
-  paired-device check as Wi-Fi, and is never treated as this machine
-  (`lib/security/auth.test.ts`).
 
 ## Development
 
