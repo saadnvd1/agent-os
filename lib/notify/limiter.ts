@@ -106,8 +106,12 @@ export class Limiter {
 
   private arm(source: string, at: number): void {
     if (this.timers.has(source)) return;
+    // A database error here must not become an unhandled rejection: the
+    // rows stay unsent and the next push or start re-arms them.
     const timer = setTimeout(
-      () => void this.flush(source),
+      () => {
+        this.flush(source).catch((error) => this.opts.onLate?.(source, error));
+      },
       Math.max(0, at - this.now)
     );
     timer.unref?.();

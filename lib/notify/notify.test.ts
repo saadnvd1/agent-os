@@ -121,6 +121,8 @@ describe("Limiter", () => {
     };
   }
   afterEach(() => vi.useRealTimers());
+  // resume() re-arms every source's held rows.
+  beforeEach(() => db.prepare(`DELETE FROM notify_outbox`).run());
 
   it("sends the first at once and holds the rest of the minute", async () => {
     vi.useFakeTimers();
@@ -187,13 +189,18 @@ describe("Limiter", () => {
   });
 
   it("drops past the cap instead of piling up", async () => {
-    const { limiter, src } = setup();
+    const { limiter, sent, src } = setup();
     await limiter.push(src("a"), "first");
     for (let i = 0; i < MAX_HELD; i++)
       expect((await limiter.push(src("a"), `m${i}`)).state).toBe("held");
     expect(await limiter.push(src("a"), "one more")).toEqual({
       state: "dropped",
     });
+    // A held text again is a duplicate, not a 21st.
+    expect(await limiter.push(src("a"), "m0")).toEqual({ state: "duplicate" });
+    await limiter.flush(src("a"));
+    expect(sent.at(-1)).toMatch(/^20 updates:/);
+    expect(sent.at(-1)).not.toContain("one more");
   });
 
   it("reports a failed send", async () => {
