@@ -226,6 +226,20 @@ describe("resumeTaskStarts", () => {
     expect(setupWorktree).not.toHaveBeenCalled();
   });
 
+  it("doesn't rerun setup for a held start a restart cut off after its claim", async () => {
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'ok' WHERE setup_status IN ('running', 'held')`
+    ).run();
+    const id = seedTask(ws.app.id);
+    // Set up, held, then claimed by the tick: running again, with its setup.
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'running', setup_ms = 42, setup_error = NULL WHERE id = ?`
+    ).run(id);
+    expect(await resumeTaskStarts(async () => false)).toEqual([id]);
+    await vi.waitFor(() => expect(launchClaude).toHaveBeenCalledTimes(1));
+    expect(setupWorktree).not.toHaveBeenCalled();
+  });
+
   it("relaunches a start whose tmux session isn't the agent's", async () => {
     db.prepare(
       `UPDATE sessions SET setup_status = 'ok' WHERE setup_status IN ('running', 'held')`
