@@ -181,7 +181,11 @@ export async function POST(request: NextRequest) {
       isRemoteHost(hostId)
         ? "terminal"
         : "chat";
-    db.prepare(`UPDATE sessions SET view = ? WHERE id = ?`).run(view, id);
+    // Named by whoever made it, or "Session 4" until its first message.
+    const nameSource = providedName?.trim() || featureName ? "user" : "default";
+    db.prepare(
+      `UPDATE sessions SET view = ?, name_source = ? WHERE id = ?`
+    ).run(view, nameSource, id);
 
     // Set worktree info if created
     if (worktreePath) {

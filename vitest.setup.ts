@@ -24,3 +24,7 @@ delete process.env.AGENTOS_NOTIFY_CMD;
 for (const key of Object.keys(process.env)) {
   if (key.startsWith("GIT_")) delete process.env[key];
 }
+
+// Nor a model: sessions keep their placeholder name. A test of the titles
+// injects its own runner.
+process.env.AGENTOS_SESSION_TITLES = "off";

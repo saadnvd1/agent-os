@@ -30,6 +30,7 @@ import {
   type TaskState,
 } from "./state";
 import { expandHome, prFor, taskSessions } from "./session";
+import { nameFor } from "../session-titles";
 
 export * from "./state";
 export { codeReviewRefusal, parseCodeReview } from "./code-review";
@@ -54,14 +55,11 @@ export interface TaskView {
   createdAt: string;
 }
 
-function taskTitle(prompt: string): string {
-  const line = prompt.trim().split("\n")[0];
-  return line.length > 60 ? `${line.slice(0, 57)}...` : line;
-}
-
 export async function createTask(opts: {
   projectId: string;
   prompt: string;
+  // Its name; generated from the prompt when absent.
+  name?: string;
   model?: string;
   // Started from this LumifyHub card, which the task then moves.
   cardId?: string;
@@ -84,7 +82,8 @@ export async function createTask(opts: {
     throw new Error(`"${opts.baseBranch}" isn't a branch name`);
   const projectPath = expandHome(project.working_directory);
   const id = randomUUID();
-  const feature = `${slugify(prompt.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
+  const naming = await nameFor(prompt, projectPath, opts.name);
+  const feature = `${slugify(naming.name.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
   const baseBranch =
     opts.base?.branch ??
     opts.baseBranch ??
@@ -114,7 +113,7 @@ export async function createTask(opts: {
     .createSession(db)
     .run(
       id,
-      taskTitle(prompt),
+      naming.name,
       tmuxName,
       wt.worktreePath,
       null,
@@ -130,9 +129,10 @@ export async function createTask(opts: {
     .updateSessionWorktree(db)
     .run(wt.worktreePath, wt.branchName, baseBranch, null, id);
   db.prepare(
-    `UPDATE sessions SET task_prompt = ?, task_status = 'running' WHERE id = ?`
-  ).run(prompt, id);
+    `UPDATE sessions SET task_prompt = ?, task_status = 'running', name_source = ? WHERE id = ?`
+  ).run(prompt, naming.source, id);
   opts.onCreated?.(id);
+  void naming.refine?.(id);
 
   await launchClaude({
     sessionId: id,
