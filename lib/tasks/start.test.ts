@@ -1,5 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import type { SetupResult } from "../env-setup";
+
+// Prompt files land here, not in the real ~/.agent-os.
+const prompts = fs.mkdtempSync(path.join(os.tmpdir(), "aos-prompts-"));
+const promptFile = (id: string) => path.join(prompts, `${id}.prompt.md`);
+// Every tmux call start.ts makes, in order.
+const tmuxCalls: string[][] = [];
+vi.mock("child_process", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("child_process")>()),
+  execFile: (
+    cmd: string,
+    args: string[],
+    _opts: unknown,
+    cb: (e: Error | null, out: { stdout: string; stderr: string }) => void
+  ) => {
+    if (cmd === "tmux") tmuxCalls.push(args);
+    cb(null, { stdout: "", stderr: "" });
+  },
+}));
 
 const setupWorktree = vi.fn<() => Promise<SetupResult>>();
 const launchClaude =
@@ -8,14 +29,20 @@ vi.mock("../env-setup", () => ({ setupWorktree: () => setupWorktree() }));
 vi.mock("../agents/launch", () => ({
   launchClaude: (opts: { prompt: string; brief?: string }) =>
     launchClaude(opts),
+  promptFileFor: (id: string) => promptFile(id),
 }));
 
 const { db } = await import("../db");
 const { seedSession, seedWorkspace } = await import("../orchestrator/testing");
 const { setPaused } = await import("../orchestrator/pause");
 const { taskSetupOf } = await import("./setup");
-const { finishTaskStart, launchHold, resumeHeldStarts, resumeTaskStarts } =
-  await import("./start");
+const {
+  finishTaskStart,
+  launchHold,
+  launchPending,
+  resumeHeldStarts,
+  resumeTaskStarts,
+} = await import("./start");
 
 const ok = (): SetupResult => ({
   success: true,
@@ -42,6 +69,7 @@ let ws: ReturnType<typeof seedWorkspace>;
 beforeEach(() => {
   setupWorktree.mockReset().mockResolvedValue(ok());
   launchClaude.mockReset().mockResolvedValue();
+  tmuxCalls.length = 0;
   ws = seedWorkspace();
 });
 
@@ -91,7 +119,7 @@ describe("finishTaskStart", () => {
     await finishTaskStart(id);
     expect(launchClaude).not.toHaveBeenCalled();
     expect(setupOf(id)?.status).toBe("held");
-    expect(setupOf(id)?.error).toMatch(/^Waiting to launch: .*paused/);
+    expect(setupOf(id)?.error).toBeNull();
   });
 
   it("holds a card of a stack the orchestrator started, and only that stack's", async () => {
@@ -127,6 +155,39 @@ describe("finishTaskStart", () => {
     expect(resumeHeldStarts()).not.toContain(id);
     await vi.waitFor(() => expect(setupOf(id)?.status).toBe("ok"));
     expect(launchClaude).toHaveBeenCalledTimes(1);
+    // Setup commands needn't be idempotent: the held start doesn't rerun them.
+    expect(setupWorktree).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a held start's setup failure for the agent's prompt", async () => {
+    const id = seedTask(ws.app.id);
+    db.prepare(
+      `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, 'task', ?, datetime('now'))`
+    ).run(ws.workspace.id, id);
+    setupWorktree.mockResolvedValue({
+      ...ok(),
+      success: false,
+      steps: [{ name: "i", command: "npm ci", success: false, error: "E404" }],
+    });
+    setPaused(ws.workspace.id, true);
+    await finishTaskStart(id);
+    expect(launchPending(id)).toBe(true);
+    setPaused(ws.workspace.id, false);
+    resumeHeldStarts();
+    await vi.waitFor(() => expect(launchClaude).toHaveBeenCalledTimes(1));
+    expect(launchClaude.mock.calls[0][0].prompt).toContain("E404");
+    expect(setupWorktree).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces a tmux session opened before the launch", async () => {
+    const id = seedTask(ws.app.id);
+    expect(launchPending(id)).toBe(true);
+    launchClaude.mockImplementation(async () => {
+      expect(tmuxCalls).toEqual([["kill-session", "-t", `=claude-${id}`]]);
+    });
+    await finishTaskStart(id);
+    expect(setupOf(id)?.status).toBe("ok");
+    expect(launchPending(id)).toBe(false);
   });
 
   it("doesn't launch a task closed during its setup", async () => {
@@ -156,12 +217,38 @@ describe("resumeTaskStarts", () => {
       `UPDATE sessions SET setup_status = 'ok' WHERE setup_status IN ('running', 'held')`
     ).run();
     const live = seedTask(ws.app.id);
+    fs.writeFileSync(promptFile(live), "Do it");
     const resumed = await resumeTaskStarts(
       async (name) => name === `claude-${live}`
     );
     expect(resumed).not.toContain(live);
     expect(setupOf(live)).toEqual({ status: "ok", ms: null, error: null });
     expect(setupWorktree).not.toHaveBeenCalled();
+  });
+
+  it("doesn't rerun setup for a held start a restart cut off after its claim", async () => {
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'ok' WHERE setup_status IN ('running', 'held')`
+    ).run();
+    const id = seedTask(ws.app.id);
+    // Set up, held, then claimed by the tick: running again, with its setup.
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'running', setup_ms = 42, setup_error = NULL WHERE id = ?`
+    ).run(id);
+    expect(await resumeTaskStarts(async () => false)).toEqual([id]);
+    await vi.waitFor(() => expect(launchClaude).toHaveBeenCalledTimes(1));
+    expect(setupWorktree).not.toHaveBeenCalled();
+  });
+
+  it("relaunches a start whose tmux session isn't the agent's", async () => {
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'ok' WHERE setup_status IN ('running', 'held')`
+    ).run();
+    // Opened from the sidebar mid-setup: alive, but no prompt was written.
+    const bare = seedTask(ws.app.id);
+    const resumed = await resumeTaskStarts(async () => true);
+    expect(resumed).toEqual([bare]);
+    await vi.waitFor(() => expect(launchClaude).toHaveBeenCalledTimes(1));
   });
 
   it("resumes only starts a restart cut off", async () => {

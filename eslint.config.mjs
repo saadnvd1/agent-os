@@ -24,6 +24,8 @@ export default defineConfig([
   },
   globalIgnores([
     ".next/**",
+    ".next-build/**",
+    ".next-prev/**",
     "node_modules/**",
     "src-tauri/**",
     "public/**",
