@@ -199,7 +199,13 @@ export async function getUntrackedFileDiff(
   workingDir: string,
   filePath: string
 ): Promise<string> {
-  return gitOutput(workingDir, ["diff", "--no-index", "/dev/null", filePath]);
+  return gitOutput(workingDir, [
+    "diff",
+    "--no-index",
+    "--",
+    "/dev/null",
+    filePath,
+  ]);
 }
 
 // File paths come from the repository's own file names: they go to git as

@@ -154,6 +154,14 @@ describe("git status, off the event loop", () => {
     fs.rmSync(path.join(repo, ".gitignore"));
   });
 
+  it("diffs an untracked file named like an option as a file", async () => {
+    const name = "--output=written.txt";
+    fs.writeFileSync(path.join(repo, name), "opt\n");
+    expect(await getUntrackedFileDiff(repo, name)).toContain("+opt");
+    expect(fs.existsSync(path.join(repo, "written.txt"))).toBe(false);
+    fs.rmSync(path.join(repo, name));
+  });
+
   it("fails loudly outside a repository", async () => {
     await expect(getGitStatus(os.tmpdir())).rejects.toThrow(
       "Failed to get git status"
