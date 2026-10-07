@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/data/chat/useChat";
 import {
   groupTimeline,
@@ -8,7 +8,13 @@ import {
   type TimelineBlock,
 } from "@/lib/chat/group";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
-import { escapeInterrupts, OVERLAY_SELECTOR } from "@/lib/chat/escape";
+import {
+  escapeAction,
+  GHOST_SELECTOR,
+  OVERLAY_SELECTOR,
+} from "@/lib/chat/escape";
+import { sentPrompts } from "@/lib/chat/history";
+import { quoteMarkdown } from "@/lib/chat/quote";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { ActivityLine } from "./Activity";
 import { Approval } from "./Approval";
@@ -16,6 +22,8 @@ import { BackgroundTasks } from "./BackgroundTasks";
 import { SubagentCard } from "./Subagent";
 import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
+import { Queue } from "./Queue";
+import { QuoteButton } from "./QuoteButton";
 import { ToolGroup } from "./Tools";
 import { McpServers } from "./McpServers";
 import { ArtifactCard } from "./Artifact";
@@ -169,6 +177,13 @@ export function ChatPanel({
     stopTask,
     loadTaskOutput,
     taskOutputs,
+    queue,
+    queueEdit,
+    queueMove,
+    queueDelete,
+    queueSendNow,
+    suggestion,
+    requestFiles,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -183,18 +198,29 @@ export function ChatPanel({
 
   const running = state === "running" || state === "waiting";
 
-  // Esc stops the turn (lib/chat/escape), from anywhere in this panel.
+  // The suggestion the reader set aside (typed over it, or Esc) stays hidden.
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const shownSuggestion = suggestion === dismissed ? null : suggestion;
+  const dismissSuggestion = useCallback((s: string) => setDismissed(s), []);
+  const history = useMemo(() => sentPrompts(items), [items]);
+  const [insert, setInsert] = useState<{ text: string; at: number }>();
+
+  // Esc sets the composer's ghost text aside, or else stops the turn
+  // (lib/chat/escape), from anywhere in this panel.
   const rootRef = useRef<HTMLDivElement>(null);
-  const escape = useRef({ running, interrupt });
+  const escape = useRef({ running, interrupt, suggestion });
   useEffect(() => {
-    escape.current = { running, interrupt };
+    escape.current = { running, interrupt, suggestion };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) return;
+      const root = rootRef.current;
+      if (!root?.contains(e.target as Node)) return;
       const overlay = !!document.querySelector(OVERLAY_SELECTOR);
-      if (escapeInterrupts(e, escape.current.running, overlay))
-        escape.current.interrupt();
+      const ghost = !!root.querySelector(GHOST_SELECTOR);
+      const action = escapeAction(e, escape.current.running, overlay, ghost);
+      if (action === "interrupt") escape.current.interrupt();
+      else if (action === "dismiss") setDismissed(escape.current.suggestion);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -286,8 +312,32 @@ export function ChatPanel({
           onStop={stopTask}
           onLoadOutput={loadTaskOutput}
         />
+        <QuoteButton
+          rootRef={scrollRef}
+          onQuote={(text) =>
+            setInsert({ text: quoteMarkdown(text), at: Date.now() })
+          }
+        />
+        <Queue
+          queue={queue}
+          running={running}
+          onEdit={queueEdit}
+          onMove={queueMove}
+          onDelete={queueDelete}
+          onSendNow={(id) =>
+            queueSendNow(
+              id,
+              running ? items.findLast((i) => i.kind === "user")?.id : undefined
+            )
+          }
+        />
         <Composer
           draftKey={sessionId}
+          suggestion={shownSuggestion}
+          onDismissSuggestion={dismissSuggestion}
+          history={history}
+          requestFiles={requestFiles}
+          insert={insert}
           running={running}
           disabled={!connected}
           placeholder={connected ? `Message ${sessionName}` : "Reconnecting…"}

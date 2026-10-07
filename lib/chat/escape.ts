@@ -21,19 +21,35 @@ export const OVERLAY_SELECTOR = [
   '[role="menu"][data-state="open"]',
   '[role="listbox"]',
   "[data-radix-popper-content-wrapper]",
+  // Something editing in place (a queued message) that Esc cancels.
+  "[data-esc-local]",
 ].join(",");
+
+// Ghost text in the composer: Esc sets it aside, and the turn goes on.
+export const GHOST_SELECTOR = "[data-composer-ghost]";
 
 export function escapeInterrupts(
   e: EscapeKey,
   running: boolean,
   overlayOpen: boolean
 ): boolean {
-  return (
-    running &&
+  return escapeAction(e, running, overlayOpen, false) === "interrupt";
+}
+
+// What Esc does in a chat: set the composer's suggestion aside, stop the
+// turn, or nothing (something on top takes it, or it isn't a bare Esc).
+export function escapeAction(
+  e: EscapeKey,
+  running: boolean,
+  overlayOpen: boolean,
+  ghostShown: boolean
+): "dismiss" | "interrupt" | null {
+  const bare =
     e.key === "Escape" &&
     !e.repeat &&
     !e.isComposing &&
-    !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) &&
-    !overlayOpen
-  );
+    !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey);
+  if (!bare || overlayOpen) return null;
+  if (ghostShown) return "dismiss";
+  return running ? "interrupt" : null;
 }

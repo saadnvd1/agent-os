@@ -10,6 +10,7 @@ import net from "net";
 import path from "path";
 import { promisify } from "util";
 import type { UndoResult } from "../driver";
+import type { FileSuggestion } from "../events";
 import {
   envPath,
   lineReader,
@@ -26,8 +27,9 @@ const START_TIMEOUT_MS = 20_000;
 
 export interface WorkerHandlers {
   onEvent: (e: WorkerEvent) => void;
-  // The worker went away: it exited, or its socket dropped.
-  onClose: () => void;
+  // The worker went away: it exited, or its socket dropped. `detached`
+  // when this server let it go (detach()), not when the worker left.
+  onClose: (detached: boolean) => void;
 }
 
 export class WorkerClient {
@@ -35,6 +37,8 @@ export class WorkerClient {
     string,
     { resolve: (r: UndoResult) => void; reject: (e: Error) => void }
   >();
+
+  private files = new Map<string, (r: FileSuggestion[] | null) => void>();
 
   private constructor(
     private socket: net.Socket,
@@ -48,7 +52,9 @@ export class WorkerClient {
       for (const u of this.undos.values())
         u.reject(new Error("The chat worker went away"));
       this.undos.clear();
-      handlers.onClose();
+      for (const f of this.files.values()) f(null);
+      this.files.clear();
+      handlers.onClose(this.detached);
     });
     socket.on("error", () => socket.destroy());
   }
@@ -94,6 +100,11 @@ export class WorkerClient {
       else u?.reject(new Error(e.error ?? "Undo failed"));
       return;
     }
+    if (e.type === "files_result") {
+      this.files.get(e.reqId)?.(e.files ?? null);
+      this.files.delete(e.reqId);
+      return;
+    }
     this.handlers.onEvent(e);
   }
 
@@ -109,8 +120,31 @@ export class WorkerClient {
     });
   }
 
+  // The agent's own matches for an @mention; null when it can't say (an
+  // older worker, an error, no answer in time).
+  fileSuggestions(
+    query: string,
+    timeoutMs = 3000
+  ): Promise<FileSuggestion[] | null> {
+    const reqId = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.files.delete(reqId);
+        resolve(null);
+      }, timeoutMs);
+      this.files.set(reqId, (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      });
+      this.command({ type: "files", reqId, query });
+    });
+  }
+
+  private detached = false;
+
   // Drops the connection; the worker keeps running.
   detach(): void {
+    this.detached = true;
     this.socket.destroy();
   }
 }

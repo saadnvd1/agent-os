@@ -85,7 +85,7 @@ export function PeerMessage({ item, peer }: { item: Of<"user">; peer: Peer }) {
 export function AssistantMessage({ item }: { item: Of<"assistant"> }) {
   return (
     <div className="group">
-      <div className={cn(item.streaming && "streaming-cursor")}>
+      <div data-quotable className={cn(item.streaming && "streaming-cursor")}>
         <Markdown text={item.text} />
       </div>
       {!item.streaming && (

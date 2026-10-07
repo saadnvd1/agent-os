@@ -6,7 +6,7 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ChatDriver, ChatConversation } from "../driver";
-import type { DriverEvent, McpServerView } from "../events";
+import type { DriverEvent, FileSuggestion, McpServerView } from "../events";
 import { InputQueue } from "../queue";
 import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
 import { toChatContext, usageTotals } from "../context";
@@ -69,6 +69,39 @@ export function mcpView(s: McpServerStatus): McpServerView {
       description: firstLine(t.description),
     })),
   };
+}
+
+// Claude Code's answer to a file_suggestions request, as files and folders
+// (a folder's path ends in "/"). Anything not shaped like that is dropped.
+export function toFileSuggestions(response: unknown): FileSuggestion[] {
+  const list = (response as { suggestions?: unknown } | undefined)?.suggestions;
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((s) => (s as { path?: unknown } | null)?.path)
+    .filter(
+      (p): p is string => typeof p === "string" && p.replace(/\/+$/, "") !== ""
+    )
+    .map((p) =>
+      p.endsWith("/")
+        ? { path: p.replace(/\/+$/, ""), dir: true }
+        : { path: p, dir: false }
+    );
+}
+
+// Claude Code's own @mention matching, through a control request the SDK
+// has no method for.
+async function fileSuggestions(
+  q: ReturnType<typeof query>,
+  text: string
+): Promise<FileSuggestion[]> {
+  const control = q as unknown as {
+    request(r: {
+      subtype: "file_suggestions";
+      query: string;
+    }): Promise<{ response?: unknown }>;
+  };
+  const r = await control.request({ subtype: "file_suggestions", query: text });
+  return toFileSuggestions(r.response);
 }
 
 // The plan file an assistant message writes, if it writes one. Only writes
@@ -156,6 +189,9 @@ export const claudeDriver: ChatDriver = {
         // Each background task has its own Stop, so Stop on the turn spares
         // them.
         perTaskStopAffordance: true,
+        // A guess at the next message after each turn (not the first, nor
+        // in plan mode), sent after the result.
+        promptSuggestions: true,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
@@ -245,6 +281,9 @@ export const claudeDriver: ChatDriver = {
       },
       async interrupt() {
         await q.interrupt();
+      },
+      async fileSuggestions(query) {
+        return fileSuggestions(q, query);
       },
       async setModel(model) {
         await q.setModel(model);
