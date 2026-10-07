@@ -277,14 +277,4 @@ describe("findPRStrict's match", () => {
     prList = [at(8, "2026-01-01T00:00:00Z")];
     expect((await findPRStrict("/repo", "feature/x"))?.number).toBe(8);
   });
-
-  it("asks for open PRs only when told to", async () => {
-    prList = [];
-    await findPRStrict("/repo", "feature/x", { openOnly: true });
-    await findPRStrict("/repo", "feature/x");
-    const states = calls
-      .filter((a) => a[0] === "pr")
-      .map((a) => a[a.indexOf("--state") + 1]);
-    expect(states).toEqual(["open", "all"]);
-  });
 });

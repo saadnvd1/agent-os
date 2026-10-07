@@ -71,7 +71,10 @@ describe("renaming a task through the API", () => {
     );
 
     // The cached answer was for the old branch: the next poll asks again.
-    prs.set("feature/schedules-message-a-session-notify", fakePR(114));
+    prs.set(
+      "feature/schedules-message-a-session-notify",
+      fakePR(114, { head: wt.head })
+    );
     expect((await prFor(taskRow(task.id)))?.number).toBe(114);
   });
 

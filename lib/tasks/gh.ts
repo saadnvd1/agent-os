@@ -28,9 +28,6 @@ export async function run(
 }
 
 export interface FindPROpts {
-  // Only an open PR counts: for a branch found in the worktree rather than
-  // given to the task, which may have been someone's before.
-  openOnly?: boolean;
   // Only a PR opened at or after this time (ISO): one older than the task
   // was a branch name's earlier use, not the task's.
   since?: string;
@@ -51,7 +48,7 @@ export async function findPRStrict(
       "--head",
       branch,
       "--state",
-      opts.openOnly ? "open" : "all",
+      "all",
       "--limit",
       "10",
       "--json",

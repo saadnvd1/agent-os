@@ -28,13 +28,19 @@ export function projectPathFor(session: Session): string | null {
   return project ? expandHome(project.working_directory) : null;
 }
 
-// The branch the task's worktree is on; null when the worktree is gone, on
-// another host, or not on a branch (mid-rebase).
-async function worktreeBranch(session: Session): Promise<string | null> {
+// The task's worktree, when it's here to look at: null when it's gone or on
+// another host.
+function localWorktree(session: Session): string | null {
   if (!session.worktree_path) return null;
   if (session.host_id && session.host_id !== "local") return null;
   const dir = expandHome(session.worktree_path);
-  if (!fs.existsSync(dir)) return null;
+  return fs.existsSync(dir) ? dir : null;
+}
+
+// The branch it's on; null when not on a branch (mid-rebase).
+async function worktreeBranch(session: Session): Promise<string | null> {
+  const dir = localWorktree(session);
+  if (!dir) return null;
   try {
     const out = await run("git", ["branch", "--show-current"], dir, 5000);
     return out.trim() || null;
@@ -87,13 +93,16 @@ function moveBranch(session: Session, branch: string): void {
   session.branch_name = branch;
 }
 
-// The commit is in the worktree's history: the task's own work.
-async function inWorktree(session: Session, sha?: string): Promise<boolean> {
+// The PR's head is in the task's worktree history: the task's own work. A
+// worktree that's gone can't say, and the task's PR was linked by then.
+async function ownWork(session: Session, sha?: string): Promise<boolean> {
+  const dir = localWorktree(session);
+  if (!dir) return true;
   if (!sha || !/^[0-9a-f]{7,40}$/.test(sha)) return false;
   return run(
     "git",
     ["merge-base", "--is-ancestor", sha, "HEAD"],
-    expandHome(session.worktree_path!),
+    dir,
     5000
   ).then(
     () => true,
@@ -120,21 +129,33 @@ export async function prFor(
   const renamed = await renamedBranch(session);
   const branch = renamed ?? session.branch_name;
   if (!branch) return null;
-  let pr = await (strict ? findPRStrict : findPR)(repo, branch, {
-    openOnly: !!renamed,
-    // A PR older than the task is an earlier use of the branch's name.
-    since: isoUTC(session.created_at),
-  });
+  // A PR older than the task is an earlier use of the branch's name.
+  const since = isoUTC(session.created_at);
+  let pr: TaskPR | null;
   if (renamed) {
-    // A PR on the renamed branch is the task's only if its head is the
-    // task's work; else the row stays where it was.
-    if (pr && !(await inWorktree(session, pr.head))) {
-      console.warn(
-        `[tasks] ${session.id.slice(0, 8)}: not following ${renamed}: PR #${pr.number}'s head isn't in its worktree`
-      );
-      pr = null;
-    } else moveBranch(session, renamed);
+    // Follow a rename only on gh's answer: a failure leaves the row put.
+    try {
+      pr = await findPRStrict(repo, branch, { since });
+    } catch (error) {
+      if (strict) throw error;
+      return null;
+    }
+  } else pr = await (strict ? findPRStrict : findPR)(repo, branch, { since });
+  // A PR becomes the task's only if its head is the task's work; a rename
+  // onto a branch with someone else's PR is not followed.
+  let refused = false;
+  if (
+    pr &&
+    pr.number !== session.pr_number &&
+    !(await ownWork(session, pr.head))
+  ) {
+    console.warn(
+      `[tasks] ${session.id.slice(0, 8)}: PR #${pr.number} on ${branch} isn't the task's work; not linked`
+    );
+    pr = null;
+    refused = true;
   }
+  if (renamed && !refused) moveBranch(session, renamed);
   prCache.set(session.id, { at: Date.now(), pr });
   if (pr) {
     db.prepare(

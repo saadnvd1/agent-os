@@ -8,8 +8,8 @@ import type { TaskPR } from "./state";
 
 export type FakePR = TaskPR & { createdAt: string };
 
-// gh pr list --head, as findPR asks it: same repo only, open or not, no
-// older than `since`.
+// gh pr list --head, as findPR asks it: same repo only, no older than
+// `since`.
 export function fakeFindPR(
   prs: Map<string, FakePR>,
   lookups: ({ branch: string } & FindPROpts)[]
@@ -18,7 +18,6 @@ export function fakeFindPR(
     lookups.push({ branch, ...opts });
     const pr = prs.get(branch);
     if (!pr) return null;
-    if (opts.openOnly && pr.state !== "OPEN") return null;
     if (opts.since && Date.parse(pr.createdAt) < Date.parse(opts.since))
       return null;
     const { createdAt: _, ...found } = pr;
