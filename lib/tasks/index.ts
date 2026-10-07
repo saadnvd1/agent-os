@@ -26,7 +26,7 @@ import {
   type TaskPR,
   type TaskState,
 } from "./state";
-import { expandHome, prFor, taskSessions } from "./session";
+import { expandHome, prFor, storedPR, taskSessions } from "./session";
 import { InProgressError } from "./move-bundle";
 import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
@@ -227,8 +227,9 @@ async function shellOnly(tmuxName: string): Promise<boolean> {
 export async function taskView(session: Session): Promise<TaskView> {
   const live = session.task_status === "running";
   const setup = taskSetupOf(session);
+  // A finished task's PR is in the database: only a running one asks gh.
   const [pr, sessionStatus] = await Promise.all([
-    prFor(session),
+    live ? prFor(session) : storedPR(session),
     live
       ? statusDetector.getStatus(session.tmux_name)
       : Promise.resolve(undefined),
@@ -287,8 +288,9 @@ export function movedTasks(): { id: string; movedTo: string | null }[] {
     .all() as { id: string; movedTo: string | null }[];
 }
 
+// Archived tasks aren't listed.
 export async function listTasks(): Promise<TaskView[]> {
-  const sessions = taskSessions();
+  const sessions = taskSessions().filter((s) => !s.archived_at);
   const [local, remote] = await Promise.all([
     Promise.all(sessions.filter((s) => !isMirror(s)).map(taskView)),
     remoteTaskViews(sessions.filter(isMirror)),

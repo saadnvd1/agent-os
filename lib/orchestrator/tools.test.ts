@@ -24,7 +24,9 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => ({
   run: async () => {
     throw new Error("no tmux here");
   },
-  findPR: async () => ({
+}));
+vi.mock("@/lib/tasks/pr-poll", () => ({
+  lookupPR: async () => ({
     number: 12,
     url: "https://github.com/o/r/pull/12",
     state: "OPEN",

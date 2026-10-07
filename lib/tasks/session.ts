@@ -3,7 +3,8 @@ import os from "os";
 import { db, queries, type Session } from "../db";
 import { isBranchName } from "../git";
 import { getProject } from "../projects";
-import { findPR, findPRStrict, run } from "./gh";
+import { findPRStrict, run } from "./gh";
+import { lookupPR } from "./pr-poll";
 import type { TaskPR } from "./state";
 
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
@@ -148,7 +149,7 @@ export async function prFor(
       if (strict) throw error;
       return null;
     }
-  } else pr = await (strict ? findPRStrict : findPR)(repo, branch, { since });
+  } else pr = await lookupPR(repo, branch, { fresh, strict, since });
   // A PR becomes the task's only if its head is the task's work; a rename
   // onto a branch with someone else's PR is not followed.
   let refused = false;
@@ -170,6 +171,22 @@ export async function prFor(
     ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
   }
   return pr;
+}
+
+// A finished task's PR as the database last saw it: no gh call.
+export function storedPR(s: Session): TaskPR | null {
+  if (!s.pr_number) return null;
+  return {
+    number: s.pr_number,
+    url: s.pr_url ?? "",
+    state:
+      s.task_status === "merged" || s.pr_status === "merged"
+        ? "MERGED"
+        : s.pr_status === "open"
+          ? "OPEN"
+          : "CLOSED",
+    checks: "none",
+  };
 }
 
 export function forgetPR(sessionId: string): void {

@@ -16,26 +16,54 @@ const prs = new Map<string, FakePR>();
 const lookups: ({ branch: string } & FindPROpts)[] = [];
 
 let ghDown = false;
+// Which lookup answered each query, and the options the batched one got.
+const via: string[] = [];
+const batched: { fresh?: boolean; strict?: boolean; since?: string }[] = [];
 
 vi.mock("./gh", async (importOriginal) => {
   const find = fakeFindPR(prs, lookups);
   return {
     ...(await importOriginal<typeof import("./gh")>()),
-    findPR: async (...a: Parameters<typeof find>) =>
-      ghDown ? null : find(...a),
+    findPR: async (...a: Parameters<typeof find>) => {
+      via.push("findPR");
+      return ghDown ? null : find(...a);
+    },
     findPRStrict: async (...a: Parameters<typeof find>) => {
+      via.push("findPRStrict");
       if (ghDown) throw new Error("HTTP 502 from api.github.com");
       return find(...a);
     },
   };
 });
 
-const { isoUTC, prFor } = await import("./session");
+// The batched lookup, answered by the same fake GitHub.
+vi.mock("./pr-poll", () => {
+  const find = fakeFindPR(prs, lookups);
+  return {
+    lookupPR: async (
+      _repo: string,
+      branch: string,
+      opts: FindPROpts & { fresh?: boolean; strict?: boolean } = {}
+    ) => {
+      via.push("lookupPR");
+      batched.push(opts);
+      if (ghDown) {
+        if (opts.strict) throw new Error("HTTP 502 from api.github.com");
+        return null;
+      }
+      return find(_repo, branch, { since: opts.since });
+    },
+  };
+});
+
+const { forgetPR, isoUTC, prFor } = await import("./session");
 
 beforeEach(() => {
   ghDown = false;
   prs.clear();
   lookups.length = 0;
+  via.length = 0;
+  batched.length = 0;
 });
 
 describe("prFor after the task's branch was renamed", () => {
@@ -63,6 +91,8 @@ describe("prFor after the task's branch was renamed", () => {
     expect(lookups.map((l) => l.branch)).toEqual([
       "feature/schedules-message-a-session-notify",
     ]);
+    // A rename is followed only on a direct, strict answer.
+    expect(via).toEqual(["findPRStrict"]);
   });
 
   it("repairs a stale row even before the branch has a PR", async () => {
@@ -276,5 +306,28 @@ describe("prFor after the task's branch was renamed", () => {
     expect(lookups[0]).toMatchObject({
       branch: "feature/same",
     });
+    // An unrenamed branch goes through the batched lookup, which a merge's
+    // fresh read bypasses; a plain poll may use its caches.
+    expect(via).toEqual(["lookupPR"]);
+    expect(batched[0]).toMatchObject({
+      fresh: true,
+      since: isoUTC(task.created_at),
+    });
+    forgetPR(task.id);
+    await prFor(taskRow(task.id));
+    expect(batched[1]).toMatchObject({ fresh: false, strict: false });
+  });
+
+  it("throws when gh can't answer for an unrenamed branch, if strict", async () => {
+    const r = makeRepo();
+    const wt = r.worktree("feature/same", { "work.txt": "task work\n" });
+    const task = seedTask(r.repo, "feature/same", wt.dir);
+    db.prepare(`UPDATE sessions SET pr_number = 3 WHERE id = ?`).run(task.id);
+    ghDown = true;
+
+    await expect(prFor(taskRow(task.id), true, true)).rejects.toThrow(/502/);
+    expect(await prFor(taskRow(task.id), true)).toBeNull();
+    expect(taskRow(task.id).pr_number).toBe(3);
+    expect(batched.map((o) => o.strict)).toEqual([true, false]);
   });
 });

@@ -263,6 +263,14 @@ this repository's CI fails one too. The review agents are in
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
 
+Tracking PRs stays inside GitHub's GraphQL quota (5,000 points an hour).
+Only running tasks are asked about: a finished task's PR comes from the
+database. One `gh pr list --state open` per repository a minute covers every
+running task with an open PR, and a branch without one is asked about on its
+own at most every 5 minutes. A merge or sign-off always asks fresh. When gh
+reports a rate limit, every gh call backs off until the limit resets, and gh
+failures are logged as `[gh] ...`, at most once a minute for each kind.
+
 ![Tasks in different states: needs input, ready for review, working, merged](screenshots/tasks.png)
 
 ### Stacks

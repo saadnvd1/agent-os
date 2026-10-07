@@ -18,7 +18,8 @@ export function useTasksQuery() {
     queryKey: taskKeys.list(),
     queryFn: async () =>
       (await json<{ tasks: TaskView[] }>(await fetch("/api/tasks"))).tasks,
-    refetchInterval: 5000,
+    // Status changes also arrive over /ws/status.
+    refetchInterval: 15000,
   });
 }
 
