@@ -63,6 +63,25 @@ export interface McpServerView {
   tools: { name: string; description?: string }[];
 }
 
+// How full the conversation's context window is, as the agent last measured.
+export interface ChatContext {
+  usedTokens: number;
+  maxTokens: number;
+  percentage: number;
+  categories: { name: string; tokens: number }[];
+  model?: string;
+  at: number;
+}
+
+// Running totals the agent reports at the end of each turn.
+export interface UsageTotals {
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
 interface Base {
   id: string;
   createdAt: number;
@@ -111,6 +130,8 @@ export type ChatItem =
   // The conversation's MCP servers, as /mcp reports them.
   | (Base & { kind: "mcp"; servers: McpServerView[] })
   | (Base & { kind: "compacted"; trigger?: "manual" | "auto" })
+  // A plan the agent proposed from plan mode, and whether it was carried out.
+  | (Base & { kind: "plan"; plan: string; carried?: boolean })
   | (Base & { kind: "error"; message: string })
   // A line in an orchestrator's decision log, shown in its chat: a note it
   // wrote, a brake that stopped new starts, something Saad must decide, his
@@ -177,6 +198,8 @@ export type DriverEvent =
   | { type: "resume_id"; id: string } // the provider's own conversation id
   | { type: "commands"; commands: ChatCommand[] } // the command list changed
   | { type: "terminal_only"; names: string[] } // commands only a terminal can run
+  | { type: "usage"; totals: UsageTotals } // running totals after a turn
+  | { type: "context"; context: ChatContext } // context window use
   | { type: "state"; state: ChatState };
 
 // What the server sends to a browser watching a conversation.
@@ -191,7 +214,10 @@ export type ChatServerMessage =
       models: ChatModel[];
       model: string;
       access: ChatAccess;
+      // Plan mode: on, or null when the session can't use it.
+      plan: boolean | null;
     }
+  | { type: "context"; context: ChatContext | null }
   | { type: "undo_preview"; from: string; preview: UndoPreview }
   | { type: "task_output"; taskId: string; text: string | null }
   | { type: "undone"; from: string; text: string };
@@ -202,6 +228,9 @@ export type ChatClientMessage =
   | { type: "interrupt" }
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }
+  | { type: "set_plan"; plan: boolean }
+  // Leaves plan mode and asks the agent to carry out that plan.
+  | { type: "carry_plan"; id: string }
   | ({ type: "respond"; id: string } & ApprovalDecision)
   | { type: "undo"; from: string; dryRun?: boolean }
   | { type: "stop_task"; taskId: string }

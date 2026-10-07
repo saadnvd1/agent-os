@@ -29,6 +29,7 @@ function fakeConversation() {
     interrupt: vi.fn(async () => {}),
     setModel: vi.fn(async () => {}),
     setAccess: vi.fn(async () => {}),
+    setPlan: vi.fn(async (_plan: boolean) => {}),
     respond: vi.fn(),
     stopTask: vi.fn(async () => {}),
     undo: vi.fn(),
@@ -159,5 +160,60 @@ describe("lastUserTask", () => {
       createdAt: 2,
     });
     expect(lastUserTask(id)).toBe("fallback");
+  });
+
+  it("sends a message only after a plan mode change reaches the agent", async () => {
+    const { host, conversation } = await startHost();
+    let finish = () => {};
+    conversation.setPlan.mockImplementationOnce(
+      () => new Promise<void>((r) => (finish = r))
+    );
+    void host.handle({ type: "set_plan", plan: false });
+    const sending = host.handle({ type: "send", id: "user-1", text: "go" });
+    await tick();
+    expect(conversation.send).not.toHaveBeenCalled();
+    finish();
+    await sending;
+    expect(conversation.send).toHaveBeenCalledOnce();
+    host.close();
+  });
+
+  it("records each turn's cost as the difference in running totals", async () => {
+    const { id, host, conversation, emitted } = await startHost();
+    const totals = (costUsd: number, inputTokens: number) => ({
+      costUsd,
+      inputTokens,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+    conversation.events.push({ type: "usage", totals: totals(0.5, 100) });
+    conversation.events.push({ type: "usage", totals: totals(0.75, 150) });
+    conversation.events.push({
+      type: "context",
+      context: {
+        usedTokens: 10,
+        maxTokens: 100,
+        percentage: 10,
+        categories: [],
+        at: 1,
+      },
+    });
+    await tick();
+    const turns = getDb()
+      .prepare(
+        `SELECT cost_usd, input_tokens FROM chat_turns WHERE session_id = ? ORDER BY id`
+      )
+      .all(id);
+    expect(turns).toEqual([
+      { cost_usd: 0.5, input_tokens: 100 },
+      { cost_usd: 0.25, input_tokens: 50 },
+    ]);
+    expect(emitted.some((e) => e.type === "context")).toBe(true);
+    const saved = getDb()
+      .prepare(`SELECT chat_context FROM sessions WHERE id = ?`)
+      .get(id) as { chat_context: string };
+    expect(JSON.parse(saved.chat_context).percentage).toBe(10);
+    host.close();
   });
 });

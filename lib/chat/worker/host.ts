@@ -13,6 +13,7 @@ import { chatDriverFor } from "../drivers";
 import type { ChatConversation, ChatStartOptions } from "../driver";
 import type { ChatItem, ChatState } from "../events";
 import { listItems, saveItem, settle } from "../store";
+import { recordTurn } from "../../usage/turns";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
 export class ChatHost {
@@ -20,6 +21,9 @@ export class ChatHost {
   readonly streaming = new Map<string, ChatItem>();
   private conversation: ChatConversation;
   private sent = new Set<string>();
+  // A permission mode change still on its way to the agent: a message sent
+  // right after it (carrying out a plan) must not overtake it.
+  private modeChange: Promise<void> = Promise.resolve();
   readonly done: Promise<void>;
 
   constructor(
@@ -45,6 +49,7 @@ export class ChatHost {
       resumeId: session.claude_session_id,
       resumeAt: session.chat_resume_at,
       access: session.chat_access ?? "full",
+      plan: !!session.chat_plan,
       systemAppend: [extras.systemAppend, BUS_BRIEF]
         .filter(Boolean)
         .join("\n\n"),
@@ -88,6 +93,14 @@ export class ChatHost {
           db.prepare(
             `UPDATE sessions SET claude_session_id = ?, chat_resume_at = NULL WHERE id = ?`
           ).run(e.id, this.session.id);
+        } else if (e.type === "usage") {
+          recordTurn(this.session, e.totals);
+        } else if (e.type === "context") {
+          db.prepare(`UPDATE sessions SET chat_context = ? WHERE id = ?`).run(
+            JSON.stringify(e.context),
+            this.session.id
+          );
+          this.emit(e);
         } else if (e.type === "state") {
           // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
           if (e.state === "idle") this.settleStreaming();
@@ -121,6 +134,7 @@ export class ChatHost {
       case "send": {
         if (this.sent.has(cmd.id)) return;
         this.sent.add(cmd.id);
+        await this.modeChange.catch(() => {});
         const user = {
           id: cmd.id,
           kind: "user" as const,
@@ -161,7 +175,9 @@ export class ChatHost {
       case "set_model":
         return this.conversation.setModel(cmd.model);
       case "set_access":
-        return this.conversation.setAccess(cmd.access);
+        return (this.modeChange = this.conversation.setAccess(cmd.access));
+      case "set_plan":
+        return (this.modeChange = this.conversation.setPlan(cmd.plan));
       case "respond":
         return this.conversation.respond(cmd.id, cmd);
       case "stop_task":

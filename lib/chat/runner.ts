@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import type {
   ApprovalDecision,
+  ChatContext,
   ChatImage,
   ChatState,
   PeerMessage,
@@ -21,7 +22,12 @@ import {
   type Listener,
   type Live,
 } from "./registry";
-import { capsKey, emitCapabilities, sendCapabilities } from "./settings";
+import {
+  capsKey,
+  emitCapabilities,
+  sendCapabilities,
+  setChatPlan,
+} from "./settings";
 import { listItems, saveItem, settle } from "./store";
 import { taskOutputTail } from "./task-output";
 import { restoreActivity, track } from "./activity";
@@ -37,7 +43,34 @@ import {
 import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
 
-export { setChatAccess, setChatModel } from "./settings";
+export { setChatAccess, setChatModel, setChatPlan } from "./settings";
+
+function savedContext(sessionId: string): ChatContext | null {
+  const raw = getSession(sessionId).chat_context;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ChatContext;
+  } catch {
+    return null;
+  }
+}
+
+const CARRY_OUT = "Carry out the plan.";
+
+// Leaves plan mode and starts the plan, once: the card remembers it.
+export async function carryOutPlan(
+  sessionId: string,
+  planId: string
+): Promise<void> {
+  const item = listItems(sessionId).find((i) => i.id === planId);
+  if (item?.kind !== "plan") throw new Error("That plan is gone");
+  if (item.carried) return;
+  const carried = { ...item, carried: true };
+  saveItem(sessionId, carried);
+  emit(sessionId, { type: "item", item: carried });
+  await setChatPlan(sessionId, false);
+  await sendChat(sessionId, { text: CARRY_OUT });
+}
 
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   track(live, e);
@@ -55,6 +88,8 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     emit(sessionId, e);
     // Its turn ended on code from before a redeploy: close it now.
     if (isStaleWorker(live.build, buildId(), e.state)) stopChat(sessionId);
+  } else if (e.type === "context") {
+    emit(sessionId, e);
   } else if (e.type === "commands" || e.type === "terminal_only") {
     const session = getSession(sessionId);
     const caps = registry.caps.get(capsKey(session));
@@ -305,6 +340,7 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
     items = settle(items);
   }
   listener({ type: "snapshot", items, state: live?.state ?? "idle" });
+  listener({ type: "context", context: savedContext(sessionId) });
   void sendCapabilities(sessionId, listener);
   let set = registry.listeners.get(sessionId);
   if (!set) registry.listeners.set(sessionId, (set = new Set()));

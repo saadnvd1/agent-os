@@ -33,6 +33,7 @@ export type WorkerCommand =
   | { type: "interrupt" }
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }
+  | { type: "set_plan"; plan: boolean }
   | ({ type: "respond"; id: string } & ApprovalDecision)
   | { type: "undo"; reqId: string; checkpoint: string; dryRun: boolean }
   | { type: "stop_task"; taskId: string }
@@ -48,7 +49,7 @@ export type WorkerEvent =
       state: ChatState;
       streaming: ChatItem[];
     }
-  | Exclude<DriverEvent, { type: "resume_id" }>
+  | Exclude<DriverEvent, { type: "resume_id" | "usage" }>
   | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string };
 
 // Per database, so a test server's workers never meet the live server's.

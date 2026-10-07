@@ -710,6 +710,41 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    id: 35,
+    name: "add_chat_plan_and_turns",
+    up: (db) => {
+      // Plan mode is remembered per session; the context meter's last
+      // reading survives a reload.
+      db.exec(
+        `ALTER TABLE sessions ADD COLUMN chat_plan INTEGER NOT NULL DEFAULT 0`
+      );
+      db.exec(`ALTER TABLE sessions ADD COLUMN chat_context TEXT`);
+      // The agent's running totals at its last turn, to tell what the next
+      // turn added.
+      db.exec(`ALTER TABLE sessions ADD COLUMN chat_usage TEXT`);
+      // What each chat turn cost, kept with the session's name and
+      // workspace so the history outlives the session.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS chat_turns (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          session_name TEXT NOT NULL,
+          workspace_id TEXT,
+          at INTEGER NOT NULL,
+          cost_usd REAL NOT NULL,
+          input_tokens INTEGER NOT NULL,
+          output_tokens INTEGER NOT NULL,
+          cache_read_tokens INTEGER NOT NULL,
+          cache_write_tokens INTEGER NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_chat_turns_at ON chat_turns(at)`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id, id)`
+      );
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

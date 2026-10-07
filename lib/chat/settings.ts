@@ -69,6 +69,7 @@ export function emitCapabilities(session: Session, listener?: Listener): void {
     models: caps.models,
     model: chatModel(session),
     access: session.chat_access,
+    plan: canPlan(session) ? !!session.chat_plan : null,
   };
   if (listener) listener(m);
   else emit(session.id, m);
@@ -136,5 +137,23 @@ export async function setChatAccess(
     sessionId
   );
   registry.live.get(sessionId)?.worker.command({ type: "set_access", access });
+  emitCapabilities(getSession(sessionId));
+}
+
+// An orchestrator's permission mode is fixed by its role.
+const canPlan = (s: Session) => s.role !== "orchestrator";
+
+// Plan mode: the agent reads and plans, and changes nothing until the plan
+// is carried out. Now if a conversation is live, and for every next start.
+export async function setChatPlan(
+  sessionId: string,
+  plan: boolean
+): Promise<void> {
+  if (!canPlan(getSession(sessionId))) return;
+  db.prepare(`UPDATE sessions SET chat_plan = ? WHERE id = ?`).run(
+    plan ? 1 : 0,
+    sessionId
+  );
+  registry.live.get(sessionId)?.worker.command({ type: "set_plan", plan });
   emitCapabilities(getSession(sessionId));
 }

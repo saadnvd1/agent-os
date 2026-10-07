@@ -1,6 +1,7 @@
 "use client";
 
 import { ViewSwitch } from "@/components/Chat/ViewSwitch";
+import { paletteActions } from "@/stores/palette";
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,7 @@ import {
   Users,
   ChevronDown,
   Circle,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session, Project } from "@/lib/db";
@@ -136,7 +138,7 @@ export function MobileTabBar({
 
   return (
     <div
-      className="bg-muted flex items-center gap-2 px-2 py-1.5"
+      className="bg-muted flex items-center gap-1.5 px-2 py-1.5"
       onClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
       onTouchEnd={(e) => e.stopPropagation()}
@@ -240,6 +242,18 @@ export function MobileTabBar({
         </button>
       </div>
 
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Command palette"
+        onClick={(e) => {
+          e.stopPropagation();
+          paletteActions.open();
+        }}
+        className="h-8 w-8 shrink-0"
+      >
+        <Search className="h-4 w-4" />
+      </Button>
       <ViewSwitch session={session} />
 
       {/* View mode toggle */}
