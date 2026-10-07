@@ -24,6 +24,9 @@ export interface Live {
   // Whether it keeps the composer's queue and answers @mention lookups
   // (send_now, drain, files); an older worker drops those silently.
   canQueue?: boolean;
+  // From an older build and idle: retired once its guess at the next
+  // message is in, or this fires.
+  retiring?: NodeJS.Timeout;
 }
 
 export interface ChatActivity {
