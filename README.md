@@ -229,6 +229,18 @@ heading at once (when the prompt points at a readable `.md` brief), then a
 "Session 4" is named after its first message. Anything named by hand, a card's
 title, a schedule's name or `--name` is kept as given.
 
+The agent starts once its worktree has its dependencies. On macOS the main
+checkout's `node_modules` (and workspace ones like `apps/web/node_modules`)
+are cloned with `cp -Rc` when the lockfile matches, and a spare clone waits in
+`~/.agent-os/spare` so the next task takes it by rename, in milliseconds.
+Otherwise, and on Linux, the lockfile's frozen install runs (`npm ci`,
+`pnpm/yarn/bun --frozen-lockfile`), then a plain install, always with
+devDependencies even though the server runs with `NODE_ENV=production`. A
+project's `.agent-os/worktrees.json` `setup` commands replace all of this.
+Starting a task returns at once and shows **Setting up** until the agent
+launches; a restart in the middle resumes it. A failed setup shows on the task
+and is in the agent's first prompt (redacted, as data).
+
 Before opening its PR, every task runs `/do-code-review` (the project's
 `.claude/skills/do-code-review`, or Claude Code's `/code-review` where a
 project has none), fixes the Blocking and High findings, and ends the PR body
