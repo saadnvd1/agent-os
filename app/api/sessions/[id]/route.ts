@@ -10,6 +10,7 @@ import { supportsChat } from "@/lib/chat/capabilities";
 import { stopChat } from "@/lib/chat/runner";
 import { statusDetector } from "@/lib/status-detector";
 import { deleteItems } from "@/lib/chat/store";
+import { clearQueue } from "@/lib/chat/queued";
 import { recordPreviousName } from "@/lib/session-names";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 import { runInBackground } from "@/lib/async-operations";
@@ -222,6 +223,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Delete from database immediately for instant UI feedback
     stopChat(id);
     deleteItems(id);
+    clearQueue(id);
     queries.deleteSession(db).run(id);
 
     // Clean up worktree in background (non-blocking)

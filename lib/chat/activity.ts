@@ -13,6 +13,10 @@ export function track(live: Live, e: WorkerEvent): void {
       a.turnStartedAt = undefined;
       a.tools.clear();
     }
+  } else if (e.type === "item" && e.item.kind === "turn_end") {
+    // A queued message starts the next turn with no idle in between.
+    a.turnStartedAt = undefined;
+    a.tools.clear();
   } else if (e.type === "item" && e.item.kind === "tool") {
     if (e.item.status === "running")
       a.tools.set(e.item.id, { label: e.item.title, since: e.item.createdAt });

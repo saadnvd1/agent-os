@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { enterAction, FENCE_LINE } from "@/lib/chat/enter";
+import { acceptsSuggestion } from "@/lib/chat/suggestion";
 
 export type MenuKey = "up" | "down" | "pick" | "close";
 
@@ -13,6 +14,27 @@ export interface KeyHandlers {
   onTogglePlain: () => void;
   // Cmd/Ctrl+Shift+V: the paste that follows goes in as plain text.
   onPasteAsText: () => void;
+  // Ghost text is showing: Tab or → takes it.
+  suggestion: boolean;
+  onAcceptSuggestion: () => void;
+  // ↑/↓ through sent messages; false when the key isn't the history's.
+  onHistory: (
+    dir: "up" | "down",
+    caret: { firstLine: boolean; lastLine: boolean }
+  ) => boolean;
+}
+
+// Where the caret is among the composer's lines (paragraphs, and lines in
+// a code block or after a break).
+export function caretLines(editor: Editor) {
+  const { doc, selection } = editor.state;
+  const before = doc.textBetween(0, selection.from, "\n", "\n");
+  const after = doc.textBetween(selection.to, doc.content.size, "\n", "\n");
+  return {
+    firstLine: !before.includes("\n"),
+    lastLine: !after.includes("\n"),
+    atEnd: selection.empty && after.length === 0,
+  };
 }
 
 // Enter on a keyboard sends; on touch screens it's a newline and the button sends.
@@ -90,6 +112,20 @@ export function handleKeyDown(
   if (h.menuOpen && event.key === "Escape") {
     h.onMenuKey("close");
     return true;
+  }
+  if (!h.menuOpen) {
+    const caret = caretLines(editor);
+    if (acceptsSuggestion(event, h.suggestion, caret.atEnd)) {
+      h.onAcceptSuggestion();
+      return true;
+    }
+    const plainKey = !(mod || event.altKey || event.shiftKey);
+    if (
+      plainKey &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      h.onHistory(event.key === "ArrowUp" ? "up" : "down", caret)
+    )
+      return true;
   }
   if (event.key !== "Enter") return false;
 

@@ -420,3 +420,21 @@ describe("ClaudeMapper slash commands", () => {
     expect(out.map((i) => i.kind)).toEqual(["turn_end"]);
   });
 });
+
+describe("ClaudeMapper prompt suggestions", () => {
+  it("passes on the guess at the next message, after the result", () => {
+    expect(
+      new ClaudeMapper().map({
+        type: "prompt_suggestion",
+        suggestion: " run the tests ",
+        session_id: "s1",
+      })
+    ).toEqual([{ type: "suggestion", text: "run the tests" }]);
+  });
+
+  it("drops an empty one", () => {
+    expect(
+      new ClaudeMapper().map({ type: "prompt_suggestion", suggestion: " " })
+    ).toEqual([]);
+  });
+});
