@@ -79,12 +79,15 @@ export async function lookupPR(
   branch: string,
   opts: LookupOpts = {}
 ): Promise<TaskPR | null> {
-  if (opts.fresh) return (opts.strict ? findPRStrict : findPR)(repoDir, branch);
+  const { since } = opts;
+  if (opts.fresh)
+    return (opts.strict ? findPRStrict : findPR)(repoDir, branch, { since });
   const now = Date.now();
-  const key = `${repoDir}\0${branch}`;
+  // A lookup filtered by another task's start isn't this one's answer.
+  const key = `${repoDir}\0${branch}\0${since ?? ""}`;
   try {
     const list = await openList(repoDir, now);
-    const hit = list.prs.find((p) => matches(p, branch, opts.since));
+    const hit = list.prs.find((p) => matches(p, branch, since));
     if (hit) {
       let view = list.views.get(hit.number);
       if (!view) {
@@ -100,7 +103,7 @@ export async function lookupPR(
     const entry = {
       at: now,
       ttl: BRANCH_TTL_MS,
-      pr: findPRStrict(repoDir, branch),
+      pr: findPRStrict(repoDir, branch, { since }),
     };
     branchLookups.set(key, entry);
     entry.pr.then(

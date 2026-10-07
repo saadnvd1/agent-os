@@ -8,6 +8,8 @@ const calls: string[][] = [];
 let api: Record<string, Record<string, unknown>> = {};
 let rollup: unknown[] = [];
 let prState = "OPEN";
+// What `gh pr list` returns, when a test sets it.
+let prList: unknown[] | null = null;
 
 vi.mock("child_process", () => ({
   execFile: (
@@ -18,6 +20,7 @@ vi.mock("child_process", () => ({
   ) => {
     calls.push(args);
     if (args[0] === "pr") {
+      if (prList) return cb(null, { stdout: JSON.stringify(prList) });
       const pr = {
         number: 7,
         url: "https://github.com/o/r/pull/7",
@@ -88,6 +91,7 @@ beforeEach(async () => {
   calls.length = 0;
   api = {};
   prState = "OPEN";
+  prList = null;
   vi.resetModules();
   ({ findPRStrict } = await import("./gh"));
 });
@@ -233,5 +237,44 @@ describe("findPRStrict's check runs", () => {
     };
     expect((await findPRStrict("/repo", "b"))?.checks).toBe("pending");
     expect(apiCalls()).toEqual(["repos/o/r/actions/runs/1"]);
+  });
+});
+
+describe("findPRStrict's match", () => {
+  const listed = (number: number, isCrossRepository: boolean) => ({
+    number,
+    url: `https://github.com/o/r/pull/${number}`,
+    state: "OPEN",
+    headRefOid: "HEAD",
+    statusCheckRollup: [],
+    isCrossRepository,
+  });
+
+  it("never links a fork's PR whose branch has the same name", async () => {
+    prList = [listed(9, true)];
+    expect(await findPRStrict("/repo", "feature/x")).toBeNull();
+  });
+
+  it("takes this repository's PR over a fork's", async () => {
+    prList = [listed(9, true), listed(8, false)];
+    expect((await findPRStrict("/repo", "feature/x"))?.number).toBe(8);
+  });
+
+  it("skips a PR opened before `since`", async () => {
+    const at = (n: number, createdAt?: string) => ({
+      ...listed(n, false),
+      createdAt,
+    });
+    const since = "2026-06-01T00:00:00Z";
+    prList = [at(8, "2026-01-01T00:00:00Z")];
+    expect(await findPRStrict("/repo", "feature/x", { since })).toBeNull();
+    prList = [at(8)];
+    expect(await findPRStrict("/repo", "feature/x", { since })).toBeNull();
+    prList = [at(8, "2026-01-01T00:00:00Z"), at(12, "2026-06-02T00:00:00Z")];
+    expect((await findPRStrict("/repo", "feature/x", { since }))?.number).toBe(
+      12
+    );
+    prList = [at(8, "2026-01-01T00:00:00Z")];
+    expect((await findPRStrict("/repo", "feature/x"))?.number).toBe(8);
   });
 });

@@ -48,10 +48,18 @@ export interface ListedPR {
   createdAt?: string;
 }
 
-// The branch's PR, null when it has none; throws when gh can't say.
+export interface FindPROpts {
+  // Only a PR opened at or after this time (ISO): one older than the task
+  // was a branch name's earlier use, not the task's.
+  since?: string;
+}
+
+// The branch's PR in this repository, null when it has none; throws when gh
+// can't say. A PR from a fork whose branch has the same name isn't it.
 export async function findPRStrict(
   repoDir: string,
-  branch: string
+  branch: string,
+  opts: FindPROpts = {}
 ): Promise<TaskPR | null> {
   const out = await run(
     "gh",
@@ -63,14 +71,18 @@ export async function findPRStrict(
       "--state",
       "all",
       "--limit",
-      "1",
+      "10",
       "--json",
-      "number,url,state,headRefOid,statusCheckRollup,body",
+      "number,url,state,headRefOid,statusCheckRollup,body,isCrossRepository,createdAt",
     ],
     repoDir,
     15000
   );
-  const [pr] = JSON.parse(out) as ListedPR[];
+  const pr = (JSON.parse(out) as ListedPR[]).find(
+    (p) =>
+      !p.isCrossRepository &&
+      (!opts.since || Date.parse(p.createdAt ?? "") >= Date.parse(opts.since))
+  );
   return pr ? toTaskPR(repoDir, pr) : null;
 }
 
@@ -167,7 +179,8 @@ async function actionsRun(
 
 export async function findPR(
   repoDir: string,
-  branch: string
+  branch: string,
+  opts: FindPROpts = {}
 ): Promise<TaskPR | null> {
-  return findPRStrict(repoDir, branch).catch(() => null);
+  return findPRStrict(repoDir, branch, opts).catch(() => null);
 }

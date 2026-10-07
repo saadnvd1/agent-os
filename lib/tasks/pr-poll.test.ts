@@ -140,6 +140,15 @@ describe("lookupPR", () => {
     expect(heads()).toEqual(["done", "done"]);
   });
 
+  it("keeps a branch's answer apart for each `since`", async () => {
+    prs = [pr(7, "shared", "MERGED", { createdAt: "2026-10-07T10:00:00Z" })];
+    const early = { since: "2026-10-07T09:00:00Z" };
+    const late = { since: "2026-10-07T11:00:00Z" };
+    expect((await poll.lookupPR("/repo", "shared", early))?.number).toBe(7);
+    await poll.lookupPR("/repo", "shared", late);
+    expect(heads()).toEqual(["shared", "shared"]);
+  });
+
   it("finds a PR opened after the list was read within a minute", async () => {
     vi.useFakeTimers({ now: Date.parse("2026-10-07T12:00:00Z") });
     expect(await poll.lookupPR("/repo", "new")).toBeNull();
