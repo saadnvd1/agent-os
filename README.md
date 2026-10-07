@@ -227,7 +227,8 @@ a project and a prompt, and starts one of:
 - **Task**: a background task that ends in a pull request, as above.
 - **Session**: a chat session in the project that runs the prompt and stays.
 - **Orchestrator**: the prompt, posted to the workspace's orchestrator as a
-  message from "Schedule <name>".
+  message from "Schedule <name>", marked as a scheduled prompt so it never
+  counts as an approval.
 
 The server checks once a minute and claims each run in SQLite before starting
 it, so a time never runs twice. If AgentOS was off when runs were due, it
@@ -235,9 +236,11 @@ runs only the most recent one when it comes back, marked **caught up**. A run
 is **skipped** while the schedule's previous task or session is still working,
 and while the workspace's orchestrator is paused. A run that fails to start is
 recorded with why and noted in the orchestrator's chat. Every run stays in the
-schedule's history with a link to what it started; **Run now** runs one
-immediately (even while paused or busy). Removing a schedule keeps its
-history. Set `AGENTOS_SCHEDULES=off` to stop the ticker.
+schedule's history with a link to what it started. **Run now** runs one
+immediately, even while the last run is still working (Pause still holds it).
+A schedule whose project has moved to another workspace fails until it's
+edited. Removing a schedule keeps its history. Set `AGENTOS_SCHEDULES=off` to
+stop the ticker.
 
 ## Agent network
 

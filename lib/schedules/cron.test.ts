@@ -118,6 +118,37 @@ describe("prevRun", () => {
     );
   });
 
+  it("agrees with nextRun across DST (the scheduler decides with prevRun)", () => {
+    // Fall-back: 1:00 AM happens at 06:00Z and 07:00Z; only the first runs.
+    expect(iso(prevRun("0 * * * *", at("2026-11-01T07:30:00Z"), TZ))).toBe(
+      "2026-11-01T06:00:00.000Z"
+    );
+    expect(iso(prevRun("30 1 * * *", at("2026-11-01T07:45:00Z"), TZ))).toBe(
+      "2026-11-01T06:30:00.000Z"
+    );
+    // Spring-forward: the skipped 2:30 AM ran at 3:30 CDT.
+    expect(iso(prevRun("30 2 * * *", at("2026-03-08T09:00:00Z"), TZ))).toBe(
+      "2026-03-08T08:30:00.000Z"
+    );
+  });
+
+  it("walking minute by minute through fall-back, each wall hour is due once", () => {
+    const due = new Set<string>();
+    for (
+      let t = at("2026-11-01T04:30:00Z");
+      t < at("2026-11-01T10:00:00Z");
+      t += 60_000
+    )
+      due.add(iso(prevRun("0 * * * *", t, TZ))!);
+    expect([...due]).toEqual([
+      "2026-11-01T04:00:00.000Z", // 11 PM CDT
+      "2026-11-01T05:00:00.000Z", // 12 AM CDT
+      "2026-11-01T06:00:00.000Z", // 1 AM CDT
+      "2026-11-01T08:00:00.000Z", // 2 AM CST
+      "2026-11-01T09:00:00.000Z", // 3 AM CST
+    ]);
+  });
+
   it("is the current minute for * * * * *", () => {
     expect(iso(prevRun("* * * * *", at("2026-10-07T14:00:59Z"), TZ))).toBe(
       "2026-10-07T14:00:00.000Z"

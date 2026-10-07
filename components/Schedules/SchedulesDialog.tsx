@@ -70,7 +70,11 @@ function ScheduleRow({ s, onOpen }: { s: ScheduleView; onOpen: () => void }) {
       role="button"
       tabIndex={0}
       onClick={onOpen}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen()}
+      onKeyDown={(e) =>
+        e.target === e.currentTarget &&
+        (e.key === "Enter" || e.key === " ") &&
+        onOpen()
+      }
       className="border-border/60 hover:bg-foreground/[0.03] focus-visible:ring-ring flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 outline-none focus-visible:ring-2"
     >
       <div className="min-w-0 flex-1 space-y-0.5">

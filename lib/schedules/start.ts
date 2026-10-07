@@ -20,17 +20,26 @@ function projectOf(schedule: Schedule) {
   return project;
 }
 
-async function startTask(schedule: Schedule): Promise<string> {
+type OnSession = (sessionId: string) => void;
+
+async function startTask(
+  schedule: Schedule,
+  onSession: OnSession
+): Promise<string> {
   const session = await createTask({
     projectId: projectOf(schedule).id,
     prompt: schedule.prompt,
+    onCreated: onSession,
   });
   return session.id;
 }
 
 // A chat session in the project that gets the prompt as its first message
 // and stays open afterwards.
-async function startSession(schedule: Schedule): Promise<string> {
+async function startSession(
+  schedule: Schedule,
+  onSession: OnSession
+): Promise<string> {
   const project = projectOf(schedule);
   if (project.host_id && project.host_id !== "local")
     throw new Error("Schedules run on this machine's projects only");
@@ -53,19 +62,31 @@ async function startSession(schedule: Schedule): Promise<string> {
       "local"
     );
   db.prepare(`UPDATE sessions SET view = 'chat' WHERE id = ?`).run(id);
+  onSession(id);
   notifyStatusChanged();
   await sendChat(id, { text: schedule.prompt, from: fromLabel(schedule) });
   return id;
 }
 
-async function postToOrchestrator(schedule: Schedule): Promise<string> {
+// Marked as a schedule's, not something Saad just typed: the orchestrator's
+// brief says it never counts as an approval.
+export function scheduledMessage(
+  schedule: Pick<Schedule, "name" | "prompt">,
+  projectName: string | null
+): string {
+  const where = projectName ? ` for ${projectName}` : "";
+  return `[Scheduled message "${schedule.name}"${where}, saved in Schedules: a standing prompt, not an approval]\n${schedule.prompt}`;
+}
+
+async function postToOrchestrator(
+  schedule: Schedule,
+  onSession: OnSession
+): Promise<string> {
   const orchestrator = ensureOrchestrator(schedule.workspace_id);
+  onSession(orchestrator.id);
   const project = schedule.project_id ? getProject(schedule.project_id) : null;
-  const text = project
-    ? `${schedule.prompt}\n\n(Project: ${project.name})`
-    : schedule.prompt;
   await sendChatConfirmed(orchestrator.id, {
-    text,
+    text: scheduledMessage(schedule, project?.name ?? null),
     from: fromLabel(schedule),
   });
   return orchestrator.id;
@@ -73,7 +94,7 @@ async function postToOrchestrator(schedule: Schedule): Promise<string> {
 
 const TASK_BUSY = new Set(["working", "blocked"]);
 
-async function stillRunning(
+export async function stillRunning(
   schedule: Schedule,
   run: ScheduleRun
 ): Promise<boolean> {
@@ -107,12 +128,12 @@ function notify(schedule: Schedule, why: string): void {
 }
 
 export const realDeps: RunDeps = {
-  start: (schedule) =>
+  start: (schedule, onSession) =>
     schedule.kind === "task"
-      ? startTask(schedule)
+      ? startTask(schedule, onSession)
       : schedule.kind === "session"
-        ? startSession(schedule)
-        : postToOrchestrator(schedule),
+        ? startSession(schedule, onSession)
+        : postToOrchestrator(schedule, onSession),
   stillRunning,
   notify,
 };

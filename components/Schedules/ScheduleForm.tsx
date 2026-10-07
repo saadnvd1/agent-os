@@ -345,7 +345,7 @@ export function ScheduleForm({
           aria-label="Time zone"
           value={timezone}
           onChange={(e) => setTimezone(e.target.value)}
-          className="text-muted-foreground h-11 text-xs md:h-8"
+          className="text-muted-foreground h-11 md:h-8 md:text-xs"
         />
         <div className="bg-primary/[0.06] rounded-lg px-3 py-2.5 text-sm">
           {cronProblem || !tzOk ? (

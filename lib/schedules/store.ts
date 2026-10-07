@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { db } from "../db";
 import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
+import { isPaused } from "../orchestrator/pause";
 import { cronError, DEFAULT_TIMEZONE, isTimezone } from "./cron";
 
 export const SCHEDULE_KINDS = ["task", "session", "orchestrator"] as const;
@@ -279,15 +280,64 @@ export function lastStarted(
   );
 }
 
-// Slots a crash left claimed but never started: recorded as failed.
+// Links a claimed run to the session it's starting, the moment it exists.
+export function attachSession(runId: number, sessionId: string): void {
+  db.prepare(
+    `UPDATE schedule_runs SET session_id = ? WHERE id = ? AND outcome = 'claimed'`
+  ).run(sessionId, runId);
+}
+
+export function lastRunBefore(
+  scheduleId: string,
+  beforeId: number
+): ScheduleRun | null {
+  return (
+    (db
+      .prepare(
+        `SELECT * FROM schedule_runs WHERE schedule_id = ? AND id < ? ORDER BY id DESC LIMIT 1`
+      )
+      .get(scheduleId, beforeId) as ScheduleRun | undefined) ?? null
+  );
+}
+
+// Why a schedule can't run where it points now, or null. Checked at each
+// run: a project can move workspace, and a workspace can be deleted, after
+// the schedule was saved.
+export function targetProblem(schedule: Schedule): string | null {
+  if (!getWorkspace(schedule.workspace_id))
+    return "Its workspace no longer exists";
+  if (!schedule.project_id) return null;
+  const project = getProject(schedule.project_id);
+  if (!project) return "Its project no longer exists";
+  if (project.workspace_id !== schedule.workspace_id)
+    return `${project.name} moved out of this schedule's workspace; edit the schedule`;
+  return null;
+}
+
+export const pausedFor = (schedule: Schedule): boolean =>
+  isPaused(schedule.workspace_id);
+
+// Slots the last process left claimed. One that had already started its
+// session counts as started, so the overlap check still sees that session;
+// one that hadn't is recorded as failed.
 export function failAbandonedClaims(
   olderThanMs: number,
   now = Date.now()
 ): number {
-  return db
+  const before = Math.floor((now - olderThanMs) / 1000);
+  const started = db
     .prepare(
-      `UPDATE schedule_runs SET outcome = 'failed', detail = 'interrupted: AgentOS stopped while it was starting'
-       WHERE outcome = 'claimed' AND created_at < datetime(?, 'unixepoch')`
+      `UPDATE schedule_runs SET outcome = 'started', detail = 'AgentOS restarted while it was starting'
+       WHERE outcome = 'claimed' AND session_id IS NOT NULL AND created_at < datetime(?, 'unixepoch')`
     )
-    .run(Math.floor((now - olderThanMs) / 1000)).changes;
+    .run(before).changes;
+  return (
+    started +
+    db
+      .prepare(
+        `UPDATE schedule_runs SET outcome = 'failed', detail = 'interrupted: AgentOS stopped while it was starting'
+         WHERE outcome = 'claimed' AND created_at < datetime(?, 'unixepoch')`
+      )
+      .run(before).changes
+  );
 }

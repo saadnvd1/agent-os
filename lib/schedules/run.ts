@@ -1,18 +1,26 @@
 import { randomUUID } from "crypto";
-import { isPaused } from "../orchestrator/pause";
 import {
+  attachSession,
   claimSlot,
   finishRun,
+  lastRunBefore,
   lastStarted,
+  pausedFor,
+  targetProblem,
   type RunTrigger,
   type Schedule,
   type ScheduleRun,
 } from "./store";
 
 // How each kind starts its work, and whether a run is still going. Real
-// ones in ./start; tests pass their own.
+// ones in ./start; tests pass their own. `start` calls onSession as soon as
+// the session it starts exists, before anything slow, so a restart mid-start
+// still knows what the run started.
 export interface RunDeps {
-  start: (schedule: Schedule) => Promise<string>;
+  start: (
+    schedule: Schedule,
+    onSession: (sessionId: string) => void
+  ) => Promise<string>;
   stillRunning: (schedule: Schedule, run: ScheduleRun) => Promise<boolean>;
   notify: (schedule: Schedule, why: string) => void;
 }
@@ -30,9 +38,10 @@ export const slotKey = (slotAt: number) => new Date(slotAt).toISOString();
 
 // Runs one slot of a schedule, or returns null when another tick already
 // took it. The slot is claimed in SQLite before anything starts, so a slot
-// runs once however many ticks see it. Run now (manual) gets a slot of its
-// own and goes even while paused or while the last run is still working:
-// Saad asked for it.
+// runs once however many ticks see it. Pause holds every run, Run now
+// included. Run now (manual) gets a slot of its own and goes while the last
+// run is still working; a scheduled run skips then, and skips too when it
+// can't tell.
 export async function runSlot(
   schedule: Schedule,
   slotAt: number,
@@ -54,17 +63,36 @@ export async function runSlot(
   };
   const joined = (...parts: (string | null)[]) =>
     parts.filter(Boolean).join(": ") || null;
+  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  const fail = (why: string): RunResult => {
+    // Once per cause: a minutely schedule that keeps failing the same way
+    // notifies the first time, not every minute.
+    if (lastRunBefore(schedule.id, runId)?.detail !== why) {
+      try {
+        deps.notify(schedule, why);
+      } catch (e) {
+        console.error(`[schedules] couldn't notify about ${schedule.name}:`, e);
+      }
+    }
+    return done("failed", why);
+  };
 
+  const target = targetProblem(schedule);
+  if (target) return fail(target);
+  if (pausedFor(schedule))
+    return done("skipped", joined(caughtUp, "paused with the orchestrator"));
   if (trigger !== "manual") {
-    if (isPaused(schedule.workspace_id))
-      return done("skipped", joined(caughtUp, "paused with the orchestrator"));
     const previous = lastStarted(schedule.id, runId);
     if (previous) {
-      let busy = false;
+      let busy: boolean;
       try {
         busy = await deps.stillRunning(schedule, previous);
-      } catch {
-        // Can't tell: start rather than stall the schedule for good.
+      } catch (error) {
+        return done(
+          "skipped",
+          joined(caughtUp, `couldn't check the last run: ${message(error)}`),
+          previous.session_id
+        );
       }
       if (busy)
         return done(
@@ -76,15 +104,11 @@ export async function runSlot(
   }
 
   try {
-    const sessionId = await deps.start(schedule);
+    const sessionId = await deps.start(schedule, (id) =>
+      attachSession(runId, id)
+    );
     return done("started", caughtUp, sessionId);
   } catch (error) {
-    const why = error instanceof Error ? error.message : String(error);
-    try {
-      deps.notify(schedule, why);
-    } catch (e) {
-      console.error(`[schedules] couldn't notify about ${schedule.name}:`, e);
-    }
-    return done("failed", why);
+    return fail(message(error));
   }
 }
