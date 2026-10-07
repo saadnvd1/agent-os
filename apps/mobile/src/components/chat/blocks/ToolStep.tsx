@@ -8,7 +8,7 @@ import { DiffView } from "./DiffView";
 
 export function ToolStep({ tool }: { tool: ToolItem }) {
   const t = useTheme();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(tool.status === "error" || !!tool.diff);
   const detail = !!tool.diff || !!tool.output;
   return (
     <View style={{ gap: space.sm }}>
@@ -20,19 +20,23 @@ export function ToolStep({ tool }: { tool: ToolItem }) {
         accessibilityState={{ expanded: open }}
       >
         {tool.status === "running" ? (
-          <ActivityIndicator size="small" color={t.muted} style={styles.icon} />
+          <ActivityIndicator
+            size="small"
+            color={t.primary}
+            style={styles.icon}
+          />
         ) : (
           <View style={styles.icon}>
             <Icon
               name={
                 tool.status === "error"
-                  ? "xmark.circle"
+                  ? "xmark"
                   : tool.status === "stopped"
-                    ? "stop.circle"
-                    : "checkmark.circle"
+                    ? "square"
+                    : "checkmark"
               }
-              size={14}
-              color={tool.status === "error" ? t.destructive : t.faint}
+              size={tool.status === "stopped" ? 11 : 13}
+              color={tool.status === "error" ? t.destructive : t.muted}
             />
           </View>
         )}
@@ -42,13 +46,6 @@ export function ToolStep({ tool }: { tool: ToolItem }) {
         >
           {tool.title}
         </Text>
-        {detail ? (
-          <Icon
-            name={open ? "chevron.up" : "chevron.down"}
-            size={11}
-            color={t.faint}
-          />
-        ) : null}
       </Pressable>
       {open && tool.diff ? <DiffView diff={tool.diff} /> : null}
       {open && !tool.diff && tool.output ? (
