@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveRef, wasName, type Candidate } from "./resolve";
+import { resolveRef, wasNames, type Candidate } from "./resolve";
 
 const c = (
   id: string,
@@ -97,10 +97,12 @@ describe("resolveRef", () => {
   });
 });
 
-describe("wasName", () => {
-  it("is the latest name that isn't the current one", () => {
-    expect(wasName(orchestrator)).toBe("Session 3");
-    expect(wasName({ name: "a", previousNames: ["A", "b"] })).toBe("b");
-    expect(wasName(worker)).toBeNull();
+describe("wasNames", () => {
+  it("lists every old name, newest first, but not the current one", () => {
+    expect(wasNames(orchestrator)).toEqual(["Session 3"]);
+    expect(
+      wasNames({ name: "a", previousNames: ["planner", "A", "Session 3"] })
+    ).toEqual(["planner", "Session 3"]);
+    expect(wasNames(worker)).toEqual([]);
   });
 });

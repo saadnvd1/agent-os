@@ -142,7 +142,7 @@ async function main() {
         if (p.id === me) continue;
         const where = p.projectName ? `${p.projectName}/` : "";
         const state = p.running ? p.doing || "running" : "not running";
-        const was = p.was ? ` (was ${p.was})` : "";
+        const was = p.was.length ? ` (was ${p.was.join(", ")})` : "";
         console.log(
           `${p.id.slice(0, 8)}  ${where}${p.name}${was}  ·  ${state}`
         );

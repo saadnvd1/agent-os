@@ -87,8 +87,6 @@ export interface DeliverOpts {
   pollMs?: number;
 }
 
-type Attempt = "submitted" | "not-typed" | "stuck";
-
 export async function deliverToPane(
   pane: Pane,
   line: string,
@@ -121,10 +119,21 @@ export async function deliverToPane(
       why: "it is showing a menu or prompt waiting for an answer",
     };
 
-  // An earlier message left unsent in the input goes first.
-  if (squash(inputText(v)).includes(MARKER)) {
+  // Every Enter looks first: a prompt that opened since the last look would
+  // take it as an answer.
+  const MENU_OPENED = "a menu or prompt opened before Enter";
+  const safeEnter = async (): Promise<boolean> => {
+    const now = await pane.view();
+    if (now.inMode || menuShown(now.text)) return false;
     await pane.enter();
-    if (!(await until((x) => !squash(inputText(x)).includes(MARKER))))
+    return true;
+  };
+  const ours = (x: PaneView) => squash(inputText(x)).includes(MARKER);
+
+  // An earlier message left unsent in the input goes first.
+  if (ours(v)) {
+    if (!(await safeEnter())) return { state: "failed", why: MENU_OPENED };
+    if (!(await until((x) => !ours(x))))
       return {
         state: "failed",
         why: "an earlier message is stuck unsent in its input",
@@ -133,37 +142,42 @@ export async function deliverToPane(
   }
   const wasBusy = busy(v.text);
 
-  const attempt = async (put: (t: string) => Promise<void>) => {
-    await put(line);
-    if (!(await until(inInput))) return "not-typed" as Attempt;
-    // Enter straight after the text can be read as part of the paste.
-    await sleep(pollMs);
-    for (let i = 0; i < 2; i++) {
-      await pane.enter();
-      if (await until((x) => !inInput(x))) return "submitted" as Attempt;
-    }
-    return "stuck" as Attempt;
-  };
-
-  let result = await attempt((t) => pane.type(t));
-  if (result === "not-typed") {
+  await pane.type(line);
+  if (!(await until(inInput))) {
     const after = await pane.view();
     if (menuShown(after.text))
       return { state: "failed", why: "a menu opened as the text was typed" };
-    result = await attempt((t) => pane.paste(t));
+    // Typed text that shows up late must not get a pasted twin.
+    if (!ours(after)) {
+      await pane.paste(line);
+      if (!(await until(inInput)))
+        return {
+          state: "failed",
+          why: "the text never showed up in its input (typed, then pasted)",
+        };
+    } else if (!(await until(inInput)))
+      return {
+        state: "failed",
+        why: "only part of the text reached its input; it was not sent",
+      };
   }
-  if (result === "not-typed")
+
+  // Enter straight after the text can be read as part of the paste.
+  await sleep(pollMs);
+  let sent = false;
+  for (let i = 0; i < 2 && !sent; i++) {
+    if (!(await safeEnter())) return { state: "failed", why: MENU_OPENED };
+    sent = await until((x) => !inInput(x));
+  }
+  if (!sent)
     return {
       state: "failed",
-      why: "the text never showed up in its input (typed, then pasted)",
-    };
-  if (result === "stuck")
-    return {
-      state: "failed",
-      why: "the text is in its input but Enter didn't send it",
+      why: "the text is in its input but Enter didn't send it; it goes out with the next message, so don't send it again",
     };
   // Busy when it went in, or Claude says it's holding it: queued for
   // after this turn.
   const after = await pane.view();
-  return { state: wasBusy || showsQueued(after.text) ? "queued" : "delivered" };
+  return {
+    state: wasBusy || showsQueued(after.text) ? "queued" : "delivered",
+  };
 }

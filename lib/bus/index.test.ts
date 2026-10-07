@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 let paneResult: import("./delivery").Delivery = { state: "delivered" };
 const typed: string[] = [];
+let chatResult: () => Promise<"delivered" | "queued"> = async () => "delivered";
 
 vi.mock("@/lib/status-detector", () => ({
   statusDetector: {
@@ -20,6 +21,10 @@ vi.mock("@/lib/bus/delivery", async (importOriginal) => ({
   },
 }));
 
+vi.mock("@/lib/chat/runner", () => ({
+  sendChatConfirmed: () => chatResult(),
+}));
+
 const { db } = await import("@/lib/db");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { createProject } = await import("@/lib/projects");
@@ -33,6 +38,15 @@ function rename(id: string, name: string) {
   recordPreviousName(id, old.name);
   db.prepare(`UPDATE sessions SET name = ? WHERE id = ?`).run(name, id);
 }
+
+const deliveredAt = (id: number) =>
+  (
+    db
+      .prepare(`SELECT delivered_at FROM bus_messages WHERE id = ?`)
+      .get(id) as {
+      delivered_at: string | null;
+    }
+  ).delivered_at;
 
 function setup() {
   const project = createProject({
@@ -59,6 +73,7 @@ describe("the bus after a rename", () => {
       `"Session ${tag}" was renamed to "orchestrator-${tag}"`
     );
     expect(sent.message.toId).toBe(target);
+    expect(deliveredAt(sent.message.id)).not.toBeNull();
     expect(typed.at(-1)).toContain(`aos send ${sender.slice(0, 8)} `);
 
     // The sender renamed too: its message shows its name now, by id.
@@ -73,7 +88,7 @@ describe("the bus after a rename", () => {
     const peer = (await bus.listPeers()).find((p) => p.id === target);
     expect(peer).toMatchObject({
       name: `orchestrator-${tag}`,
-      was: `Session ${tag}`,
+      was: [`Session ${tag}`],
     });
   });
 
@@ -97,6 +112,55 @@ describe("the bus after a rename", () => {
       expect(bus.readInbox(target).map((m) => m.body)).toEqual(["hello"]);
     } finally {
       paneResult = { state: "delivered" };
+    }
+  });
+
+  it("marks a queued message delivered: the agent has it", async () => {
+    const { sender, target } = setup();
+    paneResult = { state: "queued" };
+    try {
+      const sent = await bus.sendMessage({
+        fromId: sender,
+        to: target,
+        body: "after your turn",
+      });
+      expect(sent.delivery).toEqual({ state: "queued" });
+      expect(deliveredAt(sent.message.id)).not.toBeNull();
+    } finally {
+      paneResult = { state: "delivered" };
+    }
+  });
+
+  it("reports a chat worker that never took the message as failed", async () => {
+    const { project, sender } = setup();
+    const chat = seedSession({
+      projectId: project.id,
+      name: `chat-${randomUUID().slice(0, 6)}`,
+      view: "chat",
+    });
+    chatResult = async () => {
+      throw new Error("the chat worker didn't take it within 10s");
+    };
+    try {
+      const sent = await bus.sendMessage({
+        fromId: sender,
+        to: chat,
+        body: "x",
+      });
+      expect(sent.delivery).toEqual({
+        state: "failed",
+        why: "the chat worker didn't take it within 10s",
+      });
+      expect(deliveredAt(sent.message.id)).toBeNull();
+      chatResult = async () => "queued";
+      const again = await bus.sendMessage({
+        fromId: sender,
+        to: chat,
+        body: "y",
+      });
+      expect(again.delivery).toEqual({ state: "queued" });
+    } finally {
+      chatResult = async () => "delivered";
     }
   });
 

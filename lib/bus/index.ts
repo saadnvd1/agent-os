@@ -11,7 +11,7 @@ import { sendChatConfirmed } from "../chat/runner";
 import { sessionRowInfo } from "../session-meta";
 import { previousNames } from "../session-names";
 import { deliverToPane, type Delivery } from "./delivery";
-import { resolveRef, wasName, type Candidate } from "./resolve";
+import { resolveRef, wasNames, type Candidate } from "./resolve";
 import { tmuxPane } from "./tmux-pane";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
 
@@ -21,8 +21,8 @@ export type { Delivery } from "./delivery";
 export interface Peer {
   id: string;
   name: string;
-  // The latest name it had before a rename.
-  was: string | null;
+  // Names it had before renames, newest first.
+  was: string[];
   projectName: string | null;
   tmuxName: string;
   hostId: string;
@@ -64,7 +64,7 @@ export async function listPeers(): Promise<Peer[]> {
       return {
         id: s.id,
         name: s.name,
-        was: wasName(named[i]),
+        was: wasNames(named[i]),
         projectName: named[i].projectName,
         tmuxName: s.tmux_name,
         hostId: s.host_id,

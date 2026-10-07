@@ -46,7 +46,14 @@ export function MessagesDialog() {
   const recipient = to || (filter !== ALL ? filter : "");
 
   return (
-    <Dialog open={open} onOpenChange={busUiActions.setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        // A delivery result belongs to that send only.
+        if (!o) send.reset();
+        busUiActions.setOpen(o);
+      }}
+    >
       <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col">
         <DialogHeader>
           <DialogTitle>Messages</DialogTitle>
@@ -113,7 +120,13 @@ export function MessagesDialog() {
           }}
           className="space-y-2"
         >
-          <Select value={recipient} onValueChange={setTo}>
+          <Select
+            value={recipient}
+            onValueChange={(v) => {
+              send.reset();
+              setTo(v);
+            }}
+          >
             <SelectTrigger aria-label="Send to">
               <SelectValue placeholder="Send to a session..." />
             </SelectTrigger>

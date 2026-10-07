@@ -133,8 +133,46 @@ describe("deliverToPane", () => {
     const r = await deliverToPane(pane, LINE, fast);
     expect(r).toEqual({
       state: "failed",
-      why: "the text is in its input but Enter didn't send it",
+      why: "the text is in its input but Enter didn't send it; it goes out with the next message, so don't send it again",
     });
+  });
+
+  it("never presses Enter on a prompt that opened after the text went in", async () => {
+    const pane = new FakeClaude();
+    // The prompt opens in the pause before Enter.
+    const r = await deliverToPane(pane, LINE, {
+      ...fast,
+      sleep: async () => void (pane.o.menu = true),
+    });
+    expect(r).toEqual({
+      state: "failed",
+      why: "a menu or prompt opened before Enter",
+    });
+    expect(pane.keys).toEqual(["type"]);
+  });
+
+  it("doesn't paste a second copy when typed text shows up late", async () => {
+    const pane = new FakeClaude();
+    let views = 0;
+    let pending = "";
+    const view = pane.view.bind(pane);
+    pane.type = async (t) => {
+      pane.keys.push("type");
+      pending = t;
+      views = 0;
+    };
+    pane.view = async () => {
+      if (pending && ++views >= 6) {
+        pane.input += pending;
+        pending = "";
+      }
+      return view();
+    };
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({
+      state: "delivered",
+    });
+    expect(pane.keys).toEqual(["type", "enter"]);
+    expect(pane.transcript).toEqual([`> ${LINE}`]);
   });
 
   it("pastes when typed keys never reach the input", async () => {
@@ -147,16 +185,33 @@ describe("deliverToPane", () => {
 
   it("fails when neither typing nor pasting reaches the input", async () => {
     const pane = new FakeClaude({ typeLost: true, pasteLost: true });
-    const r = await deliverToPane(pane, LINE, fast);
-    expect(r.state).toBe("failed");
-    expect(pane.keys).not.toContain("enter");
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({
+      state: "failed",
+      why: "the text never showed up in its input (typed, then pasted)",
+    });
+    expect(pane.keys).toEqual(["type", "paste"]);
   });
 
   it("never types into a menu", async () => {
     const pane = new FakeClaude({ menu: true });
-    const r = await deliverToPane(pane, LINE, fast);
-    expect(r).toMatchObject({ state: "failed" });
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({
+      state: "failed",
+      why: "it is showing a menu or prompt waiting for an answer",
+    });
     expect(pane.keys).toEqual([]);
+  });
+
+  it("stops when a menu opens as the text is typed, without pasting", async () => {
+    const pane = new FakeClaude();
+    pane.type = async () => {
+      pane.keys.push("type");
+      pane.o.menu = true;
+    };
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({
+      state: "failed",
+      why: "a menu opened as the text was typed",
+    });
+    expect(pane.keys).toEqual(["type"]);
   });
 
   it("leaves copy mode first, and fails if it can't", async () => {
@@ -167,8 +222,9 @@ describe("deliverToPane", () => {
     expect(scrolled.keys[0]).toBe("cancel");
 
     const stuck = new FakeClaude({ inMode: true, stuckMode: true });
-    expect(await deliverToPane(stuck, LINE, fast)).toMatchObject({
+    expect(await deliverToPane(stuck, LINE, fast)).toEqual({
       state: "failed",
+      why: "its pane is scrolled back (copy mode)",
     });
     expect(stuck.keys).toEqual(["cancel"]);
   });
@@ -182,6 +238,16 @@ describe("deliverToPane", () => {
     });
     expect(pane.transcript).toEqual([`> ${earlier}`]);
     expect(pane.queued).toEqual([`  ${LINE}`]);
+  });
+
+  it("stops when an earlier message won't send, without typing over it", async () => {
+    const pane = new FakeClaude({ swallowEnters: 5 });
+    pane.input = wakeLine({ fromName: "x", fromId: "b", body: "earlier" });
+    expect(await deliverToPane(pane, LINE, fast)).toEqual({
+      state: "failed",
+      why: "an earlier message is stuck unsent in its input",
+    });
+    expect(pane.keys).toEqual(["enter"]);
   });
 
   it("verifies a CLI without an input box by the cursor's line", async () => {

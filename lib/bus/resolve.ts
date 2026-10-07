@@ -72,11 +72,12 @@ export function resolveRef(ref: string, candidates: Candidate[]): Resolution {
   return { ok: false, reason: "none", error: `No session called "${ref}"` };
 }
 
-// "orchestrator (was Session 3)": the latest name it no longer has.
-export function wasName(c: {
+// "orchestrator (was planner, Session 3)": its old names, newest first,
+// without the one it has now.
+export function wasNames(c: {
   name: string;
   previousNames: string[];
-}): string | null {
+}): string[] {
   const now = c.name.toLowerCase();
-  return c.previousNames.find((n) => n.toLowerCase() !== now) ?? null;
+  return c.previousNames.filter((n) => n.toLowerCase() !== now);
 }
