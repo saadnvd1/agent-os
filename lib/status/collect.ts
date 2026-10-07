@@ -1,0 +1,367 @@
+// The status of every session for the sidebar: terminals read from their
+// program's own reports (OSC 7501) or, failing that, their screen; chats
+// from their live conversation. Shared by GET /api/sessions/status and the
+// pushed /ws/status stream.
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+import { statusDetector, type SessionStatus } from "../status-detector";
+import type { AgentType } from "../providers";
+import {
+  getManagedSessionPattern,
+  getProviderIdFromSessionName,
+  getSessionIdFromName,
+} from "../providers/registry";
+import { getDb, type Session } from "../db";
+import { chatState } from "../chat/runner";
+import { chatActivityLine } from "../chat/activity";
+import {
+  chatNeed,
+  isUnread,
+  needsYou,
+  programStatusRow,
+  terminalStatus,
+} from "../needs-you";
+import type { SessionNeed } from "../sidebar/shelves";
+import { openAskCount } from "../orchestrator/asks";
+import { lastUserTask } from "../chat/store";
+import { hostExec, isRemoteHost } from "../hosts";
+import { dropProgramTransient, programSummary } from "../program-status/store";
+
+const execOn = (sessionName: string, command: string) =>
+  hostExec(statusDetector.hostFor(sessionName), command);
+
+export interface SessionStatusResponse {
+  sessionName: string;
+  status: SessionStatus | "error";
+  lastLine?: string;
+  claudeSessionId?: string | null;
+  agentType?: AgentType;
+  title?: string;
+  task?: string | null;
+  // An orchestrator's open asks: each counts as one thing needing you.
+  asks?: number;
+  need?: SessionNeed | null;
+  unread?: boolean;
+  // A program's own message (OSC 7501): untrusted, plain text only.
+  detail?: string | null;
+  progress?: number | null;
+}
+
+export interface StatusSnapshot {
+  statuses: Record<string, SessionStatusResponse>;
+  hostErrors: Record<string, string>;
+}
+
+async function getTmuxSessions(): Promise<string[]> {
+  const sessions = await statusDetector.listSessions();
+  return sessions.map((s) => s.name);
+}
+
+async function getTmuxSessionCwd(sessionName: string): Promise<string | null> {
+  try {
+    const { stdout } = await execOn(
+      sessionName,
+      `tmux display-message -t "${sessionName}" -p "#{pane_current_path}" 2>/dev/null || echo ""`
+    );
+    const cwd = stdout.trim();
+    return cwd || null;
+  } catch {
+    return null;
+  }
+}
+
+// Get Claude session ID from tmux environment variable
+async function getClaudeSessionIdFromEnv(
+  sessionName: string
+): Promise<string | null> {
+  try {
+    const { stdout } = await execOn(
+      sessionName,
+      `tmux show-environment -t "${sessionName}" CLAUDE_SESSION_ID 2>/dev/null || echo ""`
+    );
+    const line = stdout.trim();
+    if (line.startsWith("CLAUDE_SESSION_ID=")) {
+      const sessionId = line.replace("CLAUDE_SESSION_ID=", "");
+      if (sessionId && sessionId !== "null") {
+        return sessionId;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Get Claude session ID by looking at session files on disk
+function getClaudeSessionIdFromFiles(projectPath: string): string | null {
+  const home = os.homedir();
+  const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude");
+  const projectDirName = projectPath.replace(/\//g, "-");
+  const projectDir = path.join(claudeDir, "projects", projectDirName);
+
+  if (!fs.existsSync(projectDir)) {
+    return null;
+  }
+
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/;
+
+  try {
+    const files = fs.readdirSync(projectDir);
+    let mostRecent: string | null = null;
+    let mostRecentTime = 0;
+
+    for (const file of files) {
+      if (file.startsWith("agent-")) continue;
+      if (!uuidPattern.test(file)) continue;
+
+      const filePath = path.join(projectDir, file);
+      const stat = fs.statSync(filePath);
+
+      if (stat.mtimeMs > mostRecentTime) {
+        mostRecentTime = stat.mtimeMs;
+        mostRecent = file.replace(".jsonl", "");
+      }
+    }
+
+    if (mostRecent && Date.now() - mostRecentTime < 5 * 60 * 1000) {
+      return mostRecent;
+    }
+
+    const configFile = path.join(claudeDir, ".claude.json");
+    if (fs.existsSync(configFile)) {
+      try {
+        const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+        if (config.projects?.[projectPath]?.lastSessionId) {
+          return config.projects[projectPath].lastSessionId;
+        }
+      } catch {
+        // Ignore config parse errors
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// It rarely changes, and finding it reads a directory: once a minute is plenty.
+const claudeIds = new Map<string, { id: string | null; at: number }>();
+const CLAUDE_ID_MS = 60000;
+
+async function getClaudeSessionId(sessionName: string): Promise<string | null> {
+  const cached = claudeIds.get(sessionName);
+  if (cached && Date.now() - cached.at < CLAUDE_ID_MS) return cached.id;
+  const id = await findClaudeSessionId(sessionName);
+  claudeIds.set(sessionName, { id, at: Date.now() });
+  return id;
+}
+
+async function findClaudeSessionId(
+  sessionName: string
+): Promise<string | null> {
+  const envId = await getClaudeSessionIdFromEnv(sessionName);
+  if (envId) {
+    return envId;
+  }
+
+  // Claude's transcript files live on the machine running the session.
+  if (isRemoteHost(statusDetector.hostFor(sessionName))) return null;
+
+  const cwd = await getTmuxSessionCwd(sessionName);
+  if (cwd) {
+    return getClaudeSessionIdFromFiles(cwd);
+  }
+
+  return null;
+}
+
+async function getLastLine(sessionName: string): Promise<string> {
+  try {
+    const { stdout } = await execOn(
+      sessionName,
+      `tmux capture-pane -t "${sessionName}" -p -S -5 2>/dev/null || echo ""`
+    );
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    return lines.pop() || "";
+  } catch {
+    return "";
+  }
+}
+
+// UUID pattern for agent-os managed sessions (derived from registry)
+const UUID_PATTERN = getManagedSessionPattern();
+
+// Track previous statuses to detect changes
+const previousStatuses = new Map<string, SessionStatus>();
+// A terminal read from its screen was running at the last look: its
+// cooldown ends with no output to say so.
+let heuristicBusy = false;
+
+function getAgentTypeFromSessionName(sessionName: string): AgentType {
+  return getProviderIdFromSessionName(sessionName) || "claude";
+}
+
+function terminalRow(db: ReturnType<typeof getDb>, id: string) {
+  return db
+    .prepare(
+      `SELECT id, view, updated_at, last_seen_at FROM sessions WHERE id = ?`
+    )
+    .get(id) as
+    | Pick<Session, "id" | "view" | "updated_at" | "last_seen_at">
+    | undefined;
+}
+
+async function collect(): Promise<StatusSnapshot> {
+  const sessions = await getTmuxSessions();
+
+  // Get status for agent-os managed sessions
+  const managedSessions = sessions.filter((s) => UUID_PATTERN.test(s));
+
+  // Use the new status detector
+  const statusMap: Record<string, SessionStatusResponse> = {};
+
+  const db = getDb();
+  const sessionsToUpdate: string[] = [];
+
+  // Process all sessions in parallel for speed
+  const sessionPromises = managedSessions.map(async (sessionName) => {
+    // Working and blocked end with the program that reported them.
+    const fg = statusDetector.foregroundFor(sessionName);
+    if (fg) dropProgramTransient(sessionName, fg, statusDetector.listedAt());
+    const program = programSummary(sessionName);
+    const [status, claudeSessionId, lastLine] = await Promise.all([
+      program ? null : statusDetector.getStatus(sessionName),
+      getClaudeSessionId(sessionName),
+      getLastLine(sessionName),
+    ]);
+    const id = getSessionIdFromName(sessionName);
+    const agentType = getAgentTypeFromSessionName(sessionName);
+
+    return {
+      sessionName,
+      id,
+      status,
+      program,
+      claudeSessionId,
+      lastLine,
+      agentType,
+    };
+  });
+
+  const results = await Promise.all(sessionPromises);
+  heuristicBusy = results.some((r) => r.status === "running");
+
+  for (const {
+    sessionName,
+    id,
+    status,
+    program,
+    claudeSessionId,
+    lastLine,
+    agentType,
+  } of results) {
+    const row = terminalRow(db, id);
+    const shared = {
+      sessionName,
+      lastLine,
+      claudeSessionId,
+      agentType,
+      title: statusDetector.titleFor(sessionName),
+    };
+    // A program reporting its own state (OSC 7501) beats reading the screen.
+    if (program || !status) {
+      previousStatuses.delete(id);
+      if (program)
+        statusMap[id] = { ...shared, ...programStatusRow(row, program) };
+      continue;
+    }
+    // Track status changes - update DB when session becomes active
+    const prevStatus = previousStatuses.get(id);
+    if (status === "running" || status === "waiting") {
+      if (prevStatus !== status) {
+        sessionsToUpdate.push(id);
+      }
+    }
+    previousStatuses.set(id, status);
+
+    statusMap[id] = { ...shared, ...terminalStatus(row, status) };
+  }
+
+  // Batch update sessions and claude_session_id in a single transaction
+  const updateStatusStmt = db.prepare(
+    "UPDATE sessions SET updated_at = datetime('now') WHERE id = ?"
+  );
+  const updateClaudeIdStmt = db.prepare(
+    "UPDATE sessions SET claude_session_id = ? WHERE id = ? AND (claude_session_id IS NULL OR claude_session_id != ?)"
+  );
+
+  for (const id of sessionsToUpdate) {
+    updateStatusStmt.run(id);
+  }
+
+  // Update claude_session_id directly here instead of requiring separate API calls
+  for (const { id, claudeSessionId } of results) {
+    if (claudeSessionId) {
+      updateClaudeIdStmt.run(claudeSessionId, id, claudeSessionId);
+    }
+  }
+
+  // Chat sessions have no tmux pane: their live conversation is the status.
+  for (const session of db
+    .prepare(
+      `SELECT * FROM sessions WHERE view = 'chat' AND archived_at IS NULL`
+    )
+    .all() as Session[]) {
+    const state = chatState(session.id);
+    const asks =
+      session.role === "orchestrator" ? openAskCount(session.workspace_id) : 0;
+    statusMap[session.id] = {
+      sessionName: session.tmux_name,
+      status:
+        state === "running"
+          ? "running"
+          : needsYou(session, state)
+            ? "waiting"
+            : "idle",
+      task: chatActivityLine(session.id) ?? lastUserTask(session.id),
+      agentType: session.agent_type,
+      need: chatNeed(session, state, asks),
+      unread: session.role !== "orchestrator" && isUnread(session, state),
+      ...(session.role === "orchestrator" && { asks }),
+    };
+  }
+
+  // Cleanup old trackers
+  statusDetector.cleanup();
+
+  return { statuses: statusMap, hostErrors: statusDetector.hostErrors() };
+}
+
+// Callers at the same moment share one pass over tmux.
+let inflight: Promise<StatusSnapshot> | null = null;
+
+export function collectStatuses(): Promise<StatusSnapshot> {
+  inflight ??= collect().finally(() => {
+    inflight = null;
+  });
+  return inflight;
+}
+
+let lastSignature = "";
+
+/**
+ * Whether a terminal may have changed since the last call: "changed" when
+ * output, a title or a program did, "busy" when one only still looked busy
+ * (its cooldown ends with no output to say so). One list-sessions per
+ * machine, cached for two seconds.
+ */
+export async function terminalsChanged(): Promise<"changed" | "busy" | null> {
+  await statusDetector.refreshCache();
+  const signature = statusDetector.signature();
+  const changed = signature !== lastSignature;
+  lastSignature = signature;
+  return changed ? "changed" : heuristicBusy ? "busy" : null;
+}

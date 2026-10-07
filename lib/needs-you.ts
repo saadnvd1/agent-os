@@ -1,7 +1,9 @@
 import { getDb, type Session } from "./db";
 import type { ChatItem, ChatState } from "./chat/events";
 import { openAskCount } from "./orchestrator/asks";
+import { notifyStatusChanged } from "./status/hub";
 import type { SessionNeed } from "./sidebar/shelves";
+import type { ProgramSummary } from "./program-status/records";
 
 // SQLite datetime('now') is UTC without a zone marker.
 const sqliteMs = (t: string | null | undefined) =>
@@ -11,6 +13,7 @@ export function markSeen(sessionId: string): void {
   getDb()
     .prepare(`UPDATE sessions SET last_seen_at = datetime('now') WHERE id = ?`)
     .run(sessionId);
+  notifyStatusChanged();
 }
 
 function latestChatItem(sessionId: string): ChatItem | null {
@@ -113,4 +116,67 @@ export function terminalStatus<S extends string>(
       !!terminal &&
       isUnread(terminal, null),
   };
+}
+
+const BLOCKED_NEED: Record<string, SessionNeed> = {
+  permission: "approve",
+  question: "answer",
+  auth: "signin",
+};
+
+// A terminal whose program reports its own state (OSC 7501): that wins over
+// reading the screen. Blocked needs you whether or not you've seen it; done
+// carries the unread dot until you look. The message is the program's own
+// untrusted text, shown as plain text and nothing else.
+export function programStatusRow(
+  row: SeenFields | undefined,
+  program: ProgramSummary
+): {
+  status: "running" | "waiting" | "idle" | "error";
+  need: SessionNeed | null;
+  unread: boolean;
+  detail: string | null;
+  progress: number | null;
+} {
+  const terminal = row ? { ...row, view: "terminal" as const } : null;
+  const unread = !!terminal && isUnread(terminal, null);
+  const msg = program.msg ?? null;
+  const progress = program.progress ?? null;
+  switch (program.state) {
+    case "blocked":
+      return {
+        status: "waiting",
+        need: (program.kind && BLOCKED_NEED[program.kind]) || "input",
+        unread: false,
+        detail: msg,
+        progress,
+      };
+    case "working":
+      return {
+        status: "running",
+        need: null,
+        unread: false,
+        detail:
+          [msg, progress !== null && `${progress}%`]
+            .filter(Boolean)
+            .join(" · ") || null,
+        progress,
+      };
+    case "error":
+      return {
+        status: "error",
+        need: "failed",
+        unread: false,
+        detail: msg,
+        progress: null,
+      };
+    default:
+      return {
+        status: "idle",
+        need: null,
+        unread,
+        detail: msg,
+        progress: null,
+      };
+  }
 }

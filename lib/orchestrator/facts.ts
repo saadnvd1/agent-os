@@ -11,6 +11,7 @@ import { chatState } from "../chat/runner";
 import { chatActivityLine } from "../chat/activity";
 import { lastUserTask } from "../chat/store";
 import { needsYou } from "../needs-you";
+import { programSummary } from "../program-status/store";
 import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
 
@@ -121,9 +122,22 @@ export async function statusOf(s: Session): Promise<{
   }
   if (!statusDetector.sessionExists(s.tmux_name))
     return { status: "dead", activity: null, needsInput: false };
-  const raw = await statusDetector.getStatus(s.tmux_name);
+  const screen = await statusDetector.getStatus(s.tmux_name);
+  // A program's own report (OSC 7501) is text it chose, so here it can only
+  // make things more cautious: working or blocked count, but a reported done
+  // never turns a busy screen idle for planDone or `done --all-idle`. Its
+  // message never reaches the orchestrator.
+  const program = programSummary(s.tmux_name)?.state;
+  const raw =
+    screen === "running" || program === "working"
+      ? "running"
+      : program === "blocked"
+        ? "waiting"
+        : screen;
   const status: FactStatus =
-    raw === "waiting" && !needsYou({ ...s, view: "terminal" }, null)
+    raw === "waiting" &&
+    program !== "blocked" &&
+    !needsYou({ ...s, view: "terminal" }, null)
       ? "idle"
       : raw;
   const info = sessionRowInfo(status, statusDetector.titleFor(s.tmux_name));

@@ -38,6 +38,10 @@ import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
+import { subscribeStatuses, setStatusSource } from "./lib/status/hub";
+import { collectStatuses, terminalsChanged } from "./lib/status/collect";
+import { startProgramStatusTap } from "./lib/program-status/tap";
+import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
 import os from "os";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -51,6 +55,7 @@ process.env.AGENTOS_PORT = String(port);
 // Fixed for this process and handed to the chat workers it starts.
 buildId();
 ensureBusBrief();
+installClaudeStatusHooks();
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -99,6 +104,18 @@ app.prepare().then(() => {
 
   // Terminal WebSocket server
   const terminalWss = new WebSocketServer({ noServer: true });
+
+  // Session status, pushed: the whole map on connect and on every change.
+  setStatusSource(collectStatuses, terminalsChanged);
+  const programTap = startProgramStatusTap(port);
+  const statusWss = new WebSocketServer({ noServer: true });
+  statusWss.on("connection", (ws: WebSocket) => {
+    const unsubscribe = subscribeStatuses((snapshot) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(snapshot);
+    });
+    ws.on("close", unsubscribe);
+    ws.on("error", unsubscribe);
+  });
 
   // Chat: one socket per watched session. Sends a snapshot, then live items;
   // takes messages and interrupts.
@@ -192,6 +209,13 @@ app.prepare().then(() => {
       return;
     }
 
+    if (pathname === "/ws/status") {
+      statusWss.handleUpgrade(request, socket, head, (ws) => {
+        statusWss.emit("connection", ws, request);
+      });
+      return;
+    }
+
     if (pathname === "/ws/terminal") {
       terminalWss.handleUpgrade(request, socket, head, (ws) => {
         terminalWss.emit("connection", ws, request);
@@ -264,6 +288,7 @@ app.prepare().then(() => {
         if (spec.sessionId && !sshTarget) spec.env = agentEnv(spec.sessionId);
         const { file, args } = buildAttachProcess(spec, sshTarget, shell);
         start(file, args, true);
+        if (!sshTarget) programTap.rescan();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         send({ type: "output", data: `\r\n\x1b[31m${message}\x1b[0m\r\n` });

@@ -4,11 +4,12 @@ import type { Session } from "@/lib/db/types";
 import type { TaskState } from "@/lib/tasks/state";
 
 // Why a session is blocked on you.
-export type SessionNeed = "approve" | "answer" | "input" | "failed";
+export type SessionNeed = "approve" | "answer" | "signin" | "input" | "failed";
 
 export const NEED_LABEL: Record<SessionNeed, string> = {
   approve: "Approve",
   answer: "Answer",
+  signin: "Sign in",
   input: "Input",
   failed: "Failed",
 };
@@ -21,6 +22,8 @@ export interface RowStatus {
   need?: SessionNeed | null;
   unread?: boolean;
   asks?: number;
+  // A program's own message (OSC 7501): untrusted, plain text only.
+  detail?: string | null;
 }
 
 export interface SidebarRow {
@@ -54,7 +57,7 @@ export function needOf(
   task: TaskState | undefined
 ): SessionNeed | null {
   const live = status?.need ?? null;
-  if (live === "approve" || live === "answer") return live;
+  if (live === "approve" || live === "answer" || live === "signin") return live;
   return (
     taskNeed(task) ??
     live ??

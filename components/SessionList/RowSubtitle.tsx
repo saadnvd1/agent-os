@@ -10,8 +10,15 @@ const ATTENTION = (part: string) => part === "paused" || /\basks?$/.test(part);
 
 // Under the title: the project (and its machine when it isn't this one),
 // or for an orchestrator its workspace's live line: "AgentOS · paused ·
-// 3 running · 1 ask".
-export function RowSubtitle({ session }: { session: Session }) {
+// 3 running · 1 ask". A program that reports its own status adds what it
+// said first: "Apply 3 changes? · agent-os" (its text, as plain text).
+export function RowSubtitle({
+  session,
+  detail,
+}: {
+  session: Session;
+  detail?: string | null;
+}) {
   const ctx = useRowContext();
   if (session.role === "orchestrator") {
     const ws = session.workspace_id ?? "";
@@ -42,9 +49,9 @@ export function RowSubtitle({ session }: { session: Session }) {
   const project = ctx.projectNames.get(session.project_id ?? "");
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      {project && (
+      {(project || detail) && (
         <span className="text-muted-foreground/70 truncate text-xs">
-          {project}
+          {[detail?.slice(0, 200), project].filter(Boolean).join(" · ")}
         </span>
       )}
       <HostBadge hostId={session.host_id} />

@@ -45,6 +45,7 @@ import { useSessionStatuses } from "@/hooks/useSessionStatuses";
 import type { Session } from "@/lib/db";
 import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
+import { CLAUDE_STATUS_SETTINGS_FLAG } from "@/lib/program-status/claude-flag";
 import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
@@ -200,10 +201,11 @@ function HomeContent() {
       });
       const flagsStr = flags.join(" ");
 
-      // Local Claude sessions learn about the agent bus (`aos`).
+      // Local Claude sessions learn about the agent bus (`aos`), and report
+      // their state to the sidebar (OSC 7501).
       const busBrief =
         isLocal && provider.id === "claude"
-          ? ' --append-system-prompt-file "$HOME/.agent-os/bus-brief.md"'
+          ? ` --append-system-prompt-file "$HOME/.agent-os/bus-brief.md" ${CLAUDE_STATUS_SETTINGS_FLAG}`
           : "";
       const agentCmd = `${provider.command} ${flagsStr}${busBrief}`;
       // The init script is a file on this machine, so remote sessions run the

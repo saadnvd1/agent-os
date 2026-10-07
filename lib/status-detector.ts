@@ -161,6 +161,8 @@ export interface TmuxSessionInfo {
   path: string;
   attached: boolean;
   windows: number;
+  // The active pane's foreground program.
+  command: string;
   // The active pane's title; Claude Code writes its state and task there.
   title: string;
 }
@@ -168,11 +170,13 @@ export interface TmuxSessionInfo {
 interface SessionCache {
   data: Map<string, TmuxSessionInfo>;
   hostErrors: Map<string, string>;
+  // When the listing behind data began.
+  listedAt: number;
   updatedAt: number;
 }
 
 const LIST_FORMAT =
-  "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_title}";
+  "#{session_name}\t#{session_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_title}";
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
   const { stdout } = await hostExec(
@@ -185,7 +189,7 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [name, activity, path, attached, windows, ...title] =
+      const [name, activity, path, attached, windows, command, ...title] =
         line.split("\t");
       return {
         name,
@@ -194,6 +198,7 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
         path: path || "",
         attached: attached !== "0" && !!attached,
         windows: parseInt(windows, 10) || 1,
+        command: command || "",
         title: title.join("\t"),
       };
     });
@@ -238,6 +243,7 @@ class SessionStatusDetector {
   private cache: SessionCache = {
     data: new Map(),
     hostErrors: new Map(),
+    listedAt: 0,
     updatedAt: 0,
   };
 
@@ -246,6 +252,7 @@ class SessionStatusDetector {
   async refreshCache(): Promise<void> {
     if (Date.now() - this.cache.updatedAt < CONFIG.CACHE_VALIDITY_MS) return;
 
+    const listedAt = Date.now();
     const hosts = listHosts();
     const results = await Promise.allSettled(
       hosts.map((h) => listHostSessions(h.id))
@@ -265,7 +272,7 @@ class SessionStatusDetector {
       }
     });
 
-    this.cache = { data, hostErrors, updatedAt: Date.now() };
+    this.cache = { data, hostErrors, listedAt, updatedAt: Date.now() };
   }
 
   sessionExists(name: string): boolean {
@@ -278,6 +285,22 @@ class SessionStatusDetector {
 
   titleFor(name: string): string {
     return this.cache.data.get(name)?.title ?? "";
+  }
+
+  listedAt(): number {
+    return this.cache.listedAt;
+  }
+
+  foregroundFor(name: string): string | undefined {
+    return this.cache.data.get(name)?.command;
+  }
+
+  // Changes whenever any session's output, title or program does, so a
+  // caller can tell if anything is worth looking at again.
+  signature(): string {
+    return [...this.cache.data.values()]
+      .map((i) => `${i.name}:${i.activity}:${i.command}:${i.title}`)
+      .join("\n");
   }
 
   hostFor(name: string): string | undefined {
@@ -442,4 +465,10 @@ class SessionStatusDetector {
   }
 }
 
-export const statusDetector = new SessionStatusDetector();
+// One per process: the custom server's push and the Next.js routes share
+// its trackers and cache.
+const g = globalThis as unknown as {
+  __agentosStatusDetector?: SessionStatusDetector;
+};
+export const statusDetector = (g.__agentosStatusDetector ??=
+  new SessionStatusDetector());
