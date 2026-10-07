@@ -15,6 +15,9 @@ process.env.AGENTOS_LIMITS_FILE = join(
   "missing.json"
 );
 
+// Nor the owner's phone: a test that sends sets its own notify command.
+delete process.env.AGENTOS_NOTIFY_CMD;
+
 // Under a git hook, GIT_DIR and friends point at this repository, so a test
 // running git in a temp folder would act on it instead (a `git init` there
 // once turned the real repo bare).

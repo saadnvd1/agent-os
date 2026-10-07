@@ -176,6 +176,8 @@ export async function sendMessage(opts: {
   fromId: string | null;
   to: string;
   body: string;
+  // Who it's from when no session sent it (a schedule); the user otherwise.
+  fromLabel?: string;
 }): Promise<{ message: BusMessageView; delivery: Delivery; note?: string }> {
   const body = opts.body.trim();
   if (!body) throw new Error("Message is empty");
@@ -194,7 +196,7 @@ export async function sendMessage(opts: {
     );
   }
 
-  const fromName = from?.name ?? HUMAN;
+  const fromName = from?.name ?? opts.fromLabel ?? HUMAN;
   const { lastInsertRowid } = db
     .prepare(
       `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body) VALUES (?, ?, ?, ?, ?)`

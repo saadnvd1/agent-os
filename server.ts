@@ -36,6 +36,7 @@ import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
 import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
+import { resumePhoneOutbox } from "./lib/notify";
 import {
   bindAddresses,
   requestAllowed,
@@ -473,4 +474,5 @@ app.prepare().then(() => {
   if (process.env.AGENTOS_ORCHESTRATOR !== "off") startOrchestratorWatcher();
   // Schedules tick here, once a minute, and nowhere else.
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
+  resumePhoneOutbox();
 });
