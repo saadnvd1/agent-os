@@ -1,4 +1,5 @@
-// Memory pressure as the OS sees it: macOS's own level, or Linux PSI.
+// Pressure as the OS sees it: macOS's memory level, or Linux PSI (memory
+// and CPU, whichever is worse).
 // Unknown (null) when neither is there; the load average still decides.
 import { execFile } from "child_process";
 import { readFile } from "fs/promises";
@@ -28,6 +29,21 @@ export function parsePsiPressure(text: string): Pressure {
   return "normal";
 }
 
+// /proc/pressure/cpu: share of time something waited for a CPU.
+export function parseCpuPsi(text: string): Pressure {
+  const m = /^some avg10=([\d.]+)/m.exec(text);
+  if (!m) return null;
+  const some = Number(m[1]);
+  return some >= 90 ? "critical" : some >= 60 ? "warn" : "normal";
+}
+
+const RANK = { normal: 1, warn: 2, critical: 3 } as const;
+export const worse = (a: Pressure, b: Pressure): Pressure =>
+  !a ? b : !b ? a : RANK[a] >= RANK[b] ? a : b;
+
+const readOr = (file: string, parse: (t: string) => Pressure) =>
+  readFile(file, "utf8").then(parse, () => null);
+
 export function readPressure(timeoutMs = 2000): Promise<Pressure> {
   if (process.platform === "darwin")
     return new Promise((resolve) =>
@@ -39,9 +55,9 @@ export function readPressure(timeoutMs = 2000): Promise<Pressure> {
       )
     );
   if (process.platform === "linux")
-    return readFile("/proc/pressure/memory", "utf8").then(
-      parsePsiPressure,
-      () => null
-    );
+    return Promise.all([
+      readOr("/proc/pressure/memory", parsePsiPressure),
+      readOr("/proc/pressure/cpu", parseCpuPsi),
+    ]).then(([memory, cpu]) => worse(memory, cpu));
   return Promise.resolve(null);
 }

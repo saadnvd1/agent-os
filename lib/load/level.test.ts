@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { nextLevel, type LoadLevel } from "./level";
-import { parseDarwinPressure, parsePsiPressure } from "./pressure";
+import {
+  parseCpuPsi,
+  parseDarwinPressure,
+  parsePsiPressure,
+  worse,
+} from "./pressure";
 
 const walk = (start: LoadLevel, perCore: number[]) =>
   perCore.reduce<LoadLevel[]>(
@@ -54,5 +59,20 @@ describe("memory pressure", () => {
     expect(parsePsiPressure(psi(12, 1))).toBe("warn");
     expect(parsePsiPressure(psi(30, 6))).toBe("critical");
     expect(parsePsiPressure("nonsense")).toBeNull();
+  });
+
+  it("reads Linux CPU PSI and keeps the worse of the two", () => {
+    expect(parseCpuPsi("some avg10=12.0 avg60=0 avg300=0 total=1\n")).toBe(
+      "normal"
+    );
+    expect(parseCpuPsi("some avg10=65.0 avg60=0 avg300=0 total=1\n")).toBe(
+      "warn"
+    );
+    expect(parseCpuPsi("some avg10=95.0 avg60=0 avg300=0 total=1\n")).toBe(
+      "critical"
+    );
+    expect(worse("normal", "warn")).toBe("warn");
+    expect(worse("critical", "warn")).toBe("critical");
+    expect(worse(null, "normal")).toBe("normal");
   });
 });

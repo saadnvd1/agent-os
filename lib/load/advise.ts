@@ -3,7 +3,7 @@
 import { randomUUID } from "crypto";
 import { db } from "../db";
 import { heavyLabel, heavyNote } from "./heavy";
-import { currentLevel, heavyRegistry } from "./monitor";
+import { currentLevel, heavyRegistry, loadEnabled } from "./monitor";
 
 function sessionName(sessionId: string | null): string | null {
   if (!sessionId) return null;
@@ -19,6 +19,7 @@ export function adviseHeavy(run: {
   label: string;
   pid: number | null;
 }): string | null {
+  if (!loadEnabled()) return null;
   const registry = heavyRegistry();
   const others = registry.active().filter((r) => r.key !== run.key);
   registry.add({ ...run, sessionName: sessionName(run.sessionId) });
@@ -40,7 +41,8 @@ export function hookOutput(
   if (input.tool_name !== "Bash") return "";
   const command = input.tool_input?.command;
   if (typeof command !== "string") return "";
-  const key = `tool:${input.tool_use_id ?? randomUUID()}`;
+  const id = input.tool_use_id;
+  const key = `tool:${typeof id === "string" && /^[\w-]{1,100}$/.test(id) ? id : randomUUID()}`;
   if (event === "PostToolUse") {
     // A background command is still running when its call returns; it
     // ages out instead.

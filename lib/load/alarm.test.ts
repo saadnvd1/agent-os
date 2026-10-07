@@ -20,6 +20,15 @@ describe("the load alarm", () => {
     expect(alarm.feed("red", 4 * MIN)).toBe(true);
   });
 
+  it("starts disarmed after a restart that followed an alert", () => {
+    const alarm = new LoadAlarm(false);
+    alarm.feed("red", 0);
+    expect(alarm.feed("red", 5 * MIN)).toBe(false);
+    alarm.feed("green", 6 * MIN);
+    alarm.feed("green", 16 * MIN);
+    expect(alarm.isArmed).toBe(true);
+  });
+
   it("stays quiet until ten unbroken green minutes", () => {
     const alarm = new LoadAlarm();
     alarm.feed("red", 0);

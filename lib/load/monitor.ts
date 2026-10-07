@@ -53,6 +53,8 @@ const state: State = (g.__agentosLoad ??= {
 });
 
 export const heavyRegistry = () => state.registry;
+// AGENTOS_LOAD=off: no sampling, no notes, no alerts.
+export const loadEnabled = () => process.env.AGENTOS_LOAD !== "off";
 export const currentLevel = () => state.level;
 
 const heavyBySession = (runs: HeavyRun[]) => {
@@ -93,7 +95,28 @@ async function sample(): Promise<void> {
   };
   state.view = view;
   publishLoad(JSON.stringify({ type: "load", load: view }));
-  if (state.alarm.feed(level, Date.now())) raiseAlert(alertText(view));
+  const armed = state.alarm.isArmed;
+  const fire = state.alarm.feed(level, Date.now());
+  if (state.alarm.isArmed !== armed) saveArmed(state.alarm.isArmed);
+  if (fire) raiseAlert(alertText(view));
+}
+
+// Whether the alarm may fire, across restarts: a deploy during a long red
+// stretch mustn't send the same alert again.
+const ARMED_KEY = "load.alarm_armed";
+
+function readArmed(): boolean {
+  const row = db
+    .prepare(`SELECT value FROM settings WHERE key = ?`)
+    .get(ARMED_KEY) as { value: string } | undefined;
+  return row?.value !== "0";
+}
+
+function saveArmed(armed: boolean): void {
+  db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(ARMED_KEY, armed ? "1" : "0");
 }
 
 async function sampleUsage(): Promise<void> {
@@ -137,6 +160,7 @@ function guarded(fn: () => Promise<void>): () => Promise<void> {
 
 export function startLoadMonitor(): void {
   if (state.timers.length) return;
+  state.alarm = new LoadAlarm(readArmed());
   const tickSample = guarded(sample);
   const tickUsage = guarded(async () => {
     await sampleUsage();

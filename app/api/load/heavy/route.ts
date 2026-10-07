@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adviseHeavy } from "@/lib/load/advise";
-import { heavyLabel } from "@/lib/load/heavy";
+import { heavyLabel, programName } from "@/lib/load/heavy";
 
 // `aos heavy -- <cmd>`: the command is already running; register it and say
 // what else is.
@@ -17,11 +17,7 @@ export async function POST(request: NextRequest) {
       key: `pid:${pid}`,
       sessionId: session === null ? null : String(session),
       // Only a program's name reaches other agents, never its arguments.
-      label:
-        heavyLabel(text) ??
-        (text.split(/\s+/)[0].split("/").pop() ?? "")
-          .replace(/[^\w.-]/g, "")
-          .slice(0, 40),
+      label: heavyLabel(text) ?? (programName(text) || "command"),
       pid,
     });
     return NextResponse.json({ note });

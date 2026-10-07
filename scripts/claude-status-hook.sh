@@ -61,21 +61,24 @@ asking() {
 # commands are running or the load is red. Advisory: the command runs either
 # way, at once. A slow or missing server means no note.
 heavy() {
-  case "$input" in *'"Bash"'*) ;; *) return 0 ;; esac
-  case "$input" in
+  [ "$(field tool_name)" = Bash ] || return 0
+  # The command only: a description saying "build" isn't one.
+  case "$(field command)" in
     *vitest* | *tsc* | *"next build"* | *eslint* | *xcodebuild* | *pytest* | \
-      *jest* | *"npm "* | *"pnpm "* | *"yarn "* | *"bun "*) ;;
+      *jest* | *" test"* | *typecheck* | *lint* | *build*) ;;
     *) return 0 ;;
   esac
   where="${AGENTOS_URL:-http://127.0.0.1:3011}/api/load/hook?event=$1&session=$AGENTOS_SESSION_ID"
-  if [ -n "$AGENTOS_TOKEN" ]; then
-    out=$(printf '%s' "$input" | curl -s --connect-timeout 0.05 --max-time 0.2 \
-      -H 'Content-Type: application/json' \
-      -H "Authorization: Bearer $AGENTOS_TOKEN" --data-binary @- "$where" 2>/dev/null)
-  else
-    out=$(printf '%s' "$input" | curl -s --connect-timeout 0.05 --max-time 0.2 \
-      -H 'Content-Type: application/json' --data-binary @- "$where" 2>/dev/null)
-  fi
+  # The token goes in through a config on fd 3, never argv (ps shows argv).
+  auth=
+  [ -z "$AGENTOS_TOKEN" ] ||
+    auth="header = \"Authorization: Bearer $AGENTOS_TOKEN\""
+  out=$(printf '%s' "$input" | curl -s --max-time 0.05 -K /dev/fd/3 \
+    -H 'Content-Type: application/json' --data-binary @- "$where" 2>/dev/null 3<<EOF
+$auth
+EOF
+)
+  [ "$1" = PreToolUse ] || return 0
   case "$out" in '{"hookSpecificOutput"'*) printf '%s\n' "$out" ;; esac
 }
 

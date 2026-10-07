@@ -9,12 +9,18 @@ export const QUIET_GREEN_MS = 10 * 60_000;
 export class LoadAlarm {
   private redSince: number | null = null;
   private greenSince: number | null = null;
-  private armed = true;
 
+  // armed: false when an alert went out before a restart and the load
+  // hasn't been quiet since (kept in the database by the monitor).
   constructor(
+    private armed = true,
     private redForMs = RED_FOR_MS,
     private quietGreenMs = QUIET_GREEN_MS
   ) {}
+
+  get isArmed(): boolean {
+    return this.armed;
+  }
 
   // True exactly when an alert should go out now.
   feed(level: LoadLevel, now: number): boolean {

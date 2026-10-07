@@ -63,6 +63,14 @@ function segmentLabel(w: string[]): string | null {
   return null;
 }
 
+// The program a command line runs, without its arguments or any VAR=value
+// before it: what other agents may be shown.
+export function programName(command: string): string {
+  const first = command.split(SEP)[0] ?? "";
+  const w = words(first)[0] ?? "";
+  return (w.split("/").pop() ?? "").replace(/[^\w.-]/g, "").slice(0, 40);
+}
+
 // What kind of heavy command this is, or null for anything else.
 export function heavyLabel(command: string): string | null {
   for (const segment of command.split(SEP)) {
@@ -85,6 +93,9 @@ export interface HeavyRun {
 // A tool call's PostToolUse can go missing (a killed session); a call
 // running longer than this is forgotten.
 export const STALE_MS = 15 * 60_000;
+// Fed by requests: bounded however many arrive.
+export const MAX_RUNS = 256;
+const MAX_KEY = 200;
 
 const pidAlive = (pid: number) => {
   try {
@@ -102,10 +113,14 @@ export class HeavyRegistry {
     private alive: (pid: number) => boolean = pidAlive
   ) {}
 
-  add(run: Omit<HeavyRun, "startedAt">): HeavyRun {
-    const full = { ...run, startedAt: this.now() };
-    this.runs.set(run.key, full);
-    return full;
+  add(run: Omit<HeavyRun, "startedAt">): void {
+    if (run.key.length > MAX_KEY) return;
+    if (!this.runs.has(run.key) && this.active().length >= MAX_RUNS) {
+      // Oldest first: a Map keeps insertion order.
+      const oldest = this.runs.keys().next().value;
+      if (oldest !== undefined) this.runs.delete(oldest);
+    }
+    this.runs.set(run.key, { ...run, startedAt: this.now() });
   }
 
   finish(key: string): void {

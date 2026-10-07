@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import net from "node:net";
 import {
   chmodSync,
   existsSync,
@@ -25,7 +26,11 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "load-hook-"));
 });
 
-function run(event: string, input: object) {
+function run(
+  event: string,
+  input: object,
+  extraEnv: Record<string, string> = {}
+) {
   const start = Date.now();
   const result = spawnSync("sh", [SCRIPT, event], {
     input: JSON.stringify(input),
@@ -34,6 +39,7 @@ function run(event: string, input: object) {
       PATH: `${dir}:/usr/bin:/bin`,
       AGENTOS_URL: "http://127.0.0.1:1",
       AGENTOS_SESSION_ID: "abc",
+      ...extraEnv,
     },
     encoding: "utf-8",
   });
@@ -56,6 +62,39 @@ describe("the hook's heavy-command note", () => {
     );
   });
 
+  it("forwards PostToolUse so the server can clear the call, printing nothing", () => {
+    fakeCurl(
+      `echo "$@" > ${JSON.stringify(join(dir, "args"))}; printf '%s' '${NOTE}'`
+    );
+    expect(run("PostToolUse", heavy)).toMatchObject({ code: 0, stdout: "" });
+    expect(readFileSync(join(dir, "args"), "utf8")).toContain(
+      "event=PostToolUse"
+    );
+  });
+
+  it("passes the token in a config on fd 3, never on the command line", () => {
+    fakeCurl(
+      `echo "$@" > ${JSON.stringify(join(dir, "args"))}; cat /dev/fd/3 > ${JSON.stringify(join(dir, "config"))}`
+    );
+    run("PreToolUse", heavy, { AGENTOS_TOKEN: "sekrit-token" });
+    expect(readFileSync(join(dir, "args"), "utf8")).not.toContain("sekrit");
+    expect(readFileSync(join(dir, "config"), "utf8")).toContain(
+      'header = "Authorization: Bearer sekrit-token"'
+    );
+  });
+
+  it("looks at the command, not its description", () => {
+    fakeCurl(`touch ${JSON.stringify(join(dir, "called"))}`);
+    run("PreToolUse", {
+      tool_name: "Bash",
+      tool_input: {
+        command: "git status",
+        description: "Check the build and lint",
+      },
+    });
+    expect(existsSync(join(dir, "called"))).toBe(false);
+  });
+
   it("never asks the server about a light command", () => {
     fakeCurl(`touch ${JSON.stringify(join(dir, "called"))}`);
     const r = run("PreToolUse", {
@@ -72,6 +111,22 @@ describe("the hook's heavy-command note", () => {
     expect(run("PreToolUse", heavy)).toMatchObject({ code: 0, stdout: "" });
     fakeCurl("echo '<html>500</html>'");
     expect(run("PreToolUse", heavy)).toMatchObject({ code: 0, stdout: "" });
+  });
+
+  it("gives up on a server that accepts and never answers", async () => {
+    const server = net.createServer(() => {});
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const { port } = server.address() as net.AddressInfo;
+    try {
+      const r = run("PreToolUse", heavy, {
+        AGENTOS_URL: `http://127.0.0.1:${port}`,
+      });
+      expect(r).toMatchObject({ code: 0, stdout: "" });
+      // curl's own limit is 50ms; the rest is starting sh, awk and curl.
+      expect(r.ms).toBeLessThan(500);
+    } finally {
+      server.close();
+    }
   });
 
   it("gives up on an unreachable server fast", () => {

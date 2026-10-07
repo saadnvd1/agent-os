@@ -50,7 +50,7 @@ import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
 import { subscribeStatuses, setStatusSource } from "./lib/status/hub";
-import { startLoadMonitor } from "./lib/load/monitor";
+import { loadEnabled, startLoadMonitor } from "./lib/load/monitor";
 import { collectStatuses, terminalsChanged } from "./lib/status/collect";
 import { startProgramStatusTap } from "./lib/program-status/tap";
 import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
@@ -503,5 +503,5 @@ app.prepare().then(() => {
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
   resumePhoneOutbox();
   // Machine load: a gauge, notes on heavy commands, one alert when red.
-  if (process.env.AGENTOS_LOAD !== "off") startLoadMonitor();
+  if (loadEnabled()) startLoadMonitor();
 });

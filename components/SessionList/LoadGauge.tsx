@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 const DOT: Record<LoadView["level"], string> = {
   green: "bg-green-500",
   amber: "bg-amber-500",
-  red: "bg-red-500",
+  red: "bg-destructive",
 };
 
 // "Load 4.2 on 10 cores · memory normal"
