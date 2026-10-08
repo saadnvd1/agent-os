@@ -2,6 +2,7 @@
 // program's own reports (OSC 7501) or, failing that, their screen; chats
 // from their live conversation. Shared by GET /api/sessions/status and the
 // pushed /ws/status stream.
+import { controlManager } from "../tmux/control";
 import { managedPanes } from "./managed";
 import { findResumeId } from "../providers/resume-ids";
 import {
@@ -71,9 +72,26 @@ async function getTmuxSessions(): Promise<string[]> {
   return sessions.map((s) => s.name);
 }
 
+// A session watched through control mode answers over its client: no
+// process started. Others are asked with `tmux` as before.
+async function askTmux(
+  sessionName: string,
+  args: string[]
+): Promise<{ stdout: string }> {
+  const lines = await controlManager()?.query(
+    sessionName,
+    // tmux's command syntax: plain words as they are, anything else (a
+    // format's "#{...}") in single quotes. Session names are [\w.-] only.
+    args
+      .map((a) => (/^[\w=:.-]+$/.test(a) ? a : `'${a.replace(/'/g, "")}'`))
+      .join(" ")
+  );
+  return lines ? { stdout: lines.join("\n") } : tmuxOn(sessionName, args);
+}
+
 async function getTmuxSessionCwd(sessionName: string): Promise<string | null> {
   try {
-    const { stdout } = await tmuxOn(sessionName, [
+    const { stdout } = await askTmux(sessionName, [
       "display-message",
       "-t",
       sessionName,
@@ -92,7 +110,7 @@ async function getClaudeSessionIdFromEnv(
   sessionName: string
 ): Promise<string | null> {
   try {
-    const { stdout } = await tmuxOn(sessionName, [
+    const { stdout } = await askTmux(sessionName, [
       "show-environment",
       "-t",
       sessionName,
@@ -111,18 +129,38 @@ async function getClaudeSessionIdFromEnv(
   }
 }
 
-// It rarely changes, and finding it reads a directory: once a minute is plenty.
-const claudeIds = new Map<string, { id: string | null; at: number }>();
-const CLAUDE_ID_MS = 60000;
+// It rarely changes, and finding it asks tmux and reads a directory: a found
+// id is looked at again every few minutes, and a session with none yet backs
+// off from one minute to ten.
+const claudeIds = new Map<
+  string,
+  { id: string | null; at: number; wait: number }
+>();
+export const RESUME_ID_FOUND_MS = 5 * 60_000;
+const RESUME_ID_MISS_MS = 60_000;
+const RESUME_ID_MAX_MS = 10 * 60_000;
+
+export function resumeIdWait(
+  previous: { id: string | null; wait: number } | undefined,
+  id: string | null
+): number {
+  if (id) return RESUME_ID_FOUND_MS;
+  if (!previous || previous.id) return RESUME_ID_MISS_MS;
+  return Math.min(previous.wait * 2, RESUME_ID_MAX_MS);
+}
 
 async function getClaudeSessionId(
   sessionName: string,
   agent: AgentType
 ): Promise<string | null> {
   const cached = claudeIds.get(sessionName);
-  if (cached && Date.now() - cached.at < CLAUDE_ID_MS) return cached.id;
+  if (cached && Date.now() - cached.at < cached.wait) return cached.id;
   const id = await findResumeIdFor(sessionName, agent);
-  claudeIds.set(sessionName, { id, at: Date.now() });
+  claudeIds.set(sessionName, {
+    id,
+    at: Date.now(),
+    wait: resumeIdWait(cached, id),
+  });
   return id;
 }
 
@@ -410,13 +448,16 @@ let lastSignature = "";
 export async function terminalsChanged(): Promise<"changed" | "busy" | null> {
   await statusDetector.refreshCache();
   const signature = statusDetector.signature();
+  // Output a control client saw (lib/tmux/control.ts) is a terminal that
+  // looks busy: looked at again every few seconds, not on every tick.
+  const printed = controlManager()?.takeActivity() ?? false;
   const changed = signature !== lastSignature;
   lastSignature = signature;
   // Typed text that just crossed the unsent threshold changes nothing on
   // screen, so the time alone says to look again.
   return changed || statusDetector.unsentDue()
     ? "changed"
-    : heuristicBusy
+    : heuristicBusy || printed
       ? "busy"
       : null;
 }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { SessionStatus } from "@/components/views/types";
-import { applyStreamMessage } from "./stream";
+import {
+  applyStreamMessage,
+  HIDDEN_MS,
+  reconnectOnReturn,
+  SILENT_MS,
+  silentTooLong,
+} from "./stream";
 
 const st = (status: string) => ({ status }) as unknown as SessionStatus;
 
@@ -55,5 +61,23 @@ describe("applyStreamMessage", () => {
     expect(applyStreamMessage({ epoch: "e", seq: 6 }, {}, delta)).toEqual({
       position: { epoch: "e", seq: 7 },
     });
+  });
+});
+
+describe("when the stream reconnects", () => {
+  it("after the pings stop, not before", () => {
+    expect(silentTooLong(true, 0, SILENT_MS)).toBe(false);
+    expect(silentTooLong(true, 0, SILENT_MS + 1)).toBe(true);
+    // A socket that isn't open is the reconnect timer's to handle.
+    expect(silentTooLong(false, 0, SILENT_MS * 2)).toBe(false);
+  });
+
+  it("on return after being hidden a while, or with the socket closed", () => {
+    const OPEN = 1;
+    expect(reconnectOnReturn(OPEN, 1000, 1000 + HIDDEN_MS)).toBe(false);
+    expect(reconnectOnReturn(OPEN, 1000, 1000 + HIDDEN_MS + 1)).toBe(true);
+    expect(reconnectOnReturn(OPEN, 0, 10 ** 9)).toBe(false);
+    expect(reconnectOnReturn(3, 0, 0)).toBe(true);
+    expect(reconnectOnReturn(2, 0, 0)).toBe(true);
   });
 });

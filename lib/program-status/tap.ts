@@ -40,7 +40,7 @@ const MAX_PENDING = REPORTS_PER_SECOND + MAX_DEFERRED;
 
 interface Tap {
   socket: net.Socket;
-  scanner: OscScanner;
+  feed: ReturnType<typeof createProgramFeed>;
 }
 
 const taps = new Map<string, Tap>();
@@ -106,17 +106,22 @@ export function covered(key: string, clear: OscEvent): boolean {
   return id === "" || reportId === id || reportId.startsWith(id + "/");
 }
 
-// Exported for tests.
-export function acceptTapConnection(socket: net.Socket): void {
-  let name: string | null = null;
-  let header = "";
-  // Reports from one pane are applied in order, coalesced while busy. Past
-  // REPORTS_PER_SECOND, the rest of that second's wait (the newest per
-  // record, a bounded few) and go in when the second ends: a burst can't
-  // lose the report that ends it.
+/**
+ * One pane's output, scanned for OSC 7501 and applied. Reports from one pane
+ * are applied in order, coalesced while busy. Past REPORTS_PER_SECOND, the
+ * rest of that second's wait (the newest per record, a bounded few) and go
+ * in when the second ends: a burst can't lose the report that ends it. Fed
+ * by a pipe-pane tap or a control-mode client (lib/tmux/control.ts).
+ */
+export function createProgramFeed(name: string): {
+  push: (latin1: string) => void;
+  close: () => void;
+} {
+  const scanner = new OscScanner();
   let pending = new Map<string, OscEvent>();
   const deferred = new Map<string, OscEvent>();
   let flush: ReturnType<typeof setTimeout> | null = null;
+  let closed = false;
   const queue = (into: Map<string, OscEvent>, event: OscEvent) => {
     // A newer report for the same record replaces the queued one, at its
     // new place in line.
@@ -132,18 +137,61 @@ export function acceptTapConnection(socket: net.Socket): void {
   let draining = false;
   let windowStart = 0;
   let inWindow = 0;
-  const drain = async (paneName: string) => {
+  const drain = async () => {
     draining = true;
-    while (pending.size > 0) {
+    while (pending.size > 0 && !closed) {
       const batch = [...pending.values()];
       pending = new Map();
       for (const event of batch)
-        await handle(paneName, event).catch((err) =>
+        await handle(name, event).catch((err) =>
           console.error("[osc7501]", err?.message ?? err)
         );
     }
     draining = false;
   };
+  return {
+    push(data) {
+      if (closed) return;
+      for (const event of scanner.push(data)) {
+        const now = Date.now();
+        if (now - windowStart >= 1000) {
+          windowStart = now;
+          inWindow = 0;
+          // Last second's leftovers go first, ahead of anything newer, even
+          // if their timer hasn't fired yet.
+          if (flush) clearTimeout(flush);
+          flush = null;
+          for (const e of deferred.values()) queue(pending, e);
+          deferred.clear();
+        }
+        if (++inWindow <= REPORTS_PER_SECOND) {
+          queue(pending, event);
+          continue;
+        }
+        queue(deferred, event);
+        flush ??= setTimeout(
+          () => {
+            flush = null;
+            for (const e of deferred.values()) queue(pending, e);
+            deferred.clear();
+            if (!draining && pending.size > 0) void drain();
+          },
+          Math.max(0, 1000 - (now - windowStart))
+        );
+      }
+      if (!draining && pending.size > 0) void drain();
+    },
+    close() {
+      closed = true;
+      if (flush) clearTimeout(flush);
+    },
+  };
+}
+
+// Exported for tests.
+export function acceptTapConnection(socket: net.Socket): void {
+  let name: string | null = null;
+  let header = "";
   socket.setEncoding("latin1");
   socket.on("error", () => socket.destroy());
   socket.on("data", (chunk: string) => {
@@ -162,47 +210,22 @@ export function acceptTapConnection(socket: net.Socket): void {
       name = claimed;
       const previous = taps.get(name);
       if (previous && previous.socket !== socket) previous.socket.destroy();
-      taps.set(name, { socket, scanner: new OscScanner() });
+      taps.set(name, { socket, feed: createProgramFeed(name) });
     }
     const tap = taps.get(name);
     if (!tap || tap.socket !== socket) return void socket.destroy();
-    for (const event of tap.scanner.push(data)) {
-      const now = Date.now();
-      if (now - windowStart >= 1000) {
-        windowStart = now;
-        inWindow = 0;
-        // Last second's leftovers go first, ahead of anything newer, even
-        // if their timer hasn't fired yet.
-        if (flush) clearTimeout(flush);
-        flush = null;
-        for (const e of deferred.values()) queue(pending, e);
-        deferred.clear();
-      }
-      if (++inWindow <= REPORTS_PER_SECOND) {
-        queue(pending, event);
-        continue;
-      }
-      queue(deferred, event);
-      const paneName = name;
-      flush ??= setTimeout(
-        () => {
-          flush = null;
-          for (const e of deferred.values()) queue(pending, e);
-          deferred.clear();
-          if (!draining && pending.size > 0) void drain(paneName);
-        },
-        Math.max(0, 1000 - (now - windowStart))
-      );
-    }
-    if (!draining && pending.size > 0) void drain(name);
+    tap.feed.push(data);
   });
   socket.on("close", () => {
-    if (flush) clearTimeout(flush);
-    if (name && taps.get(name)?.socket === socket) taps.delete(name);
+    const tap = name ? taps.get(name) : undefined;
+    if (tap?.socket === socket) {
+      tap.feed.close();
+      taps.delete(name!);
+    }
   });
 }
 
-function ownedSessions(): Set<string> {
+export function ownedSessions(): Set<string> {
   const rows = getDb()
     .prepare(
       `SELECT tmux_name FROM sessions
