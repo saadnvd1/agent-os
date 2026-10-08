@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Host } from "@/lib/db";
 import type { DiscoveredSession } from "@/lib/hosts/discover";
 import { hostKeys } from "./keys";
+import { usePollWhenOffline } from "../push/connection";
 
 async function json<T>(res: Response): Promise<T> {
   const data = await res.json();
@@ -31,7 +32,8 @@ export function useDiscoveredTmuxQuery() {
         sessions: DiscoveredSession[];
         hostErrors: Record<string, string>;
       }>(await fetch("/api/tmux/discover")),
-    refetchInterval: 5000,
+    // Pushed when the set of sessions found changes ("discovered").
+    refetchInterval: usePollWhenOffline(5000),
   });
 }
 

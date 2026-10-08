@@ -69,6 +69,9 @@ export function initDb(): Database.Database {
     // Enable WAL mode for better concurrency
     db.pragma("journal_mode = WAL");
     db.pragma("busy_timeout = 10000");
+    // The WAL is truncated back to this after a checkpoint instead of
+    // keeping its largest size on disk.
+    db.pragma("journal_size_limit = 67108864");
 
     // Create tables and indexes
     createSchema(db);

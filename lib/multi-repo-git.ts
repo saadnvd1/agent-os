@@ -2,12 +2,8 @@
  * Multi-repository git status aggregation
  */
 
-import {
-  getGitStatus,
-  isGitRepo,
-  expandPath,
-  type GitFile,
-} from "./git-status";
+import { sharedGitStatus } from "./git-poller";
+import { isGitRepo, expandPath, type GitFile } from "./git-status";
 import type { ProjectRepository } from "./db";
 
 /**
@@ -93,7 +89,7 @@ export async function getMultiRepoGitStatus(
     }
 
     try {
-      const status = await getGitStatus(expandedPath);
+      const status = await sharedGitStatus(expandedPath);
 
       // Add repository status
       result.repositories.push({

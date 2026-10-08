@@ -51,7 +51,19 @@ import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
-import { subscribeStatuses, setStatusSource } from "./lib/status/hub";
+import {
+  subscribeStatuses,
+  subscribeStream,
+  setStatusSource,
+  setTopicSignature,
+  setRunFinished,
+} from "./lib/status/hub";
+import { refreshGitSoon, unwatchGit, watchGit } from "./lib/git-poller";
+import { changeWatcher } from "./lib/db/changes";
+import { getDb } from "./lib/db";
+import { discoveredSignature } from "./lib/hosts/discover-signature";
+import { sendBounded, DEFLATE } from "./lib/ws-send";
+import { compressJson } from "./lib/http-compress";
 import { loadEnabled, startLoadMonitor } from "./lib/load/monitor";
 import { collectStatuses, terminalsChanged } from "./lib/status/collect";
 import { startProgramStatusTap } from "./lib/program-status/tap";
@@ -113,6 +125,7 @@ app.prepare().then(() => {
     }
     if (!gateRequest(req, res, auth)) return;
     try {
+      await compressJson(req, res);
       const parsedUrl = parse(req.url!, true);
       await handle(req, res, parsedUrl);
     } catch (err) {
@@ -123,30 +136,75 @@ app.prepare().then(() => {
   };
 
   // Terminal WebSocket server
-  const terminalWss = new WebSocketServer({ noServer: true });
+  const terminalWss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: DEFLATE,
+  });
 
-  // Session status, pushed: the whole map on connect and on every change.
-  setStatusSource(collectStatuses, terminalsChanged);
+  // Session status and what changed, pushed (lib/status/hub). `v=2` asks for
+  // the numbered stream and resumes from `epoch`/`seq`; without it, the whole
+  // map on connect and on every change.
+  setStatusSource(collectStatuses, terminalsChanged, changeWatcher(getDb));
+  setTopicSignature("discovered", discoveredSignature);
+  // A finished run likely changed files: the git panel showing them updates.
+  setRunFinished((id) => {
+    const s = getDb()
+      .prepare(
+        `SELECT worktree_path, working_directory FROM sessions WHERE id = ?`
+      )
+      .get(id) as
+      | { worktree_path: string | null; working_directory: string }
+      | undefined;
+    if (s) refreshGitSoon(s.worktree_path || s.working_directory);
+  });
   const programTap = startProgramStatusTap(port);
-  const statusWss = new WebSocketServer({ noServer: true });
-  statusWss.on("connection", (ws: WebSocket) => {
-    const unsubscribe = subscribeStatuses((snapshot) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(snapshot);
+  const statusWss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: DEFLATE,
+  });
+  statusWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
+    const params = new URL(request.url ?? "", "http://x").searchParams;
+    const send = (json: string) => sendBounded(ws, json);
+    const seq = Number(params.get("seq"));
+    const epoch = params.get("epoch");
+    const unsubscribe =
+      params.get("v") === "2"
+        ? subscribeStream(
+            send,
+            epoch && Number.isInteger(seq) ? { epoch, seq } : undefined
+          )
+        : subscribeStatuses(send);
+    // The git folders this browser shows, polled for it (lib/git-poller).
+    ws.on("message", (raw: Buffer) => {
+      try {
+        const msg = JSON.parse(raw.toString()) as {
+          type?: unknown;
+          dirs?: unknown;
+        };
+        if (msg.type === "watch_git") watchGit(ws, msg.dirs);
+      } catch {
+        // Not a message this server reads.
+      }
     });
-    ws.on("close", unsubscribe);
-    ws.on("error", unsubscribe);
+    const done = () => {
+      unsubscribe();
+      unwatchGit(ws);
+    };
+    ws.on("close", done);
+    ws.on("error", done);
   });
 
   // Chat: one socket per watched session. Sends a snapshot, then live items;
   // takes messages and interrupts.
-  const chatWss = new WebSocketServer({ noServer: true });
+  const chatWss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: DEFLATE,
+  });
   chatWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
     const params = new URL(request.url ?? "", "http://x").searchParams;
     const sessionId = params.get("session");
     if (!sessionId) return ws.close();
-    const reply = (m: ChatServerMessage) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
-    };
+    const reply = (m: ChatServerMessage) => sendBounded(ws, JSON.stringify(m));
     const fail = (err: unknown) =>
       reply({
         type: "item",

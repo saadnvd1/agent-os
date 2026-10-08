@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { forgetGitStatus } from "@/lib/git-poller";
 import {
   commit,
   isGitRepo,
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
     // Commit
     const output = commit(path, message);
 
+    forgetGitStatus(path);
     return NextResponse.json({
       success: true,
       output,

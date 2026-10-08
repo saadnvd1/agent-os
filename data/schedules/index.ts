@@ -3,6 +3,7 @@ import type { ScheduleInput, ScheduleRun, ScheduleView } from "@/lib/schedules";
 import type { RunResult } from "@/lib/schedules/run";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "../tasks";
+import { usePollWhenOffline } from "../push/connection";
 
 export const scheduleKeys = {
   all: ["schedules"] as const,
@@ -37,7 +38,8 @@ export function useSchedulesQuery(workspaceId: string | null, enabled = true) {
         )
       ).schedules,
     enabled,
-    refetchInterval: 15000,
+    // Pushed when schedules or their runs change.
+    refetchInterval: usePollWhenOffline(15000),
   });
 }
 
@@ -49,7 +51,7 @@ export function useScheduleQuery(id: string | null) {
         `/api/schedules/${id}`
       ),
     enabled: !!id,
-    refetchInterval: 10000,
+    refetchInterval: usePollWhenOffline(10000),
   });
 }
 

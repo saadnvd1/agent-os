@@ -1,3 +1,4 @@
+import { installChangeTriggers } from "./changes";
 import type Database from "better-sqlite3";
 
 interface Migration {
@@ -977,6 +978,29 @@ const migrations: Migration[] = [
       db.exec(
         `CREATE INDEX IF NOT EXISTS idx_chat_items_kind ON chat_items(session_id, kind, seq)`
       );
+    },
+  },
+  {
+    id: 45,
+    name: "change_versions",
+    up: (db) => {
+      // What browsers show from these tables is pushed when they change
+      // (lib/db/changes.ts) instead of polled. A table added later gets its
+      // own migration.
+      installChangeTriggers(db, [
+        "sessions",
+        "projects",
+        "groups",
+        "workspaces",
+        "hosts",
+        "stacks",
+        "stack_items",
+        "bus_messages",
+        "schedules",
+        "schedule_runs",
+        "orchestrator_asks",
+        "dev_servers",
+      ]);
     },
   },
 ];

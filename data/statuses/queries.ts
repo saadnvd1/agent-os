@@ -39,9 +39,10 @@ export function useSessionStatusesQuery({
     queryKey: statusKeys.all,
     queryFn: fetchStatuses,
     staleTime: 2000,
-    // Changes are pushed; polling only covers a stream that's down.
+    // Changes are pushed and a reconnect resumes or resnapshots; polling
+    // only covers a stream that's down.
     refetchInterval: (query) => {
-      if (streaming) return 60000;
+      if (streaming) return false;
       const statuses = query.state.data?.statuses;
       if (!statuses) return 5000;
 

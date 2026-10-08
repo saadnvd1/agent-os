@@ -459,9 +459,15 @@ project and holds that project's own actions: new session, terminal, dev
 server, settings, board, workspace.
 
 Rows move the moment a session changes state: the server pushes every change
-over `/ws/status` (behind the same device gate as the terminal). While it's
-connected, polling drops to once a minute; while it's down, polling carries on
-as before and the socket reconnects with backoff.
+over `/ws/status` (behind the same device gate as the terminal). The same
+stream says when anything else on screen changed: database triggers mark the
+tables written (sessions, stacks, schedules, asks, bus messages and more,
+whoever wrote them), and the git panel's folders are polled once on the
+server for every viewer. The browser refetches only what moved, so an idle tab
+makes about one request a minute instead of forty. Messages are numbered: a
+reconnecting phone picks up what it missed, or takes a fresh snapshot when
+it's been away too long. While the socket is down, the old polling carries on.
+API JSON is gzipped and the sockets use permessage-deflate.
 
 **AgentOS reads OSC 7501**, the [Program Status
 Protocol](https://www.superlogical.com/rex/docs/build/program-status): a
@@ -743,6 +749,13 @@ scripts/redeploy --rollback  # put the previous build back and restart
 in by rename only once it finished with a `BUILD_ID`, right before the restart.
 The build it replaced is kept in `.next-prev` for one rollback, and a failed
 build leaves `.next` as it was.
+
+`scripts/perf/loadtest.mjs` starts a throwaway AgentOS (its own HOME,
+database, port and tmux socket) with N idle sessions and reports RSS, file
+descriptors, child processes and spawns per minute; `scripts/perf/execs.mjs
+--pid <pid>` counts what any server spawns, grouped by command. Both count
+spawns with eslogger (macOS) or strace (Linux) and need passwordless sudo for
+that one number. Run them on a machine with room to spare.
 
 A pre-commit hook formats and lints staged files, then typechecks and runs the
 tests. CI runs `scripts/check --build` on every pull request and push to main,

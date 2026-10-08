@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { BusMessageView, Delivery, Peer } from "@/lib/bus";
+import { usePollWhenOffline } from "../push/connection";
 
 export const busKeys = {
   all: ["bus"] as const,
@@ -22,7 +23,8 @@ export function useBusMessages(enabled = true) {
           await fetch("/api/bus/messages")
         )
       ).messages,
-    refetchInterval: 3000,
+    // Pushed when a message is written; polled only while the stream is down.
+    refetchInterval: usePollWhenOffline(3000),
     enabled,
   });
 }
@@ -32,7 +34,9 @@ export function useBusPeers(enabled = true) {
     queryKey: busKeys.peers(),
     queryFn: async () =>
       (await json<{ peers: Peer[] }>(await fetch("/api/bus/peers"))).peers,
-    refetchInterval: 10000,
+    // Each peer's live status is read when asked, not pushed: looked at
+    // every 30s (10s while the stream is down), and when sessions change.
+    refetchInterval: usePollWhenOffline(10000) || 30000,
     enabled,
   });
 }

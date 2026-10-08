@@ -5,6 +5,7 @@ import type {
 } from "@/lib/orchestrator/overview";
 import { provePresence } from "../presence";
 import { statusKeys } from "../sessions/keys";
+import { usePollWhenOffline } from "../push/connection";
 
 export const orchestratorKeys = {
   all: ["orchestrators"] as const,
@@ -36,7 +37,9 @@ export function useOrchestratorsQuery() {
         )
       ).workspaces,
     staleTime: 3000,
-    refetchInterval: 5000,
+    // Pushed when asks, workspaces or sessions change; stale asks are
+    // settled by the orchestrator's watcher.
+    refetchInterval: usePollWhenOffline(5000),
   });
 }
 
