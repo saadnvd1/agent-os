@@ -149,3 +149,25 @@ describe("the Claude Code status hook", () => {
     expect(r.events).toEqual([]);
   });
 });
+
+describe("commands that would take down every session", () => {
+  const bash = (command: string) =>
+    run("PreToolUse", { tool_name: "Bash", tool_input: { command } });
+  const denied = (r: ReturnType<typeof run>) =>
+    r.stdout.includes('"permissionDecision":"deny"');
+
+  it("refuses tmux kill-server unless it names a test server", () => {
+    expect(denied(bash("TMUX_TMPDIR=/tmp/t tmux kill-server"))).toBe(true);
+    expect(denied(bash("tmux kill-server"))).toBe(true);
+    expect(denied(bash("tmux -S /tmp/t/sock kill-server"))).toBe(false);
+    expect(denied(bash("tmux -L loadtest kill-server"))).toBe(false);
+  });
+
+  it("refuses pattern kills, and leaves other commands alone", () => {
+    expect(denied(bash('pkill -f "tsx server.ts"'))).toBe(true);
+    expect(denied(bash("killall node"))).toBe(true);
+    const plain = bash("kill 4242 && git status");
+    expect(denied(plain)).toBe(false);
+    expect(plain.code).toBe(0);
+  });
+});

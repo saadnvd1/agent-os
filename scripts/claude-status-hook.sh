@@ -82,6 +82,26 @@ EOF
   case "$out" in '{"hookSpecificOutput"'*) printf '%s\n' "$out" ;; esac
 }
 
+# Commands that take down every session on the machine, the agent's own
+# included. Inside tmux, $TMUX names the real server and wins over
+# TMUX_TMPDIR, so `tmux kill-server` there kills it; only an explicit -S or -L
+# targets a test server. Pattern kills match the live AgentOS server too.
+refuse_server_kill() {
+  cmd=$(field command)
+  why=""
+  case "$cmd" in
+    *kill-server*)
+      case "$cmd" in
+        *" -S "* | *" -L "*) ;;
+        *) why="tmux kill-server without -S or -L kills the real tmux server and every session on it (TMUX_TMPDIR is ignored inside tmux). Pass -S <socket> or -L <name>." ;;
+      esac ;;
+    *"pkill -f"* | *"pkill -9 -f"* | *"killall node"* | *"killall tmux"* | *"killall tsx"*)
+      why="Pattern kills also match the live AgentOS server and its sessions. Kill by PID: kill \$(lsof -tiTCP:<port> -sTCP:LISTEN)." ;;
+  esac
+  [ -n "$why" ] || return 1
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$why"
+}
+
 # All of it is read before any of it runs: a file replaced mid-run can't
 # leave a half-parsed script exiting 2, which Claude takes as "block".
 main() {
@@ -95,6 +115,10 @@ case "$event" in
   PreToolUse)
     case "$(field tool_name)" in
       AskUserQuestion | ExitPlanMode) asking ;;
+      Bash) refuse_server_kill || {
+        report "state=working"
+        heavy PreToolUse
+      } ;;
       *)
         report "state=working"
         heavy PreToolUse
