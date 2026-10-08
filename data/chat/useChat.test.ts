@@ -98,6 +98,16 @@ describe("routeItem", () => {
   });
 });
 
+describe("routeItem: an id loaded and also listed as earlier", () => {
+  it("updates the loaded copy and leaves the earlier list alone", () => {
+    const items = [say("a"), task("t1", "running")];
+    const earlier = [task("t1", "running")];
+    const r = routeItem(items, earlier, task("t1", "completed"));
+    expect(r.items[1]).toEqual(task("t1", "completed"));
+    expect(r.earlier).toBe(earlier);
+  });
+});
+
 describe("keptBodies", () => {
   const body = { output: "ok" };
   it("keeps finished tools' bodies and drops ones that may have changed", () => {

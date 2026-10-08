@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sharedGitStatus } from "@/lib/git-poller";
 import {
-  getGitStatus,
   isGitRepo,
   getFileDiff,
   getUntrackedFileDiff,
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Otherwise return full status
-    const status = await getGitStatus(path);
+    const status = await sharedGitStatus(path);
     return NextResponse.json(status);
   } catch (error) {
     return NextResponse.json(

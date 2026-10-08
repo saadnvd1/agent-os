@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { forgetGitStatus } from "@/lib/git-poller";
 import { discardChanges, isGitRepo, expandPath } from "@/lib/git-status";
 
 export async function POST(request: NextRequest) {
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
 
     await discardChanges(path, file);
 
+    forgetGitStatus(path);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

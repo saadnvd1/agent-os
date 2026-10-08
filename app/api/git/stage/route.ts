@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { forgetGitStatus } from "@/lib/git-poller";
 import { stageFile, stageAll, isGitRepo, expandPath } from "@/lib/git-status";
 
 export async function POST(request: NextRequest) {
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
       await stageAll(path);
     }
 
+    forgetGitStatus(path);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

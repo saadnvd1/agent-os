@@ -3,6 +3,7 @@ import type { Session, Group } from "@/lib/db";
 import type { AgentType } from "@/lib/providers";
 import type { ChatAccess, ChatImage } from "@/lib/chat/events";
 import { sessionKeys } from "./keys";
+import { usePollWhenOffline, usePushConnected } from "../push/connection";
 
 interface SessionsResponse {
   sessions: Session[];
@@ -15,12 +16,14 @@ async function fetchSessions(): Promise<SessionsResponse> {
   return res.json();
 }
 
+// Changes to sessions are pushed (data/push/topics); it polls only while
+// the stream is down.
 export function useSessionsQuery() {
   return useQuery({
     queryKey: sessionKeys.list(),
     queryFn: fetchSessions,
     staleTime: 5000,
-    refetchInterval: 10000,
+    refetchInterval: usePollWhenOffline(10000),
   });
 }
 
@@ -235,8 +238,10 @@ export interface SessionSetup {
   startedAt: number | null;
 }
 
-// A new session's worktree setup, polled while it runs.
+// A new session's worktree setup while it runs: pushed as it moves, or
+// polled while the stream is down.
 export function useSessionSetup(sessionId: string, enabled: boolean) {
+  const pushed = usePushConnected();
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: [...sessionKeys.all, "setup", sessionId],
@@ -250,7 +255,9 @@ export function useSessionSetup(sessionId: string, enabled: boolean) {
         void queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
       return setup;
     },
+    // Its stages and log are pushed as they move (`setup:<id>`).
     refetchInterval: (q) =>
+      !pushed &&
       q.state.status !== "error" &&
       (q.state.data === undefined || q.state.data?.status === "running")
         ? 1000

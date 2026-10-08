@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { forgetGitStatus } from "@/lib/git-poller";
 import {
   push,
   isGitRepo,
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
     // Check if there are commits to push
     const status = await getGitStatus(path);
     if (status.ahead === 0) {
+      forgetGitStatus(path);
       return NextResponse.json({
         success: true,
         message: "Already up to date",
@@ -49,6 +51,7 @@ export async function POST(request: NextRequest) {
     const needsUpstream = !hasUpstream(path);
     const output = push(path, needsUpstream);
 
+    forgetGitStatus(path);
     return NextResponse.json({
       success: true,
       output,

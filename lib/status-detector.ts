@@ -506,6 +506,11 @@ class SessionStatusDetector {
     return [...this.cache.data.values()];
   }
 
+  // What the last list-sessions found, without asking tmux again.
+  cachedSessions(): TmuxSessionInfo[] {
+    return [...this.cache.data.values()];
+  }
+
   hostErrors(): Record<string, string> {
     return Object.fromEntries(this.cache.hostErrors);
   }

@@ -6,6 +6,7 @@
  */
 
 import { db } from "../db";
+import { notifyTopic } from "../status/hub";
 import type { SetupStage, SetupStep } from "../env-setup";
 
 export type StageId = "fetch" | "worktree" | SetupStage;
@@ -40,6 +41,13 @@ const KEEP_FINISHED_MS = 10 * 60 * 1000;
 
 const g = globalThis as { __agentosSetups?: Map<string, SetupView> };
 const setups = (g.__agentosSetups ??= new Map());
+// Each view's session, to push its progress (`setup:<id>`) as it moves:
+// browsers watching the card refetch instead of polling.
+const sessionOf = new WeakMap<SetupView, string>();
+const moved = (view: SetupView) => {
+  const id = sessionOf.get(view);
+  if (id) notifyTopic(`setup:${id}`);
+};
 
 export function startSetup(sessionId: string, branch: string): SetupView {
   const view: SetupView = {
@@ -51,6 +59,8 @@ export function startSetup(sessionId: string, branch: string): SetupView {
     startedAt: Date.now(),
   };
   setups.set(sessionId, view);
+  sessionOf.set(view, sessionId);
+  moved(view);
   return view;
 }
 
@@ -95,6 +105,7 @@ export function enterStage(view: SetupView, id: StageId): void {
     if (s.id === id) s.state = "running";
     else if (s.state === "running") s.state = "ok";
   }
+  moved(view);
 }
 
 export function logStep(view: SetupView, step: SetupStep): void {
@@ -109,6 +120,7 @@ export function logStep(view: SetupView, step: SetupStep): void {
     const running = view.stages.find((s) => s.state === "running");
     if (running) running.state = "failed";
   }
+  moved(view);
 }
 
 export function finishSetup(
@@ -122,6 +134,7 @@ export function finishSetup(
   }
   view.status = error ? "failed" : "ok";
   view.error = error;
+  moved(view);
   setTimeout(() => {
     if (setups.get(sessionId) === view) setups.delete(sessionId);
   }, KEEP_FINISHED_MS).unref?.();

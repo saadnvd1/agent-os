@@ -6,6 +6,8 @@ export { gitKeys };
 import type { CommitSummary, CommitDetail } from "@/lib/git-history";
 import type { GitStatus } from "@/lib/git-status";
 import type { MultiRepoGitStatus } from "@/lib/multi-repo-git";
+import { usePollWhenOffline } from "../push/connection";
+import { useWatchGitDirs } from "./watch";
 
 export interface PRInfo {
   number: number;
@@ -65,12 +67,15 @@ export function useGitStatus(
   workingDir: string,
   options?: { enabled?: boolean }
 ) {
+  const enabled = !!workingDir && (options?.enabled ?? true);
+  useWatchGitDirs([enabled ? workingDir : null]);
   return useQuery({
     queryKey: gitKeys.status(workingDir),
     queryFn: () => fetchGitStatus(workingDir),
-    staleTime: 10000, // Consider fresh for 10s
-    refetchInterval: 15000, // Poll every 15s (was 3s)
-    enabled: !!workingDir && (options?.enabled ?? true),
+    staleTime: 10000,
+    // The server polls the folder for every viewer and pushes changes.
+    refetchInterval: usePollWhenOffline(15000),
+    enabled,
   });
 }
 
@@ -322,13 +327,16 @@ export function useMultiRepoGitStatus(
   fallbackPath?: string,
   options?: { enabled?: boolean }
 ) {
-  return useQuery({
+  const query = useQuery({
     queryKey: gitKeys.multiStatus(projectId || "", fallbackPath),
     queryFn: () => fetchMultiRepoGitStatus(projectId, fallbackPath),
-    staleTime: 10000, // Consider fresh for 10s
-    refetchInterval: 15000, // Poll every 15s
+    staleTime: 10000,
+    // Its repositories are polled by the server and pushed.
+    refetchInterval: usePollWhenOffline(15000),
     enabled: (!!projectId || !!fallbackPath) && (options?.enabled ?? true),
   });
+  useWatchGitDirs(query.data?.repositories.map((r) => r.path) ?? []);
+  return query;
 }
 
 // Multi-repo stage/unstage mutations

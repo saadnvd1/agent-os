@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { forgetGitStatus } from "@/lib/git-poller";
 import {
   unstageFile,
   unstageAll,
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       await unstageAll(path);
     }
 
+    forgetGitStatus(path);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

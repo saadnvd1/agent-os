@@ -21,6 +21,8 @@ async function git(cwd: string, args: string[]): Promise<string> {
       // A hung git (a stalled mount, a stuck hook) fails the request instead.
       timeout: 30_000,
       killSignal: "SIGKILL",
+      // Status reads never take the index lock a commit or rebase needs.
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
     }
   );
   return stdout;

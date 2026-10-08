@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StackPreview, StackView } from "@/lib/stacks/types";
 import { taskKeys } from "../tasks";
 import { lumifyhubKeys } from "../lumifyhub";
+import { usePollWhenOffline } from "../push/connection";
 
 export const stackKeys = {
   all: ["stacks"] as const,
@@ -27,7 +28,8 @@ export function useStacksQuery() {
     queryKey: stackKeys.list(),
     queryFn: async () =>
       (await call<{ stacks: StackView[] }>("/api/stacks")).stacks,
-    refetchInterval: 5000,
+    // Pushed when its rows change; polled only while the stream is down.
+    refetchInterval: usePollWhenOffline(5000),
   });
 }
 

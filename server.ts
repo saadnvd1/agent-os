@@ -51,7 +51,18 @@ import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
-import { subscribeStatuses, setStatusSource } from "./lib/status/hub";
+import {
+  setStatusSource,
+  setTopicSignature,
+  setRunFinished,
+} from "./lib/status/hub";
+import { serveStatusSocket, sessionFolder } from "./lib/status/socket";
+import { refreshGitSoon } from "./lib/git-poller";
+import { changeWatcher } from "./lib/db/changes";
+import { getDb } from "./lib/db";
+import { discoveredSignature } from "./lib/hosts/discover-signature";
+import { sendBounded, DEFLATE } from "./lib/ws-send";
+import { compressJson } from "./lib/http-compress";
 import { loadEnabled, startLoadMonitor } from "./lib/load/monitor";
 import { collectStatuses, terminalsChanged } from "./lib/status/collect";
 import { startProgramStatusTap } from "./lib/program-status/tap";
@@ -113,6 +124,7 @@ app.prepare().then(() => {
     }
     if (!gateRequest(req, res, auth)) return;
     try {
+      await compressJson(req, res);
       const parsedUrl = parse(req.url!, true);
       await handle(req, res, parsedUrl);
     } catch (err) {
@@ -123,30 +135,42 @@ app.prepare().then(() => {
   };
 
   // Terminal WebSocket server
-  const terminalWss = new WebSocketServer({ noServer: true });
+  const terminalWss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: DEFLATE,
+  });
 
-  // Session status, pushed: the whole map on connect and on every change.
-  setStatusSource(collectStatuses, terminalsChanged);
+  // Session status and what changed, pushed (lib/status/hub). `v=2` asks for
+  // the numbered stream and resumes from `epoch`/`seq`; without it, the whole
+  // map on connect and on every change.
+  setStatusSource(collectStatuses, terminalsChanged, changeWatcher(getDb));
+  setTopicSignature("discovered", discoveredSignature);
+  // A finished run likely changed files: the git panel showing them updates.
+  setRunFinished((id) => {
+    const folder = sessionFolder(id);
+    if (folder) refreshGitSoon(folder);
+  });
   const programTap = startProgramStatusTap(port);
-  const statusWss = new WebSocketServer({ noServer: true });
-  statusWss.on("connection", (ws: WebSocket) => {
-    const unsubscribe = subscribeStatuses((snapshot) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(snapshot);
-    });
-    ws.on("close", unsubscribe);
-    ws.on("error", unsubscribe);
+  const statusWss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: DEFLATE,
+  });
+  statusWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
+    const params = new URL(request.url ?? "", "http://x").searchParams;
+    serveStatusSocket(ws, params, (json) => sendBounded(ws, json));
   });
 
   // Chat: one socket per watched session. Sends a snapshot, then live items;
   // takes messages and interrupts.
-  const chatWss = new WebSocketServer({ noServer: true });
+  const chatWss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: DEFLATE,
+  });
   chatWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
     const params = new URL(request.url ?? "", "http://x").searchParams;
     const sessionId = params.get("session");
     if (!sessionId) return ws.close();
-    const reply = (m: ChatServerMessage) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
-    };
+    const reply = (m: ChatServerMessage) => sendBounded(ws, JSON.stringify(m));
     const fail = (err: unknown) =>
       reply({
         type: "item",

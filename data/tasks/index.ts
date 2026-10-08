@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TaskView } from "@/lib/tasks";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "./keys";
+import { usePollWhenOffline } from "../push/connection";
 
 export { taskKeys };
 export * from "./move";
@@ -17,8 +18,9 @@ export function useTasksQuery() {
     queryKey: taskKeys.list(),
     queryFn: async () =>
       (await json<{ tasks: TaskView[] }>(await fetch("/api/tasks"))).tasks,
-    // Status changes also arrive over /ws/status.
-    refetchInterval: 15000,
+    // Changes to tasks are pushed; a PR's state on GitHub isn't, so it's
+    // looked at once a minute (every 15s while the stream is down).
+    refetchInterval: usePollWhenOffline(15000) || 60000,
   });
 }
 
