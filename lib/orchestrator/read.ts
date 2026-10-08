@@ -1,6 +1,6 @@
 import type { Session } from "../db";
 import type { ChatItem } from "../chat/events";
-import { listItems } from "../chat/store";
+import { lastItems } from "../chat/store";
 import { statusDetector } from "../status-detector";
 import { resolveRef } from "../bus/resolve";
 import { previousNames } from "../session-names";
@@ -86,7 +86,7 @@ export async function readSession(
   const s = findWorkspaceSession(workspaceId, ref);
   const n = Math.max(1, Math.min(Math.floor(lines) || DEFAULT_LINES, 400));
   if (s.view === "chat") {
-    const text = chatText(listItems(s.id).slice(-n * 2));
+    const text = chatText(lastItems(s.id, n * 2));
     const body = text ? untrusted(s.name, tail(text, n)) : "(no messages yet)";
     return `${s.name} (chat), last ${n} lines:\n${body}`;
   }

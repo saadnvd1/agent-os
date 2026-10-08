@@ -18,7 +18,13 @@ import type {
   PeerMessage,
   UsageTotals,
 } from "../events";
-import { listItems, moveToEnd, runningTools, saveItem, settle } from "../store";
+import {
+  itemsOfKind,
+  moveToEnd,
+  runningTools,
+  saveItem,
+  settle,
+} from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
 import { recordTurn, startingTotals } from "../../usage/turns";
 import {
@@ -132,8 +138,7 @@ export class ChatHost {
     });
     this.suggestion = session.chat_suggestion ?? null;
     // Sends that already made it in, from before a reconnect.
-    for (const item of listItems(session.id))
-      if (item.kind === "user") this.sent.add(item.id);
+    for (const item of itemsOfKind(session.id, "user")) this.sent.add(item.id);
     // Nothing runs yet in a worker just started: a tool call still saved as
     // running was cut off with the last one.
     this.closeTools();

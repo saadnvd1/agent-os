@@ -82,6 +82,7 @@
     "@codemirror/language": "^6.12.3",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.0",
+    "@legendapp/list": "3.3.11",
     "@lezer/highlight": "^1.2.3",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@monaco-editor/react": "^4.7.0",

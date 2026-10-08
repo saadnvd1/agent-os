@@ -10,7 +10,9 @@ import { sshTargetFor } from "./lib/hosts";
 import { agentEnv, ensureBusBrief } from "./lib/agents/launch";
 import {
   chatFileSuggestions,
+  chatHistory,
   chatTaskOutput,
+  chatToolBody,
   deleteQueuedChat,
   editQueuedChat,
   interruptChat,
@@ -139,9 +141,8 @@ app.prepare().then(() => {
   // takes messages and interrupts.
   const chatWss = new WebSocketServer({ noServer: true });
   chatWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
-    const sessionId = new URL(request.url ?? "", "http://x").searchParams.get(
-      "session"
-    );
+    const params = new URL(request.url ?? "", "http://x").searchParams;
+    const sessionId = params.get("session");
     if (!sessionId) return ws.close();
     const reply = (m: ChatServerMessage) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
@@ -156,7 +157,7 @@ app.prepare().then(() => {
           createdAt: Date.now(),
         },
       });
-    const unwatch = watchChat(sessionId, reply);
+    const unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
@@ -211,6 +212,18 @@ app.prepare().then(() => {
             type: "task_output",
             taskId: msg.taskId,
             text: chatTaskOutput(sessionId, msg.taskId),
+          });
+        else if (msg.type === "history" && Number.isFinite(msg.before))
+          reply({
+            type: "history",
+            before: msg.before,
+            ...chatHistory(sessionId, msg.before),
+          });
+        else if (msg.type === "tool_body")
+          reply({
+            type: "tool_body",
+            id: String(msg.id),
+            body: chatToolBody(sessionId, String(msg.id)),
           });
         else if (msg.type === "undo")
           void undoChat(sessionId, msg.from, !!msg.dryRun, reply).catch((err) =>
@@ -296,6 +309,10 @@ app.prepare().then(() => {
     };
     if (process.env.SSH_AUTH_SOCK) {
       minimalEnv.SSH_AUTH_SOCK = process.env.SSH_AUTH_SOCK;
+    }
+    // Attach to the tmux server this AgentOS runs against, not the default one.
+    if (process.env.TMUX_TMPDIR) {
+      minimalEnv.TMUX_TMPDIR = process.env.TMUX_TMPDIR;
     }
 
     let ptyProcess: pty.IPty | null = null;

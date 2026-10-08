@@ -1,6 +1,12 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  LegendList,
+  type LegendListRef,
+  type MaintainScrollAtEndOptions,
+} from "@legendapp/list/react";
+import { Loader2 } from "lucide-react";
 import { useChat } from "@/data/chat/useChat";
 import {
   groupTimeline,
@@ -25,7 +31,8 @@ import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { QuoteButton } from "./QuoteButton";
-import { ToolGroup } from "./Tools";
+import { ToolBodies, ToolGroup } from "./Tools";
+import { RowState } from "./rowState";
 import { McpServers } from "./McpServers";
 import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
@@ -131,6 +138,17 @@ function Timeline({
   ));
 }
 
+const blockKey = (b: TimelineBlock) => (b.type === "item" ? b.item.id : b.id);
+const blockType = (b: TimelineBlock) =>
+  b.type === "item" ? b.item.kind : b.type;
+
+// Follows the newest output while the reader is at the bottom (new items, a
+// message growing, the panel resizing) and leaves them be once they scroll up.
+const FOLLOW: MaintainScrollAtEndOptions = {
+  animated: false,
+  on: { dataChange: true, itemLayout: true, layout: true },
+};
+
 // One block, re-rendered only when its items or the actions change: a long
 // conversation doesn't redraw every message for each streamed word.
 const Block = memo(
@@ -176,6 +194,12 @@ export function ChatPanel({
   const [prefill, setPrefill] = useState<{ text: string; at: number }>();
   const {
     items,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    earlierTasks,
+    toolBodies,
+    requestToolBody,
     state,
     connected,
     commands,
@@ -207,14 +231,12 @@ export function ChatPanel({
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pinned = useRef(true);
-
-  // Follow new output while the reader is at the bottom; leave them be if
-  // they've scrolled up to read.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [items]);
+  const listRef = useRef<LegendListRef>(null);
+  // Sending brings the reader back to the end, wherever they'd scrolled.
+  const toEnd = useCallback(
+    () => requestAnimationFrame(() => void listRef.current?.scrollToEnd()),
+    []
+  );
 
   const running = state === "running" || state === "waiting";
 
@@ -254,7 +276,7 @@ export function ChatPanel({
   );
   const togglePlan = plan === null ? undefined : () => setPlan(!plan);
   const sendText = (text: string) => {
-    pinned.current = true;
+    toEnd();
     send(text);
   };
 
@@ -293,6 +315,18 @@ export function ChatPanel({
   });
 
   const blocks = useMemo(() => groupTimeline(items), [items]);
+  const tasks = useMemo(() => {
+    if (!earlierTasks.length) return items;
+    const loaded = new Set(items.map((i) => i.id));
+    return earlierTasks.filter((t) => !loaded.has(t.id)).concat(items);
+  }, [earlierTasks, items]);
+  // A new conversation starts with every row closed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rowState = useMemo(() => new Map<string, unknown>(), [sessionId]);
+  const bodies = useMemo(
+    () => ({ bodies: toolBodies, request: requestToolBody, connected }),
+    [toolBodies, requestToolBody, connected]
+  );
   const idle = !running && connected;
   const actions: ItemActions = useMemo(
     () => ({
@@ -312,29 +346,65 @@ export function ChatPanel({
       className="flex h-full min-h-0 flex-col outline-none"
     >
       {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
-      <div
-        ref={scrollRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          pinned.current =
-            el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-        }}
-        className="min-h-0 flex-1 overflow-y-auto"
-      >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5">
-          <SetupCard sessionId={sessionId} />
-          {blocks.length === 0 && !queue.length && (
-            <p className="text-muted-foreground py-16 text-center text-sm">
-              Ask anything to start.
-            </p>
-          )}
-          <Timeline blocks={blocks} actions={actions} />
-        </div>
+      <div ref={scrollRef} className="relative min-h-0 flex-1">
+        <RowState.Provider value={rowState}>
+          <ToolBodies.Provider value={bodies}>
+            <LegendList<TimelineBlock>
+              // A new conversation starts its list over, scrolled to the end.
+              key={sessionId}
+              ref={listRef}
+              data={blocks}
+              extraData={actions}
+              keyExtractor={blockKey}
+              getItemType={blockType}
+              renderItem={({ item }) => (
+                <div className="mx-auto w-full max-w-3xl px-4 pb-4">
+                  <Block block={item} actions={actions} />
+                </div>
+              )}
+              estimatedItemSize={90}
+              initialScrollAtEnd
+              maintainScrollAtEnd={FOLLOW}
+              maintainScrollAtEndThreshold={0.1}
+              // Older pages land above without moving what the reader sees.
+              maintainVisibleContentPosition
+              onStartReached={hasMore ? loadOlder : undefined}
+              onStartReachedThreshold={1}
+              style={{ height: "100%" }}
+              className="overscroll-y-contain"
+              ListHeaderComponent={
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
+                  {hasMore && (
+                    <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
+                      {loadingOlder ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={loadOlder}
+                          className="hover:text-foreground min-h-11 px-3"
+                        >
+                          Show earlier messages
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <SetupCard sessionId={sessionId} />
+                  {blocks.length === 0 && !queue.length && (
+                    <p className="text-muted-foreground py-16 text-center text-sm">
+                      Ask anything to start.
+                    </p>
+                  )}
+                </div>
+              }
+            />
+          </ToolBodies.Provider>
+        </RowState.Provider>
       </div>
       <div className="mx-auto w-full max-w-3xl px-3 pb-3">
         <ActivityLine items={items} state={state} onStop={interrupt} />
         <BackgroundTasks
-          items={items}
+          items={tasks}
           outputs={taskOutputs}
           onStop={stopTask}
           onLoadOutput={loadTaskOutput}
@@ -369,7 +439,7 @@ export function ChatPanel({
           disabled={!connected}
           placeholder={connected ? `Message ${sessionName}` : "Reconnecting…"}
           onSend={(text, images) => {
-            pinned.current = true;
+            toEnd();
             send(text, images.length ? images : undefined);
           }}
           onStop={interrupt}

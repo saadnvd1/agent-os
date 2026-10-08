@@ -1,9 +1,10 @@
 "use client";
 
-import { isValidElement, memo, type ReactNode } from "react";
+import { isValidElement, memo, useMemo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { imageType, imageUrl } from "@/lib/artifacts/image-paths";
+import { incrementalMarkdown } from "@/lib/chat/markdown-incremental";
 import { CodeBlock } from "./Code";
 import { ImageThumb } from "./ImageThumb";
 
@@ -83,10 +84,25 @@ const components: Components = {
   },
 };
 
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+const PLUGINS = [remarkGfm];
+const FENCE = /(?:^|\n) {0,3}(?:`{3}|~{3})/;
+
+export const Markdown = memo(function Markdown({
+  text,
+  streaming = false,
+}: {
+  text: string;
+  // Still arriving: finished code blocks aren't parsed again per word.
+  streaming?: boolean;
+}) {
+  const incremental = streaming && FENCE.test(text);
+  const plugins = useMemo(
+    () => (incremental ? [remarkGfm, incrementalMarkdown()] : PLUGINS),
+    [incremental]
+  );
   return (
     <div className="prose prose-sm dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-code:bg-foreground/[0.06] prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-code:font-normal max-w-none break-words">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={plugins} components={components}>
         {text}
       </ReactMarkdown>
     </div>
