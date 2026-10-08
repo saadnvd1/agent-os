@@ -22,6 +22,20 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Browser code: crypto.randomUUID is undefined on a plain-http address.
+    files: ["components/**", "hooks/**", "stores/**", "data/**", "app/**/*.tsx"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "crypto",
+          property: "randomUUID",
+          message: "Undefined over plain http; use uuid() from @/lib/uuid.",
+        },
+      ],
+    },
+  },
   globalIgnores([
     ".next/**",
     ".next-build/**",

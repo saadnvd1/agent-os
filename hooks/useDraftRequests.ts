@@ -20,6 +20,7 @@ import {
   type DraftRequest,
 } from "@/stores/drafts";
 import { paletteActions } from "@/stores/palette";
+import { uuid } from "@/lib/uuid";
 
 interface Options {
   sessions: Session[];
@@ -52,7 +53,7 @@ export function useDraftRequests(options: Options) {
           ? { agentType: s.agent_type, model: s.model, access: s.chat_access }
           : {};
       const project = projects.find((p) => p.id === projectId) ?? null;
-      const draft = makeDraft(crypto.randomUUID(), project, carry, { openPr });
+      const draft = makeDraft(uuid(), project, carry, { openPr });
       draftsActions.put(draft);
       show(draft.id);
     };
