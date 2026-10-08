@@ -170,11 +170,12 @@ describe("ControlManager", () => {
     );
     await settle();
     expect(m.screen("s1")).toBe("first\nIN-CAPTURE\nafter");
-    // And it isn't read again right away for the output it applied.
+    // And it isn't read again right away for the output it applied: no
+    // new resync asks for the pane (four asks so far).
     await new Promise((r) => setTimeout(r, 60));
-    expect(c.written.filter((w) => w.startsWith("capture-pane"))).toHaveLength(
-      2
-    );
+    expect(
+      c.written.filter((w) => w.startsWith("display-message"))
+    ).toHaveLength(4);
     expect(m.screen("s1")).toBe("first\nIN-CAPTURE\nafter");
   });
 

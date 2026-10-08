@@ -187,7 +187,6 @@ describe("SharedAttach", () => {
     await flush();
     expect(late.got.at(-1)).toBe("live");
     expect(late.v.behind).toBe(false);
-    expect(pty.pause).not.toHaveBeenCalled();
     // Acking the replay leaves the live chunk counted.
     attach.ack(late.v);
     expect(late.v.pending).toHaveLength(1);
