@@ -480,9 +480,18 @@ and the program's message (plain text, capped); done gets the unread dot.
 printf '\e]7501;state=blocked:kind=permission:app=me:msg=%s\e\\' "$(printf 'Apply 3 changes?' | base64)"
 ```
 
-tmux drops sequences it doesn't know, so AgentOS copies each local terminal
-session's raw output to itself (`tmux pipe-pane`, through a unix socket only
-you can reach; needs `nc`). Claude Code sessions AgentOS starts on this
+tmux drops sequences it doesn't know, so AgentOS watches each local terminal
+session through tmux control mode: one long-lived, read-only `tmux -C`
+client per session (tmux 3.2 or newer) pushes the pane's raw output, which
+carries the reports, and keeps a copy of its screen for reading status, so
+nothing polls `capture-pane` or taps panes with `pipe-pane`. A screen is kept
+only while its pane prints, and it's checked against tmux again whenever
+output settles. A session's terminal views share one `tmux attach` (it runs at
+the smallest view's size), and a view that can't keep up is held back and sent
+the current screen once it catches up. On older tmux, or with
+`AGENTOS_TMUX_CONTROL=off`, AgentOS falls back to copying each session's
+output to itself (`tmux pipe-pane`, through a unix socket only you can reach;
+needs `nc`) and reading screens with `capture-pane`. Claude Code sessions AgentOS starts on this
 machine report through hooks it installs (`~/.agent-os/claude-status-hooks.json`,
 passed with `--settings`). Not covered yet: sessions on other machines (their
 output never passes through this one), Codex and the other agents (Codex only

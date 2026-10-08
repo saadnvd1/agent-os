@@ -32,7 +32,10 @@ export function createWebSocketConnection(
   intentionalCloseRef: React.MutableRefObject<boolean>
 ): WebSocketManager {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
+  // flow=1: each output message is acked once written, and the server holds
+  // back while too many are unacked (lib/terminal/shared-attach).
+  const url = `${protocol}//${window.location.host}/ws/terminal?flow=1`;
+  const ws = new WebSocket(url);
   wsRef.current = ws;
 
   const sendResize = (cols: number, rows: number) => {
@@ -90,9 +93,7 @@ export function createWebSocketConnection(
     reconnectDelayRef.current = WS_RECONNECT_BASE_DELAY;
 
     // Create fresh connection with saved handlers
-    const newWs = new WebSocket(
-      `${protocol}//${window.location.host}/ws/terminal`
-    );
+    const newWs = new WebSocket(url);
     wsRef.current = newWs;
     newWs.onopen = savedHandlers.onopen;
     newWs.onmessage = savedHandlers.onmessage;
@@ -127,7 +128,25 @@ export function createWebSocketConnection(
         const wasAtTop = scrollYBefore <= 0;
         const wasAtBottom = scrollYBefore >= buffer.baseY;
 
-        term.write(msg.data);
+        // The whole screen again (joining a shared view, or catching up
+        // after falling behind): it starts from a reset, so a reader
+        // scrolled up is put back as far from the bottom as they were.
+        const redraw =
+          typeof msg.data === "string" && msg.data.startsWith("\x1bc");
+        const fromBottom = buffer.baseY - scrollYBefore;
+
+        // Acked once xterm has taken it: a phone that can't keep up slows
+        // the stream instead of piling it up.
+        const from = event.target as WebSocket;
+        term.write(msg.data, () => {
+          if (from.readyState === WebSocket.OPEN)
+            from.send(JSON.stringify({ type: "ack" }));
+          if (redraw && !wasAtBottom)
+            term.scrollToLine(
+              Math.max(0, term.buffer.active.baseY - fromBottom)
+            );
+        });
+        if (redraw) return;
 
         // After write, check if scroll jumped to top unexpectedly
         // Give it a moment for the write to complete

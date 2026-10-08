@@ -185,4 +185,35 @@ describe("status hub: the numbered stream", () => {
     await vi.advanceTimersByTimeAsync(60);
     expect(finished).toEqual(["s"]);
   });
+
+  it("keeps going when the table changes can't be read once", async () => {
+    let fail = true;
+    let moved: string[] = [];
+    setStatusSource(
+      collector,
+      async () => terminals,
+      () => {
+        if (fail) {
+          fail = false;
+          throw new Error("database is locked");
+        }
+        return moved.splice(0);
+      }
+    );
+    let sig = "a";
+    setTopicSignature("still-checked", () => sig);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const seen = stream();
+    await vi.advanceTimersByTimeAsync(60);
+    sig = "b";
+    moved = ["schedules"];
+    await vi.advanceTimersByTimeAsync(2100);
+    const topics = seen
+      .filter((m) => m.type === "changed")
+      .flatMap((m) => m.topics as string[]);
+    expect(topics).toContain("still-checked");
+    expect(topics).toContain("schedules");
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
+  });
 });

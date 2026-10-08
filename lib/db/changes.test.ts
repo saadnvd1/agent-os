@@ -69,3 +69,21 @@ describe("change versions", () => {
     expect(watch()).toEqual([]);
   });
 });
+
+describe("watched tables", () => {
+  it("are exactly the tables the migrations put triggers on", async () => {
+    const { getDb } = await import("@/lib/db");
+    const { WATCHED_TABLES } = await import("./changes");
+    const triggered = new Set(
+      (
+        getDb()
+          .prepare(
+            `SELECT tbl_name FROM sqlite_master
+             WHERE type = 'trigger' AND name LIKE 'change\\_%' ESCAPE '\\'`
+          )
+          .all() as { tbl_name: string }[]
+      ).map((r) => r.tbl_name)
+    );
+    expect(triggered).toEqual(new Set(WATCHED_TABLES));
+  });
+});

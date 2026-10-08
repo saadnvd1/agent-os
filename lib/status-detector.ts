@@ -16,6 +16,8 @@
 
 import { hostExecFile, listHosts } from "./hosts";
 import { WORKING_LINE } from "./claude-working-line";
+import { controlManager } from "./tmux/control";
+import { isValidTmuxName } from "./hosts/attach";
 
 // Configuration constants
 const CONFIG = {
@@ -25,6 +27,11 @@ const CONFIG = {
   SPIKE_WINDOW_MS: 1000, // Window to detect sustained activity
   SUSTAINED_THRESHOLD: 2, // Changes needed to confirm activity
   CACHE_VALIDITY_MS: 2000, // How long tmux cache is valid
+  // This machine's listing while control clients watch its sessions: their
+  // output, titles and screens arrive pushed, and a session created or
+  // destroyed says so (%sessions-changed), so the listing is only for
+  // what's left (the foreground program, sessions nobody watches).
+  WATCHED_CACHE_MS: 10000,
   RECENT_ACTIVITY_MS: 120000, // Window for "recent" activity (2 min, tmux updates slowly)
 } as const;
 
@@ -180,6 +187,8 @@ export interface TmuxSessionInfo {
   command: string;
   // The active pane's title; Claude Code writes its state and task there.
   title: string;
+  // The active pane's process (its shell), to see what runs under it.
+  pid: number;
 }
 
 interface UnsentTracker {
@@ -197,7 +206,7 @@ interface SessionCache {
 }
 
 const LIST_FORMAT =
-  "#{session_name}\t#{session_activity}\t#{window_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_title}";
+  "#{session_name}\t#{session_activity}\t#{window_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_pid}\t#{pane_title}";
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
   const { stdout } = await hostExecFile(
@@ -219,6 +228,7 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
         attached,
         windows,
         command,
+        pid,
         ...title
       ] = line.split("\t");
       return {
@@ -230,6 +240,7 @@ async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
         attached: attached !== "0" && !!attached,
         windows: parseInt(windows, 10) || 1,
         command: command || "",
+        pid: parseInt(pid, 10) || 0,
         title: title.join("\t"),
       };
     });
@@ -441,21 +452,47 @@ class SessionStatusDetector {
     updatedAt: 0,
   };
 
-  // One list-sessions per machine, in parallel. An unreachable machine keeps
-  // its last known sessions so a network blip doesn't mark them dead.
+  // When each machine was last listed.
+  private hostListedAt = new Map<string, number>();
+  private refreshing: Promise<void> | null = null;
+  private refreshed = new Set<() => void>();
+
+  // One list-sessions per machine that's due, in parallel; the others keep
+  // what they had. An unreachable machine keeps its last known sessions so
+  // a network blip doesn't mark them dead.
   async refreshCache(): Promise<void> {
     if (Date.now() - this.cache.updatedAt < CONFIG.CACHE_VALIDITY_MS) return;
+    this.refreshing ??= this.list().finally(() => {
+      this.refreshing = null;
+    });
+    return this.refreshing;
+  }
 
+  private async list(): Promise<void> {
     const listedAt = Date.now();
-    const hosts = listHosts();
+    const watched = (controlManager()?.size() ?? 0) > 0;
+    const hosts = listHosts().filter((h) => {
+      const last = this.hostListedAt.get(h.id) ?? 0;
+      const every =
+        h.id === "local" && watched
+          ? CONFIG.WATCHED_CACHE_MS
+          : CONFIG.CACHE_VALIDITY_MS;
+      return listedAt - last >= every;
+    });
     const results = await Promise.allSettled(
       hosts.map((h) => listHostSessions(h.id))
     );
 
+    const fresh = new Set(hosts.map((h) => h.id));
     const data = new Map<string, TmuxSessionInfo>();
-    const hostErrors = new Map<string, string>();
+    for (const info of this.cache.data.values())
+      if (!fresh.has(info.hostId)) data.set(info.name, info);
+    const hostErrors = new Map(
+      [...this.cache.hostErrors].filter(([id]) => !fresh.has(id))
+    );
     results.forEach((result, i) => {
       const hostId = hosts[i].id;
+      this.hostListedAt.set(hostId, listedAt);
       if (result.status === "fulfilled") {
         for (const info of result.value) data.set(info.name, info);
         return;
@@ -466,7 +503,29 @@ class SessionStatusDetector {
       }
     });
 
-    this.cache = { data, hostErrors, listedAt, updatedAt: Date.now() };
+    this.cache = {
+      data,
+      hostErrors,
+      listedAt: hosts.length ? listedAt : this.cache.listedAt,
+      updatedAt: Date.now(),
+    };
+    if (hosts.length) for (const fn of this.refreshed) fn();
+  }
+
+  /** The next refresh lists this machine again (a session came or went). */
+  invalidateLocal(): void {
+    this.hostListedAt.delete("local");
+    this.cache.updatedAt = 0;
+  }
+
+  /** Called after each listing, for what follows the set of sessions. */
+  onRefresh(fn: () => void): () => void {
+    this.refreshed.add(fn);
+    return () => this.refreshed.delete(fn);
+  }
+
+  paneProcess(name: string): number | undefined {
+    return this.cache.data.get(name)?.pid || undefined;
   }
 
   sessionExists(name: string): boolean {
@@ -478,7 +537,9 @@ class SessionStatusDetector {
   }
 
   titleFor(name: string): string {
-    return this.cache.data.get(name)?.title ?? "";
+    return (
+      controlManager()?.title(name) || this.cache.data.get(name)?.title || ""
+    );
   }
 
   listedAt(): number {
@@ -493,7 +554,9 @@ class SessionStatusDetector {
   // caller can tell if anything is worth looking at again.
   signature(): string {
     return [...this.cache.data.values()]
-      .map((i) => `${i.name}:${i.activity}:${i.command}:${i.title}`)
+      .map(
+        (i) => `${i.name}:${i.activity}:${i.command}:${this.titleFor(i.name)}`
+      )
       .join("\n");
   }
 
@@ -531,7 +594,15 @@ class SessionStatusDetector {
     }
   }
 
+  // What's on screen now, read from tmux itself: what a gate decides on
+  // (a BLOCKED: line) is never the kept copy. A watched session is asked
+  // over its control client, so this still starts no process.
   async capturePane(name: string): Promise<string> {
+    const asked = await controlManager()?.query(
+      name,
+      `capture-pane -p -t =${name}:`
+    );
+    if (asked) return asked.join("\n").trim();
     return (await this.capture(name, false)).trim();
   }
 
@@ -539,9 +610,29 @@ class SessionStatusDetector {
   // again only when it may have changed (screenStillFresh), or always when
   // `fresh` (a reported question is being checked against the screen).
   async captureScreen(name: string, fresh = false): Promise<string> {
+    // Kept from the pane's own output by its control client: as current as
+    // a capture, at no cost. Asked to be fresh (a reported question checked
+    // against the screen), it's read from tmux, over the client if watched.
+    if (!fresh) {
+      const live = controlManager()?.screen(name);
+      if (live != null) return live.trimEnd();
+    } else if (isValidTmuxName(name)) {
+      const asked = await controlManager()?.query(
+        name,
+        `capture-pane -e -p -t =${name}:`
+      );
+      if (asked) return asked.join("\n").trimEnd();
+    }
     const output = this.cache.data.get(name)?.output ?? 0;
     const cached = this.screens.get(name);
     const now = Date.now();
+    // Its control client saw nothing printed since that read: it holds.
+    if (
+      !fresh &&
+      cached &&
+      controlManager()?.printedSince(name, cached.at) === false
+    )
+      return cached.text;
     if (
       !fresh &&
       cached &&

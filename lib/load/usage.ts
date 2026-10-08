@@ -77,12 +77,14 @@ const run = (cmd: string, args: string[], timeout: number) =>
     )
   );
 
-// Usage by tmux session name. Empty when ps or tmux can't be read.
+// Usage by tmux session name. Empty when ps or tmux can't be read. The
+// process table is the one shared with the rest of the server.
 export async function readUsage(
   timeoutMs = 3000
 ): Promise<Record<string, Usage>> {
-  const [ps, panes] = await Promise.all([
-    run("ps", ["-Ao", "pid=,ppid=,pcpu=,rss="], timeoutMs),
+  const { processTable } = await import("../process-table");
+  const [procs, panes] = await Promise.all([
+    processTable(),
     run(
       "tmux",
       ["list-panes", "-a", "-F", "#{session_name}\t#{pane_pid}"],
@@ -90,7 +92,7 @@ export async function readUsage(
     ),
   ]);
   return sumTrees(
-    parsePs(ps),
+    procs ?? [],
     parsePanes(panes).map((p) => ({ key: p.tmux, pid: p.pid }))
   );
 }

@@ -13,6 +13,8 @@ vi.mock("@/lib/status-detector", () => ({
     titleFor: () => "",
     getTimestamp: () => 0,
     hostFor: () => "local",
+    foregroundFor: () => undefined,
+    paneProcess: () => undefined,
     capturePane: async () => "",
   },
 }));

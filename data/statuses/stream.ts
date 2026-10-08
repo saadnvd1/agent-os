@@ -27,8 +27,25 @@ const MAX_BACKOFF_MS = 30000;
 // The server pings every 25s: a socket silent for longer than this is dead
 // even if the browser still says it's open (a phone that changed networks
 // while asleep), and so is one that comes back from being hidden this long.
-const SILENT_MS = 60000;
-const HIDDEN_MS = 15000;
+export const SILENT_MS = 60000;
+export const HIDDEN_MS = 15000;
+
+/** An open socket that has said nothing for longer than the pings allow. */
+export function silentTooLong(open: boolean, heardAt: number, now: number) {
+  return open && now - heardAt > SILENT_MS;
+}
+
+/**
+ * Coming back to the page: reconnect when the socket is closed or closing,
+ * or the page was hidden long enough for a phone to have killed it quietly.
+ */
+export function reconnectOnReturn(
+  readyState: number,
+  hiddenAt: number,
+  now: number
+): boolean {
+  return readyState > 1 || (hiddenAt > 0 && now - hiddenAt > HIDDEN_MS);
+}
 
 // Where a stream left off, applied to the statuses it knew: the next state,
 // or "resync" when a message was missed.
@@ -159,7 +176,7 @@ export function useStatusStream(): boolean {
     connect();
     const stopWatching = onWatchedGitDirs(() => ws && sendWatched(ws));
     const watchdog = setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN && Date.now() - heardAt > SILENT_MS)
+      if (silentTooLong(ws?.readyState === WebSocket.OPEN, heardAt, Date.now()))
         reconnect();
     }, 10000);
 
@@ -171,9 +188,10 @@ export function useStatusStream(): boolean {
         hiddenAt = Date.now();
         return;
       }
-      const away = hiddenAt > 0 && Date.now() - hiddenAt > HIDDEN_MS;
+      const since = hiddenAt;
       hiddenAt = 0;
-      if (ws && (ws.readyState > WebSocket.OPEN || away)) reconnect();
+      if (ws && reconnectOnReturn(ws.readyState, since, Date.now()))
+        reconnect();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {

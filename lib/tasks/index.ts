@@ -4,6 +4,7 @@
  * drops it.
  */
 
+import { processTable, runsSomething } from "../process-table";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
@@ -13,7 +14,6 @@ import { resolveModelForAgent } from "../model-catalog";
 import { getProvider } from "../providers";
 import { statusDetector } from "../status-detector";
 import { buildTaskBrief, type StackedOn } from "./brief";
-import { run } from "./gh";
 import {
   attachTaskCard,
   inBackground,
@@ -201,27 +201,17 @@ async function startTask(
 
 // The agent runs under a shell (`zsh -c "...; claude ...; exec $SHELL"`), so
 // the pane's command reads as the shell even while the agent works. It has
-// exited when the shell is all that's left: no child process under it.
-async function shellOnly(tmuxName: string): Promise<boolean> {
-  try {
-    const out = await run(
-      "tmux",
-      [
-        "display-message",
-        "-t",
-        `=${tmuxName}:`,
-        "-p",
-        "#{pane_current_command} #{pane_pid}",
-      ],
-      "/"
-    );
-    const [cmd, pid] = out.trim().split(" ");
-    if (!/^-?(zsh|bash|sh|fish)$/.test(cmd)) return false;
-    const children = await run("pgrep", ["-P", pid], "/").catch(() => "");
-    return children.trim() === "";
-  } catch {
-    return false;
-  }
+// exited when the shell is all that's left: nothing running under it. Read
+// from the session listing and the shared process table, never a call per
+// task; anything unknown reads as still running.
+export async function shellOnly(tmuxName: string): Promise<boolean> {
+  // Another machine's processes aren't in this one's table.
+  if ((statusDetector.hostFor(tmuxName) ?? "local") !== "local") return false;
+  const cmd = statusDetector.foregroundFor(tmuxName);
+  const pid = statusDetector.paneProcess(tmuxName);
+  if (!cmd || !pid || !/^-?(zsh|bash|sh|fish)$/.test(cmd)) return false;
+  const rows = await processTable();
+  return rows ? !runsSomething(rows, pid) : false;
 }
 
 export async function taskView(session: Session): Promise<TaskView> {
