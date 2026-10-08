@@ -151,6 +151,20 @@ describe("serveTerminal", () => {
     ws.emit("close");
   });
 
+  it("keeps a socket that answers pings", () => {
+    const { ws } = connect();
+    const ping = vi.fn();
+    const terminate = vi.fn(() => ws.emit("close"));
+    Object.assign(ws, { ping, terminate });
+    for (let t = 0; t < 150_000; t += 25_000) {
+      vi.advanceTimersByTime(25_000);
+      ws.emit("pong");
+    }
+    expect(ping).toHaveBeenCalled();
+    expect(terminate).not.toHaveBeenCalled();
+    ws.emit("close");
+  });
+
   it("drops a socket that stops answering pings", () => {
     const { ws } = connect();
     const terminate = vi.fn(() => ws.emit("close"));

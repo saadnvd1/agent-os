@@ -134,7 +134,7 @@ describe("ControlManager", () => {
   });
 
   it("applies output after a later capture's reply once, and none from before it", async () => {
-    const { m, clients } = manager();
+    const { m, clients } = manager({ quietMs: 10 });
     m.sync(["s1"]);
     const c = clients[0];
     await identify(c);
@@ -149,7 +149,13 @@ describe("ControlManager", () => {
     c.say("%layout-change @1 x x *");
     await tick();
     c.say("%begin 5 5 1", "%1", "%end 5 5 1"); // identify
-    await new Promise((r) => setTimeout(r, 2100));
+    // Once quiet, the resync asks for the pane again (the fourth ask:
+    // two identifies, the first seed, this): answer when it has.
+    for (let i = 0; i < 100; i++) {
+      if (c.written.filter((w) => w.startsWith("display-message")).length >= 4)
+        break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
     c.say("%begin 6 6 1", "%1 20 4 0 1", "%end 6 6 1");
     await tick();
     // Printed before the capture's reply ends: already in it.
@@ -163,6 +169,13 @@ describe("ControlManager", () => {
       "%output %1 \\015\\012after"
     );
     await settle();
+    expect(m.screen("s1")).toBe("first\nIN-CAPTURE\nafter");
+    // And it isn't read again right away for the output it applied: no
+    // new resync asks for the pane (four asks so far).
+    await new Promise((r) => setTimeout(r, 60));
+    expect(
+      c.written.filter((w) => w.startsWith("display-message"))
+    ).toHaveLength(4);
     expect(m.screen("s1")).toBe("first\nIN-CAPTURE\nafter");
   });
 

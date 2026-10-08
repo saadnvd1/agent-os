@@ -23,6 +23,17 @@ export interface WebSocketManager {
   cleanup: () => void;
 }
 
+// A redraw (ESC c, the whole screen again) starts from a reset: a reader
+// scrolled up goes back to the same distance from the bottom; one at the
+// bottom stays there (null: leave the scroll alone).
+export function scrollAfterRedraw(
+  wasAtBottom: boolean,
+  fromBottom: number,
+  baseYAfter: number
+): number | null {
+  return wasAtBottom ? null : Math.max(0, baseYAfter - fromBottom);
+}
+
 export function createWebSocketConnection(
   term: XTerm,
   callbacks: WebSocketCallbacks,
@@ -141,10 +152,14 @@ export function createWebSocketConnection(
         term.write(msg.data, () => {
           if (from.readyState === WebSocket.OPEN)
             from.send(JSON.stringify({ type: "ack" }));
-          if (redraw && !wasAtBottom)
-            term.scrollToLine(
-              Math.max(0, term.buffer.active.baseY - fromBottom)
-            );
+          const line = redraw
+            ? scrollAfterRedraw(
+                wasAtBottom,
+                fromBottom,
+                term.buffer.active.baseY
+              )
+            : null;
+          if (line !== null) term.scrollToLine(line);
         });
         if (redraw) return;
 
