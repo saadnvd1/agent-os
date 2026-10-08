@@ -43,6 +43,52 @@ export function applyDeltas(
   return next ?? items;
 }
 
+// Where a live item lands: replaced in place when loaded, in the composer's
+// list when it's a background task from before the loaded page, else at the
+// end. Unchanged lists keep their identity.
+export function routeItem(
+  items: ChatItem[],
+  earlier: ChatItem[],
+  item: ChatItem
+): { items: ChatItem[]; earlier: ChatItem[] } {
+  const i = lastIndexOfId(items, item.id);
+  if (i === -1 && earlier.some((t) => t.id === item.id))
+    return {
+      items,
+      earlier: earlier.map((t) => (t.id === item.id ? item : t)),
+    };
+  const next = items.slice();
+  if (i === -1) next.push(item);
+  else next[i] = item;
+  return { items: next, earlier };
+}
+
+// Tool bodies still good after a reconnect's snapshot: a finished tool's
+// output can't change, but one running then, or whose status moved while
+// away, is asked for again.
+export function keptBodies(
+  bodies: Record<string, ToolBody | null>,
+  before: ChatItem[],
+  page: ChatItem[]
+): Record<string, ToolBody | null> {
+  const was = new Map(
+    before.flatMap((i) => (i.kind === "tool" ? [[i.id, i.status]] : []))
+  );
+  const stale = new Set(
+    page
+      .filter(
+        (i) =>
+          i.kind === "tool" &&
+          (i.status === "running" || was.get(i.id) !== i.status)
+      )
+      .map((i) => i.id)
+  );
+  const next: Record<string, ToolBody | null> = {};
+  for (const [id, body] of Object.entries(bodies))
+    if (body !== null && !stale.has(id)) next[id] = body;
+  return next;
+}
+
 // A fresh page after a reconnect, joined to the older items already loaded
 // when it overlaps them.
 export function joinPage(
@@ -145,6 +191,7 @@ export function useChat(
       ws.onmessage = (event) => {
         const m = JSON.parse(event.data) as ChatServerMessage;
         if (m.type === "snapshot") {
+          const before = itemsRef.current;
           withDeltas(() => {
             const kept = joinPage(itemsRef.current, m.items);
             if (!kept) {
@@ -154,9 +201,7 @@ export function useChat(
             setItems(kept ?? m.items);
           });
           setEarlierTasks(m.tasks ?? []);
-          // Bodies may have changed while away (a tool that was running
-          // finished): opened tools ask again.
-          setToolBodies({});
+          setToolBodies((prev) => keptBodies(prev, before, m.items));
           setLoadingOlder(false);
           setState(m.state);
           setQueue(m.queue ?? []);
@@ -197,21 +242,14 @@ export function useChat(
           setToolBodies((prev) => ({ ...prev, [m.id]: m.body }));
         } else if (m.type === "item") {
           withDeltas(() => {
-            const prev = itemsRef.current;
-            const i = lastIndexOfId(prev, m.item.id);
-            // A background task from before the loaded page changes where
-            // it's listed, not at the end of the conversation.
-            const earlier = earlierTasksRef.current;
-            if (i === -1 && earlier.some((t) => t.id === m.item.id)) {
-              setEarlierTasks(
-                earlier.map((t) => (t.id === m.item.id ? m.item : t))
-              );
-              return;
-            }
-            const next = prev.slice();
-            if (i === -1) next.push(m.item);
-            else next[i] = m.item;
-            setItems(next);
+            const routed = routeItem(
+              itemsRef.current,
+              earlierTasksRef.current,
+              m.item
+            );
+            if (routed.items !== itemsRef.current) setItems(routed.items);
+            if (routed.earlier !== earlierTasksRef.current)
+              setEarlierTasks(routed.earlier);
           });
         } else if (m.type === "delta") {
           deltas.set(m.id, (deltas.get(m.id) ?? "") + m.text);
