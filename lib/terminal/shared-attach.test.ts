@@ -150,6 +150,49 @@ describe("SharedAttach", () => {
     }
   });
 
+  it("a viewer back within the grace keeps the attach for as long as it stays", async () => {
+    vi.useFakeTimers();
+    try {
+      const pty = fakePty();
+      const attach = new SharedAttach(pty, 20, 4, () => {});
+      const first = viewer();
+      attach.join(first.v);
+      attach.leave(first.v);
+      const back = viewer();
+      attach.join(back.v);
+      // Long past the first leave's grace, still watched: still running.
+      await vi.advanceTimersByTimeAsync(GRACE_MS * 3);
+      expect(pty.kill).not.toHaveBeenCalled();
+      expect(attach.alive).toBe(true);
+      attach.leave(back.v);
+      await vi.advanceTimersByTimeAsync(GRACE_MS + 1);
+      expect(pty.kill).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("doesn't count a replay bigger than the window against it", async () => {
+    const pty = fakePty();
+    const attach = new SharedAttach(pty, 80, 24, () => {});
+    attach.join(viewer(false).v);
+    // Enough history that the replay alone is over the window.
+    for (let i = 0; i < 400; i++) pty.print(`${"x".repeat(200)} ${i}\r\n`);
+    await flush();
+    const late = viewer();
+    attach.join(late.v);
+    await flush();
+    expect(late.got[0].length).toBeGreaterThan(64 * 1024);
+    pty.print("live");
+    await flush();
+    expect(late.got.at(-1)).toBe("live");
+    expect(late.v.behind).toBe(false);
+    expect(pty.pause).not.toHaveBeenCalled();
+    // Acking the replay leaves the live chunk counted.
+    attach.ack(late.v);
+    expect(late.v.pending).toHaveLength(1);
+  });
+
   it("isn't held back by an acking viewer while one that doesn't ack watches", async () => {
     const pty = fakePty();
     const attach = new SharedAttach(pty, 20, 4, () => {});

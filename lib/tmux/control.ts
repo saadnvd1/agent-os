@@ -40,8 +40,10 @@ export interface ControlDeps {
   attached: (name: string) => void;
   detached: (name: string) => void;
   now: () => number;
-  // How long a command may wait for its reply (tests shorten it).
+  // How long a command may wait for its reply, and how long output must
+  // stop before the screen is trued up (tests shorten both).
   commandTimeoutMs?: number;
+  quietMs?: number;
 }
 
 interface Command {
@@ -334,7 +336,8 @@ export class ControlManager {
   private settleLater(w: Watched): void {
     w.dirty = true;
     if (w.quiet) clearTimeout(w.quiet);
-    const due = Math.max(QUIET_MS, w.syncedAt + RESYNC_MS - this.deps.now());
+    const quiet = this.deps.quietMs ?? QUIET_MS;
+    const due = Math.max(quiet, w.syncedAt + RESYNC_MS - this.deps.now());
     w.quiet = setTimeout(() => {
       w.quiet = null;
       if (w.dirty) void this.resync(w);
@@ -404,10 +407,11 @@ export class ControlManager {
         y: Number(y) || 0,
       });
       for (const data of w.held ?? []) w.screen.write(data);
-      if (w.held?.length) this.settleLater(w);
       w.synced = true;
       w.syncedAt = this.deps.now();
       w.failures = 0;
+      // Held output moved the screen on: it's checked again later, not now.
+      if (w.held?.length) this.settleLater(w);
     } catch {
       w.synced = false;
     } finally {
