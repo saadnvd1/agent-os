@@ -181,7 +181,9 @@ describe("SharedAttach", () => {
     await flush();
     const late = viewer();
     attach.join(late.v);
-    await flush();
+    // The replay is serialized off the headless terminal, which a slow
+    // machine can take longer than one flush to finish.
+    await vi.waitFor(() => expect(late.got.length).toBeGreaterThan(0));
     expect(late.got[0].length).toBeGreaterThan(64 * 1024);
     pty.print("live");
     await flush();
