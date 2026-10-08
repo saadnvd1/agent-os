@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { Bot, ChevronRight } from "lucide-react";
 import type { ToolItem } from "@/lib/chat/group";
 import { cn } from "@/lib/utils";
 import { Markdown } from "./Markdown";
 import { StatusIcon, useToolBody } from "./Tools";
+import { useRowState } from "./rowState";
 
 // Its report, loaded when the card opens if the page left it out.
 function Report({ item }: { item: ToolItem }) {
@@ -16,7 +16,7 @@ function Report({ item }: { item: ToolItem }) {
 
 // Work handed to a subagent: what it was asked, and its report when done.
 export function SubagentCard({ item }: { item: ToolItem }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useRowState(`agent:${item.id}`, false);
   const input = (item.input ?? {}) as {
     subagent_type?: string;
     prompt?: string;

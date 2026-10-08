@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Bot,
   Check,
@@ -16,6 +15,7 @@ import { CopyButton } from "./CopyButton";
 import { ImageThumb } from "./ImageThumb";
 import { Markdown } from "./Markdown";
 import { UndoButton } from "./Undo";
+import { useRowState } from "./rowState";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
@@ -100,7 +100,7 @@ export function AssistantMessage({ item }: { item: Of<"assistant"> }) {
 }
 
 export function Reasoning({ item }: { item: Of<"reasoning"> }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useRowState(`reasoning:${item.id}`, false);
   return (
     <div className="text-muted-foreground text-xs">
       <button

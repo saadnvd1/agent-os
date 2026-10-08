@@ -70,6 +70,47 @@ describe("watchChat", () => {
     ]);
   });
 
+  it("leaves out tasks long finished and ones already on the page", () => {
+    const project = createProject({
+      name: `p-${randomUUID().slice(0, 6)}`,
+      workingDirectory: "/tmp/p",
+    });
+    const id = seedSession({ projectId: project.id, name: "c", view: "chat" });
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    saveItem(id, {
+      id: "task-done",
+      kind: "task",
+      taskId: "t-done",
+      description: "finished long ago",
+      status: "completed",
+      endedAt: twoHoursAgo,
+      createdAt: twoHoursAgo - 1000,
+    } as ChatItem);
+    saveItem(id, {
+      id: "task-recent",
+      kind: "task",
+      taskId: "t-recent",
+      description: "finished just now",
+      status: "completed",
+      endedAt: Date.now() - 1000,
+      createdAt: 1,
+    } as ChatItem);
+    for (let i = 0; i < PAGE_ITEMS + 5; i++)
+      saveItem(id, { id: `m${i}`, kind: "assistant", text: "", createdAt: i });
+    saveItem(id, {
+      id: "task-new",
+      kind: "task",
+      taskId: "t-new",
+      description: "on the page",
+      status: "completed",
+      endedAt: Date.now(),
+      createdAt: Date.now(),
+    } as ChatItem);
+    const snap = snapshot(id, true);
+    expect(snap.tasks.map((t) => t.id)).toEqual(["task-recent"]);
+    expect(snap.items.some((i) => i.id === "task-new")).toBe(true);
+  });
+
   it("sends every item to a client that didn't ask for pages", () => {
     const id = longChat(PAGE_ITEMS + 30);
     const snap = snapshot(id, false);

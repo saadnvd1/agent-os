@@ -31,11 +31,17 @@ describe("incrementalParser", () => {
   });
 
   it("reparses the whole document when a definition appears", () => {
-    streamed("```\nx\n```\n\nSee [the docs][d].\n\n[d]: https://example.com\n");
+    // The reference is before the cached fence and its definition after:
+    // only a full parse links it.
+    streamed(
+      "See [the docs][d].\n\n```\nx\n```\n\n[d]: https://example.com\n",
+      1
+    );
   });
 
-  it("falls back to full parses around CRs", () => {
-    streamed("```\na\r\n```\r\n\r\ntext\r\n");
+  it("keeps a BOM that lands right after the cached prefix", () => {
+    // Parsed on its own, the suffix would lose it as a document's BOM.
+    streamed("```\nx\n```\n\n\uFEFFhello\n", 1);
   });
 
   it("reuses the finished prefix rather than parsing it again", () => {

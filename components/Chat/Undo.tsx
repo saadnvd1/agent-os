@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronRight, Loader2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +14,7 @@ import type { UndoPreview } from "@/lib/chat/events";
 import type { UndoItem } from "@/lib/chat/group";
 import { shortPath } from "@/lib/chat/diff";
 import { cn } from "@/lib/utils";
+import { useRowState } from "./rowState";
 
 const counts = (p: { insertions?: number; deletions?: number }) =>
   p.insertions || p.deletions
@@ -110,7 +110,7 @@ export function UndoneBlock({
   count: number;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useRowState(`undone:${undo.id}`, false);
   const files = undo.filesChanged
     ? ` · restored ${undo.filesChanged} file${undo.filesChanged === 1 ? "" : "s"}${counts(undo)}`
     : "";

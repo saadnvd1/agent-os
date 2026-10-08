@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect } from "react";
 import { Check, ChevronRight, Loader2, Square, X } from "lucide-react";
 import type { FileDiff, ToolBody } from "@/lib/chat/events";
 import type { ToolItem } from "@/lib/chat/group";
@@ -9,22 +9,24 @@ import { cn } from "@/lib/utils";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { Highlighted } from "./Code";
 import { useNow } from "./useNow";
+import { useRowState } from "./rowState";
 
 // Output and diffs of tool calls sent without them (lib/chat/page), loaded
 // when one is opened.
 export const ToolBodies = createContext<{
   bodies: Record<string, ToolBody | null>;
   request: (id: string) => void;
-}>({ bodies: {}, request: () => {} });
+  connected: boolean;
+}>({ bodies: {}, request: () => {}, connected: false });
 
 // A tool call's output and diff: its own, or once loaded. `undefined` while
 // it loads.
 export function useToolBody(tool: ToolItem): ToolBody | null | undefined {
-  const { bodies, request } = useContext(ToolBodies);
+  const { bodies, request, connected } = useContext(ToolBodies);
   const body = tool.deferred ? bodies[tool.id] : tool;
   useEffect(() => {
-    if (tool.deferred && body === undefined) request(tool.id);
-  }, [tool.deferred, tool.id, body, request]);
+    if (tool.deferred && body === undefined && connected) request(tool.id);
+  }, [tool.deferred, tool.id, body, request, connected]);
   return body;
 }
 
@@ -125,7 +127,8 @@ function Elapsed({ tool }: { tool: ToolItem }) {
 }
 
 function ToolRow({ tool }: { tool: ToolItem }) {
-  const [open, setOpen] = useState(
+  const [open, setOpen] = useRowState(
+    `tool:${tool.id}`,
     tool.status === "error" || !!tool.diff || !!tool.hasDiff
   );
   return (
@@ -152,7 +155,7 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
   const failed = tools.filter((t) => t.status === "error").length;
   const stopped = tools.filter((t) => t.status === "stopped").length;
   const edits = tools.filter((t) => t.diff || t.hasDiff).length;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useRowState(`steps:${tools[0].id}`, false);
   const latest =
     tools.findLast((t) => t.status === "running") ?? tools[tools.length - 1];
   return (

@@ -44,7 +44,7 @@ export function incrementalParser(parse: Parse): Parse {
   return (source, file) => {
     // A CR could become half of a CRLF and a BOM is stripped at the start:
     // either way the split point isn't safe.
-    if (source.includes("\r") || source.includes("﻿"))
+    if (source.includes("\r") || source.includes("\uFEFF"))
       return parse(source, file);
 
     const prefix =

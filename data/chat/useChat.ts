@@ -73,7 +73,12 @@ export function useChat(
   const [hasMore, setHasMore] = useState(false);
   const cursor = useRef<number | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [earlierTasks, setEarlierTasks] = useState<ChatItem[]>([]);
+  const [earlierTasks, setEarlierTasksState] = useState<ChatItem[]>([]);
+  const earlierTasksRef = useRef<ChatItem[]>([]);
+  const setEarlierTasks = useCallback((next: ChatItem[]) => {
+    earlierTasksRef.current = next;
+    setEarlierTasksState(next);
+  }, []);
   const [toolBodies, setToolBodies] = useState<Record<string, ToolBody | null>>(
     {}
   );
@@ -111,6 +116,8 @@ export function useChat(
     cursor.current = null;
     setHasMore(false);
     setToolBodies({});
+    setEarlierTasks([]);
+    setLoadingOlder(false);
     // Streamed words land many to a frame: one render per frame, not per word.
     const deltas = new Map<string, string>();
     let frame: number | null = null;
@@ -147,6 +154,9 @@ export function useChat(
             setItems(kept ?? m.items);
           });
           setEarlierTasks(m.tasks ?? []);
+          // Bodies may have changed while away (a tool that was running
+          // finished): opened tools ask again.
+          setToolBodies({});
           setLoadingOlder(false);
           setState(m.state);
           setQueue(m.queue ?? []);
@@ -189,6 +199,15 @@ export function useChat(
           withDeltas(() => {
             const prev = itemsRef.current;
             const i = lastIndexOfId(prev, m.item.id);
+            // A background task from before the loaded page changes where
+            // it's listed, not at the end of the conversation.
+            const earlier = earlierTasksRef.current;
+            if (i === -1 && earlier.some((t) => t.id === m.item.id)) {
+              setEarlierTasks(
+                earlier.map((t) => (t.id === m.item.id ? m.item : t))
+              );
+              return;
+            }
             const next = prev.slice();
             if (i === -1) next.push(m.item);
             else next[i] = m.item;
@@ -226,7 +245,7 @@ export function useChat(
       document.removeEventListener("visibilitychange", onVisible);
       wsRef.current?.close();
     };
-  }, [sessionId, setItems]);
+  }, [sessionId, setItems, setEarlierTasks]);
 
   const queryClient = useQueryClient();
   const send = useCallback(
@@ -330,8 +349,11 @@ export function useChat(
     ws.send(JSON.stringify({ type: "history", before: cursor.current }));
   }, [loadingOlder, hasMore]);
 
+  // Asked again by the opened tool once the socket is back (useToolBody).
   const requestToolBody = useCallback((id: string) => {
-    wsRef.current?.send(JSON.stringify({ type: "tool_body", id }));
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify({ type: "tool_body", id }));
   }, []);
 
   return {

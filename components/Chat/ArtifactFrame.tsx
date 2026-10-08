@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { parseTheme } from "@/lib/theme-config";
+import { useRowState } from "./rowState";
 
 // Agent output, never the app: scripts run, but with an opaque origin and no
 // same-origin access. The server sends the same sandbox as a CSP header.
@@ -37,7 +38,7 @@ export function ArtifactFrame({
 }) {
   const { resolvedTheme } = useTheme();
   const ref = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(240);
+  const [height, setHeight] = useRowState(`artifact:${artifactId}`, 240);
 
   useEffect(() => {
     if (fill) return;
@@ -48,7 +49,7 @@ export function ArtifactFrame({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [fill, maxHeight]);
+  }, [fill, maxHeight, setHeight]);
 
   // The page's prefers-color-scheme follows the frame's color-scheme.
   const style: CSSProperties = {

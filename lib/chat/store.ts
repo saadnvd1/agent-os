@@ -54,7 +54,7 @@ export function lastItems(
       ? db
           .prepare(
             `SELECT data FROM chat_items WHERE session_id = ?
-             AND json_extract(data, '$.kind') = ? ORDER BY seq DESC LIMIT ?`
+             AND kind = ? ORDER BY seq DESC LIMIT ?`
           )
           .all(sessionId, kind, n)
       : db
@@ -74,7 +74,7 @@ export function itemsOfKind<K extends ChatItem["kind"]>(
     db
       .prepare(
         `SELECT data FROM chat_items WHERE session_id = ?
-         AND json_extract(data, '$.kind') = ? ORDER BY seq`
+         AND kind = ? ORDER BY seq`
       )
       .all(sessionId, kind) as { data: string }[]
   ).map((r) => JSON.parse(r.data));
@@ -88,7 +88,7 @@ export function runningTools(
     db
       .prepare(
         `SELECT data FROM chat_items WHERE session_id = ?
-         AND json_extract(data, '$.kind') = 'tool'
+         AND kind = 'tool'
          AND json_extract(data, '$.status') = 'running'`
       )
       .all(sessionId) as { data: string }[]
