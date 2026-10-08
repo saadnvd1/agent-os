@@ -86,7 +86,7 @@ export function AssistantMessage({ item }: { item: Of<"assistant"> }) {
   return (
     <div className="group">
       <div data-quotable className={cn(item.streaming && "streaming-cursor")}>
-        <Markdown text={item.text} />
+        <Markdown text={item.text} streaming={item.streaming} />
       </div>
       {!item.streaming && (
         <CopyButton

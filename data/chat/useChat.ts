@@ -15,8 +15,44 @@ import type {
   ChatState,
   FileSuggestion,
   QueuedMessage,
+  ToolBody,
   UndoPreview,
 } from "@/lib/chat/events";
+
+// The index of the item with `id`, searched from the end: what changes is
+// almost always the latest.
+function lastIndexOfId(items: ChatItem[], id: string): number {
+  for (let i = items.length - 1; i >= 0; i--) if (items[i].id === id) return i;
+  return -1;
+}
+
+// Streamed text for several items, applied in one pass.
+export function applyDeltas(
+  items: ChatItem[],
+  deltas: Map<string, string>
+): ChatItem[] {
+  let next: ChatItem[] | null = null;
+  for (const [id, text] of deltas) {
+    const i = lastIndexOfId(next ?? items, id);
+    if (i === -1) continue;
+    const item = (next ?? items)[i];
+    if (!("text" in item)) continue;
+    next ??= items.slice();
+    next[i] = { ...item, text: item.text + text } as ChatItem;
+  }
+  return next ?? items;
+}
+
+// A fresh page after a reconnect, joined to the older items already loaded
+// when it overlaps them.
+export function joinPage(
+  prev: ChatItem[],
+  page: ChatItem[]
+): ChatItem[] | null {
+  if (!page.length) return null;
+  const at = prev.findIndex((p) => p.id === page[0].id);
+  return at > 0 ? prev.slice(0, at).concat(page) : null;
+}
 
 // One chat conversation over its WebSocket: a snapshot, then live items and
 // streamed text. Reconnects when the socket drops (e.g. a phone waking up).
@@ -25,7 +61,22 @@ export function useChat(
   // Called with a message's text once it's undone, to edit and resend.
   onUndone?: (text: string) => void
 ) {
-  const [items, setItems] = useState<ChatItem[]>([]);
+  const [items, setItemsState] = useState<ChatItem[]>([]);
+  // The items as last set, for updates that read them outside a render.
+  const itemsRef = useRef<ChatItem[]>([]);
+  const setItems = useCallback((next: ChatItem[]) => {
+    itemsRef.current = next;
+    setItemsState(next);
+  }, []);
+  // Older history: where it starts, whether there's more, and background
+  // tasks from before the loaded items.
+  const [hasMore, setHasMore] = useState(false);
+  const cursor = useRef<number | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [earlierTasks, setEarlierTasks] = useState<ChatItem[]>([]);
+  const [toolBodies, setToolBodies] = useState<Record<string, ToolBody | null>>(
+    {}
+  );
   const [state, setState] = useState<ChatState>("idle");
   const [connected, setConnected] = useState(false);
   const [commands, setCommands] = useState<ChatCommand[]>([]);
@@ -55,18 +106,48 @@ export function useChat(
   useEffect(() => {
     let closed = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    // Another conversation: nothing of the last one carries over.
+    setItems([]);
+    cursor.current = null;
+    setHasMore(false);
+    setToolBodies({});
+    // Streamed words land many to a frame: one render per frame, not per word.
+    const deltas = new Map<string, string>();
+    let frame: number | null = null;
+    const flushDeltas = () => {
+      frame = null;
+      if (!deltas.size) return;
+      const batch = new Map(deltas);
+      deltas.clear();
+      setItems(applyDeltas(itemsRef.current, batch));
+    };
+    // Items are applied in order with the deltas around them.
+    const withDeltas = (fn: () => void) => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      flushDeltas();
+      fn();
+    };
 
     const connect = () => {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(
-        `${protocol}//${window.location.host}/ws/chat?session=${encodeURIComponent(sessionId)}`
+        `${protocol}//${window.location.host}/ws/chat?session=${encodeURIComponent(sessionId)}&paged=1`
       );
       wsRef.current = ws;
       ws.onopen = () => setConnected(true);
       ws.onmessage = (event) => {
         const m = JSON.parse(event.data) as ChatServerMessage;
         if (m.type === "snapshot") {
-          setItems(m.items);
+          withDeltas(() => {
+            const kept = joinPage(itemsRef.current, m.items);
+            if (!kept) {
+              cursor.current = m.cursor;
+              setHasMore(m.hasMore);
+            }
+            setItems(kept ?? m.items);
+          });
+          setEarlierTasks(m.tasks ?? []);
+          setLoadingOlder(false);
           setState(m.state);
           setQueue(m.queue ?? []);
           setSuggestion(m.suggestion ?? null);
@@ -94,24 +175,33 @@ export function useChat(
         } else if (m.type === "undone") {
           setUndoPreview(null);
           onUndoneRef.current?.(m.text);
+        } else if (m.type === "history") {
+          if (m.before !== cursor.current) return;
+          cursor.current = m.cursor;
+          setHasMore(m.hasMore);
+          setLoadingOlder(false);
+          const prev = itemsRef.current;
+          const have = new Set(prev.map((p) => p.id));
+          setItems(m.items.filter((i) => !have.has(i.id)).concat(prev));
+        } else if (m.type === "tool_body") {
+          setToolBodies((prev) => ({ ...prev, [m.id]: m.body }));
         } else if (m.type === "item") {
-          setItems((prev) => {
-            const i = prev.findIndex((p) => p.id === m.item.id);
-            if (i === -1) return [...prev, m.item];
+          withDeltas(() => {
+            const prev = itemsRef.current;
+            const i = lastIndexOfId(prev, m.item.id);
             const next = prev.slice();
-            next[i] = m.item;
-            return next;
+            if (i === -1) next.push(m.item);
+            else next[i] = m.item;
+            setItems(next);
           });
         } else if (m.type === "delta") {
-          setItems((prev) =>
-            prev.map((p) =>
-              p.id === m.id && "text" in p ? { ...p, text: p.text + m.text } : p
-            )
-          );
+          deltas.set(m.id, (deltas.get(m.id) ?? "") + m.text);
+          frame ??= requestAnimationFrame(flushDeltas);
         }
       };
       ws.onclose = () => {
         setConnected(false);
+        setLoadingOlder(false);
         if (!closed) retry = setTimeout(connect, 1500);
       };
     };
@@ -132,10 +222,11 @@ export function useChat(
     return () => {
       closed = true;
       clearTimeout(retry);
+      if (frame !== null) cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", onVisible);
       wsRef.current?.close();
     };
-  }, [sessionId]);
+  }, [sessionId, setItems]);
 
   const queryClient = useQueryClient();
   const send = useCallback(
@@ -230,8 +321,27 @@ export function useChat(
     wsRef.current?.send(JSON.stringify({ type: "task_output", taskId }));
   }, []);
 
+  // The page before the oldest loaded item, once at a time.
+  const loadOlder = useCallback(() => {
+    const ws = wsRef.current;
+    if (loadingOlder || !hasMore || cursor.current === null) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    setLoadingOlder(true);
+    ws.send(JSON.stringify({ type: "history", before: cursor.current }));
+  }, [loadingOlder, hasMore]);
+
+  const requestToolBody = useCallback((id: string) => {
+    wsRef.current?.send(JSON.stringify({ type: "tool_body", id }));
+  }, []);
+
   return {
     items,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    earlierTasks,
+    toolBodies,
+    requestToolBody,
     state,
     connected,
     commands,

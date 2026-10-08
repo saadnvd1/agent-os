@@ -27,6 +27,59 @@ export function listItems(sessionId: string): ChatItem[] {
   ).map((r) => JSON.parse(r.data) as ChatItem);
 }
 
+export function getItem(
+  sessionId: string,
+  itemId: string
+): ChatItem | undefined {
+  const row = db
+    .prepare(`SELECT data FROM chat_items WHERE session_id = ? AND item_id = ?`)
+    .get(sessionId, itemId) as { data: string } | undefined;
+  return row ? (JSON.parse(row.data) as ChatItem) : undefined;
+}
+
+export function hasItem(sessionId: string, itemId: string): boolean {
+  return !!db
+    .prepare(`SELECT 1 FROM chat_items WHERE session_id = ? AND item_id = ?`)
+    .get(sessionId, itemId);
+}
+
+// The latest `n` items, oldest first; of one kind when `kind` is given.
+export function lastItems(
+  sessionId: string,
+  n: number,
+  kind?: ChatItem["kind"]
+): ChatItem[] {
+  const rows = (
+    kind
+      ? db
+          .prepare(
+            `SELECT data FROM chat_items WHERE session_id = ?
+             AND json_extract(data, '$.kind') = ? ORDER BY seq DESC LIMIT ?`
+          )
+          .all(sessionId, kind, n)
+      : db
+          .prepare(
+            `SELECT data FROM chat_items WHERE session_id = ? ORDER BY seq DESC LIMIT ?`
+          )
+          .all(sessionId, n)
+  ) as { data: string }[];
+  return rows.reverse().map((r) => JSON.parse(r.data) as ChatItem);
+}
+
+export function itemsOfKind<K extends ChatItem["kind"]>(
+  sessionId: string,
+  kind: K
+): Extract<ChatItem, { kind: K }>[] {
+  return (
+    db
+      .prepare(
+        `SELECT data FROM chat_items WHERE session_id = ?
+         AND json_extract(data, '$.kind') = ? ORDER BY seq`
+      )
+      .all(sessionId, kind) as { data: string }[]
+  ).map((r) => JSON.parse(r.data));
+}
+
 // Tool calls saved as still running.
 export function runningTools(
   sessionId: string

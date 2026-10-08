@@ -29,7 +29,15 @@ import {
   sendCapabilities,
   setChatPlan,
 } from "./settings";
-import { listItems, saveItem, settle } from "./store";
+import {
+  getItem,
+  hasItem,
+  itemsOfKind,
+  listItems,
+  saveItem,
+  settle,
+} from "./store";
+import { readPage, toolBody, type ItemPage } from "./page";
 import {
   deleteQueued,
   editQueued,
@@ -40,7 +48,7 @@ import {
 } from "./queued";
 import { fallbackFileSuggestions } from "./files";
 import { holdsQueue, settingUp } from "../sessions/setup-progress";
-import type { FileSuggestion } from "./events";
+import type { ChatItem, FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
 import { restoreActivity, track } from "./activity";
 
@@ -77,7 +85,7 @@ export async function carryOutPlan(
   planId: string,
   timeoutMs?: number
 ): Promise<void> {
-  const item = listItems(sessionId).find((i) => i.id === planId);
+  const item = getItem(sessionId, planId);
   if (item?.kind !== "plan") throw new Error("That plan is gone");
   if (item.carried) return;
   // Mid-turn (another tab, a phone reconnecting), leaving plan mode would let
@@ -347,8 +355,7 @@ export async function sendChatConfirmed(
   const wasBusy = live.state === "running" || live.state === "waiting";
   const id = input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
   // Already taken (a retry of the same message): nothing to wait for.
-  if (input.id && listItems(sessionId).some((i) => i.id === id))
-    return "delivered";
+  if (input.id && hasItem(sessionId, id)) return "delivered";
   let set = registry.listeners.get(sessionId);
   if (!set) registry.listeners.set(sessionId, (set = new Set()));
   const listeners = set;
@@ -360,7 +367,7 @@ export async function sendChatConfirmed(
     };
     timer = setTimeout(() => {
       // The event can be missed across a reconnect; the row can't.
-      if (listItems(sessionId).some((i) => i.id === id)) resolve();
+      if (hasItem(sessionId, id)) resolve();
       else
         reject(
           new Error(
@@ -404,7 +411,7 @@ export async function undoChat(
   dryRun: boolean,
   reply: Listener
 ): Promise<void> {
-  const target = listItems(sessionId).find((i) => i.id === from);
+  const target = getItem(sessionId, from);
   if (target?.kind !== "user" || !target.checkpoint)
     throw new Error("That message can't be undone");
   const running = registry.live.get(sessionId)?.state;
@@ -505,25 +512,45 @@ export function chatTaskOutput(
   sessionId: string,
   taskId: string
 ): string | null {
-  const task = listItems(sessionId).find(
-    (i) => i.kind === "task" && i.taskId === taskId
-  );
+  const task = itemsOfKind(sessionId, "task").find((i) => i.taskId === taskId);
   if (task?.kind !== "task") return null;
   return taskOutputTail(taskId, task.outputFile);
 }
 
-// Snapshot then live updates. Returns the unsubscribe function.
-export function watchChat(sessionId: string, listener: Listener): () => void {
+// What a watcher is sent of stored items: the live text of what's still
+// streaming, or with no conversation running, nothing left running.
+function present(sessionId: string, items: ChatItem[]): ChatItem[] {
   const live = registry.live.get(sessionId);
-  let items = listItems(sessionId);
-  if (live) {
-    items = items.map((i) => live.streaming.get(i.id) ?? i);
-  } else if (!runningWorkers().includes(sessionId)) {
-    items = settle(items);
-  }
+  if (live) return items.map((i) => live.streaming.get(i.id) ?? i);
+  return runningWorkers().includes(sessionId) ? items : settle(items);
+}
+
+// Snapshot then live updates. Returns the unsubscribe function. `paged`
+// clients get the latest page and ask for the rest; others get everything.
+export function watchChat(
+  sessionId: string,
+  listener: Listener,
+  paged = false
+): () => void {
+  const live = registry.live.get(sessionId);
+  const page = paged
+    ? readPage(sessionId)
+    : { items: listItems(sessionId), cursor: null, hasMore: false };
+  const onPage = new Set(page.items.map((i) => i.id));
+  // The composer lists background work still going or just done, even when
+  // it started before the page.
+  const recent = Date.now() - 60 * 60 * 1000;
+  const tasks = itemsOfKind(sessionId, "task").filter(
+    (t) =>
+      !onPage.has(t.id) &&
+      (t.status === "running" || (t.endedAt ?? t.createdAt) > recent)
+  );
   listener({
     type: "snapshot",
-    items,
+    items: present(sessionId, page.items),
+    cursor: page.cursor,
+    hasMore: page.hasMore,
+    tasks: present(sessionId, tasks),
     state: live?.state ?? "idle",
     queue: listQueue(sessionId),
     suggestion: getSession(sessionId).chat_suggestion ?? null,
@@ -535,6 +562,14 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
   set.add(listener);
   return () => set?.delete(listener);
 }
+
+// The page before `before`, as the reader scrolls up.
+export function chatHistory(sessionId: string, before: number): ItemPage {
+  const page = readPage(sessionId, before);
+  return { ...page, items: present(sessionId, page.items) };
+}
+
+export const chatToolBody = toolBody;
 
 // After a restart: reconnect to every worker still running a conversation,
 // and send the queues of conversations whose worker is gone.

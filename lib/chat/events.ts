@@ -112,6 +112,11 @@ export type ChatItem =
       diff?: FileDiff;
       // When it finished, to show how long a step took.
       endedAt?: number;
+      // Sent without its output and diff (lib/chat/page), which load when
+      // it's opened; these say which of the two it has.
+      deferred?: boolean;
+      hasOutput?: boolean;
+      hasDiff?: boolean;
     })
   | (Base & {
       kind: "todos";
@@ -227,15 +232,35 @@ export type DriverEvent =
   | { type: "turn_start" } // the agent started a turn (maybe one nobody sent)
   | { type: "state"; state: ChatState };
 
+// A tool call's output and diff, loaded when it's opened.
+export interface ToolBody {
+  output?: string;
+  diff?: FileDiff;
+}
+
 // What the server sends to a browser watching a conversation.
 export type ChatServerMessage =
   | {
       type: "snapshot";
+      // Every item, or the latest page for a client that asked (?paged=1).
       items: ChatItem[];
+      // Where older items start, and whether there are any.
+      cursor: number | null;
+      hasMore: boolean;
+      // Background tasks from before the page, for the composer's list.
+      tasks: ChatItem[];
       state: ChatState;
       queue: QueuedMessage[];
       suggestion: string | null;
     }
+  | {
+      type: "history";
+      before: number;
+      items: ChatItem[];
+      cursor: number | null;
+      hasMore: boolean;
+    }
+  | { type: "tool_body"; id: string; body: ToolBody | null }
   | { type: "queue"; queue: QueuedMessage[] }
   | { type: "suggestion"; text: string | null }
   | {
@@ -279,4 +304,7 @@ export type ChatClientMessage =
   | ({ type: "respond"; id: string } & ApprovalDecision)
   | { type: "undo"; from: string; dryRun?: boolean }
   | { type: "stop_task"; taskId: string }
-  | { type: "task_output"; taskId: string };
+  | { type: "task_output"; taskId: string }
+  // Older items, from before a page's cursor.
+  | { type: "history"; before: number }
+  | { type: "tool_body"; id: string };

@@ -1,14 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Check, ChevronRight, Loader2, Square, X } from "lucide-react";
-import type { FileDiff } from "@/lib/chat/events";
+import type { FileDiff, ToolBody } from "@/lib/chat/events";
 import type { ToolItem } from "@/lib/chat/group";
 import { lineDiff, shortPath, type DiffLine } from "@/lib/chat/diff";
 import { cn } from "@/lib/utils";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { Highlighted } from "./Code";
 import { useNow } from "./useNow";
+
+// Output and diffs of tool calls sent without them (lib/chat/page), loaded
+// when one is opened.
+export const ToolBodies = createContext<{
+  bodies: Record<string, ToolBody | null>;
+  request: (id: string) => void;
+}>({ bodies: {}, request: () => {} });
+
+// A tool call's output and diff: its own, or once loaded. `undefined` while
+// it loads.
+export function useToolBody(tool: ToolItem): ToolBody | null | undefined {
+  const { bodies, request } = useContext(ToolBodies);
+  const body = tool.deferred ? bodies[tool.id] : tool;
+  useEffect(() => {
+    if (tool.deferred && body === undefined) request(tool.id);
+  }, [tool.deferred, tool.id, body, request]);
+  return body;
+}
 
 export function StatusIcon({ status }: { status: ToolItem["status"] }) {
   if (status === "running")
@@ -70,13 +88,23 @@ export function ToolPreview({
 }
 
 function ToolDetail({ tool }: { tool: ToolItem }) {
+  const body = useToolBody(tool);
+  if (body === undefined && tool.hasDiff)
+    return (
+      <div className="pb-2 pl-6">
+        <Loader2 className="text-muted-foreground h-3.5 w-3.5 animate-spin" />
+      </div>
+    );
   return (
     <div className="space-y-2 pb-2 pl-6">
-      <ToolPreview name={tool.name} input={tool.input} diff={tool.diff} />
-      {tool.output && !tool.diff && (
+      <ToolPreview name={tool.name} input={tool.input} diff={body?.diff} />
+      {body?.output && !body.diff && (
         <pre className="text-muted-foreground max-h-64 overflow-auto rounded-lg px-2 font-mono text-[11px] whitespace-pre-wrap">
-          {tool.output}
+          {body.output}
         </pre>
+      )}
+      {body === undefined && tool.hasOutput && (
+        <Loader2 className="text-muted-foreground h-3.5 w-3.5 animate-spin" />
       )}
     </div>
   );
@@ -97,7 +125,9 @@ function Elapsed({ tool }: { tool: ToolItem }) {
 }
 
 function ToolRow({ tool }: { tool: ToolItem }) {
-  const [open, setOpen] = useState(tool.status === "error" || !!tool.diff);
+  const [open, setOpen] = useState(
+    tool.status === "error" || !!tool.diff || !!tool.hasDiff
+  );
   return (
     <div>
       <button
@@ -121,7 +151,7 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
   const running = tools.some((t) => t.status === "running");
   const failed = tools.filter((t) => t.status === "error").length;
   const stopped = tools.filter((t) => t.status === "stopped").length;
-  const edits = tools.filter((t) => t.diff).length;
+  const edits = tools.filter((t) => t.diff || t.hasDiff).length;
   const [open, setOpen] = useState(false);
   const latest =
     tools.findLast((t) => t.status === "running") ?? tools[tools.length - 1];

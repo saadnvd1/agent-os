@@ -3,7 +3,7 @@
 
 import type { Session } from "../db";
 import { chatState } from "../chat/runner";
-import { listItems } from "../chat/store";
+import { lastItems } from "../chat/store";
 import { blockedReason } from "../tasks/state";
 import { checkWaitingPatterns, statusDetector } from "../status-detector";
 import { getCheck, putCheck } from "./checks";
@@ -15,9 +15,7 @@ export async function waitingState(
   task: Session
 ): Promise<{ blocked: string | null; waitingOn: string | null }> {
   if (task.view === "chat") {
-    const last = listItems(task.id)
-      .filter((i) => i.kind === "assistant")
-      .slice(-2)
+    const last = lastItems(task.id, 2, "assistant")
       .map((i) => (i.kind === "assistant" ? i.text : ""))
       .join("\n");
     const reason = blockedReason(last);
