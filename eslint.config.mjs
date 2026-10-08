@@ -24,7 +24,13 @@ export default defineConfig([
   },
   {
     // Browser code: crypto.randomUUID is undefined on a plain-http address.
-    files: ["components/**", "hooks/**", "stores/**", "data/**", "app/**/*.tsx"],
+    files: [
+      "components/**",
+      "hooks/**",
+      "stores/**",
+      "data/**",
+      "app/**/*.tsx",
+    ],
     rules: {
       "no-restricted-properties": [
         "error",
