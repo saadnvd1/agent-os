@@ -52,13 +52,12 @@ import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
 import {
-  subscribeStatuses,
-  subscribeStream,
   setStatusSource,
   setTopicSignature,
   setRunFinished,
 } from "./lib/status/hub";
-import { refreshGitSoon, unwatchGit, watchGit } from "./lib/git-poller";
+import { serveStatusSocket, sessionFolder } from "./lib/status/socket";
+import { refreshGitSoon } from "./lib/git-poller";
 import { changeWatcher } from "./lib/db/changes";
 import { getDb } from "./lib/db";
 import { discoveredSignature } from "./lib/hosts/discover-signature";
@@ -148,14 +147,8 @@ app.prepare().then(() => {
   setTopicSignature("discovered", discoveredSignature);
   // A finished run likely changed files: the git panel showing them updates.
   setRunFinished((id) => {
-    const s = getDb()
-      .prepare(
-        `SELECT worktree_path, working_directory FROM sessions WHERE id = ?`
-      )
-      .get(id) as
-      | { worktree_path: string | null; working_directory: string }
-      | undefined;
-    if (s) refreshGitSoon(s.worktree_path || s.working_directory);
+    const folder = sessionFolder(id);
+    if (folder) refreshGitSoon(folder);
   });
   const programTap = startProgramStatusTap(port);
   const statusWss = new WebSocketServer({
@@ -164,34 +157,7 @@ app.prepare().then(() => {
   });
   statusWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
     const params = new URL(request.url ?? "", "http://x").searchParams;
-    const send = (json: string) => sendBounded(ws, json);
-    const seq = Number(params.get("seq"));
-    const epoch = params.get("epoch");
-    const unsubscribe =
-      params.get("v") === "2"
-        ? subscribeStream(
-            send,
-            epoch && Number.isInteger(seq) ? { epoch, seq } : undefined
-          )
-        : subscribeStatuses(send);
-    // The git folders this browser shows, polled for it (lib/git-poller).
-    ws.on("message", (raw: Buffer) => {
-      try {
-        const msg = JSON.parse(raw.toString()) as {
-          type?: unknown;
-          dirs?: unknown;
-        };
-        if (msg.type === "watch_git") watchGit(ws, msg.dirs);
-      } catch {
-        // Not a message this server reads.
-      }
-    });
-    const done = () => {
-      unsubscribe();
-      unwatchGit(ws);
-    };
-    ws.on("close", done);
-    ws.on("error", done);
+    serveStatusSocket(ws, params, (json) => sendBounded(ws, json));
   });
 
   // Chat: one socket per watched session. Sends a snapshot, then live items;

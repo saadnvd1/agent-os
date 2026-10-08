@@ -28,7 +28,14 @@ describe("change versions", () => {
 
   it("refuses a table name that isn't a plain identifier", () => {
     const db = new Database(":memory:");
-    expect(() => installChangeTriggers(db, ["x; DROP TABLE y"])).toThrow();
+    db.exec(`CREATE TABLE things (id TEXT)`);
+    expect(() => installChangeTriggers(db, ["x; DROP TABLE y"])).toThrow(
+      /bad table name/
+    );
+    // A name SQL would take as given is refused by the check, not by SQLite.
+    expect(() => installChangeTriggers(db, ["Things"])).toThrow(
+      /bad table name/
+    );
   });
 
   it("names the tables that moved, a new one included", () => {

@@ -104,6 +104,24 @@ describe("status stream", () => {
     expect(ahead.seen).toMatchObject([{ type: "snapshot" }]);
   });
 
+  it("replays from the oldest kept message, and not one before it", () => {
+    const stream = createStream(0);
+    stream.statuses(snap({ a: "idle" }));
+    const keep = client();
+    stream.add(keep.fn, undefined, null);
+    for (let i = 0; i < 520; i++)
+      stream.statuses(snap({ a: i % 2 ? "idle" : "running" }));
+    // 520 messages, the last 512 kept: seq 9..520.
+    const { epoch } = stream.position();
+    const edge = client();
+    stream.add(edge.fn, { epoch, seq: 8 }, null);
+    expect(edge.seen).toHaveLength(512);
+    expect(edge.seen[0]).toMatchObject({ type: "statuses", seq: 9 });
+    const gone = client();
+    stream.add(gone.fn, { epoch, seq: 7 }, null);
+    expect(gone.seen).toMatchObject([{ type: "snapshot", seq: 520 }]);
+  });
+
   it("starts a new epoch on reset, so nothing resumes across it", () => {
     const stream = createStream();
     stream.statuses(snap({ a: "idle" }));

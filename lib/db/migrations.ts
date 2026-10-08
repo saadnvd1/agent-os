@@ -1,4 +1,4 @@
-import { installChangeTriggers } from "./changes";
+import { installChangeTriggers, TABLES_WATCHED_45 } from "./changes";
 import type Database from "better-sqlite3";
 
 interface Migration {
@@ -987,20 +987,7 @@ const migrations: Migration[] = [
       // What browsers show from these tables is pushed when they change
       // (lib/db/changes.ts) instead of polled. A table added later gets its
       // own migration.
-      installChangeTriggers(db, [
-        "sessions",
-        "projects",
-        "groups",
-        "workspaces",
-        "hosts",
-        "stacks",
-        "stack_items",
-        "bus_messages",
-        "schedules",
-        "schedule_runs",
-        "orchestrator_asks",
-        "dev_servers",
-      ]);
+      installChangeTriggers(db, TABLES_WATCHED_45);
     },
   },
 ];

@@ -102,3 +102,35 @@ describe("git poller", () => {
     expect(status.calls).toBe(first + 2);
   });
 });
+
+describe("git poller after a change", () => {
+  it("doesn't hand a read started before a commit to the refetch after it", async () => {
+    const { getGitStatus } = await import("./git-status");
+    let finishOld!: () => void;
+    vi.mocked(getGitStatus).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = () =>
+            resolve({
+              branch: "before-commit",
+              ahead: 0,
+              behind: 0,
+              staged: [],
+              unstaged: [],
+              untracked: [],
+            });
+        })
+    );
+    const old = poller.sharedGitStatus("/srv/commit");
+    poller.forgetGitStatus("/srv/commit");
+    status.branch = "after-commit";
+    const fresh = await poller.sharedGitStatus("/srv/commit");
+    expect(fresh.branch).toBe("after-commit");
+    finishOld();
+    expect((await old).branch).toBe("before-commit");
+    // The late answer doesn't replace the fresh one.
+    expect((await poller.sharedGitStatus("/srv/commit")).branch).toBe(
+      "after-commit"
+    );
+  });
+});

@@ -238,7 +238,7 @@ export interface SessionSetup {
   startedAt: number | null;
 }
 
-// A new session's worktree setup while it runs: pushed with its row, or
+// A new session's worktree setup while it runs: pushed as it moves, or
 // polled while the stream is down.
 export function useSessionSetup(sessionId: string, enabled: boolean) {
   const pushed = usePushConnected();
@@ -255,7 +255,7 @@ export function useSessionSetup(sessionId: string, enabled: boolean) {
         void queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
       return setup;
     },
-    // Its progress is written to the session's row, which is pushed.
+    // Its stages and log are pushed as they move (`setup:<id>`).
     refetchInterval: (q) =>
       !pushed &&
       q.state.status !== "error" &&

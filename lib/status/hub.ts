@@ -157,9 +157,19 @@ export function notifySessionsChanged(): void {
   hub.stream.changed("sessions");
 }
 
+// Tables that moved, or none when they can't be read this time.
+function movedTables(): string[] {
+  try {
+    return hub.tables?.() ?? [];
+  } catch (err) {
+    console.error("[status] reading table changes failed:", err);
+    return [];
+  }
+}
+
 function checkTopics(): void {
   if (!hub.stream.size()) return;
-  for (const table of hub.tables?.() ?? []) hub.stream.changed(table);
+  for (const table of movedTables()) hub.stream.changed(table);
   for (const [topic, sig] of hub.signatures) {
     let now: string;
     try {
@@ -201,7 +211,7 @@ function started(): void {
   if (hub.ticker) return;
   // Changes from before anyone watched don't count: a new subscriber's
   // snapshot (or first fetch) already has them.
-  hub.tables?.();
+  movedTables();
   for (const sig of hub.signatures.values()) sig.last = undefined;
   checkTopics();
   hub.ticker = setInterval(() => void tick(), TICK_MS);

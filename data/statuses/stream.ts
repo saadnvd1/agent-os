@@ -20,9 +20,15 @@ type StreamMessage =
       removed: string[];
     }
   | { type: "changed"; seq: number; topics: string[] }
-  | { type: "load"; load: LoadView };
+  | { type: "load"; load: LoadView }
+  | { type: "ping" };
 
 const MAX_BACKOFF_MS = 30000;
+// The server pings every 25s: a socket silent for longer than this is dead
+// even if the browser still says it's open (a phone that changed networks
+// while asleep), and so is one that comes back from being hidden this long.
+const SILENT_MS = 60000;
+const HIDDEN_MS = 15000;
 
 // Where a stream left off, applied to the statuses it knew: the next state,
 // or "resync" when a message was missed.
@@ -36,7 +42,7 @@ export function applyStreamMessage(
   | null {
   if (m.type === "snapshot")
     return { position: { epoch: m.epoch, seq: m.seq }, statuses: m.statuses };
-  if (m.type === "load") return null;
+  if (m.type === "load" || m.type === "ping") return null;
   if (!position || m.seq !== position.seq + 1) return "resync";
   const next = { epoch: position.epoch, seq: m.seq };
   if (m.type === "changed") return { position: next };
@@ -64,6 +70,7 @@ export function useStatusStream(): boolean {
     // changes, so what's shown is refetched.
     let hadStream = false;
     let openedAt = 0;
+    let heardAt = Date.now();
 
     const sendWatched = (sock: WebSocket) => {
       if (sock.readyState === WebSocket.OPEN)
@@ -85,13 +92,14 @@ export function useStatusStream(): boolean {
       sock.onopen = () => {
         if (ws !== sock) return;
         backoff = 1000;
-        openedAt = Date.now();
+        openedAt = heardAt = Date.now();
         setConnected(true);
         setPushConnected(true);
         sendWatched(sock);
       };
       sock.onmessage = (event) => {
         if (ws !== sock) return;
+        heardAt = Date.now();
         let m: StreamMessage;
         try {
           m = JSON.parse(event.data) as StreamMessage;
@@ -129,38 +137,55 @@ export function useStatusStream(): boolean {
         hadStream = true;
       };
       sock.onclose = () => {
-        if (ws !== sock) return;
+        if (closed || ws !== sock) return;
         setConnected(false);
         setPushConnected(false);
-        if (closed) return;
         retry = setTimeout(connect, backoff);
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
       };
     };
+    // Replaces the socket now; its place in the stream is kept, so the new
+    // one resumes.
+    const reconnect = () => {
+      const old = ws;
+      ws = null;
+      old?.close();
+      clearTimeout(retry);
+      backoff = 1000;
+      setConnected(false);
+      setPushConnected(false);
+      connect();
+    };
     connect();
     const stopWatching = onWatchedGitDirs(() => ws && sendWatched(ws));
+    const watchdog = setInterval(() => {
+      if (ws?.readyState === WebSocket.OPEN && Date.now() - heardAt > SILENT_MS)
+        reconnect();
+    }, 10000);
 
-    // Phones drop sockets in the background: reconnect on return.
+    // Phones drop sockets in the background, or keep ones that died: on
+    // return, reconnect unless it's plainly fine.
+    let hiddenAt = 0;
     const onVisible = () => {
-      if (
-        document.visibilityState === "visible" &&
-        ws &&
-        ws.readyState > WebSocket.OPEN
-      ) {
-        clearTimeout(retry);
-        backoff = 1000;
-        ws.close();
-        connect();
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
       }
+      const away = hiddenAt > 0 && Date.now() - hiddenAt > HIDDEN_MS;
+      hiddenAt = 0;
+      if (ws && (ws.readyState > WebSocket.OPEN || away)) reconnect();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       closed = true;
       clearTimeout(retry);
+      clearInterval(watchdog);
       stopWatching();
       setPushConnected(false);
       document.removeEventListener("visibilitychange", onVisible);
-      ws?.close();
+      const old = ws;
+      ws = null;
+      old?.close();
     };
   }, [queryClient]);
 

@@ -16,6 +16,8 @@ import { archivedKeys } from "../done";
 // pushed view) means the browser should refetch. Only queries on screen
 // refetch; the rest are marked stale for next time.
 function keysFor(topic: string): QueryKey[] {
+  if (topic.startsWith("setup:"))
+    return [[...sessionKeys.all, "setup", topic.slice(6)]];
   if (topic.startsWith("git:")) {
     const dir = topic.slice(4);
     return [gitKeys.status(dir), [...gitKeys.all, "multi-status"]];

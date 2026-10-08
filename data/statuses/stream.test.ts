@@ -36,6 +36,12 @@ describe("applyStreamMessage", () => {
     });
   });
 
+  it("ignores pings and load, which aren't numbered", () => {
+    expect(
+      applyStreamMessage({ epoch: "e", seq: 1 }, {}, { type: "ping" })
+    ).toBeNull();
+  });
+
   it("asks for a resync on a gap or before any snapshot", () => {
     const delta = {
       type: "changed" as const,

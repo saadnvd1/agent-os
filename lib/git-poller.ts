@@ -24,6 +24,9 @@ interface Entry {
   every: number;
   nextAt: number;
   reading?: Promise<GitStatus>;
+  // Bumped by a change made here: a read started before it isn't reused.
+  generation: number;
+  readingGeneration?: number;
 }
 
 const g = globalThis as unknown as {
@@ -42,15 +45,26 @@ const state = (g.__agentosGitPoller ??= {
 function entryFor(dir: string): Entry {
   let entry = state.entries.get(dir);
   if (!entry) {
-    entry = { names: new Set(), at: 0, every: EVERY_MS, nextAt: 0 };
+    entry = {
+      names: new Set(),
+      at: 0,
+      every: EVERY_MS,
+      nextAt: 0,
+      generation: 0,
+    };
     state.entries.set(dir, entry);
   }
   return entry;
 }
 
 function read(dir: string, entry: Entry): Promise<GitStatus> {
-  entry.reading ??= getGitStatus(dir)
+  if (entry.reading && entry.readingGeneration === entry.generation)
+    return entry.reading;
+  const generation = entry.generation;
+  const reading: Promise<GitStatus> = getGitStatus(dir)
     .then((status) => {
+      // Started before a change made here: its answer is already old.
+      if (generation !== entry.generation) return status;
       const json = JSON.stringify(status);
       const moved = entry.last !== undefined && entry.last !== json;
       entry.last = json;
@@ -66,9 +80,11 @@ function read(dir: string, entry: Entry): Promise<GitStatus> {
       throw error;
     })
     .finally(() => {
-      entry.reading = undefined;
+      if (entry.reading === reading) entry.reading = undefined;
     });
-  return entry.reading;
+  entry.reading = reading;
+  entry.readingGeneration = generation;
+  return reading;
 }
 
 /** A folder's status for a request: shared with reads moments ago. */
@@ -83,7 +99,10 @@ export async function sharedGitStatus(dir: string): Promise<GitStatus> {
 /** A change was just made here (a commit, a stage): the next read is fresh. */
 export function forgetGitStatus(dir: string): void {
   const entry = state.entries.get(expandPath(dir));
-  if (entry) entry.at = 0;
+  if (entry) {
+    entry.at = 0;
+    entry.generation++;
+  }
 }
 
 /** A run in this folder finished: look again now if anyone shows it. */

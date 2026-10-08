@@ -6,6 +6,26 @@ import type Database from "better-sqlite3";
 // pushes the names of the tables that moved (lib/status/hub.ts); browsers
 // refetch what they show from those tables instead of polling.
 
+// The tables migration 45 watches. A migration's list never changes once
+// shipped: a table watched later gets its own migration and list.
+export const TABLES_WATCHED_45 = [
+  "sessions",
+  "projects",
+  "groups",
+  "workspaces",
+  "hosts",
+  "stacks",
+  "stack_items",
+  "bus_messages",
+  "schedules",
+  "schedule_runs",
+  "orchestrator_asks",
+  "dev_servers",
+] as const;
+
+// Every table any migration watches, for the browser's topic map to cover.
+export const WATCHED_TABLES: readonly string[] = [...TABLES_WATCHED_45];
+
 export function installChangeTriggers(
   db: Database.Database,
   tables: readonly string[]
