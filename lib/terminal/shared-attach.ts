@@ -19,6 +19,9 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 export const MAX_PENDING_CHUNKS = 8;
 export const MAX_PENDING_BYTES = 64 * 1024;
 const SCROLLBACK = 1000;
+// After its last viewer goes, the attach (and the screen kept for replay)
+// stays this long, so a reconnecting phone picks up where it was.
+export const GRACE_MS = 30_000;
 
 export interface Pty {
   onData(fn: (data: string) => void): { dispose(): void } | void;
@@ -38,6 +41,8 @@ export interface Viewer {
   cols: number;
   rows: number;
   pending: number[];
+  // Replays sent and not yet acked: they don't count toward the window.
+  replays: number;
   behind: boolean;
 }
 
@@ -48,7 +53,16 @@ export function newViewer(
   cols: number,
   rows: number
 ): Viewer {
-  return { send, detached, flow, cols, rows, pending: [], behind: false };
+  return {
+    send,
+    detached,
+    flow,
+    cols,
+    rows,
+    pending: [],
+    replays: 0,
+    behind: false,
+  };
 }
 
 const full = (v: Viewer) =>
@@ -62,6 +76,7 @@ export class SharedAttach {
   private paused = false;
   private exited = false;
   private closing = false;
+  private grace: ReturnType<typeof setTimeout> | null = null;
   private queued = "";
   // Whether there's a screen to show yet.
   private printed = false;
@@ -85,6 +100,8 @@ export class SharedAttach {
     pty.onExit(({ exitCode }) => {
       this.exited = true;
       this.screen.dispose();
+      if (this.grace) clearTimeout(this.grace);
+      this.grace = null;
       const viewers = [...this.viewers];
       this.viewers.clear();
       for (const v of viewers) v.detached(exitCode);
@@ -103,20 +120,35 @@ export class SharedAttach {
 
   /** A new viewer sees the screen as it is, then follows. */
   join(viewer: Viewer): void {
+    if (this.grace) clearTimeout(this.grace);
+    this.grace = null;
     this.viewers.add(viewer);
     this.fit();
     if (this.printed) this.replay(viewer);
+    this.repause();
   }
 
   leave(viewer: Viewer): void {
     this.viewers.delete(viewer);
-    if (this.viewers.size) {
-      this.fit();
-      this.pauseIfAllBehind();
-    } else {
-      this.closing = true;
-      this.pty.kill();
+    if (this.viewers.size) this.fit();
+    else if (!this.grace && !this.closing && !this.exited) {
+      this.grace = setTimeout(() => {
+        this.grace = null;
+        if (this.viewers.size) return;
+        this.closing = true;
+        this.pty.kill();
+      }, GRACE_MS);
+      this.grace.unref?.();
     }
+    this.repause();
+  }
+
+  /** Ends it now, whoever is watching (the server is going away). */
+  close(): void {
+    if (this.grace) clearTimeout(this.grace);
+    this.grace = null;
+    this.closing = true;
+    this.pty.kill();
   }
 
   input(data: string): void {
@@ -131,20 +163,22 @@ export class SharedAttach {
 
   /** The viewer took a chunk: it may have room again. */
   ack(viewer: Viewer): void {
-    viewer.pending.shift();
-    if (viewer.behind && viewer.pending.length === 0) {
+    if (viewer.replays > 0) viewer.replays--;
+    else viewer.pending.shift();
+    if (viewer.behind && viewer.pending.length === 0 && viewer.replays === 0) {
       viewer.behind = false;
       this.replay(viewer);
+      this.fit();
     }
-    if (this.paused && !full(viewer)) {
-      this.paused = false;
-      this.pty.resume();
-    }
+    this.repause();
   }
 
+  // The smallest size among viewers keeping up: one that stopped acking (a
+  // phone asleep with its socket half open) doesn't hold the rest small.
   private fit(): void {
     if (!this.viewers.size || this.exited) return;
-    const sizes = [...this.viewers];
+    const keeping = [...this.viewers].filter((v) => !v.behind);
+    const sizes = keeping.length ? keeping : [...this.viewers];
     const cols = Math.max(2, Math.min(...sizes.map((v) => v.cols)));
     const rows = Math.max(1, Math.min(...sizes.map((v) => v.rows)));
     if (cols === this.cols && rows === this.rows) return;
@@ -177,25 +211,33 @@ export class SharedAttach {
         continue;
       }
       if (v.behind || full(v)) {
-        v.behind = true;
+        if (!v.behind) {
+          v.behind = true;
+          this.fit();
+        }
         continue;
       }
       v.pending.push(message.length);
       v.send(message);
     }
-    this.pauseIfAllBehind();
+    this.repause();
   }
 
-  private pauseIfAllBehind(): void {
-    const acking = [...this.viewers].filter((v) => v.flow);
-    if (
-      !this.paused &&
-      acking.length > 0 &&
-      acking.length === this.viewers.size &&
-      acking.every((v) => v.behind || full(v))
-    ) {
+  // tmux is held back only while every viewer acks and none has room: a
+  // viewer that doesn't ack, or none at all (the grace after the last one
+  // left), keeps it flowing.
+  private repause(): void {
+    if (this.exited) return;
+    const viewers = [...this.viewers];
+    const hold =
+      viewers.length > 0 &&
+      viewers.every((v) => v.flow && (v.behind || full(v)));
+    if (hold && !this.paused) {
       this.paused = true;
       this.pty.pause();
+    } else if (!hold && this.paused) {
+      this.paused = false;
+      this.pty.resume();
     }
   }
 
@@ -208,7 +250,9 @@ export class SharedAttach {
         type: "output",
         data: `\x1bc${this.serializer.serialize({ scrollback: SCROLLBACK })}`,
       });
-      if (viewer.flow) viewer.pending.push(message.length);
+      // A replay is acked like any message but isn't held against the
+      // window: it can be bigger than the window by itself.
+      if (viewer.flow) viewer.replays++;
       viewer.send(message);
     });
   }

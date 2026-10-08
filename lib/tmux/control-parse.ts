@@ -12,8 +12,11 @@ export type ControlLine =
   | { type: "exit"; reason: string }
   | { type: "sessions-changed" }
   | { type: "layout-change" }
-  | { type: "begin" }
-  | { type: "end" }
+  // The session's active pane or window changed: what's watched moved.
+  | { type: "pane-changed" }
+  // `id`: the block's "<time> <number>", which its end repeats.
+  | { type: "begin"; id: string; ours: boolean }
+  | { type: "end"; id: string; error: boolean }
   | { type: "other" };
 
 /** \ooo octal and \\ back to the bytes, as a latin1 string. */
@@ -38,9 +41,18 @@ export function parseControlLine(line: string): ControlLine {
     return { type: "exit", reason: line.slice(6) };
   if (line === "%sessions-changed") return { type: "sessions-changed" };
   if (line.startsWith("%layout-change ")) return { type: "layout-change" };
-  if (line.startsWith("%begin ")) return { type: "begin" };
-  if (line.startsWith("%end ") || line.startsWith("%error "))
-    return { type: "end" };
+  if (
+    line.startsWith("%window-pane-changed ") ||
+    line.startsWith("%session-window-changed ")
+  )
+    return { type: "pane-changed" };
+  const block = /^%(begin|end|error) (\d+ \d+) (\d+)$/.exec(line);
+  if (block) {
+    const [, kind, id, flags] = block;
+    return kind === "begin"
+      ? { type: "begin", id, ours: flags === "1" }
+      : { type: "end", id, error: kind === "error" };
+  }
   return { type: "other" };
 }
 

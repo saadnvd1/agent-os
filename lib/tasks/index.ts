@@ -204,7 +204,9 @@ async function startTask(
 // exited when the shell is all that's left: nothing running under it. Read
 // from the session listing and the shared process table, never a call per
 // task; anything unknown reads as still running.
-async function shellOnly(tmuxName: string): Promise<boolean> {
+export async function shellOnly(tmuxName: string): Promise<boolean> {
+  // Another machine's processes aren't in this one's table.
+  if ((statusDetector.hostFor(tmuxName) ?? "local") !== "local") return false;
   const cmd = statusDetector.foregroundFor(tmuxName);
   const pid = statusDetector.paneProcess(tmuxName);
   if (!cmd || !pid || !/^-?(zsh|bash|sh|fish)$/.test(cmd)) return false;

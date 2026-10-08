@@ -128,13 +128,25 @@ export function createWebSocketConnection(
         const wasAtTop = scrollYBefore <= 0;
         const wasAtBottom = scrollYBefore >= buffer.baseY;
 
+        // The whole screen again (joining a shared view, or catching up
+        // after falling behind): it starts from a reset, so a reader
+        // scrolled up is put back as far from the bottom as they were.
+        const redraw =
+          typeof msg.data === "string" && msg.data.startsWith("\x1bc");
+        const fromBottom = buffer.baseY - scrollYBefore;
+
         // Acked once xterm has taken it: a phone that can't keep up slows
         // the stream instead of piling it up.
         const from = event.target as WebSocket;
         term.write(msg.data, () => {
           if (from.readyState === WebSocket.OPEN)
             from.send(JSON.stringify({ type: "ack" }));
+          if (redraw && !wasAtBottom)
+            term.scrollToLine(
+              Math.max(0, term.buffer.active.baseY - fromBottom)
+            );
         });
+        if (redraw) return;
 
         // After write, check if scroll jumped to top unexpectedly
         // Give it a moment for the write to complete

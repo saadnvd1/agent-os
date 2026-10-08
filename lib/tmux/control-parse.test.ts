@@ -35,8 +35,24 @@ describe("control mode lines", () => {
     ).toEqual({
       type: "layout-change",
     });
-    expect(parseControlLine("%begin 1 2 0").type).toBe("begin");
-    expect(parseControlLine("%error 1 2 0").type).toBe("end");
+    expect(parseControlLine("%begin 1 2 0")).toEqual({
+      type: "begin",
+      id: "1 2",
+      ours: false,
+    });
+    expect(parseControlLine("%begin 1 2 1")).toMatchObject({ ours: true });
+    expect(parseControlLine("%error 1 2 1")).toEqual({
+      type: "end",
+      id: "1 2",
+      error: true,
+    });
+    expect(parseControlLine("%end text a pane printed").type).toBe("other");
+    expect(parseControlLine("%window-pane-changed @1 %3").type).toBe(
+      "pane-changed"
+    );
+    expect(parseControlLine("%session-window-changed $0 @2").type).toBe(
+      "pane-changed"
+    );
     expect(parseControlLine("%window-renamed @1 x").type).toBe("other");
     expect(parseControlLine("%output %3").type).toBe("other");
   });

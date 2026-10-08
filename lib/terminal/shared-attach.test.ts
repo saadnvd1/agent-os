@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  GRACE_MS,
   MAX_PENDING_CHUNKS,
   SharedAttach,
   SharedAttaches,
@@ -112,7 +113,7 @@ describe("SharedAttach", () => {
     expect(late.got[0]).toBe("\x1bcprompt> ");
   });
 
-  it("tells every viewer when tmux goes away, and stops when the last leaves", () => {
+  it("tells every viewer when tmux goes away", () => {
     const pty = fakePty();
     const gone = vi.fn();
     const attach = new SharedAttach(pty, 20, 4, gone);
@@ -121,14 +122,83 @@ describe("SharedAttach", () => {
     pty.end(1);
     expect(a.detached).toEqual([1]);
     expect(gone).toHaveBeenCalledWith(1);
+  });
 
-    const pty2 = fakePty();
-    const second = new SharedAttach(pty2, 20, 4, () => {});
-    const b = viewer();
-    second.join(b.v);
-    second.leave(b.v);
-    expect(pty2.kill).toHaveBeenCalled();
-    expect(second.alive).toBe(false);
+  it("keeps running a while after the last viewer leaves, for a reconnect", async () => {
+    vi.useFakeTimers();
+    try {
+      const pty = fakePty();
+      const attach = new SharedAttach(pty, 20, 4, () => {});
+      const first = viewer();
+      attach.join(first.v);
+      pty.print("history line\r\n");
+      await vi.advanceTimersByTimeAsync(5);
+      attach.leave(first.v);
+      expect(pty.kill).not.toHaveBeenCalled();
+      expect(attach.alive).toBe(true);
+      // Back within the grace: the kept screen is replayed.
+      const back = viewer();
+      attach.join(back.v);
+      await vi.advanceTimersByTimeAsync(5);
+      expect(back.got[0]).toContain("history line");
+      attach.leave(back.v);
+      await vi.advanceTimersByTimeAsync(GRACE_MS + 1);
+      expect(pty.kill).toHaveBeenCalled();
+      expect(attach.alive).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("isn't held back by an acking viewer while one that doesn't ack watches", async () => {
+    const pty = fakePty();
+    const attach = new SharedAttach(pty, 20, 4, () => {});
+    const slow = viewer(true);
+    const old = viewer(false);
+    attach.join(slow.v);
+    attach.join(old.v);
+    for (let i = 0; i < MAX_PENDING_CHUNKS + 3; i++) {
+      pty.print(`l${i}`);
+      await flush();
+    }
+    expect(slow.v.behind).toBe(true);
+    expect(pty.pause).not.toHaveBeenCalled();
+    // The one that doesn't ack leaves: now everyone is behind.
+    attach.leave(old.v);
+    expect(pty.pause).toHaveBeenCalled();
+    // Another such viewer joins: it gets output again.
+    attach.join(viewer(false).v);
+    expect(pty.resume).toHaveBeenCalled();
+  });
+
+  it("lets tmux go again as soon as the viewer has room", async () => {
+    const pty = fakePty();
+    const attach = new SharedAttach(pty, 20, 4, () => {});
+    const slow = viewer();
+    attach.join(slow.v);
+    for (let i = 0; i < MAX_PENDING_CHUNKS; i++) {
+      pty.print(`x${i}`);
+      await flush();
+    }
+    expect(pty.pause).toHaveBeenCalledTimes(1);
+    attach.ack(slow.v);
+    expect(pty.resume).toHaveBeenCalledTimes(1);
+  });
+
+  it("sizes to viewers keeping up, not one that stopped acking", async () => {
+    const pty = fakePty();
+    const attach = new SharedAttach(pty, 120, 40, () => {});
+    const desk = viewer(false, 120, 40);
+    const phone = viewer(true, 50, 30);
+    attach.join(desk.v);
+    attach.join(phone.v);
+    expect(pty.resize).toHaveBeenLastCalledWith(50, 30);
+    for (let i = 0; i < MAX_PENDING_CHUNKS + 1; i++) {
+      pty.print(`p${i}`);
+      await flush();
+    }
+    expect(phone.v.behind).toBe(true);
+    expect(pty.resize).toHaveBeenLastCalledWith(120, 40);
   });
 });
 
@@ -147,5 +217,22 @@ describe("SharedAttaches", () => {
     ptys[0].end();
     expect(registry.open("local:s", make)).not.toBe(first);
     expect(registry.count()).toBe(2);
+  });
+
+  it("starts anew past one being killed, and the old one's end leaves it be", () => {
+    const registry = new SharedAttaches();
+    const ptys: ReturnType<typeof fakePty>[] = [];
+    const make = (onGone: () => void) => {
+      const pty = fakePty();
+      ptys.push(pty);
+      return new SharedAttach(pty, 80, 24, onGone);
+    };
+    const dying = registry.open("local:s", make);
+    dying.close();
+    const next = registry.open("local:s", make);
+    expect(next).not.toBe(dying);
+    // The killed one exits afterwards: the new one stays registered.
+    ptys[0].end();
+    expect(registry.open("local:s", make)).toBe(next);
   });
 });

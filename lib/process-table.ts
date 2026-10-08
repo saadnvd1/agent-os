@@ -78,6 +78,9 @@ const base = (comm: string) => comm.split("/").pop()?.replace(/^-/, "") ?? "";
  */
 export function runsSomething(rows: ProcRow[], pid: number): boolean {
   const shell = rows.find((r) => r.pid === pid);
+  // A pane the table doesn't know (newer than the table, or gone since) says
+  // nothing about its agent: it counts as still running.
+  if (!shell) return true;
   const children = new Map<number, ProcRow[]>();
   for (const r of rows) {
     const list = children.get(r.ppid);
@@ -86,7 +89,6 @@ export function runsSomething(rows: ProcRow[], pid: number): boolean {
   }
   return (children.get(pid) ?? []).some(
     (child) =>
-      !shell ||
       base(child.comm) !== base(shell.comm) ||
       (children.get(child.pid)?.length ?? 0) > 0
   );

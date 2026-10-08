@@ -40,6 +40,8 @@ export interface ControlDeps {
   attached: (name: string) => void;
   detached: (name: string) => void;
   now: () => number;
+  // How long a command may wait for its reply (tests shorten it).
+  commandTimeoutMs?: number;
 }
 
 interface Command {
@@ -47,6 +49,8 @@ interface Command {
   resolve: (lines: string[]) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  // Called the moment its reply ends, before anything after it is read.
+  onEnd?: () => void;
 }
 
 interface Watched {
@@ -61,10 +65,13 @@ interface Watched {
   printedAt: number;
   feed: ReturnType<ControlDeps["feed"]>;
   commands: Command[];
-  // Lines of the reply being read, when inside a %begin block of ours.
-  reply: string[] | null;
-  // A capture is on its way: output before its reply is already in it.
+  // The reply being read, inside a %begin block of ours: its lines, and the
+  // block's id, which only its own %end repeats.
+  reply: { id: string; lines: string[] } | null;
+  // A capture is on its way. Until its reply ends, output is already in it;
+  // after, until the screen has taken the capture, it's held to apply next.
   capturing: boolean;
+  held: string[] | null;
   dirty: boolean;
   syncedAt: number;
   quiet: ReturnType<typeof setTimeout> | null;
@@ -94,10 +101,15 @@ export class ControlManager {
     }
   }
 
-  /** The session's screen as capture-pane -e -p prints it, when kept. */
+  /**
+   * The session's screen as capture-pane -e -p prints it, when kept and
+   * current: not while a capture is being taken in.
+   */
   screen(name: string): string | null {
     const w = this.watched.get(name);
-    return w?.child && w.synced && w.screen ? w.screen.text() : null;
+    return w?.child && w.synced && !w.capturing && w.screen
+      ? w.screen.text()
+      : null;
   }
 
   title(name: string): string | null {
@@ -149,6 +161,7 @@ export class ControlManager {
       commands: [],
       reply: null,
       capturing: false,
+      held: null,
       dirty: false,
       syncedAt: 0,
       quiet: null,
@@ -194,9 +207,12 @@ export class ControlManager {
         w,
         `display-message -p -t =${w.name}: '#{pane_id}'`
       );
-      if (pane?.startsWith("%")) {
-        if (w.pane === null) w.watchedFrom = this.deps.now();
-        w.pane = pane.trim();
+      const id = pane?.trim();
+      if (id?.startsWith("%") && id !== w.pane) {
+        // Another pane: nothing read from the last one says anything now.
+        w.watchedFrom = this.deps.now();
+        w.pane = id;
+        this.dropScreen(w);
       }
     } catch {
       // Exited or not answering: the next start asks again.
@@ -222,6 +238,7 @@ export class ControlManager {
     w.child = null;
     w.synced = false;
     w.capturing = false;
+    w.held = null;
     w.pane = null;
     for (const c of w.commands.splice(0)) {
       clearTimeout(c.timer);
@@ -250,27 +267,35 @@ export class ControlManager {
     if (w.everAttached) this.deps.detached(w.name);
   }
 
+  private dropScreen(w: Watched): void {
+    w.screen?.dispose();
+    w.screen = null;
+    w.synced = false;
+  }
+
   private line(w: Watched, line: string): void {
-    // Inside a reply to one of our commands: collect until its end.
+    // Inside a reply to one of our commands: collect until its own end.
     if (w.reply) {
       const parsed = line.startsWith("%") ? parseControlLine(line) : null;
-      if (parsed?.type === "end") {
-        const lines = w.reply;
+      if (parsed?.type === "end" && parsed.id === w.reply.id) {
+        const lines = w.reply.lines;
         w.reply = null;
         const c = w.commands.shift();
         if (c) {
           clearTimeout(c.timer);
-          if (line.startsWith("%error")) c.reject(new Error(lines.join("\n")));
+          c.onEnd?.();
+          if (parsed.error) c.reject(new Error(lines.join("\n")));
           else c.resolve(lines);
         }
-      } else w.reply.push(line);
+      } else w.reply.lines.push(line);
       return;
     }
     const parsed = parseControlLine(line);
     switch (parsed.type) {
       case "begin":
-        // Flags 1: a command this client sent; the attach's own block isn't.
-        if (/ 1$/.test(line) && w.commands.length) w.reply = [];
+        // A command this client sent; the attach's own block isn't one.
+        if (parsed.ours && w.commands.length)
+          w.reply = { id: parsed.id, lines: [] };
         return;
       case "output":
         if (parsed.pane !== w.pane) return;
@@ -278,6 +303,7 @@ export class ControlManager {
         w.printedAt = this.deps.now();
         w.feed.push(parsed.data);
         this.idleLater(w);
+        if (w.held) return void w.held.push(parsed.data);
         if (w.capturing) return;
         // The first output since the screen was let go: start one.
         if (!w.screen) return void this.resync(w);
@@ -290,6 +316,10 @@ export class ControlManager {
         w.dirty = true;
         w.syncedAt = 0;
         this.settleLater(w);
+        return;
+      case "pane-changed":
+        // The next output from whichever pane is active starts its screen.
+        void this.identify(w);
         return;
       case "sessions-changed":
         this.deps.sessionsChanged();
@@ -323,16 +353,23 @@ export class ControlManager {
     w.idle.unref?.();
   }
 
-  private command(w: Watched, line: string): Promise<string[]> {
+  private command(
+    w: Watched,
+    line: string,
+    onEnd?: () => void
+  ): Promise<string[]> {
     const child = w.child;
     if (!child?.stdin?.writable) return Promise.reject(new Error("no client"));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const i = w.commands.findIndex((c) => c.timer === timer);
-        if (i >= 0) w.commands.splice(i, 1);
-        reject(new Error("tmux didn't answer"));
-      }, COMMAND_TIMEOUT_MS);
-      w.commands.push({ line, resolve, reject, timer });
+      // A reply that's late would answer the next command in line: start
+      // the client over instead (its exit fails what's still waiting, and
+      // the next sync attaches again).
+      const timer = setTimeout(
+        () => child.kill(),
+        this.deps.commandTimeoutMs ?? COMMAND_TIMEOUT_MS
+      );
+      timer.unref?.();
+      w.commands.push({ line, resolve, reject, timer, onEnd });
       child.stdin!.write(`${line}\n`);
     });
   }
@@ -347,22 +384,34 @@ export class ControlManager {
         w,
         `display-message -p -t ${target} '#{pane_id} #{pane_width} #{pane_height} #{cursor_x} #{cursor_y}'`
       );
-      const capture = await this.command(w, `capture-pane -e -p -t ${target}`);
+      // Output before the capture's reply ends is in it; output after is
+      // held from that moment and applied on top.
+      const capture = await this.command(
+        w,
+        `capture-pane -e -p -t ${target}`,
+        () => (w.held = [])
+      );
       const [pane, cols, rows, x, y] = (info ?? "").trim().split(" ");
       const size = { cols: Number(cols), rows: Number(rows) };
       if (!pane || !(size.cols > 0) || !(size.rows > 0)) throw new Error(info);
-      w.pane = pane;
+      if (pane !== w.pane) {
+        w.pane = pane;
+        w.watchedFrom = this.deps.now();
+      }
       w.screen ??= new PaneScreen(size.cols, size.rows);
       await w.screen.reset(capture.join("\n"), size.cols, size.rows, {
         x: Number(x) || 0,
         y: Number(y) || 0,
       });
+      for (const data of w.held ?? []) w.screen.write(data);
+      if (w.held?.length) this.settleLater(w);
       w.synced = true;
       w.syncedAt = this.deps.now();
       w.failures = 0;
     } catch {
       w.synced = false;
     } finally {
+      w.held = null;
       w.capturing = false;
     }
   }

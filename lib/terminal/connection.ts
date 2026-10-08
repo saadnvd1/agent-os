@@ -21,6 +21,11 @@ import {
 
 // Long enough for the page's attach to arrive right after it connects.
 export const SHELL_AFTER_MS = 400;
+// A browser answers pings by itself; one that hasn't for this long is a
+// socket that died quietly (a phone asleep), and goes, so it neither holds a
+// shared attach small nor counts as watching.
+export const PING_MS = 25_000;
+export const DEAD_AFTER_MS = 60_000;
 
 const shared = new SharedAttaches();
 export const sharedAttachCount = () => shared.count();
@@ -53,6 +58,8 @@ export interface TerminalSocket extends EventEmitter {
   readyState: number;
   send(data: string): void;
   close(): void;
+  ping?(): void;
+  terminate?(): void;
 }
 
 export function serveTerminal(
@@ -69,6 +76,23 @@ export function serveTerminal(
   let view: { attach: SharedAttach; viewer: Viewer } | null = null;
   let closed = false;
   const reply = (msg: object) => send(JSON.stringify(msg));
+  let heardAt = Date.now();
+  ws.on("pong", () => (heardAt = Date.now()));
+  ws.on("message", () => (heardAt = Date.now()));
+  const pinger = setInterval(() => {
+    if (Date.now() - heardAt > DEAD_AFTER_MS) {
+      clearInterval(pinger);
+      if (ws.terminate) ws.terminate();
+      else ws.close();
+      return;
+    }
+    try {
+      ws.ping?.();
+    } catch {
+      // Closing already.
+    }
+  }, PING_MS);
+  pinger.unref?.();
 
   // This connection's own shell; replacing one isn't the terminal exiting.
   const startShell = () => {
@@ -219,6 +243,7 @@ export function serveTerminal(
   const shutdown = () => {
     if (closed) return;
     closed = true;
+    clearInterval(pinger);
     cancelShell();
     leave();
     const proc = own;

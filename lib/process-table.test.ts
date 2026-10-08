@@ -27,6 +27,10 @@ describe("process table", () => {
     expect(runsSomething([row(10, 1, "-zsh")], 10)).toBe(false);
   });
 
+  it("counts a pane it doesn't know as still running", () => {
+    expect(runsSomething([row(10, 1, "/bin/zsh")], 99)).toBe(true);
+  });
+
   it("doesn't count a prompt theme's idle copy of the shell", () => {
     const idle = [row(10, 1, "/bin/zsh"), row(11, 10, "zsh")];
     expect(runsSomething(idle, 10)).toBe(false);

@@ -133,6 +133,96 @@ describe("ControlManager", () => {
     expect(m.printedSince("s1", 2500)).toBeNull();
   });
 
+  it("applies output after a later capture's reply once, and none from before it", async () => {
+    const { m, clients } = manager();
+    m.sync(["s1"]);
+    const c = clients[0];
+    await identify(c);
+    c.say("%output %1 a");
+    await tick();
+    c.say("%begin 3 3 1", "%1 20 4 0 0", "%end 3 3 1");
+    await tick();
+    c.say("%begin 4 4 1", "first", "%end 4 4 1");
+    await settle();
+    expect(m.screen("s1")).toBe("first");
+    // The window changed: once it's quiet, the screen is read again.
+    c.say("%layout-change @1 x x *");
+    await tick();
+    c.say("%begin 5 5 1", "%1", "%end 5 5 1"); // identify
+    await new Promise((r) => setTimeout(r, 2100));
+    c.say("%begin 6 6 1", "%1 20 4 0 1", "%end 6 6 1");
+    await tick();
+    // Printed before the capture's reply ends: already in it.
+    c.say("%output %1 IN-CAPTURE");
+    c.say(
+      "%begin 7 7 1",
+      "first",
+      "IN-CAPTURE",
+      "%end 7 7 1",
+      // Printed after it, in the same read: applied on top, once.
+      "%output %1 \\015\\012after"
+    );
+    await settle();
+    expect(m.screen("s1")).toBe("first\nIN-CAPTURE\nafter");
+  });
+
+  it("follows the active pane when it changes", async () => {
+    const { m, clients, pushed } = manager();
+    m.sync(["s1"]);
+    const c = clients[0];
+    await identify(c);
+    c.say("%window-pane-changed @1 %2");
+    await tick();
+    c.say("%begin 3 3 1", "%2", "%end 3 3 1");
+    await tick();
+    c.say("%output %1 old pane", "%output %2 new pane");
+    await tick();
+    expect(pushed.at(-1)).toBe("s1:new pane");
+    expect(pushed).not.toContain("s1:old pane");
+  });
+
+  it("hands back nothing for a command tmux refused", async () => {
+    const { m, clients } = manager();
+    m.sync(["s1"]);
+    const c = clients[0];
+    await identify(c);
+    const answer = m.query("s1", "show-environment -t =s1 NOPE");
+    await tick();
+    c.say("%begin 7 7 1", "unknown variable: NOPE", "%error 7 7 1");
+    expect(await answer).toBeNull();
+  });
+
+  it("ends a reply only at its own end, not a pane line that looks like one", async () => {
+    const { m, clients } = manager();
+    m.sync(["s1"]);
+    const c = clients[0];
+    await identify(c);
+    const answer = m.query("s1", "capture-pane -p -t =s1:");
+    await tick();
+    c.say(
+      "%begin 8 8 1",
+      "%end of a line on screen",
+      "%end 1 1 1",
+      "real",
+      "%end 8 8 1"
+    );
+    expect(await answer).toEqual([
+      "%end of a line on screen",
+      "%end 1 1 1",
+      "real",
+    ]);
+  });
+
+  it("starts the client over when tmux doesn't answer, rather than mismatch replies", async () => {
+    const { m, clients } = manager({ commandTimeoutMs: 30 });
+    m.sync(["s1"]);
+    const c = clients[0];
+    const answer = m.query("s1", "display-message -p x");
+    await new Promise((r) => setTimeout(r, 60));
+    expect(c.kill).toHaveBeenCalled();
+    expect(await answer).toBeNull();
+  });
+
   it("answers tmux commands over the client, without a process", async () => {
     const { m, clients } = manager();
     m.sync(["s1"]);

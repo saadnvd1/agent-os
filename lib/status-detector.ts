@@ -17,6 +17,7 @@
 import { hostExecFile, listHosts } from "./hosts";
 import { WORKING_LINE } from "./claude-working-line";
 import { controlManager } from "./tmux/control";
+import { isValidTmuxName } from "./hosts/attach";
 
 // Configuration constants
 const CONFIG = {
@@ -593,9 +594,15 @@ class SessionStatusDetector {
     }
   }
 
+  // What's on screen now, read from tmux itself: what a gate decides on
+  // (a BLOCKED: line) is never the kept copy. A watched session is asked
+  // over its control client, so this still starts no process.
   async capturePane(name: string): Promise<string> {
-    const live = controlManager()?.screen(name);
-    if (live != null) return plainText(live).trim();
+    const asked = await controlManager()?.query(
+      name,
+      `capture-pane -p -t =${name}:`
+    );
+    if (asked) return asked.join("\n").trim();
     return (await this.capture(name, false)).trim();
   }
 
@@ -604,9 +611,18 @@ class SessionStatusDetector {
   // `fresh` (a reported question is being checked against the screen).
   async captureScreen(name: string, fresh = false): Promise<string> {
     // Kept from the pane's own output by its control client: as current as
-    // a capture, at no cost.
-    const live = controlManager()?.screen(name);
-    if (live != null) return live.trimEnd();
+    // a capture, at no cost. Asked to be fresh (a reported question checked
+    // against the screen), it's read from tmux, over the client if watched.
+    if (!fresh) {
+      const live = controlManager()?.screen(name);
+      if (live != null) return live.trimEnd();
+    } else if (isValidTmuxName(name)) {
+      const asked = await controlManager()?.query(
+        name,
+        `capture-pane -e -p -t =${name}:`
+      );
+      if (asked) return asked.join("\n").trimEnd();
+    }
     const output = this.cache.data.get(name)?.output ?? 0;
     const cached = this.screens.get(name);
     const now = Date.now();
