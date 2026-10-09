@@ -33,4 +33,38 @@ describe("getDefaultBranch", () => {
     );
     expect(await getDefaultBranch(dir)).toBe("main");
   });
+
+  const repo = (branch: string) => {
+    const dir = fs.mkdtempSync(path.join(tmpdir(), "aos-git-"));
+    git(dir, "init", "-q", "-b", branch);
+    git(
+      dir,
+      "-c",
+      "user.email=t@e",
+      "-c",
+      "user.name=T",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "x"
+    );
+    return dir;
+  };
+
+  it("takes the remote's default branch, without its refs/remotes prefix", async () => {
+    const dir = repo("main");
+    git(dir, "update-ref", "refs/remotes/origin/develop", "HEAD");
+    git(
+      dir,
+      "symbolic-ref",
+      "refs/remotes/origin/HEAD",
+      "refs/remotes/origin/develop"
+    );
+    expect(await getDefaultBranch(dir)).toBe("develop");
+  });
+
+  it("falls back to master when there is no remote default or main", async () => {
+    expect(await getDefaultBranch(repo("master"))).toBe("master");
+  });
 });

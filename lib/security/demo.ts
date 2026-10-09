@@ -151,6 +151,10 @@ function homeDir(value: string, home: string): string | null {
   return within(resolved, real(home)) ? resolved : null;
 }
 
+/** A folder a visitor names (a status socket's git watch) in the home. */
+export const demoDirAllowed = (value: string, home = os.homedir()) =>
+  !!homeDir(value, home);
+
 function paramsAllowed(params: URLSearchParams, home: string): boolean {
   for (const [key, value] of params) {
     if (DIR_PARAMS.includes(key) && !homeDir(value, home)) return false;

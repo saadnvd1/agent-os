@@ -14,7 +14,8 @@ const hasRg = (() => {
   }
 })();
 
-describe.skipIf(!hasRg)("searchCode", () => {
+// CI installs ripgrep, so there a missing rg fails rather than skips.
+describe.skipIf(!hasRg && !process.env.CI)("searchCode", () => {
   it("reads a query starting with - as a pattern, never an option", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "code-search-"));
     fs.writeFileSync(path.join(dir, "a.sh"), 'touch "$0.ran"\n--pre=sh\n');

@@ -1,6 +1,7 @@
 import type { EventEmitter } from "events";
 import { getDb } from "../db";
 import { unwatchGit, watchGit } from "../git-poller";
+import { demoDirAllowed, demoMode } from "../security/demo";
 import { subscribeStatuses, subscribeStream } from "./hub";
 
 // One /ws/status connection. `v=2` asks for the numbered stream and resumes
@@ -29,7 +30,13 @@ export function onStatusMessage(watcher: object, raw: Buffer | string): void {
       type?: unknown;
       dirs?: unknown;
     };
-    if (msg.type === "watch_git") watchGit(watcher, msg.dirs);
+    if (msg.type !== "watch_git") return;
+    // A demo's visitors are strangers: git runs only in the demo's home.
+    const dirs =
+      demoMode() && Array.isArray(msg.dirs)
+        ? msg.dirs.filter((d) => typeof d === "string" && demoDirAllowed(d))
+        : msg.dirs;
+    watchGit(watcher, dirs);
   } catch {
     // Not a message this server reads.
   }
