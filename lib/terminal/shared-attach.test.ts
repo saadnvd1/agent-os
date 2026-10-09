@@ -172,6 +172,19 @@ describe("SharedAttach", () => {
     }
   });
 
+  it("replays tmux's mouse modes so a late viewer's wheel reaches tmux", async () => {
+    const pty = fakePty();
+    const attach = new SharedAttach(pty, 80, 24, () => {});
+    attach.join(viewer(false).v);
+    pty.print("\x1b[?1000h\x1b[?1006hprompt$ ");
+    await flush();
+    const late = viewer(false);
+    attach.join(late.v);
+    await vi.waitFor(() => expect(late.got.length).toBeGreaterThan(0));
+    expect(late.got[0]).toContain("\x1b[?1000h");
+    expect(late.got[0]).toContain("\x1b[?1006h");
+  });
+
   it("doesn't count a replay bigger than the window against it", async () => {
     const pty = fakePty();
     const attach = new SharedAttach(pty, 80, 24, () => {});

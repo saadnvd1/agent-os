@@ -1,5 +1,6 @@
 import { Terminal } from "@xterm/headless";
 import { SerializeAddon } from "@xterm/addon-serialize";
+import { MouseModes } from "./mouse-modes";
 
 /**
  * One `tmux attach` per session, shared by every browser showing it,
@@ -73,6 +74,7 @@ export class SharedAttach {
   readonly viewers = new Set<Viewer>();
   private screen: Terminal;
   private serializer = new SerializeAddon();
+  private mouse = new MouseModes();
   private paused = false;
   private exited = false;
   private closing = false;
@@ -191,6 +193,7 @@ export class SharedAttach {
   // Output is gathered for a tick, then sent as one message per viewer.
   private output(data: string): void {
     this.printed = true;
+    this.mouse.feed(data);
     this.screen.write(data);
     this.queued += data;
     if (this.flushing) return;
@@ -248,7 +251,7 @@ export class SharedAttach {
       if (this.exited) return;
       const message = JSON.stringify({
         type: "output",
-        data: `\x1bc${this.serializer.serialize({ scrollback: SCROLLBACK })}`,
+        data: `\x1bc${this.serializer.serialize({ scrollback: SCROLLBACK })}${this.mouse.restore()}`,
       });
       // A replay is acked like any message but isn't held against the
       // window: it can be bigger than the window by itself.
