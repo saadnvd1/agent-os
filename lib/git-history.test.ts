@@ -57,8 +57,16 @@ describe("commit history reads", () => {
   it("never run what they're given as a command or an option", () => {
     expect(getCommitDetail(dir, `--output=${marker}`)).toBeNull();
     expect(getCommitDetail(dir, `$(touch ${marker})`)).toBeNull();
-    expect(getCommitFileDiff(dir, head, `"; touch ${marker}; "`)).toBe("");
-    expect(getCommitFileDiff(dir, head, `$(touch ${marker})`)).toBe("");
+    // A path that matches nothing: no diff (some git versions still
+    // print the commit header), and nothing run.
+    expect(getCommitFileDiff(dir, head, `"; touch ${marker}; "`)).not.toContain(
+      "diff --git"
+    );
+    // A path that matches nothing: no diff (some git versions still
+    // print the commit header), and nothing run.
+    expect(getCommitFileDiff(dir, head, `$(touch ${marker})`)).not.toContain(
+      "diff --git"
+    );
     expect(fs.existsSync(marker)).toBe(false);
   });
 
