@@ -1,0 +1,241 @@
+import fs from "fs";
+import path from "path";
+import { describe, expect, it } from "vitest";
+import {
+  STATIC_SIBLINGS,
+  assertDemoSandbox,
+  demoAllows,
+  demoAllowsUpgrade,
+  demoMode,
+} from "./demo";
+
+const HOME = "/srv/demo/home/alex";
+const allows = (method: string, url: string) =>
+  demoAllows({ method, url }, HOME);
+
+describe("demo mode", () => {
+  it("is on only for AGENTOS_DEMO=1", () => {
+    expect(demoMode({ AGENTOS_DEMO: "1" })).toBe(true);
+    expect(demoMode({ AGENTOS_DEMO: "true" })).toBe(false);
+    expect(demoMode({})).toBe(false);
+  });
+});
+
+describe("demo gate: refused", () => {
+  it("terminals: no /ws/terminal, nor any socket off the list", () => {
+    expect(demoAllowsUpgrade("/ws/terminal", true)).toBe(false);
+    expect(demoAllowsUpgrade("/ws/terminal", false)).toBe(false);
+    expect(demoAllowsUpgrade("/ws/anything", true)).toBe(false);
+    expect(demoAllowsUpgrade(null, true)).toBe(false);
+    expect(demoAllowsUpgrade("/_next/webpack-hmr", false)).toBe(false);
+  });
+
+  it.each([
+    ["exec", "/api/exec"],
+    ["send-keys", "/api/sessions/abc/send-keys"],
+    ["git commit", "/api/git/commit"],
+    ["git push", "/api/git/push"],
+    ["git stage", "/api/git/stage"],
+    ["git unstage", "/api/git/unstage"],
+    ["git discard", "/api/git/discard"],
+    ["git check", "/api/git/check"],
+    ["opening a PR", "/api/git/pr"],
+    ["tmux kill-all", "/api/tmux/kill-all"],
+    ["tmux rename", "/api/tmux/rename"],
+    ["file write", "/api/files/content"],
+    ["file upload", "/api/files/upload-temp"],
+    ["new session", "/api/sessions"],
+    ["fork", "/api/sessions/abc/fork"],
+    ["summarize", "/api/sessions/abc/summarize"],
+    ["init script", "/api/sessions/init-script"],
+    ["new task", "/api/tasks"],
+    ["merge", "/api/tasks/abc/merge"],
+    ["dev server", "/api/dev-servers"],
+    ["dev server restart", "/api/dev-servers/abc/restart"],
+    ["clone", "/api/projects/clone"],
+    ["project init", "/api/projects/init"],
+    ["bus spawn", "/api/bus/spawn"],
+    ["bus send", "/api/bus/send"],
+    ["orchestrate spawn", "/api/orchestrate/spawn"],
+    ["schedule run", "/api/schedules/abc/run"],
+    ["host test", "/api/hosts/abc/test"],
+    ["card run", "/api/lumifyhub/cards/abc/run"],
+    ["chat message", "/api/sessions/abc/messages"],
+  ])("%s (POST %s)", (_, url) => {
+    expect(allows("POST", url)).toBe(false);
+  });
+
+  it("changes to things the reads can see", () => {
+    for (const method of ["PUT", "PATCH", "DELETE"]) {
+      expect(allows(method, "/api/sessions/abc")).toBe(false);
+      expect(allows(method, "/api/projects/abc")).toBe(false);
+      expect(allows(method, "/api/files/content?path=~/code/a")).toBe(false);
+    }
+  });
+
+  it("routes not on the list, even reads (fail closed)", () => {
+    expect(allows("GET", "/api/brand-new-route")).toBe(false);
+    expect(allows("GET", "/api/devices")).toBe(false);
+    expect(allows("GET", "/api/hosts")).toBe(false);
+    expect(allows("GET", "/api/projects/browse")).toBe(false);
+    expect(allows("GET", "/api/lumifyhub/callback")).toBe(false);
+    expect(allows("GET", "/api/sessions/abc/claude-session")).toBe(false);
+    expect(allows("GET", "/api/sessions/done-idle")).toBe(false);
+    expect(allows("GET", "/api/devices/network")).toBe(false);
+    expect(allows("GET", "/api/projects/detect")).toBe(false);
+  });
+
+  it("posts to pages (server actions)", () => {
+    expect(allows("POST", "/")).toBe(false);
+    expect(allows("POST", "/sessions/abc")).toBe(false);
+  });
+
+  it("reads outside the demo's home", () => {
+    expect(allows("GET", "/api/files/content?path=/etc/passwd")).toBe(false);
+    expect(allows("GET", "/api/files?path=/")).toBe(false);
+    expect(allows("GET", "/api/files?path=~/../../etc")).toBe(false);
+    expect(allows("GET", `/api/files?path=${HOME}-other`)).toBe(false);
+    expect(allows("GET", "/api/files/image?path=%2Fetc%2Fhosts")).toBe(false);
+    expect(
+      allows("GET", "/api/git/file-content?path=~/code/a&file=../../../x")
+    ).toBe(false);
+    expect(allows("GET", "/api/git/status?path=~/code/a%00")).toBe(false);
+    expect(allows("GET", "/api/code-search?query=x&path=/Users")).toBe(false);
+    expect(
+      allows("GET", "/api/git/multi-status?projectId=a&fallbackPath=/etc")
+    ).toBe(false);
+    expect(allows("GET", "/api/files/../exec")).toBe(false);
+  });
+
+  it("reads that would reach another machine or start an agent", () => {
+    expect(allows("GET", "/api/files?path=~/code&hostId=box")).toBe(false);
+    expect(allows("GET", "/api/git/pr?path=~/code/a&generate=true")).toBe(
+      false
+    );
+  });
+});
+
+describe("demo gate: allowed", () => {
+  it("pages and their assets", () => {
+    expect(allows("GET", "/")).toBe(true);
+    expect(allows("GET", "/_next/static/chunks/main.js")).toBe(true);
+    expect(allows("HEAD", "/")).toBe(true);
+  });
+
+  it("reads of the seeded sessions, chats, diffs and PRs", () => {
+    expect(allows("GET", "/api/sessions")).toBe(true);
+    expect(allows("GET", "/api/sessions/abc")).toBe(true);
+    expect(allows("GET", "/api/sessions/abc/pr")).toBe(true);
+    expect(allows("GET", "/api/git/status?path=~/code/storefront")).toBe(true);
+    expect(
+      allows("GET", `/api/git/file-content?path=${HOME}/code/a&file=src/a.ts`)
+    ).toBe(true);
+    expect(allows("GET", "/api/git/history/abc123/diff?path=~/code/a")).toBe(
+      true
+    );
+    expect(allows("GET", "/api/git/pr?path=~/code/a")).toBe(true);
+    expect(allows("GET", "/api/files?path=~/code&hostId=local")).toBe(true);
+  });
+
+  it("pairing, and marking a session seen", () => {
+    expect(allows("POST", "/api/pair/start")).toBe(true);
+    expect(allows("POST", "/api/pair/claim")).toBe(true);
+    expect(allows("GET", "/api/pair/status")).toBe(true);
+    expect(allows("POST", "/api/sessions/abc/seen")).toBe(true);
+  });
+
+  it("chat and status sockets; the dev reloader only in development", () => {
+    expect(demoAllowsUpgrade("/ws/chat", false)).toBe(true);
+    expect(demoAllowsUpgrade("/ws/status", false)).toBe(true);
+    expect(demoAllowsUpgrade("/_next/webpack-hmr", true)).toBe(true);
+    expect(demoAllowsUpgrade("/_next/hmr", true)).toBe(true);
+    expect(demoAllowsUpgrade("/_next/hmr", false)).toBe(false);
+  });
+});
+
+// Every write any route exports, found on disk: a new route is refused
+// until someone puts it on the list on purpose.
+describe("demo gate: every write route in app/api", () => {
+  const api = path.resolve(__dirname, "../../app/api");
+  const routes: { url: string; method: string }[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name === "route.ts") {
+        const src = fs.readFileSync(full, "utf8");
+        const url =
+          "/api/" +
+          path
+            .relative(api, dir)
+            .split(path.sep)
+            .map((s) =>
+              s.startsWith("[...") ? "a/b" : s.startsWith("[") ? "x1" : s
+            )
+            .join("/");
+        for (const m of src.matchAll(
+          /export (?:async )?(?:function|const) (POST|PUT|PATCH|DELETE)\b/g
+        ))
+          routes.push({ url, method: m[1] });
+      }
+    }
+  };
+  walk(api);
+  const ALLOWED = new Set([
+    "POST /api/pair/start",
+    "POST /api/pair/claim",
+    "POST /api/sessions/x1/seen",
+  ]);
+
+  it("knows every static folder beside a dynamic one", () => {
+    const found = new Set<string>();
+    const scan = (dir: string) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+      if (dirs.some((d) => d.startsWith("[")))
+        dirs.filter((d) => !d.startsWith("[")).forEach((d) => found.add(d));
+      dirs.forEach((d) => scan(path.join(dir, d)));
+    };
+    scan(api);
+    for (const name of found) expect(STATIC_SIBLINGS).toContain(name);
+  });
+
+  it("finds the routes", () => {
+    expect(routes.length).toBeGreaterThan(80);
+  });
+
+  it("refuses all of them but pairing and seen", () => {
+    const let_through = routes
+      .filter((r) => demoAllows(r, HOME))
+      .map((r) => `${r.method} ${r.url}`);
+    expect(new Set(let_through)).toEqual(ALLOWED);
+  });
+});
+
+describe("assertDemoSandbox", () => {
+  const env = (extra: Record<string, string>) => ({
+    AGENTOS_DEMO_ROOT: "/srv/demo",
+    DB_PATH: "/srv/demo/agent-os.db",
+    ...extra,
+  });
+
+  it("passes when home and database are in the demo root", () => {
+    expect(() => assertDemoSandbox(env({}), HOME)).not.toThrow();
+  });
+
+  it("refuses the machine's real home or database", () => {
+    expect(() => assertDemoSandbox(env({}), "/home/someone")).toThrow();
+    expect(() =>
+      assertDemoSandbox(env({ DB_PATH: "/home/someone/agent-os.db" }), HOME)
+    ).toThrow();
+    expect(() =>
+      assertDemoSandbox({ DB_PATH: "/srv/demo/a.db" }, HOME)
+    ).toThrow();
+    expect(() =>
+      assertDemoSandbox(env({ AGENTOS_DEMO_ROOT: "/" }), HOME)
+    ).toThrow();
+    expect(() =>
+      assertDemoSandbox(env({ DB_PATH: "/srv/demo-other/a.db" }), HOME)
+    ).toThrow();
+  });
+});

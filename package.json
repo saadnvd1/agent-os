@@ -49,7 +49,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "scripts/check",
-    "screenshots": "tsx scripts/screenshots/run.ts"
+    "screenshots": "tsx scripts/screenshots/run.ts",
+    "demo": "tsx scripts/screenshots/demo.ts"
   },
   "repository": {
     "type": "git",

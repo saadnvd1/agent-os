@@ -62,6 +62,7 @@ import {
 } from "./worker/client";
 import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
+import { DEMO_REFUSAL, demoMode } from "../security/demo";
 
 export { setChatAccess, setChatModel, setChatPlan } from "./settings";
 
@@ -172,6 +173,8 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
   const pending = registry.connecting.get(sessionId);
   if (pending) return pending;
   const connecting = (async () => {
+    // Demo chat runs in-process (lib/chat/demo); no worker ever starts.
+    if (demoMode()) throw new Error(DEMO_REFUSAL);
     checkChattable(getSession(sessionId));
     let live: Live | null = null;
     const handlers = {

@@ -1,3 +1,4 @@
+import fs from "fs";
 import os from "os";
 import path from "path";
 
@@ -57,22 +58,45 @@ export function forbiddenStrings(): string[] {
   ];
 }
 
+// The first shell this machine has: zsh on a Mac, often only bash or sh on
+// Linux.
+export function demoShell(exists = fs.existsSync): string {
+  const shells = ["zsh", "bash", "sh"].flatMap((s) => [
+    `/bin/${s}`,
+    `/usr/bin/${s}`,
+  ]);
+  return shells.find((s) => exists(s)) ?? "/bin/sh";
+}
+
+// System bin directories that exist here (Homebrew's only where it's
+// installed), after the demo's own and node's.
+export function demoPath(exists = fs.existsSync): string {
+  const system = [
+    "/opt/homebrew/bin",
+    "/home/linuxbrew/.linuxbrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+  ].filter((d) => exists(d));
+  return [BIN, path.dirname(process.execPath), ...system].join(":");
+}
+
 // The environment every demo process runs with, built from scratch rather
 // than inherited, so no real session, tmux socket or config leaks in.
 export function demoEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  const nodeBin = path.dirname(process.execPath);
   return {
-    PATH: [BIN, nodeBin, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]
-      .concat(["/bin", "/usr/sbin", "/sbin"])
-      .join(":"),
+    PATH: demoPath(),
     HOME,
     USER,
     LOGNAME: USER,
-    SHELL: "/bin/zsh",
+    SHELL: demoShell(),
     LANG: "en_US.UTF-8",
     TERM: "xterm-256color",
     TMUX_TMPDIR,
     DB_PATH,
+    AGENTOS_DEMO_ROOT: ROOT,
     PORT: String(PORT),
     GIT_CONFIG_NOSYSTEM: "1",
     NEXT_TELEMETRY_DISABLED: "1",

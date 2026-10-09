@@ -741,6 +741,29 @@ and API calls or terminal connections made by another website's page.
 | `AGENTOS_TOKEN`                        | A device token for `aos` and the MCP server when they reach AgentOS over a network that needs pairing. |
 | `AGENTOS_AUTH=off`                     | No pairing, for when your own proxy does the login. Anyone who reaches the port gets a shell.          |
 
+### Demo mode
+
+`AGENTOS_DEMO=1` runs a server that is safe to show to strangers, over fake
+data. Every request is refused unless it is on a read allowlist
+(`lib/security/demo.ts`): no terminals, no exec or send-keys, no git, tmux or
+file writes, nothing that starts a session, task, dev server or other process.
+Reads of sessions, chats, diffs and PRs work, as does pairing a device from
+this machine. A chat message gets a short canned reply instead of an agent.
+File reads stay inside the demo's home, and the server refuses to start in
+demo mode unless `HOME` and `DB_PATH` both sit under `AGENTOS_DEMO_ROOT`, so
+it can never serve a real machine's sessions.
+
+```bash
+npm run demo                  # seed fake data, serve it on 127.0.0.1:3340
+npm run build && npm run demo -- --prod
+AGENTOS_BIND=0.0.0.0 AGENTOS_ALLOWED_HOSTS=demo.example.com AGENTOS_AUTH=off npm run demo -- --prod
+```
+
+The seed (`scripts/screenshots/seed.ts`) needs git and tmux, and works on macOS
+and Linux. `AGENTOS_DEMO_ROOT` (default `/tmp/agentos-demo`) and
+`AGENTOS_DEMO_PORT` move it; keep the root short, as tmux socket paths are
+limited to about 100 characters.
+
 ## Development
 
 ```bash
