@@ -4,6 +4,7 @@
  * AgentOS never uses next/image, so the endpoint is refused for everyone.
  */
 
+import type { ServerResponse } from "http";
 import path from "path";
 
 const REFUSED = ["/_next/image"];
@@ -31,4 +32,15 @@ export function refusedNextInternal(url: string | undefined): boolean {
   const p = normalized(url);
   if (p === null) return true;
   return REFUSED.some((r) => p === r || p.startsWith(r + "/"));
+}
+
+/** Answers a refused request 404 and returns true; false lets it go on. */
+export function refuseNextInternal(
+  req: { url?: string },
+  res: Pick<ServerResponse, "statusCode" | "end">
+): boolean {
+  if (!refusedNextInternal(req.url)) return false;
+  res.statusCode = 404;
+  res.end();
+  return true;
 }
