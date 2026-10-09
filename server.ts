@@ -193,7 +193,13 @@ app.prepare().then(async () => {
           createdAt: Date.now(),
         },
       });
-    const unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
+    let unwatch: () => void;
+    try {
+      unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
+    } catch {
+      // No such session: an exception here would take the server down.
+      return ws.close(1008, "Session not found");
+    }
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;

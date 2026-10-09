@@ -136,6 +136,15 @@ describe("demo chat", () => {
     );
   });
 
+  it("a chat socket for a session that doesn't exist throws to its caller, never later", async () => {
+    // server.ts closes the socket on the throw; an unhandled rejection
+    // afterwards would take the process down.
+    const { watchChat } = await import("./runner");
+    const { sendCapabilities } = await import("./settings");
+    expect(() => watchChat("nope", () => {})).toThrow(/Session not found/);
+    await expect(sendCapabilities("nope", () => {})).resolves.toBeUndefined();
+  });
+
   it("refuses a session that doesn't exist", () => {
     expect(() => sendDemoChat("nope", "hi")).toThrow(/Session not found/);
   });
