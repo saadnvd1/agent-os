@@ -192,7 +192,7 @@ describe("demo: POST /api/workspaces/:id/orchestrator/asks/:askId", () => {
     const a = ask("decision");
     const res = await answer(a.id, { action: "reply", text: "yes" });
     expect(res.status).toBe(200);
-    expect(getAsk(workspace, a.id)?.status).not.toBe("open");
+    expect(getAsk(workspace, a.id)?.status).toBe("resolved");
   });
 
   it("approves a gate without a passkey: nothing acts on it in a demo", async () => {
@@ -202,7 +202,21 @@ describe("demo: POST /api/workspaces/:id/orchestrator/asks/:askId", () => {
       binding: askBinding(a),
     });
     expect(res.status).toBe(200);
-    expect(spawned).toEqual([]);
+    expect((await res.json()).ask).toMatchObject({
+      id: a.id,
+      status: "approved",
+    });
+    expect(getAsk(workspace, a.id)?.status).toBe("approved");
+  });
+
+  it("still refuses an approval of an ask that changed since it was seen", async () => {
+    const a = ask("gate");
+    const res = await answer(a.id, {
+      action: "approve",
+      binding: askBinding(a) + "x",
+    });
+    expect(res.status).toBe(409);
+    expect(getAsk(workspace, a.id)?.status).toBe("open");
   });
 
   it("refuses passkey asks, which would change the demo's passkeys", async () => {
