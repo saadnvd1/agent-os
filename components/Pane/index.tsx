@@ -265,6 +265,10 @@ export const Pane = memo(function Pane({
   const tabBody = (tab: TabData, isActive: boolean) => {
     // A demo starts no session and runs no terminal: a notice instead.
     if (demo && (tab.draftId || !chatSessionFor(tab))) return <DemoNotice />;
+    // Not known yet whether this is a demo: no terminal may open and try to
+    // connect before it is, so a terminal tab waits a moment.
+    if (demo === undefined && !tab.draftId && !chatSessionFor(tab))
+      return <TerminalSkeleton />;
     if (tab.draftId)
       return (
         <DraftPanel
