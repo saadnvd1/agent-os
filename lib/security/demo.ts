@@ -7,6 +7,7 @@
  * (lib/demo/chat) instead of an agent.
  */
 
+import fs from "fs";
 import os from "os";
 import path from "path";
 import type { IncomingMessage, ServerResponse } from "http";
@@ -85,7 +86,6 @@ const READS = [
   "orchestrators",
   "orchestrate/workers",
   "orchestrate/workers/[id]",
-  "agents/status",
   "bus/messages",
   "bus/peers",
   "usage",
@@ -113,18 +113,56 @@ const WRITES = ["pair/start", "pair/claim", "sessions/[id]/seen"].map(route);
 
 // Query parameters that name a place on disk: they must stay in the demo's
 // home. One that names another machine must name this one.
-const PATH_PARAMS = ["path", "fallbackPath", "file", "dir", "cwd"];
+// Query parameters that name a place on disk must name one in the demo's
+// home: absolute or "~/...", plain characters only (some routes still build
+// shell strings), and inside the home once symlinks are followed. `file` is
+// relative to the folder in `path`, and checked the same way.
+const DIR_PARAMS = ["path", "fallbackPath", "dir", "cwd"];
+const PLAIN = /^[A-Za-z0-9._~/@+-]+$/;
 const REFUSED_PARAMS: Record<string, (v: string) => boolean> = {
   hostId: (v) => v !== "local",
   // Asks an agent to write the PR description.
   generate: (v) => v === "true",
 };
 
-function insideHome(value: string, home: string): boolean {
-  if (value.includes("\0")) return false;
-  if (value.split(/[\\/]/).includes("..")) return false;
-  const expanded = value.replace(/^~(?=$|\/)/, home);
-  return !path.isAbsolute(expanded) || within(path.resolve(expanded), home);
+function real(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+function plain(value: string): boolean {
+  return (
+    PLAIN.test(value) &&
+    !value.startsWith("-") &&
+    !value.split("/").includes("..")
+  );
+}
+
+function homeDir(value: string, home: string): string | null {
+  if (
+    !plain(value) ||
+    !(value === "~" || value.startsWith("~/") || value.startsWith("/"))
+  )
+    return null;
+  const resolved = real(value.replace(/^~/, home));
+  return within(resolved, real(home)) ? resolved : null;
+}
+
+function paramsAllowed(params: URLSearchParams, home: string): boolean {
+  for (const [key, value] of params) {
+    if (DIR_PARAMS.includes(key) && !homeDir(value, home)) return false;
+    if (REFUSED_PARAMS[key]?.(value)) return false;
+  }
+  const file = params.get("file");
+  if (file === null) return true;
+  if (!plain(file)) return false;
+  if (file.startsWith("/")) return !!homeDir(file, home);
+  const dir = params.get("path");
+  const base = dir ? homeDir(dir, home) : null;
+  return !!base && within(real(path.join(base, file)), real(home));
 }
 
 export interface DemoRequest {
@@ -145,10 +183,7 @@ export function demoAllows(req: DemoRequest, home = os.homedir()): boolean {
   const method = (req.method ?? "GET").toUpperCase();
   const read = method === "GET" || method === "HEAD";
   if (!p.startsWith("/api/")) return read;
-  for (const [key, value] of url.searchParams) {
-    if (PATH_PARAMS.includes(key) && !insideHome(value, home)) return false;
-    if (REFUSED_PARAMS[key]?.(value)) return false;
-  }
+  if (!paramsAllowed(url.searchParams, home)) return false;
   if (read) return READS.some((r) => r.test(p));
   return method === "POST" && WRITES.some((r) => r.test(p));
 }

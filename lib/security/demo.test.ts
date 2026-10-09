@@ -1,9 +1,14 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
+import type { IncomingMessage, ServerResponse } from "http";
+import type { Duplex } from "stream";
 import {
   STATIC_SIBLINGS,
   assertDemoSandbox,
+  gateDemoRequest,
+  refuseDemoUpgrade,
   demoAllows,
   demoAllowsUpgrade,
   demoMode,
@@ -75,6 +80,8 @@ describe("demo gate: refused", () => {
 
   it("routes not on the list, even reads (fail closed)", () => {
     expect(allows("GET", "/api/brand-new-route")).toBe(false);
+    // Runs every agent CLI it finds, to read its version.
+    expect(allows("GET", "/api/agents/status")).toBe(false);
     expect(allows("GET", "/api/devices")).toBe(false);
     expect(allows("GET", "/api/hosts")).toBe(false);
     expect(allows("GET", "/api/projects/browse")).toBe(false);
@@ -88,6 +95,51 @@ describe("demo gate: refused", () => {
   it("posts to pages (server actions)", () => {
     expect(allows("POST", "/")).toBe(false);
     expect(allows("POST", "/sessions/abc")).toBe(false);
+  });
+
+  it("relative paths, which routes resolve against the server's folder", () => {
+    expect(allows("GET", "/api/files/content?path=.env")).toBe(false);
+    expect(allows("GET", "/api/files?path=.")).toBe(false);
+    expect(allows("GET", "/api/git/status?path=lib")).toBe(false);
+    expect(allows("GET", "/api/files/content?path=~-other/x")).toBe(false);
+    expect(allows("GET", "/api/git/file-content?file=a.ts")).toBe(false);
+  });
+
+  it("paths a shell or an option parser could read as code", () => {
+    for (const bad of [
+      '~/code/a"$(id)"',
+      "~/code/a`id`",
+      "~/code/a;id",
+      "~/code/a b",
+      "-x",
+    ])
+      expect(allows("GET", `/api/git/pr?path=${encodeURIComponent(bad)}`)).toBe(
+        false
+      );
+    for (const file of ["$(id)", '"x', "-p", "a;b", "a b"])
+      expect(
+        allows(
+          "GET",
+          `/api/git/file-content?path=~/code/a&file=${encodeURIComponent(file)}`
+        )
+      ).toBe(false);
+  });
+
+  it("a symlink in the home that points out of it", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "demo-gate-"));
+    const home = path.join(root, "home");
+    fs.mkdirSync(path.join(home, "code", "a"), { recursive: true });
+    fs.symlinkSync("/", path.join(home, "out"));
+    fs.symlinkSync("/etc", path.join(home, "code", "a", "etc"));
+    const ok = (url: string) => demoAllows({ method: "GET", url }, home);
+    expect(ok("/api/files?path=~/code/a")).toBe(true);
+    expect(ok("/api/files?path=~/out")).toBe(false);
+    expect(ok("/api/files?path=~/out/etc")).toBe(false);
+    expect(ok("/api/git/file-content?path=~/code/a&file=etc/hosts")).toBe(
+      false
+    );
+    expect(ok("/api/git/file-content?path=~/code/a&file=src/a.ts")).toBe(true);
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it("reads outside the demo's home", () => {
@@ -237,5 +289,70 @@ describe("assertDemoSandbox", () => {
     expect(() =>
       assertDemoSandbox(env({ DB_PATH: "/srv/demo-other/a.db" }), HOME)
     ).toThrow();
+  });
+});
+
+describe("demo gate: answering", () => {
+  const res = () => {
+    const r = {
+      statusCode: 200,
+      headers: {} as Record<string, string>,
+      body: "",
+    };
+    return Object.assign(r, {
+      setHeader: (k: string, v: string) => (r.headers[k] = v),
+      end: (b?: string) => (r.body = b ?? ""),
+    });
+  };
+
+  it("answers a refused request 403 and stops it", () => {
+    const r = res();
+    const req = { method: "POST", url: "/api/exec" } as IncomingMessage;
+    expect(gateDemoRequest(req, r as unknown as ServerResponse)).toBe(false);
+    expect(r.statusCode).toBe(403);
+    expect(JSON.parse(r.body)).toEqual({ error: "Not available in the demo." });
+  });
+
+  it("lets an allowed one through untouched", () => {
+    const r = res();
+    const req = { method: "GET", url: "/api/sessions" } as IncomingMessage;
+    expect(gateDemoRequest(req, r as unknown as ServerResponse)).toBe(true);
+    expect(r.body).toBe("");
+  });
+
+  it("refuses an upgrade with 403 and closes the socket", () => {
+    const written: string[] = [];
+    let destroyed = false;
+    refuseDemoUpgrade({
+      write: (s: string) => written.push(s),
+      destroy: () => (destroyed = true),
+    } as unknown as Duplex);
+    expect(written.join("")).toMatch(/^HTTP\/1.1 403/);
+    expect(destroyed).toBe(true);
+  });
+});
+
+// server.ts is what makes these helpers matter: the request gate runs
+// before Next handles anything, and upgrades are checked before routing.
+describe("demo gate: wired into the server", () => {
+  const server = fs.readFileSync(
+    path.resolve(__dirname, "../../server.ts"),
+    "utf8"
+  );
+
+  it("refuses requests before Next handles them", () => {
+    const gate = server.indexOf(
+      "if (demo && !gateDemoRequest(req, res)) return;"
+    );
+    expect(gate).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(
+      server.indexOf("await handle(req, res, parsedUrl)")
+    );
+  });
+
+  it("refuses upgrades before any socket is handed over", () => {
+    const gate = server.indexOf("if (demo && !demoAllowsUpgrade(pathname))");
+    expect(gate).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(server.indexOf('if (pathname === "/ws/chat")'));
   });
 });

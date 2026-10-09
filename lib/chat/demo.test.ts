@@ -4,7 +4,14 @@ import { db } from "../db";
 import type { ChatServerMessage, DriverEvent } from "./events";
 import { DEMO_REPLY, demoConversation } from "./drivers/demo";
 import { chatDriverFor } from "./drivers";
-import { handleDemoChat, sendDemoChat } from "./demo";
+import {
+  DEMO_CHAT_READS,
+  MAX_SENDS,
+  handleDemoChat,
+  sendDemoChat,
+  setDemoReplyStep,
+} from "./demo";
+import type { ChatClientMessage } from "./events";
 import { registry } from "./registry";
 import { listItems } from "./store";
 import { sendChat } from "./runner";
@@ -35,7 +42,10 @@ async function until(check: () => boolean): Promise<void> {
   expect(check()).toBe(true);
 }
 
-beforeEach(() => vi.stubEnv("AGENTOS_DEMO", "1"));
+beforeEach(() => {
+  vi.stubEnv("AGENTOS_DEMO", "1");
+  setDemoReplyStep(0);
+});
 afterEach(() => vi.unstubAllEnvs());
 
 describe("demo chat driver", () => {
@@ -80,24 +90,54 @@ describe("demo chat", () => {
     expect(connectWorker).not.toHaveBeenCalled();
   });
 
-  it("refuses everything else a chat socket can ask", () => {
+  it("answers only history, tool bodies and task output from storage", () => {
+    expect([...DEMO_CHAT_READS].sort()).toEqual([
+      "history",
+      "task_output",
+      "tool_body",
+    ]);
+  });
+
+  it("refuses every other message a chat socket can send", () => {
     const id = newSession();
-    const replies: ChatServerMessage[] = [];
-    for (const msg of [
-      { type: "undo", from: "user-1" },
+    const others: ChatClientMessage[] = [
+      { type: "queue_edit", id: "q", text: "x" },
+      { type: "queue_move", id: "q", by: 1 },
+      { type: "queue_delete", id: "q" },
+      { type: "queue_send_now", id: "q" },
+      { type: "set_model", model: "opus" },
       { type: "set_access", access: "full" },
+      { type: "set_plan", plan: true },
       { type: "carry_plan", id: "plan-1" },
-      { type: "queue_send_now", id: "q-1" },
-    ] as const)
-      handleDemoChat(id, msg, (m) => replies.push(m));
-    expect(replies).toHaveLength(4);
+      { type: "respond", id: "a", decision: "allow" },
+      { type: "undo", from: "user-1" },
+      { type: "stop_task", taskId: "t" },
+    ];
+    const replies: ChatServerMessage[] = [];
+    for (const msg of others) handleDemoChat(id, msg, (m) => replies.push(m));
+    expect(replies).toHaveLength(others.length);
     for (const r of replies)
       expect(r).toMatchObject({ type: "item", item: { kind: "error" } });
     expect(listItems(id)).toEqual([]);
   });
 
+  it("stops taking messages for a session after the cap", async () => {
+    const id = newSession();
+    for (let i = 0; i < MAX_SENDS; i++) sendDemoChat(id, `message ${i}`);
+    expect(() => sendDemoChat(id, "one more")).toThrow(
+      /Not available in the demo/
+    );
+    await until(
+      () =>
+        listItems(id).filter((i) => i.kind === "turn_end").length === MAX_SENDS
+    );
+    expect(listItems(id).filter((i) => i.kind === "user")).toHaveLength(
+      MAX_SENDS
+    );
+  });
+
   it("refuses a session that doesn't exist", () => {
-    expect(() => sendDemoChat("nope", "hi")).toThrow();
+    expect(() => sendDemoChat("nope", "hi")).toThrow(/Session not found/);
   });
 
   it("never starts a worker, even through the real send path", async () => {

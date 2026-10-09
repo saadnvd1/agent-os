@@ -13,14 +13,17 @@ import { saveItem } from "./store";
 import { DEMO_REFUSAL } from "../security/demo";
 
 const conversations = new Map<string, ChatConversation>();
+// How long each streamed word takes; tests make it 0.
+let stepMs = 40;
+export const setDemoReplyStep = (ms: number) => (stepMs = ms);
 // Strangers can type here: a cap keeps them from growing the database.
-const MAX_SENDS = 50;
+export const MAX_SENDS = 50;
 const sends = new Map<string, number>();
 
 function conversation(sessionId: string): ChatConversation {
   let c = conversations.get(sessionId);
   if (c) return c;
-  c = demoConversation();
+  c = demoConversation(stepMs);
   conversations.set(sessionId, c);
   void (async () => {
     for await (const e of c.events) {
