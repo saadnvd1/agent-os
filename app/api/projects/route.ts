@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getHost, hostExec, isRemoteHost } from "@/lib/hosts";
+import { shellPath } from "@/lib/project-add/shell";
 import {
   getAllProjectsWithDevServers,
   createProject,
@@ -45,10 +46,9 @@ export async function POST(request: NextRequest) {
       if (!getHost(hostId)) {
         return NextResponse.json({ error: "Unknown machine" }, { status: 400 });
       }
-      const dir = workingDirectory.replace(/^~/, "$HOME");
       const { stdout } = await hostExec(
         hostId,
-        `test -d "${dir.replace(/"/g, "")}" && echo ok || true`
+        `test -d ${shellPath(String(workingDirectory))} && echo ok || true`
       ).catch(() => ({ stdout: "" }));
       if (stdout.trim() !== "ok") {
         return NextResponse.json(
