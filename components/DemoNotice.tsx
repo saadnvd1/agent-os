@@ -16,7 +16,7 @@ export function DemoNotice() {
         </p>
         <p className="text-muted-foreground text-sm leading-relaxed">
           Open a session from the sidebar to read its chat, its changes and its
-          pull request.
+          pull request; its terminal stays closed.
         </p>
       </div>
     </div>

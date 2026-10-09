@@ -552,11 +552,16 @@ export const Pane = memo(function Pane({
                   <>
                     <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 h-px cursor-row-resize transition-colors" />
                     <ResizablePanel defaultSize={30} minSize={10}>
-                      <ShellDrawer
-                        open={true}
-                        onOpenChange={setShellDrawerOpen}
-                        workingDirectory={session.working_directory}
-                      />
+                      {/* A demo runs no shell. */}
+                      {demo ? (
+                        <DemoNotice />
+                      ) : (
+                        <ShellDrawer
+                          open={true}
+                          onOpenChange={setShellDrawerOpen}
+                          workingDirectory={session.working_directory}
+                        />
+                      )}
                     </ResizablePanel>
                   </>
                 )}
