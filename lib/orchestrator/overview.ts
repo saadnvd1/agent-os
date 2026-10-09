@@ -4,6 +4,7 @@
  * counts come from the live session statuses on the client.
  */
 
+import { demoMode } from "../security/demo";
 import { db } from "../db";
 import { listWorkspaces } from "../workspaces";
 import { askBinding, openAsks, PRESENCE_KINDS } from "./asks";
@@ -51,7 +52,8 @@ export function orchestratorOverview(): OrchestratorOverview[] {
           link: a.link,
           sha: a.sha,
           binding: askBinding(a),
-          presence: PRESENCE_KINDS.includes(a.kind),
+          // A demo answers without a passkey (its orchestrator never runs).
+          presence: !demoMode() && PRESENCE_KINDS.includes(a.kind),
           createdAt: a.created_at,
         };
       }),

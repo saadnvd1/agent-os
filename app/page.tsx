@@ -54,6 +54,7 @@ import { useAppCommands } from "@/components/CommandPalette/useAppCommands";
 import { useMoveCommands } from "@/components/Tasks/useMoveCommands";
 import dynamic from "next/dynamic";
 import { chatMetaActions } from "@/stores/chatMeta";
+import { useDemoMode } from "@/data/demo";
 
 // The app's dialogs open from their stores, so none is needed for the first
 // paint: their code loads right after it.
@@ -159,6 +160,7 @@ function HomeContent() {
     usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const { isMobile, isHydrated } = useViewport();
+  const demo = useDemoMode();
 
   // Data hooks
   const { sessions, fetchSessions } = useSessions();
@@ -591,6 +593,8 @@ function HomeContent() {
     async (projectId: string) => {
       const project = projects.find((p) => p.id === projectId);
       if (!project) return;
+      // A demo runs no shell: a new tab shows its notice.
+      if (demo) return addTab(focusedPaneId);
 
       // Create a shell session with the project's working directory
       const res = await fetch("/api/sessions", {
@@ -614,7 +618,7 @@ function HomeContent() {
         attachToSession(data.session);
       }, 100);
     },
-    [projects, fetchSessions, attachToSession]
+    [projects, fetchSessions, attachToSession, demo, addTab, focusedPaneId]
   );
 
   // Active session and dev server project

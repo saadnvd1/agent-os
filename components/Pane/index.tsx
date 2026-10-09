@@ -29,6 +29,8 @@ import { GitDrawer } from "@/components/GitDrawer";
 import { ShellDrawer } from "@/components/ShellDrawer";
 import { useSnapshot } from "valtio";
 import { fileOpenStore, fileOpenActions } from "@/stores/fileOpen";
+import { useDemoMode } from "@/data/demo";
+import { DemoNotice } from "@/components/DemoNotice";
 
 // Dynamic imports for client-only components with loading states
 const Terminal = dynamic(
@@ -96,6 +98,7 @@ export const Pane = memo(function Pane({
   onAttachSession,
 }: PaneProps) {
   const { isMobile } = useViewport();
+  const demo = useDemoMode();
   const {
     focusedPaneId,
     canSplit,
@@ -260,6 +263,12 @@ export const Pane = memo(function Pane({
   // What a tab shows: a draft, a chat, its setup while a terminal session
   // waits for its worktree, or its terminal.
   const tabBody = (tab: TabData, isActive: boolean) => {
+    // A demo starts no session and runs no terminal: a notice instead.
+    if (demo && (tab.draftId || !chatSessionFor(tab))) return <DemoNotice />;
+    // Not known yet whether this is a demo: no terminal may open and try to
+    // connect before it is, so a terminal tab waits a moment.
+    if (demo === undefined && !tab.draftId && !chatSessionFor(tab))
+      return <TerminalSkeleton />;
     if (tab.draftId)
       return (
         <DraftPanel
@@ -547,11 +556,18 @@ export const Pane = memo(function Pane({
                   <>
                     <ResizablePanelHandle className="bg-border/30 hover:bg-primary/30 active:bg-primary/50 h-px cursor-row-resize transition-colors" />
                     <ResizablePanel defaultSize={30} minSize={10}>
-                      <ShellDrawer
-                        open={true}
-                        onOpenChange={setShellDrawerOpen}
-                        workingDirectory={session.working_directory}
-                      />
+                      {/* A demo runs no shell. */}
+                      {demo ? (
+                        <DemoNotice />
+                      ) : demo === undefined ? (
+                        <TerminalSkeleton />
+                      ) : (
+                        <ShellDrawer
+                          open={true}
+                          onOpenChange={setShellDrawerOpen}
+                          workingDirectory={session.working_directory}
+                        />
+                      )}
                     </ResizablePanel>
                   </>
                 )}
