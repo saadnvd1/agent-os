@@ -268,10 +268,29 @@ export function demoClientKey(
   headers: IncomingHttpHeaders
 ): string | null {
   const ip = plainAddress(remote);
-  if (!ip || proxied(headers)) return null;
-  if (ip === "127.0.0.1" || ip === "::1") return null;
+  if (!ip || ip === "127.0.0.1" || ip === "::1") return null;
+  // Forwarding headers count only from a peer that could be the demo's own
+  // proxy (another container, the same network): from anyone else they are
+  // the visitor's own say-so, and would lift their cap.
+  if (proxied(headers) && privateAddress(ip)) return null;
   if (net.isIPv6(ip)) return `${ipv6Prefix(ip)}::/64`;
   return ip;
+}
+
+// Loopback, private, link-local and shared (CGNAT) ranges.
+const PRIVATE = new net.BlockList();
+PRIVATE.addSubnet("127.0.0.0", 8);
+PRIVATE.addSubnet("10.0.0.0", 8);
+PRIVATE.addSubnet("172.16.0.0", 12);
+PRIVATE.addSubnet("192.168.0.0", 16);
+PRIVATE.addSubnet("169.254.0.0", 16);
+PRIVATE.addSubnet("100.64.0.0", 10);
+PRIVATE.addSubnet("fc00::", 7, "ipv6");
+PRIVATE.addSubnet("fe80::", 10, "ipv6");
+
+function privateAddress(ip: string): boolean {
+  const family = net.isIPv6(ip) ? "ipv6" : net.isIPv4(ip) ? "ipv4" : null;
+  return !!family && PRIVATE.check(ip.split("%")[0], family);
 }
 
 /** Counts open sockets; `acquire` gives a release, or null when full. */
@@ -306,7 +325,7 @@ export function socketLimiter(
 interface DemoSocket {
   close(code: number, reason: string): void;
   terminate(): void;
-  once(event: "close", fn: () => void): unknown;
+  once(event: "close" | "error", fn: () => void): unknown;
 }
 
 /**
@@ -327,6 +346,9 @@ export function admitDemoSocket(
     ws.once("close", release);
     return true;
   }
+  // Nothing else listens on a refused socket: a bad frame in the second it
+  // stays open would otherwise be an uncaught error.
+  ws.once("error", () => ws.terminate());
   ws.close(DEMO_BUSY_CODE, DEMO_BUSY_REASON);
   setTimeout(() => ws.terminate(), dropAfterMs).unref();
   return false;

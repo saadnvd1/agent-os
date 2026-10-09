@@ -401,6 +401,10 @@ describe("admitDemoSocket", () => {
       const extra = fakeSocket();
       expect(admitDemoSocket(extra, from("203.0.113.7"), slots)).toBe(false);
       expect(extra.closed).toEqual([1013, DEMO_BUSY_REASON]);
+      // A bad frame before it's dropped is handled, not thrown.
+      expect(() => extra.emit("error", new Error("bad frame"))).not.toThrow();
+      expect(extra.terminated).toBe(true);
+      extra.terminated = false;
       expect(extra.terminated).toBe(false);
       vi.advanceTimersByTime(1000);
       expect(extra.terminated).toBe(true);
@@ -443,6 +447,15 @@ describe("demo socket client key", () => {
     expect(demoClientKey("127.0.0.1", {})).toBeNull();
     expect(demoClientKey("::1", {})).toBeNull();
     expect(demoClientKey(undefined, {})).toBeNull();
+  });
+
+  it("ignores forwarding headers from a public peer, which chose them itself", () => {
+    expect(demoClientKey("203.0.113.7", { "x-forwarded-for": "x" })).toBe(
+      "203.0.113.7"
+    );
+    expect(demoClientKey("2001:db8:0:1::9", { via: "1" })).toBe(
+      "2001:db8:0:1::/64"
+    );
   });
 
   it("groups an IPv6 host's whole /64", () => {
