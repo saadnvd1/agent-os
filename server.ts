@@ -150,8 +150,9 @@ app.prepare().then(async () => {
   // pipe-pane where tmux is too old for it.
   const control = await startTmuxControl();
   const programTap = control ?? startProgramStatusTap(port);
-  // A demo's visitors are strangers: their status sockets are capped.
+  // A demo's visitors are strangers: their status and chat sockets are capped.
   const statusSlots = socketLimiter();
+  const chatSlots = socketLimiter();
   const statusWss = new WebSocketServer({
     noServer: true,
     perMessageDeflate: DEFLATE,
@@ -204,6 +205,7 @@ app.prepare().then(async () => {
 
     if (pathname === "/ws/chat") {
       chatWss.handleUpgrade(request, socket, head, (ws) => {
+        if (demo && !admitDemoSocket(ws, request, chatSlots)) return;
         chatWss.emit("connection", ws, request);
       });
       return;

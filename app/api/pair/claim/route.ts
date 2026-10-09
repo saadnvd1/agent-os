@@ -3,6 +3,7 @@ import { claimPairing } from "@/lib/security/pairing";
 import { REMOTE_HEADER } from "@/lib/security/auth";
 import { rateLimitKey } from "@/lib/security/rate-limit-key";
 import { deviceCookie, isHttps } from "@/lib/security/cookie";
+import { MAX_CLAIM_BYTES, readCapped } from "@/lib/security/read-capped";
 import {
   claimResponseBody,
   claimSetsCookie,
@@ -11,11 +12,15 @@ import {
 // POST /api/pair/claim - reachable without a token; trades a code for one.
 // A client that isn't a browser sends `token: true` to get it in the body too.
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => ({}))) as {
-    code?: string;
-    name?: string;
-    token?: unknown;
-  };
+  const raw = await readCapped(request, MAX_CLAIM_BYTES);
+  if (raw === null)
+    return NextResponse.json({ error: "Too large" }, { status: 413 });
+  let body: { code?: string; name?: string; token?: unknown } = {};
+  try {
+    body = JSON.parse(raw) ?? {};
+  } catch {
+    // Not JSON: no code.
+  }
   if (!body.code)
     return NextResponse.json({ error: "code required" }, { status: 400 });
   const result = claimPairing({
