@@ -223,8 +223,13 @@ export function createWebSocketConnection(
 
   // Handle Shift+Enter for multi-line input
   term.attachCustomKeyEventHandler((event) => {
-    if (event.type === "keydown" && event.key === "Enter" && event.shiftKey) {
-      sendInput("\n");
+    // Every event of it is swallowed, not just keydown: a keypress let
+    // through makes xterm send "\r" too, which submits the line.
+    if (event.key === "Enter" && event.shiftKey) {
+      if (event.type === "keydown") {
+        event.preventDefault();
+        sendInput("\n");
+      }
       return false;
     }
     return true;
