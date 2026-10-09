@@ -200,6 +200,7 @@ describe("demo gate: allowed", () => {
       "/api/sessions/status",
       "/api/tasks",
       "/api/workspaces",
+      "/api/demo",
       "/api/sessions/6c1a585a-5a7b-4c3b-80e9-90f6fac0267b/preview",
     ])
       expect(allows("GET", url), url).toBe(true);

@@ -29,6 +29,8 @@ import { GitDrawer } from "@/components/GitDrawer";
 import { ShellDrawer } from "@/components/ShellDrawer";
 import { useSnapshot } from "valtio";
 import { fileOpenStore, fileOpenActions } from "@/stores/fileOpen";
+import { useDemoMode } from "@/data/demo";
+import { DemoNotice } from "@/components/DemoNotice";
 
 // Dynamic imports for client-only components with loading states
 const Terminal = dynamic(
@@ -96,6 +98,7 @@ export const Pane = memo(function Pane({
   onAttachSession,
 }: PaneProps) {
   const { isMobile } = useViewport();
+  const demo = useDemoMode();
   const {
     focusedPaneId,
     canSplit,
@@ -260,6 +263,8 @@ export const Pane = memo(function Pane({
   // What a tab shows: a draft, a chat, its setup while a terminal session
   // waits for its worktree, or its terminal.
   const tabBody = (tab: TabData, isActive: boolean) => {
+    // A demo starts no session and runs no terminal: a notice instead.
+    if (demo && (tab.draftId || !chatSessionFor(tab))) return <DemoNotice />;
     if (tab.draftId)
       return (
         <DraftPanel

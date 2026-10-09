@@ -116,6 +116,8 @@ const READS = [
   // stub: what a client checks before it trusts the server.
   "devices",
   "devices/network",
+  // Whether this is a demo, for the UI.
+  "demo",
 ].map(route);
 
 // The only writes, each a database write and nothing more in demo mode:

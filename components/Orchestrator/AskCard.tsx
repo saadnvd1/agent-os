@@ -8,6 +8,7 @@ import type { AskView } from "@/lib/orchestrator/overview";
 import type { AskKind } from "@/lib/orchestrator/asks";
 import type { AskAction } from "@/data/orchestrators";
 import { NO_PASSKEYS_HERE, passkeysHere } from "@/data/presence";
+import { useDemoMode } from "@/data/demo";
 import { cn } from "@/lib/utils";
 
 const amber = "bg-amber-500/15 text-amber-700 dark:text-amber-300";
@@ -57,6 +58,7 @@ export function AskCard({
   // Known only in the browser: whether this page can use a passkey.
   const canProve = useSyncExternalStore(noSubscribe, passkeysHere, () => true);
   const blocked = ask.presence && !canProve;
+  const demo = useDemoMode();
   const [text, setText] = useState("");
   const kind = KIND[ask.kind];
   const btn = "h-11 md:h-8";
@@ -116,6 +118,12 @@ export function AskCard({
         ))}
       {blocked && !dense && (
         <p className="text-muted-foreground text-xs">{NO_PASSKEYS_HERE}</p>
+      )}
+      {demo && !dense && (
+        <p className="text-muted-foreground text-xs">
+          In this demo anyone can answer. On a real machine, approving needs the
+          owner&apos;s passkey.
+        </p>
       )}
       {replying ? (
         <div className="space-y-2">
