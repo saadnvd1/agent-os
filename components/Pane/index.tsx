@@ -559,6 +559,8 @@ export const Pane = memo(function Pane({
                       {/* A demo runs no shell. */}
                       {demo ? (
                         <DemoNotice />
+                      ) : demo === undefined ? (
+                        <TerminalSkeleton />
                       ) : (
                         <ShellDrawer
                           open={true}
