@@ -12,6 +12,7 @@ import {
   type AskAnswer,
 } from "@/lib/orchestrator/asks";
 import { askPresence } from "@/lib/orchestrator/presence-binding";
+import { demoMode } from "@/lib/security/demo";
 
 const isNewPasskeyAsk = (ask: { kind: string; subject: string }) =>
   ask.kind === "passkey" && ask.subject.startsWith("passkey:");
@@ -31,7 +32,12 @@ function parseAnswer(body: unknown): AskAnswer | null {
 // a device he let approve), and approving a hard line, a gate, a brake or a
 // passkey also needs his passkey on a challenge bound to this ask as it is.
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const gate = requireApprover(request);
+  // A demo's asks are seeded and its orchestrator never runs: any visitor
+  // may answer, with no passkey, and nothing acts on the answer.
+  const demo = demoMode();
+  const gate = demo
+    ? ({ ok: true, approver: { via: "device", deviceId: null } } as const)
+    : requireApprover(request);
   if (!gate.ok) return gate.response;
   const { id, askId } = await params;
   const body = (await request.json().catch(() => null)) as {
@@ -48,6 +54,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const ask = getAsk(id, Number(askId));
     if (!ask)
       return NextResponse.json({ error: "No such ask" }, { status: 404 });
+    if (demo && ask.kind === "passkey")
+      return NextResponse.json(
+        { error: "Not available in the demo." },
+        { status: 403 }
+      );
     // Declining a new passkey's ask revokes it, so it needs a passkey too.
     const revokes = answer.action === "decline" && isNewPasskeyAsk(ask);
     if (answer.action === "approve" || revokes) {
@@ -56,7 +67,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           { error: "Say what you're answering" },
           { status: 400 }
         );
-      if (PRESENCE_KINDS.includes(ask.kind))
+      if (!demo && PRESENCE_KINDS.includes(ask.kind))
         await verifyPresence(
           relyingParty(request.headers),
           body.assertion,

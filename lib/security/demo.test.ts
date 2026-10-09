@@ -88,13 +88,11 @@ describe("demo gate: refused", () => {
     expect(allows("GET", "/api/brand-new-route")).toBe(false);
     // Runs every agent CLI it finds, to read its version.
     expect(allows("GET", "/api/agents/status")).toBe(false);
-    expect(allows("GET", "/api/devices")).toBe(false);
     expect(allows("GET", "/api/hosts")).toBe(false);
     expect(allows("GET", "/api/projects/browse")).toBe(false);
     expect(allows("GET", "/api/lumifyhub/callback")).toBe(false);
     expect(allows("GET", "/api/sessions/abc/claude-session")).toBe(false);
     expect(allows("GET", "/api/sessions/done-idle")).toBe(false);
-    expect(allows("GET", "/api/devices/network")).toBe(false);
     expect(allows("GET", "/api/projects/detect")).toBe(false);
   });
 
@@ -192,6 +190,35 @@ describe("demo gate: refused", () => {
 });
 
 describe("demo gate: allowed", () => {
+  it("everything a client app needs to connect and browse", () => {
+    for (const url of [
+      "/api/devices",
+      "/api/devices/network",
+      "/api/orchestrators",
+      "/api/projects",
+      "/api/sessions",
+      "/api/sessions/status",
+      "/api/tasks",
+      "/api/workspaces",
+      "/api/sessions/6c1a585a-5a7b-4c3b-80e9-90f6fac0267b/preview",
+    ])
+      expect(allows("GET", url), url).toBe(true);
+    expect(demoAllowsUpgrade("/ws/chat", false)).toBe(true);
+    expect(demoAllowsUpgrade("/ws/status", false)).toBe(true);
+  });
+
+  it("the client's writes, each by its own method only", () => {
+    expect(allows("POST", "/api/sessions/abc/pin")).toBe(true);
+    expect(allows("POST", "/api/sessions/abc/done")).toBe(true);
+    expect(allows("POST", "/api/workspaces/w1/orchestrator/asks/7")).toBe(true);
+    expect(allows("DELETE", "/api/devices/d1")).toBe(true);
+    expect(allows("PATCH", "/api/devices/d1")).toBe(false);
+    expect(allows("PUT", "/api/devices/network")).toBe(false);
+    expect(allows("DELETE", "/api/sessions/abc")).toBe(false);
+    expect(allows("POST", "/api/workspaces/w1/orchestrator/pause")).toBe(false);
+    expect(allows("POST", "/api/workspaces/w1/orchestrator")).toBe(false);
+  });
+
   it("pages and their assets", () => {
     expect(allows("GET", "/")).toBe(true);
     expect(allows("GET", "/_next/static/chunks/main.js")).toBe(true);
@@ -261,6 +288,10 @@ describe("demo gate: every write route in app/api", () => {
     "POST /api/pair/start",
     "POST /api/pair/claim",
     "POST /api/sessions/x1/seen",
+    "POST /api/sessions/x1/pin",
+    "POST /api/sessions/x1/done",
+    "POST /api/workspaces/x1/orchestrator/asks/x1",
+    "DELETE /api/devices/x1",
   ]);
 
   it("knows every static folder beside a dynamic one", () => {
@@ -280,7 +311,7 @@ describe("demo gate: every write route in app/api", () => {
     expect(routes.length).toBeGreaterThan(80);
   });
 
-  it("refuses all of them but pairing and seen", () => {
+  it("refuses all of them but the database-only ones", () => {
     const let_through = routes
       .filter((r) => demoAllows(r, HOME))
       .map((r) => `${r.method} ${r.url}`);
