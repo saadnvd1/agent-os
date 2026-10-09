@@ -31,6 +31,7 @@ import {
   refuseDemoUpgrade,
   socketLimiter,
 } from "./lib/security/demo";
+import { startDemoReseed } from "./lib/demo-reseed";
 import { upgradePath } from "./lib/security/upgrade-path";
 import {
   refuseAbsoluteTarget,
@@ -322,6 +323,8 @@ app.prepare().then(async () => {
   // A demo starts nothing on its own: no agents, tasks, stacks or schedules.
   if (demo) {
     console.log("> Demo mode: agents don't run, and nothing runs code");
+    // Visitors share it: back to the seed every few minutes, while serving.
+    startDemoReseed(getDb(), `${process.env.DB_PATH}.seed`);
     return;
   }
   // New sessions whose worktree setup a restart cut off.

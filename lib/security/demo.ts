@@ -249,6 +249,11 @@ export function refuseDemoUpgrade(socket: Duplex): void {
 
 export const DEMO_REFUSAL = REFUSAL;
 
+// What a demo keeps of what a visitor types (a chat message, an answer to
+// an ask): everyone else sees it, so it is never the visitor's own text.
+export const DEMO_VISITOR_TEXT =
+  "A visitor's message. In the demo, what visitors type isn't kept or shown.";
+
 // Status sockets are cheap for a visitor to open and each one costs the
 // server a subscription and git watches, so a demo caps them: a few per
 // client address, and a ceiling for everyone. Behind a reverse proxy every
