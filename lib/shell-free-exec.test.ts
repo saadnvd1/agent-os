@@ -1,12 +1,13 @@
 import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 // What reaches child_process from the routes and helpers that used to build
 // shell strings out of request and session data: each value must arrive as
 // one argument of its own, and nothing may run through a shell.
-type Call = { file: string; args: string[]; stdin?: string };
+// cwd is recorded but not enumerable, so call lists compare on argv alone.
+type Call = { file: string; args: string[]; stdin?: string; cwd?: string };
 const calls = vi.hoisted(() => [] as Call[]);
 const BROKEN_PIPE = vi.hoisted(() => "a paste tmux never finished reading");
 const answer = vi.hoisted(() => ({
@@ -21,6 +22,8 @@ vi.mock("child_process", async (original) => {
   const execFile = (file: string, args: string[], ...rest: unknown[]) => {
     const cb = rest.at(-1) as Callback;
     const call: Call = { file, args };
+    const opts = rest.length > 1 ? (rest[0] as { cwd?: string }) : undefined;
+    Object.defineProperty(call, "cwd", { value: opts?.cwd, enumerable: false });
     calls.push(call);
     const out = answer.fn(file, args);
     // stdin is written after execFile returns, as a real child's is.
@@ -53,12 +56,16 @@ vi.mock("child_process", async (original) => {
   };
   // The summarizer's `claude -p`, which reads the conversation on stdin.
   const spawn = (file: string, args: string[]) => {
-    calls.push({ file, args });
+    const call: Call = { file, args };
+    calls.push(call);
     const child = new EventEmitter() as EventEmitter & Record<string, unknown>;
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     child.stdin = {
-      write: () => true,
+      write: (data: string) => {
+        call.stdin = (call.stdin ?? "") + data;
+        return true;
+      },
       end: () =>
         setImmediate(() => {
           (child.stdout as EventEmitter).emit("data", "the summary");
@@ -351,20 +358,38 @@ describe("spawnWorker", async () => {
   const os = await import("os");
   const path = await import("path");
 
+  // Its readiness poll sleeps 2s between looks: run those sleeps on a fake
+  // clock, while the mocked processes still answer on real setImmediate.
+  async function spawn(task: string, workingDirectory: string) {
+    answer.fn = (_file, args) =>
+      args[0] === "capture-pane" ? "? for shortcuts\n" : "";
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      let done = false;
+      const started = spawnWorker({
+        conductorSessionId: addSession(),
+        task,
+        workingDirectory,
+        useWorktree: false,
+      }).finally(() => (done = true));
+      while (!done) {
+        await vi.advanceTimersByTimeAsync(2000);
+        await new Promise((r) => setImmediate(r));
+      }
+      return await started;
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+  const created = () =>
+    tmuxCalls().find((c) => c.args[0] === "new-session")?.args;
+
   it.each(EVIL)(
     "starts in a hostile directory and sends the task %j as literal keys",
     async (task) => {
-      answer.fn = (_file, args) =>
-        args[0] === "capture-pane" ? "? for shortcuts\n" : "";
-      const worker = await spawnWorker({
-        conductorSessionId: addSession(),
-        task,
-        workingDirectory: `~/${EVIL[0]}`,
-        useWorktree: false,
-      });
+      const worker = await spawn(task, `~/${EVIL[0]}`);
       const target = `=${worker.tmux_name}:`;
-      const created = tmuxCalls().find((c) => c.args[0] === "new-session");
-      expect(created?.args.slice(0, 6)).toEqual([
+      expect(created()?.slice(0, 6)).toEqual([
         "new-session",
         "-d",
         "-s",
@@ -372,27 +397,22 @@ describe("spawnWorker", async () => {
         "-c",
         path.join(os.homedir(), EVIL[0]),
       ]);
-      expect(created?.args).toHaveLength(7);
+      expect(created()).toHaveLength(7);
       expect(tmuxCalls().slice(-2)).toEqual([
         { file: "tmux", args: ["send-keys", "-t", target, "-l", "--", task] },
         { file: "tmux", args: ["send-keys", "-t", target, "Enter"] },
       ]);
-    },
-    10_000
+    }
   );
 
-  it("leaves a ~ that isn't leading alone", async () => {
-    answer.fn = (_file, args) =>
-      args[0] === "capture-pane" ? "? for shortcuts\n" : "";
-    await spawnWorker({
-      conductorSessionId: addSession(),
-      task: "t",
-      workingDirectory: "/a~b",
-      useWorktree: false,
-    });
-    const created = tmuxCalls().find((c) => c.args[0] === "new-session");
-    expect(created?.args[5]).toBe("/a~b");
-  }, 10_000);
+  it.each([
+    ["~", os.homedir()],
+    ["~foo/x", "~foo/x"],
+    ["/a~b", "/a~b"],
+  ])("expands only a leading ~ or ~/: %j", async (dir, cwd) => {
+    await spawn("t", dir);
+    expect(created()?.[5]).toBe(cwd);
+  });
 });
 
 describe("docker dev server reads", async () => {
@@ -435,6 +455,7 @@ describe("docker dev server reads", async () => {
 
   it("lists a compose file's services in a hostile directory, as the cwd", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "$(touch pwned)"));
+    onTestFinished(() => fs.rmSync(dir, { recursive: true, force: true }));
     fs.writeFileSync(path.join(dir, "compose.yml"), "services: {}\n");
     answer.fn = () => "web\n";
     expect(await detectDockerServices(dir)).toEqual([
@@ -446,7 +467,7 @@ describe("docker dev server reads", async () => {
         args: ["compose", "-f", "compose.yml", "config", "--services"],
       },
     ]);
-    fs.rmSync(dir, { recursive: true });
+    expect(calls[0].cwd).toBe(dir);
   });
 
   it("checks a node server's ports with lsof's arguments only", async () => {
@@ -467,44 +488,88 @@ describe("docker dev server reads", async () => {
 
 describe("summarize reads Claude's session id as an id", async () => {
   const { POST } = await import("@/app/api/sessions/[id]/summarize/route");
+  const fs = await import("fs");
+  const os = await import("os");
+  const path = await import("path");
 
-  it.each(["../../../etc/passwd", "a/b", "$(id)"])(
-    "ignores %j and falls back to the scrollback",
-    async (claudeId) => {
-      const id = addSession();
+  // A home of our own, with a transcript planted wherever each id would
+  // lead: only a plain id may be read.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "summarize-home-"));
+  const projects = path.join(home, ".claude", "projects", "-tmp");
+  const line = (text: string) =>
+    JSON.stringify({ type: "user", message: { content: text } });
+  const plant = (id: string, text: string) => {
+    const file = path.join(projects, `${id}.jsonl`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${line(text.repeat(40))}\n`);
+  };
+
+  async function summarize(claudeId: string) {
+    const realHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
       answer.fn = (_file, args) =>
         args[0] === "show-environment"
           ? `CLAUDE_SESSION_ID=${claudeId}\n`
           : args[0] === "capture-pane"
             ? "short"
             : null;
-      const res = await POST(post({ createFork: false }), params(id));
+      return await POST(post({ createFork: false }), params(addSession()));
+    } finally {
+      process.env.HOME = realHome;
+    }
+  }
+  const claude = () => calls.find((c) => c.file === "claude");
+
+  it.each(["../../escaped", "a/b", "$(id)"])(
+    "won't read the transcript %j points at",
+    async (claudeId) => {
+      plant(claudeId, "PLANTED ");
+      const res = await summarize(claudeId);
       expect(res.status).toBe(400);
-      expect(tmuxCalls().map((c) => c.args[0])).toEqual([
-        "display-message",
-        "show-environment",
-        "capture-pane",
-      ]);
+      expect(claude()).toBeUndefined();
     }
   );
+
+  it("reads a plain id's transcript", async () => {
+    plant("abc-123", "REAL ");
+    const res = await summarize("abc-123");
+    expect(res.status).toBe(200);
+    expect(claude()?.stdin).toContain("REAL REAL");
+  });
 });
 
 describe("POST /api/git/commit", async () => {
   const { POST } = await import("@/app/api/git/commit/route");
 
-  it.each([
-    ["-f", "x"],
-    [["a"], "x"],
-    ["x; touch /tmp/pwned", "x"],
-    [undefined, ["not", "a", "string"]],
-  ])(
-    "answers 400 for branch %j and message %j, running nothing",
-    async (branchName, message) => {
-      answer.fn = () => null; // a git that ran would fail
-      const res = await POST(post({ path: "/tmp", message, branchName }));
+  // A repository on main with one file staged, as far as the reads go; a
+  // checkout or commit that ran would be recorded.
+  beforeEach(() => {
+    answer.fn = (_file, args) =>
+      args.includes("rev-parse")
+        ? ".git\n"
+        : args.includes("status")
+          ? "A  staged.txt\n"
+          : args.includes("--show-current")
+            ? "main\n"
+            : "";
+  });
+
+  it.each(["-f", "--orphan=x", "x; touch /tmp/pwned", ["a"]])(
+    "refuses the branch %j with its own reason, running nothing",
+    async (branchName) => {
+      const res = await POST(post({ path: "/tmp", message: "m", branchName }));
       expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Invalid branch name" });
       expect(calls.filter((c) => c.args.includes("checkout"))).toEqual([]);
       expect(calls.filter((c) => c.args.includes("commit"))).toEqual([]);
     }
   );
+
+  it("refuses a message that isn't a string", async () => {
+    const res = await POST(post({ path: "/tmp", message: ["m"] }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Commit message is required" });
+    expect(calls).toEqual([]);
+  });
 });

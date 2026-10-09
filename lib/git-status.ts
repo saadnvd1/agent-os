@@ -358,7 +358,7 @@ export function createBranch(workingDir: string, branchName: string): void {
 }
 
 // A commit or push can wait on a hook or a remote: off the event loop, with a
-// ceiling, and never on a prompt nobody can answer.
+// ceiling (a hung ssh is killed at it), and no git credential prompt.
 function gitWrite(
   cwd: string,
   args: string[],
@@ -377,13 +377,12 @@ function gitWrite(
         env: {
           ...process.env,
           GIT_TERMINAL_PROMPT: "0",
-          GIT_SSH_COMMAND:
-            process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes",
         },
       },
       (error, stdout, stderr) => {
         if (!error) return resolve({ stdout, stderr });
-        const reason = stderr.trim() || error.message;
+        // "nothing to commit" is on stdout.
+        const reason = stderr.trim() || stdout.trim() || error.message;
         reject(new Error(`git ${args[0]} failed: ${reason}`));
       }
     );

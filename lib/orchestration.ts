@@ -90,7 +90,7 @@ export async function spawnWorker(
   const model = resolveModelForAgent(agentType, options.model);
 
   // Expand ~ to home directory
-  const workingDirectory = rawWorkingDir.replace(/^~/, process.env.HOME || "");
+  const workingDirectory = rawWorkingDir.replace(/^~(?=\/|$)/, homedir());
 
   const sessionId = randomUUID();
   const sessionName = taskToSessionName(task);
@@ -158,7 +158,7 @@ export async function spawnWorker(
 
   // Create tmux session and start the agent
   const tmuxSessionName = `${provider.id}-${sessionId}`;
-  const cwd = actualWorkingDir.replace(/^~(?=\/|$)/, homedir());
+  const cwd = actualWorkingDir;
   const target = `=${tmuxSessionName}:`;
 
   // Build the initial prompt command (workers use auto-approve by default for automation)

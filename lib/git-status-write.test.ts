@@ -82,7 +82,9 @@ describe("commit", () => {
   });
 
   it("fails when nothing is staged", async () => {
-    await expect(commit(repo, "empty")).rejects.toThrow(/git commit failed/);
+    await expect(commit(repo, "empty")).rejects.toThrow(
+      /git commit failed: [\s\S]*nothing (added )?to commit/
+    );
   });
 });
 
