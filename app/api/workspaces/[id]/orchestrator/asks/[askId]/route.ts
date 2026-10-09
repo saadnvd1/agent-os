@@ -12,7 +12,7 @@ import {
   type AskAnswer,
 } from "@/lib/orchestrator/asks";
 import { askPresence } from "@/lib/orchestrator/presence-binding";
-import { demoMode } from "@/lib/security/demo";
+import { DEMO_VISITOR_TEXT, demoMode } from "@/lib/security/demo";
 
 const isNewPasskeyAsk = (ask: { kind: string; subject: string }) =>
   ask.kind === "passkey" && ask.subject.startsWith("passkey:");
@@ -44,7 +44,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     binding?: string;
     assertion?: AuthenticationResponseJSON;
   } | null;
-  const answer = parseAnswer(body);
+  const parsed = parseAnswer(body);
+  // A demo keeps no visitor's words where the next visitor would read them.
+  const answer =
+    demo && parsed?.action === "reply"
+      ? { action: "reply" as const, text: DEMO_VISITOR_TEXT }
+      : parsed;
   if (!answer)
     return NextResponse.json(
       { error: "Send approve, decline, or reply with text" },

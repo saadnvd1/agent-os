@@ -9,8 +9,10 @@ import {
   MAX_SENDS,
   handleDemoChat,
   sendDemoChat,
+  resetDemoChat,
   setDemoReplyStep,
 } from "./demo";
+import { DEMO_VISITOR_TEXT } from "../security/demo";
 import type { ChatClientMessage } from "./events";
 import { registry } from "./registry";
 import { listItems } from "./store";
@@ -84,6 +86,12 @@ describe("demo chat", () => {
     await until(() => listItems(id).some((i) => i.kind === "turn_end"));
     const kinds = listItems(id).map((i) => i.kind);
     expect(kinds).toEqual(["user", "assistant", "turn_end"]);
+    // Other visitors read this session: the visitor's own words aren't kept.
+    expect(listItems(id)[0]).toMatchObject({
+      kind: "user",
+      text: DEMO_VISITOR_TEXT,
+    });
+    expect(JSON.stringify(listItems(id))).not.toContain("flaky");
     expect(listItems(id)[1]).toMatchObject({ text: DEMO_REPLY });
     expect(seen.some((m) => m.type === "delta")).toBe(true);
     expect(seen.at(-1)).toEqual({ type: "state", state: "idle" });
@@ -147,6 +155,28 @@ describe("demo chat", () => {
 
   it("refuses a session that doesn't exist", () => {
     expect(() => sendDemoChat("nope", "hi")).toThrow(/Session not found/);
+  });
+
+  it("a reset stops a reply mid-stream: watchers see idle, nothing more is saved", async () => {
+    setDemoReplyStep(20);
+    const id = newSession();
+    const seen = watch(id);
+    sendDemoChat(id, "hello");
+    await until(() => seen.some((m) => m.type === "delta"));
+    resetDemoChat();
+    expect(seen.at(-1)).toEqual({ type: "state", state: "idle" });
+    const count = seen.length;
+    await new Promise((r) => setTimeout(r, 200));
+    expect(seen).toHaveLength(count);
+    expect(listItems(id).map((i) => i.kind)).toEqual(["user"]);
+  });
+
+  it("starts over after a re-seed: send counts and conversations reset", () => {
+    const id = newSession();
+    for (let i = 0; i < MAX_SENDS; i++) sendDemoChat(id, `m${i}`);
+    expect(() => sendDemoChat(id, "more")).toThrow();
+    resetDemoChat();
+    expect(() => sendDemoChat(id, "again")).not.toThrow();
   });
 
   it("never starts a worker, even through the real send path", async () => {

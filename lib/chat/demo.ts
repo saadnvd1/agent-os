@@ -10,7 +10,7 @@ import type { ChatClientMessage, ChatServerMessage } from "./events";
 import { demoConversation } from "./drivers/demo";
 import { emit, getSession } from "./registry";
 import { saveItem } from "./store";
-import { DEMO_REFUSAL } from "../security/demo";
+import { DEMO_REFUSAL, DEMO_VISITOR_TEXT } from "../security/demo";
 
 const conversations = new Map<string, ChatConversation>();
 // How long each streamed word takes; tests make it 0.
@@ -47,12 +47,23 @@ export function sendDemoChat(sessionId: string, text: string): void {
   const item = {
     id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
     kind: "user" as const,
-    text: trimmed.slice(0, 4000),
+    text: DEMO_VISITOR_TEXT,
     createdAt: Date.now(),
   };
   saveItem(sessionId, item);
   emit(sessionId, { type: "item", item });
-  conversation(sessionId).send(trimmed);
+  conversation(sessionId).send(DEMO_VISITOR_TEXT);
+}
+
+/** After a re-seed: stub conversations and send counts start over. */
+export function resetDemoChat(): void {
+  for (const [sessionId, c] of conversations) {
+    c.close();
+    // A reply cut off mid-stream: watchers stop showing it as running.
+    emit(sessionId, { type: "state", state: "idle" });
+  }
+  conversations.clear();
+  sends.clear();
 }
 
 // Messages that only read what's stored; the socket answers them as usual.

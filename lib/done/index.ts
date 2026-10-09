@@ -112,6 +112,9 @@ export async function doneSession(
   // A demo archives and nothing more: no merge, no agent to stop, no
   // worktree to touch.
   if (demoMode()) {
+    if (s.role === "orchestrator")
+      throw new Error("An orchestrator isn't marked done.");
+    if (s.archived_at) throw new Error(`${s.name} is already archived.`);
     if (s.task_prompt)
       db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(
         s.id

@@ -751,7 +751,10 @@ Reads of sessions, chats, diffs and PRs work, as does pairing a device from
 this machine. A few writes stay database-only: pinning a session, Done
 (archives, with no merge or clean-up), answering an ask, and removing your own
 device. A chat message gets a short canned reply instead of an agent, and the
-device list and network settings show no addresses.
+device list and network settings show no addresses. Visitors share one demo,
+so what they type (a chat message, an answer to an ask) is kept and shown as
+fixed text, and the database goes back to its seed every 10 minutes, in
+place, while it keeps serving.
 File reads stay inside the demo's home, and the server refuses to start in
 demo mode unless `HOME` and `DB_PATH` both sit under `AGENTOS_DEMO_ROOT`, so
 it can never serve a real machine's sessions.

@@ -19,18 +19,20 @@ function channel() {
   let closed = false;
   return {
     push(e: DriverEvent) {
+      if (closed) return;
       queue.push(e);
       wake?.();
     },
+    // Ends the stream at once: nothing still queued is read.
     close() {
       closed = true;
+      queue.length = 0;
       wake?.();
     },
     async *events(): AsyncIterable<DriverEvent> {
-      while (true) {
+      while (!closed) {
         const next = queue.shift();
         if (next) yield next;
-        else if (closed) return;
         else await new Promise<void>((r) => (wake = r));
       }
     },
@@ -41,7 +43,9 @@ export function demoConversation(stepMs = 40): ChatConversation {
   const out = channel();
   let turn = Promise.resolve();
   let stopped = false;
+  let closed = false;
   const reply = async () => {
+    if (closed) return;
     stopped = false;
     const started = Date.now();
     const id = `assistant-${started}-${Math.random().toString(36).slice(2, 7)}`;
@@ -59,7 +63,7 @@ export function demoConversation(stepMs = 40): ChatConversation {
     });
     const words = DEMO_REPLY.split(/(?<= )/);
     let i = 0;
-    for (; i < words.length && !stopped; i++) {
+    for (; i < words.length && !stopped && !closed; i++) {
       await sleep(stepMs);
       out.push({ type: "delta", id, text: words[i] });
     }
@@ -101,7 +105,10 @@ export function demoConversation(stepMs = 40): ChatConversation {
     respond: () => {},
     stopTask: async () => {},
     undo: refuse,
-    close: () => out.close(),
+    close: () => {
+      closed = true;
+      out.close();
+    },
     events: out.events(),
   };
 }
