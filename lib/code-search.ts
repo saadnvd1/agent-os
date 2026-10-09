@@ -51,7 +51,10 @@ export function searchCode(
       `--max-count=${Math.ceil(maxResults / 10)}`,
       `--context=${contextLines}`,
       "--ignore-case",
+      // -e: a query starting with "-" is a pattern, never an option (--pre).
+      "-e",
       query,
+      "--",
       ".", // CRITICAL: Tell ripgrep to search current directory explicitly
     ];
 

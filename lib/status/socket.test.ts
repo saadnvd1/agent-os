@@ -1,4 +1,7 @@
 import { EventEmitter } from "events";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "crypto";
 import { polledDirs, unwatchGit } from "../git-poller";
@@ -39,6 +42,26 @@ describe("status socket messages", () => {
       JSON.stringify({ type: "watch_git", dirs: ["/srv/x"] })
     );
     expect(polledDirs()).toEqual(["/srv/x"]);
+  });
+
+  it("in a demo, watches git only in the demo's home", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "demo-home-"));
+    fs.mkdirSync(path.join(home, "code"));
+    vi.stubEnv("AGENTOS_DEMO", "1");
+    vi.stubEnv("HOME", home);
+    try {
+      onStatusMessage(
+        watcher,
+        JSON.stringify({
+          type: "watch_git",
+          dirs: ["/", "/etc", "~/../x", "~/code", 7],
+        })
+      );
+      expect(polledDirs()).toEqual([path.join(home, "code")]);
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it("stops polling a socket's folders and pinging once it closes", () => {

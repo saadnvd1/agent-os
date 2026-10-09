@@ -181,14 +181,17 @@ function writeHome(): void {
     "[user]\n\tname = Alex Rivera\n\temail = alex@example.com\n[init]\n\tdefaultBranch = main\n"
   );
   // Every shell the app opens (terminal tabs, tmux attach) must find the
-  // demo's own tmux server, never the machine's.
-  fs.writeFileSync(
-    path.join(HOME, ".zshenv"),
-    `export TMUX_TMPDIR=${TMUX_TMPDIR}\nexport PATH=${BIN}:$PATH\nunset TMUX TMUX_PANE\n`
-  );
+  // demo's own tmux server, never the machine's, whichever shell it is.
+  const env = `export TMUX_TMPDIR=${TMUX_TMPDIR}\nexport PATH=${BIN}:$PATH\nunset TMUX TMUX_PANE\n`;
+  fs.writeFileSync(path.join(HOME, ".zshenv"), env);
   fs.writeFileSync(
     path.join(HOME, ".zshrc"),
     "PROMPT='%F{245}%~%f %F{141}❯%f '\n"
+  );
+  fs.writeFileSync(path.join(HOME, ".profile"), env);
+  fs.writeFileSync(
+    path.join(HOME, ".bashrc"),
+    `${env}PS1='\\[\\e[38;5;245m\\]\\w\\[\\e[0m\\] \\[\\e[38;5;141m\\]❯\\[\\e[0m\\] '\n`
   );
   fs.writeFileSync(path.join(HOME, ".tmux.conf"), "set -g status off\n");
   fs.mkdirSync(BIN, { recursive: true });

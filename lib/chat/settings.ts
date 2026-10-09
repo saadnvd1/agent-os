@@ -97,7 +97,13 @@ export async function sendCapabilities(
   sessionId: string,
   listener: Listener
 ): Promise<void> {
-  const session = getSession(sessionId);
+  let session: Session;
+  try {
+    // Gone since the socket opened: nothing to say, and nothing to throw.
+    session = getSession(sessionId);
+  } catch {
+    return;
+  }
   if (session.host_id && session.host_id !== "local") return;
   try {
     await loadCapabilities(session);

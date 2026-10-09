@@ -15,7 +15,7 @@ const execFileAsync = promisify(execFile);
 export async function isGitRepo(dirPath: string): Promise<boolean> {
   try {
     const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-    await execAsync(`git -C "${resolvedPath}" rev-parse --git-dir`, {
+    await execFileAsync("git", ["-C", resolvedPath, "rev-parse", "--git-dir"], {
       timeout: 5000,
     });
     return true;
@@ -29,8 +29,9 @@ export async function isGitRepo(dirPath: string): Promise<boolean> {
  */
 export async function getCurrentBranch(dirPath: string): Promise<string> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  const { stdout } = await execAsync(
-    `git -C "${resolvedPath}" rev-parse --abbrev-ref HEAD`,
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", resolvedPath, "rev-parse", "--abbrev-ref", "HEAD"],
     { timeout: 5000 }
   );
   return stdout.trim();
@@ -43,14 +44,16 @@ export async function getDefaultBranch(dirPath: string): Promise<string> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
   try {
     // Try to get the default branch from remote
-    const { stdout } = await execAsync(
-      `git -C "${resolvedPath}" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`,
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", resolvedPath, "symbolic-ref", "refs/remotes/origin/HEAD"],
       { timeout: 5000 }
     );
+    const name = stdout.trim().replace(/^refs\/remotes\/origin\//, "");
     // The remote picks this name: anything that isn't a plain branch name
     // (a "$(...)" a hostile repo could set) is ignored.
-    if (stdout.trim() && isBranchName(stdout.trim())) {
-      return stdout.trim();
+    if (name && isBranchName(name)) {
+      return name;
     }
   } catch {
     // Ignore
@@ -58,15 +61,23 @@ export async function getDefaultBranch(dirPath: string): Promise<string> {
 
   // Fallback: check if main or master exists
   try {
-    await execAsync(`git -C "${resolvedPath}" rev-parse --verify main`, {
-      timeout: 5000,
-    });
+    await execFileAsync(
+      "git",
+      ["-C", resolvedPath, "rev-parse", "--verify", "main"],
+      {
+        timeout: 5000,
+      }
+    );
     return "main";
   } catch {
     try {
-      await execAsync(`git -C "${resolvedPath}" rev-parse --verify master`, {
-        timeout: 5000,
-      });
+      await execFileAsync(
+        "git",
+        ["-C", resolvedPath, "rev-parse", "--verify", "master"],
+        {
+          timeout: 5000,
+        }
+      );
       return "master";
     } catch {
       // Return current branch as fallback

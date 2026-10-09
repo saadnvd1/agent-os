@@ -44,6 +44,14 @@ import {
   type AccessPolicy,
 } from "./lib/security/net";
 import { authPolicy, gateRequest, gateUpgrade } from "./lib/security/gate";
+import {
+  assertDemoSandbox,
+  demoAllowsUpgrade,
+  demoMode,
+  gateDemoRequest,
+  refuseDemoUpgrade,
+} from "./lib/security/demo";
+import { DEMO_CHAT_READS, handleDemoChat } from "./lib/chat/demo";
 import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
@@ -78,10 +86,15 @@ const pFlagIndex = process.argv.indexOf("-p");
 const portArg = pFlagIndex !== -1 ? process.argv[pFlagIndex + 1] : undefined;
 const port = parseInt(portArg || process.env.PORT || "3011", 10);
 process.env.AGENTOS_PORT = String(port);
+// Demo mode: seeded data, nothing that runs code (lib/security/demo).
+const demo = demoMode();
+if (demo) assertDemoSandbox();
 // Fixed for this process and handed to the chat workers it starts.
 buildId();
-ensureBusBrief();
-installClaudeStatusHooks();
+if (!demo) {
+  ensureBusBrief();
+  installClaudeStatusHooks();
+}
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -118,6 +131,7 @@ app.prepare().then(async () => {
       return;
     }
     if (!gateRequest(req, res, auth)) return;
+    if (demo && !gateDemoRequest(req, res)) return;
     try {
       await compressJson(req, res);
       const parsedUrl = parse(req.url!, true);
@@ -179,11 +193,19 @@ app.prepare().then(async () => {
           createdAt: Date.now(),
         },
       });
-    const unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
+    let unwatch: () => void;
+    try {
+      unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
+    } catch {
+      // No such session: an exception here would take the server down.
+      return ws.close(1008, "Session not found");
+    }
     ws.on("message", (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as ChatClientMessage;
-        if (msg.type === "send") {
+        if (demo && !DEMO_CHAT_READS.has(msg.type))
+          handleDemoChat(sessionId, msg, reply);
+        else if (msg.type === "send") {
           const send = clientSend(msg);
           void sendChat(sessionId, { ...send, queue: true }).catch(fail);
           // "Session 4" is named after its first message.
@@ -292,6 +314,10 @@ app.prepare().then(async () => {
       socket.destroy();
       return;
     }
+    if (demo && !demoAllowsUpgrade(pathname)) {
+      refuseDemoUpgrade(socket);
+      return;
+    }
 
     if (pathname === "/ws/chat") {
       chatWss.handleUpgrade(request, socket, head, (ws) => {
@@ -385,9 +411,15 @@ app.prepare().then(async () => {
     ];
   };
   // AgentOS Connect: reachable at <id>.<machine domain> through the relay.
-  const connect = startConnect({ onRequest, onUpgrade }, port);
+  const connect = demo
+    ? { hostname: () => null }
+    : startConnect({ onRequest, onUpgrade }, port);
   // HTTPS on the tailnet (its own port) for passkeys and other secure-origin APIs.
-  if (process.env.AGENTOS_TAILNET_HTTPS !== "0" && !process.env.AGENTOS_BIND) {
+  if (
+    !demo &&
+    process.env.AGENTOS_TAILNET_HTTPS !== "0" &&
+    !process.env.AGENTOS_BIND
+  ) {
     startTailnetHttps({
       handlers: { onRequest, onUpgrade },
       port,
@@ -400,6 +432,11 @@ app.prepare().then(async () => {
     console.warn(
       "> WARNING: AGENTOS_AUTH=off and listening beyond loopback. Anyone who can reach this port gets a shell."
     );
+  }
+  // A demo starts nothing on its own: no agents, tasks, stacks or schedules.
+  if (demo) {
+    console.log("> Demo mode: agents don't run, and nothing runs code");
+    return;
   }
   // New sessions whose worktree setup a restart cut off.
   failInterruptedSetups();
