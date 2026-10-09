@@ -23,3 +23,15 @@ export async function networkState(): Promise<NetworkState> {
     connect: connectStatus(),
   };
 }
+
+// What a demo says about its network: nothing about the machine it runs on
+// (no addresses, no tailnet, no Connect), whatever the machine has.
+export function demoNetworkState(): NetworkState {
+  return {
+    lan: { on: false, locked: true },
+    requirePairingOnTailnet: { on: false, locked: true },
+    tailscale: { state: "missing" },
+    reach: [],
+    connect: { state: "off" },
+  };
+}

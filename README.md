@@ -748,7 +748,10 @@ data. Every request is refused unless it is on a read allowlist
 (`lib/security/demo.ts`): no terminals, no exec or send-keys, no git, tmux or
 file writes, nothing that starts a session, task, dev server or other process.
 Reads of sessions, chats, diffs and PRs work, as does pairing a device from
-this machine. A chat message gets a short canned reply instead of an agent.
+this machine. A few writes stay database-only: pinning a session, Done
+(archives, with no merge or clean-up), answering an ask, and removing your own
+device. A chat message gets a short canned reply instead of an agent, and the
+device list and network settings show no addresses.
 File reads stay inside the demo's home, and the server refuses to start in
 demo mode unless `HOME` and `DB_PATH` both sit under `AGENTOS_DEMO_ROOT`, so
 it can never serve a real machine's sessions.

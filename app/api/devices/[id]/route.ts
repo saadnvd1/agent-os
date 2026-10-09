@@ -5,6 +5,8 @@ import {
   setDeviceCanApprove,
 } from "@/lib/security/devices";
 import { requireLocalTrust } from "@/lib/security/route-guard";
+import { DEVICE_HEADER } from "@/lib/security/auth";
+import { demoMode } from "@/lib/security/demo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -33,8 +35,14 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 }
 
 // DELETE /api/devices/:id - revoke; its open terminals drop at once
-export async function DELETE(_: NextRequest, { params }: Ctx) {
+export async function DELETE(request: NextRequest, { params }: Ctx) {
   const { id } = await params;
+  // In a demo a visitor may sign only their own device out.
+  if (demoMode() && request.headers.get(DEVICE_HEADER) !== id)
+    return NextResponse.json(
+      { error: "Not available in the demo." },
+      { status: 403 }
+    );
   if (!revokeDevice(id))
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });

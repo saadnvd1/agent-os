@@ -112,11 +112,25 @@ const READS = [
   "files/content",
   "files/image",
   "pair/status",
+  // Who this request is (devices without their addresses) and a network
+  // stub: what a client checks before it trusts the server.
+  "devices",
+  "devices/network",
 ].map(route);
 
-// The only writes: pairing a device (start is loopback-only in its route),
-// and marking a session seen, which is the reader's own bookkeeping.
-const WRITES = ["pair/start", "pair/claim", "sessions/[id]/seen"].map(route);
+// The only writes, each a database write and nothing more in demo mode:
+// pairing a device (start is loopback-only in its route), marking a session
+// seen or pinned, done (archives only: no merge, no clean-up), answering an
+// ask, and removing the caller's own device.
+const WRITES: [string, RegExp][] = [
+  ["POST", "pair/start"],
+  ["POST", "pair/claim"],
+  ["POST", "sessions/[id]/seen"],
+  ["POST", "sessions/[id]/pin"],
+  ["POST", "sessions/[id]/done"],
+  ["POST", "workspaces/[id]/orchestrator/asks/[id]"],
+  ["DELETE", "devices/[id]"],
+].map(([m, p]) => [m, route(p)]);
 
 // Query parameters that name a place on disk: they must stay in the demo's
 // home. One that names another machine must name this one.
@@ -199,7 +213,7 @@ export function demoAllows(req: DemoRequest, home = os.homedir()): boolean {
   if (!p.startsWith("/api/")) return read;
   if (!paramsAllowed(url.searchParams, home)) return false;
   if (read) return READS.some((r) => r.test(p));
-  return method === "POST" && WRITES.some((r) => r.test(p));
+  return WRITES.some(([m, r]) => m === method && r.test(p));
 }
 
 // The sockets a demo serves: chat (with the stub driver) and status. Never a

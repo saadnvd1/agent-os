@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { networkState } from "@/lib/security/network-state";
+import { demoNetworkState, networkState } from "@/lib/security/network-state";
+import { demoMode } from "@/lib/security/demo";
 import { requireLocalTrust } from "@/lib/security/route-guard";
 import { setConnectEnabled } from "@/lib/connect/config";
 import {
@@ -10,7 +11,9 @@ import {
 
 // GET /api/devices/network - Wi-Fi access, tailnet pairing, Tailscale, addresses
 export async function GET() {
-  return NextResponse.json(await networkState());
+  return NextResponse.json(
+    demoMode() ? demoNetworkState() : await networkState()
+  );
 }
 
 // PUT /api/devices/network {lan?, requirePairingOnTailnet?}

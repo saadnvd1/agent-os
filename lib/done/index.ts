@@ -20,6 +20,7 @@ import { judge, mergeJudged } from "../orchestrator/signoff";
 import { isPaused } from "../orchestrator/pause";
 import { plain } from "../orchestrator/overview";
 import { archiveSession } from "./archive";
+import { demoMode } from "../security/demo";
 import { planDone } from "./plan";
 import { deleteMergedRemote } from "./remote";
 import { settleWorktree, type WorktreeFate } from "./worktree";
@@ -108,6 +109,22 @@ export async function doneSession(
   opts: DoneOptions
 ): Promise<DoneOutcome> {
   const s = getDoneTarget(id);
+  // A demo archives and nothing more: no merge, no agent to stop, no
+  // worktree to touch.
+  if (demoMode()) {
+    if (s.task_prompt)
+      db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(
+        s.id
+      );
+    archiveSession(s.id);
+    return {
+      id: s.id,
+      name: s.name,
+      merged: null,
+      worktree: { action: "none" },
+      text: `${s.name} archived. In the demo, nothing is merged or cleaned up.`,
+    };
+  }
   await statusDetector.refreshCache();
   const plan = await planDone(s, opts.callerId);
   if (plan.action === "refuse") throw new Error(plan.reason);
