@@ -56,7 +56,8 @@ export const STATIC_SIBLINGS = [
   "network",
   "status",
 ];
-const ID = `(?!(?:${STATIC_SIBLINGS.join("|")})(?:/|$))[A-Za-z0-9._-]+`;
+// No leading "-": an id that reaches a command line can't read as an option.
+const ID = `(?!(?:${STATIC_SIBLINGS.join("|")})(?:/|$))[A-Za-z0-9_][A-Za-z0-9._-]*`;
 const route = (p: string) => new RegExp(`^/api/${p.replace(/\[id\]/g, ID)}$`);
 
 // Reads the UI makes over seeded data. Every entry was checked to start no
