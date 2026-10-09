@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import { db } from "@/lib/db";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+// Session ids are UUIDs; anything else never reaches tmux.
+const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 // GET: Check tmux environment for Claude session ID
 export async function GET(
@@ -11,13 +14,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!SESSION_ID.test(id))
+    return NextResponse.json({ error: "Invalid session id" }, { status: 400 });
   const tmuxSession = `claude-${id}`;
 
   try {
     // Check tmux environment for CLAUDE_SESSION_ID
-    const { stdout } = await execAsync(
-      `tmux show-environment -t "${tmuxSession}" CLAUDE_SESSION_ID 2>/dev/null || echo ""`
-    );
+    const { stdout } = await execFileAsync("tmux", [
+      "show-environment",
+      "-t",
+      `=${tmuxSession}`,
+      "CLAUDE_SESSION_ID",
+    ]).catch(() => ({ stdout: "" }));
 
     const line = stdout.trim();
     if (line.startsWith("CLAUDE_SESSION_ID=")) {

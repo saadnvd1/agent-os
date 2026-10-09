@@ -53,6 +53,7 @@ import {
 } from "./lib/security/demo";
 import { DEMO_CHAT_READS, handleDemoChat } from "./lib/chat/demo";
 import { upgradePath } from "./lib/security/upgrade-path";
+import { refusedNextInternal } from "./lib/security/next-internals";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
@@ -128,6 +129,12 @@ app.prepare().then(async () => {
     ) {
       res.statusCode = 403;
       res.end("forbidden");
+      return;
+    }
+    // Next's image optimizer re-fetches any URL past these gates.
+    if (refusedNextInternal(req.url)) {
+      res.statusCode = 404;
+      res.end();
       return;
     }
     if (!gateRequest(req, res, auth)) return;
