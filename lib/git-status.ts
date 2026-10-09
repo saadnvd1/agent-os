@@ -3,6 +3,7 @@ import { promisify } from "util";
 import { realpathSync, unlinkSync } from "fs";
 import { basename, dirname, join, resolve, sep } from "path";
 import { homedir } from "os";
+import { remoteDefaultBranch } from "./pr";
 
 const execFileAsync = promisify(execFile);
 
@@ -394,16 +395,5 @@ export function getRemoteUrl(workingDir: string): string | null {
  * Get the default branch name (main or master)
  */
 export function getDefaultBranch(workingDir: string): string {
-  try {
-    // Try to get from remote
-    const output = execSync(
-      "git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo 'refs/heads/main'",
-      { cwd: workingDir, encoding: "utf-8" }
-    ).trim();
-    return output
-      .replace("refs/remotes/origin/", "")
-      .replace("refs/heads/", "");
-  } catch {
-    return "main";
-  }
+  return remoteDefaultBranch(workingDir);
 }

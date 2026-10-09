@@ -44,3 +44,19 @@ export function refuseNextInternal(
   res.end();
   return true;
 }
+
+/**
+ * A request target must be a path ("origin form"). The absolute form
+ * (GET http://host/path) routes the same in Next, but every check here
+ * that looks at the path would see the scheme first.
+ */
+export function refuseAbsoluteTarget(
+  req: { url?: string },
+  res: Pick<ServerResponse, "statusCode" | "end">
+): boolean {
+  const url = req.url ?? "";
+  if (url.startsWith("/") && !url.startsWith("//")) return false;
+  res.statusCode = 400;
+  res.end();
+  return true;
+}

@@ -1,7 +1,11 @@
 import fs from "fs";
 import path from "path";
 import { describe, expect, it } from "vitest";
-import { refuseNextInternal, refusedNextInternal } from "./next-internals";
+import {
+  refuseAbsoluteTarget,
+  refuseNextInternal,
+  refusedNextInternal,
+} from "./next-internals";
 
 describe("refusedNextInternal", () => {
   it("refuses Next's image optimizer, however the path is spelled", () => {
@@ -19,6 +23,39 @@ describe("refusedNextInternal", () => {
       "/%E0%A4%A",
     ])
       expect(refusedNextInternal(url), url).toBe(true);
+  });
+
+  it("refuses a target that isn't a plain path (absolute form)", () => {
+    for (const url of [
+      "http://localhost:3011/_next/image?url=/api/x",
+      "HTTP://h/_next/image",
+      "//h/_next/image",
+      "*",
+      "",
+    ]) {
+      const res = {
+        statusCode: 200,
+        ended: false,
+        end() {
+          res.ended = true;
+        },
+      };
+      expect(
+        refuseAbsoluteTarget(
+          { url },
+          res as unknown as Parameters<typeof refuseAbsoluteTarget>[1]
+        ),
+        url
+      ).toBe(true);
+      expect(res).toMatchObject({ statusCode: 400, ended: true });
+    }
+    const ok = { statusCode: 200, end() {} };
+    expect(
+      refuseAbsoluteTarget(
+        { url: "/api/sessions" },
+        ok as unknown as Parameters<typeof refuseAbsoluteTarget>[1]
+      )
+    ).toBe(false);
   });
 
   it("leaves everything else alone", () => {
@@ -64,7 +101,7 @@ describe("refusedNextInternal", () => {
   // One handler serves every listener (loopback, tailnet, tailnet HTTPS,
   // Connect); the refusal is its first check after the host/origin check,
   // unconditional, and stops the request.
-  it("is the first thing server.ts's request handler does after the host check", () => {
+  it("are the request handler's first steps, around the host check", () => {
     const server = fs.readFileSync(
       path.resolve(__dirname, "../../server.ts"),
       "utf8"
@@ -75,10 +112,11 @@ describe("refusedNextInternal", () => {
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith("//"));
+    expect(lines[1]).toBe("if (refuseAbsoluteTarget(req, res)) return;");
     const refuse = lines.indexOf("if (refuseNextInternal(req, res)) return;");
     expect(refuse).toBeGreaterThan(-1);
-    expect(lines.slice(0, refuse).join(" ")).toMatch(
-      /^const onRequest[^]*requestAllowed\([^]*return;\s*}$/
+    expect(lines.slice(2, refuse).join(" ")).toMatch(
+      /^if \(\s*!requestAllowed\([^]*return;\s*}$/
     );
     expect(lines[refuse + 1]).toBe("if (!gateRequest(req, res, auth)) return;");
     for (const l of [

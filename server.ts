@@ -53,7 +53,10 @@ import {
 } from "./lib/security/demo";
 import { DEMO_CHAT_READS, handleDemoChat } from "./lib/chat/demo";
 import { upgradePath } from "./lib/security/upgrade-path";
-import { refuseNextInternal } from "./lib/security/next-internals";
+import {
+  refuseAbsoluteTarget,
+  refuseNextInternal,
+} from "./lib/security/next-internals";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
@@ -114,6 +117,8 @@ app.prepare().then(async () => {
     Array.isArray(v) ? v[0] : v;
 
   const onRequest: Parameters<typeof createServer>[1] = async (req, res) => {
+    // Paths only: every check below reads the target as one.
+    if (refuseAbsoluteTarget(req, res)) return;
     if (
       !requestAllowed(
         {
