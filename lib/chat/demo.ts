@@ -57,7 +57,11 @@ export function sendDemoChat(sessionId: string, text: string): void {
 
 /** After a re-seed: stub conversations and send counts start over. */
 export function resetDemoChat(): void {
-  for (const c of conversations.values()) c.close();
+  for (const [sessionId, c] of conversations) {
+    c.close();
+    // A reply cut off mid-stream: watchers stop showing it as running.
+    emit(sessionId, { type: "state", state: "idle" });
+  }
   conversations.clear();
   sends.clear();
 }

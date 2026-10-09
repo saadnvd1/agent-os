@@ -60,13 +60,15 @@ describe("demo re-seed", () => {
   it("restores on a timer, again and again, while the database stays open", () => {
     vi.useFakeTimers();
     const { db, seed } = scratch();
-    const stop = startDemoReseed(db, seed, 1000);
+    const restored = vi.fn();
+    const stop = startDemoReseed(db, seed, 1000, restored);
     const before = rows(db);
     for (let i = 0; i < 2; i++) {
       db.exec(`UPDATE children SET note = 'defaced ${i}'`);
       vi.advanceTimersByTime(1000);
       expect(rows(db)).toEqual(before);
     }
+    expect(restored).toHaveBeenCalledTimes(2);
     stop();
     db.exec(`UPDATE children SET note = 'after stop'`);
     vi.advanceTimersByTime(5000);
@@ -98,5 +100,16 @@ describe("demo re-seed", () => {
       )?.name;
     expect(name(kept)).toBe("seeded");
     expect(name(added)).toBeUndefined();
+  });
+
+  it("leaves access and settings alone: a device paired since stays paired", async () => {
+    const { getDb } = await import("./db");
+    const { mintDevice, getDevice } = await import("./security/devices");
+    const db = getDb();
+    const seed = path.join(tmp(), "app.db.seed");
+    snapshotDemo(db, seed);
+    const { device } = mintDevice("phone");
+    restoreDemo(db, seed);
+    expect(getDevice(device.id)?.name).toBe("phone");
   });
 });

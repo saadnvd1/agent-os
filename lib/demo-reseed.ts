@@ -1,7 +1,8 @@
 /**
  * A public demo is shared by strangers, so its database goes back to the
  * seed on a timer: a copy taken at startup is written back over every table
- * in one transaction, in this process, while it keeps serving.
+ * in one transaction, in this process, while it keeps serving. Replies
+ * still streaming stop, and open chats reconnect to read the seed again.
  */
 
 import fs from "fs";
@@ -10,6 +11,24 @@ import { notifyStatusChanged } from "./status/hub";
 import { resetDemoChat } from "./chat/demo";
 
 export const RESEED_MS = 10 * 60 * 1000;
+
+// Access and configuration, not demo content: a re-seed leaves these as
+// they are, so paired devices stay paired and settings stay set. Every
+// other table, including any added later, goes back to the seed.
+export const KEEP_TABLES = new Set([
+  "_migrations",
+  "change_versions",
+  "devices",
+  "passkeys",
+  "passkey_enrollments",
+  "presence_challenges",
+  "settings",
+  "notify_settings",
+  "scheduler_lease",
+  "lumifyhub_connection",
+  "hosts",
+  "host_links",
+]);
 
 /** Copies the database as it is now to `file`, replacing what's there. */
 export function snapshotDemo(db: Database.Database, file: string): void {
@@ -36,6 +55,7 @@ export function restoreDemo(db: Database.Database, file: string): void {
       .all() as { name: string }[];
     db.transaction(() => {
       for (const { name } of tables) {
+        if (KEEP_TABLES.has(name)) continue;
         // Stored columns only: a generated one can't be written.
         const cols = (
           db.prepare(`SELECT * FROM pragma_table_xinfo(?)`).all(name) as {
@@ -63,7 +83,9 @@ export function restoreDemo(db: Database.Database, file: string): void {
 export function startDemoReseed(
   db: Database.Database,
   file: string,
-  everyMs = RESEED_MS
+  everyMs = RESEED_MS,
+  // After each restore: e.g. close chat sockets so clients reload history.
+  onRestored: () => void = () => {}
 ): () => void {
   snapshotDemo(db, file);
   const timer = setInterval(() => {
@@ -71,6 +93,7 @@ export function startDemoReseed(
       restoreDemo(db, file);
       resetDemoChat();
       notifyStatusChanged();
+      onRestored();
     } catch (error) {
       console.error("Demo re-seed failed:", error);
     }

@@ -324,7 +324,11 @@ app.prepare().then(async () => {
   if (demo) {
     console.log("> Demo mode: agents don't run, and nothing runs code");
     // Visitors share it: back to the seed every few minutes, while serving.
-    startDemoReseed(getDb(), `${process.env.DB_PATH}.seed`);
+    // Open chats show history the restore replaced: they reconnect (1012,
+    // service restart) and read it again.
+    startDemoReseed(getDb(), `${process.env.DB_PATH}.seed`, undefined, () => {
+      for (const ws of chatWss.clients) ws.close(1012, "Demo reset");
+    });
     return;
   }
   // New sessions whose worktree setup a restart cut off.

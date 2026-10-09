@@ -157,6 +157,20 @@ describe("demo chat", () => {
     expect(() => sendDemoChat("nope", "hi")).toThrow(/Session not found/);
   });
 
+  it("a reset stops a reply mid-stream: watchers see idle, nothing more is saved", async () => {
+    setDemoReplyStep(20);
+    const id = newSession();
+    const seen = watch(id);
+    sendDemoChat(id, "hello");
+    await until(() => seen.some((m) => m.type === "delta"));
+    resetDemoChat();
+    expect(seen.at(-1)).toEqual({ type: "state", state: "idle" });
+    const count = seen.length;
+    await new Promise((r) => setTimeout(r, 200));
+    expect(seen).toHaveLength(count);
+    expect(listItems(id).map((i) => i.kind)).toEqual(["user"]);
+  });
+
   it("starts over after a re-seed: send counts and conversations reset", () => {
     const id = newSession();
     for (let i = 0; i < MAX_SENDS; i++) sendDemoChat(id, `m${i}`);
