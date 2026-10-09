@@ -1,14 +1,20 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { describe, expect, it } from "vitest";
+import { EventEmitter } from "events";
+import { describe, expect, it, vi } from "vitest";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Duplex } from "stream";
 import {
   STATIC_SIBLINGS,
   assertDemoSandbox,
+  DEMO_SOCKETS_PER_CLIENT,
   gateDemoRequest,
   refuseDemoUpgrade,
+  DEMO_BUSY_REASON,
+  admitDemoSocket,
+  demoClientKey,
+  socketLimiter,
   demoAllows,
   demoAllowsUpgrade,
   demoMode,
@@ -350,9 +356,165 @@ describe("demo gate: wired into the server", () => {
     );
   });
 
+  it("admits demo status sockets through the cap", () => {
+    expect(server).toMatch(
+      /statusWss\.handleUpgrade\([^]*?if \(demo && !admitDemoSocket\(ws, request, statusSlots\)\) return;\s*statusWss\.emit\("connection"/
+    );
+  });
+
   it("refuses upgrades before any socket is handed over", () => {
     const gate = server.indexOf("if (demo && !demoAllowsUpgrade(pathname))");
     expect(gate).toBeGreaterThan(-1);
     expect(gate).toBeLessThan(server.indexOf('if (pathname === "/ws/chat")'));
+  });
+});
+
+describe("admitDemoSocket", () => {
+  const fakeSocket = () => {
+    const ws = Object.assign(new EventEmitter(), {
+      closed: null as null | [number, string],
+      terminated: false,
+      close(code: number, reason: string) {
+        ws.closed = [code, reason];
+      },
+      terminate() {
+        ws.terminated = true;
+      },
+    });
+    return ws;
+  };
+  const from = (ip: string) =>
+    ({ headers: {}, socket: { remoteAddress: ip } }) as unknown as Pick<
+      IncomingMessage,
+      "headers" | "socket"
+    >;
+
+  it("closes the client's fifth socket with 1013 and drops it if it hangs", () => {
+    vi.useFakeTimers();
+    try {
+      const slots = socketLimiter();
+      const open = Array.from({ length: DEMO_SOCKETS_PER_CLIENT }, () => {
+        const ws = fakeSocket();
+        expect(admitDemoSocket(ws, from("203.0.113.7"), slots)).toBe(true);
+        return ws;
+      });
+      const extra = fakeSocket();
+      expect(admitDemoSocket(extra, from("203.0.113.7"), slots)).toBe(false);
+      expect(extra.closed).toEqual([1013, DEMO_BUSY_REASON]);
+      // A bad frame before it's dropped is handled, not thrown.
+      expect(() => extra.emit("error", new Error("bad frame"))).not.toThrow();
+      expect(extra.terminated).toBe(true);
+      extra.terminated = false;
+      expect(extra.terminated).toBe(false);
+      vi.advanceTimersByTime(1000);
+      expect(extra.terminated).toBe(true);
+      // Someone else still gets in, and a closed socket frees its slot.
+      expect(admitDemoSocket(fakeSocket(), from("198.51.100.1"), slots)).toBe(
+        true
+      );
+      open[0].emit("close");
+      expect(admitDemoSocket(fakeSocket(), from("203.0.113.7"), slots)).toBe(
+        true
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("behind a proxy, counts only toward the total", () => {
+    const slots = socketLimiter(1, 3);
+    const proxied = {
+      headers: { "x-forwarded-for": "1.2.3.4" },
+      socket: { remoteAddress: "172.17.0.1" },
+    } as unknown as Pick<IncomingMessage, "headers" | "socket">;
+    for (let i = 0; i < 3; i++)
+      expect(admitDemoSocket(fakeSocket(), proxied, slots)).toBe(true);
+    expect(admitDemoSocket(fakeSocket(), proxied, slots)).toBe(false);
+  });
+});
+
+describe("demo socket client key", () => {
+  it("is the visitor's address when they connect directly", () => {
+    expect(demoClientKey("203.0.113.7", {})).toBe("203.0.113.7");
+    expect(demoClientKey("::ffff:203.0.113.7", {})).toBe("203.0.113.7");
+  });
+
+  it("is none behind a proxy, on loopback or over Connect: total only", () => {
+    expect(
+      demoClientKey("172.17.0.1", { "x-forwarded-for": "1.2.3.4" })
+    ).toBeNull();
+    expect(demoClientKey("10.0.0.2", { via: "1.1 caddy" })).toBeNull();
+    expect(demoClientKey("127.0.0.1", {})).toBeNull();
+    expect(demoClientKey("::1", {})).toBeNull();
+    expect(demoClientKey(undefined, {})).toBeNull();
+  });
+
+  it("ignores forwarding headers from a public peer, which chose them itself", () => {
+    expect(demoClientKey("203.0.113.7", { "x-forwarded-for": "x" })).toBe(
+      "203.0.113.7"
+    );
+    expect(demoClientKey("2001:db8:0:1::9", { via: "1" })).toBe(
+      "2001:db8:0:1::/64"
+    );
+  });
+
+  it("groups an IPv6 host's whole /64", () => {
+    const key = demoClientKey("2001:db8:0:1::1", {});
+    expect(key).toBe("2001:db8:0:1::/64");
+    expect(demoClientKey("2001:db8:0:1:ffff:1:2:3", {})).toBe(key);
+    expect(demoClientKey("2001:0db8:0000:0001::abcd", {})).toBe(key);
+    expect(demoClientKey("2001:db8::1", {})).toBe("2001:db8:0:0::/64");
+    expect(demoClientKey("2001:db8:0:2::1", {})).not.toBe(key);
+  });
+});
+
+describe("demo socket limiter", () => {
+  it("caps sockets per client", () => {
+    const slots = socketLimiter(2, 10);
+    const a = [slots.acquire("1.2.3.4"), slots.acquire("1.2.3.4")];
+    expect(a.every(Boolean)).toBe(true);
+    expect(slots.acquire("1.2.3.4")).toBeNull();
+    expect(slots.acquire("5.6.7.8")).not.toBeNull();
+  });
+
+  it("caps sockets for everyone together", () => {
+    const slots = socketLimiter(4, 3);
+    expect(slots.acquire("a")).not.toBeNull();
+    expect(slots.acquire("b")).not.toBeNull();
+    expect(slots.acquire("c")).not.toBeNull();
+    expect(slots.acquire("d")).toBeNull();
+    expect(slots.count()).toBe(3);
+  });
+
+  it("frees a slot when its socket closes, once however often it's called", () => {
+    const slots = socketLimiter(1, 1);
+    const release = slots.acquire("a")!;
+    expect(slots.acquire("a")).toBeNull();
+    release();
+    release();
+    expect(slots.count()).toBe(0);
+    expect(slots.count("a")).toBe(0);
+    expect(slots.acquire("a")).not.toBeNull();
+    expect(slots.acquire("b")).toBeNull();
+  });
+
+  it("counts a proxied socket (no client) toward the total only", () => {
+    const slots = socketLimiter(1, 3);
+    expect(slots.acquire(null)).not.toBeNull();
+    expect(slots.acquire(null)).not.toBeNull();
+    const release = slots.acquire(null)!;
+    expect(release).not.toBeNull();
+    expect(slots.acquire(null)).toBeNull();
+    expect(slots.acquire("a")).toBeNull();
+    release();
+    expect(slots.count()).toBe(2);
+    expect(slots.acquire("a")).not.toBeNull();
+  });
+
+  it("defaults to a few per client", () => {
+    const slots = socketLimiter();
+    for (let i = 0; i < DEMO_SOCKETS_PER_CLIENT; i++)
+      expect(slots.acquire("a")).not.toBeNull();
+    expect(slots.acquire("a")).toBeNull();
   });
 });

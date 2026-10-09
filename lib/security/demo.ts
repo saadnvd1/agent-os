@@ -8,9 +8,15 @@
  */
 
 import fs from "fs";
+import net from "net";
 import os from "os";
 import path from "path";
-import type { IncomingMessage, ServerResponse } from "http";
+import type {
+  IncomingHttpHeaders,
+  IncomingMessage,
+  ServerResponse,
+} from "http";
+import { plainAddress, proxied } from "./auth";
 import type { Duplex } from "stream";
 
 type Env = Record<string, string | undefined>;
@@ -224,3 +230,126 @@ export function refuseDemoUpgrade(socket: Duplex): void {
 }
 
 export const DEMO_REFUSAL = REFUSAL;
+
+// Status sockets are cheap for a visitor to open and each one costs the
+// server a subscription and git watches, so a demo caps them: a few per
+// client address, and a ceiling for everyone. Behind a reverse proxy every
+// visitor shares the proxy's address, so a proxied socket (client null)
+// counts only toward the total.
+export const DEMO_SOCKETS_PER_CLIENT = 4;
+export const DEMO_SOCKETS_TOTAL = 200;
+// WebSocket close code 1013, "try again later".
+export const DEMO_BUSY_CODE = 1013;
+export const DEMO_BUSY_REASON = "Too many connections to the demo";
+
+function ipv6Prefix(ip: string): string {
+  const [head, tail = ""] = ip.split("::");
+  const left = head ? head.split(":") : [];
+  const right = ip.includes("::") && tail ? tail.split(":") : [];
+  const groups = [
+    ...left,
+    ...Array(Math.max(0, 8 - left.length - right.length)).fill("0"),
+    ...right,
+  ];
+  return groups
+    .slice(0, 4)
+    .map((g) => parseInt(g || "0", 16).toString(16))
+    .join(":");
+}
+
+/**
+ * Whose socket this is, for the per-client cap. Null when the address
+ * stands for many visitors (a proxy, loopback, a Connect stream): those
+ * count only toward the total. One IPv6 host holds a whole /64, so that is
+ * the client.
+ */
+export function demoClientKey(
+  remote: string | undefined,
+  headers: IncomingHttpHeaders
+): string | null {
+  const ip = plainAddress(remote);
+  if (!ip || ip === "127.0.0.1" || ip === "::1") return null;
+  // Forwarding headers count only from a peer that could be the demo's own
+  // proxy (another container, the same network): from anyone else they are
+  // the visitor's own say-so, and would lift their cap.
+  if (proxied(headers) && privateAddress(ip)) return null;
+  if (net.isIPv6(ip)) return `${ipv6Prefix(ip)}::/64`;
+  return ip;
+}
+
+// Loopback, private, link-local and shared (CGNAT) ranges.
+const PRIVATE = new net.BlockList();
+PRIVATE.addSubnet("127.0.0.0", 8);
+PRIVATE.addSubnet("10.0.0.0", 8);
+PRIVATE.addSubnet("172.16.0.0", 12);
+PRIVATE.addSubnet("192.168.0.0", 16);
+PRIVATE.addSubnet("169.254.0.0", 16);
+PRIVATE.addSubnet("100.64.0.0", 10);
+PRIVATE.addSubnet("fc00::", 7, "ipv6");
+PRIVATE.addSubnet("fe80::", 10, "ipv6");
+
+function privateAddress(ip: string): boolean {
+  const family = net.isIPv6(ip) ? "ipv6" : net.isIPv4(ip) ? "ipv4" : null;
+  return !!family && PRIVATE.check(ip.split("%")[0], family);
+}
+
+/** Counts open sockets; `acquire` gives a release, or null when full. */
+export function socketLimiter(
+  perClient = DEMO_SOCKETS_PER_CLIENT,
+  total = DEMO_SOCKETS_TOTAL
+) {
+  const open = new Map<string, number>();
+  let all = 0;
+  return {
+    acquire(client: string | null): (() => void) | null {
+      const mine = client === null ? 0 : (open.get(client) ?? 0);
+      if (mine >= perClient || all >= total) return null;
+      if (client !== null) open.set(client, mine + 1);
+      all++;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        all--;
+        if (client === null) return;
+        const left = (open.get(client) ?? 1) - 1;
+        if (left > 0) open.set(client, left);
+        else open.delete(client);
+      };
+    },
+    count: (client?: string) =>
+      client === undefined ? all : (open.get(client) ?? 0),
+  };
+}
+
+interface DemoSocket {
+  close(code: number, reason: string): void;
+  terminate(): void;
+  once(event: "close" | "error", fn: () => void): unknown;
+}
+
+/**
+ * Takes a slot for a socket that just connected, freed when it closes.
+ * When there is none, closes it with 1013, and drops it a second later if
+ * the peer never answers the close.
+ */
+export function admitDemoSocket(
+  ws: DemoSocket,
+  request: Pick<IncomingMessage, "headers" | "socket">,
+  slots: ReturnType<typeof socketLimiter>,
+  dropAfterMs = 1000
+): boolean {
+  const release = slots.acquire(
+    demoClientKey(request.socket.remoteAddress, request.headers)
+  );
+  if (release) {
+    ws.once("close", release);
+    return true;
+  }
+  // Nothing else listens on a refused socket: a bad frame in the second it
+  // stays open would otherwise be an uncaught error.
+  ws.once("error", () => ws.terminate());
+  ws.close(DEMO_BUSY_CODE, DEMO_BUSY_REASON);
+  setTimeout(() => ws.terminate(), dropAfterMs).unref();
+  return false;
+}
