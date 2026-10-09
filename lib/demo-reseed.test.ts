@@ -50,6 +50,13 @@ describe("demo re-seed", () => {
     ).toEqual({ n: 0 });
   });
 
+  it("keeps the snapshot owner-only, like the database", () => {
+    const { db, seed } = scratch();
+    snapshotDemo(db, seed);
+    expect(fs.statSync(seed).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(seed).size).toBeGreaterThan(0);
+  });
+
   it("restores on a timer, again and again, while the database stays open", () => {
     vi.useFakeTimers();
     const { db, seed } = scratch();

@@ -13,8 +13,12 @@ export const RESEED_MS = 10 * 60 * 1000;
 
 /** Copies the database as it is now to `file`, replacing what's there. */
 export function snapshotDemo(db: Database.Database, file: string): void {
+  // Owner-only, like the database it copies: made empty with that mode
+  // first, which VACUUM INTO writes into as it is.
   fs.rmSync(file, { force: true });
+  fs.writeFileSync(file, "", { mode: 0o600 });
   db.prepare("VACUUM INTO ?").run(file);
+  fs.chmodSync(file, 0o600);
 }
 
 /** Puts every table back as it was in `file`, all at once. */
