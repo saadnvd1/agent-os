@@ -1,4 +1,5 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
+import { UNTRUSTED_RULE, untrusted } from "./orchestrator/untrusted";
 
 export interface GeneratedPRContent {
   title: string;
@@ -52,86 +53,72 @@ function getGitContext(
   let commits: string[] = [];
   let changedFiles: string[] = [];
 
+  // Names and text here come from the repository; every one is an
+  // argument to git, never shell text or an option.
+  const git = (args: string[]) =>
+    execFileSync("git", args, {
+      cwd: workingDir,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  const lines = (out: string) =>
+    out
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
   try {
     // Try to get the remote base branch reference
     let baseBranchRef = baseBranch;
     try {
-      execSync(`git rev-parse --verify origin/${baseBranch}`, {
-        cwd: workingDir,
-        stdio: "pipe",
-      });
+      git([
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        `origin/${baseBranch}`,
+      ]);
       baseBranchRef = `origin/${baseBranch}`;
     } catch {
       // Fall back to local branch
       try {
-        execSync(`git rev-parse --verify ${baseBranch}`, {
-          cwd: workingDir,
-          stdio: "pipe",
-        });
+        git(["rev-parse", "--verify", "--end-of-options", baseBranch]);
       } catch {
         // Base branch doesn't exist
         return { diff, commits, changedFiles };
       }
     }
+    const range = `${baseBranchRef}...HEAD`;
 
-    // Get diff stats
     try {
-      diff = execSync(`git diff ${baseBranchRef}...HEAD --stat`, {
-        cwd: workingDir,
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      diff = git(["diff", "--stat", "--end-of-options", range, "--"]);
     } catch {}
 
-    // Get changed files
     try {
-      const filesOut = execSync(
-        `git diff --name-only ${baseBranchRef}...HEAD`,
-        {
-          cwd: workingDir,
-          encoding: "utf-8",
-        }
+      changedFiles = lines(
+        git(["diff", "--name-only", "--end-of-options", range, "--"])
       );
-      changedFiles = filesOut
-        .split("\n")
-        .map((f) => f.trim())
-        .filter(Boolean);
     } catch {}
 
-    // Get commit messages
     try {
-      const commitsOut = execSync(
-        `git log ${baseBranchRef}..HEAD --pretty=format:"%s"`,
-        {
-          cwd: workingDir,
-          encoding: "utf-8",
-        }
+      commits = lines(
+        git([
+          "log",
+          "--pretty=format:%s",
+          "--end-of-options",
+          `${baseBranchRef}..HEAD`,
+          "--",
+        ])
       );
-      commits = commitsOut
-        .split("\n")
-        .map((c) => c.trim())
-        .filter(Boolean);
     } catch {}
 
     // Also include uncommitted changes
     try {
-      const workingDiff = execSync("git diff --stat", {
-        cwd: workingDir,
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      const workingDiff = git(["diff", "--stat"]);
       if (workingDiff) {
         diff = diff ? `${diff}\n${workingDiff}` : workingDiff;
       }
-
-      const uncommittedFiles = execSync("git diff --name-only", {
-        cwd: workingDir,
-        encoding: "utf-8",
-      })
-        .split("\n")
-        .map((f) => f.trim())
-        .filter(Boolean);
-
+      const uncommittedFiles = lines(git(["diff", "--name-only"]));
       changedFiles = [...new Set([...changedFiles, ...uncommittedFiles])];
     } catch {}
   } catch (error) {
@@ -151,7 +138,7 @@ async function generateWithClaude(
 ): Promise<GeneratedPRContent | null> {
   // Check if Claude CLI is available
   try {
-    execSync("claude --version", { stdio: "pipe", timeout: 5000 });
+    execFileSync("claude", ["--version"], { stdio: "pipe", timeout: 5000 });
   } catch {
     return null;
   }
@@ -160,8 +147,10 @@ async function generateWithClaude(
 
   try {
     // Use claude CLI with --print flag for non-interactive output
-    const output = execSync(`claude --print "${prompt.replace(/"/g, '\\"')}"`, {
+    // The prompt goes on stdin: never argv, never a shell.
+    const output = execFileSync("claude", ["--print"], {
       cwd: workingDir,
+      input: prompt,
       encoding: "utf-8",
       timeout: 30000,
       maxBuffer: 1024 * 1024,
@@ -177,16 +166,19 @@ async function generateWithClaude(
 /**
  * Build prompt for PR generation
  */
-function buildPRPrompt(diff: string, commits: string[]): string {
+export function buildPRPrompt(diff: string, commits: string[]): string {
+  // Commit subjects and file names are the repository's words, not ours.
   const commitContext =
     commits.length > 0
-      ? `Commits:\n${commits.map((c) => `- ${c}`).join("\n")}`
+      ? `Commits:\n${untrusted("commit subjects", commits.map((c) => `- ${c}`).join("\n"))}`
       : "";
   const diffContext = diff
-    ? `Diff summary:\n${diff.substring(0, 2000)}${diff.length > 2000 ? "..." : ""}`
+    ? `Diff summary:\n${untrusted("diff stat", `${diff.substring(0, 2000)}${diff.length > 2000 ? "..." : ""}`)}`
     : "";
 
   return `Generate a concise PR title and description based on these changes:
+
+${UNTRUSTED_RULE}
 
 ${commitContext}
 

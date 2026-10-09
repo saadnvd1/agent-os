@@ -98,6 +98,24 @@ describe("demo gate: refused", () => {
     expect(allows("GET", "/api/projects/detect")).toBe(false);
   });
 
+  it("Next's endpoints other than static files (they reach the API inside)", () => {
+    expect(allows("GET", "/_next/image?url=%2Fapi%2Fsessions&w=64&q=75")).toBe(
+      false
+    );
+    expect(allows("GET", "/_next/%69mage?url=/api/sessions")).toBe(false);
+    expect(allows("GET", "/__nextjs_original-stack-frame")).toBe(false);
+    expect(allows("GET", "/_next/static/chunks/main.js")).toBe(true);
+  });
+
+  it("ids that start with -, which a command line could read as an option", () => {
+    expect(allows("GET", "/api/git/history/-p?path=~/code/a")).toBe(false);
+    expect(
+      allows("GET", "/api/git/history/--output=x/diff?path=~/code/a")
+    ).toBe(false);
+    expect(allows("GET", "/api/sessions/-abc")).toBe(false);
+    expect(allows("GET", "/api/git/history/abc1234?path=~/code/a")).toBe(true);
+  });
+
   it("posts to pages (server actions)", () => {
     expect(allows("POST", "/")).toBe(false);
     expect(allows("POST", "/sessions/abc")).toBe(false);

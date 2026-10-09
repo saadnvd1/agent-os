@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import { getDb, queries, type Session } from "@/lib/db";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -21,7 +21,7 @@ interface PRInfo {
  */
 async function checkGhCli(): Promise<boolean> {
   try {
-    await execAsync("gh auth status", { timeout: 5000 });
+    await execFileAsync("gh", ["auth", "status"], { timeout: 5000 });
     return true;
   } catch {
     return false;
@@ -36,8 +36,18 @@ async function getPRForBranch(
   branchName: string
 ): Promise<PRInfo | null> {
   try {
-    const { stdout } = await execAsync(
-      `gh pr list --head "${branchName}" --json number,url,state,title --limit 1`,
+    const { stdout } = await execFileAsync(
+      "gh",
+      [
+        "pr",
+        "list",
+        "--head",
+        branchName,
+        "--json",
+        "number,url,state,title",
+        "--limit",
+        "1",
+      ],
       { cwd: projectPath, timeout: 10000 }
     );
     const prs = JSON.parse(stdout);
@@ -59,7 +69,7 @@ async function createPR(
 ): Promise<PRInfo> {
   // First push the branch if not already pushed
   try {
-    await execAsync(`git push -u origin "${branchName}"`, {
+    await execFileAsync("git", ["push", "-u", "origin", "--", branchName], {
       cwd: projectPath,
       timeout: 30000,
     });
@@ -67,9 +77,20 @@ async function createPR(
     // Branch might already be pushed, continue
   }
 
-  const bodyArg = body ? `--body "${body.replace(/"/g, '\\"')}"` : '--body ""';
-  const { stdout } = await execAsync(
-    `gh pr create --title "${title.replace(/"/g, '\\"')}" --base "${baseBranch}" ${bodyArg} --json number,url,state,title`,
+  const { stdout } = await execFileAsync(
+    "gh",
+    [
+      "pr",
+      "create",
+      "--title",
+      title,
+      "--base",
+      baseBranch,
+      "--body",
+      body ?? "",
+      "--json",
+      "number,url,state,title",
+    ],
     { cwd: projectPath, timeout: 30000 }
   );
   return JSON.parse(stdout);

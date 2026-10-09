@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCommitFileDiff } from "@/lib/git-history";
+import { getCommitFileDiff, isCommitHash } from "@/lib/git-history";
 
 interface RouteParams {
   params: Promise<{ hash: string }>;
@@ -8,6 +8,11 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { hash } = await params;
+    if (!isCommitHash(hash))
+      return NextResponse.json(
+        { error: "Invalid commit hash" },
+        { status: 400 }
+      );
     const searchParams = request.nextUrl.searchParams;
     const path = searchParams.get("path");
     const file = searchParams.get("file");

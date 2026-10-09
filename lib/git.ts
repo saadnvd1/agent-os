@@ -2,11 +2,10 @@
  * Git utilities for worktree management
  */
 
-import { exec, execFile } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 /**
@@ -91,8 +90,9 @@ export async function getDefaultBranch(dirPath: string): Promise<string> {
  */
 export async function getBranches(dirPath: string): Promise<string[]> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  const { stdout } = await execAsync(
-    `git -C "${resolvedPath}" branch --format='%(refname:short)'`,
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", resolvedPath, "branch", "--format=%(refname:short)"],
     { timeout: 5000 }
   );
   return stdout
@@ -110,8 +110,16 @@ export async function branchExists(
 ): Promise<boolean> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
   try {
-    await execAsync(
-      `git -C "${resolvedPath}" rev-parse --verify "${branchName}"`,
+    await execFileAsync(
+      "git",
+      [
+        "-C",
+        resolvedPath,
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        branchName,
+      ],
       { timeout: 5000 }
     );
     return true;
@@ -163,8 +171,9 @@ export async function remoteBranchExists(
 ): Promise<boolean> {
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
   try {
-    const { stdout } = await execAsync(
-      `git -C "${resolvedPath}" ls-remote --heads origin "${branchName}"`,
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", resolvedPath, "ls-remote", "--heads", "origin", "--", branchName],
       { timeout: 10000 }
     );
     return stdout.trim().length > 0;
@@ -206,8 +215,9 @@ export async function getGitStatus(dirPath: string): Promise<{
   const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
 
   // Get file counts
-  const { stdout: statusOutput } = await execAsync(
-    `git -C "${resolvedPath}" status --porcelain`,
+  const { stdout: statusOutput } = await execFileAsync(
+    "git",
+    ["-C", resolvedPath, "status", "--porcelain"],
     { timeout: 5000 }
   );
 
@@ -231,8 +241,17 @@ export async function getGitStatus(dirPath: string): Promise<{
   let ahead = 0;
   let behind = 0;
   try {
-    const { stdout: aheadBehind } = await execAsync(
-      `git -C "${resolvedPath}" rev-list --left-right --count HEAD...@{upstream} 2>/dev/null || echo "0 0"`,
+    // No upstream throws, and counts as level.
+    const { stdout: aheadBehind } = await execFileAsync(
+      "git",
+      [
+        "-C",
+        resolvedPath,
+        "rev-list",
+        "--left-right",
+        "--count",
+        "HEAD...@{upstream}",
+      ],
       { timeout: 5000 }
     );
     const [a, b] = aheadBehind.trim().split(/\s+/);

@@ -1,4 +1,23 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
+
+/** The remote's default branch, or "main" when it has none. */
+export function remoteDefaultBranch(workingDir: string): string {
+  try {
+    return execFileSync(
+      "git",
+      ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+      {
+        cwd: workingDir,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }
+    )
+      .trim()
+      .replace(/^origin\//, "");
+  } catch {
+    return "main";
+  }
+}
 
 export interface PRInfo {
   number: number;
@@ -18,7 +37,7 @@ export interface CommitInfo {
  */
 export function checkGhCli(): boolean {
   try {
-    execSync("gh auth status", { timeout: 5000, stdio: "pipe" });
+    execFileSync("gh", ["auth", "status"], { timeout: 5000, stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -34,25 +53,35 @@ export function getCommitsSinceBase(
 ): CommitInfo[] {
   try {
     // Get the merge base
-    const mergeBase = execSync(`git merge-base ${baseBranch} HEAD`, {
-      cwd: workingDir,
-      encoding: "utf-8",
-    }).trim();
+    // Names come from the repository (its remote's default branch): they
+    // are arguments, never shell text or options.
+    const mergeBase = execFileSync(
+      "git",
+      ["merge-base", "--end-of-options", baseBranch, "HEAD"],
+      { cwd: workingDir, encoding: "utf-8" }
+    ).trim();
 
     // Get commits since merge base
-    const output = execSync(
-      `git log ${mergeBase}..HEAD --format="COMMIT_START%n%H%n%s%n%b%nCOMMIT_END"`,
-      {
-        cwd: workingDir,
-        encoding: "utf-8",
-      }
+    const output = execFileSync(
+      "git",
+      [
+        "log",
+        `${mergeBase}..HEAD`,
+        "--format=COMMIT_START%n%H%n%s%n%b%nCOMMIT_END",
+        "--",
+      ],
+      { cwd: workingDir, encoding: "utf-8" }
     );
 
     const commits: CommitInfo[] = [];
     const parts = output.split("COMMIT_START").filter(Boolean);
 
     for (const part of parts) {
-      const lines = part.split("\n").filter((line) => line !== "COMMIT_END");
+      // Each block starts on the line after COMMIT_START.
+      const lines = part
+        .replace(/^\n/, "")
+        .split("\n")
+        .filter((line) => line !== "COMMIT_END");
       if (lines.length >= 2) {
         const hash = lines[0].trim();
         const subject = lines[1].trim();
@@ -136,13 +165,19 @@ export function getPRForBranch(
   branchName: string
 ): PRInfo | null {
   try {
-    const output = execSync(
-      `gh pr list --head "${branchName}" --json number,url,state,title --limit 1`,
-      {
-        cwd: workingDir,
-        encoding: "utf-8",
-        timeout: 10000,
-      }
+    const output = execFileSync(
+      "gh",
+      [
+        "pr",
+        "list",
+        "--head",
+        branchName,
+        "--json",
+        "number,url,state,title",
+        "--limit",
+        "1",
+      ],
+      { cwd: workingDir, encoding: "utf-8", timeout: 10000 }
     );
     const prs = JSON.parse(output);
     return prs.length > 0 ? prs[0] : null;
@@ -163,7 +198,7 @@ export function createPR(
 ): PRInfo {
   // First ensure branch is pushed
   try {
-    execSync(`git push -u origin "${branchName}"`, {
+    execFileSync("git", ["push", "-u", "origin", "--", branchName], {
       cwd: workingDir,
       timeout: 30000,
       stdio: "pipe",
@@ -174,15 +209,10 @@ export function createPR(
 
   // Create PR using gh CLI
   // gh pr create outputs the PR URL on success
-  const titleEscaped = title.replace(/'/g, "'\\''");
-  const bodyEscaped = body.replace(/'/g, "'\\''");
-  const output = execSync(
-    `gh pr create --title '${titleEscaped}' --base "${baseBranch}" --body '${bodyEscaped}'`,
-    {
-      cwd: workingDir,
-      encoding: "utf-8",
-      timeout: 30000,
-    }
+  const output = execFileSync(
+    "gh",
+    ["pr", "create", "--title", title, "--base", baseBranch, "--body", body],
+    { cwd: workingDir, encoding: "utf-8", timeout: 30000 }
   );
 
   // Parse URL from output (gh pr create prints the URL)
@@ -206,7 +236,7 @@ export function createPR(
  * Get current branch name
  */
 export function getCurrentBranch(workingDir: string): string {
-  return execSync("git branch --show-current", {
+  return execFileSync("git", ["branch", "--show-current"], {
     cwd: workingDir,
     encoding: "utf-8",
   }).trim();
@@ -218,16 +248,7 @@ export function getCurrentBranch(workingDir: string): string {
 export function getBaseBranch(workingDir: string): string {
   try {
     // Try to get from remote HEAD
-    const output = execSync(
-      "git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo 'refs/heads/main'",
-      {
-        cwd: workingDir,
-        encoding: "utf-8",
-      }
-    ).trim();
-    return output
-      .replace("refs/remotes/origin/", "")
-      .replace("refs/heads/", "");
+    return remoteDefaultBranch(workingDir);
   } catch {
     return "main";
   }

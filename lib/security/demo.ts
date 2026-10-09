@@ -62,7 +62,8 @@ export const STATIC_SIBLINGS = [
   "network",
   "status",
 ];
-const ID = `(?!(?:${STATIC_SIBLINGS.join("|")})(?:/|$))[A-Za-z0-9._-]+`;
+// No leading "-": an id that reaches a command line can't read as an option.
+const ID = `(?!(?:${STATIC_SIBLINGS.join("|")})(?:/|$))[A-Za-z0-9_][A-Za-z0-9._-]*`;
 const route = (p: string) => new RegExp(`^/api/${p.replace(/\[id\]/g, ID)}$`);
 
 // Reads the UI makes over seeded data. Every entry was checked to start no
@@ -192,6 +193,9 @@ export function demoAllows(req: DemoRequest, home = os.homedir()): boolean {
   if (p.includes("..") || p.includes("//")) return false;
   const method = (req.method ?? "GET").toUpperCase();
   const read = method === "GET" || method === "HEAD";
+  // Next's own endpoints beyond its static files (the image optimizer
+  // among them) can reach the API from inside, past this gate.
+  if (/^\/_{1,2}next/i.test(p) && !p.startsWith("/_next/static/")) return false;
   if (!p.startsWith("/api/")) return read;
   if (!paramsAllowed(url.searchParams, home)) return false;
   if (read) return READS.some((r) => r.test(p));
