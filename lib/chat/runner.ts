@@ -559,7 +559,9 @@ export function watchChat(
     suggestion: getSession(sessionId).chat_suggestion ?? null,
   });
   listener({ type: "context", context: savedContext(sessionId) });
-  void sendCapabilities(sessionId, listener);
+  sendCapabilities(sessionId, listener).catch((error) =>
+    console.error(`[chat ${sessionId}] capabilities not sent:`, error)
+  );
   let set = registry.listeners.get(sessionId);
   if (!set) registry.listeners.set(sessionId, (set = new Set()));
   set.add(listener);

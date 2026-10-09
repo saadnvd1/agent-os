@@ -5,30 +5,8 @@ import { parse } from "url";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { ensureBusBrief } from "./lib/agents/launch";
-import {
-  chatFileSuggestions,
-  chatHistory,
-  chatTaskOutput,
-  chatToolBody,
-  deleteQueuedChat,
-  editQueuedChat,
-  interruptChat,
-  moveQueuedChat,
-  reattachChats,
-  respondChat,
-  sendChat,
-  sendQueuedNow,
-  setChatAccess,
-  setChatPlan,
-  carryOutPlan,
-  setChatModel,
-  stopChatTask,
-  undoChat,
-  watchChat,
-} from "./lib/chat/runner";
-import { clientSend } from "./lib/chat/client-send";
-import { titleChatFromMessage } from "./lib/session-titles";
-import type { ChatClientMessage, ChatServerMessage } from "./lib/chat/events";
+import { reattachChats } from "./lib/chat/runner";
+import { serveChatSocket } from "./lib/chat/socket";
 import { startStackWatcher } from "./lib/stacks";
 import { setStartGate } from "./lib/stacks/tick";
 import { stackStartGate } from "./lib/orchestrator/brakes";
@@ -51,7 +29,6 @@ import {
   gateDemoRequest,
   refuseDemoUpgrade,
 } from "./lib/security/demo";
-import { DEMO_CHAT_READS, handleDemoChat } from "./lib/chat/demo";
 import { upgradePath } from "./lib/security/upgrade-path";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
@@ -180,113 +157,7 @@ app.prepare().then(async () => {
   });
   chatWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
     const params = new URL(request.url ?? "", "http://x").searchParams;
-    const sessionId = params.get("session");
-    if (!sessionId) return ws.close();
-    const reply = (m: ChatServerMessage) => sendBounded(ws, JSON.stringify(m));
-    const fail = (err: unknown) =>
-      reply({
-        type: "item",
-        item: {
-          id: `error-${Date.now()}`,
-          kind: "error",
-          message: err instanceof Error ? err.message : String(err),
-          createdAt: Date.now(),
-        },
-      });
-    let unwatch: () => void;
-    try {
-      unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
-    } catch {
-      // No such session: an exception here would take the server down.
-      return ws.close(1008, "Session not found");
-    }
-    ws.on("message", (raw: Buffer) => {
-      try {
-        const msg = JSON.parse(raw.toString()) as ChatClientMessage;
-        if (demo && !DEMO_CHAT_READS.has(msg.type))
-          handleDemoChat(sessionId, msg, reply);
-        else if (msg.type === "send") {
-          const send = clientSend(msg);
-          void sendChat(sessionId, { ...send, queue: true }).catch(fail);
-          // "Session 4" is named after its first message.
-          void titleChatFromMessage(sessionId, send.text);
-        } else if (msg.type === "queue_edit" && typeof msg.text === "string")
-          editQueuedChat(sessionId, String(msg.id), msg.text);
-        else if (msg.type === "queue_move")
-          moveQueuedChat(sessionId, String(msg.id), msg.by === -1 ? -1 : 1);
-        else if (msg.type === "queue_delete")
-          deleteQueuedChat(sessionId, String(msg.id));
-        else if (msg.type === "queue_send_now")
-          void sendQueuedNow(
-            sessionId,
-            String(msg.id),
-            typeof msg.during === "string" ? msg.during : undefined
-          ).catch(fail);
-        else if (msg.type === "files" && typeof msg.query === "string")
-          void chatFileSuggestions(sessionId, msg.query.slice(0, 200))
-            .then((files) =>
-              reply({
-                type: "files",
-                reqId: String(msg.reqId),
-                query: msg.query,
-                files,
-              })
-            )
-            .catch(() =>
-              reply({
-                type: "files",
-                reqId: String(msg.reqId),
-                query: msg.query,
-                files: [],
-              })
-            );
-        else if (msg.type === "interrupt") void interruptChat(sessionId);
-        else if (msg.type === "set_model")
-          void setChatModel(sessionId, msg.model);
-        else if (msg.type === "set_access")
-          void setChatAccess(sessionId, msg.access);
-        else if (msg.type === "set_plan")
-          void setChatPlan(sessionId, !!msg.plan).catch(fail);
-        else if (msg.type === "carry_plan")
-          void carryOutPlan(sessionId, String(msg.id)).catch(fail);
-        else if (msg.type === "respond") respondChat(sessionId, msg.id, msg);
-        else if (msg.type === "stop_task") stopChatTask(sessionId, msg.taskId);
-        else if (msg.type === "task_output")
-          reply({
-            type: "task_output",
-            taskId: msg.taskId,
-            text: chatTaskOutput(sessionId, msg.taskId),
-          });
-        else if (msg.type === "history" && Number.isFinite(msg.before))
-          reply({
-            type: "history",
-            before: msg.before,
-            ...chatHistory(sessionId, msg.before),
-          });
-        else if (msg.type === "tool_body")
-          reply({
-            type: "tool_body",
-            id: String(msg.id),
-            body: chatToolBody(sessionId, String(msg.id)),
-          });
-        else if (msg.type === "undo")
-          void undoChat(sessionId, msg.from, !!msg.dryRun, reply).catch((err) =>
-            reply({
-              type: "undo_preview",
-              from: msg.from,
-              preview: {
-                canUndo: false,
-                files: [],
-                error: err instanceof Error ? err.message : String(err),
-              },
-            })
-          );
-      } catch (err) {
-        fail(err);
-      }
-    });
-    ws.on("close", unwatch);
-    ws.on("error", unwatch);
+    serveChatSocket(ws, params, (json) => sendBounded(ws, json), demo);
   });
 
   // Handle WebSocket upgrades
