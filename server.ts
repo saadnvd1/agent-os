@@ -47,9 +47,11 @@ import { authPolicy, gateRequest, gateUpgrade } from "./lib/security/gate";
 import {
   assertDemoSandbox,
   demoAllowsUpgrade,
+  admitDemoSocket,
   demoMode,
   gateDemoRequest,
   refuseDemoUpgrade,
+  socketLimiter,
 } from "./lib/security/demo";
 import { DEMO_CHAT_READS, handleDemoChat } from "./lib/chat/demo";
 import { upgradePath } from "./lib/security/upgrade-path";
@@ -163,6 +165,8 @@ app.prepare().then(async () => {
   // pipe-pane where tmux is too old for it.
   const control = await startTmuxControl();
   const programTap = control ?? startProgramStatusTap(port);
+  // A demo's visitors are strangers: their status sockets are capped.
+  const statusSlots = socketLimiter();
   const statusWss = new WebSocketServer({
     noServer: true,
     perMessageDeflate: DEFLATE,
@@ -328,6 +332,7 @@ app.prepare().then(async () => {
 
     if (pathname === "/ws/status") {
       statusWss.handleUpgrade(request, socket, head, (ws) => {
+        if (demo && !admitDemoSocket(ws, request, statusSlots)) return;
         statusWss.emit("connection", ws, request);
       });
       return;
