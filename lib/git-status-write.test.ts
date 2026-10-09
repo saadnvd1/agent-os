@@ -60,18 +60,29 @@ describe("commit", () => {
     "--output=x",
     "-m",
     "line one\n\nline two with 'quotes' and \"doubles\"",
-  ])("records %j as the message, verbatim, running nothing", (raw) => {
+  ])("records %j as the message, verbatim, running nothing", async (raw) => {
     const message = raw.replaceAll("ROOT", root);
     stage();
-    commit(repo, message);
+    await commit(repo, message);
     expect(git("log", "-1", "--format=%B").replace(/\n+$/, "")).toBe(message);
     // A new commit, not an amended one.
     expect(git("rev-list", "--count", "HEAD").trim()).toBe("2");
     expect(pwned()).toBe(false);
   });
 
-  it("fails when nothing is staged", () => {
-    expect(() => commit(repo, "empty")).toThrow();
+  it("fails, without crashing, when git exits before reading a long message", async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "not-a-repo-"));
+    try {
+      await expect(commit(outside, "m".repeat(4 << 20))).rejects.toThrow(
+        /git commit failed: .*not a git repository/i
+      );
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("fails when nothing is staged", async () => {
+    await expect(commit(repo, "empty")).rejects.toThrow(/git commit failed/);
   });
 });
 
@@ -108,13 +119,13 @@ describe("createBranch", () => {
 });
 
 describe("push", () => {
-  it("sets the upstream for a branch whose name is shell syntax, running nothing", () => {
+  it("sets the upstream for a branch whose name is shell syntax, running nothing", async () => {
     const name = "x;touch${IFS}pwned`id`";
     createBranch(repo, name);
     stage();
-    commit(repo, "work");
+    await commit(repo, "work");
     expect(hasUpstream(repo)).toBe(false);
-    push(repo, true);
+    await push(repo, true);
     expect(hasUpstream(repo)).toBe(true);
     expect(
       execFileSync("git", ["ls-remote", "--heads", origin], {
@@ -124,11 +135,11 @@ describe("push", () => {
     expect(pwned()).toBe(false);
   });
 
-  it("pushes to the upstream it already has", () => {
-    push(repo, true);
+  it("pushes to the upstream it already has", async () => {
+    await push(repo, true);
     stage();
-    commit(repo, "second");
-    push(repo);
+    await commit(repo, "second");
+    await push(repo);
     expect(
       execFileSync("git", ["rev-parse", "main"], {
         cwd: origin,
@@ -137,13 +148,15 @@ describe("push", () => {
     ).toBe(git("rev-parse", "HEAD"));
   });
 
-  it("refuses to set an upstream from a detached HEAD", () => {
+  it("refuses to set an upstream from a detached HEAD", async () => {
     git("checkout", "-q", "--detach");
-    expect(() => push(repo, true)).toThrow(/detached HEAD/);
+    await expect(push(repo, true)).rejects.toThrow(/detached HEAD/);
   });
 
-  it("fails with git's own reason", () => {
+  it("fails with git's own reason", async () => {
     git("remote", "set-url", "origin", path.join(root, "missing.git"));
-    expect(() => push(repo, true)).toThrow(/missing\.git|does not appear/);
+    await expect(push(repo, true)).rejects.toThrow(
+      /git push failed: [\s\S]*(missing\.git|does not appear)/
+    );
   });
 });

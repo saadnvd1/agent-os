@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Push (set upstream if needed)
     const needsUpstream = !hasUpstream(path);
-    const output = push(path, needsUpstream);
+    const output = await push(path, needsUpstream);
 
     forgetGitStatus(path);
     return NextResponse.json({

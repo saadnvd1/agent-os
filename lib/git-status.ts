@@ -1,4 +1,4 @@
-import { execFile, execFileSync, spawnSync } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 import { realpathSync, unlinkSync } from "fs";
 import { basename, dirname, join, resolve, sep } from "path";
@@ -357,18 +357,60 @@ export function createBranch(workingDir: string, branchName: string): void {
   gitSync(workingDir, ["checkout", "-b", branchName, "--"]);
 }
 
+// A commit or push can wait on a hook or a remote: off the event loop, with a
+// ceiling, and never on a prompt nobody can answer.
+function gitWrite(
+  cwd: string,
+  args: string[],
+  input?: string
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      "git",
+      args,
+      {
+        cwd,
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 120_000,
+        killSignal: "SIGKILL",
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: "0",
+          GIT_SSH_COMMAND:
+            process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes",
+        },
+      },
+      (error, stdout, stderr) => {
+        if (!error) return resolve({ stdout, stderr });
+        const reason = stderr.trim() || error.message;
+        reject(new Error(`git ${args[0]} failed: ${reason}`));
+      }
+    );
+    // git exiting before it read the message is its failure, not a crash.
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(input ?? "");
+  });
+}
+
 /**
  * Commit staged changes. The message goes on stdin, so nothing in it is
  * read by a shell or as an option.
  */
-export function commit(workingDir: string, message: string): string {
-  return gitSync(workingDir, ["commit", "-F", "-"], message);
+export async function commit(
+  workingDir: string,
+  message: string
+): Promise<string> {
+  return (await gitWrite(workingDir, ["commit", "-F", "-"], message)).stdout;
 }
 
 /**
  * Push to remote
  */
-export function push(workingDir: string, setUpstream = false): string {
+export async function push(
+  workingDir: string,
+  setUpstream = false
+): Promise<string> {
   const args = ["push"];
   if (setUpstream) {
     const branch = currentBranch(workingDir);
@@ -378,16 +420,8 @@ export function push(workingDir: string, setUpstream = false): string {
     args.push("-u", "origin", `refs/heads/${branch}:refs/heads/${branch}`);
   }
   // git push reports progress and the remote's messages on stderr.
-  const result = spawnSync("git", args, {
-    cwd: workingDir,
-    encoding: "utf-8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `git push exited ${result.status}`);
-  }
-  return `${result.stdout}${result.stderr}`;
+  const { stdout, stderr } = await gitWrite(workingDir, args);
+  return `${stdout}${stderr}`;
 }
 
 /**

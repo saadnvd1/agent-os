@@ -27,6 +27,8 @@ export async function pasteText(
       { timeout: 10_000 },
       (err) => (err ? reject(err) : resolve())
     );
+    // tmux gone before it read everything is a failed paste, not a crash.
+    child.stdin?.on("error", reject);
     child.stdin?.end(text);
   });
   await tmux(["paste-buffer", "-d", "-b", buffer, "-t", target]);

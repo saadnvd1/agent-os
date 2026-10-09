@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Commit
-    const output = commit(path, message);
+    const output = await commit(path, message);
 
     forgetGitStatus(path);
     return NextResponse.json({

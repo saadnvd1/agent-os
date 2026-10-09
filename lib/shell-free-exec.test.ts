@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // one argument of its own, and nothing may run through a shell.
 type Call = { file: string; args: string[]; stdin?: string };
 const calls = vi.hoisted(() => [] as Call[]);
+const BROKEN_PIPE = vi.hoisted(() => "a paste tmux never finished reading");
 const answer = vi.hoisted(() => ({
   fn: (_file: string, _args: string[]): string | null => "",
 }));
@@ -23,16 +24,27 @@ vi.mock("child_process", async (original) => {
     calls.push(call);
     const out = answer.fn(file, args);
     // stdin is written after execFile returns, as a real child's is.
-    const stdin = {
+    const stdin = Object.assign(new EventEmitter(), {
       end: (data?: string) => {
         call.stdin = data;
+        // tmux gone before reading: the pipe breaks, then the process fails.
+        if (data === BROKEN_PIPE) {
+          setImmediate(() => {
+            stdin.emit(
+              "error",
+              Object.assign(new Error("EPIPE"), { code: "EPIPE" })
+            );
+            cb(new Error("killed"), { stdout: "", stderr: "" });
+          });
+          return;
+        }
         setImmediate(() =>
           out === null
             ? cb(new Error("failed"), { stdout: "", stderr: "" })
             : cb(null, { stdout: out, stderr: "" })
         );
       },
-    };
+    });
     if (!["load-buffer"].includes(args[0])) stdin.end();
     return { stdin };
   };
@@ -59,7 +71,8 @@ vi.mock("child_process", async (original) => {
   return { ...mocked, default: mocked };
 });
 
-const { db } = await import("@/lib/db");
+const { db, queries } = await import("@/lib/db");
+type DevServer = import("@/lib/db").DevServer;
 const { createHost } = await import("@/lib/hosts");
 const { loginShellCommand } = await import("@/lib/hosts/ssh");
 
@@ -118,6 +131,11 @@ describe("POST /api/sessions/[id]/send-keys", async () => {
       },
       { file: "tmux", args: ["send-keys", "-t", `=${tmuxName}:`, "Enter"] },
     ]);
+  });
+
+  it("answers a broken pipe to tmux with an error, not a crash", async () => {
+    const res = await POST(post({ text: BROKEN_PIPE }), params(addSession()));
+    expect(res.status).toBe(500);
   });
 
   it("refuses text that isn't a string", async () => {
@@ -326,4 +344,167 @@ describe("POST /api/tmux/kill-all", async () => {
       { file: "tmux", args: ["kill-session", "-t", `=${name}`] },
     ]);
   });
+});
+
+describe("spawnWorker", async () => {
+  const { spawnWorker } = await import("@/lib/orchestration");
+  const os = await import("os");
+  const path = await import("path");
+
+  it.each(EVIL)(
+    "starts in a hostile directory and sends the task %j as literal keys",
+    async (task) => {
+      answer.fn = (_file, args) =>
+        args[0] === "capture-pane" ? "? for shortcuts\n" : "";
+      const worker = await spawnWorker({
+        conductorSessionId: addSession(),
+        task,
+        workingDirectory: `~/${EVIL[0]}`,
+        useWorktree: false,
+      });
+      const target = `=${worker.tmux_name}:`;
+      const created = tmuxCalls().find((c) => c.args[0] === "new-session");
+      expect(created?.args.slice(0, 6)).toEqual([
+        "new-session",
+        "-d",
+        "-s",
+        worker.tmux_name,
+        "-c",
+        path.join(os.homedir(), EVIL[0]),
+      ]);
+      expect(created?.args).toHaveLength(7);
+      expect(tmuxCalls().slice(-2)).toEqual([
+        { file: "tmux", args: ["send-keys", "-t", target, "-l", "--", task] },
+        { file: "tmux", args: ["send-keys", "-t", target, "Enter"] },
+      ]);
+    },
+    10_000
+  );
+
+  it("leaves a ~ that isn't leading alone", async () => {
+    answer.fn = (_file, args) =>
+      args[0] === "capture-pane" ? "? for shortcuts\n" : "";
+    await spawnWorker({
+      conductorSessionId: addSession(),
+      task: "t",
+      workingDirectory: "/a~b",
+      useWorktree: false,
+    });
+    const created = tmuxCalls().find((c) => c.args[0] === "new-session");
+    expect(created?.args[5]).toBe("/a~b");
+  }, 10_000);
+});
+
+describe("docker dev server reads", async () => {
+  const { getServerLogs, getServerStatus, detectDockerServices } =
+    await import("@/lib/dev-servers");
+  const { createProject } = await import("@/lib/projects");
+  const fs = await import("fs");
+  const os = await import("os");
+  const path = await import("path");
+  const project = createProject({ name: "q", workingDirectory: "/tmp" });
+  const container = EVIL[1];
+  const id = randomUUID();
+  db.prepare(
+    `INSERT INTO dev_servers (id, project_id, type, name, command, container_id) VALUES (?, ?, 'docker', 'd', 'web', ?)`
+  ).run(id, project.id, container);
+
+  it.each([
+    [NaN, "0"],
+    ["5; touch /tmp/pwned", "0"],
+    [-5, "0"],
+    [25.7, "25"],
+  ])("reads logs with --tail %j as %s", async (lines, tail) => {
+    await getServerLogs(id, lines as number);
+    expect(calls).toEqual([
+      { file: "docker", args: ["logs", "--tail", tail, "--", container] },
+    ]);
+  });
+
+  it("inspects a container by its stored id, as one argument", async () => {
+    answer.fn = () => "running\n";
+    const server = queries.getDevServer(db).get(id) as DevServer;
+    expect(await getServerStatus(server)).toBe("running");
+    expect(calls).toEqual([
+      {
+        file: "docker",
+        args: ["inspect", "-f", "{{.State.Status}}", "--", container],
+      },
+    ]);
+  });
+
+  it("lists a compose file's services in a hostile directory, as the cwd", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "$(touch pwned)"));
+    fs.writeFileSync(path.join(dir, "compose.yml"), "services: {}\n");
+    answer.fn = () => "web\n";
+    expect(await detectDockerServices(dir)).toEqual([
+      expect.objectContaining({ name: "web", command: "web" }),
+    ]);
+    expect(calls).toEqual([
+      {
+        file: "docker",
+        args: ["compose", "-f", "compose.yml", "config", "--services"],
+      },
+    ]);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it("checks a node server's ports with lsof's arguments only", async () => {
+    const nodeId = randomUUID();
+    db.prepare(
+      `INSERT INTO dev_servers (id, project_id, type, name, command, ports) VALUES (?, ?, 'node', 'n', 'npm run dev', '[3123]')`
+    ).run(nodeId, project.id);
+    answer.fn = () => "4242\n4343\n";
+    const server = queries.getDevServer(db).get(nodeId) as DevServer;
+    expect(await getServerStatus(server)).toBe("running");
+    expect(calls).toEqual([
+      { file: "lsof", args: ["-t", "-i", ":3123"] },
+      { file: "lsof", args: ["-t", "-i", ":3123"] },
+    ]);
+    expect((queries.getDevServer(db).get(nodeId) as DevServer).pid).toBe(4242);
+  });
+});
+
+describe("summarize reads Claude's session id as an id", async () => {
+  const { POST } = await import("@/app/api/sessions/[id]/summarize/route");
+
+  it.each(["../../../etc/passwd", "a/b", "$(id)"])(
+    "ignores %j and falls back to the scrollback",
+    async (claudeId) => {
+      const id = addSession();
+      answer.fn = (_file, args) =>
+        args[0] === "show-environment"
+          ? `CLAUDE_SESSION_ID=${claudeId}\n`
+          : args[0] === "capture-pane"
+            ? "short"
+            : null;
+      const res = await POST(post({ createFork: false }), params(id));
+      expect(res.status).toBe(400);
+      expect(tmuxCalls().map((c) => c.args[0])).toEqual([
+        "display-message",
+        "show-environment",
+        "capture-pane",
+      ]);
+    }
+  );
+});
+
+describe("POST /api/git/commit", async () => {
+  const { POST } = await import("@/app/api/git/commit/route");
+
+  it.each([
+    ["-f", "x"],
+    [["a"], "x"],
+    ["x; touch /tmp/pwned", "x"],
+    [undefined, ["not", "a", "string"]],
+  ])(
+    "answers 400 for branch %j and message %j, running nothing",
+    async (branchName, message) => {
+      answer.fn = () => null; // a git that ran would fail
+      const res = await POST(post({ path: "/tmp", message, branchName }));
+      expect(res.status).toBe(400);
+      expect(calls.filter((c) => c.args.includes("checkout"))).toEqual([]);
+      expect(calls.filter((c) => c.args.includes("commit"))).toEqual([]);
+    }
+  );
 });
