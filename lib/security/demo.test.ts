@@ -374,6 +374,13 @@ describe("demo gate: wired into the server", () => {
     );
   });
 
+  it("admits demo chat sockets through their own cap", () => {
+    expect(server).toMatch(
+      /chatWss\.handleUpgrade\([^]*?if \(demo && !admitDemoSocket\(ws, request, chatSlots\)\) return;\s*chatWss\.emit\("connection"/
+    );
+    expect(server).toMatch(/const chatSlots = socketLimiter\(\);/);
+  });
+
   it("admits demo status sockets through the cap", () => {
     expect(server).toMatch(
       /statusWss\.handleUpgrade\([^]*?if \(demo && !admitDemoSocket\(ws, request, statusSlots\)\) return;\s*statusWss\.emit\("connection"/
