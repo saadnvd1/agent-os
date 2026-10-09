@@ -5,6 +5,7 @@ import {
   isGitRepo,
   isMainBranch,
   createBranch,
+  isValidBranchName,
   getGitStatus,
   expandPath,
 } from "@/lib/git-status";
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
 
-    if (!message) {
+    if (!message || typeof message !== "string") {
       return NextResponse.json(
         { error: "Commit message is required" },
         { status: 400 }
@@ -38,6 +39,16 @@ export async function POST(request: NextRequest) {
     if (!(await isGitRepo(path))) {
       return NextResponse.json(
         { error: "Not a git repository" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      branchName &&
+      (typeof branchName !== "string" || !isValidBranchName(path, branchName))
+    ) {
+      return NextResponse.json(
+        { error: "Invalid branch name" },
         { status: 400 }
       );
     }
@@ -59,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Commit
-    const output = commit(path, message);
+    const output = await commit(path, message);
 
     forgetGitStatus(path);
     return NextResponse.json({

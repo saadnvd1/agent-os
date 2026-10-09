@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queries, getDb, type Session } from "@/lib/db";
-import { hostExec } from "@/lib/hosts";
+import { hostExecFile } from "@/lib/hosts";
 import { isValidTmuxName } from "@/lib/hosts/attach";
 import { controlManager } from "@/lib/tmux/control";
 
@@ -28,10 +28,14 @@ export async function GET(
       : null;
     const { stdout } = watched
       ? { stdout: watched.join("\n") }
-      : await hostExec(
-          session?.host_id,
-          `tmux capture-pane -t "${sessionName}" -p -S -100 2>/dev/null || echo ""`
-        );
+      : await hostExecFile(session?.host_id, "tmux", [
+          "capture-pane",
+          "-t",
+          `=${sessionName}:`,
+          "-p",
+          "-S",
+          "-100",
+        ]).catch(() => ({ stdout: "" }));
 
     // Take the last 50 non-empty lines (trim trailing empty lines)
     const allLines = stdout.split("\n");

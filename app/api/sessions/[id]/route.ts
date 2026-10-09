@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deletionRefusal } from "@/lib/orchestrator/home";
 import { getDb, queries, type Session } from "@/lib/db";
-import { deleteWorktree, isAgentOSWorktree } from "@/lib/worktrees";
+import {
+  deleteWorktree,
+  isAgentOSWorktree,
+  mainCheckoutOf,
+} from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
 import { killWorker } from "@/lib/orchestration";
-import { hostExec } from "@/lib/hosts";
+import { hostExec, hostExecFile } from "@/lib/hosts";
 import { shellQuote } from "@/lib/hosts/ssh";
 import { supportsChat } from "@/lib/chat/capabilities";
 import { stopChat } from "@/lib/chat/runner";
@@ -112,10 +116,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       // Try to rename the tmux session
       if (oldTmuxName && newTmuxName) {
         try {
-          await hostExec(
-            existing.host_id,
-            `tmux rename-session -t "${oldTmuxName}" "${newTmuxName}"`
-          );
+          await hostExecFile(existing.host_id, "tmux", [
+            "rename-session",
+            "-t",
+            `=${oldTmuxName}`,
+            "--",
+            newTmuxName,
+          ]);
           updates.push("tmux_name = ?");
           values.push(newTmuxName);
         } catch {
@@ -236,15 +243,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (existing.worktree_path && isAgentOSWorktree(existing.worktree_path)) {
       const worktreePath = existing.worktree_path; // Capture for closure
       runInBackground(async () => {
-        const { exec } = await import("child_process");
-        const { promisify } = await import("util");
-        const execAsync = promisify(exec);
-
-        const { stdout } = await execAsync(
-          `git -C "${worktreePath}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo ""`,
-          { timeout: 5000 }
-        );
-        const gitCommonDir = stdout.trim().replace(/\/.git$/, "");
+        const gitCommonDir = await mainCheckoutOf(worktreePath);
 
         if (gitCommonDir) {
           await deleteWorktree(worktreePath, gitCommonDir, false);
@@ -259,15 +258,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
           const worktreePath = worker.worktree_path; // Capture for closure
           const workerId = worker.id; // Capture ID for task name
           runInBackground(async () => {
-            const { exec } = await import("child_process");
-            const { promisify } = await import("util");
-            const execAsync = promisify(exec);
-
-            const { stdout } = await execAsync(
-              `git -C "${worktreePath}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo ""`,
-              { timeout: 5000 }
-            );
-            const gitCommonDir = stdout.trim().replace(/\/.git$/, "");
+            const gitCommonDir = await mainCheckoutOf(worktreePath);
 
             if (gitCommonDir) {
               await deleteWorktree(worktreePath, gitCommonDir, false);

@@ -1,4 +1,4 @@
-import { execFile, execSync } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 import { realpathSync, unlinkSync } from "fs";
 import { basename, dirname, join, resolve, sep } from "path";
@@ -294,18 +294,31 @@ export async function isGitRepo(workingDir: string): Promise<boolean> {
   }
 }
 
+// Writes and the few sync reads: argv only, never a shell, so a branch name,
+// a commit message or a path is always data.
+function gitSync(cwd: string, args: string[], input?: string): string {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf-8",
+    input,
+    stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: 10 * 1024 * 1024,
+  });
+}
+
 /**
  * Get the root of the git repository
  */
 export function getGitRoot(workingDir: string): string {
   try {
-    return execSync("git rev-parse --show-toplevel", {
-      cwd: workingDir,
-      encoding: "utf-8",
-    }).trim();
+    return gitSync(workingDir, ["rev-parse", "--show-toplevel"]).trim();
   } catch {
     return workingDir;
   }
+}
+
+function currentBranch(workingDir: string): string {
+  return gitSync(workingDir, ["branch", "--show-current"]).trim();
 }
 
 /**
@@ -313,11 +326,22 @@ export function getGitRoot(workingDir: string): string {
  */
 export function isMainBranch(workingDir: string): boolean {
   try {
-    const branch = execSync("git branch --show-current", {
-      cwd: workingDir,
-      encoding: "utf-8",
-    }).trim();
+    const branch = currentBranch(workingDir);
     return branch === "main" || branch === "master";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A name `git checkout -b` takes as a branch and nothing else: no option
+ * ("-f", "--orphan=x"), nothing git itself refuses as a ref.
+ */
+export function isValidBranchName(workingDir: string, name: string): boolean {
+  if (!name || name.startsWith("-")) return false;
+  try {
+    gitSync(workingDir, ["check-ref-format", "--branch", name]);
+    return true;
   } catch {
     return false;
   }
@@ -327,38 +351,76 @@ export function isMainBranch(workingDir: string): boolean {
  * Create a new branch and switch to it
  */
 export function createBranch(workingDir: string, branchName: string): void {
-  execSync(`git checkout -b "${branchName}"`, {
-    cwd: workingDir,
-    encoding: "utf-8",
+  if (!isValidBranchName(workingDir, branchName)) {
+    throw new Error(`Invalid branch name: ${branchName}`);
+  }
+  gitSync(workingDir, ["checkout", "-b", branchName, "--"]);
+}
+
+// A commit or push can wait on a hook or a remote: off the event loop, with a
+// ceiling (a hung ssh is killed at it), and no git credential prompt.
+function gitWrite(
+  cwd: string,
+  args: string[],
+  input?: string
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      "git",
+      args,
+      {
+        cwd,
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 120_000,
+        killSignal: "SIGKILL",
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: "0",
+        },
+      },
+      (error, stdout, stderr) => {
+        if (!error) return resolve({ stdout, stderr });
+        // "nothing to commit" is on stdout.
+        const reason = stderr.trim() || stdout.trim() || error.message;
+        reject(new Error(`git ${args[0]} failed: ${reason}`));
+      }
+    );
+    // git exiting before it read the message is its failure, not a crash.
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(input ?? "");
   });
 }
 
 /**
- * Commit staged changes
+ * Commit staged changes. The message goes on stdin, so nothing in it is
+ * read by a shell or as an option.
  */
-export function commit(workingDir: string, message: string): string {
-  const output = execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
-    cwd: workingDir,
-    encoding: "utf-8",
-  });
-  return output;
+export async function commit(
+  workingDir: string,
+  message: string
+): Promise<string> {
+  return (await gitWrite(workingDir, ["commit", "-F", "-"], message)).stdout;
 }
 
 /**
  * Push to remote
  */
-export function push(workingDir: string, setUpstream = false): string {
-  const branch = execSync("git branch --show-current", {
-    cwd: workingDir,
-    encoding: "utf-8",
-  }).trim();
-
-  const upstreamFlag = setUpstream ? `-u origin "${branch}"` : "";
-  const output = execSync(`git push ${upstreamFlag}`, {
-    cwd: workingDir,
-    encoding: "utf-8",
-  });
-  return output;
+export async function push(
+  workingDir: string,
+  setUpstream = false
+): Promise<string> {
+  const args = ["push"];
+  if (setUpstream) {
+    const branch = currentBranch(workingDir);
+    if (!isValidBranchName(workingDir, branch)) {
+      throw new Error(`Can't push from "${branch || "a detached HEAD"}"`);
+    }
+    args.push("-u", "origin", `refs/heads/${branch}:refs/heads/${branch}`);
+  }
+  // git push reports progress and the remote's messages on stderr.
+  const { stdout, stderr } = await gitWrite(workingDir, args);
+  return `${stdout}${stderr}`;
 }
 
 /**
@@ -366,11 +428,7 @@ export function push(workingDir: string, setUpstream = false): string {
  */
 export function hasUpstream(workingDir: string): boolean {
   try {
-    execSync("git rev-parse --abbrev-ref @{upstream}", {
-      cwd: workingDir,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    gitSync(workingDir, ["rev-parse", "--abbrev-ref", "@{upstream}"]);
     return true;
   } catch {
     return false;
@@ -382,10 +440,7 @@ export function hasUpstream(workingDir: string): boolean {
  */
 export function getRemoteUrl(workingDir: string): string | null {
   try {
-    return execSync("git remote get-url origin", {
-      cwd: workingDir,
-      encoding: "utf-8",
-    }).trim();
+    return gitSync(workingDir, ["remote", "get-url", "origin"]).trim();
   } catch {
     return null;
   }

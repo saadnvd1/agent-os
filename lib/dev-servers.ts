@@ -1,10 +1,16 @@
-import { spawn, exec } from "child_process";
+import { spawn, execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import { db, queries, DevServer, DevServerType, DevServerStatus } from "./db";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+const run = async (file: string, args: string[], cwd?: string) =>
+  (await execFileAsync(file, args, { cwd, timeout: 60_000 })).stdout;
+
+// A compose service is a name, never an option or more than one word.
+const COMPOSE_SERVICE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
 const LOGS_DIR = path.join(process.env.HOME || "~", ".agent-os", "logs");
 
@@ -52,9 +58,7 @@ async function isPidRunning(pid: number): Promise<boolean> {
 // Check if a port is in use
 async function isPortInUse(port: number): Promise<boolean> {
   try {
-    const { stdout } = await execAsync(
-      `lsof -i :${port} -t 2>/dev/null || true`
-    );
+    const stdout = await run("lsof", ["-t", "-i", `:${Number(port)}`]);
     return stdout.trim().length > 0;
   } catch {
     return false;
@@ -64,10 +68,8 @@ async function isPortInUse(port: number): Promise<boolean> {
 // Get PID using a port
 async function getPidOnPort(port: number): Promise<number | null> {
   try {
-    const { stdout } = await execAsync(
-      `lsof -i :${port} -t 2>/dev/null | head -1`
-    );
-    const pid = parseInt(stdout.trim(), 10);
+    const stdout = await run("lsof", ["-t", "-i", `:${Number(port)}`]);
+    const pid = parseInt(stdout.trim().split("\n")[0], 10);
     return isNaN(pid) ? null : pid;
   } catch {
     return null;
@@ -103,9 +105,13 @@ async function checkDockerStatus(server: DevServer): Promise<DevServerStatus> {
   if (!server.container_id) return "stopped";
 
   try {
-    const { stdout } = await execAsync(
-      `docker inspect -f '{{.State.Status}}' ${server.container_id} 2>/dev/null || echo ""`
-    );
+    const stdout = await run("docker", [
+      "inspect",
+      "-f",
+      "{{.State.Status}}",
+      "--",
+      server.container_id,
+    ]).catch(() => "");
     const status = stdout.trim();
     if (status === "running") return "running";
     if (status === "starting" || status === "restarting") return "starting";
@@ -198,9 +204,9 @@ async function spawnNodeServer(
     env.PORT = String(ports[0]);
   }
 
-  const fullCommand = `cd "${cwd}" && ${command}`;
-
-  const child = spawn(fullCommand, [], {
+  // The command is the project's own dev-server command line, run as written;
+  // the directory is the spawn's cwd, never part of that line.
+  const child = spawn(command, [], {
     cwd,
     env: env as NodeJS.ProcessEnv,
     shell: true,
@@ -226,15 +232,21 @@ async function spawnDockerService(
 ): Promise<{ containerId: string | null }> {
   try {
     // command is expected to be the service name
-    await execAsync(`docker compose up -d ${command}`, {
-      cwd: workingDirectory,
-    });
+    if (!COMPOSE_SERVICE.test(command)) {
+      throw new Error(`Invalid compose service: ${command}`);
+    }
+    await run(
+      "docker",
+      ["compose", "up", "-d", "--", command],
+      workingDirectory
+    );
 
     // Get container ID
-    const { stdout } = await execAsync(
-      `docker compose ps -q ${command} 2>/dev/null || echo ""`,
-      { cwd: workingDirectory }
-    );
+    const stdout = await run(
+      "docker",
+      ["compose", "ps", "-q", "--", command],
+      workingDirectory
+    ).catch(() => "");
     const containerId = stdout.trim() || null;
 
     return { containerId };
@@ -301,7 +313,7 @@ export async function stopServer(id: string): Promise<void> {
   if (server.type === "docker") {
     if (server.container_id) {
       try {
-        await execAsync(`docker stop ${server.container_id}`);
+        await run("docker", ["stop", "--", server.container_id]);
       } catch {
         // Container may already be stopped
       }
@@ -390,10 +402,18 @@ export async function getServerLogs(
 
   if (server.type === "docker" && server.container_id) {
     try {
-      const { stdout } = await execAsync(
-        `docker logs --tail ${lines} ${server.container_id} 2>&1`
+      const { stdout, stderr } = await execFileAsync(
+        "docker",
+        [
+          "logs",
+          "--tail",
+          String(Math.max(0, Math.floor(Number(lines)) || 0)),
+          "--",
+          server.container_id,
+        ],
+        { timeout: 60_000, maxBuffer: 8 << 20 }
       );
-      return stdout.split("\n");
+      return `${stdout}${stderr}`.split("\n");
     } catch {
       return [];
     }
@@ -465,10 +485,11 @@ export async function detectDockerServices(
     const composePath = path.join(workingDir, file);
     if (fs.existsSync(composePath)) {
       try {
-        const { stdout } = await execAsync(
-          `docker compose -f ${file} config --services 2>/dev/null || echo ""`,
-          { cwd: workingDir }
-        );
+        const stdout = await run(
+          "docker",
+          ["compose", "-f", file, "config", "--services"],
+          workingDir
+        ).catch(() => "");
         const services = stdout.trim().split("\n").filter(Boolean);
 
         return services.map((service) => ({
