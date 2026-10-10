@@ -3,8 +3,6 @@ import type { Host } from "@/lib/db";
 import type { DiscoveredSession } from "@/lib/hosts/discover";
 import { hostKeys } from "./keys";
 import { usePollWhenOffline } from "../push/connection";
-import { sessionKeys } from "../sessions";
-import { sessionOpenActions } from "@/stores/sessionOpen";
 
 async function json<T>(res: Response): Promise<T> {
   const data = await res.json();
@@ -36,26 +34,6 @@ export function useDiscoveredTmuxQuery() {
       }>(await fetch("/api/tmux/discover")),
     // Pushed when the set of sessions found changes ("discovered").
     refetchInterval: usePollWhenOffline(5000),
-  });
-}
-
-// A linked machine's session: mirrored here, then opened like any other.
-export function useOpenPeerSession() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: { hostId: string; sessionId: string }) =>
-      json<{ session: { id: string } }>(
-        await fetch(`/api/hosts/${encodeURIComponent(input.hostId)}/sessions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: input.sessionId }),
-        })
-      ),
-    onSuccess: async ({ session }) => {
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.all });
-      queryClient.invalidateQueries({ queryKey: hostKeys.discovered() });
-      sessionOpenActions.request(session.id);
-    },
   });
 }
 
@@ -108,6 +86,11 @@ export function useLinkHost() {
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: hostKeys.all }),
   });
+}
+
+/** Linked machines' names by id: their sessions are run through their AgentOS. */
+export function useLinkedHostNames(): Record<string, string> {
+  return Object.fromEntries(useLinkedHosts().map((h) => [h.id, h.name]));
 }
 
 /** Machines whose own AgentOS this one is paired with: tasks can run there. */

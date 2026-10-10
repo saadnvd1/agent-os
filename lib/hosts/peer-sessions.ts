@@ -7,6 +7,7 @@
 
 import type { TmuxSessionInfo } from "../status-detector";
 import { isValidTmuxName } from "./attach";
+import { syncPeerMirrors } from "./peer-sync";
 import {
   cleanRemoteText,
   hostApi,
@@ -24,9 +25,17 @@ export interface PeerSession {
   agentType: string;
   state: "running" | "waiting" | "idle" | null;
   activity: number;
+  // Its row as that machine has it, for the mirror here.
+  model: string;
+  updatedAt: string | null;
+  prUrl: string | null;
+  prNumber: number | null;
+  prStatus: "open" | "merged" | "closed" | null;
 }
 
 const ID = /^[A-Za-z0-9-]{1,64}$/;
+const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+const PR_STATUS = new Set(["open", "merged", "closed"]);
 const num = (n: unknown) =>
   typeof n === "number" && Number.isFinite(n) ? n : 0;
 const text = (s: unknown, max = 300) => cleanRemoteText(s).slice(0, max);
@@ -106,9 +115,16 @@ export function toPeerSession(
   const view = raw.view === "chat" ? "chat" : "terminal";
   // A terminal is opened by its tmux name.
   if (view === "terminal" && !isValidTmuxName(tmuxName)) return null;
-  const updated = Date.parse(
-    String(raw.updated_at ?? "").replace(" ", "T") + "Z"
-  );
+  const updatedAt =
+    typeof raw.updated_at === "string" && SQLITE_TIME.test(raw.updated_at)
+      ? raw.updated_at
+      : null;
+  const updated = Date.parse(String(updatedAt).replace(" ", "T") + "Z");
+  const prUrl =
+    typeof raw.pr_url === "string" &&
+    /^https:\/\/github\.com\/[^\s]{1,300}$/.test(raw.pr_url)
+      ? raw.pr_url
+      : null;
   return {
     id,
     hostId,
@@ -119,6 +135,17 @@ export function toPeerSession(
     agentType: text(raw.agent_type, 40) || "claude",
     state: null,
     activity: Number.isFinite(updated) ? Math.floor(updated / 1000) : 0,
+    model: text(raw.model, 100),
+    updatedAt,
+    prUrl,
+    prNumber:
+      prUrl && Number.isSafeInteger(raw.pr_number) && Number(raw.pr_number) > 0
+        ? Number(raw.pr_number)
+        : null,
+    prStatus:
+      prUrl && PR_STATUS.has(String(raw.pr_status))
+        ? (raw.pr_status as PeerSession["prStatus"])
+        : null,
   };
 }
 
@@ -138,15 +165,18 @@ async function refreshManaged(link: HostLink): Promise<void> {
     }),
     refreshStatuses(link).catch(() => undefined),
   ]);
-  managed.set(
-    link.hostId,
-    (Array.isArray(sessions) ? sessions : [])
-      .map((s) =>
-        toPeerSession(link.hostId, (s ?? {}) as Record<string, unknown>)
-      )
-      .filter((s): s is PeerSession => !!s)
-      .map((s) => ({ ...s, state: peerStatus(link.hostId, s.id) }))
-  );
+  const list = (Array.isArray(sessions) ? sessions : [])
+    .map((s) =>
+      toPeerSession(link.hostId, (s ?? {}) as Record<string, unknown>)
+    )
+    .filter((s): s is PeerSession => !!s)
+    .map((s) => ({ ...s, state: peerStatus(link.hostId, s.id) }));
+  // Listed last time and not now: it left that machine's sidebar.
+  const now = new Set(list.map((s) => s.id));
+  const before: PeerSession[] = managed.get(link.hostId) ?? [];
+  const gone = before.map((s) => s.id).filter((id) => !now.has(id));
+  managed.set(link.hostId, list);
+  syncPeerMirrors(link.hostId, list, gone);
 }
 
 /**

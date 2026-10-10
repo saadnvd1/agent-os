@@ -9,7 +9,9 @@ import {
   projectsInWorkspace,
 } from "@/lib/sidebar/shelves";
 import type { TaskState } from "@/lib/tasks/state";
+import { machineGroups, onMachineOnly } from "@/lib/sidebar/machines";
 import { useSessionsQuery } from "@/data/sessions";
+import { useLinkedHostNames } from "@/data/hosts";
 import { useProjectsQuery } from "@/data/projects";
 import { useTasksQuery } from "@/data/tasks";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
@@ -46,6 +48,12 @@ export function useSidebarData(
     () => sessionsQuery.data?.sessions ?? [],
     [sessionsQuery.data]
   );
+  // Keyed by its contents: the hosts query hands back a new object each time.
+  const linkedKey = JSON.stringify(useLinkedHostNames());
+  const linked = useMemo(
+    () => JSON.parse(linkedKey) as Record<string, string>,
+    [linkedKey]
+  );
   const projects = useMemo(
     () => projectsQuery.data ?? [],
     [projectsQuery.data]
@@ -58,7 +66,7 @@ export function useSidebarData(
   );
   const project = workspaceProjects.find((p) => p.id === ui.projectId) ?? null;
 
-  const shelves = useMemo(() => {
+  const { shelves, machines } = useMemo(() => {
     const byId = new Map(projects.map((p) => [p.id, p]));
     const workspaceName = new Map(workspaces.map((w) => [w.id, w.name]));
     const taskStates: Record<string, TaskState> = {};
@@ -67,22 +75,32 @@ export function useSidebarData(
       s.role === "orchestrator"
         ? `Orchestrator · ${workspaceName.get(s.workspace_id ?? "") ?? ""}`
         : (byId.get(s.project_id ?? "")?.name ?? "");
-    return buildShelves({
-      sessions: sessions.filter((s) =>
-        inWorkspace(
-          s,
-          (id) => byId.get(id)?.workspace_id,
-          workspace?.id ?? null
-        )
-      ),
+    const common = {
       statuses: sessionStatuses ?? {},
       tasks: taskStates,
       projectName,
       query: ui.query,
-      projectId: project?.id ?? null,
-      currentOrchestrators,
-    });
+    };
+    return {
+      shelves: buildShelves({
+        ...common,
+        sessions: sessions.filter(
+          (s) =>
+            !onMachineOnly(s, linked) &&
+            inWorkspace(
+              s,
+              (id) => byId.get(id)?.workspace_id,
+              workspace?.id ?? null
+            )
+        ),
+        projectId: project?.id ?? null,
+        currentOrchestrators,
+      }),
+      // Not in any project, so not under a chosen one.
+      machines: project ? [] : machineGroups({ ...common, sessions }, linked),
+    };
   }, [
+    linked,
     sessions,
     projects,
     workspaces,
@@ -127,6 +145,7 @@ export function useSidebarData(
   return {
     ui,
     shelves,
+    machines,
     sessions,
     projects,
     projectNames,

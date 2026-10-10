@@ -78,7 +78,8 @@ export const cleanRemoteText = (s: unknown): string =>
 export class HostApiError extends Error {
   constructor(
     message: string,
-    readonly refused: boolean
+    readonly refused: boolean,
+    readonly status?: number
   ) {
     super(message);
   }
@@ -149,7 +150,8 @@ export async function hostApi<T>(
     const refused = res.status >= 400 && res.status < 500 && !!data?.error;
     throw new HostApiError(
       `${link.hostName}: ${cleanRemoteText(data?.error) || `HTTP ${res.status}`}`,
-      refused
+      refused,
+      res.status
     );
   }
   if (!data) throw unknown(new Error("its answer wasn't JSON"));

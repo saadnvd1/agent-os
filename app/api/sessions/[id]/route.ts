@@ -19,6 +19,11 @@ import { clearQueue } from "@/lib/chat/queued";
 import { recordPreviousName } from "@/lib/session-names";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 import { runInBackground } from "@/lib/async-operations";
+import {
+  deleteOnPeer,
+  peerSessionLink,
+  renameOnPeer,
+} from "@/lib/hosts/peer-actions";
 
 // Sanitize a name for use as tmux session name
 function sanitizeTmuxName(name: string): string {
@@ -65,6 +70,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const existing = queries.getSession(db).get(id) as Session | undefined;
     if (!existing) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    // A linked machine's session is renamed there; nothing else is
+    // changed from here yet.
+    const peer = peerSessionLink(existing);
+    if (peer) {
+      const other = Object.keys(body).filter((k) => k !== "name");
+      if (other.length || typeof body.name !== "string" || !body.name.trim())
+        return NextResponse.json(
+          {
+            error: `Runs on ${peer.hostName}: only a rename reaches it from here`,
+          },
+          { status: 400 }
+        );
+      return renameOnPeer(peer, existing, body.name.trim()).then(
+        (session) => NextResponse.json({ session }),
+        (err: Error) =>
+          NextResponse.json({ error: err.message }, { status: 502 })
+      );
     }
 
     // Build update query dynamically based on provided fields
@@ -217,6 +241,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
     const refusal = deletionRefusal(existing);
     if (refusal) return NextResponse.json({ error: refusal }, { status: 409 });
+
+    // A linked machine's session is deleted there, then its mirror here.
+    const peer = peerSessionLink(existing);
+    if (peer) {
+      return deleteOnPeer(peer, existing).then(
+        () => NextResponse.json({ success: true }),
+        (err: Error) =>
+          NextResponse.json({ error: err.message }, { status: 502 })
+      );
+    }
 
     // If this is a conductor, delete all its workers first
     const workers = queries.getWorkersByConductor(db).all(id) as Session[];

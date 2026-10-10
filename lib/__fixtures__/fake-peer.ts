@@ -16,8 +16,13 @@ export async function fakePeer(token: string) {
     [];
   let onSocket: (s: (typeof sockets)[number]) => void = () => {};
   const wss = new WebSocketServer({ noServer: true });
-  // JSON answers by path, for HTTP calls; 404 otherwise.
-  const routes: Record<string, () => unknown> = {};
+  // JSON answers by path, for HTTP calls; 404 otherwise. A route sees the
+  // method and JSON body, and answers { $status } to fail with that status.
+  const routes: Record<
+    string,
+    (req: { method: string; body: unknown }) => unknown
+  > = {};
+  const calls: { method: string; path: string; body: unknown }[] = [];
   const allowed = (req: IncomingMessage) =>
     authorize(
       {
@@ -28,8 +33,12 @@ export async function fakePeer(token: string) {
       },
       { tailnet: [], lookup: (t) => (t === token ? { id: "mac" } : null) }
     ).ok;
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     const path = (req.url ?? "/").split("?")[0];
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    const method = req.method ?? "GET";
+    const body: unknown = raw ? JSON.parse(raw) : undefined;
     const route = routes[path];
     res.setHeader("Content-Type", "application/json");
     if (!allowed(req)) {
@@ -40,7 +49,10 @@ export async function fakePeer(token: string) {
       res.statusCode = 404;
       return res.end(JSON.stringify({ error: "not found" }));
     }
-    res.end(JSON.stringify(route()));
+    calls.push({ method, path, body });
+    const answer = route({ method, body }) as { $status?: number } | null;
+    if (answer?.$status) res.statusCode = answer.$status;
+    res.end(JSON.stringify(answer));
   });
   server.on("upgrade", (req: IncomingMessage, socket, head) => {
     upgrades.push({
@@ -71,6 +83,7 @@ export async function fakePeer(token: string) {
     upgrades,
     sockets,
     routes,
+    calls,
     onSocket: (fn: typeof onSocket) => void (onSocket = fn),
     close: () =>
       new Promise<void>((r) => {

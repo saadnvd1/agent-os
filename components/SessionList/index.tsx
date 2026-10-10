@@ -62,8 +62,9 @@ export function SessionList({
         ...shelves.needsYou,
         ...shelves.working,
         ...shelves.done,
+        ...data.machines.flatMap((g) => g.rows),
       ]),
-    [shelves]
+    [shelves, data.machines]
   );
 
   // Rows read their handlers through the latest render, so the context only

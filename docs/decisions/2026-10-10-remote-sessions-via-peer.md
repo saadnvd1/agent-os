@@ -124,9 +124,19 @@ desktop app included.
   mirrored terminal session is still built on this machine and sent as the
   attach `command` (the old ssh path did the same). It only matters when the
   tmux session is gone. The peer should rebuild it from its own row.
-- **A mirror should notice when its session is gone.** When the peer deletes
-  a session, its mirror stays until removed here. The chat view gets the
-  peer's 4404 and says the session no longer exists.
 - **Live state should be pushed.** Peer statuses are polled with the status
   pass, at most every 5 s per machine. Subscribing to the peer's `/ws/status`
   would push them instead.
+
+## Later: linked machines' sessions are sessions here
+
+Every session a linked machine's AgentOS lists is mirrored as soon as it is
+listed, not on first open (`lib/hosts/peer-sync.ts`). So it gets the same row,
+menu and address as a local one. It sits with its project when its folder
+maps to a project on that machine, and otherwise under the machine's name.
+"Elsewhere" is left for tmux sessions no AgentOS started. A mirror the peer
+listed and then stopped listing goes. Rename, delete, done and undo run on the
+peer with the link's token (`lib/hosts/peer-actions.ts`). Done refuses anything
+that is a task there, so it never merges. Fork, fresh start, move to project
+and check-ins are shown disabled, with the reason
+(`lib/hosts/remote-menu.ts`). Task mirrors keep their own paths.
