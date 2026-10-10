@@ -9,6 +9,7 @@
 import { db, stackQueries as q, type Session, type StackItemRow } from "../db";
 import { getDefaultBranch } from "../git";
 import { sendMessage } from "../bus";
+import { chatStateNow, interruptChat } from "../chat/runner";
 import { findPRStrict, run } from "../tasks/gh";
 import type { TaskPR } from "../tasks/state";
 import { expandHome } from "../tasks/session";
@@ -39,8 +40,9 @@ function restackedHeads(
 export interface RestackDeps {
   runner: Runner;
   notify: (sessionId: string, body: string) => Promise<void>;
-  // Stop the agent before its worktree is rewritten under it.
-  interrupt: (session: Session) => Promise<void>;
+  // Stop the agent before its worktree is rewritten under it; false when
+  // it couldn't be stopped.
+  interrupt: (session: Session) => Promise<boolean>;
   defaultBranch: (repo: string) => Promise<string>;
   // The branch's PR right now; throws when GitHub can't say.
   prOf: (repo: string, branch: string) => Promise<TaskPR | null>;
@@ -55,22 +57,49 @@ export const stackNotice = (to: string, body: string) => ({
   origin: { kind: "system", label: "AgentOS stacks", body } as const,
 });
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// How long a chat's turn may take to stop after it's interrupted.
+export const CHAT_STOP_WAIT_MS = 10_000;
+
+// A terminal agent gets Escape. A chat has no tmux session to send keys to:
+// its turn is interrupted through its worker (attached first, so one that
+// outlived a restart hears it too) and waited out. False when it can't be
+// shown to have stopped: its worktree isn't rewritten under it.
+export async function interruptAgent(
+  session: Session,
+  wait = sleep
+): Promise<boolean> {
+  if (session.view === "chat") {
+    const now = () =>
+      chatStateNow(session.id).catch(() => "unreachable" as const);
+    const busy = (s: Awaited<ReturnType<typeof now>>) =>
+      s === "running" || s === "waiting" || s === "unreachable";
+    if (!busy(await now())) return true;
+    await interruptChat(session.id);
+    for (let waited = 0; waited < CHAT_STOP_WAIT_MS; waited += 500) {
+      await wait(500);
+      if (!busy(await now())) return true;
+    }
+    return false;
+  }
+  const sent = await run(
+    "tmux",
+    ["send-keys", "-t", `=${session.tmux_name}:`, "Escape"],
+    "/"
+  ).then(
+    () => true,
+    () => false
+  );
+  if (sent) await wait(1500);
+  return true;
+}
+
 const defaults: RestackDeps = {
   runner: (cmd, args, cwd) => run(cmd, args, cwd, 120000),
   notify: async (to, body) => {
     await sendMessage(stackNotice(to, body)).catch(() => {});
   },
-  interrupt: async (session) => {
-    const sent = await run(
-      "tmux",
-      ["send-keys", "-t", `=${session.tmux_name}:`, "Escape"],
-      "/"
-    ).then(
-      () => true,
-      () => false
-    );
-    if (sent) await new Promise((r) => setTimeout(r, 1500));
-  },
+  interrupt: (session) => interruptAgent(session),
   defaultBranch: getDefaultBranch,
   prOf: findPRStrict,
 };
@@ -275,8 +304,16 @@ async function restackItems(
         );
       if (tip === item.base_tip) continue;
     }
+    // Still working: left as it is, on a branch kept for it, and tried
+    // again on a later pass.
+    if (!(await deps.interrupt(session))) {
+      q.updateItem(db, item.id, {
+        note: `Waiting for its agent to stop to restack onto ${onto}`,
+      });
+      stuck ||= direct;
+      continue;
+    }
     q.updateItem(db, item.id, { note: `Restacking onto ${onto}` });
-    await deps.interrupt(session);
     const result = await restackBranch(
       {
         name: itemName(item),

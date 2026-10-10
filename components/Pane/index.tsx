@@ -248,12 +248,15 @@ export const Pane = memo(function Pane({
         onAttachSession(handle, tabSession);
         return;
       }
-      // A tmux session AgentOS didn't start: reattach, never recreate it.
+      // A tmux session AgentOS didn't start, or a session not listed here
+      // yet: reattach, never recreate it. Its id goes with it, so the server
+      // treats it as that session's view (waits on its launch, no shell).
       if (tab.attachedTmux) {
         handle.attach({
           sessionName: tab.attachedTmux,
           hostId: tab.attachedHost ?? undefined,
           attachOnly: true,
+          sessionId: tab.sessionId ?? undefined,
         });
       }
     },

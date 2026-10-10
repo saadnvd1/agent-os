@@ -117,6 +117,33 @@ describe("finishTaskStart", () => {
     expect(setupOf(id)).toEqual({ status: "ok", ms: 42, error: null });
   });
 
+  it("shows its setup as it runs, and tells a waiting terminal once it's recorded", async () => {
+    const { getSetup, watchSetup } = await import("../sessions/setup-progress");
+    const id = seedTask(ws.app.id);
+    setupWorktree.mockImplementation(async () => {
+      expect(getSetup(id)?.status).toBe("running");
+      return ok();
+    });
+    // What a terminal waiting on the launch reads when it's woken.
+    const seen: (string | undefined)[] = [];
+    const stop = watchSetup(id, () => seen.push(setupOf(id)?.status));
+    await finishTaskStart(id);
+    stop();
+    expect(getSetup(id)?.status).toBe("ok");
+    expect(seen.at(-1)).toBe("ok");
+  });
+
+  it("a setup that throws ends its progress as failed, not running", async () => {
+    const { getSetup } = await import("../sessions/setup-progress");
+    const id = seedTask(ws.app.id);
+    setupWorktree.mockRejectedValue(new Error("disk full"));
+    await finishTaskStart(id);
+    expect(getSetup(id)).toMatchObject({
+      status: "failed",
+      error: "disk full",
+    });
+  });
+
   it("still launches after a failed setup, and tells the agent", async () => {
     const id = seedTask(ws.app.id);
     setupWorktree.mockResolvedValue({

@@ -44,6 +44,7 @@ export function useCreateTask() {
       model?: string;
       baseBranch?: string;
       hostId?: string;
+      view?: "chat" | "terminal";
     }) =>
       // Over the workspace's running task limit it's queued instead.
       json<

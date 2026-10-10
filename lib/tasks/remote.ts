@@ -19,7 +19,7 @@ import type { TaskView } from "./index";
 
 // What this machine's task API does, for another machine deciding whether
 // it can trust it with a pinned merge or a move.
-export const TASK_CAPABILITIES = ["pinned-merge", "move"] as const;
+export const TASK_CAPABILITIES = ["pinned-merge", "move", "chat-turn"] as const;
 
 export interface HostTasks {
   tasks: TaskView[];
@@ -39,8 +39,8 @@ export function mirrorTask(
   db.prepare(
     `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
        agent_type, auto_approve, project_id, host_id, worktree_path, branch_name,
-       base_branch, task_prompt, task_status, name_source)
-     VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 1, ?, ?, ?, ?, ?, ?, 'running', 'user')
+       base_branch, task_prompt, task_status, name_source, view)
+     VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 1, ?, ?, ?, ?, ?, ?, 'running', 'user', ?)
      ON CONFLICT(id) DO NOTHING`
   ).run(
     remote.id,
@@ -53,7 +53,9 @@ export function mirrorTask(
     remote.worktree_path,
     remote.branch_name,
     remote.base_branch,
-    remote.task_prompt
+    remote.task_prompt,
+    // As that machine runs it: one that predates chat tasks says terminal.
+    remote.view === "chat" ? "chat" : "terminal"
   );
 }
 
@@ -84,6 +86,7 @@ export async function startRemoteTask(
     name?: string;
     model?: string;
     baseBranch?: string;
+    view?: "chat" | "terminal";
   }
 ): Promise<Session> {
   const link = requireHostLink(hostId);

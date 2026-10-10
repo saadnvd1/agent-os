@@ -9,12 +9,13 @@ import { useMoveSession, useMoveTargets } from "@/data/tasks";
 type MenuItem = ComponentType<{
   onSelect?: () => void;
   className?: string;
+  disabled?: boolean;
   children: ReactNode;
 }>;
 
 // "Move to <machine>" / "Move back to this machine" for any menu (the row's
 // ⋯ and right-click menus, the pane's menu, the phone's session switcher);
-// nothing when it can't move.
+// nothing when it can't move, and disabled with why when it can't yet.
 export function MoveMenuItems({
   session,
   Item,
@@ -35,22 +36,39 @@ export function MoveMenuItems({
   return (
     <>
       {Before && <Before />}
-      {targets.map((t) => (
-        <Item
-          key={t.hostId}
-          // A 44px target on a phone.
-          className="min-h-11 md:min-h-0"
-          onSelect={() =>
-            move(
-              { id: session.id, name: session.name, hostId: session.host_id },
-              t
-            )
-          }
-        >
-          <ArrowRightLeft className={iconClassName} />
-          {t.label}
-        </Item>
-      ))}
+      {targets.map((t) =>
+        t.blocked ? (
+          // Disabled, but the reason keeps full contrast: only the label dims.
+          <Item
+            key={t.hostId}
+            disabled
+            className="min-h-11 items-start data-[disabled]:opacity-100 md:min-h-0"
+          >
+            <ArrowRightLeft className={`${iconClassName} mt-0.5 opacity-50`} />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-muted-foreground">{t.label}</span>
+              <span className="text-muted-foreground text-xs leading-tight">
+                {t.blocked}
+              </span>
+            </span>
+          </Item>
+        ) : (
+          <Item
+            key={t.hostId}
+            // A 44px target on a phone.
+            className="min-h-11 md:min-h-0"
+            onSelect={() =>
+              move(
+                { id: session.id, name: session.name, hostId: session.host_id },
+                t
+              )
+            }
+          >
+            <ArrowRightLeft className={iconClassName} />
+            {t.label}
+          </Item>
+        )
+      )}
       {After && <After />}
     </>
   );

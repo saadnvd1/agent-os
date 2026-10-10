@@ -3,6 +3,7 @@ import {
   enterStage,
   finishSetup,
   getSetup,
+  holdsQueue,
   logStep,
   settingUp,
   startSetup,
@@ -45,5 +46,15 @@ describe("setup progress", () => {
     });
     expect(view.log).toHaveLength(40);
     expect(view.log.at(-1)).toBe("line 99");
+  });
+
+  it("a failed setup holds a session's queue, but not a task's: its launch decides", () => {
+    const session = startSetup("s-held", "b");
+    finishSetup("s-held", session, "npm ci failed");
+    expect(holdsQueue("s-held")).toBe(true);
+    const task = startSetup("t-held", "b", { task: true });
+    expect(holdsQueue("t-held")).toBe(true);
+    finishSetup("t-held", task, "npm ci failed");
+    expect(holdsQueue("t-held")).toBe(false);
   });
 });

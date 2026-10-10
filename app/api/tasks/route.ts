@@ -4,6 +4,7 @@ import { startOrQueue } from "@/lib/tasks/queue";
 import { TASK_CAPABILITIES } from "@/lib/tasks/remote";
 import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
 import { isSessionId, statusFor } from "@/lib/tasks/move-bundle";
+import { startView } from "@/lib/sessions/launch";
 
 // moved and capabilities are for another machine that mirrors these tasks.
 export async function GET() {
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
       hostId,
       baseBranch,
       after,
+      view,
     } = await request.json();
     if (id !== undefined && !isSessionId(id)) throw new Error("Bad task id");
     const pid =
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
       name: typeof name === "string" ? name : undefined,
       hostId: typeof hostId === "string" && hostId ? hostId : undefined,
       baseBranch: typeof baseBranch === "string" ? baseBranch : undefined,
+      view: startView(view),
     };
     if (id !== undefined) {
       const session = await createTask({ id, ...opts });

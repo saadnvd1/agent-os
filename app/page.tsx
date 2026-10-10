@@ -346,7 +346,12 @@ function HomeContent() {
           ? undefined
           : terminalRefs.current.get(`${focusedPaneId}:${activeTab.id}`);
       if (!terminalInfo) {
-        attachSession(focusedPaneId, session.id, session.tmux_name);
+        attachSession(
+          focusedPaneId,
+          session.id,
+          session.tmux_name,
+          session.host_id
+        );
         return;
       }
 
@@ -424,7 +429,12 @@ function HomeContent() {
       const existingKeys = new Set(terminalRefs.current.keys());
       addTab(focusedPaneId);
       if (session.view === "chat") {
-        attachSession(focusedPaneId, session.id, session.tmux_name);
+        attachSession(
+          focusedPaneId,
+          session.id,
+          session.tmux_name,
+          session.host_id
+        );
         return;
       }
 

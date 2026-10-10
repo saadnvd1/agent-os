@@ -26,6 +26,13 @@ import { firstMessageId, launchPending } from "./launch-gate";
 
 export { firstMessageId, launchPending };
 import { expandHome } from "./session";
+import {
+  enterStage,
+  finishSetup,
+  logStep,
+  setupMoved,
+  startSetup,
+} from "../sessions/setup-progress";
 import { recordSetup, setupNote, setupOutcome, type TaskSetup } from "./setup";
 
 const execFileAsync = promisify(execFile);
@@ -56,16 +63,34 @@ export function launchHold(sessionId: string): string | null {
 
 // The task's ports (kept across a resume: the slot is on the row), then its
 // worktree's setup with them.
-async function prepare(
-  sessionId: string,
-  worktreePath: string,
-  sourcePath: string
-) {
-  const { ports } = await allocatePorts(
-    sessionId,
-    portBases(loadProjectConfig(sourcePath).config)
-  );
-  return setupWorktree({ worktreePath, sourcePath, ports, sessionId });
+// Stage by stage, for whoever opens it meanwhile (lib/sessions/setup-progress):
+// its worktree was cut when the task was created.
+async function prepare(session: Session, sourcePath: string) {
+  const sessionId = session.id;
+  const view = startSetup(sessionId, session.branch_name ?? "", { task: true });
+  enterStage(view, "fetch");
+  enterStage(view, "worktree");
+  try {
+    const { ports } = await allocatePorts(
+      sessionId,
+      portBases(loadProjectConfig(sourcePath).config)
+    );
+    const result = await setupWorktree({
+      worktreePath: session.worktree_path!,
+      sourcePath,
+      ports,
+      sessionId,
+      progress: {
+        onStage: (stage) => enterStage(view, stage),
+        onStep: (step) => logStep(view, step),
+      },
+    });
+    finishSetup(sessionId, view, setupOutcome(result).error);
+    return result;
+  } catch (err) {
+    finishSetup(sessionId, view, asError(err).message);
+    throw err;
+  }
 }
 
 // `earlier` is a setup already done (a held start resuming): it isn't run again,
@@ -79,17 +104,20 @@ export async function finishTaskStart(
     .get(sessionId) as Session | undefined;
   if (!session?.worktree_path) throw new Error(`No task ${sessionId}`);
   const project = session.project_id ? getProject(session.project_id) : null;
-  const done = (setup: TaskSetup) => (recordSetup(db, sessionId, setup), setup);
+  const done = (setup: TaskSetup) => {
+    recordSetup(db, sessionId, setup);
+    // A terminal opened during setup attaches now (lib/terminal/pending-launch).
+    setupMoved(sessionId);
+    return setup;
+  };
 
   const setup = earlier
     ? earlier
     : project
       ? setupOutcome(
-          await prepare(
-            sessionId,
-            session.worktree_path,
-            expandHome(project.working_directory)
-          ).catch(asError)
+          await prepare(session, expandHome(project.working_directory)).catch(
+            asError
+          )
         )
       : setupOutcome(new Error("its project no longer exists"));
 

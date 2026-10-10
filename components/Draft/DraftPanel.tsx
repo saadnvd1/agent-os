@@ -68,6 +68,7 @@ export function DraftPanel({
           model: draft.model,
           baseBranch: draft.baseBranch ?? undefined,
           hostId: draft.hostId !== project.host_id ? draft.hostId : undefined,
+          view: draft.terminal ? "terminal" : undefined,
         });
         draftsActions.remove(draft.id);
         if (queued) {
@@ -76,7 +77,7 @@ export function DraftPanel({
           );
           return;
         }
-        attachSession(paneId, session.id, `claude-${session.id}`);
+        attachSession(paneId, session.id, `claude-${session.id}`, draft.hostId);
         toast.success("Task started: it opens a pull request when done");
         return;
       }

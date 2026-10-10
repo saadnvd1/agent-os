@@ -10,6 +10,7 @@ import { hostLink } from "../hosts/remote-api";
 import { PeerPty } from "./peer-pty";
 import { agentEnv } from "../agents/launch";
 import { launchPending } from "../tasks/start";
+import { sessionForTmux, waitForLaunch } from "./pending-launch";
 import {
   SharedAttach,
   SharedAttaches,
@@ -21,7 +22,8 @@ import {
  * One /ws/terminal connection: a plain shell of its own, or a view of a
  * session shared with every other view of it (lib/terminal/shared-attach).
  * The shell starts only if no attach comes first: a session's view never
- * pays for a login shell it replaces at once. `?flow=1` clients ack each
+ * pays for a login shell it replaces at once, and one that belongs to a
+ * session never falls back to a shell at all. `?flow=1` clients ack each
  * output message, for flow control.
  */
 
@@ -80,6 +82,10 @@ export function serveTerminal(
   let rows = 24;
   let own: pty.IPty | null = null;
   let view: { attach: SharedAttach; viewer: Viewer } | null = null;
+  // The session this connection is a view of: it never gets a login shell
+  // in place of the session, whether its attach waits, fails or detaches.
+  let bound: string | null = null;
+  let stopWaiting: (() => void) | null = null;
   let closed = false;
   const reply = (msg: object) => send(JSON.stringify(msg));
   let heardAt = Date.now();
@@ -126,7 +132,7 @@ export function serveTerminal(
   };
   let shellTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
     shellTimer = null;
-    if (!view && !own) startShell();
+    if (!view && !own && !bound) startShell();
   }, SHELL_AFTER_MS);
   const cancelShell = () => {
     if (shellTimer) clearTimeout(shellTimer);
@@ -140,14 +146,32 @@ export function serveTerminal(
   };
 
   const attach = (spec: AttachSpec) => {
+    stopWaiting?.();
+    stopWaiting = null;
     try {
       const sshTarget = sshTargetFor(spec.hostId);
+      // A pane that knows only the tmux name is still its session's view
+      // (and a linked machine is told which session).
+      if (!spec.sessionId && (!sshTarget || hostLink(spec.hostId)))
+        spec.sessionId =
+          sessionForTmux(spec.hostId, spec.sessionName) ?? undefined;
+      bound = spec.sessionId ?? null;
+      if (bound) cancelShell();
       // A task still setting up gets its tmux session from its launch;
-      // creating it here would start a bare agent without the task.
+      // creating it here would start a bare agent without the task. Its
+      // setup shows meanwhile, and it attaches (never creates) once launched.
       if (spec.sessionId && !sshTarget && launchPending(spec.sessionId)) {
-        reply({
-          type: "output",
-          data: "\r\nThis task is still setting up. Open it again once its agent has started.\r\n",
+        const previous = own;
+        own = null;
+        previous?.kill();
+        leave();
+        stopWaiting = waitForLaunch(spec.sessionId, {
+          draw: (data) => reply({ type: "output", data }),
+          launched: () => {
+            stopWaiting = null;
+            attach({ ...spec, attachOnly: true });
+          },
+          cols: () => cols,
         });
         return;
       }
@@ -180,11 +204,12 @@ export function serveTerminal(
         send,
         (code) => {
           // tmux detached (or the session ended): back to a shell, as a
-          // terminal left after `tmux detach` would be.
+          // terminal left after `tmux detach` would be, unless this is a
+          // session's view.
           if (view?.viewer !== viewer) return;
           view = null;
           reply({ type: "detached", code });
-          startShell();
+          if (!bound) startShell();
         },
         flow,
         cols,
@@ -206,7 +231,7 @@ export function serveTerminal(
 
   const write = (data: string) => {
     if (view) view.attach.input(data);
-    else {
+    else if (!bound) {
       if (!own) {
         cancelShell();
         startShell();
@@ -256,6 +281,8 @@ export function serveTerminal(
     closed = true;
     clearInterval(pinger);
     cancelShell();
+    stopWaiting?.();
+    stopWaiting = null;
     leave();
     const proc = own;
     own = null;

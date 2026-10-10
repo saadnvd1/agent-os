@@ -8,7 +8,10 @@ import { useMoveSession, useMoveTargets } from "@/data/tasks";
 
 // ⌘K "Move this task to <machine>" for the focused session, when it can move.
 export function useMoveCommands(session: Session | undefined) {
-  const targets = useMoveTargets(session ? movableSession(session) : null);
+  // A move it can't take yet is the menus' to explain, not the palette's.
+  const targets = useMoveTargets(
+    session ? movableSession(session) : null
+  ).filter((t) => !t.blocked);
   const move = useMoveSession();
   usePaletteCommands(
     "move",

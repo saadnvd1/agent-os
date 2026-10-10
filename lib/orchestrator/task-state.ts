@@ -7,7 +7,8 @@ import { saidSinceLastMessage } from "../chat/store";
 import { blockedReason } from "../tasks/state";
 import { checkWaitingPatterns, statusDetector } from "../status-detector";
 import { getCheck, putCheck } from "./checks";
-import { hostLink } from "../hosts/remote-api";
+import { cleanRemoteText, hostLink, type HostLink } from "../hosts/remote-api";
+import { hostTasks } from "../tasks/remote";
 import { peerPane } from "../hosts/peer-sessions";
 import { untrusted } from "./untrusted";
 
@@ -16,6 +17,10 @@ import { untrusted } from "./untrusted";
 export async function waitingState(
   task: Session
 ): Promise<{ blocked: string | null; waitingOn: string | null }> {
+  // A linked machine's chat lives in that machine's store, not this one's:
+  // its own reading of the task is asked for, fresh.
+  const link = hostLink(task.host_id);
+  if (link && task.view === "chat") return peerChatWaiting(link, task);
   if (task.view === "chat") {
     const reason = blockedReason(saidSinceLastMessage(task.id));
     // Asked of a worker still running from before a restart, too; one
@@ -33,7 +38,6 @@ export async function waitingState(
   }
   // A linked machine reads its own screens: asked, and an answer it can't
   // give is a screen that can't be cleared.
-  const link = hostLink(task.host_id);
   let tail: string;
   if (link) {
     const lines = await peerPane(link, task.id);
@@ -61,6 +65,45 @@ export async function waitingState(
   return {
     blocked: reason === null ? null : untrusted(task.name, reason),
     waitingOn: checkWaitingPatterns(tail) ? "a prompt in its terminal" : null,
+  };
+}
+
+async function peerChatWaiting(
+  link: HostLink,
+  task: Session
+): Promise<{ blocked: string | null; waitingOn: string | null }> {
+  const unread = {
+    blocked: `its chat on ${link.hostName} couldn't be read, so a BLOCKED: line or open question can't be ruled out`,
+    waitingOn: null,
+  };
+  const view = await hostTasks(link, true)
+    .then(({ tasks, capabilities }) =>
+      // One that can't say its chat's turn can't rule out an open question.
+      Array.isArray(capabilities) && capabilities.includes("chat-turn")
+        ? (Array.isArray(tasks) ? tasks : []).find((t) => t?.id === task.id)
+        : undefined
+    )
+    .catch(() => undefined);
+  if (!view || typeof view.state !== "string") return unread;
+  const turn = view.chatTurn;
+  const said =
+    typeof view.blocked === "string" ? cleanRemoteText(view.blocked) : "";
+  return {
+    blocked: said
+      ? untrusted(task.name, said)
+      : view.state === "blocked"
+        ? `${link.hostName} reports it blocked`
+        : null,
+    waitingOn:
+      turn === "waiting"
+        ? `an approval or question in its chat on ${link.hostName}`
+        : // null: no worker running, so nothing open.
+          turn === null ||
+            turn === "running" ||
+            turn === "idle" ||
+            turn === "error"
+          ? null
+          : `its chat on ${link.hostName} couldn't say whether a question is open`,
   };
 }
 

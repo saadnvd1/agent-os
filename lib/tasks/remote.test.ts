@@ -103,10 +103,31 @@ describe("starting a task on a linked machine", () => {
     ).rejects.toThrow(/isn't linked/);
   });
 
-  it("stacked, card and chat tasks stay on this machine", async () => {
-    await expect(
-      createTask({ projectId: f.projectId, prompt: "x", hostId, view: "chat" })
-    ).rejects.toThrow(/Chat tasks run on this machine only/);
+  it("runs as a chat there by default, and in a terminal when picked", async () => {
+    const chat = { ...remoteSession(), view: "chat" as const };
+    fetchMock.mockResolvedValueOnce(json({ session: chat }, 201));
+    await createTask({ projectId: f.projectId, prompt: "do x", hostId });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).view).toBe("chat");
+    expect(row(chat.id!).view).toBe("chat");
+
+    const term = { ...remoteSession(), view: "terminal" as const };
+    fetchMock.mockResolvedValueOnce(json({ session: term }, 201));
+    await createTask({
+      projectId: f.projectId,
+      prompt: "do x",
+      hostId,
+      view: "terminal",
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).view).toBe("terminal");
+    expect(row(term.id!).view).toBe("terminal");
+  });
+
+  it("mirrors what that machine ran: one that predates chat tasks says terminal", async () => {
+    const r = await startOne();
+    expect(row(r.id!).view).toBe("terminal");
+  });
+
+  it("stacked and card tasks stay on this machine", async () => {
     await expect(
       createTask({ projectId: f.projectId, prompt: "x", hostId, cardId: "c" })
     ).rejects.toThrow(/this machine only/);

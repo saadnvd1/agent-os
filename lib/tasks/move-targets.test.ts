@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_MOVE_REFUSAL,
+  CHAT_MOVE_REFUSAL_AWAY,
   movableSession,
   movableTask,
   moveTargets,
@@ -15,6 +17,7 @@ const here: Movable = {
   movedTo: null,
   branch: "feature/x",
   pinnedHere: false,
+  blocked: null,
 };
 const labels = (m: Movable, linked = [box, spare]) =>
   moveTargets(m, linked).map((t) => [t.hostId, t.label]);
@@ -85,6 +88,28 @@ describe("reading a session or a task view", () => {
     expect(
       movableSession({ ...session, role: "orchestrator" }).pinnedHere
     ).toBe(true);
+  });
+
+  it("a chat task's moves show, disabled, with why", () => {
+    for (const m of [
+      movableSession({ ...session, view: "chat" }),
+      movableTask({
+        hostId: null,
+        branch: "b",
+        cardUrl: null,
+        state: "working",
+        view: "chat",
+      }),
+    ]) {
+      expect(m.blocked).toBe(CHAT_MOVE_REFUSAL);
+      expect(moveTargets(m, [box]).map((t) => [t.label, t.blocked])).toEqual([
+        ["Move to devbox", CHAT_MOVE_REFUSAL],
+      ]);
+    }
+    expect(movableSession({ ...session, view: "terminal" }).blocked).toBeNull();
+    // One on another machine can't come back as a chat either.
+    const away = movableSession({ ...session, host_id: "h1", view: "chat" });
+    expect(moveTargets(away, [box])[0].blocked).toBe(CHAT_MOVE_REFUSAL_AWAY);
   });
 
   it("a task view that ended can't move; one moving can", () => {

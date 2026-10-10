@@ -236,6 +236,8 @@ export interface SessionSetup {
   branch: string | null;
   error: string | null;
   startedAt: number | null;
+  // From a linked machine's AgentOS: polled, since its pushes stay there.
+  relayed?: boolean;
 }
 
 // A new session's worktree setup while it runs: pushed as it moves, or
@@ -255,12 +257,16 @@ export function useSessionSetup(sessionId: string, enabled: boolean) {
         void queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
       return setup;
     },
-    // Its stages and log are pushed as they move (`setup:<id>`).
+    // Its stages and log are pushed as they move (`setup:<id>`), except a
+    // linked machine's, which is read from there every couple of seconds.
     refetchInterval: (q) =>
-      !pushed &&
-      q.state.status !== "error" &&
-      (q.state.data === undefined || q.state.data?.status === "running")
-        ? 1000
-        : false,
+      q.state.status === "error"
+        ? false
+        : q.state.data?.relayed && q.state.data.status === "running"
+          ? 2000
+          : !pushed &&
+              (q.state.data === undefined || q.state.data?.status === "running")
+            ? 1000
+            : false,
   });
 }

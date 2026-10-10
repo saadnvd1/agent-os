@@ -32,6 +32,10 @@ export type StartView = "chat" | "terminal";
 // machine. The one default: orchestrator starts use it too.
 export const DEFAULT_START_VIEW: StartView = "chat";
 
+// A caller's explicit pick, or none (the default) for anything else.
+export const startView = (v: unknown): StartView | undefined =>
+  v === "chat" || v === "terminal" ? v : undefined;
+
 export const SCRATCH_DIR = path.join(os.homedir(), ".agent-os", "scratch");
 
 export interface LaunchInput {
