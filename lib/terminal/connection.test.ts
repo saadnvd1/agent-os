@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -248,6 +249,25 @@ describe("serveTerminal", () => {
     say({ type: "input", data: "ls\r" });
     vi.advanceTimersByTime(SHELL_AFTER_MS + 100);
     expect(ptys).toHaveLength(1);
+    ws.emit("close");
+  });
+
+  it("tells a linked machine which session a tmux name is, and starts no shell for it", async () => {
+    const { db } = await import("../db");
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id)
+       VALUES (?, 'm', 'claude-mirror', '/tmp', 'box')`
+    ).run(id);
+    const { say, ws } = connect();
+    say({
+      type: "attach",
+      spec: { sessionName: "claude-mirror", hostId: "box", attachOnly: true },
+    });
+    expect(peers[0].spec.sessionId).toBe(id);
+    vi.advanceTimersByTime(SHELL_AFTER_MS + 100);
+    say({ type: "input", data: "ls\r" });
+    expect(ptys).toHaveLength(0);
     ws.emit("close");
   });
 

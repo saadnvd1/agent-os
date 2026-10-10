@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -99,9 +100,12 @@ function launch() {
   setupMoved(TASK);
 }
 
+// A fresh setup each run: the live progress outlasts a test.
+let setup: ReturnType<typeof startSetup>;
 beforeEach(() => {
   vi.useFakeTimers();
   ptys.length = 0;
+  setup = startSetup(TASK, "feature/x", { task: true });
   db.prepare(`DELETE FROM sessions WHERE id = ?`).run(TASK);
   db.prepare(
     `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, setup_status)
@@ -144,10 +148,12 @@ describe.each([
     expect(ptys).toHaveLength(0);
     expect(view.screen()).toContain("Setting up this task");
 
-    const setup = startSetup(TASK, "feature/x", { task: true });
+    // Redrawn as it moves, woken by the setup (well before the recheck).
+    const running = "\x1b[33m› Install dependencies";
+    expect(view.screen()).not.toContain(running);
     enterStage(setup, "deps");
     await vi.advanceTimersByTimeAsync(200);
-    expect(view.screen()).toContain("Install dependencies");
+    expect(view.screen()).toContain(running);
 
     launch();
     await vi.advanceTimersByTimeAsync(200);
@@ -172,4 +178,19 @@ describe.each([
       view.ws.emit("close");
     }
   );
+});
+
+describe("which session an attach naming only a tmux session is", () => {
+  it("is the one on that machine: this one's, or a linked one's mirror", async () => {
+    const { sessionForTmux } = await import("./pending-launch");
+    const mirror = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id)
+       VALUES (?, 'm', 'claude-shared', '/tmp', 'box')`
+    ).run(mirror);
+    expect(sessionForTmux("box", "claude-shared")).toBe(mirror);
+    expect(sessionForTmux(undefined, "claude-shared")).toBeNull();
+    expect(sessionForTmux("box", TMUX)).toBeNull();
+    expect(sessionForTmux("local", TMUX)).toBe(TASK);
+  });
 });

@@ -73,3 +73,66 @@ describe("reading a linked machine's terminal for the orchestrator", () => {
     );
   });
 });
+
+// A chat task there: its chat is that machine's, so its own reading counts.
+async function remoteChatTask(tasks?: unknown[] | ((id: string) => unknown[])) {
+  const peer = await fakePeer("tok");
+  const host = linkedHost(peer.url, "tok");
+  cleanups.push(peer.close, host.remove);
+  const id = randomUUID();
+  if (tasks)
+    peer.routes["/api/tasks"] = () => ({
+      tasks: typeof tasks === "function" ? tasks(id) : tasks,
+    });
+  getDb()
+    .prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, task_status, view)
+       VALUES (?, 't', 'main', '/tmp', ?, 'running', 'chat')`
+    )
+    .run(id, host.hostId);
+  return getDb()
+    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .get(id) as Session;
+}
+
+describe("waitingState for a chat task on a linked machine", () => {
+  it("takes that machine's word: a BLOCKED: line or an open question", async () => {
+    const blocked = await remoteChatTask((id) => [
+      { id, state: "blocked", blocked: "need the prod key" },
+    ]);
+    expect((await waitingState(blocked)).blocked).toContain(
+      "need the prod key"
+    );
+    const asking = await remoteChatTask((id) => [
+      { id, state: "needs-input", blocked: null },
+    ]);
+    expect((await waitingState(asking)).waitingOn).toContain("its chat on");
+  });
+
+  it("clears one that machine reads as clean", async () => {
+    const task = await remoteChatTask((id) => [
+      { id, state: "review", blocked: null },
+    ]);
+    expect(await waitingState(task)).toEqual({
+      blocked: null,
+      waitingOn: null,
+    });
+  });
+
+  it("never clears one it couldn't read, nor this machine's empty chat", async () => {
+    expect((await waitingState(await remoteChatTask())).blocked).toContain(
+      "couldn't be read"
+    );
+    expect((await waitingState(await remoteChatTask([]))).blocked).toContain(
+      "couldn't be read"
+    );
+  });
+});
+
+describe("a linked machine's chat task in the workspace facts", () => {
+  it("is busy, not idle, while that machine hasn't said", async () => {
+    const { statusOf } = await import("./facts");
+    const task = await remoteChatTask();
+    expect((await statusOf(task)).status).toBe("running");
+  });
+});

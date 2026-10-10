@@ -385,10 +385,10 @@ describe("chat tasks, where they differ from terminal ones", () => {
     expect((await taskView(row(t.id))).state).toBe("working");
   });
 
-  it("stay on this machine", () => {
+  it("can't move yet, and say so", () => {
     const chat = task("chat", { said: "x", state: "idle" });
     const term = task("terminal", { said: "x", state: "idle" });
-    expect(moveRefusal(row(chat.id))).toMatch(/Chat tasks run on this machine/);
+    expect(moveRefusal(row(chat.id))).toMatch(/Chat tasks can't move yet/);
     expect(moveRefusal(row(term.id))).toBeNull();
   });
 

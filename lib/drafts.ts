@@ -21,6 +21,8 @@ export interface Draft {
   baseBranch: string | null;
   // A task: works alone and opens a pull request when done.
   openPr: boolean;
+  // A task that runs in a terminal rather than a chat (the default).
+  terminal?: boolean;
   createdAt: number;
 }
 

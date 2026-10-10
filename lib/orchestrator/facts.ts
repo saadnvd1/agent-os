@@ -122,6 +122,12 @@ export async function statusOf(s: Session): Promise<{
     (s.setup_status === "running" || s.setup_status === "held")
   )
     return { status: "running", activity: "setting up", needsInput: false };
+  // A linked machine's chat isn't in this machine's store: that machine's
+  // word, and unknown counts as busy.
+  if (s.view === "chat" && hostLink(s.host_id)) {
+    const status = peerStatus(s.host_id, s.id) ?? "running";
+    return { status, activity: null, needsInput: status === "waiting" };
+  }
   if (s.view === "chat") {
     const state = chatState(s.id);
     const status: FactStatus =

@@ -6,6 +6,7 @@ import {
   GitBranch,
   GitPullRequest,
   Monitor,
+  SquareTerminal,
 } from "lucide-react";
 import type { Host } from "@/lib/db";
 import type { Project } from "@/lib/db";
@@ -200,6 +201,15 @@ export function DraftChips({
           on={draft.openPr}
           title="Works alone in a worktree and opens a pull request"
           onChange={(openPr) => onChange({ openPr })}
+        />
+      )}
+      {project && draft.openPr && (
+        <ChipToggle
+          icon={SquareTerminal}
+          label="Terminal"
+          on={!!draft.terminal}
+          title="Runs in a terminal instead of a chat; only a terminal task can move"
+          onChange={(terminal) => onChange({ terminal })}
         />
       )}
       {!draft.openPr && agentBlocker(probes?.[draft.agentType]) && (

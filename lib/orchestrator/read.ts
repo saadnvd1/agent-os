@@ -87,12 +87,14 @@ export async function readSession(
 ): Promise<string> {
   const s = findWorkspaceSession(workspaceId, ref);
   const n = Math.max(1, Math.min(Math.floor(lines) || DEFAULT_LINES, 400));
+  const link = hostLink(s.host_id);
+  if (s.view === "chat" && link)
+    return `${s.name} (chat on ${link.hostName}): its messages are on that machine; open it to read them.`;
   if (s.view === "chat") {
     const text = chatText(lastItems(s.id, n * 2));
     const body = text ? untrusted(s.name, tail(text, n)) : "(no messages yet)";
     return `${s.name} (chat), last ${n} lines:\n${body}`;
   }
-  const link = hostLink(s.host_id);
   if (link) {
     const lines = await peerPane(link, s.id);
     const body = lines ? tail(lines.join("\n"), n) : "";
