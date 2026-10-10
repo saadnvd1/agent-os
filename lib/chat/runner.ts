@@ -203,8 +203,6 @@ function checkChattable(session: Session): void {
 // Why reattaching found no worker to keep: nothing listens on its socket,
 // or it was an idle one from an older build, retired.
 const RETIRED = "RETIRED";
-// Conversations whose worker retired itself, until a current one connects.
-const restarted = new Set<string>();
 const GONE = ["ECONNREFUSED", "ENOENT", RETIRED];
 
 // The session's worker, connected; started first if none is running,
@@ -228,12 +226,8 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
           registry.live.delete(sessionId);
           emit(sessionId, { type: "state", state: "idle" });
         }
-        // It retired itself for a current worker: what it queued goes now,
-        // and the agent hears it was restarted.
-        if (live?.retireSent) {
-          resumed.delete(sessionId);
-          restarted.add(sessionId);
-        }
+        // It retired itself for a current worker: what it queued goes now.
+        if (live?.retireSent) resumed.delete(sessionId);
         // Its agent died mid-turn, with messages still queued, or with a
         // turn cut off. (One this server let go, it stopped on purpose.)
         if (live && !detached)
@@ -278,12 +272,9 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
     // its next turn boundary, by itself if it can. Messages meanwhile wait
     // in the queue rather than keep it on old code (an orchestrator, fed
     // events mid-turn, might otherwise never be idle).
-    if (hello.caps?.includes("retire")) {
-      if (hello.build !== buildId()) {
-        client.command({ type: "retire" });
-        live.retireSent = true;
-      } else if (restarted.delete(sessionId))
-        client.command({ type: "restarted" });
+    if (hello.build !== buildId() && hello.caps?.includes("retire")) {
+      client.command({ type: "retire" });
+      live.retireSent = true;
     }
     registry.live.set(sessionId, live);
     // A setting changed while no worker was attached (a restart, a dropped

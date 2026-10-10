@@ -1103,6 +1103,21 @@ const migrations: Migration[] = [
         db.exec(`ALTER TABLE chat_queue ADD COLUMN sent_by TEXT`);
     },
   },
+  {
+    id: 52,
+    name: "sessions_chat_restarted",
+    up: (db) => {
+      // Set by a chat worker that retired cleanly after a deploy; the next
+      // worker tells the agent so with its first message, then clears it.
+      const columns = db.prepare(`PRAGMA table_info(sessions)`).all() as {
+        name: string;
+      }[];
+      if (!columns.some((c) => c.name === "chat_restarted"))
+        db.exec(
+          `ALTER TABLE sessions ADD COLUMN chat_restarted INTEGER NOT NULL DEFAULT 0`
+        );
+    },
+  },
 ];
 
 // `upTo`: stop after this id (tests that start from an older database).

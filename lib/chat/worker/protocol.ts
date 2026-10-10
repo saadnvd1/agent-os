@@ -54,9 +54,6 @@ export type WorkerCommand =
   // wait in the queue) and closes at its next turn boundary, so a current
   // worker resumes the conversation with today's tools.
   | { type: "retire" }
-  // It took over from a retired one: the agent hears so, with the next
-  // message it's sent.
-  | { type: "restarted" }
   | { type: "close" };
 
 // Worker -> server: what's live right now on connecting, then events.

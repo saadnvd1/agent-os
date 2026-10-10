@@ -105,7 +105,7 @@ describe("a worker from before a deploy", () => {
     expect(retires()).toBe(0);
   });
 
-  it("once it has retired itself, a current worker resumes, sends what waited and says it restarted, once", async () => {
+  it("once it has retired itself, a current worker resumes, sends what waited", async () => {
     const id = chat();
     // No worker running at the restart: the reattach starts one to send the
     // queue, which arms the once-a-minute resume, and that one is old.
@@ -123,20 +123,9 @@ describe("a worker from before a deploy", () => {
       expect(workers.connects[1]?.commands).toContainEqual({ type: "drain" })
     );
     expect(workers.connects[1].spawn).toBe(true);
-    const types = workers.connects[1].commands.map((c) => c.type);
-    expect(types.indexOf("restarted")).toBeGreaterThan(-1);
-    expect(types.indexOf("restarted")).toBeLessThan(types.indexOf("drain"));
     expect(retires(1)).toBe(0);
     expect(listQueue(id).map((m) => m.id)).toEqual(["user-q1"]);
     await new Promise((r) => setTimeout(r, 50));
     expect(workers.connects).toHaveLength(2);
-    // Reconnecting to that current worker later says nothing more.
-    workers.handlers[1].onClose(true);
-    workers.running = [id];
-    await reattachChats();
-    expect(workers.connects).toHaveLength(3);
-    expect(workers.connects[2].commands.map((c) => c.type)).not.toContain(
-      "restarted"
-    );
   });
 });

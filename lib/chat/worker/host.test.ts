@@ -1274,12 +1274,25 @@ describe("ChatHost retiring after a deploy", () => {
     next.close();
   });
 
-  it("taking over from a retired worker, tells the agent once, ahead of its next message", async () => {
-    const { RESTARTED_NOTE } = await import("./host");
+  it("after a clean retire, the next worker tells the agent once, ahead of its next message", async () => {
+    const { RESTARTED_NOTE, ChatHost } = await import("./host");
     const { id, host, conversation } = await startHost("orchestrator");
-    await host.handle({ type: "restarted" });
-    await host.handle({ type: "send", id: "user-1", text: "an event" });
-    expect(conversation.send).toHaveBeenLastCalledWith(
+    await host.handle({ type: "send", id: "user-0", text: "work" });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    const row = () =>
+      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+    // Kept in the database, so a server restart in between doesn't lose it,
+    // nor a next worker that goes before sending anything.
+    current = fakeConversation();
+    new ChatHost(row(), () => {}).close();
+    current = fakeConversation();
+    const next = new ChatHost(row(), () => {});
+    await next.handle({ type: "send", id: "user-1", text: "an event" });
+    expect(current.send).toHaveBeenLastCalledWith(
       `${RESTARTED_NOTE}\n\nan event`,
       undefined
     );
@@ -1287,10 +1300,31 @@ describe("ChatHost retiring after a deploy", () => {
     expect(listItems(id).find((i) => i.id === "user-1")).toMatchObject({
       text: "an event",
     });
-    conversation.events.push({ type: "state", state: "idle" });
+    current.events.push({ type: "state", state: "idle" });
     await tick();
-    await host.handle({ type: "send", id: "user-2", text: "another" });
-    expect(conversation.send).toHaveBeenLastCalledWith("another", undefined);
+    await next.handle({ type: "send", id: "user-2", text: "another" });
+    expect(current.send).toHaveBeenLastCalledWith("another", undefined);
+    next.close();
+    current = fakeConversation();
+    const later = new ChatHost(row(), () => {});
+    await later.handle({ type: "send", id: "user-3", text: "later" });
+    expect(current.send).toHaveBeenLastCalledWith("later", undefined);
+    later.close();
+  });
+
+  it("a worker that goes any other way (a crash, a stop) leaves no note", async () => {
+    const { ChatHost } = await import("./host");
+    const { id, host } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-0", text: "work" });
+    await host.handle({ type: "retire" });
     host.close();
+    current = fakeConversation();
+    const next = new ChatHost(
+      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      () => {}
+    );
+    await next.handle({ type: "send", id: "user-1", text: "hello" });
+    expect(current.send).toHaveBeenLastCalledWith("hello", undefined);
+    next.close();
   });
 });

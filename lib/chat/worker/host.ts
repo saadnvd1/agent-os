@@ -49,8 +49,8 @@ export const RETIRE_SUGGESTION_WAIT_MS = 2 * 60 * 1000;
 // the agent never turned into one).
 export const RETIRE_REST_WAIT_MS = 30 * 1000;
 
-// What the agent reads, ahead of its next message, in a worker that took
-// over from a retired one. Not shown in the chat.
+// What the agent reads, ahead of its next message, in the worker after one
+// that retired cleanly (sessions.chat_restarted). Not shown in the chat.
 export const RESTARTED_NOTE =
   "(AgentOS was updated and restarted you between turns; your tools are current.)";
 
@@ -173,6 +173,7 @@ export class ChatHost {
       permissionMode: extras.permissionMode,
     });
     this.suggestion = session.chat_suggestion ?? null;
+    this.restartedNote = !!session.chat_restarted;
     // Sends that already made it in, from before a reconnect.
     for (const item of itemsOfKind(session.id, "user")) this.sent.add(item.id);
     // Nothing runs yet in a worker just started: a tool call still saved as
@@ -348,7 +349,12 @@ export class ChatHost {
     if (now) this.nowPending++;
     this.stopping = null;
     const text = this.restartedNote ? `${RESTARTED_NOTE}\n\n${m.text}` : m.text;
-    this.restartedNote = false;
+    if (this.restartedNote) {
+      this.restartedNote = false;
+      db.prepare(`UPDATE sessions SET chat_restarted = 0 WHERE id = ?`).run(
+        this.session.id
+      );
+    }
     const checkpoint = now
       ? this.conversation.send(text, m.images, { now })
       : this.conversation.send(text, m.images);
@@ -539,9 +545,6 @@ export class ChatHost {
           });
         }
         return;
-      case "restarted":
-        this.restartedNote = true;
-        return;
       case "retire":
         this.retiring = true;
         return this.retireIfDone();
@@ -572,6 +575,10 @@ export class ChatHost {
       }, RETIRE_SUGGESTION_WAIT_MS);
       return;
     }
+    // Retired cleanly (a crash sets nothing): the next worker says so.
+    db.prepare(`UPDATE sessions SET chat_restarted = 1 WHERE id = ?`).run(
+      this.session.id
+    );
     this.close();
   }
 
