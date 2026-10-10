@@ -242,6 +242,17 @@ describe("message schedules: who can aim them where", () => {
     expect(() => updateSchedule(schedule.id, { cron: "*/5 * * * *" })).toThrow(
       /every 10 minutes/
     );
+    // Saad's own orchestrator schedules keep no such limit.
+    const saved = createSchedule({
+      workspaceId: ws.id,
+      name: "Often",
+      cron: "*/5 * * * *",
+      prompt: "p",
+      kind: "orchestrator",
+    });
+    expect(updateSchedule(saved.id, { cron: "*/2 * * * *" }).cron).toBe(
+      "*/2 * * * *"
+    );
     await runSlot(schedule, at("2026-10-07T13:30:00Z"), "schedule", realDeps);
     expect(workers.sends.at(-1)).toMatchObject({ sessionId: first });
     expect(workers.sends.at(-1)!.text).toContain(
