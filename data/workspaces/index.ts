@@ -51,6 +51,8 @@ export function useUpdateWorkspace() {
       id: string;
       name?: string;
       collapsed?: boolean;
+      // Running tasks at once; null for no limit.
+      maxRunningTasks?: number | null;
     }) =>
       json(
         await fetch(`/api/workspaces/${id}`, {
@@ -59,10 +61,20 @@ export function useUpdateWorkspace() {
           body: JSON.stringify(updates),
         })
       ),
-    onMutate: async ({ id, ...updates }) => {
+    onMutate: async ({ id, maxRunningTasks, ...updates }) => {
       await queryClient.cancelQueries({ queryKey: workspaceKeys.list() });
       queryClient.setQueryData<Workspace[]>(workspaceKeys.list(), (prev) =>
-        prev?.map((w) => (w.id === id ? { ...w, ...updates } : w))
+        prev?.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                ...updates,
+                ...(maxRunningTasks !== undefined && {
+                  max_running_tasks: maxRunningTasks,
+                }),
+              }
+            : w
+        )
       );
     },
     onSettled: () =>

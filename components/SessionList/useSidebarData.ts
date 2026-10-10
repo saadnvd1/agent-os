@@ -13,7 +13,8 @@ import { machineGroups, onMachineOnly } from "@/lib/sidebar/machines";
 import { useSessionsQuery } from "@/data/sessions";
 import { useLinkedHostNames } from "@/data/hosts";
 import { useProjectsQuery } from "@/data/projects";
-import { useTasksQuery } from "@/data/tasks";
+import { useQueuedTasksQuery, useTasksQuery } from "@/data/tasks";
+import { queuedRows } from "@/lib/sidebar/queued";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useOrchestratorsQuery } from "@/data/orchestrators";
 import { sidebarUi } from "@/stores/sidebarUi";
@@ -34,6 +35,7 @@ export function useSidebarData(
   const { workspaces, workspace } = useSelectedWorkspace();
   const { data: tasks = NONE } = useTasksQuery();
   const { data: orchestrators = NONE } = useOrchestratorsQuery();
+  const { data: queue = NONE } = useQueuedTasksQuery();
   // Keyed by the ids, so an asks push doesn't re-sort the shelves.
   const currentKey = orchestrators
     .flatMap((o) => (o.sessionId ? [o.sessionId] : []))
@@ -132,6 +134,19 @@ export function useSidebarData(
     [runningKey]
   );
 
+  // Tasks waiting to start, in their line's order.
+  const queued = useMemo(
+    () =>
+      queuedRows({
+        queue,
+        sessionIds: new Set(sessions.map((s) => s.id)),
+        workspaceId: workspace?.id ?? null,
+        projectId: project?.id ?? null,
+        query: ui.query,
+      }),
+    [queue, sessions, workspace, project, ui.query]
+  );
+
   const taskCardUrl = useCallback(
     (id: string) => tasks.find((t) => t.id === id)?.cardUrl,
     [tasks]
@@ -145,6 +160,7 @@ export function useSidebarData(
   return {
     ui,
     shelves,
+    queued,
     machines,
     sessions,
     projects,

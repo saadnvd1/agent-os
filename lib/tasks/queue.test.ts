@@ -107,7 +107,12 @@ describe("the task queue", () => {
       prompt: "follow-up",
       after: "add-auth",
     })!;
-    expect(queued.after).toBe("add-auth");
+    // The sidebar links the wait to its task and files it by workspace.
+    expect(queued).toMatchObject({
+      after: "add-auth",
+      afterId: t.task,
+      workspaceId: t.workspace.id,
+    });
     await tick();
     expect(started).toEqual([]);
     finish(t.task, "dropped");

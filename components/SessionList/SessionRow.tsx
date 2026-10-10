@@ -2,10 +2,7 @@
 
 import { memo, useState } from "react";
 import { useSnapshot } from "valtio";
-import { CheckSquare, GitFork, MoreHorizontal, Square } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import * as DM from "@/components/ui/dropdown-menu";
-import * as CM from "@/components/ui/context-menu";
+import { CheckSquare, GitFork, Square } from "lucide-react";
 import { compactTimeAgo, fromSqliteTime } from "@/lib/session-meta";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { useMinuteTick } from "@/hooks/useMinuteTick";
@@ -13,6 +10,7 @@ import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import { cn } from "@/lib/utils";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
+import { RowShell, type RowMenuKind } from "./RowShell";
 import { RowBadge, RowDot, RowRename } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
@@ -50,38 +48,47 @@ export const SessionRow = memo(function SessionRow({
     ctx.onSelect(session.id);
   };
 
-  const content = (
-    <div
-      role="button"
-      tabIndex={0}
-      title={session.name}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          ctx.onSelect(session.id);
+  const menu = (kind: RowMenuKind) => (
+    <SessionRowMenu
+      session={session}
+      kind={kind}
+      onRename={() => setRenaming(true)}
+    />
+  );
+
+  return (
+    <div className={cn(nested && "pl-5")}>
+      <RowShell
+        title={session.name}
+        highlight={selected ? "selected" : active ? "active" : null}
+        onClick={onClick}
+        onActivate={() => ctx.onSelect(session.id)}
+        leading={
+          selecting ? (
+            selected ? (
+              <CheckSquare className="text-primary h-4 w-4 shrink-0" />
+            ) : (
+              <Square className="text-muted-foreground h-4 w-4 shrink-0" />
+            )
+          ) : (
+            <RowDot row={row} />
+          )
         }
-      }}
-      className={cn(
-        "group relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition-colors",
-        selected
-          ? "bg-primary/15"
-          : active
-            ? "bg-primary/10"
-            : "hover:bg-foreground/[0.04]"
-      )}
-    >
-      {selecting ? (
-        selected ? (
-          <CheckSquare className="text-primary h-4 w-4 shrink-0" />
-        ) : (
-          <Square className="text-muted-foreground h-4 w-4 shrink-0" />
-        )
-      ) : (
-        <RowDot row={row} />
-      )}
-      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+        aside={
+          session.parent_session_id && (
+            <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />
+          )
+        }
+        trailing={
+          <>
+            <RowBadge row={row} />
+            {!row.need && <TimeAgo at={session.updated_at} />}
+          </>
+        }
+        menu={menu}
+        menuLabel="Session actions"
+        menuButton={!selecting}
+      >
         {renaming ? (
           <RowRename
             initial={session.name}
@@ -102,54 +109,7 @@ export const SessionRow = memo(function SessionRow({
           </span>
         )}
         <RowSubtitle session={session} detail={row.status?.detail} />
-      </span>
-      {session.parent_session_id && (
-        <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />
-      )}
-      <span className="flex shrink-0 items-center gap-2 md:group-hover:invisible md:group-has-[:focus-visible]:invisible md:group-has-[[data-state=open]]:invisible">
-        <RowBadge row={row} />
-        {!row.need && <TimeAgo at={session.updated_at} />}
-      </span>
-      {!selecting && (
-        <DM.DropdownMenu>
-          <DM.DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Session actions"
-              className="-mr-2.5 h-11 w-11 shrink-0 md:absolute md:top-1/2 md:right-1.5 md:mr-0 md:h-7 md:w-7 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 md:data-[state=open]:opacity-100 [@media(hover:none)]:md:static [@media(hover:none)]:md:-mr-2.5 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11 [@media(hover:none)]:md:translate-y-0 [@media(hover:none)]:md:opacity-100"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DM.DropdownMenuTrigger>
-          <DM.DropdownMenuContent
-            align="end"
-            className="w-56"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <SessionRowMenu
-              session={session}
-              kind="dropdown"
-              onRename={() => setRenaming(true)}
-            />
-          </DM.DropdownMenuContent>
-        </DM.DropdownMenu>
-      )}
-    </div>
-  );
-
-  return (
-    <div className={cn(nested && "pl-5")}>
-      <CM.ContextMenu>
-        <CM.ContextMenuTrigger asChild>{content}</CM.ContextMenuTrigger>
-        <CM.ContextMenuContent className="w-56">
-          <SessionRowMenu
-            session={session}
-            kind="context"
-            onRename={() => setRenaming(true)}
-          />
-        </CM.ContextMenuContent>
-      </CM.ContextMenu>
+      </RowShell>
       {session.role === "orchestrator" && row.need && (
         <OrchestratorAsks workspaceId={session.workspace_id} />
       )}

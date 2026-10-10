@@ -7,6 +7,7 @@ import {
   ChevronDown,
   CircleCheck,
   Clock,
+  Gauge,
   LayoutGrid,
   Pencil,
   Plus,
@@ -14,7 +15,8 @@ import {
   Workflow,
 } from "lucide-react";
 import * as DM from "@/components/ui/dropdown-menu";
-import { WorkspaceNameDialog } from "@/components/Workspaces";
+import { TaskLimitDialog, WorkspaceNameDialog } from "@/components/Workspaces";
+import { taskLimitLabel } from "@/components/Workspaces/task-limit";
 import { WorkspaceLumifyHubItem } from "@/components/LumifyHub/MenuItems";
 import type { Workspace } from "@/lib/db";
 import {
@@ -41,7 +43,7 @@ export function WorkspaceSwitcher({
   const create = useCreateWorkspace();
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
-  const [dialog, setDialog] = useState<"new" | "rename" | null>(null);
+  const [dialog, setDialog] = useState<"new" | "rename" | "limit" | null>(null);
   const name = current?.name ?? "All workspaces";
 
   return (
@@ -107,6 +109,13 @@ export function WorkspaceSwitcher({
                 <Pencil className={icon} />
                 Rename
               </DM.DropdownMenuItem>
+              <DM.DropdownMenuItem onClick={() => setDialog("limit")}>
+                <Gauge className={icon} />
+                <span className="flex-1">Task limit</span>
+                <span className="text-muted-foreground text-xs">
+                  {taskLimitLabel(current.max_running_tasks)}
+                </span>
+              </DM.DropdownMenuItem>
               <DM.DropdownMenuItem
                 onClick={() => cleanupUiActions.open(current.id)}
               >
@@ -137,8 +146,15 @@ export function WorkspaceSwitcher({
           )}
         </DM.DropdownMenuContent>
       </DM.DropdownMenu>
+      {current && (
+        <TaskLimitDialog
+          workspace={current}
+          open={dialog === "limit"}
+          onClose={() => setDialog(null)}
+        />
+      )}
       <WorkspaceNameDialog
-        open={dialog !== null}
+        open={dialog === "new" || dialog === "rename"}
         title={dialog === "rename" ? "Rename workspace" : "New workspace"}
         initialName={dialog === "rename" ? current?.name : ""}
         submitLabel={dialog === "rename" ? "Rename" : "Create"}

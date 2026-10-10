@@ -64,6 +64,7 @@ export function SidebarBody({
     shelves.pinned.length +
     shelves.needsYou.length +
     shelves.working.length +
+    data.queued.length +
     shelves.done.length +
     data.machines.length;
   const noProjects = data.projects.every((p) => p.is_uncategorized);
@@ -100,6 +101,7 @@ export function SidebarBody({
         ))}
       <SessionShelves
         shelves={shelves}
+        queued={data.queued}
         doneCollapsed={ui.doneCollapsed}
         donePages={ui.donePages}
       />
