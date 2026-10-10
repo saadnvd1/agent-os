@@ -47,6 +47,9 @@ export async function checkScope(input: {
   const { workspaceId, task, sha } = input;
   const base = { workspaceId, sessionId: task.id, sha, kind: "scope" as const };
   try {
+    // Claimed before the first await: written in the same tick as the
+    // review's verdict, so no review call sees neither.
+    putCheck({ ...base, status: "running", detail: null });
     const card = await cardText(task);
     const list = input.files.map((f) => `${f.status} ${f.path}`).join("\n");
     const of = input.parts.length;
