@@ -195,6 +195,11 @@ function checkChattable(session: Session): void {
   }
 }
 
+// Why reattaching found no worker to keep: nothing listens on its socket,
+// or it was an idle one from an older build, retired.
+const RETIRED = "RETIRED";
+const GONE = ["ECONNREFUSED", "ENOENT", RETIRED];
+
 // The session's worker, connected; started first if none is running,
 // unless only an existing one will do (reattaching, stopping).
 async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
@@ -239,7 +244,11 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       client.detach();
       await waitForExit(sessionId);
       removeStaleSocket(sessionId);
-      if (!spawn) throw new Error(`retired a stale worker for ${sessionId}`);
+      if (!spawn)
+        throw Object.assign(
+          new Error(`retired a stale worker for ${sessionId}`),
+          { code: RETIRED }
+        );
       ({ client, hello } = await connectWorker(sessionId, true, handlers));
       activity = restoreActivity(sessionId, hello.state);
     }
@@ -742,7 +751,7 @@ export async function reattachChats(): Promise<void> {
         .then(() => live.add(id))
         .catch((error) => {
           const code = (error as NodeJS.ErrnoException).code;
-          if (code !== "ECONNREFUSED" && code !== "ENOENT") live.add(id);
+          if (!GONE.includes(code ?? "")) live.add(id);
           console.error(`Not reattaching chat ${id}:`, error.message ?? error);
         })
     )
