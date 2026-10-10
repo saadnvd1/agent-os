@@ -8,10 +8,10 @@ import type { ProjectWithDevServers } from "@/lib/projects";
 import {
   currentProjectId,
   newDraft as makeDraft,
+  pickableProjects,
   reusableDraft,
   type Draft,
 } from "@/lib/drafts";
-import { projectsInWorkspace } from "@/lib/sidebar/shelves";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import {
   draftHasText,
@@ -65,9 +65,7 @@ export function useDraftRequests(options: Options) {
 
     const choose = (openPr?: boolean) => {
       const { projects, workspaceId } = latest.current;
-      const real = projectsInWorkspace(projects, workspaceId).filter(
-        (p) => !p.is_uncategorized
-      );
+      const real = pickableProjects(projects, workspaceId);
       if (real.length <= 1) return open(real[0]?.id ?? null, openPr);
       paletteActions.pick(
         openPr ? "New task in…" : "New session in…",

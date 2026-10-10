@@ -114,6 +114,16 @@ export function currentProjectId(
   return latest?.project_id ?? here.find((p) => real(p.id))?.id ?? null;
 }
 
+// The projects "In project…" offers: the selected workspace's real ones, or
+// every real one when none is selected.
+export function pickableProjects<
+  P extends { is_uncategorized: boolean; workspace_id?: string | null },
+>(projects: P[], workspaceId: string | null): P[] {
+  return projectsInWorkspace(projects, workspaceId).filter(
+    (p) => !p.is_uncategorized
+  );
+}
+
 export type DraftKey = "current" | "choose" | "scratch";
 
 // ⌥N: the current project. ⌥⇧N: pick one. ⌃⌥N: a scratch chat. Browsers keep

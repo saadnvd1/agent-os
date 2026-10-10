@@ -3,6 +3,7 @@ import {
   currentProjectId,
   draftKeyFor,
   newDraft,
+  pickableProjects,
   reusableDraft,
   type Draft,
   type DraftProject,
@@ -121,6 +122,19 @@ describe("currentProjectId", () => {
     expect(currentProjectId(null, [], [projects[0]])).toBeNull();
   });
 
+  it("takes the sidebar's project filter with no workspace selected", () => {
+    const all = { workspaceId: null };
+    expect(
+      currentProjectId(null, recent, projects, { ...all, projectId: "a" })
+    ).toBe("a");
+    expect(
+      currentProjectId(null, recent, projects, {
+        ...all,
+        projectId: "uncategorized",
+      })
+    ).toBe("b");
+  });
+
   describe("with a workspace selected in the sidebar", () => {
     const projects = [
       { id: "uncategorized", is_uncategorized: true, workspace_id: null },
@@ -150,6 +164,15 @@ describe("currentProjectId", () => {
       ).toBe("b");
     });
 
+    it("keeps a viewed project in it over the sidebar's filter", () => {
+      expect(
+        currentProjectId({ projectId: "c" }, recent, projects, {
+          ...w2,
+          projectId: "b",
+        })
+      ).toBe("c");
+    });
+
     it("ignores a filter left over from another workspace", () => {
       expect(
         currentProjectId(null, recent, projects, { ...w2, projectId: "a" })
@@ -168,6 +191,28 @@ describe("currentProjectId", () => {
         })
       ).toBeNull();
     });
+  });
+});
+
+describe("pickableProjects", () => {
+  const projects = [
+    { id: "uncategorized", is_uncategorized: true, workspace_id: null },
+    { id: "a", is_uncategorized: false, workspace_id: "w1" },
+    { id: "b", is_uncategorized: false, workspace_id: "w2" },
+  ];
+  const ids = (ws: string | null) =>
+    pickableProjects(projects, ws).map((p) => p.id);
+
+  it("offers only the selected workspace's projects", () => {
+    expect(ids("w2")).toEqual(["b"]);
+  });
+
+  it("offers every real project with none selected", () => {
+    expect(ids(null)).toEqual(["a", "b"]);
+  });
+
+  it("offers none for a workspace with no projects", () => {
+    expect(ids("w3")).toEqual([]);
   });
 });
 
