@@ -156,6 +156,23 @@ describe("SettingsDialog", () => {
     expect(document.activeElement).toBe(navButton("Devices"));
   });
 
+  it("leaves focus on the list on a wide screen, where both show", async () => {
+    window.matchMedia = ((q: string) => ({
+      matches: q === "(min-width: 768px)",
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await mount();
+      await act(async () => settingsUiActions.open());
+      await act(async () => {
+        navButton("Schedules").focus();
+        navButton("Schedules").click();
+      });
+      expect(document.activeElement).toBe(navButton("Schedules"));
+    } finally {
+      delete (window as { matchMedia?: unknown }).matchMedia;
+    }
+  });
+
   it("opens from the address on load, keeping the session", async () => {
     await mount("/?session=s1&settings=workspaces");
     expect(settingsUi).toMatchObject({ open: true, section: "workspaces" });

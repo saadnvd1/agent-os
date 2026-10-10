@@ -111,6 +111,8 @@ export const SettingsDialog = memo(function SettingsDialog({
     const was = lastSection.current;
     lastSection.current = section;
     if (!open || was === section) return;
+    // A wide screen keeps both on show: focus stays where it was.
+    if (window.matchMedia?.("(min-width: 768px)").matches) return;
     if (section) bodyRef.current?.focus({ preventScroll: true });
     else
       navRef.current
