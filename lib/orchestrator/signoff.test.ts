@@ -1181,6 +1181,23 @@ describe("gate failures count per task and gate", () => {
     expect(merges).toEqual([]);
   });
 
+  it("counts a card task's out-of-scope check the same way", async () => {
+    const t = setup({ card: true });
+    await reviewNow(t.w, "pass", false);
+    await reviewNow(t.w, "pass", false).catch(() => {});
+    expect(failureOf(t.task, "scope")).toMatchObject({
+      count: 1,
+      last_sha: t.sha,
+    });
+    t.push("src/b.ts", "export const b = 2;\n");
+    await reviewNow(t.w, "pass", false);
+    expect(failureOf(t.task, "scope")?.count).toBe(2);
+    expect(failureOf(t.task, "scope")?.escalated_at).toBeTruthy();
+    expect(events(t.w).at(-1)).toMatch(
+      /passed; the scope gate failed twice, so it's with Saad now/
+    );
+  });
+
   it("still counts other gates each time they fail", async () => {
     const t = setup();
     await reviewNow(t.w);
@@ -1243,6 +1260,47 @@ describe("a merge decision from Saad", () => {
       /Give both task and sha/
     );
     expect(openAsks(t.w)).toEqual([]);
+  });
+
+  it("carries AgentOS's own facts under the orchestrator's words", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await expect(ask(t, { task: "add-a", sha: pr!.head! })).resolves.toMatch(
+      /sign_off merges it once/
+    );
+    const [raised] = openAsks(t.w);
+    expect(raised.detail).toMatch(
+      /AgentOS: PR #7 at \w{7} changes 2 files; touches \.github\/workflows\/ci\.yml \(CI config\); review: none yet/
+    );
+  });
+
+  it("never rewrites an ask the gates raised", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const gate = oneGateAsk(t.w, t.task, pr!.head!);
+    await expect(
+      ask(t, { task: "add-a", sha: pr!.head!, title: "Merge a typo fix?" })
+    ).resolves.toMatch(/Already on Saad's list as ask \d+; left as it is/);
+    expect(getAsk(t.w, gate.id)).toMatchObject({
+      title: gate.title,
+      detail: gate.detail,
+    });
+  });
+
+  it("still needs a code review of the commit Saad approved", async () => {
+    const t = setup();
+    await reviewNow(t.w, "block");
+    await ask(t, { task: "add-a", sha: t.sha });
+    const [raised] = openAsks(t.w);
+    answerAsk(t.w, raised.id, { action: "approve" });
+    pr = { ...pr!, codeReview: null };
+    await expect(t.signOff()).rejects.toThrow(
+      /Saad approved this commit, but the PR body has no Code review section/
+    );
+    expect(merges).toEqual([]);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
   });
 
   it("keeps a plain decision ask off the task, so its approval merges nothing", async () => {

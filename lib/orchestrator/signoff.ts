@@ -122,14 +122,23 @@ export async function gateVerdict(
     text,
   });
   const { pr, sha, repo } = work;
-  // Saad approved merging this exact commit (an escalated gate, or an ask
-  // the orchestrator raised about it): it merges once, whatever the gates.
-  const approval = latestApproval(workspaceId, workSubject(work.id));
-  if (approval?.sha === sha)
-    return { ok: true, sha, pr: pr.number, approval: approval.id };
   const held = holdingEscalations(work.id);
   if (held.length)
     return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number);
+  // Saad approved merging this exact commit on an ask the orchestrator
+  // raised (ask_saad with its task and sha): it merges once whatever the
+  // gates say, but still only with a code review of that commit and its
+  // stack parent merged, which no answer stands in for.
+  const approval = latestApproval(workspaceId, workSubject(work.id));
+  if (approval?.sha === sha) {
+    const i = await inputs();
+    const refusal = i.codeReviewRefusal ?? i.stackRefusal;
+    if (refusal)
+      return no(
+        `${work.name} (PR #${pr.number} at ${short(sha)}): Saad approved this commit, but ${refusal}`
+      );
+    return { ok: true, sha, pr: pr.number, approval: approval.id };
+  }
 
   const base = await fetchRefs(repo, work.refs);
   const files = await changedFiles(repo, base, sha);

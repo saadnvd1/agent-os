@@ -118,7 +118,10 @@ function refusal(
   return null;
 }
 
-function openBySubject(workspaceId: string, subject: string): AskRow | null {
+export function openBySubject(
+  workspaceId: string,
+  subject: string
+): AskRow | null {
   return (
     (db
       .prepare(

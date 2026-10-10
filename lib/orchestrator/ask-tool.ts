@@ -1,5 +1,15 @@
+import type { Session } from "../db";
 import { prFor } from "../tasks/session";
-import { AskRefused, raiseAsk, workSubject, type AskKind } from "./asks";
+import {
+  AskRefused,
+  openBySubject,
+  raiseAsk,
+  workSubject,
+  type AskKind,
+} from "./asks";
+import { getCheck } from "./checks";
+import { changedFiles, sensitiveFiles } from "./diff";
+import { fetchRefs, repoOf } from "./repo";
 import { titleSubject } from "./ask-text";
 import { gateTarget } from "./external-pr";
 import { addNote } from "./notes";
@@ -12,7 +22,7 @@ async function mergeTarget(
   workspaceId: string,
   ref: string,
   sha: string
-): Promise<{ subject: string; sha: string; url: string }> {
+): Promise<{ subject: string; sha: string; url: string; facts: string }> {
   const t = await gateTarget(workspaceId, ref);
   const pr = t.kind === "external" ? t.pr.pr : await prFor(t.task, true);
   const name = t.kind === "external" ? t.pr.name : t.task.name;
@@ -22,11 +32,41 @@ async function mergeTarget(
     throw new Error(
       `PR #${pr.number}'s head is ${pr.head.slice(0, 7)}, not ${sha.slice(0, 7)}: ask about the commit that would merge`
     );
+  const id = t.kind === "external" ? t.pr.id : t.task.id;
+  const repo = t.kind === "external" ? t.pr.repo : repoOf(t.task);
+  const refs =
+    t.kind === "external"
+      ? { base_branch: t.pr.base, branch_name: t.pr.branch }
+      : t.task;
   return {
-    subject: workSubject(t.kind === "external" ? t.pr.id : t.task.id),
+    subject: workSubject(id),
     sha: pr.head,
     url: pr.url,
+    facts: await mergeFacts(repo, refs, id, pr.number, pr.head),
   };
+}
+
+// What AgentOS itself knows about the commit, under the orchestrator's
+// words, so Saad never approves a merge on its description alone.
+async function mergeFacts(
+  repo: string,
+  refs: Pick<Session, "base_branch" | "branch_name">,
+  id: string,
+  number: number,
+  sha: string
+): Promise<string> {
+  const files = await changedFiles(repo, await fetchRefs(repo, refs), sha);
+  const sensitive = sensitiveFiles(files);
+  const review = getCheck(id, sha, "review")?.status ?? "none yet";
+  return [
+    `AgentOS: PR #${number} at ${sha.slice(0, 7)} changes ${files.length} file${files.length === 1 ? "" : "s"}`,
+    sensitive.length
+      ? `touches ${sensitive.map((f) => `${f.path} (${f.why})`).join(", ")}`
+      : "",
+    `review: ${review}`,
+  ]
+    .filter(Boolean)
+    .join("; ");
 }
 
 // `ask_saad`: parks the item and returns at once. The same title again,
@@ -49,6 +89,11 @@ export async function askSaad(
     );
   const merge =
     a.task && a.sha ? await mergeTarget(workspaceId, a.task, a.sha) : null;
+  // An ask the gates raised keeps their reason: the orchestrator's words
+  // never replace it.
+  const open = merge && openBySubject(workspaceId, merge.subject);
+  if (open)
+    return `Already on Saad's list as ask ${open.id}; left as it is. Carry on with everything else.`;
   let raised;
   try {
     raised = raiseAsk({
@@ -56,7 +101,7 @@ export async function askSaad(
       subject: merge?.subject ?? titleSubject(a.title),
       kind: merge ? "gate" : a.kind,
       title: a.title,
-      detail: a.detail,
+      detail: merge ? `${a.detail}\n\n${merge.facts}` : a.detail,
       link: a.link ?? merge?.url ?? null,
       sha: merge?.sha ?? null,
     });

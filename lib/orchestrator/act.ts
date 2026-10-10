@@ -52,6 +52,8 @@ export async function send(
         `${to.name} isn't a running task; a scope change is recorded only on one`
       );
     amendBrief(workspaceId, to.id, message);
+    // In the decision log, so Saad sees every change of scope it records.
+    addNote(workspaceId, `Scope change for ${to.name}: ${message}`);
     amended = ` Recorded as scope change ${amendmentsOf(to.id).length} on its brief: reviews from now on judge against it (call review with fresh to judge the current head again).`;
   }
   const { delivery } = await sendMessage({
