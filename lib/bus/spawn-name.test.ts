@@ -12,6 +12,19 @@ vi.mock("@/lib/tasks", () => ({
     return { id: "t1", name: o.name ?? "generated" };
   },
 }));
+// Queued only when it waits on another task; the queue has its own tests.
+const asked: unknown[] = [];
+vi.mock("@/lib/tasks/queue", () => ({
+  startOrQueue: async (
+    o: { after?: string; name?: string },
+    start: () => Promise<unknown>
+  ) => {
+    asked.push(o);
+    return o.after
+      ? { queued: { id: "q1", name: o.name ?? "x", position: 1 } }
+      : { started: await start() };
+  },
+}));
 vi.mock("@/lib/agents/spawn", () => ({
   findProject: () => ({ id: "p1" }),
   spawnSession: async (o: { name?: string; prompt: string }) => {
@@ -23,7 +36,10 @@ vi.mock("@/lib/agents/spawn", () => ({
 const { POST } = await import("@/app/api/bus/spawn/route");
 
 // Runs bin/aos against a server that records what it was sent.
-async function aos(args: string[]): Promise<{ body: unknown; out: string }> {
+async function aos(
+  args: string[],
+  reply: unknown = { session: { name: "x" } }
+): Promise<{ body: unknown; out: string }> {
   let body: unknown;
   const server = http.createServer((req, res) => {
     let data = "";
@@ -31,7 +47,7 @@ async function aos(args: string[]): Promise<{ body: unknown; out: string }> {
     req.on("end", () => {
       body = JSON.parse(data);
       res.writeHead(201, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ session: { name: "x" } }));
+      res.end(JSON.stringify(reply));
     });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -78,7 +94,44 @@ describe("naming a spawned session or task", () => {
     });
   });
 
+  it("aos task --after queues it and says what it waits on", async () => {
+    const { body, out } = await aos(
+      ["task", "agent-os", "--after", "add-auth", "follow", "up"],
+      { queued: { name: "follow up", position: 2, after: "add-auth" } }
+    );
+    expect(body).toEqual({
+      project: "agent-os",
+      prompt: "follow up",
+      mode: "task",
+      after: "add-auth",
+    });
+    expect(out).toMatch(/queued task "follow up" \(after add-auth\)/);
+  });
+
+  it("the route queues a task with after, and refuses after for a session", async () => {
+    const post = (body: object) =>
+      POST(
+        new NextRequest("http://127.0.0.1:3011/api/bus/spawn", {
+          method: "POST",
+          body: JSON.stringify({ project: "agent-os", prompt: "p", ...body }),
+        })
+      );
+    asked.length = 0;
+    created.length = 0;
+    const queued = await post({ mode: "task", after: "any" });
+    expect(queued.status).toBe(202);
+    expect((await queued.json()).queued).toMatchObject({ id: "q1" });
+    expect(asked).toEqual([
+      expect.objectContaining({ projectId: "p1", prompt: "p", after: "any" }),
+    ]);
+    expect(created).toEqual([]);
+    expect((await post({ mode: "task" })).status).toBe(201);
+    expect(created).toEqual([{ kind: "task", name: undefined, prompt: "p" }]);
+    expect((await post({ mode: "session", after: "any" })).status).toBe(400);
+  });
+
   it("the route passes the name through to tasks and sessions", async () => {
+    created.length = 0;
     for (const mode of ["task", "session"]) {
       const res = await POST(
         new NextRequest("http://127.0.0.1:3011/api/bus/spawn", {

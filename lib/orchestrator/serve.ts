@@ -71,6 +71,7 @@ export async function runTool(
         base: a.base,
         name: a.name,
         view: a.view,
+        after: a.after,
       });
     }
     case "start_session": {

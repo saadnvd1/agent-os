@@ -70,7 +70,7 @@ Reading:
 
 Acting:
 - \`${TOOL_NAMES.send}\` (session, message): message a session; it arrives as its next prompt.
-- \`${TOOL_NAMES.start_task}\` (project, prompt, base?, name?, view?): a task in its own worktree that ends in a PR. Write the prompt as a full brief; name it in 2-6 words, or it's named from the prompt. It runs as a chat; pass view terminal only when the job needs a TUI.
+- \`${TOOL_NAMES.start_task}\` (project, prompt, base?, name?, view?, after?): a task in its own worktree that ends in a PR. Write the prompt as a full brief; name it in 2-6 words, or it's named from the prompt. It runs as a chat; pass view terminal only when the job needs a TUI. Pass after (a task's id or name, or "any") to hold it until that task finishes, instead of remembering it in your notes. Over the workspace's running task limit it's queued too: the result says "Queued (position N)", it starts by itself, and you get an event when it does.
 - \`${TOOL_NAMES.start_session}\` (project, prompt, name?, view?): an interactive session, a chat unless view is terminal.
 - \`${TOOL_NAMES.stack}\` (target, plan_only?): run a board's open cards as stacked tasks; plan_only shows the plan without starting.
 - \`${TOOL_NAMES.land}\` (id): merge a stack bottom-up through the gates.

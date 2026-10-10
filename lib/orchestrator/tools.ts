@@ -55,7 +55,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   cards: "Cards on this workspace's linked LumifyHub boards, by list.",
   send: "Message a session in this workspace over the bus. It arrives as its next prompt.",
   start_task:
-    "Start a task: an agent in its own worktree that ends in a PR. It runs as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.",
+    "Start a task: an agent in its own worktree that ends in a PR. It runs as a chat unless view is terminal (only for a job that needs a TUI). With after (a task's id or name, or \"any\"), or over the workspace's running task limit, it's queued and starts by itself; the result says Queued (position N). Refused while a brake holds.",
   start_session:
     "Start an interactive agent session in a project with a prompt. It runs as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.",
   stack:

@@ -5,8 +5,19 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
-  const { name, collapsed, sortOrder } = await request.json();
-  const workspace = updateWorkspace(id, { name, collapsed, sortOrder });
+  const { name, collapsed, sortOrder, maxRunningTasks } = await request.json();
+  let workspace;
+  try {
+    workspace = updateWorkspace(id, {
+      name,
+      collapsed,
+      sortOrder,
+      maxRunningTasks,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
   if (!workspace) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }

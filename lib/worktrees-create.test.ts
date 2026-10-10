@@ -135,6 +135,56 @@ describe("createWorktree when an add fails partway", () => {
   });
 });
 
+describe("discardLeftoverStart", () => {
+  it("clears what a cut-off start made, so the retry can make it again", async () => {
+    const { createWorktree, discardLeftoverStart } = await load();
+    const first = await createWorktree({
+      projectPath: repo,
+      featureName: "cut-ab12",
+    });
+    await expect(
+      createWorktree({ projectPath: repo, featureName: "cut-ab12" })
+    ).rejects.toThrow(/already exists/);
+    expect(await discardLeftoverStart(repo, "cut-ab12")).toBe(true);
+    expect(fs.existsSync(first.worktreePath)).toBe(false);
+    expect(branches()).not.toContain(first.branchName);
+    const again = await createWorktree({
+      projectPath: repo,
+      featureName: "cut-ab12",
+    });
+    expect(again.worktreePath).toBe(first.worktreePath);
+  });
+
+  it("refuses a branch or worktree with work on it", async () => {
+    const { createWorktree, discardLeftoverStart } = await load();
+    const made = await createWorktree({
+      projectPath: repo,
+      featureName: "work-ef56",
+    });
+    fs.writeFileSync(path.join(made.worktreePath, "notes.txt"), "draft");
+    await expect(discardLeftoverStart(repo, "work-ef56")).rejects.toThrow(
+      /has work on it/
+    );
+    execFileSync("git", ["add", "."], { cwd: made.worktreePath });
+    execFileSync("git", ["commit", "-qm", "work"], { cwd: made.worktreePath });
+    await expect(discardLeftoverStart(repo, "work-ef56")).rejects.toThrow(
+      /has work on it/
+    );
+    expect(fs.existsSync(made.worktreePath)).toBe(true);
+    expect(branches()).toContain(made.branchName);
+  });
+
+  it("clears a claimed folder git never got to, and leaves nothing else", async () => {
+    const { discardLeftoverStart, worktreePathFor } = await load();
+    expect(await discardLeftoverStart(repo, "nothing-here")).toBe(false);
+    const claimed = worktreePathFor(repo, "half-cd34");
+    fs.mkdirSync(claimed, { recursive: true });
+    expect(await discardLeftoverStart(repo, "half-cd34")).toBe(true);
+    expect(fs.existsSync(claimed)).toBe(false);
+    expect(branches()).toEqual(["main"]);
+  });
+});
+
 describe("worktreeAddTimeout", () => {
   it("is two minutes, scaled by load past the cores, capped at ten", async () => {
     const { worktreeAddTimeout } = await load();

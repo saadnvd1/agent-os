@@ -18,6 +18,7 @@ import { reconcileStarting, startItem } from "./start";
 import { restackDescendants } from "./restack";
 import { parentBranchOf } from "./guard";
 import { outputOf } from "./git";
+import { recoverQueue, tickQueue } from "../tasks/queue";
 
 const EVERY = 60_000;
 // A start that fails is tried again on the next looks, up to this many times.
@@ -194,7 +195,11 @@ export async function tickStack(
   }
 }
 
+// The same loop starts queued tasks (lib/tasks/queue.ts).
 export async function tickAll(): Promise<void> {
+  await tickQueue().catch((error: unknown) =>
+    console.error("[queue] tick:", error)
+  );
   for (const stack of q.all(db).filter((s) => s.status === "running")) {
     await tickStack(stack).catch((error: unknown) =>
       console.error(`[stacks] tick ${stack.id}:`, error)
@@ -214,6 +219,7 @@ export function tickSoon(stackId?: string): void {
 // carries on from the first PR not yet merged.
 export function recoverAfterRestart(): void {
   reconcileStarting();
+  recoverQueue();
   db.prepare(
     `UPDATE stacks SET status = 'paused',
        error = 'Landing was interrupted by a restart. Press Land to carry on.'

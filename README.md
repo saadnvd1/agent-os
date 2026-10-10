@@ -237,6 +237,18 @@ exited. **Sign off & merge** squash-merges the PR (refused while CI is failing
 or pending), then removes the session, worktree and branches. **Drop** closes
 the PR and removes everything. Agents never merge their own work.
 
+**Queued tasks.** A workspace can limit how many tasks run at once (none by
+default; `PATCH /api/workspaces/<id>` with `{"maxRunningTasks": 3}`, or
+`null` for no limit). A task started over the limit is queued, with no
+worktree or agent yet, and starts by itself in line order when one finishes
+(merged, dropped or done). `aos task --after <task|any>` (and the
+orchestrator's `start_task` with `after`) holds a task until a named task
+finishes, or until any task running now does. Pause stops automatic starts,
+and the orchestrator's brakes still apply when its queued tasks start. The
+line is kept in the database across restarts (`GET /api/tasks/queue`; start
+now, move up or down, or remove with `/api/tasks/queue/<id>`). Why it works
+this way: [docs/decisions/2026-10-10-queued-tasks.md](docs/decisions/2026-10-10-queued-tasks.md).
+
 ## New sessions
 
 ⌘N (the **+** on a phone) opens a draft: a composer in the current project, or
@@ -484,7 +496,8 @@ aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
-                                  # (both take --name "..." before the prompt)
+                                  # (both take --name "..." before the prompt;
+                                  # task takes --after <task|any> to queue it)
 aos move <session> <machine>      # carry a task on there ("here" brings it back)
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is

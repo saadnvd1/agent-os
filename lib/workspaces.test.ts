@@ -28,6 +28,22 @@ describe("workspaces", () => {
     expect(b.collapsed).toBe(false);
   });
 
+  it("takes a running task limit from 1, or none, and refuses anything else", () => {
+    const w = createWorkspace("Limits");
+    expect(w.max_running_tasks).toBeNull();
+    expect(
+      updateWorkspace(w.id, { maxRunningTasks: 3 })?.max_running_tasks
+    ).toBe(3);
+    for (const bad of [0, -1, 1.5, "3"])
+      expect(() =>
+        updateWorkspace(w.id, { maxRunningTasks: bad as number })
+      ).toThrow(/whole number from 1/);
+    expect(updateWorkspace(w.id, { name: "Kept" })?.max_running_tasks).toBe(3);
+    expect(
+      updateWorkspace(w.id, { maxRunningTasks: null })?.max_running_tasks
+    ).toBeNull();
+  });
+
   it("rejects an empty name", () => {
     expect(() => createWorkspace("   ")).toThrow();
   });

@@ -233,6 +233,156 @@ describe("acting inside the workspace", () => {
     ]);
   });
 
+  it("queues a task with after, and tells the orchestrator when it starts", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    started.length = 0;
+    const text = await runTool(w, "start_task", {
+      project: mine.app.name,
+      prompt: "follow up on auth",
+      name: "auth follow-up",
+      after: "add-auth",
+    });
+    expect(text).toMatch(
+      /^Queued \(position 1\) task "auth follow-up" \(id \w{8}\) in app-\w+, after add-auth\./
+    );
+    expect(started).not.toContain("follow up on auth");
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      mine.task
+    );
+    const { tickQueue } = await import("@/lib/tasks/queue");
+    await tickQueue();
+    expect(started).toContain("follow up on auth");
+    const events = db
+      .prepare(
+        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE 'once:queued-start:%'`
+      )
+      .all(w) as { line: string }[];
+    expect(events.map((e) => e.line)).toEqual([
+      expect.stringMatching(
+        /^Queued task "follow up on auth" \(id \w{8}\) started/
+      ),
+    ]);
+    await expect(
+      runTool(w, "start_task", {
+        project: mine.app.name,
+        prompt: "x",
+        after: "nothing-like-this",
+      })
+    ).rejects.toThrow(/No running or queued task matches/);
+  });
+
+  it("never waits on another workspace's task, by id or prefix", async () => {
+    const { mine, other } = twoWorkspaces();
+    for (const after of [other.task, other.task.slice(0, 8)])
+      await expect(
+        runTool(mine.workspace.id, "start_task", {
+          project: mine.app.name,
+          prompt: "x",
+          after,
+        })
+      ).rejects.toThrow(/No running or queued task matches/);
+  });
+
+  it("a queued task the brakes refuse waits in line; start now is braked too", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    started.length = 0;
+    await runTool(w, "start_task", {
+      project: mine.app.name,
+      prompt: "braked follow-up",
+      after: mine.task,
+    });
+    const { tickQueue, listQueue, startQueuedNow } =
+      await import("@/lib/tasks/queue");
+    const id = listQueue().find((q) => q.prompt === "braked follow-up")!.id;
+    process.env.AGENTOS_ORCH_BRAKES = "1";
+    db.prepare(
+      `UPDATE workspaces SET orch_max_starts_per_hour = 0 WHERE id = ?`
+    ).run(w);
+    try {
+      db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+        mine.task
+      );
+      await tickQueue();
+      expect(started).not.toContain("braked follow-up");
+      const row = db
+        .prepare(`SELECT status, note, attempts FROM task_queue WHERE id = ?`)
+        .get(id) as { status: string; note: string; attempts: number };
+      expect(row).toMatchObject({ status: "queued", attempts: 0 });
+      expect(row.note).toMatch(/^Waiting: .*starts in the last hour/);
+      await expect(startQueuedNow(id)).rejects.toThrow(/^Brake: /);
+      expect(started).not.toContain("braked follow-up");
+    } finally {
+      delete process.env.AGENTOS_ORCH_BRAKES;
+      db.prepare(
+        `UPDATE workspaces SET orch_max_starts_per_hour = 6 WHERE id = ?`
+      ).run(w);
+    }
+  });
+
+  it("a queued task whose project left the workspace isn't started", async () => {
+    const { mine, other } = twoWorkspaces();
+    const w = mine.workspace.id;
+    started.length = 0;
+    await runTool(w, "start_task", {
+      project: mine.app.name,
+      prompt: "moved away",
+      after: mine.task,
+    });
+    const { listQueue, tickQueue } = await import("@/lib/tasks/queue");
+    const id = listQueue().find((q) => q.prompt === "moved away")!.id;
+    db.prepare(`UPDATE projects SET workspace_id = ? WHERE id = ?`).run(
+      other.workspace.id,
+      mine.app.id
+    );
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      mine.task
+    );
+    await tickQueue();
+    expect(started).not.toContain("moved away");
+    expect(
+      db.prepare(`SELECT status, error FROM task_queue WHERE id = ?`).get(id)
+    ).toEqual({
+      status: "failed",
+      error:
+        "Not started: its project left the orchestrator's workspace or this machine",
+    });
+  });
+
+  it("a start cut off by a restart after its task exists is announced and counted", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    await runTool(w, "start_task", {
+      project: mine.app.name,
+      prompt: "cut off",
+      after: mine.task,
+    });
+    const { listQueue, recoverQueue } = await import("@/lib/tasks/queue");
+    const id = listQueue().find((q) => q.prompt === "cut off")!.id;
+    db.prepare(`UPDATE task_queue SET status = 'starting' WHERE id = ?`).run(
+      id
+    );
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status)
+       VALUES (?, 'cut off', 'claude-cut', '/tmp', ?, 'running')`
+    ).run(id, mine.app.id);
+    recoverQueue();
+    const event = db
+      .prepare(
+        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key = ?`
+      )
+      .get(w, `once:queued-start:${id}`) as { line: string } | undefined;
+    expect(event?.line).toMatch(/^Queued task "cut off"/);
+    expect(
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM orchestrator_starts WHERE target = ?`
+        )
+        .get(id)
+    ).toEqual({ n: 1 });
+  });
+
   it("starts in a terminal when asked to, for a job that needs a TUI", async () => {
     const { mine } = twoWorkspaces();
     const w = mine.workspace.id;
