@@ -46,6 +46,30 @@ const CAPTIONS: Record<string, Caption> = {
       "Agents coordinate over a shared message bus, and you can join in.",
     layout: "fit",
   },
+  orchestrator: {
+    headline: "An orchestrator for each workspace",
+    subline:
+      "It runs tasks, reviews and merges what passes the gates, and asks you about the rest.",
+    layout: "window",
+  },
+  "task-chat": {
+    headline: "Tasks end in a pull request",
+    subline:
+      "Each task works in its own worktree, opens as a chat, and reviews its own PR.",
+    layout: "window",
+  },
+  draft: {
+    headline: "Nothing starts until you send",
+    subline:
+      "A new session or task is a draft: pick the project, machine, agent and branch first.",
+    layout: "window",
+  },
+  machines: {
+    headline: "Other machines, same list",
+    subline:
+      "A linked machine's sessions sit next to yours, and open, rename and finish the same way.",
+    layout: "window",
+  },
   terminal: {
     headline: "The terminal is always there",
     subline:

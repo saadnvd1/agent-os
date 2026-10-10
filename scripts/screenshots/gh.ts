@@ -13,6 +13,14 @@ export const PRS: Record<string, unknown[]> = {
       statusCheckRollup: [{ conclusion: "SUCCESS" }, { conclusion: "SUCCESS" }],
     },
   ],
+  "feat/order-export-csv": [
+    {
+      number: 231,
+      url: "https://github.com/example/storefront/pull/231",
+      state: "OPEN",
+      statusCheckRollup: [{ conclusion: "SUCCESS" }, { conclusion: "SUCCESS" }],
+    },
+  ],
   "feat/order-shipped-push": [
     {
       number: 88,

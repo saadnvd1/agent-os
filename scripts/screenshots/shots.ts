@@ -102,7 +102,11 @@ export const SHOTS: Shot[] = [
         setup: async (page) => {
           await openSession(page, CHAT);
           await closeGitDrawer(page);
-          await page.getByPlaceholder(`Message ${CHAT}`).click();
+          // The composer is an editor, not a textarea: no placeholder attribute.
+          await page
+            .locator(".chat-composer [contenteditable]")
+            .first()
+            .click();
           await page.keyboard.type("/");
           await page.waitForTimeout(1200);
         },
@@ -141,6 +145,71 @@ export const SHOTS: Shot[] = [
           await openSession(page, "webhook-retries");
           await closeGitDrawer(page);
           await page.waitForTimeout(2000);
+        },
+      },
+    ],
+  },
+  {
+    name: "orchestrator",
+    parts: [
+      {
+        id: "desktop",
+        device: "desktop",
+        setup: async (page) => {
+          await page.getByText("Work", { exact: true }).first().click();
+          await page.getByText("2 asks for you").waitFor();
+          await page.waitForTimeout(1500);
+        },
+      },
+    ],
+  },
+  {
+    name: "task-chat",
+    parts: [
+      {
+        id: "desktop",
+        device: "desktop",
+        setup: async (page) => {
+          await openSession(page, "order-export");
+          await page.getByText(/^Opened/).waitFor({ timeout: 30000 });
+          await closeGitDrawer(page);
+          await page.getByText(/3 steps · 1 edit/).click();
+          await page.waitForTimeout(800);
+        },
+      },
+    ],
+  },
+  {
+    name: "draft",
+    parts: [
+      {
+        id: "desktop",
+        device: "desktop",
+        setup: async (page) => {
+          await page.getByRole("button", { name: /New session/ }).click();
+          await page.waitForTimeout(1500);
+          await page.keyboard.type(
+            "Profile the nightly eval job and cut its memory use in half."
+          );
+          await page.getByText("Open a PR when done").click();
+          await page.waitForTimeout(800);
+        },
+      },
+    ],
+  },
+  {
+    name: "machines",
+    parts: [
+      {
+        id: "desktop",
+        device: "desktop",
+        setup: async (page) => {
+          await openSession(page, CHAT);
+          await closeGitDrawer(page);
+          await page
+            .getByText("terraform-plan", { exact: true })
+            .scrollIntoViewIfNeeded();
+          await page.waitForTimeout(800);
         },
       },
     ],

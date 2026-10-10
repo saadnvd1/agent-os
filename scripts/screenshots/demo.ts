@@ -14,6 +14,7 @@ import path from "path";
 import { spawn } from "child_process";
 import { PORT, REPO, demoEnv } from "./config";
 import { seed, teardownTmux } from "./seed";
+import { startPeer } from "./peer";
 
 const PASSED_THROUGH = [
   "AGENTOS_BIND",
@@ -28,6 +29,7 @@ async function main() {
   }
   console.log("Seeding demo data");
   await seed();
+  const peer = startPeer();
   const passed = Object.fromEntries(
     PASSED_THROUGH.flatMap((k) =>
       process.env[k] ? [[k, process.env[k]!]] : []
@@ -49,6 +51,7 @@ async function main() {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   server.on("exit", (code) => {
+    peer.close();
     teardownTmux();
     process.exit(code ?? 0);
   });
