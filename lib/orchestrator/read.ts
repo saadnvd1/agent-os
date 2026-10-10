@@ -10,6 +10,11 @@ import { hostLink } from "../hosts/remote-api";
 import { peerPane } from "../hosts/peer-sessions";
 import { workspaceSessions } from "./facts";
 import { untrusted } from "./untrusted";
+import {
+  findExternalSession,
+  knownExternalSession,
+  type ExternalSession,
+} from "./external-sessions";
 
 // About 4k tokens: what one read may return.
 export const READ_CHAR_CAP = 16000;
@@ -32,13 +37,32 @@ export function findWorkspaceSession(
       previousNames: old.get(s.id) ?? [],
     }))
   );
-  if (!r.ok)
+  if (!r.ok) {
+    const external =
+      r.reason === "none" && knownExternalSession(workspaceId, ref);
     throw new Error(
-      r.reason === "none"
-        ? `No session "${ref}" in this workspace. Call sessions to see them.`
-        : r.error
+      external
+        ? `${external.ref} is an external session (not started by AgentOS) on ${external.host}: read it with read; it can't be sent to, stopped or finished from here.`
+        : r.reason === "none"
+          ? `No session "${ref}" in this workspace. Call sessions to see them.`
+          : r.error
     );
+  }
   return all.find((s) => s.id === r.id)!;
+}
+
+// A session AgentOS didn't start: its screen, read the way the sidebar
+// reads one (a linked machine's only through its AgentOS, which doesn't
+// serve a screen it didn't start).
+async function readExternal(s: ExternalSession, n: number): Promise<string> {
+  const head = `${s.ref} (external terminal on ${s.host}, not started by AgentOS)`;
+  if (hostLink(s.hostId))
+    return `${head}: its screen is on that machine and isn't served to this one.`;
+  const pane = await statusDetector
+    .capturePane(s.name, s.hostId)
+    .catch(() => "");
+  const body = tail(pane, n);
+  return `${head}, last ${n} lines:\n${body ? untrusted(s.ref, body) : "(couldn't be read)"}`;
 }
 
 // The end of a text, keeping whole lines, within the cap.
@@ -85,8 +109,17 @@ export async function readSession(
   ref: string,
   lines = DEFAULT_LINES
 ): Promise<string> {
-  const s = findWorkspaceSession(workspaceId, ref);
   const n = Math.max(1, Math.min(Math.floor(lines) || DEFAULT_LINES, 400));
+  let s: Session & { project_name: string };
+  try {
+    s = findWorkspaceSession(workspaceId, ref);
+  } catch (error) {
+    const external = await findExternalSession(workspaceId, ref).catch(
+      () => null
+    );
+    if (!external) throw error;
+    return readExternal(external, n);
+  }
   const link = hostLink(s.host_id);
   if (s.view === "chat" && link)
     return `${s.name} (chat on ${link.hostName}): its messages are on that machine; open it to read them.`;

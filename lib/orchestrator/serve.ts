@@ -12,14 +12,15 @@ import {
 import { readCards } from "./cards";
 import { describeSessions } from "./describe";
 import { sessionFacts } from "./facts";
+import { describeExternal, externalSessions } from "./external-sessions";
 import { resolveStaleAsks } from "./ask-settle";
 import { addNote } from "./notes";
 import { askSaad } from "./ask-tool";
 import { listOrchestratorPeers, messageOrchestrator } from "./cross";
 import { PAUSED_REFUSAL } from "./pause";
 import { readSession } from "./read";
-import { review } from "./review";
-import { land, signOff } from "./signoff";
+import { reviewTarget, signOffTarget } from "./external-gates";
+import { land } from "./signoff";
 import { parseArgs as p, type ToolName } from "./tool-schemas";
 
 export { isToolName, TOOLS, type ToolName } from "./tool-schemas";
@@ -53,9 +54,17 @@ export async function runTool(
   switch (tool) {
     case "sessions": {
       p(tool, raw);
-      const facts = await sessionFacts(w);
+      const [facts, external] = await Promise.all([
+        sessionFacts(w),
+        externalSessions(w).catch(() => []),
+      ]);
       resolveStaleAsks(w);
-      return describeSessions(workspace.name, facts);
+      return [
+        describeSessions(workspace.name, facts),
+        describeExternal(external),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
     }
     case "read": {
       const a = p(tool, raw);
@@ -111,10 +120,10 @@ export async function runTool(
       return "Noted.";
     case "review": {
       const a = p(tool, raw);
-      return review(w, a.target, { fresh: a.fresh });
+      return reviewTarget(w, a.target, { fresh: a.fresh });
     }
     case "sign_off":
-      return signOff(w, p(tool, raw).task);
+      return signOffTarget(w, p(tool, raw).task);
     case "ask_saad":
       return askSaad(w, p(tool, raw));
   }

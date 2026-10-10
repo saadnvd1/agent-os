@@ -50,8 +50,8 @@ const answer = async (call: Promise<string>): Promise<CallToolResult> => {
 
 const DESCRIPTIONS: Record<ToolName, string> = {
   sessions:
-    "Every session in this workspace: project, view, status, what it's doing, task/PR/CI state and stack position.",
-  read: "The end of one session's terminal or chat, as plain text (capped at about 4k tokens).",
+    "Every session in this workspace: project, view, status, what it's doing, task/PR/CI state and stack position; then external sessions (tmux sessions AgentOS didn't start, here or on other machines, working in a workspace repository), read-only, with their branch's PR.",
+  read: "The end of one session's terminal or chat, or an external session's screen, as plain text (capped at about 4k tokens).",
   cards: "Cards on this workspace's linked LumifyHub boards, by list.",
   send: "Message a session in this workspace over the bus. It arrives as its next prompt.",
   orchestrators:
@@ -71,9 +71,9 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
   note: "Add a line to this workspace's decision log; it shows in your chat.",
   review:
-    "Start an independent read-only review of a task's PR at its exact head commit, or read the stored verdict for that commit.",
+    "Start an independent read-only review of a PR at its exact head commit, or read the stored verdict for that commit. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL, even one no task owns.",
   sign_off:
-    "Squash-merge a task's PR through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Refuses with the failing gate.",
+    "Squash-merge a PR through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL (an external PR). Refuses with the failing gate, or a repository outside the workspace.",
   ask_saad:
     "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event.",
 };

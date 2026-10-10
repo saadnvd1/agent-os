@@ -764,6 +764,16 @@ it may do on its own, and the lines that always come back to you as asks.
   has merged, and the PR body's Code review section names that commit. `land` judges each item again at its own head right before
   merging it. The second failure of a gate or a repo with no CI goes to you
   as an ask, and the orchestrator stops merging that task.
+- **External PRs and sessions:** `review` and `sign_off` also take an open
+  PR no AgentOS task owns (dispatch, a person, dependabot) by `#N`,
+  `owner/repo#N` or URL, as long as its repository is one of the workspace's
+  projects; anything else is refused. The same gates apply, except that a
+  draft waits and a "blocked", "do not merge" or "wip" label holds it (there's
+  no session to read), and a body with no Code review section is covered by
+  the orchestrator's own review of that head. `sessions` also lists tmux
+  sessions AgentOS didn't start that work in a workspace repository or a
+  worktree of it, here or on another machine, with their branch's PR; `read`
+  reads them, and nothing else acts on them.
 - **Merge approvals** (Settings → Devices, off by default): on, any change to
   CI config, build and hook scripts, agent config, deploy scripts, secrets
   handling or AgentOS's security code, and any diff over 80k characters, goes

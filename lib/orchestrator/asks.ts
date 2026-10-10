@@ -76,6 +76,10 @@ export type AskAnswer =
 const cap = (s: string, n: number) => s.trim().slice(0, n);
 
 export const taskSubject = (taskId: string) => `task:${taskId}`;
+// A PR no AgentOS task owns (external-pr.ts) is its own subject.
+export const EXTERNAL_PREFIX = "pr:";
+export const workSubject = (id: string) =>
+  id.startsWith(EXTERNAL_PREFIX) ? id : taskSubject(id);
 export const BRAKE_SUBJECT = "brake";
 export const passkeySubject = (id: string) => `passkey:${id}`;
 export const revokedPasskeySubject = (id: string) => `passkey-revoked:${id}`;

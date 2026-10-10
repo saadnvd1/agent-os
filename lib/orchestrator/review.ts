@@ -13,6 +13,7 @@
 import { db, type Session } from "../db";
 import type { TaskPR } from "../tasks/state";
 import { prFor } from "../tasks/session";
+import { EXTERNAL_PREFIX } from "./asks";
 import { queueEvent } from "./events";
 import { clearStaleRunning, getCheck, putCheck, type CheckRow } from "./checks";
 import { runClaude, type ClaudeRunner } from "./claude-cli";
@@ -57,16 +58,30 @@ export function describeReview(row: CheckRow): string {
   return row.detail ? `${head}\n${untrusted("reviewer", row.detail)}` : head;
 }
 
+// What a review reads: a task's PR, or a PR no task owns (external-pr.ts).
+// `id` keys its stored checks; `task` is set only for a task, whose card
+// gets a scope check.
+export interface ReviewTarget {
+  id: string;
+  name: string;
+  // How its events and answers name it: "task add-a", "PR o/r#5".
+  label: string;
+  goal: string;
+  repo: string;
+  refs: Pick<Session, "base_branch" | "branch_name">;
+  pr: Pick<TaskPR, "number" | "url">;
+  task?: Session;
+}
+
 async function reviewJob(
   workspaceId: string,
-  task: Session,
-  pr: TaskPR,
+  target: ReviewTarget,
   sha: string,
   claude: ClaudeRunner
 ): Promise<CheckRow> {
-  const row = { workspaceId, sessionId: task.id, sha };
-  const repo = repoOf(task);
-  const base = await fetchRefs(repo, task);
+  const { pr, repo, task } = target;
+  const row = { workspaceId, sessionId: target.id, sha };
+  const base = await fetchRefs(repo, target.refs);
   const diff = await fullDiff(repo, base, sha);
   const parts =
     diff.length <= DIFF_CAP
@@ -81,7 +96,7 @@ async function reviewJob(
     // the task whatever that switch says.
     escalate(
       workspaceId,
-      task,
+      target,
       approvals ? "size" : "unreviewable",
       why,
       pr.url,
@@ -113,7 +128,7 @@ async function reviewJob(
         cwd: dir,
         system: REVIEW_SYSTEM,
         prompt: reviewPrompt({
-          task,
+          goal: target.goal,
           sha,
           base,
           files,
@@ -132,7 +147,7 @@ async function reviewJob(
       kind: "review",
       ...combineVerdicts(verdicts),
     });
-    if (task.lh_card_id)
+    if (task?.lh_card_id)
       await checkScope({ workspaceId, task, sha, files, parts, claude });
     return done;
   } finally {
@@ -140,34 +155,29 @@ async function reviewJob(
   }
 }
 
-export async function review(
+export interface ReviewOpts {
+  fresh?: boolean;
+  wait?: boolean;
+  claude?: ClaudeRunner;
+  // At startup: a "running" review is one the restart cut off.
+  resume?: boolean;
+}
+
+// The stored verdict of this exact commit, or a review of it started in
+// the background.
+export async function reviewAt(
   workspaceId: string,
-  ref: string,
-  opts: {
-    fresh?: boolean;
-    wait?: boolean;
-    claude?: ClaudeRunner;
-    // At startup: a "running" review is one the restart cut off.
-    resume?: boolean;
-  } = {}
+  target: ReviewTarget,
+  sha: string,
+  opts: ReviewOpts = {}
 ): Promise<string> {
-  clearStaleRunning();
-  const task = workspaceTask(workspaceId, ref);
-  if (task.task_status !== "running")
-    throw new Error(`${task.name} is already ${task.task_status}`);
-  const held = holdingEscalations(task.id);
-  if (held.length)
-    return `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
-  const pr = await prFor(task, true);
-  if (!pr?.head) throw new Error(`${task.name} has no PR to review yet`);
-  const sha = pr.head;
-  const known = getCheck(task.id, sha, "review");
+  const known = getCheck(target.id, sha, "review");
   // A card task's scope check runs after its review; one never stored (a
   // restart between the two) means running the job again.
   const scopeMissing =
-    !!task.lh_card_id &&
+    !!target.task?.lh_card_id &&
     known?.status !== "running" &&
-    !getCheck(task.id, sha, "scope");
+    !getCheck(target.id, sha, "scope");
   if (
     known &&
     !(opts.resume && known.status === "running") &&
@@ -176,9 +186,14 @@ export async function review(
   )
     return describeReview(known);
 
-  const row = { workspaceId, sessionId: task.id, sha, kind: "review" as const };
+  const row = {
+    workspaceId,
+    sessionId: target.id,
+    sha,
+    kind: "review" as const,
+  };
   putCheck({ ...row, status: "running" });
-  const job = reviewJob(workspaceId, task, pr, sha, opts.claude ?? runClaude)
+  const job = reviewJob(workspaceId, target, sha, opts.claude ?? runClaude)
     .catch((e: unknown) =>
       putCheck({
         ...row,
@@ -195,14 +210,45 @@ export async function review(
             : "couldn't run";
       queueEvent(
         workspaceId,
-        `review:${task.id}:${sha}`,
-        task.id,
-        `task ${task.name}: review of ${short(sha)} ${said}`
+        `review:${target.id}:${sha}`,
+        target.id,
+        `${target.label}: review of ${short(sha)} ${said}`
       );
       return done;
     });
   if (opts.wait) return describeReview(await job);
-  return `Reviewing ${task.name} at ${short(sha)} (PR #${pr.number}) in a fresh read-only process. The verdict arrives as an event; call review again to read it.`;
+  return `Reviewing ${target.name} at ${short(sha)} (PR #${target.pr.number}) in a fresh read-only process. The verdict arrives as an event; call review again to read it.`;
+}
+
+export async function review(
+  workspaceId: string,
+  ref: string,
+  opts: ReviewOpts = {}
+): Promise<string> {
+  clearStaleRunning();
+  const task = workspaceTask(workspaceId, ref);
+  if (task.task_status !== "running")
+    throw new Error(`${task.name} is already ${task.task_status}`);
+  const held = holdingEscalations(task.id);
+  if (held.length)
+    return `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
+  const pr = await prFor(task, true);
+  if (!pr?.head) throw new Error(`${task.name} has no PR to review yet`);
+  return reviewAt(
+    workspaceId,
+    {
+      id: task.id,
+      name: task.name,
+      label: `task ${task.name}`,
+      goal: task.task_prompt ?? task.name,
+      repo: repoOf(task),
+      refs: task,
+      pr,
+      task,
+    },
+    pr.head,
+    opts
+  );
 }
 
 const INTERRUPTED = "Interrupted by a restart";
@@ -219,10 +265,15 @@ export async function resumeReviews(
   const cut = db
     .prepare(
       `SELECT DISTINCT c.workspace_id, c.session_id, s.name
-       FROM orchestrator_checks c JOIN sessions s ON s.id = c.session_id
-       WHERE c.status = 'running' AND c.kind IN ('review', 'scope')`
+       FROM orchestrator_checks c LEFT JOIN sessions s ON s.id = c.session_id
+       WHERE c.status = 'running' AND c.kind IN ('review', 'scope')
+         AND (s.id IS NOT NULL OR c.session_id LIKE '${EXTERNAL_PREFIX}%')`
     )
-    .all() as { workspace_id: string; session_id: string; name: string }[];
+    .all() as {
+    workspace_id: string;
+    session_id: string;
+    name: string | null;
+  }[];
   const resumed: string[] = [];
   for (const row of cut) {
     const shas = (
@@ -245,6 +296,10 @@ export async function resumeReviews(
     ).run(row.session_id);
     let why: string;
     try {
+      // A PR no task owns may have moved on or merged by now: it's
+      // reviewed again when the orchestrator asks.
+      if (row.session_id.startsWith(EXTERNAL_PREFIX))
+        throw new Error("a PR no task owns is reviewed again only when asked");
       why = await review(row.workspace_id, row.session_id, {
         claude,
         resume: true,
@@ -265,7 +320,7 @@ export async function resumeReviews(
         row.workspace_id,
         `review:${row.session_id}:${sha}`,
         row.session_id,
-        `task ${row.name}: review of ${short(sha)} was cut off by a restart and not run again: ${why}`
+        `${row.name ? `task ${row.name}` : `PR ${row.session_id.slice(EXTERNAL_PREFIX.length)}`}: review of ${short(sha)} was cut off by a restart and not run again: ${why}`
       );
     }
   }

@@ -2,7 +2,6 @@
 // and how that answer becomes a stored verdict.
 
 import { randomBytes } from "crypto";
-import type { Session } from "../db";
 import type { CheckStatus } from "./checks";
 import type { ChangedFile } from "./diff";
 
@@ -45,7 +44,9 @@ export function fence(name: string, text: string, tag = randomTag(name)) {
 const randomTag = (name: string) => `${name}-${randomBytes(6).toString("hex")}`;
 
 export function reviewPrompt(input: {
-  task: Session;
+  // What the change was written for: the task's prompt, or a PR's title
+  // and body.
+  goal: string;
   sha: string;
   base: string;
   files: ChangedFile[];
@@ -60,7 +61,7 @@ export function reviewPrompt(input: {
   return `Review the change from ${input.base} to ${input.sha}. You can read any file of the checkout in your working directory.
 ${skill}
 The task it was written for, as data:
-${fence("task", input.task.task_prompt ?? input.task.name)}
+${fence("task", input.goal)}
 
 Files changed:
 ${input.files.map((f) => `${f.status} ${f.path}`).join("\n")}

@@ -1,8 +1,7 @@
 // A task that's with Saad merges only on his approval of its exact head
 // commit, once. A new commit since he approved goes back to him.
 
-import type { Session } from "../db";
-import { AskRefused, raiseAsk, taskSubject } from "./asks";
+import { AskRefused, raiseAsk, workSubject } from "./asks";
 import { latestApproval } from "./ask-approvals";
 import type { FailureRow } from "./gates";
 import type { Verdict } from "./signoff";
@@ -11,13 +10,13 @@ const short = (sha: string) => sha.slice(0, 7);
 
 export function heldVerdict(
   workspaceId: string,
-  task: Session,
+  task: { id: string; name: string },
   held: FailureRow[],
   url: string,
   sha: string,
   pr: number
 ): Verdict {
-  const approval = latestApproval(workspaceId, taskSubject(task.id));
+  const approval = latestApproval(workspaceId, workSubject(task.id));
   if (approval?.sha === sha)
     return { ok: true, sha, pr, approval: approval.id };
   if (approval) {
@@ -25,7 +24,7 @@ export function heldVerdict(
     try {
       raiseAsk({
         workspaceId,
-        subject: taskSubject(task.id),
+        subject: workSubject(task.id),
         kind: "gate",
         title: `Merge ${task.name}?`,
         detail: why,
