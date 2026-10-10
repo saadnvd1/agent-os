@@ -19,7 +19,7 @@ async function json<T>(res: Response): Promise<T> {
 
 // A request that never got an answer (AgentOS restarting, offline) says so,
 // rather than the browser's bare "Failed to fetch".
-const post = async (url: string, body: object) => {
+export const post = async (url: string, body: object) => {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -52,6 +52,32 @@ export function useOrchestratorsQuery() {
 export function useOrchestratorOverview(workspaceId: string | null) {
   const { data } = useOrchestratorsQuery();
   return data?.find((o) => o.workspaceId === workspaceId) ?? null;
+}
+
+export function withoutAsk(
+  list: OrchestratorOverview[] | undefined,
+  workspaceId: string,
+  askId: number
+): OrchestratorOverview[] | undefined {
+  return list?.map((o) =>
+    o.workspaceId === workspaceId
+      ? { ...o, asks: o.asks.filter((a) => a.id !== askId) }
+      : o
+  );
+}
+
+// Only the card whose answer failed comes back, in its place: others
+// answered meanwhile stay answered.
+export function withAskBack(
+  list: OrchestratorOverview[] | undefined,
+  workspaceId: string,
+  ask: AskView
+): OrchestratorOverview[] | undefined {
+  return list?.map((o) =>
+    o.workspaceId === workspaceId && !o.asks.some((a) => a.id === ask.id)
+      ? { ...o, asks: [...o.asks, ask].sort((a, b) => a.id - b.id) }
+      : o
+  );
 }
 
 export type AskAction =
@@ -93,32 +119,17 @@ export function useAnswerAsk(workspaceId: string) {
         ?.asks.find((a) => a.id === askId);
       queryClient.setQueryData<OrchestratorOverview[]>(
         orchestratorKeys.all,
-        (prev) =>
-          prev?.map((o) =>
-            o.workspaceId === workspaceId
-              ? { ...o, asks: o.asks.filter((a) => a.id !== askId) }
-              : o
-          )
+        (prev) => withoutAsk(prev, workspaceId, askId)
       );
       return { removed };
     },
-    // Only this card comes back: others answered meanwhile stay answered.
     onError: (_error, _answer, context) => {
       const removed = context?.removed;
-      if (!removed) return;
-      queryClient.setQueryData<OrchestratorOverview[]>(
-        orchestratorKeys.all,
-        (prev) =>
-          prev?.map((o) =>
-            o.workspaceId === workspaceId &&
-            !o.asks.some((a) => a.id === removed.id)
-              ? {
-                  ...o,
-                  asks: [...o.asks, removed].sort((a, b) => a.id - b.id),
-                }
-              : o
-          )
-      );
+      if (removed)
+        queryClient.setQueryData<OrchestratorOverview[]>(
+          orchestratorKeys.all,
+          (prev) => withAskBack(prev, workspaceId, removed)
+        );
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: orchestratorKeys.all });

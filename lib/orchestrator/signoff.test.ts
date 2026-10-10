@@ -57,7 +57,8 @@ const { listNotes } = await import("./notes");
 const { listItems } = await import("@/lib/chat/store");
 const { claudeArgs } = await import("./claude-cli");
 const { seedSession } = await import("./testing");
-const { answerAsk, getAsk, openAsks } = await import("./asks");
+const { answerAsk, getAsk, openAsks, raiseAsk, BRAKE_SUBJECT } =
+  await import("./asks");
 const { setMergeApprovals } = await import("./merge-approvals");
 const { releaseInterruptedClaims, spendApproval } =
   await import("./ask-approvals");
@@ -580,13 +581,35 @@ describe("sign_off", () => {
     await expect(t.signOff()).rejects.toThrow(/is with Saad/);
     expect(openAsks(t.w)).toEqual([]);
 
-    releaseInterruptedClaims();
+    expect(releaseInterruptedClaims()).toBe(1);
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
     expect(merges).toEqual([
       ["pr", "merge", "7", "--squash", "--match-head-commit", next],
     ]);
     expect(getAsk(t.w, second.id)?.used_at).toBeTruthy();
     expect(getAsk(t.w, first.id)?.used_at).toBeNull();
+  });
+
+  it("keeps a used brake approval and a voided one spent across a restart", async () => {
+    const t = setup({ approvals: true });
+    const { second } = await approveTwice(t);
+    spendApproval(second.id);
+    db.prepare(
+      `UPDATE orchestrator_asks SET answer = 'approve (void)' WHERE id = ?`
+    ).run(second.id);
+    const { ask: brake } = raiseAsk({
+      workspaceId: t.w,
+      subject: BRAKE_SUBJECT,
+      kind: "brake",
+      title: "Start past the brakes?",
+      brakeKey: "spend",
+    });
+    answerAsk(t.w, brake.id, { action: "approve" });
+    expect(spendApproval(brake.id)).toBe(true);
+
+    expect(releaseInterruptedClaims()).toBe(0);
+    expect(getAsk(t.w, second.id)?.used_at).toBeTruthy();
+    expect(getAsk(t.w, brake.id)?.used_at).toBeTruthy();
   });
 
   it("keeps a claim on a merged task spent across a restart", async () => {
