@@ -9,6 +9,8 @@ const workers = vi.hoisted(() => ({
   // The build workers report; undefined for this server's own.
   build: undefined as string | undefined,
   state: "idle" as "idle" | "running",
+  // Its socket file is there, but nothing answers on it.
+  dead: false,
   started: [] as {
     sessionId: string;
     handlers: WorkerHandlers;
@@ -20,9 +22,10 @@ vi.mock("./worker/client", async (original) => ({
   runningWorkers: () => workers.running,
   connectWorker: async (
     sessionId: string,
-    _spawn: boolean,
+    spawn: boolean,
     handlers: WorkerHandlers
   ) => {
+    if (workers.dead && !spawn) throw new Error("connect ECONNREFUSED");
     const { buildId } = await import("../build");
     const { saveItem } = await import("./store");
     const started = {
@@ -196,6 +199,21 @@ describe("a cut-off turn that isn't resumed", () => {
   });
 });
 
+describe("a message taken just before the restart", () => {
+  it("is resumed though the agent wrote nothing yet", async () => {
+    const { id } = task();
+    db.prepare(
+      `DELETE FROM chat_items WHERE session_id = ? AND item_id = 'tool-1'`
+    ).run(id);
+    try {
+      await reattachChats();
+      expect(sends(id).map((c) => c.id)).toEqual(["user-resume-user-1"]);
+    } finally {
+      forget(id);
+    }
+  });
+});
+
 describe("a local command after a finished turn", () => {
   it("isn't taken for a cut-off turn", async () => {
     const { id } = task();
@@ -239,6 +257,22 @@ describe("a cut-off turn outside a task", () => {
       expect(sends(id)).toHaveLength(1);
       expect(events(w, id)).toEqual([]);
     } finally {
+      forget(id);
+    }
+  });
+});
+
+describe("a worker killed hard, its socket left behind", () => {
+  it("doesn't keep its cut-off turn from being resumed", async () => {
+    const { id } = task();
+    workers.running = [id];
+    workers.dead = true;
+    try {
+      await reattachChats();
+      expect(sends(id).map((c) => c.id)).toEqual(["user-resume-tool-1"]);
+    } finally {
+      workers.running = [];
+      workers.dead = false;
       forget(id);
     }
   });

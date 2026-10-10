@@ -335,6 +335,14 @@ describe("review", () => {
     expect(await resumeReviews(r.claude)).toEqual([]);
     expect(r.runs).toEqual([]);
     expect(getCheck(t.task, t.sha, "review")?.status).toBe("error");
+    const event = db
+      .prepare(
+        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE ?`
+      )
+      .get(t.w, `%review:${t.task}:${t.sha}`) as { line: string } | undefined;
+    expect(event?.line).toBe(
+      `task add-a: review of ${t.sha.slice(0, 7)} was cut off by a restart and not run again: add-a is already merged`
+    );
   });
 
   it("says so when a cut-off review's commit isn't the PR's head any more", async () => {

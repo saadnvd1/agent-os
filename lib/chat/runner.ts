@@ -732,19 +732,23 @@ export const chatToolBody = toolBody;
 // After a restart: reconnect to every worker still running a conversation,
 // and send the queues of conversations whose worker is gone.
 export async function reattachChats(): Promise<void> {
-  const running = runningWorkers();
+  // A worker that can't be reached (killed hard, its socket left behind)
+  // isn't running anything: its turn and queue are picked up below.
+  const attached = new Set<string>();
   await Promise.all(
-    running.map((id) =>
-      ensureLive(id, false).catch((error) =>
-        console.error(`Not reattaching chat ${id}:`, error.message ?? error)
-      )
+    runningWorkers().map((id) =>
+      ensureLive(id, false)
+        .then(() => attached.add(id))
+        .catch((error) =>
+          console.error(`Not reattaching chat ${id}:`, error.message ?? error)
+        )
     )
   );
   // Turns cut off while no worker was left to finish them, then queues.
   // One at a time, and only what was queued recently: a backlog from long
   // ago isn't sent unasked by a restart (it stays on screen to send).
   for (const id of cutOffSessions(Date.now() - RESUME_WITHIN_MS))
-    if (!running.includes(id)) await resumeInterrupted(id);
+    if (!attached.has(id)) await resumeInterrupted(id);
   for (const id of queuedSessions(Date.now() - RESUME_WITHIN_MS))
-    if (!running.includes(id)) await resumeQueue(id);
+    if (!attached.has(id)) await resumeQueue(id);
 }
