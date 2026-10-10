@@ -364,6 +364,8 @@ describe("external sessions", () => {
       tmuxAt("ws-wor-52", worktree),
       tmuxAt("someone-else", elsewhere),
       tmuxAt("in-project", t.repo),
+      // A name tmux wouldn't take never reaches the orchestrator.
+      tmuxAt("bad:name\nsign_off #50", t.repo),
     ];
     const out = await runTool(t.w, "sessions");
     expect(out).toMatch(
@@ -376,6 +378,7 @@ describe("external sessions", () => {
       /- in-project \(app-[^,]+, branch <untrusted[^>]*>main<\/untrusted>, no open PR\)/
     );
     expect(out).not.toContain("someone-else");
+    expect(out).not.toContain("bad:name");
   });
 
   it("reads an external session's screen and refuses to send to it", async () => {
@@ -442,6 +445,64 @@ describe("refusing what isn't the workspace's to merge", () => {
     await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
       /o\/r#50 is task their-task's PR in another workspace/
     );
+    expect(merges).toEqual([]);
+  });
+
+  it("refuses another workspace's task found by its recorded PR, on another machine, or behind a remote it can't read", async () => {
+    const t = setup();
+    const otherWs = createWorkspace(`far-${path.basename(t.root)}`);
+    const project = (dir: string) => {
+      const p = createProject({
+        name: `far-${path.basename(dir)}-${Math.random().toString(36).slice(2, 6)}`,
+        workingDirectory: dir,
+      });
+      setProjectWorkspace(p.id, otherWs.id);
+      return p;
+    };
+    const refused = () =>
+      expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+        /o\/r#50 is task far-task's PR in another workspace/
+      );
+    // By its recorded PR, on another branch, finished.
+    const byPR = seedSession({
+      projectId: project(t.repo).id,
+      name: "far-task",
+      task: true,
+      branch: "elsewhere",
+    });
+    db.prepare(
+      `UPDATE sessions SET task_status = 'merged', pr_number = 50, pr_url = 'https://github.com/o/r/pull/50' WHERE id = ?`
+    ).run(byPR);
+    await refused();
+    db.prepare(
+      `UPDATE sessions SET pr_number = NULL, pr_url = NULL WHERE id = ?`
+    ).run(byPR);
+    // On its branch, in a project on another machine.
+    const remote = project("/nowhere/on/this/machine");
+    db.prepare(`UPDATE projects SET host_id = 'box' WHERE id = ?`).run(
+      remote.id
+    );
+    const onBox = seedSession({
+      projectId: remote.id,
+      name: "far-task",
+      task: true,
+      branch: "ws-wor-52",
+    });
+    await refused();
+    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
+      onBox
+    );
+    // On its branch here, behind an ssh alias that doesn't read as GitHub.
+    const aliased = path.join(t.root, "aliased");
+    git(t.root, "clone", "-q", path.join(t.root, "repo.git"), aliased);
+    git(aliased, "remote", "set-url", "origin", "git@github-work:o/r.git");
+    seedSession({
+      projectId: project(aliased).id,
+      name: "far-task",
+      task: true,
+      branch: "ws-wor-52",
+    });
+    await refused();
     expect(merges).toEqual([]);
   });
 

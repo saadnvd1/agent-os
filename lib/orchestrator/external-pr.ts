@@ -113,8 +113,9 @@ type OwnerRow = WorkspaceTask & {
 // The task that owns this PR, in any workspace on any machine: one whose
 // recorded PR is it, or one working on its branch in a clone of its
 // repository (a PR the row hasn't caught up with is still the task's). A
-// project whose repository can't be read here (another machine's) counts
-// as the same repository: it's refused rather than gated as no one's.
+// project whose repository can't be read here (another machine's, a folder
+// gone, a remote that isn't plainly GitHub's) counts as the same
+// repository: it's refused rather than gated as no one's.
 async function ownerOf(
   slug: string,
   number: number,
@@ -139,7 +140,7 @@ async function ownerOf(
     if (t.branch_name !== branch && t.pr_number !== number) continue;
     const local = !t.project_host || t.project_host === "local";
     const theirs = local ? await repoSlug(expandHome(t.project_dir)) : null;
-    if (!local || theirs === slug) return t;
+    if (theirs === null || theirs === slug) return t;
   }
   return null;
 }
