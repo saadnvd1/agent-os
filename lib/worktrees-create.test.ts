@@ -76,8 +76,9 @@ describe("createWorktree when an add fails partway", () => {
         timeoutMs: 500,
       })
     ).rejects.toThrow(/timed out after/);
-    // One try, not one per ref.
-    expect(fs.readFileSync(tries, "utf-8")).toBe("try\n");
+    // At most one try, not one per ref (a slow add may not reach the hook).
+    const ran = fs.existsSync(tries) ? fs.readFileSync(tries, "utf-8") : "";
+    expect(ran).toMatch(/^(try\n)?$/);
     expect(branches()).toEqual(["main"]);
   });
 
@@ -93,6 +94,24 @@ describe("createWorktree when an add fails partway", () => {
     expect(fs.readFileSync(path.join(taken, "theirs.txt"), "utf-8")).toBe(
       "x\n"
     );
+  });
+
+  it("never deletes a branch made between its check and its add", async () => {
+    // The race: the early branchExists check passed, then the branch
+    // appeared before the add, at the same start point.
+    vi.doMock("./git", async (orig) => ({
+      ...(await orig<typeof import("./git")>()),
+      branchExists: async () => false,
+    }));
+    const { createWorktree } = await load();
+    vi.doUnmock("./git");
+    git("branch", "feature/taken", "main");
+    const tip = git("rev-parse", "main").trim();
+
+    await expect(
+      createWorktree({ projectPath: repo, featureName: "taken" })
+    ).rejects.toThrow(/already exists/);
+    expect(git("rev-parse", "feature/taken").trim()).toBe(tip);
   });
 
   it("keeps a branch that has moved past its start point", async () => {
