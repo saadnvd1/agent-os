@@ -8,6 +8,7 @@ import { shellQuote } from "../hosts/ssh";
 import { runInBackground } from "../async-operations";
 import { trustPromptKeys } from "../tasks/state";
 import { BUS_BRIEF } from "./brief";
+import { selfUrl } from "./self-env";
 import { CLAUDE_STATUS_SETTINGS_FLAG } from "../program-status/claude-flag";
 import {
   sessionProjectEnv,
@@ -32,11 +33,10 @@ export function ensureBusBrief(): void {
 // agentos.json env and the session's ports come first, so neither can
 // override what AgentOS sets.
 export function agentEnv(sessionId: string): Record<string, string> {
-  const port = process.env.AGENTOS_PORT || process.env.PORT || "3011";
   return {
     ...sessionProjectEnv(sessionId),
     AGENTOS_SESSION_ID: sessionId,
-    AGENTOS_URL: `http://127.0.0.1:${port}`,
+    AGENTOS_URL: selfUrl(),
     PATH: `${AOS_BIN_DIR}:${process.env.PATH ?? ""}`,
   };
 }

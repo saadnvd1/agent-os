@@ -21,6 +21,8 @@ export interface Condition {
   sticky: boolean;
   // Worth a message only alongside others, or after a long wait.
   low?: boolean;
+  // Someone is waiting: news even on the subject's first look.
+  waiting?: boolean;
 }
 
 export interface StackFacts {
@@ -50,8 +52,21 @@ function sessionConditions(
   quiet: boolean
 ): Condition[] {
   const out: Condition[] = [];
-  const add = (key: string, line: string, sticky = true, low = false) =>
-    out.push({ key: `${key}:${f.id}`, subject: f.id, line, sticky, low });
+  const add = (
+    key: string,
+    line: string,
+    sticky = true,
+    low = false,
+    waiting = false
+  ) =>
+    out.push({
+      key: `${key}:${f.id}`,
+      subject: f.id,
+      line,
+      sticky,
+      low,
+      waiting,
+    });
   const who = f.task ? `task ${f.name}` : f.name;
   const pr = f.task?.pr;
 
@@ -70,13 +85,18 @@ function sessionConditions(
   if (blocked !== null)
     add(
       `blocked:${hash(blocked)}`,
-      `${who}: BLOCKED: ${blocked ? untrusted(f.name, blocked) : "(no reason given)"}`
+      `${who}: BLOCKED: ${blocked ? untrusted(f.name, blocked) : "(no reason given)"}`,
+      true,
+      false,
+      true
     );
   else if (f.needsInput && !quiet)
     add(
       "needs",
       `${who}: needs input: ${f.activity ? untrusted(f.name, f.activity) : "waiting on an answer"}`,
-      false
+      false,
+      false,
+      true
     );
 
   const shouldPR = !!f.task || !!f.branch;

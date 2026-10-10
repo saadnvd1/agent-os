@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspace } from "@/lib/workspaces";
 import { createProject } from "@/lib/projects";
-import type { Condition } from "./conditions";
+import { conditionsFor, type Condition } from "./conditions";
 import {
   markDelivered,
   pendingEvents,
@@ -15,7 +15,7 @@ import {
   LOW_HOLD_MS,
   SUBJECT_CAP,
 } from "./deliver";
-import { NOW } from "./fixtures";
+import { facts, NOW, withTask } from "./fixtures";
 import { seedSession } from "./testing";
 
 // Events about sessions that are gone are forgotten, so they're about real ones.
@@ -63,6 +63,37 @@ describe("recordConditions", () => {
     recordConditions(w.id, both, [s, later], NOW);
     recordConditions(w.id, both, [s, later], NOW);
     expect(pendingEvents(w.id)).toEqual([]);
+  });
+
+  it("sends a wait already there on a subject's first look, once, across a restart", async () => {
+    const [b, n] = [sid(), sid()];
+    const w = createWorkspace("Early");
+    const conds = conditionsFor(
+      [
+        withTask(b, { state: "blocked", blocked: "need the key" }),
+        facts(n, { status: "waiting", needsInput: true }),
+      ],
+      [],
+      NOW
+    );
+    const look = (at: number, events = { recordConditions, pendingEvents }) => {
+      events.recordConditions(w.id, conds, [b, n], at);
+      return events.pendingEvents(w.id).map((e) => e.line);
+    };
+    expect(look(NOW)).toEqual([]);
+    const ready = look(NOW + 15000);
+    expect(ready).toHaveLength(2);
+    expect(ready[0]).toContain("BLOCKED: ");
+    expect(ready[1]).toContain("needs input");
+    markDelivered(
+      pendingEvents(w.id).map((e) => e.id),
+      NOW + 16000
+    );
+    expect(look(NOW + 30000)).toEqual([]);
+    vi.resetModules();
+    const restarted = await import("./events");
+    expect(look(NOW + 45000, restarted)).toEqual([]);
+    expect(look(NOW + 60000, restarted)).toEqual([]);
   });
 
   it("sends a condition only once it holds on two diffs in a row", () => {
