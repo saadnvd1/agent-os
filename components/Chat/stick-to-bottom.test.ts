@@ -1,15 +1,19 @@
-import { JSDOM } from "jsdom";
+import "./composer/test-dom";
+import { act, createElement, createRef, type RefObject } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   anchorCorrection,
+  arrivalKey,
   NEAR_BOTTOM_PX,
   nextStuck,
   stickToBottom,
+  useStickToBottom,
 } from "./stick-to-bottom";
 
-// The suite's setup needs node, so the DOM is built here.
-const { window } = new JSDOM("<!doctype html><body></body>");
-const { document } = window;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const at = (scrollTop: number, scrollHeight = 2000, clientHeight = 500) => ({
   scrollTop,
@@ -86,16 +90,25 @@ function touch(el: HTMLElement, type: string, y?: number) {
   el.dispatchEvent(e);
 }
 
+const key = (k: string, shiftKey = false) =>
+  new window.KeyboardEvent("keydown", { key: k, shiftKey });
+
 describe("stickToBottom", () => {
   let changes: boolean[];
   let ctl: ReturnType<typeof stickToBottom>;
   let el: HTMLElement;
   let box: { top: number; height: number; view: number };
+  let clock: number;
 
   beforeEach(() => {
     changes = [];
+    clock = 0;
     ({ el, box } = scroller());
-    ctl = stickToBottom(el, (s) => changes.push(s));
+    ctl = stickToBottom(
+      el,
+      (s) => changes.push(s),
+      () => clock
+    );
   });
   afterEach(() => {
     ctl.dispose();
@@ -178,9 +191,67 @@ describe("stickToBottom", () => {
     expect(ctl.isStuck()).toBe(false);
   });
 
-  it("lets go on keys that scroll up", () => {
-    el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "PageUp" }));
+  it.each([
+    ["PageUp", false],
+    ["ArrowUp", false],
+    ["Home", false],
+    [" ", true],
+  ])("lets go on keys that scroll up: %j (shift %s)", (k, shift) => {
+    el.dispatchEvent(key(k, shift));
     expect(ctl.isStuck()).toBe(false);
+  });
+
+  it.each(["ArrowDown", "PageDown", "End", " "])(
+    "keeps following on keys that scroll down: %j",
+    (k) => {
+      el.dispatchEvent(key(k));
+      expect(ctl.isStuck()).toBe(true);
+    }
+  );
+
+  it("lets go when the scrollbar is dragged up", () => {
+    el.dispatchEvent(new window.Event("pointerdown"));
+    el.scrollTop -= 300;
+    expect(ctl.isStuck()).toBe(false);
+    const top = box.top;
+    grow(500);
+    expect(box.top).toBe(top);
+  });
+
+  it("doesn't count a press inside the content as a scrollbar drag", () => {
+    const row = document.createElement("p");
+    el.append(row);
+    row.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+    box.height -= 300;
+    el.scrollTop = box.top - 50; // moved by the page, not the reader
+    expect(ctl.isStuck()).toBe(true);
+  });
+
+  it("stops counting scrolls as the reader's once the drag ends", () => {
+    el.dispatchEvent(new window.Event("pointerdown"));
+    window.dispatchEvent(new window.Event("pointerup"));
+    clock += 300;
+    el.scrollTop -= 100;
+    expect(ctl.isStuck()).toBe(true);
+  });
+
+  it("stops counting scrolls as the reader's after the wheel goes quiet", () => {
+    wheel(el, 10);
+    el.scrollTop -= 100;
+    expect(ctl.isStuck()).toBe(false);
+    el.scrollTop = box.height; // back at the end
+    wheel(el, 10);
+    clock += 300;
+    el.scrollTop -= 100;
+    expect(ctl.isStuck()).toBe(true);
+  });
+
+  it("counts touch momentum as the reader's only for a while", () => {
+    touch(el, "touchstart", 400);
+    touch(el, "touchend");
+    clock += 1600;
+    el.scrollTop -= 200;
+    expect(ctl.isStuck()).toBe(true);
   });
 
   it("ignores a wheel up when there is nothing to scroll", () => {
@@ -218,5 +289,81 @@ describe("stickToBottom", () => {
     ctl.pin();
     expect(line.getBoundingClientRect().top).toBe(120);
     expect(box.top).toBe(700);
+  });
+});
+
+describe("arrivalKey", () => {
+  it("changes for a new item or more streamed text, not a rebuilt copy", () => {
+    const a = { id: "a", kind: "assistant", text: "Hel" };
+    expect(arrivalKey({ ...a })).toBe(arrivalKey(a));
+    expect(arrivalKey({ ...a, text: "Hello" })).not.toBe(arrivalKey(a));
+    expect(arrivalKey({ id: "b" })).not.toBe(arrivalKey(a));
+    expect(arrivalKey(undefined)).toBeUndefined();
+  });
+});
+
+describe("useStickToBottom", () => {
+  type Hook = ReturnType<typeof useStickToBottom>;
+  let root: Root;
+  let hook: Hook;
+  let el: HTMLElement;
+  let box: { top: number; height: number; view: number };
+  let list: RefObject<{ getScrollableNode(): unknown } | null>;
+
+  function Probe(props: {
+    id: string;
+    latest: unknown;
+    onHook: (h: Hook) => void;
+  }) {
+    props.onHook(useStickToBottom(list, props.id, props.latest));
+    return null;
+  }
+  const render = (id: string, latest: unknown) =>
+    act(() =>
+      root.render(
+        createElement(Probe, { id, latest, onHook: (h) => (hook = h) })
+      )
+    );
+
+  beforeEach(async () => {
+    ({ el, box } = scroller());
+    list = createRef();
+    (list as { current: unknown }).current = { getScrollableNode: () => el };
+    root = createRoot(document.createElement("div"));
+    await render("s1", "a:0");
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    el.remove();
+  });
+
+  const scrollUp = () =>
+    act(() => {
+      wheel(el, -100);
+      el.scrollTop -= 600;
+    });
+
+  it("shows the pill only once something arrives after letting go", async () => {
+    scrollUp();
+    expect(hook).toMatchObject({ stuck: false, unread: false });
+    await render("s1", "a:0");
+    expect(hook.unread).toBe(false);
+    await render("s1", "a:12");
+    expect(hook.unread).toBe(true);
+  });
+
+  it("clears the pill and follows again on toBottom", async () => {
+    scrollUp();
+    await render("s1", "b:0");
+    act(() => hook.toBottom());
+    expect(hook).toMatchObject({ stuck: true, unread: false });
+    expect(box.top).toBe(box.height - box.view);
+  });
+
+  it("starts stuck again in another conversation", async () => {
+    scrollUp();
+    await render("s1", "b:0");
+    await render("s2", "c:0");
+    expect(hook).toMatchObject({ stuck: true, unread: false });
   });
 });

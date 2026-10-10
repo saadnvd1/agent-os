@@ -37,7 +37,7 @@ import { SetupCard } from "./SetupCard";
 import { UserTurn } from "./EventRow";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
-import { useStickToBottom } from "./stick-to-bottom";
+import { arrivalKey, useStickToBottom } from "./stick-to-bottom";
 import {
   AssistantMessage,
   CommandOutput,
@@ -228,7 +228,7 @@ export function ChatPanel({
     stuck,
     unread,
     toBottom: toEnd,
-  } = useStickToBottom(listRef, sessionId, items.at(-1));
+  } = useStickToBottom(listRef, sessionId, arrivalKey(items.at(-1)));
 
   const running = state === "running" || state === "waiting";
 

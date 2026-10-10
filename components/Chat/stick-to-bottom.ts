@@ -52,6 +52,14 @@ export function nextStuck(
   return stuck;
 }
 
+/**
+ * What changes when something new arrives at the end of a conversation: a
+ * new last item, or more text streamed into it. A reconnect rebuilds the
+ * same items as new objects, which is not news.
+ */
+export const arrivalKey = (item: { id: string; text?: unknown } | undefined) =>
+  item && `${item.id}:${typeof item.text === "string" ? item.text.length : 0}`;
+
 const canScroll = (el: HTMLElement) => el.scrollHeight > el.clientHeight + 1;
 
 /** How far to scroll so an anchor that moved from `was` to `now` is back. */
