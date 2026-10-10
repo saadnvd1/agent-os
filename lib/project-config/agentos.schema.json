@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "ports": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1024,
+        "maximum": 65000
+      }
+    },
+    "env": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "setup": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "copy": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?![/~\\\\])(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).+$"
+      }
+    },
+    "clone": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?![/~\\\\])(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).+$"
+      }
+    },
+    "dev": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ready": {
+      "type": "object",
+      "properties": {
+        "check": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "contains": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "test": {
+      "type": "string",
+      "minLength": 1
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "browse": {
+      "type": "object",
+      "properties": {
+        "login": {
+          "type": "string",
+          "minLength": 1
+        },
+        "map": {
+          "type": "string",
+          "pattern": "^(?![/~\\\\])(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).+$"
+        },
+        "port": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "database": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "env": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65000
+        },
+        "host": {
+          "type": "string"
+        }
+      },
+      "required": ["from"],
+      "additionalProperties": false
+    },
+    "mcp": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "alias": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "cards": {
+      "type": "object",
+      "properties": {
+        "workspace": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "boards": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "board": {
+                "type": "string"
+              },
+              "list": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "prefix": {
+                "type": "string"
+              },
+              "triage": {
+                "type": "string"
+              }
+            },
+            "required": ["board", "list"],
+            "additionalProperties": {}
+          }
+        }
+      },
+      "additionalProperties": {}
+    },
+    "auto": {
+      "type": "object",
+      "properties": {
+        "min_free_gb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "context": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "apps": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?![/~\\\\])(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "test": {
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
+        "required": ["path"],
+        "additionalProperties": {}
+      }
+    },
+    "recipes": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          }
+        },
+        "required": ["prompt"],
+        "additionalProperties": {}
+      }
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "review_skill": {
+      "type": "string",
+      "minLength": 1
+    },
+    "notion": {
+      "type": "object",
+      "properties": {
+        "vault": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "required": ["project", "token"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": {}
+    },
+    "formerly": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "agentos.json",
+  "description": "How AgentOS prepares a session's worktree and runs the project. See docs/decisions/2026-10-10-agentos-json.md."
+}

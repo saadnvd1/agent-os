@@ -1,27 +1,23 @@
 /**
- * Port Management for Dev Servers
- *
- * Assigns unique ports to worktree sessions to avoid conflicts.
+ * Port slots: every session with a worktree takes the lowest free slot, and
+ * each port its project names in agentos.json is `base + slot`. Stored on the
+ * row so a resume gets the same ports; freed when the session ends.
  */
 
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
-import { getDb } from "./db";
+import { db } from "./db";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
-// Port range for dev servers
-const BASE_PORT = 3100;
-const PORT_INCREMENT = 10;
-const MAX_PORT = 3900;
+export const MAX_SLOT = 200;
 
-/**
- * Check if a port is in use
- */
+// Something outside AgentOS listening on it. lsof exits 1 when nothing is.
 export async function isPortInUse(port: number): Promise<boolean> {
   try {
-    const { stdout } = await execAsync(
-      `lsof -i :${port} -sTCP:LISTEN 2>/dev/null | head -1`,
+    const { stdout } = await execFileAsync(
+      "lsof",
+      ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"],
       { timeout: 5000 }
     );
     return stdout.trim().length > 0;
@@ -30,71 +26,138 @@ export async function isPortInUse(port: number): Promise<boolean> {
   }
 }
 
-/**
- * Get all ports currently assigned to sessions
- */
-export function getAssignedPorts(): number[] {
-  const db = getDb();
-  const sessions = db
+export const portsFor = (
+  bases: Record<string, number>,
+  slot: number
+): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(bases).map(([name, base]) => [name, base + slot])
+  );
+
+const parsePorts = (json: string | null | undefined) => {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as Record<string, number>;
+  } catch {
+    return null;
+  }
+};
+
+// The session's ports, or null when it holds no slot.
+export function sessionPorts(sessionId: string): Record<string, number> | null {
+  const row = db
     .prepare(
-      "SELECT dev_server_port FROM sessions WHERE dev_server_port IS NOT NULL"
+      `SELECT ports FROM sessions WHERE id = ? AND port_slot IS NOT NULL`
     )
-    .all() as Array<{ dev_server_port: number }>;
-  return sessions.map((s) => s.dev_server_port);
+    .get(sessionId) as { ports: string | null } | undefined;
+  return parsePorts(row?.ports);
 }
 
+// Ends the allocator didn't see (an archive, a merge noticed later) give
+// their slot back before the next one is handed out.
+function reclaimEnded(): void {
+  db.prepare(
+    `UPDATE sessions SET port_slot = NULL, ports = NULL, dev_server_port = NULL
+     WHERE port_slot IS NOT NULL
+       AND (archived_at IS NOT NULL OR task_status IN ('done', 'merged'))`
+  ).run();
+}
+
+// Every port another session holds: its slot's ports, and the single port
+// sessions from before slots were given.
+function portsTaken(exceptId: string): Set<number> {
+  const rows = db
+    .prepare(
+      `SELECT ports, dev_server_port FROM sessions
+       WHERE id != ? AND (ports IS NOT NULL OR dev_server_port IS NOT NULL)`
+    )
+    .all(exceptId) as {
+    ports: string | null;
+    dev_server_port: number | null;
+  }[];
+  const taken = new Set<number>();
+  for (const r of rows) {
+    for (const p of Object.values(parsePorts(r.ports) ?? {})) taken.add(p);
+    if (r.dev_server_port) taken.add(r.dev_server_port);
+  }
+  return taken;
+}
+
+const slotsTaken = () =>
+  new Set(
+    (
+      db
+        .prepare(`SELECT port_slot FROM sessions WHERE port_slot IS NOT NULL`)
+        .all() as { port_slot: number }[]
+    ).map((r) => r.port_slot)
+  );
+
 /**
- * Find the next available port
+ * The session's slot and ports, taking the lowest free slot when it has
+ * none. A slot is free when no session holds it, none of its ports is held
+ * by another session (another project's bases can meet these), and nothing
+ * on the machine is listening on them. The claim rechecks in a transaction,
+ * and the unique index refuses a slot a parallel start took first.
  */
-export async function findAvailablePort(): Promise<number> {
-  const assignedPorts = new Set(getAssignedPorts());
+export async function allocatePorts(
+  sessionId: string,
+  bases: Record<string, number>,
+  inUse: (port: number) => Promise<boolean> = isPortInUse
+): Promise<{ slot: number; ports: Record<string, number> }> {
+  const held = db
+    .prepare(`SELECT port_slot, ports FROM sessions WHERE id = ?`)
+    .get(sessionId) as
+    | { port_slot: number | null; ports: string | null }
+    | undefined;
+  if (!held) throw new Error(`No session ${sessionId}`);
+  const existing = parsePorts(held.ports);
+  if (held.port_slot != null && existing)
+    return { slot: held.port_slot, ports: existing };
 
-  for (let port = BASE_PORT; port <= MAX_PORT; port += PORT_INCREMENT) {
-    // Skip if already assigned to a session
-    if (assignedPorts.has(port)) {
-      continue;
+  reclaimEnded();
+  const claim = db.transaction(
+    (slot: number, ports: Record<string, number>) => {
+      if (slotsTaken().has(slot)) return false;
+      const taken = portsTaken(sessionId);
+      if (Object.values(ports).some((p) => taken.has(p))) return false;
+      db.prepare(
+        `UPDATE sessions SET port_slot = ?, ports = ?, dev_server_port = ? WHERE id = ?`
+      ).run(
+        slot,
+        JSON.stringify(ports),
+        Object.values(ports)[0] ?? null,
+        sessionId
+      );
+      return true;
     }
+  );
 
-    // Check if port is actually in use (by something outside AgentOS)
-    if (!(await isPortInUse(port))) {
-      return port;
+  for (let slot = 1; slot <= MAX_SLOT; slot++) {
+    if (slotsTaken().has(slot)) continue;
+    const ports = portsFor(bases, slot);
+    const values = Object.values(ports);
+    if (values.some((p) => p > 65535)) break;
+    const taken = portsTaken(sessionId);
+    if (values.some((p) => taken.has(p))) continue;
+    const busy = await Promise.all(values.map(inUse));
+    if (busy.some(Boolean)) continue;
+    try {
+      // .immediate: the write lock is taken before the recheck reads.
+      if (claim.immediate(slot, ports)) return { slot, ports };
+    } catch (error) {
+      if (!/UNIQUE constraint/.test(String(error))) throw error;
     }
   }
-
-  // Fallback: return a random port in range
-  return BASE_PORT + Math.floor(Math.random() * 80) * PORT_INCREMENT;
-}
-
-/**
- * Assign a port to a session
- */
-export async function assignPort(sessionId: string): Promise<number> {
-  const port = await findAvailablePort();
-  const db = getDb();
-  db.prepare("UPDATE sessions SET dev_server_port = ? WHERE id = ?").run(
-    port,
-    sessionId
-  );
-  return port;
-}
-
-/**
- * Release a port from a session
- */
-export function releasePort(sessionId: string): void {
-  const db = getDb();
-  db.prepare("UPDATE sessions SET dev_server_port = NULL WHERE id = ?").run(
-    sessionId
+  throw new Error(
+    `No free port slot: ${MAX_SLOT} sessions' worth of ports are taken or in use`
   );
 }
 
-/**
- * Get the port assigned to a session
- */
-export function getSessionPort(sessionId: string): number | null {
-  const db = getDb();
-  const result = db
-    .prepare("SELECT dev_server_port FROM sessions WHERE id = ?")
-    .get(sessionId) as { dev_server_port: number | null } | undefined;
-  return result?.dev_server_port || null;
+export function releasePorts(sessionId: string): void {
+  db.prepare(
+    `UPDATE sessions SET port_slot = NULL, ports = NULL, dev_server_port = NULL WHERE id = ?`
+  ).run(sessionId);
 }
+
+// The name the session routes call.
+export const releasePort = releasePorts;

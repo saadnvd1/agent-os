@@ -68,6 +68,9 @@ export interface Session {
   branch_name: string | null;
   base_branch: string | null;
   dev_server_port: number | null;
+  // Port slot and the ports it resolves to, JSON {NAME: port} (lib/ports.ts)
+  port_slot?: number | null;
+  ports?: string | null;
   // PR tracking
   pr_url: string | null;
   pr_number: number | null;

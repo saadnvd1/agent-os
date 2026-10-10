@@ -17,7 +17,8 @@ import {
   isBranchName,
   renameBranch,
 } from "../git";
-import { findAvailablePort } from "../ports";
+import { allocatePorts } from "../ports";
+import { loadProjectConfig, portBases } from "../project-config";
 import { notifySessionsChanged } from "../status/hub";
 import {
   recordSetup,
@@ -110,17 +111,20 @@ export async function setUpWorktree(input: WorktreeSetupInput): Promise<void> {
       featureName: feature,
       baseBranch,
     });
-    const port = await findAvailablePort();
     db.prepare(
-      `UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ?, dev_server_port = ? WHERE id = ?`
-    ).run(wt.worktreePath, wt.branchName, baseBranch, port, sessionId);
+      `UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ? WHERE id = ?`
+    ).run(wt.worktreePath, wt.branchName, baseBranch, sessionId);
+    const { ports } = await allocatePorts(
+      sessionId,
+      portBases(loadProjectConfig(projectPath).config)
+    );
     notifySessionsChanged();
 
     const [result] = await Promise.all([
       setupWorktree({
         worktreePath: wt.worktreePath,
         sourcePath: projectPath,
-        port,
+        ports,
         progress: {
           onStage: (stage) => enterStage(view, stage),
           onStep: (step) => logStep(view, step),

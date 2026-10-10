@@ -1,0 +1,12 @@
+{
+  "$schema": "./lib/project-config/agentos.schema.json",
+  "ports": { "PORT": 3100 },
+  "dev": "mkdir -p .dev-tmux && env -u TMUX TMUX_TMPDIR=\"$PWD/.dev-tmux\" DB_PATH=\"$PWD/.dev.db\" npm run dev",
+  "ready": { "url": "/api/projects" },
+  "test": "npm run typecheck && npx vitest run <the test files you touched>",
+  "notes": [
+    "Run targeted tests (`npx vitest run path/to/x.test.ts`) while you work; the full suite loads the machine.",
+    "The dev command above keeps the dev instance on its own port, database and tmux server: never run one against the real database or tmux.",
+    "Never stop or restart the AgentOS server you are running under; it ends your own session."
+  ]
+}

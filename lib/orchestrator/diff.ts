@@ -74,7 +74,7 @@ const SENSITIVE: { why: string; test: RegExp }[] = [
   },
   {
     why: "agent config",
-    test: /^\.claude\/|(^|\/)(\.agent-os\.json|\.dispatch\.json|\.mcp\.json)$|^\.agent-os\//i,
+    test: /^\.claude\/|(^|\/)(agentos\.json|\.agent-os\.json|\.dispatch\.json|\.mcp\.json)$|^\.agent-os\//i,
   },
   {
     why: "deploy",

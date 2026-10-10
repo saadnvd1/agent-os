@@ -11,6 +11,8 @@ import { promisify } from "util";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { setupWorktree } from "../env-setup";
+import { allocatePorts } from "../ports";
+import { loadProjectConfig, portBases } from "../project-config";
 import { launchClaude, promptFileFor } from "../agents/launch";
 import * as fs from "fs";
 import { isPaused } from "../orchestrator/pause";
@@ -58,6 +60,20 @@ export function launchPending(sessionId: string): boolean {
   return !!row;
 }
 
+// The task's ports (kept across a resume: the slot is on the row), then its
+// worktree's setup with them.
+async function prepare(
+  sessionId: string,
+  worktreePath: string,
+  sourcePath: string
+) {
+  const { ports } = await allocatePorts(
+    sessionId,
+    portBases(loadProjectConfig(sourcePath).config)
+  );
+  return setupWorktree({ worktreePath, sourcePath, ports });
+}
+
 // `earlier` is a setup already done (a held start resuming): it isn't run again,
 // since project setup commands (migrations, seeds) needn't be idempotent.
 export async function finishTaskStart(
@@ -75,10 +91,11 @@ export async function finishTaskStart(
     ? earlier
     : project
       ? setupOutcome(
-          await setupWorktree({
-            worktreePath: session.worktree_path,
-            sourcePath: expandHome(project.working_directory),
-          }).catch(asError)
+          await prepare(
+            sessionId,
+            session.worktree_path,
+            expandHome(project.working_directory)
+          ).catch(asError)
         )
       : setupOutcome(new Error("its project no longer exists"));
 

@@ -9,14 +9,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { bringDependencies, runCommand } from "./worktree-deps";
-
-export interface WorktreeConfig {
-  setup?: string[];
-  devServer?: {
-    command: string;
-    portEnvVar?: string;
-  };
-}
+import { loadProjectConfig, projectEnv, withPorts } from "./project-config";
 
 export interface SetupStep {
   name: string;
@@ -39,33 +32,8 @@ export interface SetupResult {
   steps: SetupStep[];
   envFilesCopied: string[];
   packageManager?: string;
-  port?: number;
+  ports?: Record<string, number>;
   durationMs: number;
-}
-
-/**
- * Read worktree config from project
- */
-export async function readWorktreeConfig(
-  projectPath: string
-): Promise<WorktreeConfig | null> {
-  const configPaths = [
-    path.join(projectPath, ".agent-os", "worktrees.json"),
-    path.join(projectPath, ".agent-os.json"),
-  ];
-
-  for (const configPath of configPaths) {
-    try {
-      if (fs.existsSync(configPath)) {
-        const content = await fs.promises.readFile(configPath, "utf-8");
-        return JSON.parse(content);
-      }
-    } catch {
-      // Continue to next path
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -109,24 +77,64 @@ export async function copyEnvFiles(
   return copied;
 }
 
+const inside = (root: string, p: string) =>
+  p === root || p.startsWith(root + path.sep);
+
+/**
+ * agentos.json's `copy`: files or folders from the main checkout, each one
+ * resolved (symlinks included) to a place inside it, so a project can't
+ * copy what lies outside itself into a worktree an agent may commit from.
+ */
+export async function copyDeclared(
+  sourcePath: string,
+  worktreePath: string,
+  paths: string[]
+): Promise<{ copied: string[]; refused: string[] }> {
+  const root = await fs.promises.realpath(sourcePath);
+  const copied: string[] = [];
+  const refused: string[] = [];
+  for (const rel of paths) {
+    const real = await fs.promises
+      .realpath(path.join(sourcePath, rel))
+      .catch(() => null);
+    // Not there in this checkout: nothing to copy, as with a missing .env.
+    if (!real) continue;
+    const dest = path.join(worktreePath, rel);
+    if (!inside(root, real) || !inside(worktreePath, path.resolve(dest))) {
+      refused.push(rel);
+      continue;
+    }
+    try {
+      await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+      await fs.promises.cp(real, dest, { recursive: true, force: true });
+      copied.push(rel);
+    } catch (error) {
+      console.error(`Failed to copy ${rel}:`, error);
+      refused.push(rel);
+    }
+  }
+  return { copied, refused };
+}
+
 /**
  * Run setup for a new worktree
  */
 export async function setupWorktree(options: {
   worktreePath: string;
   sourcePath: string;
-  port?: number;
+  // The session's ports (lib/ports.ts), exported to the setup commands.
+  ports?: Record<string, number> | null;
   skipInstall?: boolean;
   progress?: SetupProgress;
 }): Promise<SetupResult> {
-  const { worktreePath, sourcePath, port, skipInstall, progress } = options;
+  const { worktreePath, sourcePath, skipInstall, progress } = options;
 
   const started = Date.now();
   const result: SetupResult = {
     success: true,
     steps: [],
     envFilesCopied: [],
-    port,
+    ports: options.ports ?? undefined,
     durationMs: 0,
   };
   // Each step is reported as it finishes, for the chat's setup card.
@@ -136,39 +144,83 @@ export async function setupWorktree(options: {
     return push(...steps);
   };
 
-  // 1. Read config if exists
-  const config = await readWorktreeConfig(sourcePath);
-
-  // 2. Copy env files
-  progress?.onStage?.("env");
-  result.envFilesCopied = await copyEnvFiles(sourcePath, worktreePath);
-  if (result.envFilesCopied.length > 0) {
+  // 1. The project's config. A broken one is reported and nothing of it is
+  // used: running an older file's setup instead would hide the mistake.
+  const { config, source, error } = loadProjectConfig(sourcePath);
+  if (error) {
+    result.success = false;
     result.steps.push({
-      name: "Copy env files",
-      command: `cp ${result.envFilesCopied.join(" ")}`,
-      success: true,
-      output: `Copied: ${result.envFilesCopied.join(", ")}`,
+      name: `Read ${source}`,
+      command: `read ${source}`,
+      success: false,
+      error,
     });
   }
 
-  // Build env vars for commands
+  // 2. Copy env files, or exactly what the config's `copy` names
+  progress?.onStage?.("env");
+  if (config.copy) {
+    const { copied, refused } = await copyDeclared(
+      sourcePath,
+      worktreePath,
+      config.copy
+    );
+    result.envFilesCopied = copied;
+    if (copied.length || refused.length)
+      result.steps.push({
+        name: "Copy files",
+        command: `cp ${config.copy.join(" ")}`,
+        success: refused.length === 0,
+        output: copied.length ? `Copied: ${copied.join(", ")}` : undefined,
+        error: refused.length
+          ? `Not copied (outside the project, or failed): ${refused.join(", ")}`
+          : undefined,
+      });
+    if (refused.length) result.success = false;
+  } else {
+    result.envFilesCopied = await copyEnvFiles(sourcePath, worktreePath);
+    if (result.envFilesCopied.length > 0) {
+      result.steps.push({
+        name: "Copy env files",
+        command: `cp ${result.envFilesCopied.join(" ")}`,
+        success: true,
+        output: `Copied: ${result.envFilesCopied.join(", ")}`,
+      });
+    }
+  }
+
+  // The project's env, the session's ports over it, then the paths.
   const envVars: Record<string, string> = {
+    ...projectEnv(config, options.ports ?? null),
     ROOT_WORKTREE_PATH: sourcePath,
     WORKTREE_PATH: worktreePath,
   };
-  if (port) {
-    envVars.PORT = String(port);
+
+  // 3. Dependencies: always when `clone` is declared; otherwise only when
+  // there are no setup commands, which used to replace them.
+  if (config.clone || (!config.setup?.length && !skipInstall)) {
+    progress?.onStage?.("deps");
+    await bringDependencies(
+      result,
+      sourcePath,
+      worktreePath,
+      envVars,
+      undefined,
+      config.clone
+    );
   }
 
-  // 3. Run config setup commands if present
-  if (config?.setup && config.setup.length > 0) {
+  // 4. The config's setup commands
+  if (config.setup && config.setup.length > 0) {
     progress?.onStage?.("script");
     for (const cmd of config.setup) {
-      // Expand variables in command
-      let expandedCmd = cmd;
-      for (const [key, value] of Object.entries(envVars)) {
-        expandedCmd = expandedCmd.replace(new RegExp(`\\$${key}`, "g"), value);
-      }
+      // The paths and ports are written in, as before; the project's env
+      // values only ever reach the shell, never the setup log.
+      const expandedCmd = withPorts(cmd, {
+        ...(options.ports ?? {}),
+        ROOT_WORKTREE_PATH: sourcePath,
+        WORKTREE_PATH: worktreePath,
+      });
 
       const cmdResult = await runCommand(expandedCmd, worktreePath, envVars);
       result.steps.push({
@@ -183,49 +235,8 @@ export async function setupWorktree(options: {
         result.success = false;
       }
     }
-  } else if (!skipInstall) {
-    progress?.onStage?.("deps");
-    await bringDependencies(result, sourcePath, worktreePath, envVars);
   }
 
   result.durationMs = Date.now() - started;
   return result;
-}
-
-/**
- * Get dev server command from config or package.json
- */
-export async function getDevServerCommand(
-  projectPath: string,
-  port?: number
-): Promise<{ command: string; port: number } | null> {
-  // Check config first
-  const config = await readWorktreeConfig(projectPath);
-  if (config?.devServer) {
-    const portEnvVar = config.devServer.portEnvVar || "PORT";
-    const finalPort = port || 3000;
-    return {
-      command: `${portEnvVar}=${finalPort} ${config.devServer.command}`,
-      port: finalPort,
-    };
-  }
-
-  // Check package.json for dev script
-  const pkgPath = path.join(projectPath, "package.json");
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(await fs.promises.readFile(pkgPath, "utf-8"));
-      if (pkg.scripts?.dev) {
-        const finalPort = port || 3000;
-        return {
-          command: `PORT=${finalPort} npm run dev`,
-          port: finalPort,
-        };
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-
-  return null;
 }

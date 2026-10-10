@@ -265,7 +265,9 @@ are cloned with `cp -Rc` when the lockfile matches, and a spare clone waits in
 Otherwise, and on Linux, the lockfile's frozen install runs (`npm ci`,
 `pnpm/yarn/bun --frozen-lockfile`), then a plain install, always with
 devDependencies even though the server runs with `NODE_ENV=production`. A
-project's `.agent-os/worktrees.json` `setup` commands replace all of this.
+project's `agentos.json` can name exactly what to copy and clone, and its
+`setup` commands (without a `clone`) replace the install; see
+[Project config](#project-config-agentosjson).
 Starting a task returns at once and shows **Setting up** until the agent
 launches; a restart in the middle resumes it. A failed setup shows on the task
 and is in the agent's first prompt (redacted, as data).
@@ -291,6 +293,49 @@ reports a rate limit, every gh call backs off until the limit resets, and gh
 failures are logged as `[gh] ...`, at most once a minute for each kind.
 
 ![Tasks in different states: needs input, ready for review, working, merged](screenshots/tasks.png)
+
+### Project config (`agentos.json`)
+
+A project describes how its sessions run in `agentos.json` at the repository
+root. Every field is optional:
+
+```json
+{
+  "ports": { "RAILS_PORT": 3000, "VITE_PORT": 3100 },
+  "env": { "STORAGE_PROVIDER": "disk" },
+  "copy": [".env", "config/master.key"],
+  "clone": ["node_modules"],
+  "setup": ["bin/setup"],
+  "dev": "bin/dev",
+  "ready": { "url": "/up", "port": "RAILS_PORT" },
+  "test": "bundle exec rspec",
+  "browse": { "login": "/dev/login", "map": "docs/browsing.md" },
+  "notes": ["Kill your own server by port: lsof -ti tcp:$RAILS_PORT"]
+}
+```
+
+Every task and worktree session takes a **port slot**, and each named port is
+`base + slot` (a project with no `ports` still gets a `PORT` from 3100), so
+parallel sessions never share a dev server port. The slot is kept on the
+session and freed when it's done, merged, archived or deleted. The ports and
+`env` are exported to the setup commands, the agent and its terminals; a port
+always wins over an `env` entry of the same name. The agent's brief gets a
+short **Running this project** section: its ports, the dev command, how to
+wait for `ready` in one backgrounded call, the test command, the login URL on
+its own port, the browsing map and the notes. Only declared fields are
+mentioned, and `env` values never are. Keep secrets out of the file: it is
+committed.
+
+The file is validated against
+[agentos.schema.json](lib/project-config/agentos.schema.json); a broken one
+fails the setup with every bad field named, rather than being ignored. Without
+an `agentos.json`, a `.dispatch.json` is read with the same meanings, then the
+legacy `.agent-os/worktrees.json` and `.agent-os.json`. The config is always
+read from the main checkout, so an agent can't change its own environment by
+editing it, and the merge gates flag an edit to it as agent config. The full
+schema, including the fields later releases implement (a private database per
+session, MCP servers, apps, recipes), is in
+[docs/decisions/2026-10-10-agentos-json.md](docs/decisions/2026-10-10-agentos-json.md).
 
 ### Stacks
 

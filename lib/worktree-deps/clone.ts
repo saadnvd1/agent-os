@@ -90,50 +90,74 @@ export interface CloneResult {
   refill?: Promise<unknown>;
 }
 
+export const NOT_MAC = "clones are macOS only";
+
 export async function cloneDeps(opts: {
   sourcePath: string;
   worktreePath: string;
+  // agentos.json's `clone`: exactly these paths. Without it, every
+  // node_modules findNodeModules finds.
+  only?: string[];
   spareRoot?: string;
   platform?: NodeJS.Platform;
 }): Promise<CloneResult> {
-  const { sourcePath, worktreePath } = opts;
+  const { sourcePath, worktreePath, only } = opts;
   const root = opts.spareRoot ?? SPARE_ROOT;
   const cloned: CloneResult["cloned"] = [];
   if ((opts.platform ?? process.platform) !== "darwin")
-    return { ok: false, reason: "clones are macOS only", cloned };
+    return { ok: false, reason: NOT_MAC, cloned };
 
-  const all = await findNodeModules(sourcePath);
-  if (!all.includes("node_modules"))
-    return {
-      ok: false,
-      reason: "the main checkout has no node_modules",
-      cloned,
-    };
+  const isModules = (rel: string) => path.basename(rel) === "node_modules";
+  const all = only
+    ? only.map((rel) => path.normalize(rel).replace(/[/\\]+$/, ""))
+    : await findNodeModules(sourcePath);
+  const modules = all.filter(isModules);
+  // Declared or not, a root node_modules is only cloned against a matching
+  // lockfile: otherwise the clone would be the wrong dependencies.
   const lock = await lockfileHash(sourcePath);
-  if (!lock)
-    return { ok: false, reason: "the main checkout has no lockfile", cloned };
-  if (lock !== (await lockfileHash(worktreePath)))
-    return {
-      ok: false,
-      reason: "the worktree's lockfile differs from the main checkout's",
-      cloned,
-    };
+  if (!only || modules.includes("node_modules")) {
+    if (!(await isDir(path.join(sourcePath, "node_modules"))))
+      return {
+        ok: false,
+        reason: "the main checkout has no node_modules",
+        cloned,
+      };
+    if (!lock)
+      return { ok: false, reason: "the main checkout has no lockfile", cloned };
+    if (lock !== (await lockfileHash(worktreePath)))
+      return {
+        ok: false,
+        reason: "the worktree's lockfile differs from the main checkout's",
+        cloned,
+      };
+  }
 
   const spares: Array<{ rel: string; lock: string }> = [];
   for (const rel of all) {
+    const from = path.join(sourcePath, rel);
     const target = path.join(worktreePath, rel);
-    // A workspace directory this branch doesn't have, or deps already there.
+    if (!(await isDir(from))) continue;
+    // A directory this branch doesn't have, or the files already there.
     if (!(await isDir(path.dirname(target))) || fs.existsSync(target)) continue;
+    if (!isModules(rel)) {
+      // Anything else declared (a virtualenv, vendor/bundle) is cloned as
+      // is: there is no lockfile AgentOS knows to check it against.
+      if (!(await cloneWhole(from, target)))
+        return { ok: false, reason: `cloning ${rel} failed`, cloned };
+      cloned.push({ rel, from: "clone" });
+      continue;
+    }
     // A nested project with its own lockfile is cloned only when that
     // lockfile matches too.
     const own = await lockfileHash(path.join(sourcePath, path.dirname(rel)));
     const ownHere = await lockfileHash(path.dirname(target));
     if (rel !== "node_modules" && own !== ownHere) continue;
     const key = own ?? lock;
+    if (!key) continue;
     const spare = sparePath(root, sourcePath, rel, key);
     if (await takeSpare(spare, target)) {
       cloned.push({ rel, from: "spare" });
-    } else if (await cloneWhole(path.join(sourcePath, rel), target)) {
+    } else if (await cloneWhole(from, target)) {
       cloned.push({ rel, from: "clone" });
     } else {
       return { ok: false, reason: `cloning ${rel} failed`, cloned };

@@ -9,6 +9,8 @@ import os from "os";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import { setupWorktree } from "../env-setup";
+import { allocatePorts } from "../ports";
+import { loadProjectConfig, portBases } from "../project-config";
 import { runInBackground } from "../async-operations";
 import { launchClaude } from "../agents/launch";
 import { resolveModelForAgent } from "../model-catalog";
@@ -129,6 +131,9 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
 
   stepProgress(bundle.moveId, "resume");
   try {
+    // Its ports here, for the agent's environment and brief. Setup already
+    // ran without them: it starts before the row exists.
+    await allocatePorts(id, portBases(loadProjectConfig(projectPath).config));
     await launchClaude({
       sessionId: id,
       tmuxName,

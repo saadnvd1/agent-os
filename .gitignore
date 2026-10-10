@@ -55,6 +55,7 @@ agent-os.db-shm
 docs/*
 !docs/setup/
 !docs/issues/
+!docs/decisions/
 .mcp.json
 .git-evening
 
@@ -66,3 +67,7 @@ progress.md
 
 # Agent worktrees
 .claude/worktrees/
+
+# agentos.json dev instance
+.dev.db*
+.dev-tmux/
