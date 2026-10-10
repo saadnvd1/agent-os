@@ -68,11 +68,15 @@ export interface QueuedTaskView {
   prompt: string;
   projectId: string;
   projectName: string | null;
+  // The workspace whose line it's in, or null for a project without one.
+  workspaceId: string | null;
   status: QueueStatus;
   // 1-based place in its workspace's line.
   position: number;
   // What it waits on: a task's name, or "any running task".
   after: string | null;
+  // The task it waits on, by id, when it waits on one.
+  afterId: string | null;
   note: string | null;
   error: string | null;
   createdAt: string;
@@ -334,9 +338,11 @@ export function listQueue(): QueuedTaskView[] {
       prompt: r.prompt,
       projectId: r.project_id,
       projectName: r.project_name,
+      workspaceId: r.workspace_id,
       status: r.status,
       position: place,
       after: afterLabel(r),
+      afterId: r.after_task,
       note: r.note,
       error: r.error,
       createdAt: r.created_at,

@@ -7,6 +7,7 @@ import { usePollWhenOffline } from "../push/connection";
 
 export { taskKeys };
 export * from "./move";
+export * from "./queue";
 
 async function json<T>(res: Response): Promise<T> {
   const data = await res.json();

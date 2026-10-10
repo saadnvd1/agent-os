@@ -8,6 +8,8 @@ import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
 import { SessionRow } from "./SessionRow";
 import { OrchestratorPinRow } from "./OrchestratorPinRow";
+import { QueuedRow } from "./QueuedRow";
+import type { QueuedRow as QueuedRowData } from "@/lib/sidebar/queued";
 
 function ShelfLabel({
   label,
@@ -78,14 +80,16 @@ export function MachineShelves({ groups }: { groups: MachineGroup[] }) {
   ));
 }
 
-// The pinned orchestrator, then Pinned, Needs you, Working and Done: once
-// for the whole list.
+// The pinned orchestrator, then Pinned, Needs you, Working, Queued and
+// Done: once for the whole list.
 export function SessionShelves({
   shelves,
+  queued,
   doneCollapsed,
   donePages,
 }: {
   shelves: Shelves;
+  queued: QueuedRowData[];
   doneCollapsed: boolean;
   donePages: number;
 }) {
@@ -118,6 +122,13 @@ export function SessionShelves({
         <Shelf label="Working" count={shelves.working.length}>
           {shelves.working.map((r) => (
             <SessionRow key={r.session.id} row={r} />
+          ))}
+        </Shelf>
+      )}
+      {queued.length > 0 && (
+        <Shelf label="Queued" count={queued.length}>
+          {queued.map((r) => (
+            <QueuedRow key={r.item.id} row={r} />
           ))}
         </Shelf>
       )}
