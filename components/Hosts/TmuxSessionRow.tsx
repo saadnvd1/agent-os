@@ -53,16 +53,20 @@ export function TmuxSessionRow({
       title={blocked ?? session.path}
       className={cn(
         "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-left md:min-h-8",
-        disabled
-          ? "cursor-not-allowed opacity-60"
-          : "hover:bg-foreground/[0.04]"
+        disabled ? "cursor-not-allowed" : "hover:bg-foreground/[0.04]"
       )}
     >
-      <span className="flex w-2 shrink-0 justify-center">
+      {/* Dimmed, but not the reason: it stays readable in both themes. */}
+      <span
+        className={cn(
+          "flex w-2 shrink-0 justify-center",
+          disabled && "opacity-60"
+        )}
+      >
         <StateDot state={info.state} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col py-1 leading-tight">
-        <span className="truncate text-sm">
+        <span className={cn("truncate text-sm", disabled && "opacity-60")}>
           {peer ? peer.name : tmuxDisplayName(session.name, session.path)}
         </span>
         {subtitle && (

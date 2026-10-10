@@ -216,9 +216,6 @@ export const sessionKey = (hostId: string, name: string) =>
   `${hostId}\t${name}`;
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
-  // A linked machine's AgentOS lists its own sessions; ssh is for the rest.
-  const link = hostLink(hostId);
-  if (link) return peerTmuxSessions(link);
   const { stdout } = await hostExecFile(
     hostId,
     "tmux",
@@ -465,6 +462,8 @@ class SessionStatusDetector {
   // When each machine was last listed.
   private hostListedAt = new Map<string, number>();
   private refreshing: Promise<void> | null = null;
+  // Linked machines being asked right now (see refreshPeer).
+  private peersAsked = new Set<string>();
   private refreshed = new Set<() => void>();
 
   // One list-sessions per machine that's due, in parallel; the others keep
@@ -481,13 +480,21 @@ class SessionStatusDetector {
   private async list(): Promise<void> {
     const listedAt = Date.now();
     const watched = (controlManager()?.size() ?? 0) > 0;
-    const hosts = listHosts().filter((h) => {
+    const due = listHosts().filter((h) => {
       const last = this.hostListedAt.get(h.id) ?? 0;
       const every =
         h.id === "local" && watched
           ? CONFIG.WATCHED_CACHE_MS
           : CONFIG.CACHE_VALIDITY_MS;
       return listedAt - last >= every;
+    });
+    // A linked machine's AgentOS lists its own sessions, in the background:
+    // a slow one, or one that's asking this machine back, never holds up
+    // this listing. ssh is for the rest.
+    const hosts = due.filter((h) => {
+      const link = hostLink(h.id);
+      if (link) this.refreshPeer(link);
+      return !link;
     });
     const results = await Promise.allSettled(
       hosts.map((h) => listHostSessions(h.id))
@@ -523,6 +530,36 @@ class SessionStatusDetector {
       updatedAt: Date.now(),
     };
     if (hosts.length) for (const fn of this.refreshed) fn();
+  }
+
+  private refreshPeer(link: NonNullable<ReturnType<typeof hostLink>>): void {
+    const hostId = link.hostId;
+    if (this.peersAsked.has(hostId)) return;
+    this.peersAsked.add(hostId);
+    this.hostListedAt.set(hostId, Date.now());
+    void peerTmuxSessions(link)
+      .then(
+        (list) => {
+          const data = new Map(
+            [...this.cache.data].filter(([, i]) => i.hostId !== hostId)
+          );
+          for (const info of list)
+            data.set(sessionKey(info.hostId, info.name), info);
+          const hostErrors = new Map(this.cache.hostErrors);
+          hostErrors.delete(hostId);
+          this.cache = { ...this.cache, data, hostErrors };
+        },
+        (err) => {
+          // Its last known sessions stand; the error says why they're old.
+          const hostErrors = new Map(this.cache.hostErrors);
+          hostErrors.set(hostId, String(err?.message || err));
+          this.cache = { ...this.cache, hostErrors };
+        }
+      )
+      .finally(() => {
+        this.peersAsked.delete(hostId);
+        for (const fn of this.refreshed) fn();
+      });
   }
 
   /** The next refresh lists this machine again (a session came or went). */

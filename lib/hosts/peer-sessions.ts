@@ -125,12 +125,12 @@ async function refreshStatuses(link: HostLink): Promise<void> {
 }
 
 async function refreshManaged(link: HostLink): Promise<void> {
-  const { sessions } = await hostApi<{ sessions?: unknown[] }>(
-    link,
-    "/api/sessions",
-    { timeout: 8000 }
-  );
-  await refreshStatuses(link).catch(() => undefined);
+  const [{ sessions }] = await Promise.all([
+    hostApi<{ sessions?: unknown[] }>(link, "/api/sessions", {
+      timeout: 8000,
+    }),
+    refreshStatuses(link).catch(() => undefined),
+  ]);
   managed.set(
     link.hostId,
     (Array.isArray(sessions) ? sessions : [])
@@ -140,6 +140,31 @@ async function refreshManaged(link: HostLink): Promise<void> {
       .filter((s): s is PeerSession => !!s)
       .map((s) => ({ ...s, state: peerStatus(link.hostId, s.id) }))
   );
+}
+
+/**
+ * A session's last screen lines, as its machine's AgentOS reads them. null
+ * when they couldn't be had, or came back empty (its answer to a failure
+ * too): a caller deciding on them must treat that as unknown, never as clear.
+ */
+export async function peerPane(
+  link: HostLink,
+  sessionId: string
+): Promise<string[] | null> {
+  try {
+    const { lines } = await hostApi<{ lines?: unknown }>(
+      link,
+      `/api/sessions/${encodeURIComponent(sessionId)}/preview`,
+      { timeout: 8000 }
+    );
+    const kept = (Array.isArray(lines) ? lines : [])
+      .filter((l): l is string => typeof l === "string")
+      .map((l) => l.slice(0, 2000))
+      .slice(-200);
+    return kept.some((l) => l.trim()) ? kept : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

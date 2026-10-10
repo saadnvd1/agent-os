@@ -11,7 +11,12 @@
 import { db } from "../db";
 import { hostLink, cleanRemoteText, type HostLink } from "../hosts/remote-api";
 import { openPeerSocket } from "../hosts/peer-socket";
-import { PEER_RETRY_MS, type PeerSocket } from "../terminal/peer-pty";
+import {
+  PEER_GIVE_UP_MS,
+  PEER_RETRY_MS,
+  type PeerSocket,
+} from "../terminal/peer-pty";
+import { SEND_BACKLOG_LIMIT } from "../ws-send";
 import type { ChatSocket } from "./socket";
 
 // Frames a browser sends before the other machine answers, kept until then.
@@ -38,7 +43,8 @@ export function relayChatSocket(
   open: (link: HostLink, query: Record<string, string>) => PeerSocket = (
     l,
     q
-  ) => openPeerSocket(l, "/ws/chat", q)
+  ) => openPeerSocket(l, "/ws/chat", q),
+  now: () => number = Date.now
 ): void {
   let closed = false;
   // Frames are held only while the first connection is on its way; during
@@ -46,6 +52,7 @@ export function relayChatSocket(
   let holding = true;
   let told = false;
   let attempt = 0;
+  let downSince: number | null = null;
   let retry: ReturnType<typeof setTimeout> | null = null;
   let up: PeerSocket | null = null;
   const early: string[] = [];
@@ -58,6 +65,7 @@ export function relayChatSocket(
   };
   // Said once per outage, not on every retry.
   const down = (message: string) => {
+    downSince ??= now();
     holding = false;
     early.length = 0;
     if (!told) fail(message);
@@ -86,6 +94,12 @@ export function relayChatSocket(
         const status = res.statusCode ?? 0;
         res.resume?.();
         sock.terminate?.();
+        // A proxy's 5xx while that AgentOS restarts: retried like a drop.
+        if (status >= 500) {
+          if (up === sock) up = null;
+          down(`${link.hostName}'s AgentOS answered ${status}; reconnecting`);
+          return later();
+        }
         fail(
           status === 401 || status === 403
             ? `${link.hostName} refused this machine's link (${status}). Link it again in Machines.`
@@ -98,13 +112,26 @@ export function relayChatSocket(
       if (closed) return sock.close();
       opened = true;
       attempt = 0;
+      downSince = null;
       told = false;
       holding = false;
       // The other side's snapshot follows, as on any connect.
       for (const frame of early.splice(0)) sock.send(frame);
     });
     sock.on("message", (raw: Buffer | string) => {
-      if (!closed && up === sock) send(raw.toString());
+      if (closed || up !== sock) return;
+      // The browser isn't keeping up and the other side keeps sending: cut
+      // it off rather than queue it all here. A reconnect starts from a
+      // fresh snapshot.
+      if ((ws.bufferedAmount ?? 0) > SEND_BACKLOG_LIMIT) {
+        up = null;
+        sock.terminate?.();
+        down(
+          `${link.hostName}'s chat is arriving faster than it can be shown; reconnecting`
+        );
+        return later();
+      }
+      send(raw.toString());
     });
     sock.on("error", (err: Error) => {
       error = err?.message ?? "";
@@ -131,6 +158,10 @@ export function relayChatSocket(
 
   const later = () => {
     if (closed) return;
+    // Long enough down: the browser's own reconnect takes it from here,
+    // and nothing keeps retrying for a browser that's quietly gone.
+    if (downSince !== null && now() - downSince >= PEER_GIVE_UP_MS)
+      return end(1011, "peer unreachable");
     const wait = PEER_RETRY_MS[Math.min(attempt++, PEER_RETRY_MS.length - 1)];
     retry = setTimeout(() => {
       retry = null;

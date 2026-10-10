@@ -10,8 +10,8 @@ import { WebSocket } from "ws";
 import type { HostLink } from "./remote-api";
 
 export const PEER_HANDSHAKE_MS = 10_000;
-// A long chat's snapshot is one message.
-export const PEER_MAX_PAYLOAD = 64 * 1024 * 1024;
+// A long chat's (paged) snapshot is one message.
+export const PEER_MAX_PAYLOAD = 16 * 1024 * 1024;
 
 export function peerSocketUrl(
   link: Pick<HostLink, "url">,
@@ -27,12 +27,13 @@ export function peerSocketUrl(
 export function openPeerSocket(
   link: HostLink,
   path: string,
-  query: Record<string, string> = {}
+  query: Record<string, string> = {},
+  maxPayload = PEER_MAX_PAYLOAD
 ): WebSocket {
   return new WebSocket(peerSocketUrl(link, path, query), {
     headers: { Authorization: `Bearer ${link.token}` },
     handshakeTimeout: PEER_HANDSHAKE_MS,
-    maxPayload: PEER_MAX_PAYLOAD,
+    maxPayload,
     followRedirects: false,
     perMessageDeflate: true,
   });

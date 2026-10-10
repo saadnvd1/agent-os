@@ -30,6 +30,9 @@ export interface PeerSocket extends EventEmitter {
 export const PEER_RETRY_MS = [1000, 2000, 4000, 8000, 15_000];
 // Retries stop once the link has been down this long.
 export const PEER_GIVE_UP_MS = 2 * 60_000;
+// Output held while paused, past which the other side isn't respecting acks.
+export const PEER_MAX_UNACKED = 4 * 1024 * 1024;
+export const PEER_TERMINAL_MAX_PAYLOAD = 8 * 1024 * 1024;
 
 const OPEN = 1;
 
@@ -40,6 +43,7 @@ export class PeerPty implements Pty {
   private done = false;
   private paused = false;
   private owed = 0;
+  private owedBytes = 0;
   private attempt = 0;
   private opened = false;
   private downSince: number | null = null;
@@ -51,7 +55,12 @@ export class PeerPty implements Pty {
     private cols: number,
     private rows: number,
     private readonly open: (link: HostLink) => PeerSocket = (l) =>
-      openPeerSocket(l, "/ws/terminal", { flow: "1" }),
+      openPeerSocket(
+        l,
+        "/ws/terminal",
+        { flow: "1" },
+        PEER_TERMINAL_MAX_PAYLOAD
+      ),
     private readonly now: () => number = Date.now
   ) {
     // After whoever made this has subscribed to its data and exit.
@@ -82,6 +91,7 @@ export class PeerPty implements Pty {
 
   resume(): void {
     this.paused = false;
+    this.owedBytes = 0;
     for (; this.owed > 0; this.owed--) this.sendJson({ type: "ack" });
   }
 
@@ -126,12 +136,18 @@ export class PeerPty implements Pty {
     }
     this.ws = ws;
     this.owed = 0;
+    this.owedBytes = 0;
     let refused = false;
     ws.on("unexpected-response", (_req: unknown, res: IncomingMessage) => {
       refused = true;
       const status = res.statusCode ?? 0;
       res.resume?.();
       ws.terminate?.();
+      // A proxy's 5xx while that AgentOS restarts: retried like a drop.
+      if (this.opened && status >= 500) {
+        this.ws = null;
+        return this.lost(`it answered ${status}`);
+      }
       this.finish(
         1,
         status === 401 || status === 403
@@ -153,18 +169,41 @@ export class PeerPty implements Pty {
     });
     ws.on("message", (raw: Buffer | string) => {
       if (this.ws !== ws) return;
-      let msg: { type?: unknown; data?: unknown; code?: unknown };
+      // Another machine's frames: anything but an object is ignored, and
+      // nothing it sends may throw out of this listener.
+      let msg: unknown;
       try {
         msg = JSON.parse(raw.toString());
       } catch {
         return;
       }
-      if (msg.type === "output" && typeof msg.data === "string") {
-        this.data(msg.data);
-        if (this.paused) this.owed++;
-        else this.sendJson({ type: "ack" });
-      } else if (msg.type === "detached" || msg.type === "exit") {
-        this.finish(typeof msg.code === "number" ? msg.code : 0);
+      if (!msg || typeof msg !== "object") return;
+      try {
+        const { type, data, code } = msg as Record<string, unknown>;
+        if (type === "output" && typeof data === "string") {
+          if (this.paused) {
+            this.owed++;
+            this.owedBytes += data.length;
+            // It ignores flow control: cut it off rather than hold it all.
+            if (this.owedBytes > PEER_MAX_UNACKED)
+              return this.finish(
+                1,
+                `${this.link.hostName}'s AgentOS sent more than this terminal could take.`
+              );
+          } else this.sendJson({ type: "ack" });
+          this.data(data);
+        } else if (type === "detached" || type === "exit") {
+          this.finish(typeof code === "number" ? code : 0);
+        }
+      } catch (err) {
+        // Its output broke something here (more than the screen can take):
+        // this terminal ends, the server doesn't.
+        console.error(`[peer terminal ${this.link.hostName}]`, err);
+        ws.terminate?.();
+        this.finish(
+          1,
+          `${this.link.hostName}'s terminal sent something this machine couldn't show.`
+        );
       }
     });
     let error = "";

@@ -225,6 +225,48 @@ describe("/ws/chat for a linked machine's session", () => {
     }
   });
 
+  it("is never relayed for a demo visitor", async () => {
+    const { fakePeer } = await import("../__fixtures__/fake-peer");
+    const { linkedHost } = await import("../__fixtures__/linked-host");
+    const peer = await fakePeer("tok");
+    const host = linkedHost(peer.url, "tok");
+    const id = randomUUID();
+    getDb()
+      .prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, view) VALUES (?, 'c', ?, '/tmp', ?, 'chat')`
+      )
+      .run(id, `claude-${id}`, host.hostId);
+    try {
+      const { ws } = open(id, true);
+      ws.message({ type: "send", text: "hi" });
+      await new Promise((r) => setTimeout(r, 100));
+      expect(peer.upgrades).toEqual([]);
+      ws.emit("close");
+    } finally {
+      host.remove();
+      await peer.close();
+    }
+  });
+
+  it("refuses an agent's or a schedule's send to a linked chat", async () => {
+    const { linkedHost } = await import("../__fixtures__/linked-host");
+    const { sendChat } = await import("./runner");
+    const host = linkedHost("http://127.0.0.1:9", "tok");
+    const id = randomUUID();
+    getDb()
+      .prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, view) VALUES (?, 'c', ?, '/tmp', ?, 'chat')`
+      )
+      .run(id, `claude-${id}`, host.hostId);
+    try {
+      await expect(sendChat(id, { text: "from an agent" })).rejects.toThrow(
+        /runs this chat/
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
   it("an unlinked machine's chat is refused, saying to link it", async () => {
     const id = session();
     const { ws, sent } = open(id);

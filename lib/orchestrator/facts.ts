@@ -7,6 +7,8 @@
 
 import { db, type Session, type StackItemStatus } from "../db";
 import { statusDetector } from "../status-detector";
+import { hostLink } from "../hosts/remote-api";
+import { peerStatus } from "../hosts/peer-sessions";
 import { chatState } from "../chat/runner";
 import { chatActivityLine } from "../chat/activity";
 import { lastUserTask } from "../chat/store";
@@ -128,9 +130,14 @@ export async function statusOf(s: Session): Promise<{
     (s.setup_status === "running" || s.setup_status === "held")
   )
     return { status: "running", activity: "setting up", needsInput: false };
-  if (!statusDetector.sessionExists(s.tmux_name))
+  const host = s.host_id || "local";
+  const linked = !!hostLink(host);
+  if (!linked && !statusDetector.sessionExists(s.tmux_name, host))
     return { status: "dead", activity: null, needsInput: false };
-  const screen = await statusDetector.getStatus(s.tmux_name);
+  // A linked machine says how its sessions are; unknown counts as busy.
+  const screen = linked
+    ? (peerStatus(host, s.id) ?? "running")
+    : await statusDetector.getStatus(s.tmux_name, undefined, host);
   // A program's own report (OSC 7501) is text it chose, so here it can only
   // make things more cautious: working or blocked count, but a reported done
   // never turns a busy screen idle for planDone or `done --all-idle`. Its

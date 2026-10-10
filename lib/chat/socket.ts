@@ -42,6 +42,8 @@ export interface ChatSocket {
   on(event: "message", fn: (raw: Buffer) => void): unknown;
   on(event: "close" | "error", fn: () => void): unknown;
   close(code?: number, reason?: string): void;
+  // What's queued to the browser and not yet sent (a real socket has it).
+  bufferedAmount?: number;
 }
 
 // Closed because the session it watched no longer exists.

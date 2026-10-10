@@ -688,9 +688,12 @@ WebSockets with the link's device token, and only ever connects out to it.
 - Terminals attach through its `/ws/terminal`, relayed by this server; one
   connection per session however many views show it, with flow control
   carried through. A dropped connection retries for two minutes, then says so.
-- Chats open in the chat view through its `/ws/chat`. Messages from agents
+- Chats open in the chat view through its `/ws/chat`, retried the same way
+  while the chat stays open. Messages from agents
   (`aos send`) and schedules aren't relayed to another machine's chats: they'd
   arrive there as yours.
+- The orchestrator asks that machine for a linked task's screen before
+  clearing it; a screen it can't get counts as possibly blocked.
 - ssh stays for machines that aren't linked. A row that can't be opened
   (the machine unreachable, a name tmux can't attach) is greyed out and says why.
 

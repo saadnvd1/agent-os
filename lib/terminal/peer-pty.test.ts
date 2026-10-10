@@ -122,3 +122,118 @@ describe("PeerPty", () => {
     t.pty.kill();
   });
 });
+
+describe("PeerPty against a misbehaving or absent peer", async () => {
+  const { EventEmitter } = await import("events");
+  const { vi } = await import("vitest");
+  const { PEER_GIVE_UP_MS } = await import("./peer-pty");
+  const link: HostLink = {
+    hostId: "box",
+    hostName: "box",
+    url: "http://box:3011",
+    token: "t",
+  };
+  type Sock = InstanceType<typeof EventEmitter> & {
+    readyState: number;
+    sent: string[];
+    send(d: string): void;
+    close(): void;
+    terminate(): void;
+  };
+  function harness() {
+    let t = 0;
+    const socks: Sock[] = [];
+    const open = () => {
+      const s = Object.assign(new EventEmitter(), {
+        readyState: 0,
+        sent: [] as string[],
+        send(d: string) {
+          s.sent.push(d);
+        },
+        close() {},
+        terminate() {},
+      }) as Sock;
+      socks.push(s);
+      return s;
+    };
+    const pty = new PeerPty(
+      link,
+      { sessionName: "main", attachOnly: true },
+      80,
+      24,
+      open,
+      () => t
+    );
+    let out = "";
+    let exit: number | null = null;
+    pty.onData((d) => (out += d));
+    pty.onExit(({ exitCode }) => (exit = exitCode));
+    const opened = (s: Sock) => {
+      s.readyState = 1;
+      s.emit("open");
+    };
+    return {
+      pty,
+      socks,
+      opened,
+      at: (ms: number) => (t = ms),
+      out: () => out,
+      exit: () => exit,
+    };
+  }
+
+  it("gives up, saying so, once the peer has been gone too long", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness();
+      await Promise.resolve();
+      h.opened(h.socks[0]);
+      h.socks[0].emit("close");
+      h.at(PEER_GIVE_UP_MS + 1);
+      vi.advanceTimersByTime(1000);
+      expect(h.socks).toHaveLength(2);
+      h.socks[1].emit("close");
+      expect(h.exit()).toBe(1);
+      expect(h.out()).toContain("Lost box's AgentOS");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries a proxy's 5xx after it was connected, instead of ending", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness();
+      await Promise.resolve();
+      h.opened(h.socks[0]);
+      h.socks[0].emit("unexpected-response", {}, { statusCode: 502 });
+      expect(h.exit()).toBeNull();
+      vi.advanceTimersByTime(1000);
+      expect(h.socks).toHaveLength(2);
+      h.pty.kill();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores frames that aren't objects, without throwing", async () => {
+    const h = harness();
+    await Promise.resolve();
+    h.opened(h.socks[0]);
+    for (const f of ["null", "7", '"x"', "[]", "{"])
+      expect(() => h.socks[0].emit("message", Buffer.from(f))).not.toThrow();
+    expect(h.exit()).toBeNull();
+    h.pty.kill();
+  });
+
+  it("cuts off a peer that ignores flow control", async () => {
+    const h = harness();
+    await Promise.resolve();
+    h.opened(h.socks[0]);
+    h.pty.pause();
+    const big = JSON.stringify({ type: "output", data: "x".repeat(1 << 20) });
+    for (let i = 0; i < 6; i++) h.socks[0].emit("message", Buffer.from(big));
+    expect(h.exit()).toBe(1);
+    expect(h.out()).toContain("more than this terminal could take");
+  });
+});

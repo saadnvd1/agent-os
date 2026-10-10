@@ -7,6 +7,8 @@ import { lastItems } from "../chat/store";
 import { blockedReason } from "../tasks/state";
 import { checkWaitingPatterns, statusDetector } from "../status-detector";
 import { getCheck, putCheck } from "./checks";
+import { hostLink } from "../hosts/remote-api";
+import { peerPane } from "../hosts/peer-sessions";
 import { untrusted } from "./untrusted";
 
 // A BLOCKED: line or a waiting prompt, from wherever the task's agent
@@ -27,17 +29,32 @@ export async function waitingState(
           : null,
     };
   }
-  await statusDetector.refreshCache();
-  if (!statusDetector.sessionExists(task.tmux_name))
-    return {
-      blocked:
-        "its terminal is gone, so a BLOCKED: line or open prompt can't be ruled out",
-      waitingOn: null,
-    };
-  const tail = (await statusDetector.capturePane(task.tmux_name))
-    .split("\n")
-    .slice(-15)
-    .join("\n");
+  // A linked machine reads its own screens: asked, and an answer it can't
+  // give is a screen that can't be cleared.
+  const link = hostLink(task.host_id);
+  let tail: string;
+  if (link) {
+    const lines = await peerPane(link, task.id);
+    if (!lines)
+      return {
+        blocked: `its terminal on ${link.hostName} couldn't be read, so a BLOCKED: line or open prompt can't be ruled out`,
+        waitingOn: null,
+      };
+    tail = lines.slice(-15).join("\n");
+  } else {
+    const host = task.host_id || "local";
+    await statusDetector.refreshCache();
+    if (!statusDetector.sessionExists(task.tmux_name, host))
+      return {
+        blocked:
+          "its terminal is gone, so a BLOCKED: line or open prompt can't be ruled out",
+        waitingOn: null,
+      };
+    tail = (await statusDetector.capturePane(task.tmux_name, host))
+      .split("\n")
+      .slice(-15)
+      .join("\n");
+  }
   const reason = blockedReason(tail);
   return {
     blocked: reason === null ? null : untrusted(task.name, reason),

@@ -132,3 +132,87 @@ describe("relayChatSocket", () => {
     r.browser.emit("close");
   });
 });
+
+describe("relayChatSocket over time", async () => {
+  const { vi } = await import("vitest");
+  const { PEER_GIVE_UP_MS } = await import("../terminal/peer-pty");
+  type Sock = InstanceType<typeof EventEmitter> & {
+    readyState: number;
+    send(d: string): void;
+    close(): void;
+    terminate(): void;
+  };
+  function harness() {
+    let t = 0;
+    const socks: Sock[] = [];
+    const browser = new Browser();
+    const failed: string[] = [];
+    relayChatSocket(
+      browser,
+      { hostId: "box", hostName: "box", url: "http://box:3011", token: "t" },
+      { session: "s1" },
+      () => {},
+      (m) => failed.push(m),
+      () => {
+        const s = Object.assign(new EventEmitter(), {
+          readyState: 0,
+          send() {},
+          close() {},
+          terminate() {},
+        }) as Sock;
+        socks.push(s);
+        return s;
+      },
+      () => t
+    );
+    return { browser, socks, failed, at: (ms: number) => (t = ms) };
+  }
+
+  it("stops retrying once the peer has been gone too long", () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness();
+      h.socks[0].emit("close", 1006, "");
+      h.at(PEER_GIVE_UP_MS + 1);
+      vi.advanceTimersByTime(1000);
+      h.socks[1].emit("close", 1006, "");
+      expect(h.browser.closedWith?.[0]).toBe(1011);
+      vi.advanceTimersByTime(60_000);
+      expect(h.socks).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries a proxy's 5xx rather than ending the chat", () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness();
+      h.socks[0].emit("unexpected-response", {}, { statusCode: 503 });
+      expect(h.browser.closedWith).toBeNull();
+      vi.advanceTimersByTime(1000);
+      expect(h.socks).toHaveLength(2);
+      h.browser.emit("close");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cuts off the peer while the browser is far behind", () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness();
+      h.socks[0].readyState = 1;
+      h.socks[0].emit("open");
+      (h.browser as unknown as { bufferedAmount: number }).bufferedAmount =
+        64 * 1024 * 1024;
+      const sent: string[] = [];
+      h.socks[0].emit("message", Buffer.from("{}"));
+      expect(sent).toEqual([]);
+      expect(h.failed[0]).toContain("faster than it can be shown");
+      h.browser.emit("close");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
