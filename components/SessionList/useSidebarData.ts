@@ -13,6 +13,7 @@ import { useSessionsQuery } from "@/data/sessions";
 import { useProjectsQuery } from "@/data/projects";
 import { useTasksQuery } from "@/data/tasks";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
+import { useOrchestratorsQuery } from "@/data/orchestrators";
 import { sidebarUi } from "@/stores/sidebarUi";
 import type { SessionStatus } from "./SessionList.types";
 
@@ -30,6 +31,16 @@ export function useSidebarData(
   const projectsQuery = useProjectsQuery();
   const { workspaces, workspace } = useSelectedWorkspace();
   const { data: tasks = NONE } = useTasksQuery();
+  const { data: orchestrators = NONE } = useOrchestratorsQuery();
+  // Keyed by the ids, so an asks push doesn't re-sort the shelves.
+  const currentKey = orchestrators
+    .flatMap((o) => (o.sessionId ? [o.sessionId] : []))
+    .sort()
+    .join(",");
+  const currentOrchestrators = useMemo(
+    () => new Set(currentKey ? currentKey.split(",") : []),
+    [currentKey]
+  );
 
   const sessions = useMemo(
     () => sessionsQuery.data?.sessions ?? [],
@@ -69,12 +80,14 @@ export function useSidebarData(
       projectName,
       query: ui.query,
       projectId: project?.id ?? null,
+      currentOrchestrators,
     });
   }, [
     sessions,
     projects,
     workspaces,
     tasks,
+    currentOrchestrators,
     sessionStatuses,
     workspace,
     project,

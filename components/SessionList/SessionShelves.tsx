@@ -6,6 +6,7 @@ import { DONE_PAGE, doneLimit, type Shelves } from "@/lib/sidebar/shelves";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
 import { SessionRow } from "./SessionRow";
+import { OrchestratorPinRow } from "./OrchestratorPinRow";
 
 function ShelfLabel({
   label,
@@ -65,7 +66,8 @@ function Shelf({
   );
 }
 
-// Pinned, Needs you, Working, then Done: once for the whole list.
+// The pinned orchestrator, then Pinned, Needs you, Working and Done: once
+// for the whole list.
 export function SessionShelves({
   shelves,
   doneCollapsed,
@@ -79,6 +81,17 @@ export function SessionShelves({
   const hidden = shelves.done.length - shown.length;
   return (
     <>
+      {shelves.orchestrators.length > 0 && (
+        <section aria-label="Orchestrator" className="space-y-1 pt-2">
+          {shelves.orchestrators.map((r) => (
+            <OrchestratorPinRow
+              key={r.session.id}
+              row={r}
+              showWorkspace={shelves.orchestrators.length > 1}
+            />
+          ))}
+        </section>
+      )}
       {shelves.pinned.length > 0 && (
         <Shelf label="Pinned">
           {shelves.pinned.map((r) => (

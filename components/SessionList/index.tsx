@@ -57,6 +57,7 @@ export function SessionList({
   const orderedIds = useMemo(
     () =>
       flatten([
+        ...shelves.orchestrators,
         ...shelves.pinned,
         ...shelves.needsYou,
         ...shelves.working,
