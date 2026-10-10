@@ -167,6 +167,11 @@ session <id> (copying)`, and the restore's own transaction sets it to
   its copy, is still found and dropped; a copy that finishes after its
   session was deleted drops itself. A pending copy isn't exported or
   briefed as the session's.
+- **A drop leaves a mark.** A drop with nothing to drop yet, or one that
+  dropped the copy, writes `{"dropped":true}`, and every write of the copy's
+  record is a compare-and-set over the last one. So a session that ends
+  before or during its setup's database step never gets a copy afterwards:
+  the step stops before `createdb`, or drops what it finished or reused.
 
 ## Consequences
 

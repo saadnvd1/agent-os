@@ -209,7 +209,7 @@ async function makeDatabase(
   sessionId: string,
   declared: DatabaseDecl,
   run: PgRun,
-  record: (state: SessionDatabase) => void
+  record: (state: SessionDatabase) => number
 ): Promise<SessionDatabase> {
   const state: SessionDatabase = {
     name: null,
@@ -241,7 +241,8 @@ async function makeDatabase(
         error: `${target} already exists and AgentOS didn't make it, so it was left alone`,
       };
     // An interrupted copy of ours: made again from the start.
-    record({ ...state, name: target, pending: true });
+    if (!record({ ...state, name: target, pending: true }))
+      return { ...state, error: ENDED };
     const dropped = await run("dropdb", ["--if-exists", target], env);
     if (dropped.code !== 0)
       return {
@@ -249,10 +250,16 @@ async function makeDatabase(
         error: `could not remove the half-made ${target}: ${oneLine(dropped.out)}`,
       };
   }
-  record({ ...state, name: target, pending: true });
+  if (!record({ ...state, name: target, pending: true }))
+    return { ...state, error: ENDED };
   const failed = await copy(run, env, declared.from, target, sessionId);
   return failed ? { ...state, error: failed } : { ...state, name: target };
 }
+
+// Written by a drop, copy or none: a setup still on its way to the copy
+// step must not make one for a session that has ended.
+const DROPPED = JSON.stringify({ dropped: true });
+const ENDED = "the session ended before its copy was made";
 
 const isLocal = (hostId: string | null | undefined) =>
   !hostId || hostId === "local";
@@ -261,7 +268,7 @@ export function sessionDatabase(sessionId: string): SessionDatabase | null {
   const row = db
     .prepare(`SELECT database FROM sessions WHERE id = ?`)
     .get(sessionId) as { database: string | null } | undefined;
-  if (!row?.database) return null;
+  if (!row?.database || row.database === DROPPED) return null;
   try {
     return JSON.parse(row.database) as SessionDatabase;
   } catch {
@@ -299,6 +306,7 @@ export async function ensureSessionDatabase(
     }
     return changed;
   };
+  if (written === DROPPED) return null;
   let state: SessionDatabase;
   try {
     state = await makeDatabase(sessionId, declared, run, save);
@@ -360,7 +368,15 @@ export function dropSessionDatabase(
   run: PgRun = pgRun
 ): Promise<void> {
   const state = sessionDatabase(sessionId);
-  if (!state?.name || state.name === state.from) return Promise.resolve();
+  if (!state?.name) {
+    // Nothing made yet: marked, so a setup still on its way makes none.
+    db.prepare(`UPDATE sessions SET database = ? WHERE id = ?`).run(
+      DROPPED,
+      sessionId
+    );
+    return Promise.resolve();
+  }
+  if (state.name === state.from) return Promise.resolve();
   return dropDatabase(sessionId, state, run).catch((error) => {
     console.error(`[database] drop for ${sessionId}:`, error);
   });
@@ -374,8 +390,8 @@ async function dropDatabase(
   const name = state.name!;
   const forget = () =>
     db
-      .prepare(`UPDATE sessions SET database = NULL WHERE id = ?`)
-      .run(sessionId);
+      .prepare(`UPDATE sessions SET database = ? WHERE id = ?`)
+      .run(DROPPED, sessionId);
   if (refusal({ from: state.from, host: state.host, env: state.env })) return;
   const env = pgEnv(state);
   const listed = await listDatabases(run, env);

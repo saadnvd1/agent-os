@@ -323,6 +323,49 @@ describe("ensureSessionDatabase", () => {
     expect(pg.dbs.has(databaseName("app_dev", id))).toBe(false);
   });
 
+  it("makes no copy for a session that ended before setup reached the step", async () => {
+    const id = session();
+    await dropSessionDatabase(id, pg.run);
+    expect(await ensureSessionDatabase(id, decl, pg.run)).toBeNull();
+    expect(pg.calls).toEqual([]);
+    expect(sessionProjectEnv(id).DB_NAME).toBeUndefined();
+  });
+
+  it("makes no copy when the session ends while its setup lists the databases", async () => {
+    const id = session();
+    const run = pg.run;
+    pg.run = async (cmd, args, env) => {
+      // Nothing recorded yet: the drop leaves its mark.
+      if (cmd === "psql" && args.includes("-c"))
+        await dropSessionDatabase(id, run);
+      return run(cmd, args, env);
+    };
+    const made = await ensureSessionDatabase(id, decl, pg.run);
+    expect(made?.name).toBeNull();
+    expect(made?.error).toContain("ended before its copy was made");
+    expect(pg.calls.some((c) => c[0] === "createdb")).toBe(false);
+    expect(pg.dbs.has(databaseName("app_dev", id))).toBe(false);
+  });
+
+  it("drops a copy it reused for a session that ended meanwhile", async () => {
+    const id = session();
+    const name = databaseName("app_dev", id);
+    await ensureSessionDatabase(id, decl, pg.run);
+    // A later start: the session ends between reading the row and reusing.
+    db.prepare(`UPDATE sessions SET database = NULL WHERE id = ?`).run(id);
+    const run = pg.run;
+    pg.run = async (cmd, args, env) => {
+      if (cmd === "psql" && args.includes("-c")) {
+        const out = await run(cmd, args, env);
+        await dropSessionDatabase(id, run);
+        return out;
+      }
+      return run(cmd, args, env);
+    };
+    expect(await ensureSessionDatabase(id, decl, pg.run)).toBeNull();
+    expect(pg.dbs.has(name)).toBe(false);
+  });
+
   it("accepts one socket folder, and talks to it", async () => {
     const id = session();
     const made = await ensureSessionDatabase(
