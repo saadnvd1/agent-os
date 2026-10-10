@@ -36,7 +36,12 @@ import {
 export const CHALLENGE_MS = 2 * 60 * 1000;
 const ENROLL_MS = 10 * 60 * 1000;
 
-export type PresencePurpose = "approve" | "resume" | "enroll" | "revoke";
+export type PresencePurpose =
+  | "approve"
+  | "resume"
+  | "enroll"
+  | "revoke"
+  | "approvals-off";
 
 export class PresenceError extends Error {
   constructor(

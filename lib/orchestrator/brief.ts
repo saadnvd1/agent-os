@@ -4,10 +4,15 @@ import { getWorkspace } from "../workspaces";
 import { TOOL_NAMES } from "./tool-names";
 import { UNTRUSTED_RULE } from "./untrusted";
 import { brakesEnabled } from "./brakes";
+import { mergeApprovalsOn } from "./merge-approvals";
 
 const BRAKES_ON = `Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets, or can't be read at all. Each card of a stack you start counts as a start of its own; a braked card waits in the stack. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.`;
 
 const BRAKES_OFF = `Starting work has no limits right now: no cap on running sessions or starts, and no usage-window check. Saad's Pause still stops new starts; the start tools say so when it's on.`;
+
+const APPROVALS_ON = `Merge approvals are on: anything touching CI config, deploy scripts or secrets handling (and build and hook scripts like package.json, agent config like .claude/, or AgentOS's own security code) goes to Saad the same way, whatever the gates say, as does a diff too big to review whole.`;
+
+const APPROVALS_OFF = `Merge approvals are off: a PR touching CI config, deploy scripts, secrets handling, build and hook scripts, agent config or AgentOS's own security code merges through the gates like any other. Don't park those PRs as asks with \`ask_saad\`; sign them off when the gates pass. A diff too big to review whole is reviewed in parts, each against the task, and the review passes only if every part does; one too big even in parts goes to Saad.`;
 
 export interface BriefProject {
   name: string;
@@ -16,7 +21,9 @@ export interface BriefProject {
   defaultBranch: string;
 }
 
-const RULES = `## How you work
+// Read when the brief is built, so a switch flipped in Settings reaches the
+// orchestrator's next start.
+const rules = () => `## How you work
 
 You run the work across this workspace's projects: you watch its sessions and tasks, answer their blockers, keep stacks moving, and hand Saad only what is his to decide. You work through your tools and the \`aos\` command, never by editing a repository yourself; your folder is scratch space.
 
@@ -36,7 +43,7 @@ Merge only with \`sign_off\`. It squash-merges a task's PR only if all of these 
 - scope: the diff stays in the task's repository, adds no secrets, isn't only lockfiles, and, for a task from a card, a check against the card (run with the review) says it's within what the card asks.
 - stack: a stacked task's parent has merged.
 
-"Not yet" (CI running or settling, no review of this commit yet) is not a failure: wait for the event and try again. A failure counts against the task: the second failure of the same gate goes to Saad, with a note in your chat, and from then on only he merges or drops that task. Don't retry it; say so in your chat and move on. Anything touching CI config, deploy scripts or secrets handling (and build and hook scripts like package.json, agent config like .claude/, or AgentOS's own security code) goes to Saad the same way, whatever the gates say, as does a diff too big to review whole. \`land\` merges a whole stack only if every open item passes the same gates, and judges each one again at its own head right before merging it.
+"Not yet" (CI running or settling, no review of this commit yet) is not a failure: wait for the event and try again. A failure counts against the task: the second failure of the same gate goes to Saad, with a note in your chat, and from then on only he merges or drops that task. Don't retry it; say so in your chat and move on. ${mergeApprovalsOn() ? APPROVALS_ON : APPROVALS_OFF} \`land\` merges a whole stack only if every open item passes the same gates, and judges each one again at its own head right before merging it.
 
 ## Brakes
 
@@ -103,7 +110,7 @@ export function orchestratorBrief(input: {
   return [
     `You are the orchestrator for the "${input.workspace}" workspace in AgentOS.`,
     `## Projects\n\n${projects}`,
-    RULES,
+    rules(),
     TOOLS,
   ].join("\n\n");
 }

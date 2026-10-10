@@ -2,6 +2,7 @@ import { tailscaleStatus, type TailscaleState } from "@/lib/tailscale";
 import { networkSetting, networkSettingLocked } from "./network-settings";
 import { reachableAt, type Reach } from "./reach";
 import { connectStatus, type ConnectStatus } from "@/lib/connect/serve";
+import { mergeApprovalsOn } from "@/lib/orchestrator/merge-approvals";
 
 export interface NetworkState {
   lan: { on: boolean; locked: boolean };
@@ -9,6 +10,8 @@ export interface NetworkState {
   tailscale: TailscaleState;
   reach: Reach[];
   connect: ConnectStatus;
+  // Not network, but switched beside it: who may let a sensitive PR merge.
+  mergeApprovals: { on: boolean; locked: boolean };
 }
 
 export async function networkState(): Promise<NetworkState> {
@@ -21,6 +24,7 @@ export async function networkState(): Promise<NetworkState> {
     tailscale: await tailscaleStatus(),
     reach: await reachableAt(),
     connect: connectStatus(),
+    mergeApprovals: { on: mergeApprovalsOn(), locked: false },
   };
 }
 
@@ -33,5 +37,6 @@ export function demoNetworkState(): NetworkState {
     tailscale: { state: "missing" },
     reach: [],
     connect: { state: "off" },
+    mergeApprovals: { on: false, locked: true },
   };
 }

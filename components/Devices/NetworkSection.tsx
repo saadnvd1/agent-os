@@ -76,6 +76,13 @@ export function NetworkSection({
           update.mutate({ requirePairingOnTailnet })
         }
       />
+      <Toggle
+        title="Require my approval to merge sensitive or large PRs"
+        detail="PRs touching CI, deploys, secrets, build scripts, agent config or AgentOS's security code, or too big to review whole, wait for you to approve them with your passkey. Off, they merge through the usual gates, and a big PR is reviewed in parts."
+        checked={data.mergeApprovals.on}
+        locked={data.mergeApprovals.locked || !canManage}
+        onChange={(mergeApprovals) => update.mutate({ mergeApprovals })}
+      />
       {update.error && (
         <p className="text-destructive text-xs">{update.error.message}</p>
       )}

@@ -1,8 +1,9 @@
 /**
  * What a task's PR changes, read from git at its exact head commit, and the
  * plain rules a merge is held to before any model looks at it: nothing
- * outside the repository, no secrets, not only lockfiles, and nothing
- * touching CI, deploys or secrets handling without Saad.
+ * outside the repository, no secrets, not only lockfiles, and, while merge
+ * approvals are on, nothing touching CI, deploys or secrets handling
+ * without Saad.
  */
 
 import path from "path";
@@ -92,7 +93,8 @@ const SENSITIVE: { why: string; test: RegExp }[] = [
   },
 ];
 
-// Files a merge must go to Saad for, whatever the gates say.
+// Files a merge goes to Saad for, whatever the gates say, while merge
+// approvals are on (merge-approvals.ts).
 export function sensitiveFiles(
   files: ChangedFile[]
 ): { path: string; why: string }[] {

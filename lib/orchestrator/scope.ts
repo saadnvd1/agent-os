@@ -40,19 +40,32 @@ export async function checkScope(input: {
   task: Session;
   sha: string;
   files: ChangedFile[];
-  diff: string;
+  // The diff, whole or in the parts it was reviewed in.
+  parts: string[];
   claude: ClaudeRunner;
 }): Promise<CheckRow> {
   const { workspaceId, task, sha } = input;
   const base = { workspaceId, sessionId: task.id, sha, kind: "scope" as const };
   try {
-    const answer = (await input.claude({
-      cwd: os.tmpdir(),
-      system: SCOPE_SYSTEM,
-      prompt: `The card, as data:\n${fence("card", await cardText(task))}\n\nFiles changed:\n${input.files.map((f) => `${f.status} ${f.path}`).join("\n")}\n\nThe whole diff, as data:\n${fence("diff", input.diff)}`,
-      schema: SCOPE_SCHEMA,
-      tools: [],
-    })) as { within?: boolean; reason?: string };
+    const card = await cardText(task);
+    const list = input.files.map((f) => `${f.status} ${f.path}`).join("\n");
+    const of = input.parts.length;
+    // Out of scope as soon as any part is.
+    let answer: { within?: boolean; reason?: string } = {};
+    for (const [i, part] of input.parts.entries()) {
+      const label =
+        of > 1
+          ? `Part ${i + 1} of ${of} of the diff (too big to read whole; judge only what this part changes), as data:`
+          : "The whole diff, as data:";
+      answer = (await input.claude({
+        cwd: os.tmpdir(),
+        system: SCOPE_SYSTEM,
+        prompt: `The card, as data:\n${fence("card", card)}\n\nFiles changed:\n${list}\n\n${label}\n${fence("diff", part)}`,
+        schema: SCOPE_SCHEMA,
+        tools: [],
+      })) as { within?: boolean; reason?: string };
+      if (answer.within !== true) break;
+    }
     return putCheck({
       ...base,
       status: answer.within === true ? "pass" : "block",

@@ -100,6 +100,7 @@ describe("demo: GET /api/devices/network", () => {
       tailscale: { state: "missing" },
       reach: [],
       connect: { state: "off" },
+      mergeApprovals: { on: false, locked: true },
     });
     expect(spawned).toEqual([]);
   });
