@@ -348,6 +348,72 @@ describe("starting directly", () => {
   });
 });
 
+describe("a slot held by a direct start", () => {
+  it("is given back when the start fails", async () => {
+    const t = seedWorkspace();
+    updateWorkspace(t.workspace.id, { maxRunningTasks: 2 });
+    await expect(
+      startOrQueue({ projectId: t.app.id, prompt: "a" }, async () => {
+        throw new Error("braked");
+      })
+    ).rejects.toThrow("braked");
+    expect(
+      await startOrQueue({ projectId: t.app.id, prompt: "b" }, async () => "b")
+    ).toEqual({ started: "b" });
+  });
+
+  it("keeps the tick from starting a queued task into it", async () => {
+    const t = seedWorkspace();
+    updateWorkspace(t.workspace.id, { maxRunningTasks: 2 });
+    const waiting = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "waits",
+      after: t.task,
+    })!;
+    seedSession({ projectId: t.app.id, name: "other", task: true });
+    let release!: () => void;
+    const slow = new Promise<void>((r) => (release = r));
+    finish(t.task); // its after is met; one running, one direct start
+    const direct = startOrQueue({ projectId: t.api.id, prompt: "d" }, () =>
+      slow.then(() => "d")
+    );
+    await tick();
+    expect(started).toEqual([]);
+    release();
+    await direct;
+    await tick();
+    // The direct start never made a row here, so its slot is free again.
+    expect(started.map((s) => s.id)).toEqual([waiting.id]);
+  });
+});
+
+describe("a keyed retry's leftovers", () => {
+  it("are only cleared when no task has that worktree or branch", async () => {
+    const { ownedByATask } = await import("./index");
+    const { worktreePathFor } = await import("@/lib/worktrees");
+    const t = seedWorkspace();
+    const feature = "fix-login-ab12";
+    expect(ownedByATask(t.app.id, "/tmp/app", feature)).toBe(false);
+    const byBranch = seedSession({
+      projectId: t.app.id,
+      name: "b",
+      task: true,
+    });
+    db.prepare(`UPDATE sessions SET branch_name = ? WHERE id = ?`).run(
+      `feature/${feature}`,
+      byBranch
+    );
+    expect(ownedByATask(t.app.id, "/tmp/app", feature)).toBe(true);
+    expect(ownedByATask(t.api.id, "/tmp/api", feature)).toBe(false);
+    const byPath = seedSession({ projectId: t.api.id, name: "p", task: true });
+    db.prepare(`UPDATE sessions SET worktree_path = ? WHERE id = ?`).run(
+      worktreePathFor("/tmp/api", feature),
+      byPath
+    );
+    expect(ownedByATask(t.api.id, "/tmp/api", feature)).toBe(true);
+  });
+});
+
 describe("planQueue", () => {
   const row = (id: string, workspace: string | null, status = "queued") =>
     ({

@@ -95,6 +95,9 @@ export async function createTask(opts: {
   hostId?: string;
   // The caller's key for it: a retry with the same id gets the same task.
   id?: string;
+  // A queued task's start: clear what an attempt cut off by a restart left
+  // (its worktree and branch, when nothing is on them).
+  reclaim?: boolean;
   // How its agent runs: in a terminal (the default) or as a chat.
   view?: "chat" | "terminal";
 }): Promise<Session> {
@@ -112,6 +115,24 @@ export async function createTask(opts: {
     }
   }
   return startTask(opts, randomUUID());
+}
+
+// Whether a session already has this feature's worktree or branch: then
+// it's that task's, never a cut-off start's leftover to clear.
+export function ownedByATask(
+  projectId: string,
+  projectPath: string,
+  feature: string
+): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM sessions WHERE worktree_path = ? OR (project_id = ? AND branch_name = ?)`
+    )
+    .get(
+      worktreePathFor(projectPath, feature),
+      projectId,
+      generateBranchName(feature)
+    );
 }
 
 // Tasks being started in this process, by the caller's id.
@@ -154,20 +175,10 @@ async function startTask(
     opts.base?.branch ??
     opts.baseBranch ??
     (await getDefaultBranch(projectPath));
-  // A keyed start retried after a restart cut it off mid-setup: what it
+  // A queued start retried after a restart cut it off mid-setup: what it
   // made has no task (createTask returned early if it had one).
-  if (opts.id) {
-    const owned = db
-      .prepare(
-        `SELECT 1 FROM sessions WHERE worktree_path = ? OR (project_id = ? AND branch_name = ?)`
-      )
-      .get(
-        worktreePathFor(projectPath, feature),
-        project.id,
-        generateBranchName(feature)
-      );
-    if (!owned) await discardLeftoverStart(projectPath, feature);
-  }
+  if (opts.reclaim && !ownedByATask(project.id, projectPath, feature))
+    await discardLeftoverStart(projectPath, feature);
   const wt = await createWorktree({
     projectPath,
     featureName: feature,

@@ -321,6 +321,35 @@ describe("acting inside the workspace", () => {
     }
   });
 
+  it("a queued task whose project left the workspace isn't started", async () => {
+    const { mine, other } = twoWorkspaces();
+    const w = mine.workspace.id;
+    started.length = 0;
+    await runTool(w, "start_task", {
+      project: mine.app.name,
+      prompt: "moved away",
+      after: mine.task,
+    });
+    const { listQueue, tickQueue } = await import("@/lib/tasks/queue");
+    const id = listQueue().find((q) => q.prompt === "moved away")!.id;
+    db.prepare(`UPDATE projects SET workspace_id = ? WHERE id = ?`).run(
+      other.workspace.id,
+      mine.app.id
+    );
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      mine.task
+    );
+    await tickQueue();
+    expect(started).not.toContain("moved away");
+    expect(
+      db.prepare(`SELECT status, error FROM task_queue WHERE id = ?`).get(id)
+    ).toEqual({
+      status: "failed",
+      error:
+        "Not started: its project left the orchestrator's workspace or this machine",
+    });
+  });
+
   it("a start cut off by a restart after its task exists is announced and counted", async () => {
     const { mine } = twoWorkspaces();
     const w = mine.workspace.id;

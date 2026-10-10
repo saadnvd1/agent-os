@@ -334,29 +334,55 @@ async function dropBranch(repo: string, branch: string | null): Promise<void> {
 
 /**
  * What a start cut off by a restart left for this feature: its worktree and
- * branch, made before any task owned them. A keyed retry of that start
+ * branch, made before any task owned them. A queued task's retry
  * (lib/tasks/queue.ts) removes them first, or every retry fails with
- * "already exists". Never called for a path a task already owns.
+ * "already exists". Anything with work on it (a commit no other branch has,
+ * or a change in the worktree) isn't a leftover: it's refused, for a person.
  */
 export async function discardLeftoverStart(
   projectPath: string,
   featureName: string
 ): Promise<boolean> {
   const repo = resolvePath(projectPath);
-  const worktreePath = worktreePathFor(projectPath, featureName);
+  const worktreePath = resolvePath(worktreePathFor(projectPath, featureName));
   const branch = generateBranchName(featureName);
   const registered = (await listWorktrees(repo)).some(
-    (w) => path.resolve(w.path) === path.resolve(resolvePath(worktreePath))
+    (w) => path.resolve(w.path) === path.resolve(worktreePath)
   );
-  const there = registered || fs.existsSync(resolvePath(worktreePath));
+  const there = registered || fs.existsSync(worktreePath);
   const hasBranch = await branchExists(repo, branch);
   if (!there && !hasBranch) return false;
-  if (registered) await deleteWorktree(worktreePath, repo, false);
-  else if (there)
-    await fs.promises.rm(resolvePath(worktreePath), {
-      recursive: true,
-      force: true,
-    });
+  const work = `${branch} or ${worktreePath} has work on it; resolve it by hand`;
+  if (hasBranch) {
+    const { stdout } = await git(
+      repo,
+      [
+        "rev-list",
+        "--count",
+        `refs/heads/${branch}`,
+        "--not",
+        // A --branches pattern is written without refs/heads/.
+        `--exclude=${branch}`,
+        "--branches",
+        "--remotes",
+        "--tags",
+      ],
+      10000
+    );
+    if (Number(stdout.trim()) > 0) throw new Error(work);
+  }
+  if (registered) {
+    const { stdout } = await git(
+      worktreePath,
+      ["status", "--porcelain"],
+      10000
+    );
+    if (stdout.trim()) throw new Error(work);
+    await deleteWorktree(worktreePath, repo, false);
+  } else if (there) {
+    if (fs.readdirSync(worktreePath).length) throw new Error(work);
+    fs.rmdirSync(worktreePath);
+  }
   if (hasBranch) await dropBranch(repo, branch);
   return true;
 }

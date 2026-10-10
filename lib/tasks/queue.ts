@@ -14,6 +14,7 @@
 import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
+import { isRemoteHost } from "../hosts";
 import { getWorkspace } from "../workspaces";
 import { fillSlots } from "../stacks/ready";
 import { isPaused } from "../orchestrator/pause";
@@ -266,7 +267,13 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
 
 // Direct starts under way, by workspace: their task rows don't exist until
 // createTask gets that far, so they hold their slot here meanwhile.
-const reserved = new Map<string, number>();
+// On globalThis: the custom server's watcher and the route bundles each load
+// their own copy of this module, and must see one set of reservations.
+const g = globalThis as unknown as {
+  __agentosQueueReserved?: Map<string, number>;
+  __agentosQueueTick?: { ticking: Promise<void> | null };
+};
+const reserved = (g.__agentosQueueReserved ??= new Map<string, number>());
 
 // Queues the task, or starts it with `start` holding its slot until its
 // row exists, so two starts at once can't both take the last slot.
@@ -369,13 +376,41 @@ async function startRow(
   r: QueueRow,
   opts: { force?: boolean } = {}
 ): Promise<StartOutcome> {
-  const workspaceId = workspaceOf(r.project_id);
+  const project = getProject(r.project_id);
+  const workspaceId = project?.workspace_id ?? null;
+  const origin = r.origin_workspace_id;
+  // The orchestrator starts only in its own workspace's projects on this
+  // machine; the project may have moved since it was queued.
+  if (
+    origin &&
+    (!project ||
+      workspaceId !== origin ||
+      isRemoteHost(r.host_id ?? project.host_id))
+  ) {
+    patch(r.id, {
+      status: "failed",
+      error:
+        "Not started: its project left the orchestrator's workspace or this machine",
+    });
+    return "failed";
+  }
   if (!opts.force) {
     const held = autoHold(workspaceId);
     if (held) {
       if (r.note !== held) patch(r.id, { note: held });
       return "held";
     }
+    // A start that came in during this tick's earlier starts may have taken
+    // the slot it planned on. The check and the claim are both synchronous.
+    const limit = limitOf(workspaceId);
+    if (
+      workspaceId &&
+      limit !== null &&
+      runningIn({ workspaceId, projectId: r.project_id }).length +
+        startingIn(workspaceId) >=
+        limit
+    )
+      return "held";
   }
   const claimed = db
     .prepare(
@@ -392,8 +427,8 @@ async function startRow(
     view: r.view ?? undefined,
     baseBranch: r.base_branch ?? undefined,
     hostId: r.host_id ?? undefined,
+    reclaim: true,
   };
-  const origin = r.origin_workspace_id;
   try {
     // The orchestrator's queued starts pass its brakes when they start,
     // a person's "start now" included: it skips only the limit and `after`.
@@ -424,8 +459,12 @@ async function startRow(
       error instanceof Error ? error.message : String(error)
     ).slice(0, 300);
     // Its row exists: the task is there, only its launch failed.
-    if (sessionOf(r.id)?.task_status) {
+    // The brakes never got to count it: count and announce it here.
+    const session = sessionOf(r.id);
+    if (session?.task_status) {
       patch(r.id, { status: "started", started_at: new Date().toISOString() });
+      if (origin) recordStart(origin, "task", r.id);
+      announce(r, session);
       return "started";
     }
     const attempts = r.attempts + 1;
@@ -494,13 +533,13 @@ async function tickOnce(): Promise<void> {
 }
 
 // One look at a time; a call during one shares it.
-let ticking: Promise<void> | null = null;
+const tickState = (g.__agentosQueueTick ??= { ticking: null });
 
 export function tickQueue(): Promise<void> {
-  ticking ??= tickOnce().finally(() => {
-    ticking = null;
+  tickState.ticking ??= tickOnce().finally(() => {
+    tickState.ticking = null;
   });
-  return ticking;
+  return tickState.ticking;
 }
 
 export function tickQueueSoon(): void {

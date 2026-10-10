@@ -155,6 +155,25 @@ describe("discardLeftoverStart", () => {
     expect(again.worktreePath).toBe(first.worktreePath);
   });
 
+  it("refuses a branch or worktree with work on it", async () => {
+    const { createWorktree, discardLeftoverStart } = await load();
+    const made = await createWorktree({
+      projectPath: repo,
+      featureName: "work-ef56",
+    });
+    fs.writeFileSync(path.join(made.worktreePath, "notes.txt"), "draft");
+    await expect(discardLeftoverStart(repo, "work-ef56")).rejects.toThrow(
+      /has work on it/
+    );
+    execFileSync("git", ["add", "."], { cwd: made.worktreePath });
+    execFileSync("git", ["commit", "-qm", "work"], { cwd: made.worktreePath });
+    await expect(discardLeftoverStart(repo, "work-ef56")).rejects.toThrow(
+      /has work on it/
+    );
+    expect(fs.existsSync(made.worktreePath)).toBe(true);
+    expect(branches()).toContain(made.branchName);
+  });
+
   it("clears a claimed folder git never got to, and leaves nothing else", async () => {
     const { discardLeftoverStart, worktreePathFor } = await load();
     expect(await discardLeftoverStart(repo, "nothing-here")).toBe(false);
