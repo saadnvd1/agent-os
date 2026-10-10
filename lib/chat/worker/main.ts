@@ -8,7 +8,8 @@
 
 import fs from "fs";
 import net from "net";
-import { envPath, lineReader, PROTOCOL_VERSION, socketPath } from "./protocol";
+import { adoptServerEnv } from "./env";
+import { lineReader, PROTOCOL_VERSION, socketPath } from "./protocol";
 import { buildId } from "../../build";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 import type { Session } from "../../db";
@@ -21,13 +22,7 @@ if (!sessionId) {
   process.exit(2);
 }
 
-// The server's environment, handed over in a private file rather than on the
-// tmux command line.
-const envFile = envPath(sessionId);
-if (fs.existsSync(envFile)) {
-  Object.assign(process.env, JSON.parse(fs.readFileSync(envFile, "utf8")));
-  fs.rmSync(envFile, { force: true });
-}
+adoptServerEnv(sessionId);
 
 // Imported after the environment is in place: the database opens on import.
 async function main(sessionId: string) {

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Waits until the AgentOS server on $PORT has nothing in flight that a
+# restart would cut off (reviews, task setups: GET /api/busy), for at most
+# AGENTOS_QUIET_WAIT seconds; then returns, so a deploy always lands. A
+# server that doesn't answer (down, or a build without /api/busy) is quiet.
+set -uo pipefail
+port="${PORT:-3011}"
+cap="${AGENTOS_QUIET_WAIT:-600}"
+every="${AGENTOS_QUIET_POLL:-10}"
+start=$(date +%s)
+said=""
+while :; do
+  body=$(curl -s --max-time 5 "http://127.0.0.1:$port/api/busy" || true)
+  case "$body" in
+    *'"busy":true'*) ;;
+    *) exit 0 ;;
+  esac
+  waited=$(( $(date +%s) - start ))
+  if [ "$waited" -ge "$cap" ]; then
+    echo "Still busy after ${cap}s; restarting anyway ($body)"
+    exit 0
+  fi
+  [ -z "$said" ] && echo "Waiting for in-flight work before restarting ($body)" && said=1
+  sleep "$every"
+done

@@ -195,7 +195,10 @@ the terminal resumes it (`claude --resume`, `codex resume`, `opencode
 terminal so only one side drives it. Each chat conversation runs in its own
 worker process (in tmux, like terminal sessions), so restarting or updating
 AgentOS never cuts off a turn: the server reconnects to running workers when
-it starts. History is kept in AgentOS.
+it starts. A worker from an older build stays while its background work
+(subagents, shells) runs. A turn whose worker did go away mid-step is resumed
+once, with a note telling the agent to check what it was doing, and a task's
+orchestrator hears about it. History is kept in AgentOS.
 
 The composer formats markdown as you type: `code`, **bold**, _italic_, lists,
 `- [ ]` task lists, and ` ```ts ` fenced blocks with syntax highlighting.
@@ -1001,6 +1004,14 @@ scripts/redeploy --rollback  # put the previous build back and restart
 in by rename only once it finished with a `BUILD_ID`, right before the restart.
 The build it replaced is kept in `.next-prev` for one rollback, and a failed
 build leaves `.next` as it was.
+
+`scripts/autodeploy` waits for a merge to be 2 minutes old
+(`AGENTOS_SETTLE`), so a burst of merges is one build and one restart. Before
+it pulls, `scripts/wait-quiet` waits for the reviews and task setups the
+server runs (`GET /api/busy`, loopback or tailnet only) to finish, for up to
+10 minutes (`AGENTOS_QUIET_WAIT`), then deploys anyway. A review a restart
+cuts off anyway runs again when the server starts, and its verdict arrives
+as usual.
 
 `scripts/perf/loadtest.mjs` starts a throwaway AgentOS (its own HOME,
 database, port and tmux socket) with N idle sessions and reports RSS, file

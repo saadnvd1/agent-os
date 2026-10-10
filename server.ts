@@ -62,6 +62,7 @@ import os from "os";
 import { resumeHeldStarts, resumeTaskStarts } from "./lib/tasks/start";
 import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
 import { releaseInterruptedClaims } from "./lib/orchestrator/ask-approvals";
+import { resumeReviews } from "./lib/orchestrator/review";
 import { claimAgentosEnv } from "./lib/agents/self-env";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -346,6 +347,11 @@ app.prepare().then(async () => {
   failInterruptedSetups();
   // Chat turns that kept running through a restart.
   void reattachChats();
+  // Reviews this restart cut off run again and deliver their verdicts.
+  if (process.env.AGENTOS_ORCHESTRATOR !== "off")
+    resumeReviews().catch((error) =>
+      console.error("Resuming reviews failed:", error)
+    );
   // Task starts this restart cut off: set up and launch them now.
   resumeTaskStarts().catch((error) =>
     console.error("Resuming task starts failed:", error)

@@ -52,6 +52,8 @@ import { holdsQueue, settingUp } from "../sessions/setup-progress";
 import { firstMessageId, launchPending } from "../tasks/launch-gate";
 import type { ChatItem, FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
+import { cutOffSessions, cutOffTurn, RESUME_NOTE } from "./interrupted";
+import { queueEvent } from "../orchestrator/events";
 import { restoreActivity, track } from "./activity";
 
 export { chatActivity } from "./activity";
@@ -119,8 +121,27 @@ export async function carryOutPlan(
   emit(sessionId, { type: "item", item: carried });
 }
 
+// Its turn ended on code from before a redeploy: it goes, and the next
+// message starts a current worker. Its guess at that message comes a few
+// seconds after the turn ends, so it waits for it, unless messages are
+// queued (its agent died mid-turn) for a current worker to take. Background
+// work (subagents, shells) lives in its agent, so a worker still running
+// some stays until the last one ends.
+function retireIfStale(sessionId: string, live: Live): void {
+  if (live.retiring || !isStaleWorker(live.build, buildId(), live.state))
+    return;
+  if (listQueue(sessionId).length) retire(sessionId, live);
+  else if (!live.activity.tasks.size)
+    live.retiring = setTimeout(
+      () => retire(sessionId, live),
+      SUGGESTION_WAIT_MS
+    );
+}
+
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   track(live, e);
+  if (e.type === "item" && e.item.kind === "task")
+    retireIfStale(sessionId, live);
   if (e.type === "item") {
     if ("streaming" in e.item && e.item.streaming)
       live.streaming.set(e.item.id, e.item);
@@ -135,18 +156,7 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     emit(sessionId, e);
     clearTimeout(live.retiring);
     live.retiring = undefined;
-    // Its turn ended on code from before a redeploy: it goes, and the next
-    // message starts a current worker. Its guess at that message comes a
-    // few seconds after the turn ends, so it waits for it, unless messages
-    // are queued (its agent died mid-turn) for a current worker to take.
-    if (isStaleWorker(live.build, buildId(), e.state)) {
-      if (listQueue(sessionId).length) retire(sessionId, live);
-      else
-        live.retiring = setTimeout(
-          () => retire(sessionId, live),
-          SUGGESTION_WAIT_MS
-        );
-    }
+    retireIfStale(sessionId, live);
   } else if (e.type === "suggestion") {
     emit(sessionId, e);
     if (live.retiring && e.text) retire(sessionId, live);
@@ -185,6 +195,11 @@ function checkChattable(session: Session): void {
   }
 }
 
+// Why reattaching found no worker to keep: nothing listens on its socket,
+// or it was an idle one from an older build, retired.
+const RETIRED = "RETIRED";
+const GONE = ["ECONNREFUSED", "ENOENT", RETIRED];
+
 // The session's worker, connected; started first if none is running,
 // unless only an existing one will do (reattaching, stopping).
 async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
@@ -206,27 +221,42 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
           registry.live.delete(sessionId);
           emit(sessionId, { type: "state", state: "idle" });
         }
-        // Its agent died mid-turn, with messages still queued. (One this
-        // server let go, it stopped on purpose.)
-        if (live && !detached) void resumeQueue(sessionId);
+        // Its agent died mid-turn, with messages still queued, or with a
+        // turn cut off. (One this server let go, it stopped on purpose.)
+        if (live && !detached)
+          void resumeInterrupted(sessionId)
+            .then(() => resumeQueue(sessionId))
+            .catch((error) =>
+              console.error(`Not resuming ${sessionId}:`, error)
+            );
       },
     };
     let { client, hello } = await connectWorker(sessionId, spawn, handlers);
+    let activity = restoreActivity(sessionId, hello.state);
     // An idle worker left over from before a redeploy: retire it, and start
-    // a fresh one only when a message needs it.
-    if (isStaleWorker(hello.build, buildId(), hello.state)) {
+    // a fresh one only when a message needs it. One still running background
+    // work keeps it, and goes when that ends.
+    if (
+      isStaleWorker(hello.build, buildId(), hello.state) &&
+      !activity.tasks.size
+    ) {
       client.command({ type: "close" });
       client.detach();
       await waitForExit(sessionId);
       removeStaleSocket(sessionId);
-      if (!spawn) throw new Error(`retired a stale worker for ${sessionId}`);
+      if (!spawn)
+        throw Object.assign(
+          new Error(`retired a stale worker for ${sessionId}`),
+          { code: RETIRED }
+        );
       ({ client, hello } = await connectWorker(sessionId, true, handlers));
+      activity = restoreActivity(sessionId, hello.state);
     }
     live = {
       worker: client,
       state: hello.state,
       streaming: new Map(hello.streaming.map((i) => [i.id, i])),
-      activity: restoreActivity(sessionId, hello.state),
+      activity,
       build: hello.build,
       canPlan: !!hello.caps?.includes("plan"),
       canQueue: !!hello.caps?.includes("queue"),
@@ -338,6 +368,85 @@ async function resumeQueue(sessionId: string): Promise<void> {
       `Not sending ${sessionId}'s queue:`,
       error instanceof Error ? error.message : error
     );
+  }
+}
+
+// A turn whose worker went away mid-step (a restart, its tmux server
+// killed): the agent is told once, through its saved conversation, to check
+// what it was doing and carry on, and a task's orchestrator hears about it
+// rather than finding it idle. The note's id names the cut-off step, so
+// neither a second restart nor a retry sends it twice, and a resumed turn
+// that's cut off again is left for the orchestrator.
+const resuming = new Set<string>();
+export async function resumeInterrupted(sessionId: string): Promise<void> {
+  // Called unawaited (a socket's close, startup): nothing may escape it.
+  try {
+    await resumeCutOff(sessionId);
+  } catch (error) {
+    console.error(
+      `Not resuming ${sessionId}'s cut-off turn:`,
+      error instanceof Error ? error.message : error
+    );
+  }
+}
+
+async function resumeCutOff(sessionId: string): Promise<void> {
+  const row = db
+    .prepare(
+      `SELECT s.name, s.view, s.archived_at, s.task_status, s.role,
+         COALESCE(s.workspace_id, p.workspace_id) AS workspace_id
+       FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
+       WHERE s.id = ?`
+    )
+    .get(sessionId) as
+    | Pick<
+        Session,
+        | "name"
+        | "view"
+        | "archived_at"
+        | "workspace_id"
+        | "task_status"
+        | "role"
+      >
+    | undefined;
+  if (row?.view !== "chat" || row.archived_at) return;
+  if (holdsQueue(sessionId) || launchPending(sessionId)) return;
+  const cut = cutOffTurn(sessionId, Date.now() - RESUME_WITHIN_MS);
+  if (!cut || hasItem(sessionId, cut.resumeId) || resuming.has(cut.resumeId))
+    return;
+  resuming.add(cut.resumeId);
+  const task =
+    row.workspace_id &&
+    row.task_status === "running" &&
+    row.role !== "orchestrator"
+      ? row.workspace_id
+      : null;
+  try {
+    if (cut.again) {
+      if (task)
+        queueEvent(
+          task,
+          `interrupted:${sessionId}:${cut.last}`,
+          sessionId,
+          `task ${row.name}: interrupted again after resuming; it's idle until told to carry on`
+        );
+      return;
+    }
+    await sendChatConfirmed(sessionId, {
+      id: cut.resumeId,
+      text: RESUME_NOTE,
+      from: "agentos",
+      origin: { kind: "event", label: "AgentOS" },
+    });
+    if (task)
+      queueEvent(
+        task,
+        `interrupted:${sessionId}:${cut.last}`,
+        sessionId,
+        `task ${row.name}: interrupted by a restart, resumed`
+      );
+  } finally {
+    resuming.delete(cut.resumeId);
   }
 }
 
@@ -632,16 +741,26 @@ export const chatToolBody = toolBody;
 // After a restart: reconnect to every worker still running a conversation,
 // and send the queues of conversations whose worker is gone.
 export async function reattachChats(): Promise<void> {
-  const running = runningWorkers();
+  // A worker nothing listens for (killed hard, its socket left behind)
+  // isn't running anything: its turn and queue are picked up below. One
+  // slow to say hello is busy, not gone, and is left alone.
+  const live = new Set<string>();
   await Promise.all(
-    running.map((id) =>
-      ensureLive(id, false).catch((error) =>
-        console.error(`Not reattaching chat ${id}:`, error.message ?? error)
-      )
+    runningWorkers().map((id) =>
+      ensureLive(id, false)
+        .then(() => live.add(id))
+        .catch((error) => {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (!GONE.includes(code ?? "")) live.add(id);
+          console.error(`Not reattaching chat ${id}:`, error.message ?? error);
+        })
     )
   );
+  // Turns cut off while no worker was left to finish them, then queues.
   // One at a time, and only what was queued recently: a backlog from long
   // ago isn't sent unasked by a restart (it stays on screen to send).
+  for (const id of cutOffSessions(Date.now() - RESUME_WITHIN_MS))
+    if (!live.has(id)) await resumeInterrupted(id);
   for (const id of queuedSessions(Date.now() - RESUME_WITHIN_MS))
-    if (!running.includes(id)) await resumeQueue(id);
+    if (!live.has(id)) await resumeQueue(id);
 }
