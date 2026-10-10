@@ -12,7 +12,7 @@ import {
   type BrowserContext,
   type Page,
 } from "playwright";
-import { BASE_URL, RAW, forbiddenStrings } from "./config";
+import { PAGE_URL, RAW, forbiddenStrings } from "./config";
 import { SHOTS, type Shot } from "./shots";
 import { COMMANDS, MODELS } from "./chat";
 
@@ -119,7 +119,7 @@ async function take(browser: Browser, shot: Shot): Promise<string[]> {
     for (const theme of part.themes ?? ["dark"]) {
       const { ctx, page } = await newPage(browser, part.device, theme);
       try {
-        await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+        await page.goto(PAGE_URL, { waitUntil: "domcontentloaded" });
         await page.addStyleTag({ content: HIDE });
         await page.waitForLoadState("networkidle").catch(() => {});
         await part.setup(page);

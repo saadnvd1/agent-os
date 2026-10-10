@@ -1,57 +1,134 @@
 # AgentOS
 
-A self-hosted, mobile-first home for your AI coding agents. Run Claude Code,
-Codex, Gemini CLI and others side by side, chat with them or drop into their
-terminal, hand off tasks that end in a pull request, and check on all of it
-from your phone.
+A self-hosted home for your AI coding agents. Run Claude Code, Codex,
+OpenCode and others side by side, in a chat or their own terminal. Hand off
+tasks that end in a pull request, let an orchestrator review and merge them,
+and check on all of it from your phone.
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="screenshots/hero-light.png">
-  <img alt="AgentOS: sessions grouped by workspace, a chat with plan, steps and diffs, and the git panel" src="screenshots/hero.png">
+  <img alt="AgentOS: sessions grouped by state, a chat with its plan, steps and diffs, and the git panel" src="screenshots/hero.png">
 </picture>
+
+## What it does
+
+### An orchestrator for each workspace
+
+Every workspace has one orchestrator, a chat pinned at the top of its list.
+It starts tasks, answers agents that are blocked, and reviews and merges
+pull requests through gates: CI green and settled, an independent review of
+the exact commit (big diffs are reviewed in parts), the PR's Code review
+section, nothing blocked, and the diff in scope. Anything that is yours to
+decide (publishing, money, something irreversible, credentials) waits as an
+ask with Approve, Decline and Reply. Turn on **Require my approval** and
+sensitive or large PRs wait for you too. [More](#orchestrator)
+
+![The Work orchestrator's chat, with two asks waiting: a merge gate and a public post](screenshots/orchestrator.png)
+
+### Tasks that end in a pull request
+
+A task gets its own git worktree, branch and ports, opens as a chat, runs
+the project's code review before it opens its PR, and waits for your
+sign-off. A workspace's **Task limit** caps how many run at once; the rest
+wait under **Queued** with their place in line and start on their own, and
+`aos task --after` holds one until another finishes. [More](#tasks)
+
+![A task's chat: the edit, the tests, the code review and the PR it opened](screenshots/task-chat.png)
+
+![Two queued tasks in the sidebar, one in line and one waiting on another task, with its menu open](screenshots/queued.png)
+
+### Nothing starts until you send
+
+⌥N opens a draft in the project you're in. Project, machine, agent, worktree
+and base branch are chips on it, model and access sit under the composer, and
+**Open a PR when done** makes it a task. Unsent drafts wait in the sidebar.
+[More](#new-sessions)
+
+![A new task draft with its project, machine, branch and PR chips](screenshots/draft.png)
+
+### Other machines in the same list
+
+Link another machine that runs AgentOS and its sessions show up next to
+yours, with the same rows, menu and address. Their chats and terminals are
+relayed through this server. Pick the machine on a draft to start a session
+or task there, even for a project that only lives here (it finds or clones
+the repository), and move a running terminal task between machines.
+[More](#machines)
+
+![A linked machine's sessions listed under its name in the sidebar](screenshots/machines.png)
+
+### Built for your phone
+
+The whole app works on a phone, not a cut-down view. Every session has its
+own link (`/?session=<id>`) you can bookmark or share between devices, and
+pairing a new device is a QR code. Tailscale gives you an encrypted address
+that works from anywhere. [More](#mobile-access)
 
 ![AgentOS on a phone: a chat and the session list](screenshots/mobile.png)
 
-Demo video: https://github.com/user-attachments/assets/0e2e66f7-037e-4739-99ec-608d1840df0a
+### Agents that talk to each other
 
-## Installation
+Sessions find and message each other with `aos peers`, `aos send` and
+`aos inbox`, start tasks and sessions, and schedule check-ins. You see every
+conversation in **Messages** and can join in. [More](#agent-network)
 
-### Via npm (Recommended)
+![Messages between agent sessions, and one from you](screenshots/messages.png)
 
-If you already have Node.js 20+ installed:
+### And the rest
+
+- **Chat or terminal, same conversation.** Streaming replies, steps and
+  diffs, plan mode, a queue you can steer, slash commands and skills,
+  `@file`, undo, and inline charts and pages. One click hands the
+  conversation to the agent's own terminal. [More](#chat)
+- **Project config.** `agentos.json` (or an existing `.dispatch.json`) gives
+  each session its own ports, environment, copied files, cloned
+  dependencies, a private Postgres copy, and a "Running this project"
+  section in the agent's brief. [More](#project-config-agentosjson)
+- **Schedules.** Start tasks, chats or orchestrator prompts on a timer, or
+  check in on a session, with run history. [More](#schedules)
+- **Stacks.** Run a board's cards as stacked PRs that merge bottom-up.
+  [More](#stacks)
+- **Machine load.** A gauge in the sidebar, each session's share of CPU and
+  memory, and a note to agents before they start a full test suite or build
+  on a busy machine. [More](#machine-load)
+- **Status from the screen and the agent.** Every session moves between
+  Needs you, Working and Done as it changes, including programs that report
+  their own state (OSC 7501). [More](#the-sidebar)
+- **Also:** a ⌘K palette for every session and action, code search, a file
+  picker with uploads from a phone, a git panel (diffs, commits, PRs), dev
+  servers (Node and Docker), up to four panes side by side, dictation in the
+  terminal toolbar, and tmux sessions you started yourself listed under their
+  project.
+
+![The slash-command menu open in a chat](screenshots/commands.png)
+
+![A session in terminal view, with the agent asking before it runs a command](screenshots/terminal.png)
+
+## Install
+
+You need Node.js 20+, tmux, and at least one agent CLI:
+[Claude Code](https://github.com/anthropics/claude-code),
+[Codex](https://github.com/openai/codex),
+[OpenCode](https://github.com/anomalyco/opencode),
+Pi,
+[Kilo Code CLI](https://kilo.ai/docs/cli),
+[Gemini CLI](https://github.com/google-gemini/gemini-cli),
+[Aider](https://aider.chat/), [Cursor CLI](https://cursor.com/cli) or Amp.
 
 ```bash
-# Install globally
 npm install -g @saadnvd1/agent-os
-
-# Run setup (checks/installs tmux, ripgrep, builds app)
-agent-os install
-
-# Start the server
-agent-os start
+agent-os install   # checks for tmux and ripgrep, installs what's missing, builds the app
+agent-os start     # runs in the background on http://localhost:3011
 ```
 
-### Via curl (Installs everything)
-
-For fresh installs without Node.js:
+Without Node.js, the install script sets up everything:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/install.sh | bash
 agent-os start
 ```
 
-### Desktop App
-
-Download native desktop apps from [Releases](https://github.com/saadnvd1/agent-os/releases):
-
-- macOS (Apple Silicon): `.dmg`
-- Linux: `.deb` or `.AppImage`
-
-> **Note:** The desktop app is a native wrapper around the web UI. You still need to install and run AgentOS (via the installer script above) for the backend server. The desktop app just provides a convenient native window instead of using your browser.
-
-> **Don't want to self-host?** Try [AgentOS Cloud](https://runagentos.com) - pre-configured cloud VMs for AI coding.
-
-### Manual Install
+From source:
 
 ```bash
 git clone https://github.com/saadnvd1/agent-os
@@ -60,16 +137,12 @@ npm install
 npm run dev  # http://localhost:3011
 ```
 
-### Prerequisites
+Then open AgentOS, add a project from ⌘K, and press ⌥N. To use it from your
+phone, see [Mobile access](#mobile-access).
 
-- Node.js 20+
-- tmux
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (for code search - auto-installed by installer script, or run `agent-os update`)
-- At least one AI CLI: [Claude Code](https://github.com/anthropics/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://github.com/anomalyco/opencode), [Kilo Code CLI](https://kilo.ai/docs/cli), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Aider](https://aider.chat/), or [Cursor CLI](https://cursor.com/cli)
+### Supported agents
 
-## Supported Agents
-
-| Agent       | Chat | Resume | Fork | Auto-Approve                                 |
+| Agent       | Chat | Resume | Fork | Auto-approve                                 |
 | ----------- | ---- | ------ | ---- | -------------------------------------------- |
 | Claude Code | ✅   | ✅     | ✅   | `--dangerously-skip-permissions`             |
 | Codex       | ✅   | ✅     | ✅   | `--dangerously-bypass-approvals-and-sandbox` |
@@ -82,33 +155,28 @@ npm run dev  # http://localhost:3011
 | Amp         | ❌   | ✅     | ❌   | `--dangerously-allow-all`                    |
 | Oh My Pi    | ❌   | ❌     | ❌   | N/A                                          |
 
-The new-session picker says when an agent isn't installed or needs a sign-in
-first, and what to run (`GET /api/agents/status`).
+Agents without chat run in the terminal. The new-session picker says when an
+agent isn't installed or needs a sign-in first, and what to run.
 
-## Features
+### CLI
 
-- **Mobile-first** - Full functionality from your phone, not a dumbed-down responsive view
-- **One keystroke to a new session** - ⌘N opens a draft in the project you're in (⌘⇧N picks one, ⌘⌥N is a scratch chat). Agent, model, access, worktree, base branch and machine are chips on the draft; nothing is created until you send
-- **Chat with your agents** - Streaming replies, inline diffs, plan mode, a queue you can steer, next-prompt suggestions, `@file` mentions, and a context meter
-- **Visuals in chat** - Agents preview and show charts, tables and HTML pages inline, sandboxed
-- **Live status** - Every session moves between Needs you, Working and Done the moment it changes, including terminal programs that report their own state (OSC 7501)
-- **Tasks that end in a PR** - Hand off work to its own worktree, stack tasks from a board, and let a workspace orchestrator review and merge
-- **Schedules** - Start tasks, chats or orchestrator messages on a timer, or check in on any session, with run history
-- **Phone notifications** - A failed schedule run, or an agent's `aos notify`, reaches your phone through Telegram or a command of your own
-- **Machine load** - A gauge in the sidebar, each busy session's cores and memory, a note to agents before they start a full suite or build on a loaded machine, and one phone alert when it stays red
-- **Voice-to-text** - Dictate prompts to your coding sessions hands-free
-- **Multi-pane layout** - Run up to 4 sessions side-by-side
-- **tmux by default** - Every session lives in tmux, so closing the browser never kills your work
-- **Multiple machines** - Run sessions on any machine you can reach with ssh keys, side by side with local ones
-- **Session discovery** - tmux sessions you started yourself, on any machine, show up under the project whose folder they run in
-- **Command palette** - ⌘K (or the search button on a phone) finds any session and every action: new session, workspaces, orchestrator, plan mode, compact, Usage, Devices, Archived, theme, stop the turn
-- **Code search** - Fast codebase search with syntax-highlighted results (from the palette)
-- **File picker** - Browse and attach files to sessions, with direct upload from mobile
-- **Add project** - From ⌘K: pick a machine, then open a folder on it, clone a URL (with git's progress), or start one from a name (folder, `git init`, first commit; a private GitHub repo only if you click for one)
-- **Git integration** - Status, diffs, commits, PRs from the UI
-- **Git worktrees** - Isolated branches with auto-setup
-- **Dev servers** - Start/stop Node.js and Docker servers
-- **Session orchestration** - Conductor/worker model via MCP
+```bash
+agent-os run              # start and open the browser
+agent-os start            # start in the background
+agent-os stop             # stop the server
+agent-os restart          # stop, then start
+agent-os status           # show its addresses
+agent-os pair             # add a phone, tablet or laptop (prints a QR code)
+agent-os logs             # tail the logs
+agent-os update           # update to the latest version
+agent-os enable           # start at login (disable turns it off)
+agent-os passkeys reset   # when every passkey is lost (see Orchestrator)
+agent-os uninstall
+```
+
+# Reference
+
+Everything below is how each part works, in detail.
 
 ## Chat
 
@@ -202,8 +270,6 @@ starts in the background (shells, subagents, monitors) sits behind a
 output, and its own Stop. The session list says the same thing, so a long
 wait never looks like nothing is happening.
 
-![The slash-command menu open in a chat](screenshots/commands.png)
-
 **Visuals.** Every chat agent (not an orchestrator, which reads other
 sessions' text and gets no browser) has two tools: `html_preview` renders a page in
 headless Chrome and hands back a screenshot plus the console, so it can check
@@ -225,8 +291,6 @@ the terminal.
 Drivers for other agent CLIs plug into `lib/chat/drivers`; undo, `@file`
 suggestions and visuals are Claude-only for now, and plan mode is Claude and
 OpenCode.
-
-![A session in terminal view, with the agent asking before it runs a command](screenshots/terminal.png)
 
 ## Tasks
 
@@ -256,7 +320,7 @@ this way: [docs/decisions/2026-10-10-queued-tasks.md](docs/decisions/2026-10-10-
 
 ## New sessions
 
-⌘N (the **+** on a phone) opens a draft: a composer in the current project, or
+⌥N (the **+** on a phone) opens a draft: a composer in the current project, or
 the one you used last. Nothing exists until you send. Then the session is
 made, and with a worktree its setup runs in the chat, stage by stage: fetch,
 worktree, env files, dependencies, the project's setup script, with a log
@@ -266,7 +330,7 @@ worktree starts on a temporary branch, renamed from the first message once
 it has a title (it keeps the temporary name if there's nothing to name it
 from).
 
-⌘N reuses the project's empty draft; a draft you've typed in stays in the
+⌥N reuses the project's empty draft; a draft you've typed in stays in the
 sidebar's **Drafts** until you send or discard it. A new draft takes the
 agent, model and access you were using; a project's own agent and model win.
 Chats with no project run in `~/.agent-os/scratch`.
@@ -303,6 +367,8 @@ this repository's CI fails one too. The review agents are in
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
 
+![Tasks in different states: needs input, working, merged](screenshots/tasks.png)
+
 Tracking PRs stays inside GitHub's GraphQL quota (5,000 points an hour).
 Only running tasks are asked about: a finished task's PR comes from the
 database. One `gh pr list --state open` per repository a minute covers every
@@ -310,8 +376,6 @@ running task with an open PR, and a branch without one is asked about on its
 own at most every 5 minutes. A merge or sign-off always asks fresh. When gh
 reports a rate limit, every gh call backs off until the limit resets, and gh
 failures are logged as `[gh] ...`, at most once a minute for each kind.
-
-![Tasks in different states: needs input, ready for review, working, merged](screenshots/tasks.png)
 
 ### Project config (`agentos.json`)
 
@@ -390,8 +454,7 @@ refused; after a parent merges, every card stacked on it (grandchildren
 included) is rebased and its PR retargeted, and its agent is told. **Land**
 merges every PR in order after checking all of them are open and green, and
 waits for each restacked PR's checks before merging it. A conflict stops on
-that card with the exact command to fix it. How it works:
-[docs/stacks.md](docs/stacks.md).
+that card with the exact command to fix it.
 
 ### Schedules
 
@@ -534,8 +597,6 @@ name, the current owner wins and `aos send` says so. A name that matches more
 than one session is refused with the candidates listed. The
 **Messages** panel shows every conversation and lets you message any session.
 Sessions on other machines can receive messages but not yet send them.
-
-![Messages between agent sessions, and one from you](screenshots/messages.png)
 
 ## The sidebar
 
@@ -955,19 +1016,7 @@ which also holds the app's first-load JavaScript to a budget
 it), and fails a pull request whose body has no Code review section for its head
 commit (run `/do-code-review` first; see [Tasks](#tasks)).
 
-## CLI Commands
-
-```bash
-agent-os run       # Start and open browser
-agent-os start     # Start in background
-agent-os stop      # Stop server
-agent-os status    # Show URLs
-agent-os pair      # Add a phone, tablet or laptop (prints a QR code)
-agent-os logs      # Tail logs
-agent-os update    # Update to latest
-```
-
-## Mobile Access
+## Mobile access
 
 **At home:** open Devices from the menu, turn on "Allow devices on this Wi-Fi",
 tap "Add a device", and scan the QR code with your phone. Laptops open the link
@@ -983,17 +1032,6 @@ working. `AGENTOS_TAILNET_HTTPS=0` turns it off, and
 `AGENTOS_TAILNET_HTTPS_PORT` moves it. Use Wi-Fi access only on
 networks you trust, because traffic on Wi-Fi is not encrypted.
 
-## Documentation
-
-For configuration and advanced usage, see the [docs](https://www.runagentos.com/docs).
-
-## Related Projects
-
-- **[aTerm](https://github.com/saadnvd1/aTerm)** - A Tauri-based desktop terminal workspace for AI-assisted coding. While AgentOS is a mobile-first web UI, aTerm is a native desktop app with multi-pane layouts optimized for running AI coding agents (Claude Code, Aider, OpenCode) alongside shells, dev servers, and a built-in git panel. Choose AgentOS for mobile access and browser-based workflows, or aTerm for a native desktop terminal experience.
-- **[LumifyHub](https://lumifyhub.io)** - A place to keep docs, boards and notes, and share them with anyone. AgentOS can link a workspace to it: tasks become cards on a board, and plans and docs live where you can read and share them.
-
 ## License
 
-MIT License - Free and open source.
-
-See [LICENSE](LICENSE) for full terms.
+MIT. See [LICENSE](LICENSE).

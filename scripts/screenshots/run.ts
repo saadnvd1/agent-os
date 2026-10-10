@@ -13,6 +13,7 @@ import { BASE_URL, PORT, REPO, ROOT, demoEnv } from "./config";
 import { seed, teardownTmux } from "./seed";
 import { shoot } from "./shoot";
 import { frame } from "./frame";
+import { startPeer } from "./peer";
 
 const has = (flag: string) => process.argv.includes(flag);
 const arg = (flag: string) => {
@@ -41,7 +42,13 @@ function startServer(): ChildProcess {
   // Loopback only: the demo never listens on another network.
   return spawn(process.execPath, [tsx, "server.ts"], {
     cwd: REPO,
-    env: demoEnv({ AGENTOS_BIND: "127.0.0.1" }),
+    // No watchers: the seeded orchestrator and tasks must sit still, never
+    // start an agent.
+    env: demoEnv({
+      AGENTOS_BIND: "127.0.0.1",
+      AGENTOS_ORCHESTRATOR: "off",
+      AGENTOS_STACKS: "off",
+    }),
     stdio: ["ignore", log, log],
     detached: true,
   });
@@ -60,6 +67,7 @@ async function main() {
   const only = arg("--only")?.split(",");
   const reuse = has("--reuse");
   let server: ChildProcess | null = null;
+  const peer = reuse ? null : startPeer();
   try {
     if (!reuse) {
       console.log("Seeding demo data");
@@ -73,6 +81,7 @@ async function main() {
     console.log("Framing");
     await frame(raw);
   } finally {
+    if (peer && !has("--keep")) peer.close();
     if (server && !has("--keep")) {
       stopServer(server);
       teardownTmux();

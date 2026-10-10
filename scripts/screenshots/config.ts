@@ -30,6 +30,11 @@ export const SCREENS = path.join(ROOT, "screens");
 export const RAW = path.join(ROOT, "raw");
 export const PORT = Number(process.env.AGENTOS_DEMO_PORT || 3340);
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
+// What the browser opens: localhost is a secure context, so ask cards
+// show their Approve button rather than the passkey notice.
+export const PAGE_URL = `http://localhost:${PORT}`;
+// The fake linked machine's AgentOS (peer.ts).
+export const PEER_PORT = PORT + 1;
 
 export const REPO = path.resolve(__dirname, "..", "..");
 export const OUT = path.join(REPO, "screenshots");

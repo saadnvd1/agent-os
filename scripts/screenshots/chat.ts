@@ -256,3 +256,81 @@ export const MODELS: ChatModel[] = [
   { value: "sonnet", label: "Sonnet", description: "Fast and capable" },
   { value: "haiku", label: "Haiku", description: "Fastest" },
 ];
+
+// A task near its end: it built the feature in its own worktree, ran the
+// project's review, and opened the pull request.
+export function exportTaskConversation(start: number): ChatItem[] {
+  let t = start;
+  const at = (secs: number) => (t += secs * 1000);
+  const tool = (
+    id: string,
+    name: string,
+    title: string,
+    input: Record<string, unknown>,
+    output?: string
+  ): ChatItem => ({
+    id,
+    createdAt: at(4),
+    kind: "tool",
+    name,
+    title,
+    input,
+    status: "done",
+    output,
+  });
+  const route = "~/code/storefront/src/admin/orders/export.ts";
+  return [
+    {
+      id: "user-1",
+      createdAt: at(0),
+      kind: "user",
+      text: "Let admins export the orders table as CSV, with the current filters applied. Open a PR when done.",
+    },
+    tool("tool-read", "Read", "Read admin/orders/list.ts", {
+      file_path: "~/code/storefront/src/admin/orders/list.ts",
+    }),
+    {
+      id: "tool-write",
+      createdAt: at(6),
+      kind: "tool",
+      name: "Write",
+      title: "Write admin/orders/export.ts",
+      input: { file_path: route },
+      status: "done",
+      diff: {
+        path: route,
+        before: "",
+        after: [
+          "export async function exportOrders(filters: OrderFilters) {",
+          "  const rows = await listOrders({ ...filters, limit: undefined });",
+          "  return toCsv(rows, COLUMNS);",
+          "}",
+        ].join("\n"),
+      },
+    },
+    tool(
+      "tool-test",
+      "Bash",
+      "npx vitest run src/admin/orders",
+      { command: "npx vitest run src/admin/orders" },
+      "✓ exports the filtered rows\n✓ escapes commas and quotes\n2 passed"
+    ),
+    tool("tool-review", "Skill", "Skill: do-code-review", {
+      skill: "do-code-review",
+    }),
+    tool(
+      "tool-pr",
+      "Bash",
+      "gh pr create",
+      { command: "gh pr create --fill" },
+      "https://github.com/example/storefront/pull/231"
+    ),
+    {
+      id: "assistant-1",
+      createdAt: at(3),
+      kind: "assistant",
+      text: "Opened [#231](https://github.com/example/storefront/pull/231). **Export CSV** on the orders page downloads the filtered rows; quotes and commas are escaped. The review found one High (an unbounded query), fixed by streaming the rows; nothing deferred.",
+    },
+    { id: "turn-1", createdAt: at(1), kind: "turn_end", durationMs: 412000 },
+  ];
+}

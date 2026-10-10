@@ -14,6 +14,7 @@ import {
   CODE,
   DB_PATH,
   HOME,
+  PEER_PORT,
   ROOT,
   SCREENS,
   TMUX_TMPDIR,
@@ -23,7 +24,13 @@ import {
 } from "./config";
 import { createRepos } from "./repos";
 import { PANES } from "./panes";
-import { checkoutConversation, docsConversation } from "./chat";
+import {
+  checkoutConversation,
+  docsConversation,
+  exportTaskConversation,
+} from "./chat";
+import { orchestratorAsks, orchestratorConversation } from "./orchestrator";
+import { PEER_HOST } from "./peer";
 import { GH_SHIM, PRS } from "./gh";
 import type { ChatItem } from "../../lib/chat/events";
 
@@ -66,6 +73,20 @@ const SESSIONS: SessionSeed[] = [
         "The cart quantity test fails about one run in ten. Find the race and fix it.",
       status: "running",
       branch: "fix/flaky-cart-test",
+    },
+  },
+  {
+    key: "export",
+    name: "order-export",
+    project: "storefront",
+    view: "chat",
+    minutesAgo: 2,
+    chat: exportTaskConversation,
+    task: {
+      prompt:
+        "Let admins export the orders table as CSV, with the current filters applied.",
+      status: "running",
+      branch: "feat/order-export-csv",
     },
   },
   {
@@ -196,6 +217,13 @@ function writeHome(): void {
   fs.writeFileSync(path.join(HOME, ".tmux.conf"), "set -g status off\n");
   fs.mkdirSync(BIN, { recursive: true });
   fs.writeFileSync(path.join(BIN, "gh"), GH_SHIM, { mode: 0o755 });
+  // So the new-session picker counts Claude Code as installed. It only
+  // answers --version: nothing in the demo can start a real agent.
+  fs.writeFileSync(
+    path.join(BIN, "claude"),
+    '#!/bin/sh\n[ "$1" = "--version" ] && echo "2.1.0 (Claude Code)" && exit 0\nexit 1\n',
+    { mode: 0o755 }
+  );
   fs.writeFileSync(path.join(ROOT, "prs.json"), JSON.stringify(PRS));
 }
 
@@ -209,9 +237,11 @@ async function seedDb(): Promise<void> {
   const { getDb } = await import("../../lib/db");
   const db = getDb();
   const projectIds = new Map<string, string>();
+  const workspaceIds = new Map<string, string>();
 
   WORKSPACES.forEach((ws, wi) => {
     const wsId = randomUUID();
+    workspaceIds.set(ws.name, wsId);
     db.prepare(
       `INSERT INTO workspaces (id, name, sort_order) VALUES (?, ?, ?)`
     ).run(wsId, ws.name, wi);
@@ -278,6 +308,10 @@ async function seedDb(): Promise<void> {
     }
   }
 
+  seedOrchestrator(db, workspaceIds.get("Work")!, sessionIds, now);
+  seedLinkedMachine(db);
+  seedQueue(db, workspaceIds.get("Work")!, projectIds, sessionIds);
+
   for (const m of BUS) {
     const name = (key: string | null) =>
       key ? SESSIONS.find((s) => s.key === key)!.name : "you";
@@ -297,6 +331,104 @@ async function seedDb(): Promise<void> {
     );
   }
   db.close();
+}
+
+type Db = ReturnType<typeof import("../../lib/db").getDb>;
+
+// The Work workspace's orchestrator, pinned, with its chat and two asks.
+function seedOrchestrator(
+  db: Db,
+  workspaceId: string,
+  sessionIds: Map<string, string>,
+  now: number
+): void {
+  const id = randomUUID();
+  const start = now - 40 * 60000;
+  const dir = path.join(HOME, ".agent-os", "orchestrators", workspaceId);
+  fs.mkdirSync(dir, { recursive: true });
+  db.prepare(
+    `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
+       agent_type, project_id, host_id, view, chat_access, role, workspace_id, pinned,
+       name_source, created_at, updated_at)
+     VALUES (?, 'Work orchestrator', ?, ?, 'opus', 'sessions', 'claude', NULL, 'local',
+       'chat', 'ask', 'orchestrator', ?, 1, 'user', datetime('now', '-3 hours'),
+       datetime('now', '-1 minutes'))`
+  ).run(
+    id,
+    `claude-${id}`,
+    `~/.agent-os/orchestrators/${workspaceId}`,
+    workspaceId
+  );
+  const insert = db.prepare(
+    `INSERT INTO chat_items (session_id, item_id, seq, data) VALUES (?, ?, ?, ?)`
+  );
+  orchestratorConversation(start).forEach((item, i) =>
+    insert.run(id, item.id, i + 1, JSON.stringify(item))
+  );
+  for (const ask of orchestratorAsks({ idem: sessionIds.get("idem")! })) {
+    db.prepare(
+      `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?))`
+    ).run(
+      workspaceId,
+      ask.subject,
+      ask.kind,
+      ask.title,
+      ask.detail,
+      ask.link,
+      ask.sha,
+      `-${ask.minutesAgo} minutes`
+    );
+  }
+}
+
+// Two tasks waiting their turn: one in line, one until idempotency-keys is
+// finished. The limit sits below the tasks already running, so neither
+// ever starts.
+function seedQueue(
+  db: Db,
+  workspaceId: string,
+  projectIds: Map<string, string>,
+  sessionIds: Map<string, string>
+): void {
+  db.prepare(`UPDATE workspaces SET max_running_tasks = 2 WHERE id = ?`).run(
+    workspaceId
+  );
+  const insert = db.prepare(
+    `INSERT INTO task_queue (id, project_id, prompt, name, view, after_task,
+       origin_workspace_id, position, created_at)
+     VALUES (?, ?, ?, ?, 'chat', ?, ?, ?, datetime('now', ?))`
+  );
+  insert.run(
+    randomUUID(),
+    projectIds.get("storefront"),
+    "Add a Reorder button to past orders.",
+    "reorder-button",
+    null,
+    workspaceId,
+    1,
+    "-7 minutes"
+  );
+  insert.run(
+    randomUUID(),
+    projectIds.get("payments-api"),
+    "Read the webhook signing keys from the secrets store, not the env.",
+    "webhook-signing-keys",
+    sessionIds.get("idem"),
+    workspaceId,
+    2,
+    "-5 minutes"
+  );
+}
+
+// A machine linked to its own AgentOS: the stand-in in peer.ts.
+function seedLinkedMachine(db: Db): void {
+  db.prepare(
+    `INSERT INTO hosts (id, name, ssh_target, sort_order) VALUES (?, ?, ?, 1)`
+  ).run(PEER_HOST.id, PEER_HOST.name, PEER_HOST.ssh);
+  db.prepare(
+    `INSERT INTO host_links (host_id, url, token) VALUES (?, ?, 'demo')`
+  ).run(PEER_HOST.id, `http://127.0.0.1:${PEER_PORT}`);
 }
 
 export async function seed(): Promise<void> {
