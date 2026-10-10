@@ -84,11 +84,7 @@ export function SessionShelves({
       {shelves.orchestrators.length > 0 && (
         <section aria-label="Orchestrator" className="space-y-1 pt-2">
           {shelves.orchestrators.map((r) => (
-            <OrchestratorPinRow
-              key={r.session.id}
-              row={r}
-              showWorkspace={shelves.orchestrators.length > 1}
-            />
+            <OrchestratorPinRow key={r.session.id} row={r} />
           ))}
         </section>
       )}

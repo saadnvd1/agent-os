@@ -42,6 +42,7 @@ export function WorkspaceSwitcher({
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
   const [dialog, setDialog] = useState<"new" | "rename" | null>(null);
+  const name = current?.name ?? "All workspaces";
 
   return (
     <>
@@ -49,11 +50,13 @@ export function WorkspaceSwitcher({
         <DM.DropdownMenuTrigger asChild>
           <button
             type="button"
+            title={name}
             className="hover:bg-foreground/[0.04] -ml-1.5 flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 md:min-h-9"
           >
-            <span className="truncate text-[15px] font-semibold tracking-tight">
-              {current?.name ?? "All workspaces"}
-            </span>
+            <MiddleTruncate
+              text={name}
+              className="text-[15px] font-semibold tracking-tight"
+            />
             <ChevronDown className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
           </button>
         </DM.DropdownMenuTrigger>
@@ -147,5 +150,33 @@ export function WorkspaceSwitcher({
         onClose={() => setDialog(null)}
       />
     </>
+  );
+}
+
+const TAIL = 4;
+
+// Cuts a name that doesn't fit in the middle ("All wo…aces"), so the end
+// that tells similar names apart stays: the head truncates, the tail doesn't.
+function MiddleTruncate({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  if (text.length <= TAIL * 2) {
+    return <span className={`truncate ${className}`}>{text}</span>;
+  }
+  // Screen readers get the name whole, not as two words.
+  return (
+    <span className={`flex min-w-0 ${className}`}>
+      <span className="sr-only">{text}</span>
+      <span aria-hidden className="truncate whitespace-pre">
+        {text.slice(0, -TAIL)}
+      </span>
+      <span aria-hidden className="shrink-0 whitespace-pre">
+        {text.slice(-TAIL)}
+      </span>
+    </span>
   );
 }

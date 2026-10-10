@@ -53,6 +53,10 @@ export interface MenuItemConfig extends BaseItem {
   icon?: LucideIcon;
   disabled?: boolean;
   variant?: "default" | "destructive";
+  // Shown at the item's right edge, e.g. a count.
+  badge?: ReactNode;
+  // A second, muted line under the label.
+  description?: string;
 }
 
 export interface ToggleItemConfig extends BaseItem {
@@ -140,7 +144,17 @@ function MenuItem({ item }: { item: MenuItemConfig }) {
       )}
     >
       {Icon && <Icon className="mr-2 h-4 w-4" />}
-      {item.label}
+      {item.description ? (
+        <span className="flex min-w-0 flex-col">
+          {item.label}
+          <span className="text-muted-foreground text-xs">
+            {item.description}
+          </span>
+        </span>
+      ) : (
+        item.label
+      )}
+      {item.badge != null && <span className="ml-auto pl-3">{item.badge}</span>}
     </DropdownMenuItem>
   );
 }

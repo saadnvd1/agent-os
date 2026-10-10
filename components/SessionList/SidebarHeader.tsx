@@ -34,8 +34,12 @@ import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { SchedulesButton } from "./SchedulesButton";
 import { LoadGauge } from "./LoadGauge";
+import { useSchedulesGlance } from "./useSchedulesGlance";
+import { cn } from "@/lib/utils";
+
+// A failed schedule's red mark, on the "…" button and its Schedules item.
+const failedDot = "bg-destructive h-2 w-2 rounded-full";
 
 interface SidebarHeaderProps {
   workspaces: Workspace[];
@@ -51,32 +55,53 @@ interface SidebarHeaderProps {
 
 export function SidebarHeader(props: SidebarHeaderProps) {
   const { pinControls } = props;
+  const workspaceId = props.workspace?.id ?? null;
+  const schedules = useSchedulesGlance(workspaceId);
   return (
-    <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
-      <WorkspaceSwitcher
-        workspaces={props.workspaces}
-        current={props.workspace}
-      />
-      <div className="flex shrink-0 items-center gap-0.5">
+    <div className="flex items-center gap-1 px-3 pt-3 pb-2">
+      <div className="flex min-w-0 flex-1 items-center">
+        <WorkspaceSwitcher
+          workspaces={props.workspaces}
+          current={props.workspace}
+        />
         <LoadGauge />
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5">
         <ADropdownMenu
           trigger={
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="More"
-              className="h-11 w-11 md:h-8 md:w-8"
+              aria-label={
+                schedules.failedText ? `More (${schedules.failedText})` : "More"
+              }
+              className="relative h-11 w-11 md:h-8 md:w-8"
             >
               <MoreHorizontal className="h-4 w-4" />
+              {schedules.failed > 0 && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    failedDot,
+                    "ring-background absolute top-2 right-2 ring-2 md:top-1 md:right-1"
+                  )}
+                />
+              )}
             </Button>
           }
           items={[
             menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
-            menuItem(
-              "Schedules",
-              () => schedulesUiActions.open(props.workspace?.id ?? null),
-              { icon: Clock }
-            ),
+            menuItem("Schedules", () => schedulesUiActions.open(workspaceId), {
+              icon: Clock,
+              description: schedules.nextText,
+              badge: schedules.failed > 0 && (
+                <span className="text-destructive flex items-center gap-1.5 text-xs font-medium tabular-nums">
+                  <span aria-hidden className={failedDot} />
+                  <span aria-hidden>{schedules.failed}</span>
+                  <span className="sr-only">{schedules.failedText}</span>
+                </span>
+              ),
+            }),
             menuItem("Messages", busUiActions.open, { icon: MessagesSquare }),
             ...(props.onOpenDocs
               ? [menuItem("Docs", props.onOpenDocs, { icon: BookOpen })]
@@ -104,15 +129,15 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             }),
           ]}
         />
-        <SchedulesButton workspaceId={props.workspace?.id ?? null} />
         <ADropdownMenu
+          tooltip="New (⌥N)"
           trigger={
             <Button
-              size="sm"
-              className="ml-1 h-11 gap-1 rounded-[10px] px-3 md:h-8"
+              size="icon-sm"
+              aria-label="New"
+              className="ml-0.5 h-11 w-11 rounded-[10px] md:h-8 md:w-8"
             >
               <Plus className="h-4 w-4" />
-              New
             </Button>
           }
           items={[
