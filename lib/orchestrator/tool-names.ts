@@ -11,6 +11,8 @@ export const TOOL_NAMES = {
   read: name("read"),
   cards: name("cards"),
   send: name("send"),
+  orchestrators: name("orchestrators"),
+  message_orchestrator: name("message_orchestrator"),
   start_task: name("start_task"),
   start_session: name("start_session"),
   stack: name("stack"),

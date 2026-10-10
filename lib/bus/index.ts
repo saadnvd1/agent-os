@@ -189,6 +189,10 @@ export async function sendMessage(opts: {
   // How chat shows it when no session sent it (fromLabel is what the
   // agent reads). The user's own message, sent from the UI, has none.
   origin?: ChatOrigin;
+  // What the recipient's agent reads, whole, in place of the wake line.
+  // It's never left unread for `aos inbox` to show in another form; a
+  // failed one is the sender's to retry.
+  line?: string;
 }): Promise<{ message: BusMessageView; delivery: Delivery; note?: string }> {
   const body = opts.body.trim();
   if (!body) throw new Error("Message is empty");
@@ -218,7 +222,7 @@ export async function sendMessage(opts: {
   await statusDetector.refreshCache();
   const delivery = await deliver(
     to,
-    wakeLine({ fromName, fromId: from?.id ?? null, body }),
+    opts.line ?? wakeLine({ fromName, fromId: from?.id ?? null, body }),
     {
       name: fromName,
       peer: from ? { sessionId: from.id, body } : undefined,
@@ -232,6 +236,10 @@ export async function sendMessage(opts: {
       `UPDATE bus_messages SET delivered_at = datetime('now') WHERE id = ?`
     ).run(id);
   }
+  if (opts.line)
+    db.prepare(
+      `UPDATE bus_messages SET read_at = datetime('now') WHERE id = ?`
+    ).run(id);
   const message = toView(db.prepare(`${SELECT} WHERE m.id = ?`).get(id) as Row);
   return { message, delivery, note };
 }
