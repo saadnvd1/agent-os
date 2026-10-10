@@ -191,12 +191,14 @@ release names Microsoft, or `WSL_DISTRO_NAME` is set).
   ```
 
 What's been verified: the WSL detection and the installer's WSL paths have
-unit tests that run on any OS. The [WSL workflow](.github/workflows/wsl.yml)
-is a manual check that installs AgentOS in Ubuntu 24.04 under WSL 2 on a
-GitHub-hosted Windows runner, starts it, and reaches it from Windows over
-localhost. Untested so far: Windows Hello approvals, `wslview`/`explorer.exe`
-opening links, mirrored networking, `agent-os enable` under systemd, and the
-idle-timeout settings above.
+unit tests that run on any OS, and the manual [WSL workflow](.github/workflows/wsl.yml)
+ran on a GitHub-hosted Windows runner (Windows Server 2025, Ubuntu 24.04
+under WSL 2): the installer detected WSL 2 and installed what was missing
+through apt, tmux, lsof and node-pty worked, the server started and logged
+its WSL note, and Windows reached it at both `localhost:3011` and
+`127.0.0.1:3011`. Untested: Windows Hello approvals, links opening through
+`wslview`/`explorer.exe`, mirrored networking, `agent-os enable` under
+systemd, the idle-timeout settings above, and Debian or other distros.
 
 ### Supported agents
 
