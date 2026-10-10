@@ -1,1 +1,1 @@
-export { DevicesDialog } from "./DevicesDialog";
+export { DevicesPanel, canManageDevices } from "./DevicesPanel";

@@ -15,8 +15,7 @@ import {
   PinOff,
   Plus,
   Server,
-  Smartphone,
-  GitMerge,
+  Settings,
   SquareTerminal,
   Trash2,
 } from "lucide-react";
@@ -32,8 +31,7 @@ import { tasksUiActions } from "@/stores/tasksUi";
 import { newDraft } from "@/stores/drafts";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { busUiActions } from "@/stores/busUi";
-import { devicesUiActions } from "@/stores/devicesUi";
-import { mergeUiActions } from "@/stores/mergeUi";
+import { settingsUiActions } from "@/stores/settingsUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { LoadGauge } from "./LoadGauge";
@@ -93,6 +91,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
           }
           items={[
             menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
+            // Opens Settings > Schedules.
             menuItem("Schedules", () => schedulesUiActions.open(workspaceId), {
               icon: Clock,
               description: schedules.nextText,
@@ -114,8 +113,9 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             menuItem("Usage", usageUiActions.open, { icon: Gauge }),
             separator(),
             menuItem("Machines", props.onManageHosts, { icon: Server }),
-            menuItem("Devices", devicesUiActions.open, { icon: Smartphone }),
-            menuItem("Merging", mergeUiActions.open, { icon: GitMerge }),
+            menuItem("Settings", () => settingsUiActions.open(), {
+              icon: Settings,
+            }),
             ...(pinControls
               ? [
                   menuItem(

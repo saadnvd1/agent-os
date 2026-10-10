@@ -14,14 +14,9 @@ export function DesktopView({
   sessionStatuses,
   activeSession,
   focusedActiveTab,
-  showNotificationSettings,
-  setShowNotificationSettings,
   showQuickSwitcher,
   setShowQuickSwitcher,
   notificationSettings,
-  permissionGranted,
-  updateSettings,
-  requestPermission,
   attachToSession,
   openSessionInNewTab,
   handleNewSessionInProject,
@@ -68,12 +63,7 @@ export function DesktopView({
                 sessions={sessions}
                 sessionStatuses={sessionStatuses}
                 activeSession={activeSession}
-                showNotificationSettings={showNotificationSettings}
-                setShowNotificationSettings={setShowNotificationSettings}
                 notificationSettings={notificationSettings}
-                permissionGranted={permissionGranted}
-                updateSettings={updateSettings}
-                requestPermission={requestPermission}
                 attachToSession={attachToSession}
               />
             }

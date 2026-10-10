@@ -1,1 +1,1 @@
-export { SchedulesDialog } from "./SchedulesDialog";
+export { SchedulesPanel } from "./SchedulesPanel";

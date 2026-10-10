@@ -13,6 +13,7 @@ import { expandHome } from "./session";
 import {
   DEFAULT_MERGE_POLICY,
   type MergePolicy,
+  type MergeOverride,
   type MergeSettings,
   type MergeSource,
   type ResolvedMergePolicy,
@@ -106,4 +107,23 @@ export function mergePolicy(
     }
   }
   return { ...policy, from };
+}
+
+const hasAny = (s: MergeSettings) =>
+  Object.values(s).some((v) => v !== undefined);
+
+// The projects whose own setting or agentos.json overrides the global one.
+export function mergeOverrides(
+  projects: Array<
+    Pick<Project, "id" | "name" | "working_directory" | "is_uncategorized">
+  >
+): MergeOverride[] {
+  return projects.flatMap((p) => {
+    if (p.is_uncategorized) return [];
+    const project = projectMergeSettings(p.id);
+    const config = configMergeSettings(p);
+    return hasAny(project) || hasAny(config)
+      ? [{ projectId: p.id, name: p.name, project, config }]
+      : [];
+  });
 }

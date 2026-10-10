@@ -8,7 +8,7 @@ import { useOpenSession } from "@/hooks/useOpenSession";
 import { useSessionUrl } from "@/hooks/useSessionUrl";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
-import { memo, useState, useEffect, useCallback, useRef } from "react";
+import { memo, useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 // Debug log buffer - persists even if console is closed
 const debugLogs: string[] = [];
@@ -70,34 +70,15 @@ const AddProjectDialog = dynamic(
     ),
   { ssr: false }
 );
-const SchedulesDialog = dynamic(
+const SettingsDialog = dynamic(
   () =>
-    import("@/components/Schedules/SchedulesDialog").then(
-      (m) => m.SchedulesDialog
-    ),
-  { ssr: false }
-);
-const PhoneNotifyDialog = dynamic(
-  () =>
-    import("@/components/PhoneNotify/PhoneNotifyDialog").then(
-      (m) => m.PhoneNotifyDialog
+    import("@/components/Settings/SettingsDialog").then(
+      (m) => m.SettingsDialog
     ),
   { ssr: false }
 );
 const MessagesDialog = dynamic(
   () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
-  { ssr: false }
-);
-const MergeSettingsDialog = dynamic(
-  () =>
-    import("@/components/Merge/MergeSettingsDialog").then(
-      (m) => m.MergeSettingsDialog
-    ),
-  { ssr: false }
-);
-const DevicesDialog = dynamic(
-  () =>
-    import("@/components/Devices/DevicesDialog").then((m) => m.DevicesDialog),
   { ssr: false }
 );
 const ArchivedDialog = dynamic(
@@ -140,12 +121,8 @@ const AppDialogs = memo(function AppDialogs() {
   return (
     <>
       <TasksDialog />
-      <SchedulesDialog />
-      <PhoneNotifyDialog />
       <AddProjectDialog />
       <MessagesDialog />
-      <DevicesDialog />
-      <MergeSettingsDialog />
       <ArchivedDialog />
       <CleanupDialog />
       <LumifyHubDialogs />
@@ -159,8 +136,6 @@ const AppDialogs = memo(function AppDialogs() {
 function HomeContent() {
   // UI State
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showNotificationSettings, setShowNotificationSettings] =
-    useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
 
@@ -510,6 +485,15 @@ function HomeContent() {
     requestPermission,
     permissionGranted,
   } = useNotifications({ onSessionClick: handleNotificationClick });
+  const browserNotifications = useMemo(
+    () => ({
+      settings: notificationSettings,
+      permissionGranted,
+      updateSettings,
+      requestPermission,
+    }),
+    [notificationSettings, permissionGranted, updateSettings, requestPermission]
+  );
 
   // Session statuses
   const { sessionStatuses } = useSessionStatuses({
@@ -666,10 +650,6 @@ function HomeContent() {
     sessions,
     onSelectSession: attachToSession,
     onSearchCode: () => setShowQuickSwitcher(true),
-    // Its dialog lives in the desktop bar.
-    onNotificationSettings: isMobile
-      ? undefined
-      : () => setShowNotificationSettings(true),
   });
   useMoveCommands(activeSession);
 
@@ -686,14 +666,9 @@ function HomeContent() {
     setSidebarOpen,
     activeSession,
     focusedActiveTab,
-    showNotificationSettings,
-    setShowNotificationSettings,
     showQuickSwitcher,
     setShowQuickSwitcher,
     notificationSettings,
-    permissionGranted,
-    updateSettings,
-    requestPermission,
     attachToSession,
     openSessionInNewTab,
     handleNewSessionInProject,
@@ -713,6 +688,7 @@ function HomeContent() {
         <DesktopView {...viewProps} />
       )}
       <AppDialogs />
+      <SettingsDialog notifications={browserNotifications} />
     </>
   );
 }

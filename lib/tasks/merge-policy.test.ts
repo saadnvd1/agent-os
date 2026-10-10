@@ -4,6 +4,7 @@ import path from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createProject } from "@/lib/projects";
 import {
+  mergeOverrides,
   mergePolicy,
   projectMergeSettings,
   setGlobalMergeSettings,
@@ -86,5 +87,33 @@ describe("mergePolicy", () => {
     expect(projectMergeSettings(p.id)).toEqual({ method: "merge" });
     setProjectMergeSettings(p.id, { method: undefined });
     expect(projectMergeSettings(p.id)).toEqual({});
+  });
+});
+
+describe("mergeOverrides", () => {
+  it("lists only projects whose own setting or agentos.json sets something", () => {
+    const plain = project();
+    const viaConfig = project({ merge: { method: "rebase" } });
+    const viaUi = project();
+    setProjectMergeSettings(viaUi.id, { delete_worktree: false });
+    const broken = project({ merge: { method: "octopus" } });
+    const uncategorized = { ...viaUi, id: "u", is_uncategorized: true };
+
+    expect(
+      mergeOverrides([plain, viaConfig, viaUi, broken, uncategorized])
+    ).toEqual([
+      {
+        projectId: viaConfig.id,
+        name: viaConfig.name,
+        project: {},
+        config: { method: "rebase" },
+      },
+      {
+        projectId: viaUi.id,
+        name: viaUi.name,
+        project: { delete_worktree: false },
+        config: {},
+      },
+    ]);
   });
 });

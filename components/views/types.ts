@@ -29,16 +29,11 @@ export interface ViewProps {
   focusedActiveTab: TabData | null;
 
   // Dialogs
-  showNotificationSettings: boolean;
-  setShowNotificationSettings: (show: boolean) => void;
   showQuickSwitcher: boolean;
   setShowQuickSwitcher: (show: boolean) => void;
 
-  // Notification settings
+  // Notification settings (changed in Settings > Notifications)
   notificationSettings: NotificationSettings;
-  permissionGranted: boolean;
-  updateSettings: (settings: Partial<NotificationSettings>) => void;
-  requestPermission: () => Promise<boolean>;
 
   // Handlers
   attachToSession: (session: Session) => void;

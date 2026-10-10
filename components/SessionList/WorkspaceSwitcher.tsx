@@ -15,7 +15,8 @@ import {
   Workflow,
 } from "lucide-react";
 import * as DM from "@/components/ui/dropdown-menu";
-import { TaskLimitDialog, WorkspaceNameDialog } from "@/components/Workspaces";
+import { WorkspaceNameDialog } from "@/components/Workspaces";
+import { settingsUiActions } from "@/stores/settingsUi";
 import { taskLimitLabel } from "@/components/Workspaces/task-limit";
 import { WorkspaceLumifyHubItem } from "@/components/LumifyHub/MenuItems";
 import type { Workspace } from "@/lib/db";
@@ -43,7 +44,7 @@ export function WorkspaceSwitcher({
   const create = useCreateWorkspace();
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
-  const [dialog, setDialog] = useState<"new" | "rename" | "limit" | null>(null);
+  const [dialog, setDialog] = useState<"new" | "rename" | null>(null);
   const name = current?.name ?? "All workspaces";
 
   return (
@@ -109,7 +110,9 @@ export function WorkspaceSwitcher({
                 <Pencil className={icon} />
                 Rename
               </DM.DropdownMenuItem>
-              <DM.DropdownMenuItem onClick={() => setDialog("limit")}>
+              <DM.DropdownMenuItem
+                onClick={() => settingsUiActions.open("workspaces")}
+              >
                 <Gauge className={icon} />
                 <span className="flex-1">Task limit</span>
                 <span className="text-muted-foreground text-xs">
@@ -146,13 +149,6 @@ export function WorkspaceSwitcher({
           )}
         </DM.DropdownMenuContent>
       </DM.DropdownMenu>
-      {current && (
-        <TaskLimitDialog
-          workspace={current}
-          open={dialog === "limit"}
-          onClose={() => setDialog(null)}
-        />
-      )}
       <WorkspaceNameDialog
         open={dialog === "new" || dialog === "rename"}
         title={dialog === "rename" ? "Rename workspace" : "New workspace"}

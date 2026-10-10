@@ -1,2 +1,2 @@
 export { WorkspaceNameDialog } from "./WorkspaceNameDialog";
-export { TaskLimitDialog } from "./TaskLimitDialog";
+export { WorkspaceSettings } from "./WorkspaceSettings";

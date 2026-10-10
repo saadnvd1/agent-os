@@ -2,13 +2,6 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -18,44 +11,13 @@ import { parseTaskLimit } from "./task-limit";
 
 // How many tasks the workspace runs at once. Off by default; over the limit
 // a new task is queued and starts by itself when one finishes.
-export function TaskLimitDialog({
-  workspace,
-  open,
-  onClose,
-}: {
-  workspace: Workspace;
-  open: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Running task limit</DialogTitle>
-          <DialogDescription>
-            Tasks over the limit wait in the Queued list and start by
-            themselves, in order, when a running one finishes.
-          </DialogDescription>
-        </DialogHeader>
-        {/* Mounted with each open, so it starts from the saved setting. */}
-        <LimitForm workspace={workspace} onClose={onClose} />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function LimitForm({
-  workspace,
-  onClose,
-}: {
-  workspace: Workspace;
-  onClose: () => void;
-}) {
+export function TaskLimitForm({ workspace }: { workspace: Workspace }) {
   const update = useUpdateWorkspace();
   const current = workspace.max_running_tasks;
   const [on, setOn] = useState(current !== null);
   const [text, setText] = useState(String(current ?? 3));
   const parsed = parseTaskLimit(on, text);
+  const dirty = !("error" in parsed) && parsed.limit !== current;
 
   return (
     <form
@@ -74,7 +36,6 @@ function LimitForm({
             onError: (error) => toast.error(error.message),
           }
         );
-        onClose();
       }}
       className="space-y-4"
     >
@@ -108,19 +69,12 @@ function LimitForm({
       {"error" in parsed && (
         <p className="text-destructive text-xs">{parsed.error}</p>
       )}
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-11 sm:h-9"
-          onClick={onClose}
-        >
-          Cancel
-        </Button>
+      <div className="flex justify-end">
         <Button
           type="submit"
-          className="h-11 sm:h-9"
-          disabled={"error" in parsed}
+          size="sm"
+          className="h-11 sm:h-8"
+          disabled={"error" in parsed || !dirty || update.isPending}
         >
           Save
         </Button>

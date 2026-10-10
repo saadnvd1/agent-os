@@ -29,7 +29,7 @@ sensitive or large PRs wait for you too. [More](#orchestrator)
 
 A task gets its own git worktree, branch and ports, opens as a chat, runs
 the project's code review before it opens its PR, and waits for your
-sign-off. A workspace's **Task limit** caps how many run at once; the rest
+sign-off. A workspace's running task limit (Settings → Workspaces) caps how many run at once; the rest
 wait under **Queued** with their place in line and start on their own, and
 `aos task --after` holds one until another finishes. [More](#tasks)
 
@@ -368,7 +368,7 @@ the PR and removes everything. Agents never merge their own work.
 
 **Merging settings.** How a PR merges (sign-off, Done, Land and the
 orchestrator's external PRs alike) and what's cleaned up after it are set in
-the sidebar menu's **Merging** (or ⌘K → Merge settings) for every project,
+**Settings → Merging** (or ⌘K → Merge settings) for every project,
 and overridden per project in its **Project Settings → Merging** or in its
 `agentos.json`:
 
@@ -395,7 +395,7 @@ or commits the merge didn't include. The most specific setting wins: the
 project's, then `agentos.json`, then the global one.
 
 **Queued tasks.** A workspace can limit how many tasks run at once (none by
-default; set it from the workspace menu's **Task limit**, or `PATCH /api/workspaces/<id>` with `{"maxRunningTasks": 3}`, or
+default; set it in **Settings → Workspaces**, or `PATCH /api/workspaces/<id>` with `{"maxRunningTasks": 3}`, or
 `null` for no limit). A task started over the limit is queued, with no
 worktree or agent yet, and starts by itself in line order when one finishes
 (merged, dropped or done). `aos task --after <task|any>` (and the
@@ -639,8 +639,8 @@ waits and goes out as one message (kept in the database, so a restart
 doesn't lose it; past 20 waiting, more are dropped), and the same text twice
 goes once.
 
-Set it up in **Phone notifications** (⌘K, or the line at the bottom of
-Schedules), one of:
+Set it up in **Settings → Notifications** (⌘K → Phone notifications, or the
+line at the bottom of Schedules), one of:
 
 - **Command**: `AGENTOS_NOTIFY_CMD` in the server's environment, a shell
   command that gets the message on stdin. It wins when set. For example, a
@@ -722,6 +722,15 @@ pane's session, each switch is a history entry so back and forward move
 between sessions, and an address for an archived or unknown session says so
 and opens the usual home. A device that isn't paired is sent through pairing
 and comes back to the same session; the address grants nothing by itself.
+
+**Settings** (the sidebar's ⋯ menu, or ⌘K → Settings) holds every setting in
+one place: **Merging** (the approval switch, merge method and branch
+clean-up, with the projects that override them), **Workspaces** (each one's
+running task limit), **Devices & access** (pairing, passkeys, network),
+**Notifications** (this browser's sound and alerts, and your phone) and
+**Schedules**. Each section has its own address, `/?settings=<section>`
+(`merging`, `workspaces`, `devices`, `notifications`, `schedules`), beside
+`?session=`; on a phone the sections are a list, then the one you open.
 
 Rows move the moment a session changes state: the server pushes every change
 over `/ws/status` (behind the same device gate as the terminal). The same
@@ -869,7 +878,7 @@ it may do on its own, and the lines that always come back to you as asks.
   sessions AgentOS didn't start that work in a workspace repository or a
   worktree of it, here or on another machine, with their branch's PR; `read`
   reads them, and nothing else acts on them.
-- **Merge approvals** (Settings → Devices, off by default): on, any change to
+- **Merge approvals** (Settings → Merging, off by default): on, any change to
   CI config, build and hook scripts, agent config, deploy scripts, secrets
   handling or AgentOS's security code, and any diff over 80k characters, goes
   to you as an ask whatever the gates say, and merges once on your passkey.
@@ -1149,7 +1158,7 @@ commit (run `/do-code-review` first; see [Tasks](#tasks)).
 
 ## Mobile access
 
-**At home:** open Devices from the menu, turn on "Allow devices on this Wi-Fi",
+**At home:** open **Settings → Devices & access** from the menu, turn on "Allow devices on this Wi-Fi",
 tap "Add a device", and scan the QR code with your phone. Laptops open the link
 and type the code. Each code works once, for 10 minutes.
 
