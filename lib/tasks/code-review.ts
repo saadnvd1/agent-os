@@ -29,13 +29,13 @@ export const ATTRIBUTION =
 export type AttributionKind =
   | "a Co-Authored-By trailer naming Claude"
   | "a Claude-Session link"
-  | 'a "Generated with Claude Code" line';
+  | 'a "Generated with" AI footer';
 function attributionKind(line: string): AttributionKind | undefined {
   if (!ATTRIBUTION.test(line)) return;
   if (/^co-authored-by:/i.test(line))
     return "a Co-Authored-By trailer naming Claude";
   if (/^claude-session:/i.test(line)) return "a Claude-Session link";
-  return 'a "Generated with Claude Code" line';
+  return 'a "Generated with" AI footer';
 }
 const REVIEWED =
   /^[>*_ -]*reviewed(?: (?:commit|sha|at))?[*_ ]*:[*_` ]*([0-9a-f]{12,40})\b/i;
