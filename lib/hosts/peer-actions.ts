@@ -204,7 +204,7 @@ export interface PeerStart {
 export async function startOnPeer(
   link: HostLink,
   start: PeerStart
-): Promise<{ session: Session; initialPrompt?: string }> {
+): Promise<{ session: Session; initialPrompt?: string; repeat?: boolean }> {
   // An AgentOS from before keys would make a second session on a retry,
   // and doesn't know a carried project.
   const keyed = await hostTasks(link)
@@ -231,7 +231,11 @@ export async function startOnPeer(
   };
   // A carried project may be cloned there first.
   const timeout = start.ref ? 180000 : 60000;
-  type Answer = { session?: unknown; initialPrompt?: unknown };
+  type Answer = {
+    session?: unknown;
+    initialPrompt?: unknown;
+    repeat?: unknown;
+  };
   const res = keyed
     ? await postIdempotent<Answer>(link, "/api/sessions", body, timeout)
     : await hostApi<Answer>(link, "/api/sessions", { body, timeout });
@@ -261,7 +265,13 @@ export async function startOnPeer(
     s.view === "terminal" && typeof res.initialPrompt === "string"
       ? res.initialPrompt.slice(0, 100_000)
       : undefined;
-  return { session: row(s.id), initialPrompt };
+  // A session that machine already had for the key: the draft may need
+  // to type its own first prompt.
+  return {
+    session: row(s.id),
+    initialPrompt,
+    ...(res.repeat === true ? { repeat: true } : {}),
+  };
 }
 
 const isMirrorOf = (s: Session, link: HostLink) =>

@@ -467,6 +467,7 @@ describe("starting a session on a linked machine", () => {
       keys.add(key);
       if (++calls === 1) return { $status: 502, error: "bad gateway" };
       return {
+        repeat: true,
         session: {
           id: key,
           name: "once",
@@ -477,12 +478,14 @@ describe("starting a session on a linked machine", () => {
         },
       };
     };
-    const { session } = await launchSession({
+    const { session, repeat } = await launchSession({
       id,
       hostId,
       agentType: "claude",
       prompt: "hi",
     });
+    // It answered the retry with the session the first made, and says so.
+    expect(repeat).toBe(true);
     const starts = peer.calls.filter((c) => c.path === "/api/sessions");
     expect(starts.map((c) => (c.body as { id: string }).id)).toEqual([id, id]);
     expect([...keys]).toEqual([id]);
