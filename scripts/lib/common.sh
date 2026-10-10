@@ -35,6 +35,51 @@ detect_os() {
     esac
 }
 
+# WSL version: 2, 1, or 0 when not under WSL. The same test as lib/wsl.ts:
+# the kernel release names Microsoft, and WSL_DISTRO_NAME is the fallback
+# (it isn't set under systemd or sudo). AGENTOS_OSRELEASE_FILE is for tests.
+detect_wsl() {
+    if [[ "$(uname -s)" != Linux* ]]; then
+        echo 0
+        return
+    fi
+    local rel
+    rel=$(tr '[:upper:]' '[:lower:]' < "${AGENTOS_OSRELEASE_FILE:-/proc/sys/kernel/osrelease}" 2>/dev/null || true)
+    if [[ "$rel" == *microsoft* ]]; then
+        if [[ "$rel" == *wsl2* || "$rel" == *microsoft-standard* ]]; then
+            echo 2
+        else
+            echo 1
+        fi
+    elif [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+        echo 2
+    else
+        echo 0
+    fi
+}
+
+# systemd is PID 1 (under WSL only with systemd=true in /etc/wsl.conf).
+has_systemd() {
+    [[ "$(ps -p 1 -o comm= 2>/dev/null)" == "systemd" ]]
+}
+
+# Open a URL in the user's browser; under WSL that's the Windows one.
+open_url() {
+    local url="$1"
+    if [[ "$OS" == "macos" ]]; then
+        open "$url"
+    elif [[ "${WSL:-0}" != 0 ]] && command -v wslview &> /dev/null; then
+        wslview "$url"
+    elif [[ "${WSL:-0}" != 0 ]] && command -v explorer.exe &> /dev/null; then
+        # explorer.exe exits 1 even when it opened the page.
+        explorer.exe "$url" || true
+    elif command -v xdg-open &> /dev/null; then
+        xdg-open "$url"
+    else
+        log_warn "Could not detect a browser. Open manually: $url"
+    fi
+}
+
 # Check if running interactively
 is_interactive() {
     [[ -t 0 ]] && [[ -t 1 ]]

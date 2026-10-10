@@ -93,6 +93,30 @@ cmd_install() {
     echo "  agent-os start     Start the server"
     echo "  agent-os enable    Auto-start on boot"
     echo "  agent-os status    Show URLs"
+    wsl_next_steps
+}
+
+# What's different under WSL, after an install.
+wsl_next_steps() {
+    [[ "${WSL:-0}" == 0 ]] && return 0
+    echo ""
+    echo "Windows (WSL):"
+    if [[ "$WSL" == 1 ]]; then
+        echo "  This is WSL 1, which AgentOS doesn't support. From Windows: wsl --set-version <distro> 2"
+    fi
+    echo "  Open http://localhost:$PORT in your Windows browser. Use localhost, not"
+    echo "  127.0.0.1: passkeys (Windows Hello) only work on localhost or https."
+    if has_systemd; then
+        echo "  agent-os enable    Starts it with your WSL distro (systemd is on)."
+    else
+        echo "  agent-os enable needs systemd. Add this to /etc/wsl.conf, then run"
+        echo "  'wsl --shutdown' from Windows and reopen your terminal:"
+        echo "      [boot]"
+        echo "      systemd=true"
+    fi
+    echo "  Keep projects in your Linux home (~), not /mnt/c: git, npm and file"
+    echo "  watching are slow on the Windows drive, and changes made from Windows"
+    echo "  aren't noticed."
 }
 
 cmd_start() {
@@ -198,16 +222,7 @@ cmd_run() {
     local url="http://localhost:$PORT"
     log_info "Opening $url..."
 
-    # Open in browser
-    if [[ "$OS" == "macos" ]]; then
-        open "$url"
-    elif command -v xdg-open &> /dev/null; then
-        xdg-open "$url"
-    elif command -v wslview &> /dev/null; then
-        wslview "$url"
-    else
-        log_warn "Could not detect browser. Open manually: $url"
-    fi
+    open_url "$url"
 }
 
 cmd_status() {
@@ -339,7 +354,7 @@ EOF
         log_success "Auto-start enabled (launchd)"
         echo "  Plist: $plist_path"
 
-    elif [[ -d /etc/systemd ]]; then
+    elif has_systemd; then
         local service_dir="$HOME/.config/systemd/user"
         local service_path="$service_dir/agent-os.service"
 
@@ -366,6 +381,14 @@ EOF
         log_success "Auto-start enabled (systemd)"
         echo "  Service: $service_path"
 
+    elif [[ "${WSL:-0}" != 0 ]]; then
+        log_error "Auto-start under WSL needs systemd. Add this to /etc/wsl.conf:"
+        echo "    [boot]"
+        echo "    systemd=true"
+        echo "  then run 'wsl --shutdown' from Windows, reopen your terminal, and run"
+        echo "  'agent-os enable' again."
+        exit 1
+
     else
         log_error "Could not detect init system (launchd/systemd)"
         exit 1
@@ -384,7 +407,7 @@ cmd_disable() {
             log_warn "Auto-start was not enabled"
         fi
 
-    elif [[ -d /etc/systemd ]]; then
+    elif has_systemd; then
         systemctl --user disable agent-os 2>/dev/null || true
         rm -f "$HOME/.config/systemd/user/agent-os.service"
         systemctl --user daemon-reload

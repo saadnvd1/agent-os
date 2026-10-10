@@ -9,6 +9,7 @@ import { createProject, type ProjectWithRepositories } from "../projects";
 import { getHost } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { run, shellPath, spawnOn } from "./shell";
+import { onWindowsDrive, WINDOWS_DRIVE_WARNING } from "../wsl";
 
 export const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 // https://host/owner/repo(.git), ssh://…, or git@host:owner/repo(.git).
@@ -24,6 +25,9 @@ export interface FolderListing {
   parent: string | null;
   folders: string[];
   isGitRepo: boolean;
+  // Set when the folder is somewhere a project shouldn't live (a Windows
+  // drive under WSL).
+  warning: string | null;
 }
 
 // One folder's subfolders (hidden ones left out), for picking a project.
@@ -42,6 +46,7 @@ export async function listFolders(
     parent: abs === "/" ? null : path.posix.dirname(abs),
     folders: rest.filter(Boolean).map((f) => f.replace(/^\.\//, "")),
     isGitRepo: git === "GIT",
+    warning: onWindowsDrive(abs) ? WINDOWS_DRIVE_WARNING : null,
   };
 }
 

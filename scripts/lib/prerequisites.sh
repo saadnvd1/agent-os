@@ -151,6 +151,15 @@ check_tmux() {
     return 1
 }
 
+# apt-get install, refreshing the package lists once per run.
+apt_install() {
+    if [[ -z "${APT_UPDATED:-}" ]]; then
+        sudo apt-get update
+        APT_UPDATED=1
+    fi
+    sudo apt-get install -y "$@"
+}
+
 install_homebrew() {
     if command -v brew &> /dev/null; then
         return 0
@@ -244,11 +253,11 @@ install_node() {
             fi
             ;;
         debian)
-            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
             sudo apt-get install -y nodejs
             ;;
         redhat)
-            curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+            curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
             sudo yum install -y nodejs
             ;;
         *)
@@ -273,8 +282,7 @@ install_git() {
             done
             ;;
         debian)
-            sudo apt-get update
-            sudo apt-get install -y git
+            apt_install git
             ;;
         redhat)
             sudo yum install -y git
@@ -306,8 +314,7 @@ install_tmux() {
             fi
             ;;
         debian)
-            sudo apt-get update
-            sudo apt-get install -y tmux
+            apt_install tmux
             ;;
         redhat)
             sudo yum install -y tmux
@@ -379,8 +386,7 @@ install_ripgrep() {
             fi
             ;;
         debian)
-            sudo apt-get update
-            sudo apt-get install -y ripgrep
+            apt_install ripgrep
             ;;
         redhat)
             sudo yum install -y ripgrep
@@ -388,8 +394,51 @@ install_ripgrep() {
     esac
 }
 
+# lsof finds what's listening on a port (dev servers, port checks). macOS
+# ships it; minimal Linux images, WSL's included, may not.
+check_lsof() {
+    command -v lsof &> /dev/null
+}
+
+install_lsof() {
+    case "$OS" in
+        debian) apt_install lsof ;;
+        redhat) sudo yum install -y lsof ;;
+    esac
+}
+
+# A compiler for node-pty and better-sqlite3 when no prebuilt binary fits
+# this Node. Linux only: macOS gets one with git (Xcode tools).
+check_build_tools() {
+    [[ "$OS" == "macos" ]] && return 0
+    command -v make &> /dev/null && command -v g++ &> /dev/null && command -v python3 &> /dev/null
+}
+
+install_build_tools() {
+    case "$OS" in
+        debian) apt_install build-essential python3 ;;
+        redhat) sudo yum install -y gcc-c++ make python3 ;;
+    esac
+}
+
+# Under WSL: wslview opens links in the Windows browser (explorer.exe is
+# the fallback, so this one is optional).
+install_wslu() {
+    if [[ "${WSL:-0}" == 0 || "$OS" != "debian" ]] || command -v wslview &> /dev/null; then
+        return 0
+    fi
+    apt_install wslu || log_warn "Couldn't install wslu; links open through explorer.exe instead"
+}
+
 check_and_install_prerequisites() {
     log_info "Checking prerequisites..."
+
+    if [[ "${WSL:-0}" == 1 ]]; then
+        log_warn "This is WSL 1. AgentOS supports WSL 2 only: from Windows, run"
+        log_warn "  wsl --set-version <distro> 2"
+    elif [[ "${WSL:-0}" == 2 ]]; then
+        log_info "Windows Subsystem for Linux 2 detected"
+    fi
 
     local missing=()
 
@@ -413,8 +462,17 @@ check_and_install_prerequisites() {
         missing+=("ripgrep")
     fi
 
+    if ! check_lsof; then
+        missing+=("lsof")
+    fi
+
+    if ! check_build_tools; then
+        missing+=("build-tools")
+    fi
+
     if [[ ${#missing[@]} -eq 0 ]]; then
         log_success "All prerequisites met"
+        install_wslu
         return 0
     fi
 
@@ -433,8 +491,21 @@ check_and_install_prerequisites() {
             git) install_git ;;
             tmux) install_tmux ;;
             ripgrep) install_ripgrep ;;
+            lsof) install_lsof ;;
+            build-tools) install_build_tools ;;
         esac
     done
+    install_wslu
+
+    # What this distro has no installer for here is still missing.
+    local still=()
+    check_node > /dev/null || still+=("node 20+")
+    check_git > /dev/null || still+=("git")
+    check_tmux > /dev/null || still+=("tmux")
+    if [[ ${#still[@]} -gt 0 ]]; then
+        log_error "Still missing: ${still[*]}. Install them with your package manager, then run this again."
+        exit 1
+    fi
 
     log_success "Prerequisites installed"
 }
