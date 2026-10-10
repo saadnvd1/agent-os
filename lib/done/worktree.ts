@@ -8,7 +8,12 @@ import fs from "fs";
 import type { Session } from "../db";
 import { getDefaultBranch } from "../git";
 import { run } from "../tasks/gh";
-import { deleteWorktree, isAgentOSWorktree } from "../worktrees";
+import {
+  deleteWorktree,
+  isAgentOSWorktree,
+  removalRunning,
+  removalSettled,
+} from "../worktrees";
 import { describeChanges, unsavedChanges } from "../worktree-placed";
 
 export type WorktreeFate =
@@ -94,10 +99,25 @@ export type FatePreview =
   | Exclude<WorktreeFate, { action: "removed" }>
   | { action: "remove"; why: string; repo: string };
 
-// Decides without touching anything. Uncommitted work always keeps it;
-// a merged branch goes only if every commit on it was in the merge or is
-// on a remote; an unmerged one only if it has no commits of its own.
+// Decides without touching anything, after any removal already running
+// (a sign-off's cleanup, just before a done) has finished: a tree read
+// while git deletes it lists every deleted file as a change.
 export async function worktreeFate(
+  session: Pick<Session, "worktree_path" | "base_branch">,
+  merged: MergedAs | null
+): Promise<FatePreview> {
+  const path = session.worktree_path;
+  for (;;) {
+    if (path) await removalSettled(path);
+    const fate = await judge(session, merged);
+    if (!path || !removalRunning(path)) return fate;
+  }
+}
+
+// Uncommitted work always keeps it; a merged branch goes only if every
+// commit on it was in the merge or is on a remote; an unmerged one only if
+// it has no commits of its own.
+async function judge(
   session: Pick<Session, "worktree_path" | "base_branch">,
   merged: MergedAs | null
 ): Promise<FatePreview> {

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { execFileSync } from "child_process";
 import { setupWorktree } from "./env-setup";
+import { unsavedChanges } from "./worktree-placed";
 
 const tmp = (p: string) => fs.mkdtempSync(path.join(os.tmpdir(), p));
 
@@ -138,6 +140,48 @@ describe("setupWorktree with agentos.json", () => {
       });
       expect(result.success).toBe(true);
       expect(read(worktree, ".venv/bin/python")).toBe("py");
+    }
+  );
+
+  it.skipIf(process.platform !== "darwin")(
+    "leaves a new worktree with nothing uncommitted: env copied, dependencies cloned",
+    async () => {
+      const root = tmp("aos-setup-git-");
+      const repo = path.join(root, "repo");
+      const worktree = path.join(root, "wt");
+      const git = (cwd: string, ...args: string[]) =>
+        execFileSync("git", args, { cwd, stdio: "pipe" });
+      fs.mkdirSync(repo);
+      git(repo, "init", "-q", "-b", "main");
+      fs.writeFileSync(path.join(repo, ".gitignore"), "node_modules\n.env\n");
+      fs.writeFileSync(path.join(repo, "package.json"), "{}");
+      fs.writeFileSync(path.join(repo, "package-lock.json"), '{"v":1}');
+      fs.writeFileSync(path.join(repo, "LICENSE"), "MIT\n");
+      git(repo, "add", "-A");
+      git(
+        repo,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@e",
+        "commit",
+        "-qm",
+        "init"
+      );
+      fs.writeFileSync(path.join(repo, ".env"), "KEY=1\n");
+      fs.writeFileSync(path.join(repo, ".env.local"), "KEY=2\n");
+      fs.mkdirSync(path.join(repo, "node_modules", "dep"), { recursive: true });
+      fs.writeFileSync(path.join(repo, "node_modules", "dep", "index.js"), "1");
+      git(repo, "worktree", "add", "-q", "-b", "feature/x", worktree, "main");
+
+      const result = await setupWorktree({
+        worktreePath: worktree,
+        sourcePath: repo,
+      });
+      expect(result.success).toBe(true);
+      expect(read(worktree, "node_modules/dep/index.js")).toBe("1");
+      expect(read(worktree, ".env.local")).toBe("KEY=2\n");
+      expect(await unsavedChanges(worktree)).toEqual([]);
     }
   );
 });
