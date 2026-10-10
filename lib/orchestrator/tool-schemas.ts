@@ -10,6 +10,12 @@ const session = ref("Session name, project/name, or id from sessions");
 const task = ref("Task name, project/name, id, or its PR (#12)");
 const project = ref("A project of this workspace, by name");
 const stackId = ref("Stack id (or its name) from stack or sessions");
+const view = z
+  .enum(["chat", "terminal"])
+  .optional()
+  .describe(
+    "How its agent runs: chat (the default), or terminal only when the job needs a TUI (an interactive program, a full-screen tool)"
+  );
 
 export const TOOL_SHAPES = {
   sessions: {},
@@ -47,6 +53,7 @@ export const TOOL_SHAPES = {
       .max(80)
       .optional()
       .describe("A short name, 2-6 words (default: one made from the prompt)"),
+    view,
   },
   start_session: {
     project,
@@ -58,6 +65,7 @@ export const TOOL_SHAPES = {
       .max(80)
       .optional()
       .describe("A short name, 2-6 words (default: one made from the prompt)"),
+    view,
   },
   stack: {
     target: ref("Board or project name"),

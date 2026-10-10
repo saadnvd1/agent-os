@@ -55,9 +55,9 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   cards: "Cards on this workspace's linked LumifyHub boards, by list.",
   send: "Message a session in this workspace over the bus. It arrives as its next prompt.",
   start_task:
-    "Start a task: an agent in its own worktree that ends in a PR. Refused while a brake holds.",
+    "Start a task: an agent in its own worktree that ends in a PR. It runs as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.",
   start_session:
-    "Start an interactive agent session in a project with a prompt. Refused while a brake holds.",
+    "Start an interactive agent session in a project with a prompt. It runs as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.",
   stack:
     "Run a LumifyHub board's open cards as stacked tasks (each start braked), or with plan_only just show the plan.",
   stack_status: "One stack's items, PRs and progress.",

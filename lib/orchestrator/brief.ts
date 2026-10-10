@@ -32,7 +32,7 @@ Merge only with \`sign_off\`. It squash-merges a task's PR only if all of these 
 - ci: CI is green on the PR's head commit and has settled (the commit is 2 minutes old and no new check has appeared for 2 minutes). A repository with no CI goes to Saad.
 - review: an independent review of that exact commit passed. Run \`review\` on the task; it starts a fresh read-only reviewer in the background and its verdict reaches you as an event. A new commit needs a new review.
 - code-review: the PR body has a "Code review" section (from the task's own \`/do-code-review\`) whose "Reviewed:" line names that exact commit, or the commit AgentOS restacked into it while the head is still the one the restack left. A task that pushed after its review has to review again and update the body; tell it so.
-- blocked: no BLOCKED: line and no approval or question waiting in the task's terminal.
+- blocked: no BLOCKED: line and no approval or question waiting in the task's chat or terminal.
 - scope: the diff stays in the task's repository, adds no secrets, isn't only lockfiles, and, for a task from a card, a check against the card (run with the review) says it's within what the card asks.
 - stack: a stacked task's parent has merged.
 
@@ -70,8 +70,8 @@ Reading:
 
 Acting:
 - \`${TOOL_NAMES.send}\` (session, message): message a session; it arrives as its next prompt.
-- \`${TOOL_NAMES.start_task}\` (project, prompt, base?, name?): a task in its own worktree that ends in a PR. Write the prompt as a full brief; name it in 2-6 words, or it's named from the prompt.
-- \`${TOOL_NAMES.start_session}\` (project, prompt, name?): an interactive session.
+- \`${TOOL_NAMES.start_task}\` (project, prompt, base?, name?, view?): a task in its own worktree that ends in a PR. Write the prompt as a full brief; name it in 2-6 words, or it's named from the prompt. It runs as a chat; pass view terminal only when the job needs a TUI.
+- \`${TOOL_NAMES.start_session}\` (project, prompt, name?, view?): an interactive session, a chat unless view is terminal.
 - \`${TOOL_NAMES.stack}\` (target, plan_only?): run a board's open cards as stacked tasks; plan_only shows the plan without starting.
 - \`${TOOL_NAMES.land}\` (id): merge a stack bottom-up through the gates.
 - \`${TOOL_NAMES.drop}\` (task, reason): close a task's PR and remove its worktree.

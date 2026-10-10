@@ -10,6 +10,7 @@ import { republishAfterMerge } from "../lumifyhub/publish";
 import { restackAfterMerge } from "../stacks/restack";
 import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
 import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
+import { stopChat } from "../chat/runner";
 import { run } from "./gh";
 import { canSignOff } from "./state";
 import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
@@ -22,6 +23,8 @@ async function cleanup(
   opts: { keepRemoteBranch?: boolean; merged?: MergedAs } = {}
 ): Promise<void> {
   const keepRemoteBranch = opts.keepRemoteBranch ?? false;
+  // A chat task's agent runs in its chat worker, not the task's tmux.
+  if (session.view === "chat") stopChat(session.id);
   await run(
     "tmux",
     ["kill-session", "-t", `=${session.tmux_name}`],

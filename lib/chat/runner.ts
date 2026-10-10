@@ -48,6 +48,7 @@ import {
 } from "./queued";
 import { fallbackFileSuggestions } from "./files";
 import { holdsQueue, settingUp } from "../sessions/setup-progress";
+import { firstMessageId, launchPending } from "../tasks/launch-gate";
 import type { ChatItem, FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
 import { restoreActivity, track } from "./activity";
@@ -251,8 +252,9 @@ export async function sendChat(
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
-  // Its worktree is still being set up: the message waits its turn.
-  if (settingUp(sessionId)) {
+  // Its worktree is still being set up, or its task hasn't launched (held
+  // by Pause, say): the message waits its turn.
+  if (settingUp(sessionId) || launchPending(sessionId)) {
     enqueue(sessionId, {
       id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
       text,
@@ -299,7 +301,12 @@ const RESUME_EVERY_MS = 60_000;
 const RESUME_WITHIN_MS = 60 * 60 * 1000;
 const resumed = new Map<string, number>();
 async function resumeQueue(sessionId: string): Promise<void> {
-  if (!listQueue(sessionId).length || holdsQueue(sessionId)) return;
+  if (
+    !listQueue(sessionId).length ||
+    holdsQueue(sessionId) ||
+    launchPending(sessionId)
+  )
+    return;
   // Switched to the terminal: its agent runs there now, and a chat worker
   // on the same conversation would race it. The queue waits on screen.
   const session = db
@@ -323,14 +330,23 @@ async function resumeQueue(sessionId: string): Promise<void> {
 // Sends a queued message now: a running turn stops for it, as on Esc.
 // `during`: the user message whose turn the reader saw running, so a turn
 // that started since (the next queued one) isn't the one stopped.
+// Why a queued message can't go now: its worktree is setting up, or its
+// task hasn't launched and it isn't the launch's own first message.
+export function sendNowRefusal(sessionId: string, id: string): string | null {
+  if (settingUp(sessionId)) return "It's sent once the worktree is set up";
+  if (launchPending(sessionId) && id !== firstMessageId(sessionId))
+    return "It's sent once the task has started";
+  return null;
+}
+
 export async function sendQueuedNow(
   sessionId: string,
   id: string,
   during?: string
 ) {
   if (!listQueue(sessionId).some((m) => m.id === id)) return;
-  if (settingUp(sessionId))
-    throw new Error("It's sent once the worktree is set up");
+  const refusal = sendNowRefusal(sessionId, id);
+  if (refusal) throw new Error(refusal);
   const live = await ensureLive(sessionId);
   if (!live.canQueue)
     throw new Error("Reload to send this: the chat is on an older version");
@@ -365,6 +381,15 @@ export async function sendChatConfirmed(
 ): Promise<"delivered" | "queued"> {
   const text = input.text.trim();
   if (!text) throw new Error("Message is empty");
+  // A task not launched yet takes it after its first message.
+  if (launchPending(sessionId)) {
+    enqueue(sessionId, {
+      id: input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
+      text,
+    });
+    emitQueue(sessionId);
+    return "queued";
+  }
   const live = await ensureLive(sessionId);
   const wasBusy = live.state === "running" || live.state === "waiting";
   const id = input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
