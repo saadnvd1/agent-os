@@ -44,7 +44,9 @@ function openSession(e: MouseEvent<HTMLAnchorElement>, id: string) {
 
 function Source({ origin }: { origin: ChatOrigin }) {
   const name = (
-    <span className="text-foreground/80 font-medium">{origin.label}</span>
+    <span className="text-foreground/80 block truncate font-medium">
+      {origin.label}
+    </span>
   );
   if (!origin.sessionId) return name;
   const id = origin.sessionId;
@@ -55,7 +57,7 @@ function Source({ origin }: { origin: ChatOrigin }) {
         e.stopPropagation();
         openSession(e, id);
       }}
-      className="hover:text-foreground relative underline-offset-2 before:absolute before:-inset-x-1 before:-inset-y-3.5 hover:underline"
+      className="hover:text-foreground relative min-w-0 underline-offset-2 before:absolute before:-inset-x-1 before:-inset-y-3.5 hover:underline"
     >
       {name}
     </a>
@@ -106,7 +108,7 @@ function Row({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="max-w-[45%] shrink-0 truncate">{head}</span>
+          <span className="flex max-w-[45%] min-w-0 shrink-0">{head}</span>
           {!open && (
             <span className="min-w-0 flex-1 truncate">
               {body.split("\n")[0]}
@@ -168,7 +170,7 @@ export function EventRow({
           id={`${item.id}:${i}`}
           kind="decision"
           tone="decision"
-          head={<span className="font-medium">Saad decided</span>}
+          head={<span className="truncate font-medium">Saad decided</span>}
           body={d}
           at={item.createdAt}
         />
@@ -180,7 +182,7 @@ export function EventRow({
           tone={decision ? "decision" : undefined}
           head={
             decision ? (
-              <span className="font-medium">Saad decided</span>
+              <span className="truncate font-medium">Saad decided</span>
             ) : (
               <Source origin={origin} />
             )
