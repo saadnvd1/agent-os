@@ -41,13 +41,18 @@ function page(start: string, listed = ["a", "b", "c"]) {
   const b = browser(start);
   const notFound: string[] = [];
   let unlisted: string[] = [];
+  let shown: string | null = null;
+  const show = (id: string | null) => {
+    shown = id;
+    sync.focusChanged(id);
+  };
   const sync: SessionUrlSync = new SessionUrlSync(b.env, {
     isKnown: (id) => listed.includes(id),
-    open: (id) => sync.focusChanged(id),
+    open: (id) => show(id),
     openUnlisted: async (id) => {
       if (!unlisted.includes(id)) return false;
       listed.push(id);
-      sync.focusChanged(id);
+      show(id);
       return true;
     },
     notFound: (id) => notFound.push(id),
@@ -55,11 +60,12 @@ function page(start: string, listed = ["a", "b", "c"]) {
   return {
     b,
     sync,
+    shown: () => shown,
     notFound,
     listed,
     appearLater: (id: string) => (unlisted = [...unlisted, id]),
     // The user picking a session in the sidebar.
-    pick: (id: string | null) => sync.focusChanged(id),
+    pick: show,
     async back() {
       b.back();
       await sync.popstate();
@@ -94,6 +100,13 @@ describe("address helpers", () => {
       "https://evil.example/",
       "javascript:alert(1)",
       "/pair?next=/",
+      "/.//evil.example",
+      "/..//evil.example",
+      "/a/..//evil.example",
+      "/%2e//evil.example",
+      "/api/sessions?x=1",
+      "/\t/evil.example",
+      "/\n/evil.example",
     ]) {
       expect(safeNextPath(bad)).toBeNull();
     }
@@ -144,6 +157,7 @@ describe("SessionUrlSync", () => {
     const p = page("/?session=b");
     p.pick("a"); // the saved layout, restored before the list loads
     await p.sync.start();
+    expect(p.shown()).toBe("b");
     expect(p.b.current()).toBe("/?session=b");
     expect(p.b.entries).toHaveLength(1);
   });
@@ -164,13 +178,28 @@ describe("SessionUrlSync", () => {
     expect(p.b.entries).toEqual(["/?session=a", "/?session=b", "/?session=c"]);
 
     await p.back();
+    expect(p.shown()).toBe("b");
     expect(p.b.current()).toBe("/?session=b");
     await p.back();
+    expect(p.shown()).toBe("a");
     expect(p.b.current()).toBe("/?session=a");
     await p.forward();
+    expect(p.shown()).toBe("b");
     expect(p.b.current()).toBe("/?session=b");
     // Opening from history adds no entries of its own.
     expect(p.b.entries).toHaveLength(3);
+  });
+
+  it("an entry with no session keeps what's shown and says so", async () => {
+    const p = page("/");
+    p.pick("a");
+    await p.sync.start();
+    p.b.env.push("/"); // e.g. left by a draft
+    await p.back();
+    expect(p.shown()).toBe("a");
+    await p.forward();
+    expect(p.shown()).toBe("a");
+    expect(p.b.current()).toBe("/?session=a");
   });
 
   it("replaces when the session was archived out from under the page", async () => {

@@ -83,7 +83,8 @@ export function useSessionUrl({
           const session = latest.current.sessions.find((s) => s.id === id);
           if (session) reveal(session);
         },
-        // Made a moment ago and not in the list yet: ask once more.
+        // Made a moment ago and not in the list yet: ask once more. Archived,
+        // merged and dropped sessions aren't listed and stay not found.
         openUnlisted: async (id) => {
           const fresh = await latest.current.reloadSessions();
           const session = fresh.find((s) => s.id === id);

@@ -31,21 +31,20 @@ export function sessionLink(origin: string, id: string): string {
 }
 
 /**
- * A path on this site to come back to after pairing, or null. Only a plain
- * same-site path survives: never another host, a scheme, `//`, or /pair.
+ * The address to come back to after pairing, or null. Only the app's own
+ * page with a query survives: what a link to a session is. Checked after
+ * parsing, as `/.//host` and the like resolve to another host.
  */
 export function safeNextPath(raw: string | null | undefined): string | null {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
-  if (raw.includes("\\")) return null;
   let url: URL;
   try {
     url = new URL(raw, BASE);
   } catch {
     return null;
   }
-  if (url.origin !== BASE || url.pathname.startsWith("/pair")) return null;
-  const path = url.pathname + url.search;
-  return path === "/" ? null : path;
+  if (url.origin !== BASE || url.pathname !== "/" || !url.search) return null;
+  return "/" + url.search;
 }
 
 /** Where the gate sends a page request it refuses: /pair, keeping the way back. */
@@ -88,8 +87,9 @@ export interface SessionUrlDeps {
   /** Show a listed session. */
   open(id: string): void;
   /**
-   * Look up a session the sidebar doesn't list (a merged task, an
-   * orchestrator); true when it was found and opened.
+   * Refetch the list once, for a session made a moment ago; true when it was
+   * found and opened. Archived, merged and dropped sessions aren't listed and
+   * stay not found.
    */
   openUnlisted(id: string): Promise<boolean>;
   /** The address named a session that can't be opened. */

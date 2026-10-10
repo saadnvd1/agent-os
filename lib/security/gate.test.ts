@@ -149,5 +149,7 @@ describe("an unpaired browser opening a session's address", () => {
 
   it("never carries another site as the way back", () => {
     expect(page("//evil.example/").headers.Location).toBe("/pair");
+    expect(page("/\t/evil.example").headers.Location).toBe("/pair");
+    expect(page("/.//evil.example?session=a").headers.Location).toBe("/pair");
   });
 });
