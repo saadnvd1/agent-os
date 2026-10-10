@@ -15,6 +15,11 @@ import {
   type ChatServerMessage,
 } from "./events";
 import {
+  createSkillWatcher,
+  skillFolders,
+  type SkillWatcher,
+} from "./skill-watch";
+import {
   emit,
   getSession,
   registry,
@@ -75,21 +80,190 @@ export function emitCapabilities(session: Session, listener?: Listener): void {
   else emit(session.id, m);
 }
 
-async function loadCapabilities(session: Session): Promise<void> {
+const cwdOf = (s: Session) => s.working_directory.replace(/^~/, os.homedir());
+
+// An agent that hangs while starting would hold its key's reloads forever.
+const DISCOVER_TIMEOUT_MS = 30_000;
+// Agent processes started at once by a change to a folder many chats read.
+const RELOADS_AT_ONCE = 2;
+
+// Discovery, ended (the agent process with it) if it takes too long.
+async function discoverWithin(
+  driver: NonNullable<ReturnType<typeof chatDriverFor>>,
+  session: Session,
+  ms: number
+) {
+  const ac = new AbortController();
+  const timer = setTimeout(
+    () => ac.abort(new Error("Discovery timed out")),
+    ms
+  );
+  timer.unref?.();
+  try {
+    return await Promise.race([
+      driver.discover({
+        cwd: cwdOf(session),
+        env: agentEnv(session.id),
+        signal: ac.signal,
+      }),
+      // For a driver that doesn't watch the signal itself.
+      new Promise<never>((_, reject) =>
+        ac.signal.addEventListener("abort", () => reject(ac.signal.reason), {
+          once: true,
+        })
+      ),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Shared across module instances, like the registry: the watcher calls back
+// into whichever copy made it.
+interface Watch {
+  watcher: SkillWatcher;
+  sweep?: NodeJS.Timeout;
+  // The newest load per key: an older one finishing later doesn't win.
+  loads: Map<string, { gen: number; done: Promise<void> }>;
+  gen: number;
+  reloading: Map<string, { again: boolean; done: Promise<void> }>;
+  running: number;
+  queued: (() => void)[];
+}
+const g = globalThis as unknown as { __agentosSkillWatch?: Watch };
+const watch = (): Watch =>
+  (g.__agentosSkillWatch ??= {
+    watcher: createSkillWatcher((key) => void reloadOnChange(key)),
+    loads: new Map(),
+    gen: 0,
+    reloading: new Map(),
+    running: 0,
+    queued: [],
+  });
+
+// A watched folder changed: reload, a few keys at a time.
+export const reloadOnChange = (key: string): Promise<void> =>
+  oneOfFew(() => reloadCapabilities(key)).catch((error) =>
+    console.error("Could not reload chat commands:", error)
+  );
+
+// Runs `fn` once fewer than RELOADS_AT_ONCE others are.
+function oneOfFew(fn: () => Promise<void>): Promise<void> {
+  const w = watch();
+  return new Promise<void>((resolve, reject) => {
+    const run = () => {
+      w.running++;
+      fn()
+        .then(resolve, reject)
+        .finally(() => {
+          w.running--;
+          w.queued.shift()?.();
+        });
+    };
+    if (w.running < RELOADS_AT_ONCE) run();
+    else w.queued.push(run);
+  });
+}
+
+async function loadCapabilities(
+  session: Session,
+  force = false
+): Promise<void> {
+  const w = watch();
   const key = capsKey(session);
   const cached = registry.caps.get(key);
-  if (cached && Date.now() - cached.at < CAPS_TTL_MS) return;
+  if (!force && cached && Date.now() - cached.at < CAPS_TTL_MS) return;
+  // One already on its way will do, unless it may predate a change.
+  const loading = w.loads.get(key);
+  if (loading && !force) return loading.done;
   const driver = chatDriverFor(session.agent_type);
   if (!driver) return;
-  const found = await driver.discover({
-    cwd: session.working_directory.replace(/^~/, os.homedir()),
-    env: agentEnv(session.id),
+  w.watcher.watch(key, skillFolders(cwdOf(session)));
+  const gen = ++w.gen;
+  const done = (async () => {
+    const found = await discoverWithin(driver, session, DISCOVER_TIMEOUT_MS);
+    if (w.loads.get(key)?.gen !== gen) return;
+    registry.caps.set(key, {
+      ...found,
+      terminalOnly: registry.caps.get(key)?.terminalOnly ?? new Set(),
+      at: Date.now(),
+    });
+  })().finally(() => {
+    if (w.loads.get(key)?.gen === gen) w.loads.delete(key);
   });
-  registry.caps.set(key, {
-    ...found,
-    terminalOnly: cached?.terminalOnly ?? new Set(),
-    at: Date.now(),
-  });
+  w.loads.set(key, { gen, done });
+  return done;
+}
+
+// Local sessions with a chat open.
+function watchedSessions(): Session[] {
+  const out: Session[] = [];
+  for (const [id, set] of registry.listeners) {
+    if (!set.size) continue;
+    try {
+      const s = getSession(id);
+      if (!s.host_id || s.host_id === "local") out.push(s);
+    } catch {}
+  }
+  return out;
+}
+
+// Loads `key`'s commands afresh and tells every chat open on it. A reload
+// asked for while one runs runs once more after it, not alongside.
+export function reloadCapabilities(
+  key: string,
+  fallback?: Session
+): Promise<void> {
+  const w = watch();
+  const busy = w.reloading.get(key);
+  if (busy) {
+    busy.again = true;
+    return busy.done;
+  }
+  const state = { again: true, done: Promise.resolve() };
+  w.reloading.set(key, state);
+  state.done = (async () => {
+    try {
+      while (state.again) {
+        state.again = false;
+        const open = watchedSessions().filter((s) => capsKey(s) === key);
+        const session = open[0] ?? fallback;
+        if (!session) {
+          // Nobody's looking: stop watching, and load again when someone is.
+          registry.caps.delete(key);
+          w.watcher.release(key);
+          return;
+        }
+        await loadCapabilities(session, true);
+        watchedSessions()
+          .filter((s) => capsKey(s) === key)
+          .forEach((s) => emitCapabilities(s));
+      }
+    } finally {
+      w.reloading.delete(key);
+    }
+  })();
+  return state.done;
+}
+
+// The "/" menu's refresh: that session's commands, bypassing the cache.
+export async function refreshCapabilities(sessionId: string): Promise<void> {
+  const session = getSession(sessionId);
+  if (session.host_id && session.host_id !== "local") return;
+  await reloadCapabilities(capsKey(session), session);
+}
+
+// After the last chat on a folder closes, its watchers go too. Later rather
+// than at once, so a reconnect doesn't close and reopen them.
+export function releaseUnwatchedSoon(delayMs = 30_000): void {
+  const w = watch();
+  if (w.sweep) return;
+  w.sweep = setTimeout(() => {
+    w.sweep = undefined;
+    const open = new Set(watchedSessions().map(capsKey));
+    w.watcher.keys().forEach((k) => open.has(k) || w.watcher.release(k));
+  }, delayMs);
+  w.sweep.unref?.();
 }
 
 // Sends what the agent offers to one watcher, loading it if needed.

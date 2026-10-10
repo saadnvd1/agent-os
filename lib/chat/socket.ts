@@ -18,6 +18,7 @@ import {
   editQueuedChat,
   interruptChat,
   moveQueuedChat,
+  refreshCapabilities,
   respondChat,
   sendChat,
   sendQueuedNow,
@@ -177,6 +178,7 @@ function onChatMessage(
   else if (msg.type === "set_model") run(setChatModel(sessionId, msg.model));
   else if (msg.type === "set_access") run(setChatAccess(sessionId, msg.access));
   else if (msg.type === "set_plan") run(setChatPlan(sessionId, !!msg.plan));
+  else if (msg.type === "refresh_commands") run(refreshCapabilities(sessionId));
   else if (msg.type === "carry_plan")
     run(carryOutPlan(sessionId, String(msg.id)));
   else if (msg.type === "respond") respondChat(sessionId, msg.id, msg);

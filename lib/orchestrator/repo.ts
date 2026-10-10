@@ -6,6 +6,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import type { Session } from "../db";
+import { SKILL_DIRS } from "../agents/skill-dirs";
 import { getProject } from "../projects";
 import { run } from "../tasks/gh";
 import { expandHome } from "../tasks/session";
@@ -42,7 +43,6 @@ export async function commitTime(repo: string, sha: string): Promise<number> {
   return Number(out.trim()) || 0;
 }
 
-const SKILL_DIRS = [".claude/skills", ".agents/skills", ".claude/commands"];
 // Review agents whose rules are a checklist (the verifier and spec
 // compliance are steps of /do-code-review, not checks of the code).
 const AGENT_RULES =

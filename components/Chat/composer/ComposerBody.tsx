@@ -43,6 +43,9 @@ export interface ComposerProps {
   onSend: (text: string, images: ChatImage[]) => void;
   onStop: () => void;
   commands?: ChatCommand[];
+  // Reloads the commands past the cache (a skill just added), from the menu.
+  onRefreshCommands?: () => void;
+  refreshingCommands?: boolean;
   models?: ChatModel[];
   model?: string;
   onSetModel?: (model: string) => void;
@@ -75,6 +78,8 @@ export function ComposerBody({
   onSend,
   onStop,
   commands = [],
+  onRefreshCommands,
+  refreshingCommands = false,
   models = [],
   model = "",
   onSetModel,
@@ -275,6 +280,11 @@ export function ComposerBody({
           active={highlighted}
           onPick={pick}
           onHover={setActive}
+          refresh={
+            query !== null && onRefreshCommands
+              ? { onClick: onRefreshCommands, busy: refreshingCommands }
+              : undefined
+          }
         />
       ) : null}
       {offered && coarse && !menuOpen && (
