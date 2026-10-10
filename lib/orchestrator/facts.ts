@@ -113,6 +113,13 @@ export async function statusOf(s: Session): Promise<{
   activity: string | null;
   needsInput: boolean;
 }> {
+  // A task setting up, or held at launch, has no terminal or chat yet; it isn't
+  // idle, so nothing cleans it up meanwhile.
+  if (
+    s.task_status === "running" &&
+    (s.setup_status === "running" || s.setup_status === "held")
+  )
+    return { status: "running", activity: "setting up", needsInput: false };
   if (s.view === "chat") {
     const state = chatState(s.id);
     const status: FactStatus =
@@ -123,13 +130,6 @@ export async function statusOf(s: Session): Promise<{
       needsInput: state === "waiting",
     };
   }
-  // A task setting up, or held at launch, has no terminal yet; it isn't
-  // idle, so nothing cleans it up meanwhile.
-  if (
-    s.task_status === "running" &&
-    (s.setup_status === "running" || s.setup_status === "held")
-  )
-    return { status: "running", activity: "setting up", needsInput: false };
   const host = s.host_id || "local";
   const linked = !!hostLink(host);
   if (!linked && !statusDetector.sessionExists(s.tmux_name, host))

@@ -19,9 +19,12 @@ import { isPaused } from "../orchestrator/pause";
 import { brakesEnabled } from "../orchestrator/brakes";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
 import { inBackground } from "../lumifyhub/task-cards";
-import { enqueue } from "../chat/queued";
+import { enqueue, listQueue } from "../chat/queued";
 import { sendQueuedNow } from "../chat/runner";
 import { hasItem } from "../chat/store";
+import { firstMessageId, launchPending } from "./launch-gate";
+
+export { firstMessageId, launchPending };
 import { expandHome } from "./session";
 import { recordSetup, setupNote, setupOutcome, type TaskSetup } from "./setup";
 
@@ -49,18 +52,6 @@ export function launchHold(sessionId: string): string | null {
   if (isPaused(row.workspace_id)) return "the orchestrator is paused by Saad";
   const window = brakesEnabled() ? windowRefusal(readUsage()) : null;
   return window ? `held by the brakes: ${window}` : null;
-}
-
-// A task whose agent hasn't launched yet: opening it must not create its
-// tmux session, or the launch would find a bare agent in its place.
-export function launchPending(sessionId: string): boolean {
-  const row = db
-    .prepare(
-      `SELECT 1 FROM sessions WHERE id = ? AND task_status = 'running'
-         AND setup_status IN ('running', 'held')`
-    )
-    .get(sessionId);
-  return !!row;
 }
 
 // The task's ports (kept across a resume: the slot is on the row), then its
@@ -145,11 +136,6 @@ export async function finishTaskStart(
   return done(setup);
 }
 
-// A chat task's first message, under one id: a start resumed after a
-// restart neither loses it nor sends it twice. Its worker adds the brief.
-export const firstMessageId = (sessionId: string) =>
-  `user-task-start-${sessionId}`;
-
 async function launchChat(sessionId: string, prompt: string): Promise<void> {
   const id = firstMessageId(sessionId);
   if (hasItem(sessionId, id)) return;
@@ -207,12 +193,21 @@ export async function resumeTaskStarts(
   } & SetupColumns)[];
   const resumed = resumeHeldStarts();
   for (const row of rows) {
+    const first = firstMessageId(row.id);
+    // Queued means set up and launching: it's sent from the queue, and the
+    // setup isn't run again under an agent that may already be at work.
+    const queued =
+      row.view === "chat" && listQueue(row.id).some((m) => m.id === first);
     const launched =
       row.view === "chat"
-        ? hasItem(row.id, firstMessageId(row.id))
+        ? queued || hasItem(row.id, first)
         : fs.existsSync(promptFileFor(row.id)) && (await alive(row.tmux_name));
     if (launched) {
       recordSetup(db, row.id, { status: "ok", ms: null, error: null });
+      if (queued)
+        inBackground(`first message of task ${row.id}`, () =>
+          sendQueuedNow(row.id, first)
+        );
       continue;
     }
     resumed.push(row.id);

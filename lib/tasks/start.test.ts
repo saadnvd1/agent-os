@@ -321,14 +321,17 @@ describe("a chat task's start, beside a terminal task's", () => {
       success: false,
       steps: [{ name: "i", command: "npm ci", success: false, error: "E404" }],
     });
+    const terminal = seedTask(ws.app.id);
     const chat = seedChatTask(ws.app.id);
+    let sent = "";
     sendQueuedNow.mockImplementationOnce(async (sessionId, id) => {
-      expect(listQueue(sessionId).find((m) => m.id === id)?.text).toContain(
-        "E404"
-      );
+      sent = listQueue(sessionId).find((m) => m.id === id)?.text ?? "";
     });
+    await finishTaskStart(terminal);
     await finishTaskStart(chat);
-    expect(sendQueuedNow).toHaveBeenCalledTimes(1);
+    expect(launchClaude.mock.calls[0][0].prompt).toContain("E404");
+    expect(sent).toContain("E404");
+    expect(setupOf(chat)?.error).not.toMatch(/did not launch/);
   });
 
   it("records a chat launch that failed, as a terminal's", async () => {
@@ -356,5 +359,26 @@ describe("a chat task's start, beside a terminal task's", () => {
     expect(itemsOfKind(cut, "user")).toHaveLength(1);
     expect(setupOf(taken)?.status).toBe("ok");
     expect(launchClaude).not.toHaveBeenCalled();
+  });
+
+  it("after a restart, sends a first message still queued without setting up again", async () => {
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'ok' WHERE setup_status IN ('running', 'held')`
+    ).run();
+    const id = seedChatTask(ws.app.id);
+    // Cut off between queueing the message and the worker taking it.
+    sendQueuedNow.mockImplementationOnce(async () => {});
+    await finishTaskStart(id);
+    db.prepare(`UPDATE sessions SET setup_status = 'running' WHERE id = ?`).run(
+      id
+    );
+    setupWorktree.mockClear();
+    sendQueuedNow.mockClear();
+    const resumed = await resumeTaskStarts(async () => false);
+    expect(resumed).not.toContain(id);
+    expect(setupWorktree).not.toHaveBeenCalled();
+    expect(setupOf(id)?.status).toBe("ok");
+    expect(sendQueuedNow).toHaveBeenCalledWith(id, firstMessageId(id));
+    await vi.waitFor(() => expect(itemsOfKind(id, "user")).toHaveLength(1));
   });
 });

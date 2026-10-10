@@ -103,7 +103,10 @@ describe("starting a task on a linked machine", () => {
     ).rejects.toThrow(/isn't linked/);
   });
 
-  it("stacked and card tasks stay on this machine", async () => {
+  it("stacked, card and chat tasks stay on this machine", async () => {
+    await expect(
+      createTask({ projectId: f.projectId, prompt: "x", hostId, view: "chat" })
+    ).rejects.toThrow(/Chat tasks run on this machine only/);
     await expect(
       createTask({ projectId: f.projectId, prompt: "x", hostId, cardId: "c" })
     ).rejects.toThrow(/this machine only/);

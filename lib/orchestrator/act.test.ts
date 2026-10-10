@@ -263,6 +263,26 @@ describe("acting inside the workspace", () => {
     ).rejects.toThrow(/Bad arguments for start_task: view/);
   });
 
+  it("refuses a chat session on another machine's project", async () => {
+    const { mine } = twoWorkspaces();
+    const host = randomUUID();
+    db.prepare(
+      `INSERT INTO hosts (id, name, ssh_target) VALUES (?, 'other', 'u@other')`
+    ).run(host);
+    db.prepare(`UPDATE projects SET host_id = ? WHERE id = ?`).run(
+      host,
+      mine.app.id
+    );
+    views.length = 0;
+    await expect(
+      runTool(mine.workspace.id, "start_session", {
+        project: mine.app.name,
+        prompt: "x",
+      })
+    ).rejects.toThrow(/other machines isn't supported/);
+    expect(views).toEqual([]);
+  });
+
   it("says when a chat it messaged is waiting on an approval, as a terminal's menu does", async () => {
     const { mine } = twoWorkspaces();
     ensureOrchestrator(mine.workspace.id);

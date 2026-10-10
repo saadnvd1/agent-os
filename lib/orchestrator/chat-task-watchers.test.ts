@@ -204,7 +204,11 @@ describe.each(VIEWS)("a %s task", (view) => {
     });
     const w = await waitingState(row(t.id));
     expect(w.blocked).toBeNull();
-    expect(w.waitingOn).toBeTruthy();
+    expect(w.waitingOn).toBe(
+      view === "chat"
+        ? "an approval or question in its chat"
+        : "a prompt in its terminal"
+    );
     expect(gate(w)).toMatchObject({ state: "fail" });
     expect(gate(w).reason).toMatch(/waiting on an answer/);
     const facts = (await sessionFacts(t.ws.workspace.id)).find(
@@ -262,6 +266,54 @@ describe.each(VIEWS)("a %s task", (view) => {
   });
 });
 
+describe.each(VIEWS)("a %s task not launched yet", (view) => {
+  for (const setup of ["running", "held"])
+    it(`reads as setting up while its start is ${setup}, never idle`, async () => {
+      const t = task(view, { said: "", state: "idle", at: minsAgo(40) });
+      // No agent yet: no worker state, no chat, no screen.
+      chats.delete(t.id);
+      db.prepare(`DELETE FROM chat_items WHERE session_id = ?`).run(t.id);
+      screens.delete(`claude-${t.id}`);
+      db.prepare(`UPDATE sessions SET setup_status = ? WHERE id = ?`).run(
+        setup,
+        t.id
+      );
+      const f = (await sessionFacts(t.ws.workspace.id)).find(
+        (x) => x.id === t.id
+      )!;
+      expect(f).toMatchObject({ status: "running", activity: "setting up" });
+      expect(await lines(t.ws.workspace.id, t.id)).not.toContainEqual(
+        expect.stringMatching(/no PR/)
+      );
+    });
+});
+
+describe("a chat task not launched yet", () => {
+  it("queues what's sent to it, so nothing starts its agent before the launch", async () => {
+    const { sendChat, sendChatConfirmed, sendQueuedNow } =
+      await import("@/lib/chat/runner");
+    const { listQueue } = await import("@/lib/chat/queued");
+    const { firstMessageId } = await import("@/lib/tasks/launch-gate");
+    const t = task("chat", { said: "", state: "idle" });
+    db.prepare(`UPDATE sessions SET setup_status = 'held' WHERE id = ?`).run(
+      t.id
+    );
+    // Any of these reaching a worker would spawn one: they're queued.
+    expect(await sendChatConfirmed(t.id, { text: "from a peer" })).toBe(
+      "queued"
+    );
+    await sendChat(t.id, { text: "typed in its chat" });
+    expect(listQueue(t.id).map((m) => m.text)).toEqual([
+      "from a peer",
+      "typed in its chat",
+    ]);
+    await expect(sendQueuedNow(t.id, listQueue(t.id)[0].id)).rejects.toThrow(
+      /once the task has started/
+    );
+    expect(firstMessageId(t.id)).not.toBe(listQueue(t.id)[0].id);
+  });
+});
+
 describe("chat tasks, where they differ from terminal ones", () => {
   it("holds the gate while its chat worker can't be reached", async () => {
     const t = task("chat", { said: "Working", state: "idle" });
@@ -269,6 +321,8 @@ describe("chat tasks, where they differ from terminal ones", () => {
     const w = await waitingState(row(t.id));
     expect(gate(w)).toMatchObject({ state: "fail" });
     expect(w.waitingOn).toMatch(/couldn't be reached/);
+    // What it shows meanwhile: busy, as a linked machine's unknown screen.
+    expect((await taskView(row(t.id))).state).toBe("working");
   });
 
   it("stay on this machine", () => {
