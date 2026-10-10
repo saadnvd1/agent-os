@@ -43,7 +43,10 @@ function describe(file: string, error: z.ZodError): string {
     const at = i.path.join(".");
     const keys =
       i.code === "unrecognized_keys" ? ` (${i.keys.join(", ")})` : "";
-    return `${at || "(top level)"}: ${i.message}${keys}`;
+    // A bad record key (an env name) carries its rule one level down.
+    const message =
+      i.code === "invalid_key" && i.issues[0] ? i.issues[0].message : i.message;
+    return `${at || "(top level)"}: ${message}${keys}`;
   });
   return `${file} is invalid: ${fields.join("; ")}`;
 }

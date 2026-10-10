@@ -79,7 +79,7 @@ describe("loadProjectConfig precedence", () => {
       const loaded = loadProjectConfig(
         project({ "agentos.json": { env: { [name]: "x" } } })
       );
-      expect(loaded.error, name).toContain(`env.${name}`);
+      expect(loaded.error, name).toContain(`env.${name}: is reserved, because`);
     }
     // A .dispatch.json is held to the same rule.
     expect(

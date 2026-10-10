@@ -321,8 +321,9 @@ session and freed when it's done or deleted (an archived or merged one's once
 its agent has stopped). The ports and
 `env` are exported to the setup commands, the agent and its terminals; a port
 always wins over an `env` entry of the same name, and `env` can't set names a
-shell, runtime, git or the agent reads (`PATH`, `NODE_OPTIONS`, `GIT_*`,
-`ANTHROPIC_*`, `AGENTOS_*`…). The agent's brief gets a
+shell, runtime, git or the agent reads (`PATH`, `NODE_OPTIONS`, `TERM`,
+`GIT_*`, `ANTHROPIC_*`, `AGENTOS_*`…): a config that sets one, such as
+`NODE_OPTIONS` or `TERM`, is refused, and the error names the variable and why. The agent's brief gets a
 short **Running this project** section: its ports, the dev command, how to
 wait for `ready` in one backgrounded call, the test command, the login URL on
 its own port, the browsing map and the notes. Only declared fields are
