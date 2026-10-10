@@ -49,7 +49,8 @@ vi.mock("../orchestrator/home", async (importOriginal) => ({
   ensureOrchestrator: (workspaceId: string) => ({ id: `orch-${workspaceId}` }),
 }));
 
-const { realDeps, stillRunning, scheduledMessage } = await import("./start");
+const { realDeps, stillRunning, scheduledMessage, scheduleOrigin } =
+  await import("./start");
 const { Braked } = await import("./run");
 const { claimSlot, createSchedule, finishRun } = await import("./store");
 const { createWorkspace, setProjectWorkspace } = await import("../workspaces");
@@ -168,6 +169,19 @@ describe("stillRunning", () => {
   });
 });
 
+describe("scheduleOrigin", () => {
+  it("shows the prompt, linked to the agent session that set it up", () => {
+    const schedule = { name: "Triage", prompt: "Go" };
+    expect(scheduleOrigin(schedule, { id: "s1" })).toEqual({
+      kind: "schedule",
+      label: "Triage",
+      sessionId: "s1",
+      body: "Go",
+    });
+    expect(scheduleOrigin(schedule, null).sessionId).toBeUndefined();
+  });
+});
+
 describe("scheduledMessage", () => {
   it("marks the prompt as a schedule's, never an approval", () => {
     const text = scheduledMessage({ name: "Triage", prompt: "Go" }, "web");
@@ -192,6 +206,11 @@ describe("start links the run only once the prompt is in", () => {
       const id = await run;
       expect(linked).toEqual([id]);
       expect(sends[0].id).toBe(id);
+      // Shown in its chat as the schedule's, not as typed.
+      expect(sends[0].origin).toMatchObject({
+        kind: "schedule",
+        label: "Triage",
+      });
     });
 
     it(`${kind}: never, when the send fails`, async () => {

@@ -132,6 +132,9 @@ export type ChatItem =
       // gets the full text with how to reply.
       peer?: PeerMessage;
       origin?: ChatOrigin;
+      // Saved since messages were tagged where they're sent: without an
+      // origin, the reader typed it. Older items are matched by their text.
+      tagged?: true;
       // The provider's id for this message, to undo file changes back to it.
       checkpoint?: string;
     })

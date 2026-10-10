@@ -3,25 +3,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { UserTurn } from "@/components/Chat/EventRow";
 import type { ChatItem, ChatOrigin } from "./events";
-import { eventParts, originOf, TAGGED_SINCE } from "./origin";
+import { wakeLine } from "../bus/format";
+import { eventParts, originOf } from "./origin";
 
 type UserItem = Extract<ChatItem, { kind: "user" }>;
 
-const NOW = TAGGED_SINCE + 60_000;
 const user = (over: Partial<UserItem> = {}): UserItem => ({
   id: "u1",
   kind: "user",
   text: "hello",
-  createdAt: NOW,
+  tagged: true,
+  createdAt: Date.now(),
   ...over,
 });
 
 const render = (item: UserItem) =>
   renderToStaticMarkup(createElement(UserTurn, { item }));
 
+// As the bus writes them, short and long.
 const KNOWN_PREFIXES = [
-  '[AgentOS message from "api" (1a2b3c4d)]: hi. Reply with: aos send 1a2b3c4d "<message>"',
-  "[AgentOS message from AgentOS load monitor (via AgentOS)]: hot.",
+  wakeLine({ fromName: "api", fromId: "1a2b3c4d-0000", body: "hi" }),
+  wakeLine({ fromName: "api", fromId: "1a2b3c4d-0000", body: "x".repeat(700) }),
+  wakeLine({ fromName: "AgentOS load monitor", fromId: null, body: "hot" }),
   '[Scheduled message "Triage", saved in Schedules: a standing prompt, not an approval]\ntriage',
 ];
 
@@ -54,10 +57,11 @@ describe("originOf", () => {
   });
 
   it("matches the known prefixes only in history from before tagging", () => {
-    const old = TAGGED_SINCE - 1;
+    const old = { tagged: undefined };
     expect(
-      KNOWN_PREFIXES.map((text) => originOf(user({ text, createdAt: old })))
+      KNOWN_PREFIXES.map((text) => originOf(user({ text, ...old })))
     ).toEqual([
+      { kind: "peer", label: "api" },
       { kind: "peer", label: "api" },
       { kind: "system", label: "AgentOS load monitor" },
       { kind: "schedule", label: "Triage" },
@@ -65,15 +69,15 @@ describe("originOf", () => {
     expect(
       originOf(
         user({
-          text: "[AgentOS message from the user (via AgentOS)]: hi.",
-          createdAt: old,
+          text: wakeLine({ fromName: "you", fromId: null, body: "hi" }),
+          ...old,
         })
       )
     ).toBeNull();
-    expect(originOf(user({ text: "fix the bug", createdAt: old }))).toBeNull();
+    expect(originOf(user({ text: "fix the bug", ...old }))).toBeNull();
   });
 
-  it("never takes what the reader typed for an event", () => {
+  it("never takes what the reader typed since tagging for an event", () => {
     for (const text of [...KNOWN_PREFIXES, "hello", "/review"])
       expect(originOf(user({ text }))).toBeNull();
   });

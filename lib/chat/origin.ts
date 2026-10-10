@@ -2,10 +2,6 @@ import type { ChatItem, ChatOrigin } from "./events";
 
 type UserItem = Extract<ChatItem, { kind: "user" }>;
 
-// Items saved before messages were tagged at the source. Only these are
-// matched by their text, so nothing typed since can pass for an event.
-export const TAGGED_SINCE = Date.UTC(2026, 9, 11);
-
 // `from` was only ever set by the server, never by a client.
 function fromLabel(from: string): ChatOrigin | null {
   if (from === "you") return null;
@@ -39,7 +35,9 @@ export function originOf(item: UserItem): ChatOrigin | null {
       body: item.peer.body,
     };
   if (item.from) return fromLabel(item.from);
-  if (item.createdAt < TAGGED_SINCE) return fromText(item.text);
+  // Only history from before tagging is read by its text, so nothing
+  // typed since can pass for an event.
+  if (!item.tagged) return fromText(item.text);
   return null;
 }
 

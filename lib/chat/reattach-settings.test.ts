@@ -113,6 +113,8 @@ describe("carrying out a plan right after a restart", () => {
     expect(types.indexOf("set_plan:false")).toBeLessThan(types.indexOf("send"));
     expect(workers.commands.find((c) => c.type === "send")).toMatchObject({
       id: "user-carry-plan-t1",
+      // The reader's decision, not a message they typed.
+      origin: { kind: "decision" },
     });
     expect(listItems(id).find((i) => i.id === "plan-t1")).toMatchObject({
       carried: true,

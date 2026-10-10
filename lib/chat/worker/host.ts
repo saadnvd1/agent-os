@@ -309,6 +309,7 @@ export class ChatHost {
       from: m.from,
       peer: m.peer,
       origin: m.origin,
+      tagged: true as const,
       createdAt: Date.now(),
       checkpoint,
     };
@@ -358,6 +359,7 @@ export class ChatHost {
           from: cmd.from,
           peer: cmd.peer,
           origin: cmd.origin,
+          tagged: true as const,
           createdAt: Date.now(),
         };
         const local = cmd.images?.length

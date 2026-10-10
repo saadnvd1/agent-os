@@ -48,6 +48,7 @@ export function sendDemoChat(sessionId: string, text: string): void {
     id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
     kind: "user" as const,
     text: DEMO_VISITOR_TEXT,
+    tagged: true as const,
     createdAt: Date.now(),
   };
   saveItem(sessionId, item);

@@ -51,8 +51,11 @@ function Source({ origin }: { origin: ChatOrigin }) {
   return (
     <a
       href={hrefWithSession("/", id)}
-      onClick={(e) => openSession(e, id)}
-      className="hover:text-foreground underline-offset-2 hover:underline"
+      onClick={(e) => {
+        e.stopPropagation();
+        openSession(e, id);
+      }}
+      className="hover:text-foreground relative underline-offset-2 before:absolute before:-inset-x-1 before:-inset-y-3.5 hover:underline"
     >
       {name}
     </a>
@@ -77,11 +80,18 @@ function Row({
   const [open, setOpen] = useRowState(`event:${id}`, false);
   const Icon = ICON[kind];
   const long = body.length > SHORT || body.includes("\n");
+  // Anywhere on a long row opens it, unless the reader is selecting text.
+  const toggle = () => {
+    if (!window.getSelection()?.isCollapsed) return;
+    setOpen(!open);
+  };
   return (
     <div
       data-origin={kind}
+      onClick={long ? toggle : undefined}
       className={cn(
         "flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-xs",
+        long && "cursor-pointer",
         tone === "decision"
           ? "bg-foreground/[0.05] text-foreground/90"
           : "text-muted-foreground"
@@ -96,7 +106,7 @@ function Row({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="shrink-0">{head}</span>
+          <span className="max-w-[45%] shrink-0 truncate">{head}</span>
           {!open && (
             <span className="min-w-0 flex-1 truncate">
               {body.split("\n")[0]}
@@ -119,10 +129,13 @@ function Row({
       {long && (
         <button
           type="button"
-          onClick={() => setOpen(!open)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(!open);
+          }}
           aria-label={open ? "Collapse" : "Expand"}
           aria-expanded={open}
-          className="hover:text-foreground -my-1.5 -mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+          className="hover:text-foreground -my-3 -mr-2.5 flex size-11 shrink-0 items-center justify-center rounded-md"
         >
           <ChevronRight
             className={cn(

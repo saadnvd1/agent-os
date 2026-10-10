@@ -3,7 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { db, stackQueries as q } from "../db";
-import { restackAfterMerge, type RestackDeps } from "./restack";
+import { restackAfterMerge, stackNotice, type RestackDeps } from "./restack";
 import { seedStack } from "./testing";
 import type { Runner } from "./git";
 
@@ -318,5 +318,20 @@ describe("restack, the review's cases", () => {
     await restackAfterMerge(s.session("P"), depsFor(git.runner, { interrupt }));
     expect(interrupt).not.toHaveBeenCalled();
     expect(git.calls.some((l) => l.startsWith("git rebase"))).toBe(false);
+  });
+});
+
+describe("stackNotice", () => {
+  it("reads as before to the agent, and shows in chat as AgentOS's", () => {
+    expect(stackNotice("s1", "Rebased onto main")).toEqual({
+      fromId: null,
+      to: "s1",
+      body: "Rebased onto main",
+      origin: {
+        kind: "system",
+        label: "AgentOS stacks",
+        body: "Rebased onto main",
+      },
+    });
   });
 });
