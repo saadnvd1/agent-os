@@ -579,6 +579,14 @@ describe("Saad's approvals on an external PR", () => {
 
   it("links an ask_saad merge decision to the PR's head and merges it once on his approval", async () => {
     const t = setup();
+    putCheck({
+      workspaceId: t.w,
+      sessionId: "pr:o/r#50",
+      sha: t.sha,
+      kind: "review",
+      status: "block",
+      detail: "one bug",
+    });
     await expect(
       runTool(t.w, "ask_saad", {
         title: "Merge o/r#50 without its review?",
@@ -595,7 +603,7 @@ describe("Saad's approvals on an external PR", () => {
       sha: t.sha,
     });
     expect(ask.detail).toMatch(
-      /AgentOS: PR #50 at [0-9a-f]{7} changes 1 file; review: none yet/
+      /AgentOS: PR #50 at [0-9a-f]{7} changes 1 file; review: block\n/
     );
     answerAsk(t.w, ask.id, { action: "approve" }, t.sha);
     await expect(runTool(t.w, "sign_off", { task: "#50" })).resolves.toBe(

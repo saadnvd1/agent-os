@@ -1120,7 +1120,7 @@ const migrations: Migration[] = [
   },
   {
     id: 53,
-    name: "brief_amendments_and_failure_sha",
+    name: "brief_amendments_failure_sha_ask_raised_by",
     up: (db) => {
       // Scope changes the orchestrator records on a task after it started
       // (send with scope_change); its review judges against them.
@@ -1144,6 +1144,13 @@ const migrations: Migration[] = [
         db.exec(
           `ALTER TABLE orchestrator_gate_failures ADD COLUMN last_sha TEXT`
         );
+      // Who raised a merge ask: the orchestrator may refresh its own, never
+      // one the gates raised.
+      const asks = db.prepare(`PRAGMA table_info(orchestrator_asks)`).all() as {
+        name: string;
+      }[];
+      if (!asks.some((c) => c.name === "raised_by"))
+        db.exec(`ALTER TABLE orchestrator_asks ADD COLUMN raised_by TEXT`);
     },
   },
 ];

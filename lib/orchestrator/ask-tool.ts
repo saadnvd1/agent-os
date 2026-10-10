@@ -2,6 +2,7 @@ import type { Session } from "../db";
 import { prFor } from "../tasks/session";
 import {
   AskRefused,
+  MAX_DETAIL,
   openBySubject,
   raiseAsk,
   workSubject,
@@ -46,7 +47,7 @@ async function mergeTarget(
   };
 }
 
-// What AgentOS itself knows about the commit, under the orchestrator's
+// What AgentOS itself knows about the commit, above the orchestrator's
 // words, so Saad never approves a merge on its description alone.
 async function mergeFacts(
   repo: string,
@@ -90,9 +91,9 @@ export async function askSaad(
   const merge =
     a.task && a.sha ? await mergeTarget(workspaceId, a.task, a.sha) : null;
   // An ask the gates raised keeps their reason: the orchestrator's words
-  // never replace it.
+  // never replace it. Its own merge ask moves to the new head.
   const open = merge && openBySubject(workspaceId, merge.subject);
-  if (open)
+  if (open && open.raised_by !== "orchestrator")
     return `Already on Saad's list as ask ${open.id}; left as it is. Carry on with everything else.`;
   let raised;
   try {
@@ -101,9 +102,14 @@ export async function askSaad(
       subject: merge?.subject ?? titleSubject(a.title),
       kind: merge ? "gate" : a.kind,
       title: a.title,
-      detail: merge ? `${a.detail}\n\n${merge.facts}` : a.detail,
-      link: a.link ?? merge?.url ?? null,
+      // AgentOS's facts first, so the ask's length cap can only cut the
+      // orchestrator's words; the link is always the PR being merged.
+      detail: merge
+        ? `${merge.facts}\n\n${a.detail}`.slice(0, MAX_DETAIL)
+        : a.detail,
+      link: merge ? merge.url : (a.link ?? null),
       sha: merge?.sha ?? null,
+      raisedBy: merge ? "orchestrator" : null,
     });
   } catch (error) {
     if (error instanceof AskRefused) return `Not asked: ${error.message}.`;

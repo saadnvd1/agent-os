@@ -1184,7 +1184,9 @@ describe("gate failures count per task and gate", () => {
   it("counts a card task's out-of-scope check the same way", async () => {
     const t = setup({ card: true });
     await reviewNow(t.w, "pass", false);
-    await reviewNow(t.w, "pass", false).catch(() => {});
+    // sign_off reading the same verdict isn't another failure.
+    await expect(t.signOff()).rejects.toThrow(/scope failed \(first\)/);
+    await expect(t.signOff()).rejects.toThrow(/scope failed \(first\)/);
     expect(failureOf(t.task, "scope")).toMatchObject({
       count: 1,
       last_sha: t.sha,
@@ -1270,8 +1272,41 @@ describe("a merge decision from Saad", () => {
     );
     const [raised] = openAsks(t.w);
     expect(raised.detail).toMatch(
-      /AgentOS: PR #7 at \w{7} changes 2 files; touches \.github\/workflows\/ci\.yml \(CI config\); review: none yet/
+      /^AgentOS: PR #7 at \w{7} changes 2 files; touches \.github\/workflows\/ci\.yml \(CI config\); review: none yet\n/
     );
+    expect(raised.link).toBe("https://github.com/o/r/pull/7");
+  });
+
+  it("moves its own merge ask to a new head, and merges that one", async () => {
+    const t = setup();
+    await reviewNow(t.w, "block");
+    await ask(t, { task: "add-a", sha: t.sha });
+    expect(openAsks(t.w)[0].detail).toMatch(/; review: block\n/);
+    const next = t.push("src/b.ts", "export const b = 2;\n");
+    await expect(ask(t, { task: "add-a", sha: next })).resolves.toMatch(
+      /Already on Saad's list as ask \d+; updated it/
+    );
+    const [raised] = openAsks(t.w);
+    expect(raised.sha).toBe(next);
+    answerAsk(t.w, raised.id, { action: "approve" }, next);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", next],
+    ]);
+  });
+
+  it("keeps AgentOS's facts and the PR's own link whatever the orchestrator writes", async () => {
+    const t = setup();
+    await ask(t, {
+      task: "add-a",
+      sha: t.sha,
+      detail: "x".repeat(2000),
+      link: "https://example.com/elsewhere",
+    });
+    const [raised] = openAsks(t.w);
+    expect(raised.detail).toMatch(/^AgentOS: PR #7 at \w{7} changes 1 file/);
+    expect(raised.detail.length).toBe(2000);
+    expect(raised.link).toBe("https://github.com/o/r/pull/7");
   });
 
   it("never rewrites an ask the gates raised", async () => {
