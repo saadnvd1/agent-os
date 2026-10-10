@@ -44,6 +44,10 @@ const AFTER_STOP_MS = 2000;
 // How long a retiring worker waits, once at rest with nothing queued, for
 // the agent's guess at the next message before it goes.
 export const RETIRE_SUGGESTION_WAIT_MS = 2 * 60 * 1000;
+// How long, idle, a message the agent holds may go without starting a turn
+// before a retiring worker stops waiting for it (a background task's notice
+// the agent never turned into one).
+export const RETIRE_REST_WAIT_MS = 30 * 1000;
 
 // What the agent reads, ahead of its next message, in a worker that took
 // over from a retired one. Not shown in the chat.
@@ -97,6 +101,9 @@ export class ChatHost {
   // Messages handed to the agent while a turn ran, and not yet started: it
   // isn't at a boundary while it still holds one.
   private behind = 0;
+  private restTimer?: NodeJS.Timeout;
+  // Background tasks seen running: one that ends is a notice the agent runs.
+  private runningTasks = new Set<string>();
   // Whether its driver says when that is (lib/chat/driver atRest).
   private atRest = true;
   private restartedNote = false;
@@ -192,7 +199,12 @@ export class ChatHost {
             this.streaming.set(e.item.id, e.item);
           else this.streaming.delete(e.item.id);
           this.record(e.item);
-          if (e.item.kind === "task") this.retireIfDone();
+          if (e.item.kind === "task" && !e.item.ambient) {
+            if (e.item.status === "running")
+              this.runningTasks.add(e.item.taskId);
+            else if (this.runningTasks.delete(e.item.taskId)) this.behind++;
+            this.retireIfDone();
+          }
         } else if (e.type === "delta") {
           const item = this.streaming.get(e.id);
           if (item && "text" in item) item.text += e.text;
@@ -222,6 +234,8 @@ export class ChatHost {
         } else if (e.type === "turn_start") {
           this.turnsStarted++;
           if (this.behind) this.behind--;
+          clearTimeout(this.restTimer);
+          this.restTimer = undefined;
           if (this.nowPending && --this.nowPending)
             this.stopsUpTo = this.turnsStarted;
           // A turn the agent started itself (a background task's notice)
@@ -389,11 +403,18 @@ export class ChatHost {
         // Sent just as a move or Land took hold (lib/chat/hold): it waits
         // in the queue rather than start a turn the stop would cut short.
         // Or for the current worker that takes over from a retiring one.
-        if (isHeld(this.session.id) || this.handingOver()) {
-          enqueue(this.session.id, cmd);
-          this.emit({ type: "queue" });
-          this.retireIfDone();
-          return;
+        const held = isHeld(this.session.id);
+        if (held || this.handingOver()) {
+          try {
+            enqueue(this.session.id, cmd);
+            this.emit({ type: "queue" });
+            this.retireIfDone();
+            return;
+          } catch (error) {
+            // A full queue can't lose it: retiring, the agent takes it as
+            // before, and the worker goes at a later boundary.
+            if (held) throw error;
+          }
         }
         this.sent.add(cmd.id);
         await this.modeChange.catch(() => {});
@@ -534,8 +555,15 @@ export class ChatHost {
   // lives in the agent, and would be lost). With nothing queued it first
   // waits a while for the agent's guess at the next message.
   private retireIfDone(): void {
-    if (!this.handingOver() || this.closed || this.busy() || this.behind)
+    if (!this.handingOver() || this.closed || this.busy()) return;
+    if (this.behind) {
+      this.restTimer ??= setTimeout(() => {
+        this.restTimer = undefined;
+        this.behind = 0;
+        this.retireIfDone();
+      }, RETIRE_REST_WAIT_MS);
       return;
+    }
     const queued = listQueue(this.session.id).length > 0;
     if (!queued && this.suggestion === null && !this.retireWaited) {
       this.retireTimer ??= setTimeout(() => {
@@ -563,6 +591,7 @@ export class ChatHost {
 
   close(): void {
     clearTimeout(this.retireTimer);
+    clearTimeout(this.restTimer);
     this.closed = true;
     this.onClose();
     this.conversation.close();

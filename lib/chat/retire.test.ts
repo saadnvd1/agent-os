@@ -105,16 +105,18 @@ describe("a worker from before a deploy", () => {
     expect(retires()).toBe(0);
   });
 
-  it("once it has retired itself, a current worker resumes, sends what waited and says it restarted", async () => {
+  it("once it has retired itself, a current worker resumes, sends what waited and says it restarted, once", async () => {
     const id = chat();
-    // Queued before the restart, so the reattach already tried to send it
-    // within the last minute.
+    // No worker running at the restart: the reattach starts one to send the
+    // queue, which arms the once-a-minute resume, and that one is old.
+    workers.running = [];
     enqueue(id, { id: "user-q1", text: "an event that came mid-turn" });
     workers.hellos = [
       { build: OLD, state: "running", caps: ALL },
       { build: buildId(), state: "idle", caps: ALL },
     ];
     await reattachChats();
+    expect(workers.connects).toHaveLength(1);
     expect(retires()).toBe(1);
     workers.handlers[0].onClose(false);
     await vi.waitFor(() =>
@@ -128,5 +130,13 @@ describe("a worker from before a deploy", () => {
     expect(listQueue(id).map((m) => m.id)).toEqual(["user-q1"]);
     await new Promise((r) => setTimeout(r, 50));
     expect(workers.connects).toHaveLength(2);
+    // Reconnecting to that current worker later says nothing more.
+    workers.handlers[1].onClose(true);
+    workers.running = [id];
+    await reattachChats();
+    expect(workers.connects).toHaveLength(3);
+    expect(workers.connects[2].commands.map((c) => c.type)).not.toContain(
+      "restarted"
+    );
   });
 });

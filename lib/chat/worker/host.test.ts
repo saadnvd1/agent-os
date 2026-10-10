@@ -1161,7 +1161,62 @@ describe("ChatHost retiring after a deploy", () => {
       item: { ...task, status: "completed" },
     });
     await tick();
+    // Its notice is the agent's next turn: that runs here first.
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
     expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("a background task's notice that never starts a turn doesn't keep it for long", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { RETIRE_REST_WAIT_MS } = await import("./host");
+      const { host, conversation } = await startHost();
+      const task: ChatItem = {
+        id: "task-2",
+        kind: "task",
+        taskId: "t2",
+        description: "subagent",
+        status: "running",
+        createdAt: 1,
+      };
+      conversation.events.push({ type: "item", item: task });
+      conversation.events.push({ type: "suggestion", text: "next" });
+      await vi.advanceTimersByTimeAsync(0);
+      await host.handle({ type: "retire" });
+      conversation.events.push({
+        type: "item",
+        item: { ...task, status: "stopped" },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      vi.advanceTimersByTime(RETIRE_REST_WAIT_MS - 1);
+      expect(conversation.close).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(conversation.close).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("with the queue full, the agent takes a message as before rather than lose it", async () => {
+    const { MAX_QUEUED } = await import("../queued");
+    const { id, host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    for (let i = 0; i < MAX_QUEUED; i++)
+      await host.handle({ type: "send", id: `user-q${i}`, text: "e", ...bus });
+    expect(listQueue(id)).toHaveLength(MAX_QUEUED);
+    await host.handle({
+      type: "send",
+      id: "user-over",
+      text: "one more",
+      ...bus,
+    });
+    expect(conversation.send).toHaveBeenLastCalledWith("one more", undefined);
+    expect(listItems(id).some((i) => i.id === "user-over")).toBe(true);
+    host.close();
   });
 
   it("with a driver that never says it's at rest, a turn's end is the boundary", async () => {
