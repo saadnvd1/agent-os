@@ -120,3 +120,34 @@ describe("sourceLabel", () => {
     expect(sourceLabel("::ffff:10.0.0.9")).toBe("10.0.0.9");
   });
 });
+
+describe("an unpaired browser opening a session's address", () => {
+  function page(url: string) {
+    const headers: Record<string, string> = {};
+    const req = {
+      url,
+      method: "GET",
+      headers: { host: "h:3011", accept: "text/html" },
+      socket: { remoteAddress: "192.168.1.20", localAddress: "127.0.0.1" },
+    } as unknown as IncomingMessage;
+    const res = {
+      statusCode: 200,
+      setHeader(k: string, v: string) {
+        headers[k] = v;
+      },
+      end() {},
+    } as unknown as ServerResponse;
+    return { allowed: gateRequest(req, res, policy), res, headers };
+  }
+
+  it("is sent to pair, keeping the way back, and let into nothing", () => {
+    const { allowed, res, headers } = page("/?session=abc");
+    expect(allowed).toBe(false);
+    expect(res.statusCode).toBe(302);
+    expect(headers.Location).toBe("/pair?next=%2F%3Fsession%3Dabc");
+  });
+
+  it("never carries another site as the way back", () => {
+    expect(page("//evil.example/").headers.Location).toBe("/pair");
+  });
+});

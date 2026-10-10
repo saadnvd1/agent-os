@@ -5,6 +5,15 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/Logo";
+import { safeNextPath } from "@/lib/session-url";
+
+// Where to go once this device can use AgentOS: the page the gate turned
+// away (a session's address), or home.
+function destination(): string {
+  return (
+    safeNextPath(new URLSearchParams(window.location.search).get("next")) ?? "/"
+  );
+}
 
 function guessName(ua: string): string {
   if (/iPad/.test(ua)) return "iPad";
@@ -50,8 +59,8 @@ export default function PairPage() {
     }).catch(() => null);
     if (res?.ok) {
       // Drop the used code from history before leaving.
-      window.history.replaceState(null, "", "/pair");
-      window.location.replace("/");
+      window.history.replaceState(null, "", "/pair" + window.location.search);
+      window.location.replace(destination());
       return;
     }
     setBusy(false);
@@ -80,7 +89,7 @@ export default function PairPage() {
             <p className="text-sm">This device can already use AgentOS.</p>
             <Button
               className="h-11 w-full"
-              onClick={() => window.location.replace("/")}
+              onClick={() => window.location.replace(destination())}
             >
               Open AgentOS
             </Button>

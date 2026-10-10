@@ -26,6 +26,12 @@ export function useSessions() {
     await refetch();
   }, [refetch]);
 
+  // The list as the server has it now, rather than as last rendered.
+  const reloadSessions = useCallback(
+    async (): Promise<Session[]> => (await refetch()).data?.sessions ?? [],
+    [refetch]
+  );
+
   const deleteSession = useCallback(
     async (sessionId: string) => {
       if (!confirm("Delete this session? This cannot be undone.")) return;
@@ -72,10 +78,12 @@ export function useSessions() {
   return {
     sessions,
     groups,
+    loaded: data !== undefined,
     summarizingSessionId: summarizeMutation.isPending
       ? (summarizeMutation.variables as string)
       : null,
     fetchSessions,
+    reloadSessions,
     deleteSession,
     renameSession,
     forkSession,

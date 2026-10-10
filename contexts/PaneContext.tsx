@@ -36,6 +36,8 @@ export interface PaneViewState {
 
 interface PaneContextValue {
   state: PaneState;
+  // The saved layout has been restored; until then `state` is the default.
+  hydrated: boolean;
   focusedPaneId: string;
   canSplit: boolean;
   canClose: boolean;
@@ -376,6 +378,7 @@ export function PaneProvider({ children }: { children: ReactNode }) {
     <PaneContext.Provider
       value={{
         state,
+        hydrated,
         focusedPaneId: state.focusedPaneId,
         canSplit,
         canClose,

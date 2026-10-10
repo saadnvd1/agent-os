@@ -3,6 +3,7 @@
 import { toast } from "sonner";
 import {
   Copy,
+  Link,
   MoreHorizontal,
   SplitSquareHorizontal,
   SplitSquareVertical,
@@ -18,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { writeClipboard } from "@/hooks/useCopyToClipboard";
+import { copySessionLink, writeClipboard } from "@/hooks/useCopyToClipboard";
 import type { Session } from "@/lib/db";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
@@ -78,6 +79,10 @@ export function PaneMenu({
                 </div>
               )}
             </DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => copySessionLink(session.id)}>
+              <Link className="h-4 w-4" />
+              Copy link
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => copyId(session.id)}>
               <Copy className="h-4 w-4" />
               Copy session ID

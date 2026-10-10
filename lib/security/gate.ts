@@ -20,6 +20,7 @@ import { deviceCookie, isHttps } from "./cookie";
 import { deviceForToken, touchDevice, trackDeviceSocket } from "./devices";
 import { tailscaleAddresses } from "./net";
 import { networkSetting } from "./network-settings";
+import { pairLocation } from "../session-url";
 
 // Interface addresses change rarely; don't re-read them on every request.
 let tailnetCache = { at: 0, ips: [] as string[] };
@@ -118,7 +119,8 @@ export function gateRequest(
     (req.headers.accept ?? "").includes("text/html");
   if (wantsPage) {
     res.statusCode = 302;
-    res.setHeader("Location", "/pair");
+    // Pairing comes back to the page asked for (a session's address).
+    res.setHeader("Location", pairLocation(req.url));
   } else {
     res.statusCode = 401;
     res.setHeader("Content-Type", "application/json");
