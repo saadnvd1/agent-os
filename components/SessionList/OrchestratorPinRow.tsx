@@ -12,14 +12,13 @@ import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowRename } from "./RowParts";
 
-// The workspace's orchestrator, pinned above its sessions: what it's doing
-// and how many asks wait on you. Unpinning drops it back among the others.
+// A workspace's orchestrator, pinned above its sessions and titled with the
+// workspace's name: what it's doing and how many asks wait on you, on a line
+// of their own. Unpinning drops it back among the others.
 export const OrchestratorPinRow = memo(function OrchestratorPinRow({
   row,
-  showWorkspace,
 }: {
   row: SidebarRow;
-  showWorkspace: boolean;
 }) {
   const ctx = useRowContext();
   const [renaming, setRenaming] = useState(false);
@@ -34,9 +33,8 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
     running: ctx.runningByWorkspace.get(ws) ?? 0,
     inReview: overview?.inReview ?? 0,
   });
-  const label = showWorkspace
-    ? (ctx.workspaceNames.get(ws) ?? "Orchestrator")
-    : "Orchestrator";
+  const label = ctx.workspaceNames.get(ws) ?? "Orchestrator";
+  const summary = asks ? `${status} · ${asks}` : status;
   const menu = (kind: "dropdown" | "context") => (
     <SessionRowMenu
       session={session}
@@ -49,7 +47,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
     <div
       role="button"
       tabIndex={0}
-      title={session.name}
+      title={`${label}\n${summary}`}
       onClick={() => !renaming && ctx.onSelect(session.id)}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
@@ -59,7 +57,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
         }
       }}
       className={cn(
-        "group border-border/70 relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-1 transition-colors",
+        "group border-border/70 relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors",
         active
           ? "bg-primary/10 border-primary/30"
           : "bg-muted/50 hover:bg-muted"
@@ -78,7 +76,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
                 : "text-muted-foreground"
         )}
       />
-      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 leading-tight">
+      <span className="flex min-w-0 flex-1 flex-col leading-tight">
         {renaming ? (
           <RowRename
             initial={session.name}
@@ -97,20 +95,20 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
             >
               {label}
             </span>
-            <span className="text-muted-foreground/80 min-w-0 shrink-[2] truncate text-xs">
+            <span className="text-muted-foreground/80 mt-0.5 truncate text-xs">
               {status}
+              {asks && (
+                <>
+                  {" · "}
+                  <span className="font-semibold text-amber-700 tabular-nums dark:text-amber-400">
+                    {asks}
+                  </span>
+                </>
+              )}
             </span>
           </>
         )}
       </span>
-      {asks && (
-        <span
-          title={`${asks} waiting on you`}
-          className="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 tabular-nums dark:text-amber-400"
-        >
-          {asks}
-        </span>
-      )}
       <DM.DropdownMenu>
         <DM.DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
           <Button
@@ -144,9 +142,6 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
 }, sameProps);
 
 // Its counts come from the row context, which changes when they do.
-function sameProps(
-  a: { row: SidebarRow; showWorkspace: boolean },
-  b: { row: SidebarRow; showWorkspace: boolean }
-) {
-  return a.showWorkspace === b.showWorkspace && sameRow(a.row, b.row);
+function sameProps(a: { row: SidebarRow }, b: { row: SidebarRow }) {
+  return sameRow(a.row, b.row);
 }

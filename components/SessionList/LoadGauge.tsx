@@ -22,8 +22,8 @@ export function loadSummary(load: LoadView): string {
   return `Load ${load.load1} on ${load.cores} cores · memory ${memory}`;
 }
 
-// The machine's load as a dot in the sidebar header; tap it for the numbers
-// and the sessions using the most CPU.
+// The machine's load as a dot beside the workspace's name; tap it for the
+// numbers and the sessions using the most CPU.
 export function LoadGauge() {
   const load = useMachineLoad();
   if (!load) return null;
@@ -37,7 +37,7 @@ export function LoadGauge() {
           size="icon-sm"
           aria-label={`Machine load ${load.level}. ${summary}`}
           title={summary}
-          className="h-11 w-11 md:h-8 md:w-8"
+          className="h-11 w-8 shrink-0 md:h-8 md:w-6"
         >
           <span className={cn("h-2 w-2 rounded-full", DOT[load.level])} />
         </Button>

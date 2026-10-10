@@ -53,6 +53,10 @@ export interface MenuItemConfig extends BaseItem {
   icon?: LucideIcon;
   disabled?: boolean;
   variant?: "default" | "destructive";
+  // Shown at the item's right edge, e.g. a count.
+  badge?: ReactNode;
+  // Hover text, for detail the label leaves out.
+  title?: string;
 }
 
 export interface ToggleItemConfig extends BaseItem {
@@ -134,6 +138,7 @@ function MenuItem({ item }: { item: MenuItemConfig }) {
     <DropdownMenuItem
       onClick={item.onClick}
       disabled={item.disabled}
+      title={item.title}
       className={cn(
         item.variant === "destructive" &&
           "text-destructive focus:text-destructive"
@@ -141,6 +146,7 @@ function MenuItem({ item }: { item: MenuItemConfig }) {
     >
       {Icon && <Icon className="mr-2 h-4 w-4" />}
       {item.label}
+      {item.badge != null && <span className="ml-auto pl-3">{item.badge}</span>}
     </DropdownMenuItem>
   );
 }
