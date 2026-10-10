@@ -26,6 +26,10 @@ let pr: FakePR | null = null;
 const merges: string[][] = [];
 let tmux: TmuxSessionInfo[] = [];
 let pane = "";
+// Another repository where the same PR number is open too.
+let alsoOpenIn: string | null = null;
+// What GitHub says when it refuses a merge, or null to merge.
+let refuseMerge: string | null = null;
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
@@ -35,10 +39,16 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
       if (cmd !== "gh") return real.run(cmd, args, cwd, t);
       const repo = args[args.indexOf("--repo") + 1];
       if (args[0] === "pr" && args[1] === "merge") {
+        if (refuseMerge) throw new Error(refuseMerge);
         merges.push(args);
         return "";
       }
       if (args[0] === "pr" && args[1] === "view") {
+        if (pr && repo === alsoOpenIn && args[2] === String(pr.number))
+          return JSON.stringify({
+            ...pr,
+            url: `https://github.com/${repo}/pull/${pr.number}`,
+          });
         if (repo !== "o/r" || !pr || args[2] !== String(pr.number))
           throw new Error("no pull requests found");
         return JSON.stringify(pr);
@@ -77,7 +87,12 @@ const { createWorkspace, setProjectWorkspace } =
 const { runTool } = await import("./serve");
 const { reviewTarget } = await import("./external-gates");
 const { putCheck } = await import("./checks");
-const { openAsks } = await import("./asks");
+const { answerAsk, openAsks, getAsk } = await import("./asks");
+const { releaseInterruptedClaims, spendApproval } =
+  await import("./ask-approvals");
+const { parsePRRef } = await import("./external-pr");
+const { slugOfRemote } = await import("./repo-slug");
+const { namedAfter } = await import("./external-sessions");
 const { setMergeApprovals } = await import("./merge-approvals");
 const { seedSession } = await import("./testing");
 
@@ -89,10 +104,16 @@ beforeEach(() => {
   merges.length = 0;
   tmux = [];
   pane = "";
+  alsoOpenIn = null;
+  refuseMerge = null;
   setMergeApprovals(false);
   // Every test's PR is o/r#50: what one left on it isn't the next's.
   db.exec(
     `DELETE FROM orchestrator_gate_failures; DELETE FROM orchestrator_asks; DELETE FROM orchestrator_checks;`
+  );
+  // Nor is a task one seeded on its branch.
+  db.exec(
+    `UPDATE sessions SET task_status = 'dropped' WHERE branch_name = 'ws-wor-52'`
   );
 });
 
@@ -135,13 +156,14 @@ function clone(root: string, slug: string, name: string) {
 
 // A workspace whose project is a clone of o/r, with a branch pushed that
 // dispatch opened PR #50 from (no AgentOS task behind it).
-function setup() {
+function setup(opts: { files?: Array<[string, string]> } = {}) {
   const root = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-ext-repo-"))
   );
   const repo = clone(root, "o/r", "repo");
   git(repo, "checkout", "-qb", "ws-wor-52");
-  const sha = commit(repo, "src/a.ts", "export const a = 1;\n");
+  let sha = commit(repo, "src/a.ts", "export const a = 1;\n");
+  for (const [file, text] of opts.files ?? []) sha = commit(repo, file, text);
   git(repo, "checkout", "-q", "main");
   const workspace = createWorkspace(`ws-${path.basename(root)}`);
   const project = createProject({
@@ -180,7 +202,7 @@ function setup() {
     status: "pass",
     detail: JSON.stringify({ count: 1, at: 0 }),
   });
-  return { w, root, repo, sha, projectId: project.id };
+  return { w, root, repo, sha, projectId: project.id, workspace };
 }
 
 const passing = async (run: ClaudeRun) => {
@@ -378,3 +400,174 @@ describe("external sessions", () => {
   });
 });
 
+describe("refusing what isn't the workspace's to merge", () => {
+  it("refuses a fork's PR, a closed one, and branch names git could read as options", async () => {
+    const t = setup();
+    pr = { ...pr!, isCrossRepository: true };
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /o\/r#50 comes from a fork; the orchestrator merges only PRs whose branch is in o\/r/
+    );
+    pr = { ...pr!, isCrossRepository: false, state: "CLOSED" };
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /o\/r#50 is closed, not open/
+    );
+    pr = { ...pr!, state: "OPEN", baseRefName: "--output=/tmp/x" };
+    await expect(runTool(t.w, "review", { target: "#50" })).rejects.toThrow(
+      /branch names aren't plain ones/
+    );
+    pr = { ...pr!, baseRefName: "main", headRefName: "a..b" };
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /branch names aren't plain ones/
+    );
+    expect(merges).toEqual([]);
+  });
+
+  it("refuses a PR that is a task's in another workspace on the same repository", async () => {
+    const t = setup();
+    const otherWs = createWorkspace(`other-${path.basename(t.root)}`);
+    const clone2 = path.join(t.root, "second");
+    git(t.root, "clone", "-q", path.join(t.root, "repo.git"), clone2);
+    git(clone2, "remote", "set-url", "origin", "https://github.com/o/r.git");
+    const theirs = createProject({
+      name: `theirs-${path.basename(t.root)}`,
+      workingDirectory: clone2,
+    });
+    setProjectWorkspace(theirs.id, otherWs.id);
+    seedSession({
+      projectId: theirs.id,
+      name: "their-task",
+      task: true,
+      branch: "ws-wor-52",
+    });
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /o\/r#50 is task their-task's PR in another workspace/
+    );
+    expect(merges).toEqual([]);
+  });
+
+  it("asks which repository when #N is open in two of the workspace's", async () => {
+    const t = setup();
+    const second = clone(t.root, "o/r2", "repo2");
+    const p2 = createProject({
+      name: `app2-${path.basename(t.root)}`,
+      workingDirectory: second,
+    });
+    setProjectWorkspace(p2.id, t.w);
+    alsoOpenIn = "o/r2";
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /PR #50 is open in o\/r and o\/r2: say which, as owner\/repo#50/
+    );
+    // Open in only one of them: that one, the other skipped.
+    alsoOpenIn = null;
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /^o\/r#50 \(PR #50/
+    );
+  });
+});
+
+describe("Saad's approvals on an external PR", () => {
+  it("sends a sensitive change to Saad, merges once on his approval of that head, and gives a refused merge's approval back", async () => {
+    const t = setup({ files: [[".github/workflows/ci.yml", "on: push\n"]] });
+    setMergeApprovals(true);
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /Escalated to Saad: PR #50 at [0-9a-f]{7} touches \.github\/workflows\/ci\.yml/
+    );
+    const [ask] = openAsks(t.w);
+    expect(ask).toMatchObject({ subject: "pr:o/r#50", sha: t.sha });
+    answerAsk(t.w, ask.id, { action: "approve" });
+
+    refuseMerge = "GitHub refused";
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /GitHub refused/
+    );
+    expect(getAsk(t.w, ask.id)?.used_at).toBeNull();
+
+    refuseMerge = null;
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).resolves.toBe(
+      `Merged o/r#50: squash-merged at ${t.sha.slice(0, 7)}.`
+    );
+    expect(merges).toHaveLength(1);
+    expect(merges[0]).toContain(t.sha);
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /is with Saad/
+    );
+  });
+
+  it("releases a claim a restart cut off", () => {
+    const t = setup();
+    const id = Number(
+      db
+        .prepare(
+          `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, sha, status, used_at)
+           VALUES (?, 'pr:o/r#50', 'gate', 'Merge o/r#50?', ?, 'approved', datetime('now'))`
+        )
+        .run(t.w, t.sha).lastInsertRowid
+    );
+    expect(releaseInterruptedClaims()).toBeGreaterThanOrEqual(1);
+    expect(getAsk(t.w, id)?.used_at).toBeNull();
+    expect(spendApproval(id)).toBe(true);
+  });
+});
+
+describe("the code-review stand-in", () => {
+  it("covers only the head it reviewed, and never a blocking review", async () => {
+    const t = setup();
+    const blocking = async () => ({
+      verdict: "block",
+      summary: "Bug.",
+      findings: [{ severity: "blocking", summary: "off by one" }],
+    });
+    await reviewTarget(t.w, "#50", { wait: true, claude: blocking });
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      /code-review: not yet, .*stands in for it, and it has blocking findings/
+    );
+    db.exec(`DELETE FROM orchestrator_gate_failures`);
+    await reviewTarget(t.w, "#50", {
+      wait: true,
+      fresh: true,
+      claude: passing,
+    });
+    // A new head since: the old pass doesn't cover it.
+    git(t.repo, "checkout", "-q", "ws-wor-52");
+    const next = commit(t.repo, "src/b.ts", "export const b = 2;\n");
+    git(t.repo, "checkout", "-q", "main");
+    pr = { ...pr!, headRefOid: next };
+    putCheck({
+      workspaceId: t.w,
+      sessionId: "pr:o/r#50",
+      sha: next,
+      kind: "ci",
+      status: "pass",
+      detail: JSON.stringify({ count: 1, at: 0 }),
+    });
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
+      new RegExp(`stands in for it: call review`)
+    );
+    expect(merges).toEqual([]);
+  });
+});
+
+describe("parsing", () => {
+  it("reads PR refs, GitHub remotes and folder names strictly", () => {
+    expect(parsePRRef("#12")).toEqual({ slug: null, number: 12 });
+    expect(parsePRRef("O/R#12")).toEqual({ slug: "o/r", number: 12 });
+    expect(parsePRRef("pr:o/r#12")).toEqual({ slug: "o/r", number: 12 });
+    expect(parsePRRef("https://github.com/o/r/pull/12/files")).toEqual({
+      slug: "o/r",
+      number: 12,
+    });
+    expect(parsePRRef("o/r#12 x")).toBeNull();
+    expect(parsePRRef("http://github.com/o/r/pull/12")).toBeNull();
+    expect(slugOfRemote("git@github.com:O/R.git")).toBe("o/r");
+    expect(slugOfRemote("ssh://git@github.com/o/r")).toBe("o/r");
+    expect(slugOfRemote("https://github.com/o/r.git")).toBe("o/r");
+    expect(slugOfRemote("https://github.com.evil.com/o/r")).toBeNull();
+    expect(slugOfRemote("https://gitlab.com/o/r")).toBeNull();
+    expect(
+      namedAfter("/home/x/.dispatch/workstak-app--ws-1", "workstak-app")
+    ).toBe(true);
+    expect(namedAfter("/home/x/workstak-application", "workstak-app")).toBe(
+      false
+    );
+  });
+});

@@ -12,6 +12,7 @@ import { getDb, queries, type Project, type Session } from "../db";
 import { discoverSessions } from "../hosts/discover";
 import { getHost, hostExec } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
+import { isValidTmuxName } from "../hosts/tmux-name";
 import { shellQuote } from "../hosts/ssh";
 import { statusDetector } from "../status-detector";
 import { run } from "../tasks/gh";
@@ -107,7 +108,7 @@ async function prOf(
 }
 
 // A folder named after the repository: "workstak-app", "workstak-app--ws-1".
-function namedAfter(path: string, repoName: string): boolean {
+export function namedAfter(path: string, repoName: string): boolean {
   const name = repoName.toLowerCase();
   return path
     .toLowerCase()
@@ -154,6 +155,9 @@ export async function externalSessions(
   );
   const list: ExternalSession[] = [];
   for (const f of found) {
+    // Its name reaches the orchestrator as a handle, not fenced text: one
+    // tmux itself would refuse to be addressed by isn't listed.
+    if (!isValidTmuxName(f.name)) continue;
     const hostId = f.hostId || "local";
     const git = probed.get(hostId)?.get(f.path);
     const slug = slugOfRemote(git?.url);

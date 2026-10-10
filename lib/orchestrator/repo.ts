@@ -25,7 +25,7 @@ export async function fetchRefs(
   const base = task.base_branch || "main";
   await run(
     "git",
-    ["fetch", "--quiet", "origin", base, task.branch_name ?? base],
+    ["fetch", "--quiet", "--", "origin", base, task.branch_name ?? base],
     repo
   ).catch(() => {});
   const remote = `origin/${base}`;

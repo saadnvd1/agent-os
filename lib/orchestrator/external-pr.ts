@@ -12,7 +12,8 @@ import type { TaskPR } from "../tasks/state";
 import { getWorkspace } from "../workspaces";
 import { EXTERNAL_PREFIX } from "./asks";
 import { prKey } from "./ask-settle";
-import { workspaceRepos, type WorkspaceRepo } from "./repo-slug";
+import { repoSlug, workspaceRepos, type WorkspaceRepo } from "./repo-slug";
+import { expandHome } from "../tasks/session";
 import { workspaceTask } from "./targets";
 
 export interface PRRef {
@@ -103,25 +104,49 @@ function tasksWithPR(workspaceId: string, ref: PRRef): WorkspaceTask[] {
   return rows.filter((t) => !key || !t.pr_url || prKey(t.pr_url) === key);
 }
 
-// A running task working on this branch of one of these projects: a PR it
-// opened that its row hasn't caught up with yet is still its own.
-function taskOnBranch(
-  projects: string[],
+type OwnerRow = WorkspaceTask & {
+  owner_workspace: string | null;
+  project_dir: string;
+  project_host: string | null;
+};
+
+// The task that owns this PR, in any workspace on any machine: one whose
+// recorded PR is it, or one working on its branch in a clone of its
+// repository (a PR the row hasn't caught up with is still the task's). A
+// project whose repository can't be read here (another machine's) counts
+// as the same repository: it's refused rather than gated as no one's.
+async function ownerOf(
+  slug: string,
+  number: number,
   branch: string
-): WorkspaceTask | null {
-  if (!projects.length || !branch) return null;
-  return (
-    (db
-      .prepare(
-        `SELECT s.*, p.name AS project_name FROM sessions s
-         JOIN projects p ON p.id = s.project_id
-         WHERE s.task_status = 'running' AND s.branch_name = ?
-           AND s.project_id IN (${projects.map(() => "?").join(",")})
-         ORDER BY s.created_at DESC LIMIT 1`
-      )
-      .get(branch, ...projects) as WorkspaceTask | undefined) ?? null
-  );
+): Promise<OwnerRow | null> {
+  const rows = db
+    .prepare(
+      `SELECT s.*, p.name AS project_name, p.workspace_id AS owner_workspace,
+         p.working_directory AS project_dir, p.host_id AS project_host
+       FROM sessions s JOIN projects p ON p.id = s.project_id
+       WHERE s.task_status IS NOT NULL
+         AND (s.pr_number = ? OR (s.branch_name = ? AND s.task_status IN ('running', 'moving', 'moved')))
+       ORDER BY s.created_at DESC`
+    )
+    .all(number, branch) as OwnerRow[];
+  const key = `${slug}#${number}`;
+  for (const t of rows) {
+    if (t.pr_url) {
+      if (prKey(t.pr_url) === key) return t;
+      if (t.pr_number === number && t.branch_name !== branch) continue;
+    }
+    if (t.branch_name !== branch && t.pr_number !== number) continue;
+    const local = !t.project_host || t.project_host === "local";
+    const theirs = local ? await repoSlug(expandHome(t.project_dir)) : null;
+    if (!local || theirs === slug) return t;
+  }
+  return null;
 }
+
+// Branch names come from GitHub and reach git as arguments: only plain ones.
+const PLAIN_REF = /^[\w][\w./+-]*$/;
+const plainRef = (r: string) => PLAIN_REF.test(r) && !r.includes("..");
 
 // The open PR the ref names in one of the workspace's repositories, or the
 // task that owns it; refuses anything else, saying why.
@@ -179,11 +204,16 @@ async function externalPR(
       `${name} comes from a fork; the orchestrator merges only PRs whose branch is in ${repo.slug}`
     );
   const branch = pr.headRefName ?? "";
-  const sameRepo = repos.filter((r) => r.slug === repo.slug);
-  const owner = taskOnBranch(
-    sameRepo.map((r) => r.project.id),
-    branch
-  );
+  const base = pr.baseRefName || "main";
+  if (!plainRef(branch) || !plainRef(base))
+    throw new Error(
+      `${name}'s branch names aren't plain ones (letters, digits, . _ / + -); the orchestrator doesn't pass them to git`
+    );
+  const owner = await ownerOf(repo.slug, pr.number, branch);
+  if (owner && owner.owner_workspace !== workspaceId)
+    throw new Error(
+      `${name} is task ${owner.name}'s PR in another workspace; the orchestrator acts only on its own workspace's tasks`
+    );
   if (owner) return owner;
   return {
     id: `${EXTERNAL_PREFIX}${name}`,
@@ -195,7 +225,7 @@ async function externalPR(
     body: pr.body ?? "",
     project: repo.project,
     repo: repo.dir,
-    base: pr.baseRefName || "main",
+    base,
     branch,
     draft: !!pr.isDraft,
     labels: (pr.labels ?? []).map((l) => l.name ?? "").filter(Boolean),
