@@ -9,6 +9,7 @@ import { requireHostLink, type HostLink } from "../hosts/remote-api";
 import { deriveTaskState, type TaskStatus } from "./state";
 import { hostTasks, setMirrorStatus } from "./remote";
 import type { TaskView } from "./index";
+import { viewOf } from "./move-targets";
 
 const FINISHED: Record<string, TaskStatus> = {
   merged: "merged",
@@ -30,6 +31,7 @@ function offlineView(
     branch: session.branch_name,
     baseBranch: session.base_branch,
     tmuxName: session.tmux_name,
+    view: viewOf(session),
     state: deriveTaskState({
       taskStatus: session.task_status ?? "running",
       sessionStatus: undefined,
@@ -74,6 +76,8 @@ async function viewsOn(hostId: string, rows: Session[]): Promise<TaskView[]> {
       return [
         {
           ...t,
+          // As this machine mirrored it: the other one may predate views.
+          view: viewOf(s),
           projectId: s.project_id,
           hostId,
           hostName: link.hostName,

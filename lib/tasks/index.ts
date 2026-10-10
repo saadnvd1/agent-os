@@ -42,6 +42,7 @@ import { taskSetupOf, type TaskSetup } from "./setup";
 import { finishTaskStart } from "./start";
 import { isRemoteHost } from "../hosts";
 import { DEFAULT_START_VIEW, type StartView } from "../sessions/launch";
+import { viewOf } from "./move-targets";
 import { isMirror, startRemoteTask } from "./remote";
 import { remoteTaskViews } from "./remote-views";
 import { chatStateNow } from "../chat/runner";
@@ -62,6 +63,8 @@ export interface TaskView {
   branch: string | null;
   baseBranch: string | null;
   tmuxName: string;
+  // How its agent runs; only a terminal task can move for now.
+  view: StartView;
   state: TaskState;
   pr: TaskPR | null;
   // What its last BLOCKED: line asked for, while it's blocked.
@@ -310,6 +313,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     branch: session.branch_name,
     baseBranch: session.base_branch,
     tmuxName: session.tmux_name,
+    view: viewOf(session),
     state,
     pr,
     blocked,

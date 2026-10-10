@@ -5,6 +5,18 @@
  * offers it would refuse out of the menus.
  */
 
+// Moving carries a terminal's branch and conversation; a chat's worker,
+// transcript and queue don't follow it yet.
+// Switching views runs where the task does, so the advice is only for here.
+export const CHAT_MOVE_REFUSAL =
+  "Chat tasks can't move yet. Switch it to Terminal to move it.";
+export const CHAT_MOVE_REFUSAL_AWAY = "Chat tasks can't move yet.";
+const chatRefusal = (hostId: string | null) =>
+  isHere(hostId) ? CHAT_MOVE_REFUSAL : CHAT_MOVE_REFUSAL_AWAY;
+
+export const viewOf = (s: { view?: string | null }): "chat" | "terminal" =>
+  s.view === "chat" ? "chat" : "terminal";
+
 export interface Movable {
   // The machine it runs on; null or "local" for this one.
   hostId: string | null;
@@ -16,12 +28,16 @@ export interface Movable {
   branch: string | null;
   // Card and orchestrator tasks stay on this machine for now.
   pinnedHere: boolean;
+  // Why its moves are offered but can't be taken (shown, disabled).
+  blocked: string | null;
 }
 
 export interface MoveTarget {
   hostId: string;
   name: string;
   label: string;
+  // Offered, but disabled for this reason.
+  blocked?: string;
 }
 
 export interface LinkedMachine {
@@ -32,6 +48,13 @@ export interface LinkedMachine {
 const isHere = (hostId: string | null) => !hostId || hostId === "local";
 
 export function moveTargets(m: Movable, linked: LinkedMachine[]): MoveTarget[] {
+  const targets = offered(m, linked);
+  return m.blocked
+    ? targets.map((t) => ({ ...t, blocked: m.blocked! }))
+    : targets;
+}
+
+function offered(m: Movable, linked: LinkedMachine[]): MoveTarget[] {
   if (!m.live || !m.branch || m.pinnedHere) return [];
   if (!isHere(m.hostId))
     return [
@@ -64,6 +87,7 @@ export function movableSession(s: {
   branch_name: string | null;
   lh_card_id: string | null;
   role: string | null;
+  view?: string | null;
 }): Movable {
   return {
     hostId: s.host_id,
@@ -72,6 +96,7 @@ export function movableSession(s: {
     movedTo: s.moved_to,
     branch: s.branch_name,
     pinnedHere: !!s.lh_card_id || !!s.role,
+    blocked: viewOf(s) === "chat" ? chatRefusal(s.host_id) : null,
   };
 }
 
@@ -82,6 +107,7 @@ export function movableTask(t: {
   state: string;
   branch: string | null;
   cardUrl: string | null;
+  view?: string | null;
 }): Movable {
   return {
     hostId: t.hostId,
@@ -90,5 +116,6 @@ export function movableTask(t: {
     movedTo: null,
     branch: t.branch,
     pinnedHere: !!t.cardUrl,
+    blocked: viewOf(t) === "chat" ? chatRefusal(t.hostId) : null,
   };
 }
