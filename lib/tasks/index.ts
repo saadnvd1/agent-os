@@ -41,6 +41,7 @@ import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
 import { finishTaskStart } from "./start";
 import { isRemoteHost } from "../hosts";
+import { DEFAULT_START_VIEW, type StartView } from "../sessions/launch";
 import { isMirror, startRemoteTask } from "./remote";
 import { remoteTaskViews } from "./remote-views";
 import { chatStateNow } from "../chat/runner";
@@ -98,8 +99,9 @@ export async function createTask(opts: {
   // A queued task's start: clear what an attempt cut off by a restart left
   // (its worktree and branch, when nothing is on them).
   reclaim?: boolean;
-  // How its agent runs: in a terminal (the default) or as a chat.
-  view?: "chat" | "terminal";
+  // How its agent runs: as a chat (the default, DEFAULT_START_VIEW) or in
+  // a terminal.
+  view?: StartView;
 }): Promise<Session> {
   if (opts.id) {
     const existing = queries.getSession(db).get(opts.id) as Session | undefined;
@@ -148,9 +150,8 @@ async function startTask(
   const project = getProject(opts.projectId);
   if (!project || project.is_uncategorized) throw new Error("Pick a project");
   const hostId = opts.hostId ?? project.host_id;
+  const view = opts.view ?? DEFAULT_START_VIEW;
   if (isRemoteHost(hostId)) {
-    if (opts.view === "chat")
-      throw new Error("Chat tasks run on this machine only for now");
     if (opts.base || opts.cardId)
       throw new Error(
         "Stacked and card tasks run on this machine only for now"
@@ -161,6 +162,7 @@ async function startTask(
       name: opts.name,
       model: opts.model,
       baseBranch: opts.baseBranch,
+      view,
     });
     opts.onCreated?.(session.id);
     return session;
@@ -223,7 +225,7 @@ async function startTask(
       stack: opts.base?.stack,
     }),
     naming.source,
-    opts.view === "chat" ? "chat" : "terminal",
+    view,
     id
   );
   opts.onCreated?.(id);

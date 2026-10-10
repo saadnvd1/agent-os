@@ -3,6 +3,7 @@ import { spawnSession, findProject } from "@/lib/agents/spawn";
 import { createTask } from "@/lib/tasks";
 import { startOrQueue } from "@/lib/tasks/queue";
 import { hostIdNamed } from "@/lib/hosts";
+import { startView } from "@/lib/sessions/launch";
 
 // mode "session" starts an interactive agent; "task" starts one that ends in
 // a PR, or queues it (over the workspace's limit, or with `after`).
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
       name,
       on,
       after,
+      view,
     } = await request.json();
     const given = typeof name === "string" ? name : undefined;
     if (after !== undefined && mode !== "task")
@@ -27,6 +29,7 @@ export async function POST(request: NextRequest) {
         name: given,
         model,
         hostId: on ? hostIdNamed(String(on)) : undefined,
+        view: startView(view),
       };
       const out = await startOrQueue(
         { ...task, after: typeof after === "string" ? after : undefined },

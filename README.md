@@ -497,7 +497,8 @@ aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
                                   # (both take --name "..." before the prompt;
-                                  # task takes --after <task|any> to queue it)
+                                  # task takes --after <task|any> to queue it;
+                                  # a task opens as a chat, --terminal for tmux)
 aos move <session> <machine>      # carry a task on there ("here" brings it back)
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is
@@ -815,8 +816,11 @@ Once linked:
 - **New task → Run on** picks the machine (`aos task --on devbox <project> ...`
   does the same). That machine creates the worktree, runs the agent and opens
   the PR on its own. This one lists the task in the sidebar and Tasks with its
-  live state, attaches its terminal through that machine's AgentOS, and sends
-  sign-off and drop to it (pinned to the reviewed commit).
+  live state, opens its chat (or terminal) through that machine's AgentOS,
+  and sends sign-off and drop to it (pinned to the reviewed commit). Opened
+  while it still sets up, it shows that machine's setup steps and joins the
+  agent once it starts. Tasks open as chats unless Terminal is picked, and
+  only a terminal task can move.
 - **Move** carries a running task between this machine and a linked one,
   either way. The source stops the agent, commits anything uncommitted as
   `wip: moving to <machine>`, pushes the branch and hands over Claude's
