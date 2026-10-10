@@ -74,7 +74,9 @@ export async function runTool(
       return readCards(w, p(tool, raw).board);
     case "send": {
       const a = p(tool, raw);
-      return send(w, a.session, a.message);
+      return send(w, a.session, a.message, {
+        scopeChange: a.scope_change,
+      });
     }
     case "orchestrators":
       p(tool, raw);

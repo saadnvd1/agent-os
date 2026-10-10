@@ -122,6 +122,7 @@ const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { recentlyMessaged } = await import("./conditions");
 const { listNotes } = await import("./notes");
+const { amendmentsOf } = await import("./amendments");
 const { listItems } = await import("@/lib/chat/store");
 
 beforeAll(() => {
@@ -202,6 +203,32 @@ describe("acting inside the workspace", () => {
       .get() as { from_id: string; to_id: string };
     expect(row).toEqual({ from_id: orch.id, to_id: mine.task });
     expect(recentlyMessaged(orch.id, Date.now()).has(mine.task)).toBe(true);
+  });
+
+  it("records a scope change on the task's brief, and only on a running task", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    const text = await runTool(w, "send", {
+      session: "add-auth",
+      message: "Saad dropped the Restart menu item",
+      scope_change: true,
+    });
+    expect(text).toMatch(
+      /^Delivered to add-auth\. Recorded as scope change 1 on its brief/
+    );
+    expect(amendmentsOf(mine.task).map((a) => a.text)).toEqual([
+      "Saad dropped the Restart menu item",
+    ]);
+    // A plain message isn't a scope change.
+    await runTool(w, "send", { session: "add-auth", message: "rebase please" });
+    expect(amendmentsOf(mine.task)).toHaveLength(1);
+    await expect(
+      runTool(w, "send", {
+        session: "chat-one",
+        message: "do less",
+        scope_change: true,
+      })
+    ).rejects.toThrow(/chat-one isn't a running task/);
   });
 
   it("says when a message didn't land, and leaves it in the inbox", async () => {

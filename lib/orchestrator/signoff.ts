@@ -22,17 +22,11 @@ import {
   ruleBreaks,
   sensitiveFiles,
 } from "./diff";
-import { escalate } from "./escalate";
-import {
-  evaluateGates,
-  failureOf,
-  holdingEscalations,
-  recordFailure,
-  type GateInput,
-  type GateOutcome,
-} from "./gates";
+import { countFailure, escalate } from "./escalate";
+import { evaluateGates, holdingEscalations, type GateInput } from "./gates";
 import { addNote } from "./notes";
-import { refundApproval, spendApproval } from "./ask-approvals";
+import { latestApproval, refundApproval, spendApproval } from "./ask-approvals";
+import { workSubject } from "./asks";
 import { heldVerdict } from "./held";
 import { mergeApprovalsOn } from "./merge-approvals";
 import { isPaused } from "./pause";
@@ -128,6 +122,11 @@ export async function gateVerdict(
     text,
   });
   const { pr, sha, repo } = work;
+  // Saad approved merging this exact commit (an escalated gate, or an ask
+  // the orchestrator raised about it): it merges once, whatever the gates.
+  const approval = latestApproval(workspaceId, workSubject(work.id));
+  if (approval?.sha === sha)
+    return { ok: true, sha, pr: pr.number, approval: approval.id };
   const held = holdingEscalations(work.id);
   if (held.length)
     return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number);
@@ -169,25 +168,11 @@ export async function gateVerdict(
     ...failed.map((o) =>
       opts.count === false
         ? `- ${o.gate} failed: ${o.reason}`
-        : countFailure(workspaceId, work, o, pr.url, sha)
+        : countFailure(workspaceId, work, o, pr.url, sha).line
     ),
     ...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`),
   ];
   return no(`${head}\n${lines.join("\n")}`, !failed.length);
-}
-
-function countFailure(
-  workspaceId: string,
-  task: { id: string; name: string },
-  o: GateOutcome,
-  url: string,
-  sha: string
-): string {
-  const n = recordFailure(workspaceId, task.id, o.gate, o.reason ?? "");
-  const line = `- ${o.gate} failed (${n === 1 ? "first" : "again"}): ${o.reason}`;
-  if (n < 2 || failureOf(task.id, o.gate)?.escalated_at) return line;
-  const why = `the ${o.gate} gate failed twice: ${o.reason}`;
-  return `${line}\n  ${escalate(workspaceId, task, o.gate, why, url, sha)}`;
 }
 
 export async function signOff(

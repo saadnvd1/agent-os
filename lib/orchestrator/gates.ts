@@ -3,7 +3,9 @@
  * (not ready yet: CI running or settling, no review of this commit yet),
  * fails, or goes straight to Saad (no CI at all). Only a failure counts
  * against the task, and the second failure of the same gate goes to Saad
- * instead of being retried.
+ * instead of being retried. The count is per task and gate: a review that
+ * blocks counts when its verdict arrives, whether or not sign_off ever
+ * reads it, and reading the same commit's verdict again isn't another.
  */
 
 import { db } from "../db";
@@ -84,7 +86,7 @@ function ciGate(i: GateInput): GateOutcome {
 }
 
 // A stored check of this exact commit: missing, running or broken waits.
-function checkGate(
+export function checkGate(
   gate: "review" | "scope",
   row: CheckRow | null,
   sha: string
@@ -165,20 +167,30 @@ export interface FailureRow {
   count: number;
   last_reason: string | null;
   escalated_at: string | null;
+  last_sha: string | null;
 }
 
-// Counts one failure; returns the count now.
+// The gates whose failure is a verdict stored against one commit: the same
+// verdict read again is the same failure.
+export const PER_COMMIT_GATES: readonly string[] = ["review", "scope"];
+
+// Counts one failure; returns the count now. With `sha`, a failure of the
+// commit last counted for this gate isn't counted again.
 export function recordFailure(
   workspaceId: string,
   sessionId: string,
   gate: string,
-  reason: string
+  reason: string,
+  sha: string | null = null
 ): number {
   db.prepare(
-    `INSERT INTO orchestrator_gate_failures (session_id, gate, workspace_id, count, last_reason)
-     VALUES (?, ?, ?, 1, ?)
-     ON CONFLICT(session_id, gate) DO UPDATE SET count = count + 1, last_reason = excluded.last_reason`
-  ).run(sessionId, gate, workspaceId, reason);
+    `INSERT INTO orchestrator_gate_failures (session_id, gate, workspace_id, count, last_reason, last_sha)
+     VALUES (?, ?, ?, 1, ?, ?)
+     ON CONFLICT(session_id, gate) DO UPDATE SET
+       count = count + CASE WHEN excluded.last_sha IS NOT NULL AND last_sha IS excluded.last_sha THEN 0 ELSE 1 END,
+       last_reason = excluded.last_reason,
+       last_sha = excluded.last_sha`
+  ).run(sessionId, gate, workspaceId, reason, sha);
   return failureOf(sessionId, gate)!.count;
 }
 

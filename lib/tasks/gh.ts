@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { parseCodeReview } from "./code-review";
+import { parseScopeChange } from "./scope-change";
 import { assertGhAllowed, noteGhFailure, noteGhSuccess } from "./gh-limit";
 import {
   checksVerdict,
@@ -106,6 +107,7 @@ export async function toTaskPR(repoDir: string, pr: ListedPR): Promise<TaskPR> {
     failing: failingCheck(rollup),
     checkCount: (pr.statusCheckRollup ?? []).length,
     codeReview: pr.body === undefined ? undefined : parseCodeReview(pr.body),
+    scopeChange: parseScopeChange(pr.body),
   };
 }
 

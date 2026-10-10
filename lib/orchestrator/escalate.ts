@@ -3,7 +3,13 @@
 // task held so the orchestrator doesn't merge it.
 
 import { AskRefused, raiseAsk, workSubject } from "./asks";
-import { failureOf, markEscalated, recordFailure } from "./gates";
+import {
+  failureOf,
+  markEscalated,
+  PER_COMMIT_GATES,
+  recordFailure,
+  type GateOutcome,
+} from "./gates";
 import { addNote } from "./notes";
 
 export function escalate(
@@ -42,4 +48,25 @@ export function escalate(
       "escalation"
     );
   return `Escalated to Saad: ${why}. It's on his asks list; his answer reaches you as an event. Don't retry; say so in your chat.`;
+}
+
+// Counts a gate's failure against the task; the second failure of the same
+// gate goes to Saad. A review or scope verdict counts once per commit.
+export function countFailure(
+  workspaceId: string,
+  task: { id: string; name: string },
+  o: GateOutcome,
+  url: string,
+  sha: string
+): { line: string; escalated: boolean } {
+  const key = PER_COMMIT_GATES.includes(o.gate) ? sha : null;
+  const n = recordFailure(workspaceId, task.id, o.gate, o.reason ?? "", key);
+  const line = `- ${o.gate} failed (${n === 1 ? "first" : "again"}): ${o.reason}`;
+  if (n < 2 || failureOf(task.id, o.gate)?.escalated_at)
+    return { line, escalated: false };
+  const why = `the ${o.gate} gate failed twice: ${o.reason}`;
+  return {
+    line: `${line}\n  ${escalate(workspaceId, task, o.gate, why, url, sha)}`,
+    escalated: true,
+  };
 }

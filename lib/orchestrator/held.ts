@@ -16,10 +16,9 @@ export function heldVerdict(
   sha: string,
   pr: number
 ): Verdict {
+  // An approval of this head merged before the gates (signoff.ts).
   const approval = latestApproval(workspaceId, workSubject(task.id));
-  if (approval?.sha === sha)
-    return { ok: true, sha, pr, approval: approval.id };
-  if (approval) {
+  if (approval && approval.sha !== sha) {
     const why = `Saad approved ${approval.sha ? short(approval.sha) : "an earlier commit"}, but PR #${pr}'s head is now ${short(sha)}`;
     try {
       raiseAsk({

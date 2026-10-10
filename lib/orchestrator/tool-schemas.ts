@@ -32,7 +32,16 @@ export const TOOL_SHAPES = {
   cards: {
     board: ref("One board, by board or project name").optional(),
   },
-  send: { session, message: z.string().trim().min(1).max(8000) },
+  send: {
+    session,
+    message: z.string().trim().min(1).max(8000),
+    scope_change: z
+      .boolean()
+      .optional()
+      .describe(
+        "The message changes the task's scope (Saad added, dropped or changed what it must do): it's recorded on the task's brief, and its review judges the PR against the brief as amended. Only for a change Saad made, never one the task asked for itself"
+      ),
+  },
   orchestrators: {},
   message_orchestrator: {
     workspace: ref("Another workspace's name, from orchestrators"),
@@ -124,6 +133,17 @@ export const TOOL_SHAPES = {
       .enum(RAISED_KINDS)
       .describe(
         "decision (a call that's his), or the hard line it crosses: public (public or outbound), money, irreversible, credentials, product (what gets built)"
+      ),
+    task: ref(
+      "Only when asking whether to merge a PR: the task, or its PR (#12 or URL). Needs sha"
+    ).optional(),
+    sha: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-f]{7,40}$/i, "not a commit sha")
+      .optional()
+      .describe(
+        "With task: the PR's head commit you're asking to merge. His approval lets sign_off merge it once, at that commit only"
       ),
   },
 } satisfies Record<string, z.ZodRawShape>;
