@@ -3,6 +3,7 @@ import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskPR, TaskState } from "@/lib/tasks/state";
+import { recordPlaced } from "@/lib/worktree-placed";
 import { commitFile, git, makeRepo, WORKTREE_MARK } from "./testing";
 
 // Real repositories; gh, tmux, chat workers and LumifyHub are faked.
@@ -300,7 +301,7 @@ describe("done, by state", () => {
     const a = await doneSession(dirty.id, { by: "direct" });
     expect(a.worktree).toMatchObject({
       action: "kept",
-      why: "it has uncommitted changes",
+      why: "it has uncommitted changes (1 file: scratch.txt)",
     });
     expect(fs.existsSync(path.join(dirty.dir!, "scratch.txt"))).toBe(true);
 
@@ -331,7 +332,7 @@ describe("done, by state", () => {
     expect(merges).toHaveLength(1);
     expect(out.worktree).toMatchObject({
       action: "kept",
-      why: "it has uncommitted changes",
+      why: "it has uncommitted changes (1 file: notes.md)",
     });
     expect(fs.readFileSync(path.join(s.dir!, "notes.md"), "utf8")).toBe(
       "keep me\n"
@@ -390,7 +391,29 @@ describe("done, by state", () => {
     const outB = await doneSession(b.id, { by: "direct" });
     expect(outB.worktree).toMatchObject({
       action: "kept",
-      why: "it has uncommitted changes",
+      why: "it has uncommitted changes (1 file: notes.txt)",
+    });
+  });
+
+  it("files setup placed don't keep a worktree; an edit to one does", async () => {
+    const t = setup();
+    const a = t.session("setup-only");
+    fs.writeFileSync(path.join(a.dir!, ".env.local"), "KEY=1\n");
+    fs.mkdirSync(path.join(a.dir!, "deps"));
+    fs.writeFileSync(path.join(a.dir!, "deps", "x.js"), "1\n");
+    await recordPlaced(a.dir!, [".env.local"], ["deps"]);
+    const outA = await doneSession(a.id, { by: "direct" });
+    expect(outA.worktree).toMatchObject({ action: "removed" });
+    expect(fs.existsSync(a.dir!)).toBe(false);
+
+    const b = t.session("setup-edited");
+    fs.writeFileSync(path.join(b.dir!, ".env.local"), "KEY=1\n");
+    await recordPlaced(b.dir!, [".env.local"], []);
+    fs.writeFileSync(path.join(b.dir!, ".env.local"), "KEY=2\n");
+    const outB = await doneSession(b.id, { by: "direct" });
+    expect(outB.worktree).toMatchObject({
+      action: "kept",
+      why: "it has uncommitted changes (1 file: .env.local)",
     });
   });
 

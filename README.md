@@ -593,7 +593,9 @@ Cleanup stops the agent and archives the session. The worktree goes only if
 nothing in it would be lost: never with uncommitted changes; after a merge,
 only when every commit on it is in the merged PR or on a remote; otherwise
 only when its branch has no commits of its own. Anything else is kept and the
-reply says why. A sign-off from Tasks or the orchestrator follows the same
+reply says why, naming the uncommitted files. Files AgentOS put there itself
+(env copies, `copy` paths, cloned dependencies) don't count while they still
+hold what was copied; setup records them in the worktree's git directory. A sign-off from Tasks or the orchestrator follows the same
 rule. A branch merged on GitHub is deleted on origin when origin's tip is the
 commit that merged.
 

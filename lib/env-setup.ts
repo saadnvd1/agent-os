@@ -10,6 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { bringDependencies, runCommand } from "./worktree-deps";
 import { loadProjectConfig, projectEnv, withPorts } from "./project-config";
+import { recordPlaced } from "./worktree-placed";
 
 export interface SetupStep {
   name: string;
@@ -31,6 +32,8 @@ export interface SetupResult {
   success: boolean;
   steps: SetupStep[];
   envFilesCopied: string[];
+  // Dependency folders cloned from the main checkout.
+  clonedDeps?: string[];
   packageManager?: string;
   ports?: Record<string, number>;
   durationMs: number;
@@ -263,6 +266,14 @@ export async function setupWorktree(options: {
       }
     }
   }
+
+  // What setup put there on purpose doesn't keep the worktree once the
+  // task is done (lib/done/worktree.ts).
+  await recordPlaced(
+    worktreePath,
+    result.envFilesCopied,
+    result.clonedDeps ?? []
+  ).catch((error) => console.error("Recording setup files failed:", error));
 
   result.durationMs = Date.now() - started;
   return result;
