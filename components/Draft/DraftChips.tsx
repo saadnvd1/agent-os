@@ -76,13 +76,12 @@ export function DraftChips({
     if (!onMachines.data) return "Checking…";
     return onMachines.data[hostId] ?? null;
   };
-  // A draft kept for a machine that can no longer take the project goes
-  // back to this one, rather than failing on send.
+  // A draft kept for a machine that was unlinked goes back to this one,
+  // rather than failing on send.
   const hostGone = draftHostGone(
     draft,
     projectHere,
-    hostsLoaded ? machines : null,
-    onMachines.isSuccess ? onMachines.data : null
+    hostsLoaded ? machines : null
   );
   useEffect(() => {
     if (hostGone) onChange({ hostId: "local", useWorktree: true });

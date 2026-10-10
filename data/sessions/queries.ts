@@ -197,6 +197,8 @@ export interface LaunchSessionInput {
 interface LaunchSessionResponse {
   session: Session;
   initialPrompt?: string;
+  // The key's session already existed: an earlier send made it.
+  repeat?: boolean;
 }
 
 // A draft's first send: the session is made now, and shows in the list

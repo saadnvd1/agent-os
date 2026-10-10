@@ -161,18 +161,16 @@ export const DRAFT_KEYS: Record<DraftKey, string> = {
 };
 
 /**
- * A draft for a project here, kept for a machine that can no longer take
- * it: gone from the machines it may use, or refusing with a reason. Never
- * before both lists have loaded, and never for a task or this machine.
+ * A draft for a project here, kept for a machine it may no longer use (it
+ * was unlinked). Not one that only refuses or can't be reached now: a
+ * resend there may find the session a lost answer already made.
  */
 export function draftHostGone(
   draft: Pick<Draft, "hostId" | "openPr">,
   projectHere: boolean,
-  machines: { id: string }[] | null,
-  reasons: Record<string, string | null> | null
+  machines: { id: string }[] | null
 ): boolean {
   if (!machines || !projectHere || draft.openPr || draft.hostId === "local")
     return false;
-  if (!machines.some((h) => h.id === draft.hostId)) return true;
-  return !!reasons && reasons[draft.hostId] != null;
+  return !machines.some((h) => h.id === draft.hostId);
 }

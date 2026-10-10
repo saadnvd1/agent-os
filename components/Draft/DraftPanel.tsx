@@ -81,7 +81,7 @@ export function DraftPanel({
         toast.success("Task started: it opens a pull request when done");
         return;
       }
-      const { session, initialPrompt } = await launch.mutateAsync({
+      const { session, initialPrompt, repeat } = await launch.mutateAsync({
         projectId: project?.id ?? null,
         id: draft.id,
         hostId:
@@ -96,7 +96,14 @@ export function DraftPanel({
         prompt: text,
         images: images.length ? images : undefined,
       });
-      if (initialPrompt) setPendingPrompt(session.id, initialPrompt);
+      // A resend whose first answer was lost: the terminal still needs its
+      // first prompt, and this is the text that was sent.
+      const prompt =
+        initialPrompt ??
+        (repeat && session.view === "terminal" && text.trim()
+          ? text
+          : undefined);
+      if (prompt) setPendingPrompt(session.id, prompt);
       draftsActions.remove(draft.id);
       attachSession(
         paneId,

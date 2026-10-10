@@ -248,29 +248,22 @@ describe("draftKeyFor", () => {
 
 describe("draftHostGone", () => {
   const box = { hostId: "box", openPr: false };
-  const machines = [{ id: "local" }, { id: "box" }];
 
-  it("sends a draft back here when its machine is gone or refuses the project", () => {
-    expect(draftHostGone(box, true, [{ id: "local" }], null)).toBe(true);
-    expect(
-      draftHostGone(box, true, machines, { box: "Can't clone it there" })
-    ).toBe(true);
+  it("sends a draft back here when its machine was unlinked", () => {
+    expect(draftHostGone(box, true, [{ id: "local" }])).toBe(true);
   });
 
-  it("keeps it while the machine can take it or nothing has loaded yet", () => {
-    expect(draftHostGone(box, true, machines, { box: null })).toBe(false);
-    expect(draftHostGone(box, true, machines, null)).toBe(false);
-    expect(draftHostGone(box, true, null, null)).toBe(false);
+  it("keeps it while the machine is listed (even if it refuses now) or nothing has loaded", () => {
+    expect(draftHostGone(box, true, [{ id: "local" }, { id: "box" }])).toBe(
+      false
+    );
+    expect(draftHostGone(box, true, null)).toBe(false);
   });
 
   it("leaves tasks, scratch chats, projects elsewhere and this machine alone", () => {
     const gone = [{ id: "local" }];
-    expect(draftHostGone({ ...box, openPr: true }, true, gone, null)).toBe(
-      false
-    );
-    expect(draftHostGone(box, false, gone, null)).toBe(false);
-    expect(draftHostGone({ ...box, hostId: "local" }, true, gone, null)).toBe(
-      false
-    );
+    expect(draftHostGone({ ...box, openPr: true }, true, gone)).toBe(false);
+    expect(draftHostGone(box, false, gone)).toBe(false);
+    expect(draftHostGone({ ...box, hostId: "local" }, true, gone)).toBe(false);
   });
 });

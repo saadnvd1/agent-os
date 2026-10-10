@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
       {
         session: queries.getSession(db).get(session.id) as Session,
         ...(initialPrompt ? { initialPrompt } : {}),
+        ...(repeat ? { repeat } : {}),
       },
       { status: 201 }
     );
