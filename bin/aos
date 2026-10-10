@@ -204,7 +204,7 @@ async function scheduleAdd(words) {
     prompt,
   });
   console.log(
-    `${schedule.id.slice(0, 8)}  ${schedule.name} · messages ${schedule.targetName ?? schedule.target_session_id} · ${schedule.description}`
+    `${schedule.id.slice(0, 8)}  ${schedule.name} · messages ${schedule.kind === "orchestrator" ? "the orchestrator" : (schedule.targetName ?? schedule.target_session_id)} · ${schedule.description}`
   );
 }
 

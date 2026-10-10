@@ -377,11 +377,17 @@ a project and a prompt, and starts one of:
   does, marked the same way. A chat whose agent has exited (idle chats stop
   after 30 minutes) is started again to take it. The run records `delivered`,
   `queued` or why it failed. **Schedule check-ins** in a session's **⋯** menu
-  fills one in. The session is stored by id, so renaming it changes nothing;
-  an archived or deleted one fails the run. The orchestrator isn't a target
-  (it has its own kind). A schedule an agent made with `aos schedule add`
-  stays in that agent's workspace and reaches the session labelled as that
-  agent's request, not yours.
+  fills one in. The session is stored by id, so renaming it changes nothing.
+  An archived session fails the run until it's back. When the session is
+  deleted or a finished task, the schedule
+  turns itself off on the first run that finds it gone and says so once, in
+  the orchestrator's chat and on your phone; point it at another session or
+  delete it. The orchestrator isn't a target (it has its own kind):
+  `aos schedule add --session <the orchestrator>` makes an orchestrator
+  schedule, so it follows whichever session is the workspace's orchestrator.
+  A schedule an agent made with `aos schedule add` stays in that agent's
+  workspace and reaches its target labelled as that agent's request, not
+  yours.
 
 The server checks once a minute and claims each run in SQLite before starting
 it, so a time never runs twice. If AgentOS was off when runs were due, it

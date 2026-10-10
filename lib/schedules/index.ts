@@ -80,14 +80,17 @@ export function checkInInput(opts: {
       throw new Error(`${session.name} isn't in your workspace`);
   }
   const cron = opts.cron?.trim() || everyCron(opts.every ?? "30m");
+  // The workspace's orchestrator is kept as "its orchestrator", not this
+  // session's id: each run goes to whichever session is orchestrator then.
+  const orchestrator = session.role === "orchestrator";
   return {
     workspaceId,
     name: opts.name?.trim() || `Check-in: ${session.name}`.slice(0, 80),
     cron,
     timezone: opts.timezone,
     prompt: opts.prompt,
-    kind: "message",
-    targetSessionId: session.id,
+    kind: orchestrator ? "orchestrator" : "message",
+    targetSessionId: orchestrator ? null : session.id,
     createdBySessionId: opts.from || null,
   };
 }
