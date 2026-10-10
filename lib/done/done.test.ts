@@ -578,6 +578,36 @@ describe("done right after a sign-off", () => {
     await removal;
     expect(fate).toEqual({ action: "none" });
   });
+
+  it("judges again when a removal starts while it reads", async () => {
+    const t = setup();
+    const s = t.session("starts-removing", { task: true });
+    bulkCommit(s.dir!, s.branch);
+    const reading = worktreeFate(
+      { worktree_path: s.dir, base_branch: "main" },
+      null
+    );
+    const removal = new Promise<void>((resolve, reject) =>
+      queueMicrotask(() =>
+        deleteWorktree(s.dir!, t.repo, true).then(resolve, reject)
+      )
+    );
+    const fate = await reading;
+    await removal;
+    expect(fate).toEqual({ action: "none" });
+  });
+
+  it("joins a running removal, and a join that asks still deletes the branch", async () => {
+    const t = setup();
+    const s = t.session("joined", { task: true });
+    bulkCommit(s.dir!, s.branch);
+    const first = deleteWorktree(s.dir!, t.repo, false);
+    const second = deleteWorktree(s.dir!, t.repo, true);
+    expect(deleteWorktree(s.dir!, t.repo, false)).toBe(first);
+    await Promise.all([first, second]);
+    expect(fs.existsSync(s.dir!)).toBe(false);
+    expect(git(t.repo, "branch", "--list", s.branch)).toBe("");
+  });
 });
 
 describe("archived sessions", () => {
