@@ -189,7 +189,7 @@ async function refusal(
   return reason;
 }
 
-function recordStart(
+export function recordStart(
   workspaceId: string,
   kind: StartKind,
   target: string | null

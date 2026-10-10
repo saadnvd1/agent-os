@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTask, listTasks, movedTasks } from "@/lib/tasks";
-import { queueIfNeeded } from "@/lib/tasks/queue";
+import { startOrQueue } from "@/lib/tasks/queue";
 import { TASK_CAPABILITIES } from "@/lib/tasks/remote";
 import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
 import { isSessionId, statusFor } from "@/lib/tasks/move-bundle";
@@ -45,15 +45,17 @@ export async function POST(request: NextRequest) {
       hostId: typeof hostId === "string" && hostId ? hostId : undefined,
       baseBranch: typeof baseBranch === "string" ? baseBranch : undefined,
     };
-    const queued =
-      id === undefined
-        ? queueIfNeeded({
-            ...opts,
-            after: typeof after === "string" ? after : undefined,
-          })
-        : null;
-    if (queued) return NextResponse.json({ queued }, { status: 202 });
-    const session = await createTask({ id, ...opts });
+    if (id !== undefined) {
+      const session = await createTask({ id, ...opts });
+      return NextResponse.json({ session }, { status: 201 });
+    }
+    const out = await startOrQueue(
+      { ...opts, after: typeof after === "string" ? after : undefined },
+      () => createTask(opts)
+    );
+    if ("queued" in out)
+      return NextResponse.json({ queued: out.queued }, { status: 202 });
+    const session = out.started;
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -13,11 +13,17 @@ vi.mock("@/lib/tasks", () => ({
   },
 }));
 // Queued only when it waits on another task; the queue has its own tests.
+const asked: unknown[] = [];
 vi.mock("@/lib/tasks/queue", () => ({
-  queueIfNeeded: (o: { after?: string; name?: string }) =>
-    o.after
-      ? { id: "q1", name: o.name ?? "x", position: 1, after: o.after }
-      : null,
+  startOrQueue: async (
+    o: { after?: string; name?: string },
+    start: () => Promise<unknown>
+  ) => {
+    asked.push(o);
+    return o.after
+      ? { queued: { id: "q1", name: o.name ?? "x", position: 1 } }
+      : { started: await start() };
+  },
 }));
 vi.mock("@/lib/agents/spawn", () => ({
   findProject: () => ({ id: "p1" }),
@@ -110,9 +116,17 @@ describe("naming a spawned session or task", () => {
           body: JSON.stringify({ project: "agent-os", prompt: "p", ...body }),
         })
       );
+    asked.length = 0;
+    created.length = 0;
     const queued = await post({ mode: "task", after: "any" });
     expect(queued.status).toBe(202);
-    expect((await queued.json()).queued).toMatchObject({ after: "any" });
+    expect((await queued.json()).queued).toMatchObject({ id: "q1" });
+    expect(asked).toEqual([
+      expect.objectContaining({ projectId: "p1", prompt: "p", after: "any" }),
+    ]);
+    expect(created).toEqual([]);
+    expect((await post({ mode: "task" })).status).toBe(201);
+    expect(created).toEqual([{ kind: "task", name: undefined, prompt: "p" }]);
     expect((await post({ mode: "session", after: "any" })).status).toBe(400);
   });
 

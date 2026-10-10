@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
 import { db } from "@/lib/db";
@@ -14,16 +16,27 @@ vi.mock("@/lib/tasks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tasks")>()),
   createTask: async (o: { id?: string; projectId: string; prompt: string }) => {
     started.push({ prompt: o.prompt, id: o.id });
+    if (o.prompt.startsWith("fail")) throw new Error("no worktree");
     db.prepare(
       `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status, branch_name)
        VALUES (?, ?, ?, '/tmp', ?, 'running', 'feature/x')`
     ).run(o.id, o.prompt, `claude-${o.id}`, o.projectId);
+    // The row is written, then the agent's launch fails.
+    if (o.prompt.startsWith("half")) throw new Error("agent did not launch");
     return {
       id: o.id,
       name: o.prompt,
       branch_name: "feature/x",
     } as Session;
   },
+}));
+
+// The usage window, as the brakes read it (only while they're on).
+let windowReason: string | null = null;
+vi.mock("@/lib/orchestrator/usage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/orchestrator/usage")>()),
+  readUsage: () => ({ window: null }),
+  windowRefusal: () => windowReason,
 }));
 
 const {
@@ -33,6 +46,7 @@ const {
   queueIfNeeded,
   recoverQueue,
   removeQueued,
+  startOrQueue,
   startQueuedNow,
   tickQueue,
 } = await import("./queue");
@@ -219,6 +233,118 @@ describe("the task queue", () => {
     expect(statusOf(kept.id)).toBe("queued");
     expect(statusOf(cut.id)).toBe("queued");
     expect(statusOf(made.id)).toBe("started");
+    // The line carries on in order, and "made" is never started again.
+    for (const id of [t.task, made.id]) finish(id);
+    await tick();
+    finish(kept.id);
+    await tick();
+    expect(started.map((s) => s.id)).toEqual([kept.id, cut.id]);
+    const sessions = db
+      .prepare(`SELECT COUNT(*) AS n FROM sessions WHERE id = ?`)
+      .get(made.id) as { n: number };
+    expect(sessions.n).toBe(1);
+  });
+
+  it("retries a failed start twice, then shows it failed", async () => {
+    const t = setup(null);
+    const q = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "fail to start",
+      after: t.task,
+    })!;
+    finish(t.task);
+    for (const attempt of [1, 2]) {
+      await tick();
+      const row = db
+        .prepare(`SELECT status, attempts, error FROM task_queue WHERE id = ?`)
+        .get(q.id) as { status: string; attempts: number; error: string };
+      expect(row.attempts).toBeGreaterThanOrEqual(attempt);
+    }
+    await tick();
+    await tick();
+    const row = db
+      .prepare(`SELECT status, attempts, error FROM task_queue WHERE id = ?`)
+      .get(q.id) as { status: string; attempts: number; error: string };
+    expect(row).toMatchObject({ status: "failed", attempts: 3 });
+    expect(row.error).toMatch(/^Could not start: no worktree/);
+    expect(started.filter((s) => s.id === q.id)).toHaveLength(3);
+    expect(listQueue().find((v) => v.id === q.id)?.status).toBe("failed");
+  });
+
+  it("a start whose task row exists but whose agent failed counts as started", async () => {
+    const t = setup(null);
+    const q = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "half started",
+      after: t.task,
+    })!;
+    finish(t.task);
+    await tick();
+    await tick();
+    expect(statusOf(q.id)).toBe("started");
+    expect(started.filter((s) => s.id === q.id)).toHaveLength(1);
+  });
+
+  it("holds auto-starts while the usage window would run out", async () => {
+    const t = setup(1);
+    const q = queueIfNeeded({ projectId: t.app.id, prompt: "later" })!;
+    process.env.AGENTOS_ORCH_BRAKES = "1";
+    windowReason = "the 5h window runs out before it resets";
+    try {
+      finish(t.task);
+      await tick();
+      expect(started).toEqual([]);
+      expect(listQueue().find((v) => v.id === q.id)?.note).toBe(
+        "Waiting: the 5h window runs out before it resets"
+      );
+      windowReason = null;
+      await tick();
+      expect(started.map((s) => s.id)).toEqual([q.id]);
+    } finally {
+      delete process.env.AGENTOS_ORCH_BRAKES;
+      windowReason = null;
+    }
+  });
+
+  it("POST /api/tasks queues over the limit, but never another machine's keyed start", async () => {
+    const t = setup(1);
+    const { POST } = await import("@/app/api/tasks/route");
+    const post = (body: object) =>
+      POST(
+        new NextRequest("http://127.0.0.1:3011/api/tasks", {
+          method: "POST",
+          body: JSON.stringify({ projectId: t.app.id, prompt: "p", ...body }),
+        })
+      );
+    const queued = await post({});
+    expect(queued.status).toBe(202);
+    expect((await queued.json()).queued).toMatchObject({ status: "queued" });
+    const id = randomUUID();
+    const keyed = await post({ id });
+    expect(keyed.status).toBe(201);
+    expect((await keyed.json()).session.id).toBe(id);
+    expect(
+      db.prepare(`SELECT id FROM task_queue WHERE id = ?`).get(id)
+    ).toBeUndefined();
+  });
+});
+
+describe("starting directly", () => {
+  it("holds the slot until the task exists, so two starts at once can't both take it", async () => {
+    const t = seedWorkspace();
+    updateWorkspace(t.workspace.id, { maxRunningTasks: 2 });
+    let release!: () => void;
+    const slow = new Promise<void>((r) => (release = r));
+    const first = startOrQueue({ projectId: t.app.id, prompt: "a" }, () =>
+      slow.then(() => "a")
+    );
+    const second = await startOrQueue(
+      { projectId: t.app.id, prompt: "b" },
+      async () => "b"
+    );
+    expect(second).toHaveProperty("queued");
+    release();
+    expect(await first).toEqual({ started: "a" });
   });
 });
 

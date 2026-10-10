@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnSession, findProject } from "@/lib/agents/spawn";
 import { createTask } from "@/lib/tasks";
-import { queueIfNeeded } from "@/lib/tasks/queue";
+import { startOrQueue } from "@/lib/tasks/queue";
 import { hostIdNamed } from "@/lib/hosts";
 
 // mode "session" starts an interactive agent; "task" starts one that ends in
@@ -28,15 +28,13 @@ export async function POST(request: NextRequest) {
         model,
         hostId: on ? hostIdNamed(String(on)) : undefined,
       };
-      const queued = queueIfNeeded({
-        ...task,
-        after: typeof after === "string" ? after : undefined,
-      });
-      if (queued) return NextResponse.json({ queued }, { status: 202 });
-      return NextResponse.json(
-        { session: await createTask(task) },
-        { status: 201 }
+      const out = await startOrQueue(
+        { ...task, after: typeof after === "string" ? after : undefined },
+        () => createTask(task)
       );
+      return "queued" in out
+        ? NextResponse.json({ queued: out.queued }, { status: 202 })
+        : NextResponse.json({ session: out.started }, { status: 201 });
     }
     const session = await spawnSession({
       project: String(project ?? ""),

@@ -15,7 +15,7 @@ import {
   type StartView,
 } from "../sessions/launch";
 import { createTask, dropTask } from "../tasks";
-import { queueIfNeeded } from "../tasks/queue";
+import { startOrQueue } from "../tasks/queue";
 import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
@@ -75,30 +75,36 @@ export async function startTask(
   const view = opts.view ?? DEFAULT_START_VIEW;
   // Held for a slot or its `after`, it starts by itself through the brakes;
   // you get an event when it does.
-  const queued = queueIfNeeded({
-    projectId: project.id,
-    prompt,
-    name: opts.name,
-    view,
-    baseBranch: opts.base || undefined,
-    after: opts.after,
-    originWorkspaceId: workspaceId,
-  });
-  if (queued)
-    return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}. It starts by itself; you'll get an event when it does.`;
-  const task = await braked(
-    workspaceId,
-    "task",
+  const out = await startOrQueue(
+    {
+      projectId: project.id,
+      prompt,
+      name: opts.name,
+      view,
+      baseBranch: opts.base || undefined,
+      after: opts.after,
+      originWorkspaceId: workspaceId,
+    },
     () =>
-      createTask({
-        projectId: project.id,
-        prompt,
-        name: opts.name,
-        baseBranch: opts.base || undefined,
-        view,
-      }),
-    (s) => s.id
+      braked(
+        workspaceId,
+        "task",
+        () =>
+          createTask({
+            projectId: project.id,
+            prompt,
+            name: opts.name,
+            baseBranch: opts.base || undefined,
+            view,
+          }),
+        (s) => s.id
+      )
   );
+  if ("queued" in out) {
+    const { queued } = out;
+    return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}. It starts by itself; you'll get an event when it does.`;
+  }
+  const task = out.started;
   return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
 }
 

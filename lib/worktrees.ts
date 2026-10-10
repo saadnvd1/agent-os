@@ -333,6 +333,35 @@ async function dropBranch(repo: string, branch: string | null): Promise<void> {
 }
 
 /**
+ * What a start cut off by a restart left for this feature: its worktree and
+ * branch, made before any task owned them. A keyed retry of that start
+ * (lib/tasks/queue.ts) removes them first, or every retry fails with
+ * "already exists". Never called for a path a task already owns.
+ */
+export async function discardLeftoverStart(
+  projectPath: string,
+  featureName: string
+): Promise<boolean> {
+  const repo = resolvePath(projectPath);
+  const worktreePath = worktreePathFor(projectPath, featureName);
+  const branch = generateBranchName(featureName);
+  const registered = (await listWorktrees(repo)).some(
+    (w) => path.resolve(w.path) === path.resolve(resolvePath(worktreePath))
+  );
+  const there = registered || fs.existsSync(resolvePath(worktreePath));
+  const hasBranch = await branchExists(repo, branch);
+  if (!there && !hasBranch) return false;
+  if (registered) await deleteWorktree(worktreePath, repo, false);
+  else if (there)
+    await fs.promises.rm(resolvePath(worktreePath), {
+      recursive: true,
+      force: true,
+    });
+  if (hasBranch) await dropBranch(repo, branch);
+  return true;
+}
+
+/**
  * List all worktrees for a project
  */
 export async function listWorktrees(projectPath: string): Promise<

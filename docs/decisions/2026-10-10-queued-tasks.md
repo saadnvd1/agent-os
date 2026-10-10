@@ -19,7 +19,9 @@ Queued tasks start by themselves, in line order, when a slot frees and their
 `after` is met. Pause stops automatic starts. A task the orchestrator queued
 still goes through its brakes and the usage-window check at the moment it
 starts, and the orchestrator gets an event when it does. A person can start
-one now, move it up or down, or remove it.
+one now, move it up or down, or remove it. A direct start holds its slot
+until its task row exists, so two starts at once can't both take the last
+one.
 
 ## What t3code does
 
@@ -50,7 +52,10 @@ it lacked was the level above: whole tasks.
   when it's inserted, and the line is read in that order. A restart reads the
   same line.
 - **Send now and Remove** become **Start now** and **Remove**. Start now goes
-  past the limit, the `after` wait and Pause, because a person asked for it.
+  past the limit and the `after` wait, because a person asked for it. A task
+  the orchestrator queued still goes through its brakes, Pause included:
+  "start now" is a route any local caller can reach, and the brakes are the
+  orchestrator's to lift. A task a person queued goes past Pause too.
 - **A failed start stays visible** with its error rather than vanishing. It's
   retried twice, then marked failed, the same as a stack card.
 - **"Queued" is a state of the thing itself**, shown where the thing is shown:

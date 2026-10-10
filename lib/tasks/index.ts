@@ -8,8 +8,17 @@ import { processTable, runsSomething } from "../process-table";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import { getProject } from "../projects";
-import { createWorktree } from "../worktrees";
-import { getDefaultBranch, isBranchName, slugify } from "../git";
+import {
+  createWorktree,
+  discardLeftoverStart,
+  worktreePathFor,
+} from "../worktrees";
+import {
+  generateBranchName,
+  getDefaultBranch,
+  isBranchName,
+  slugify,
+} from "../git";
 import { resolveModelForAgent } from "../model-catalog";
 import { getProvider } from "../providers";
 import { statusDetector } from "../status-detector";
@@ -145,6 +154,20 @@ async function startTask(
     opts.base?.branch ??
     opts.baseBranch ??
     (await getDefaultBranch(projectPath));
+  // A keyed start retried after a restart cut it off mid-setup: what it
+  // made has no task (createTask returned early if it had one).
+  if (opts.id) {
+    const owned = db
+      .prepare(
+        `SELECT 1 FROM sessions WHERE worktree_path = ? OR (project_id = ? AND branch_name = ?)`
+      )
+      .get(
+        worktreePathFor(projectPath, feature),
+        project.id,
+        generateBranchName(feature)
+      );
+    if (!owned) await discardLeftoverStart(projectPath, feature);
+  }
   const wt = await createWorktree({
     projectPath,
     featureName: feature,

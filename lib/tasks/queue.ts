@@ -17,7 +17,12 @@ import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
 import { fillSlots } from "../stacks/ready";
 import { isPaused } from "../orchestrator/pause";
-import { BrakeRefused, braked, brakesEnabled } from "../orchestrator/brakes";
+import {
+  BrakeRefused,
+  braked,
+  brakesEnabled,
+  recordStart,
+} from "../orchestrator/brakes";
 import { queueEvent } from "../orchestrator/events";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
 import { createTask } from "./index";
@@ -118,13 +123,16 @@ function runningIn(scope: { workspaceId: string | null; projectId: string }) {
 
 function startingIn(workspaceId: string): number {
   return (
-    db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM task_queue q JOIN projects p ON p.id = q.project_id
+    (reserved.get(workspaceId) ?? 0) +
+    (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM task_queue q JOIN projects p ON p.id = q.project_id
          WHERE q.status = 'starting' AND p.workspace_id = ?`
-      )
-      .get(workspaceId) as { n: number }
-  ).n;
+        )
+        .get(workspaceId) as { n: number }
+    ).n
+  );
 }
 
 const limitOf = (workspaceId: string | null) =>
@@ -256,6 +264,30 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   return queuedView(id)!;
 }
 
+// Direct starts under way, by workspace: their task rows don't exist until
+// createTask gets that far, so they hold their slot here meanwhile.
+const reserved = new Map<string, number>();
+
+// Queues the task, or starts it with `start` holding its slot until its
+// row exists, so two starts at once can't both take the last slot.
+export async function startOrQueue<T>(
+  req: QueueRequest,
+  start: () => Promise<T>
+): Promise<{ queued: QueuedTaskView } | { started: T }> {
+  const queued = queueIfNeeded(req);
+  if (queued) return { queued };
+  const workspaceId = workspaceOf(req.projectId);
+  if (!workspaceId) return { started: await start() };
+  reserved.set(workspaceId, (reserved.get(workspaceId) ?? 0) + 1);
+  try {
+    return { started: await start() };
+  } finally {
+    const left = (reserved.get(workspaceId) ?? 1) - 1;
+    if (left > 0) reserved.set(workspaceId, left);
+    else reserved.delete(workspaceId);
+  }
+}
+
 function label(r: Pick<QueueRow, "name" | "prompt">): string {
   if (r.name) return r.name;
   const line = r.prompt.split("\n")[0].trim();
@@ -319,6 +351,20 @@ function autoHold(workspaceId: string | null): string | null {
 
 export type StartOutcome = "started" | "held" | "retry" | "failed";
 
+// Tells the orchestrator that queued it that it started.
+function announce(
+  r: Pick<QueueRow, "id" | "origin_workspace_id">,
+  session: Pick<Session, "name" | "branch_name">
+): void {
+  if (!r.origin_workspace_id) return;
+  queueEvent(
+    r.origin_workspace_id,
+    `queued-start:${r.id}`,
+    r.id,
+    `Queued task "${session.name}" (id ${r.id.slice(0, 8)}) started on ${session.branch_name ?? "its branch"}.`
+  );
+}
+
 async function startRow(
   r: QueueRow,
   opts: { force?: boolean } = {}
@@ -347,37 +393,31 @@ async function startRow(
     baseBranch: r.base_branch ?? undefined,
     hostId: r.host_id ?? undefined,
   };
+  const origin = r.origin_workspace_id;
   try {
-    const origin = r.origin_workspace_id;
-    // The orchestrator's queued starts pass its brakes when they start; a
-    // person's "start now" is theirs to make.
-    const session =
-      origin && !opts.force
-        ? await braked(
-            origin,
-            "task",
-            () => createTask(task),
-            (s) => s.id,
-            { spendApproval: false }
-          )
-        : await createTask(task);
+    // The orchestrator's queued starts pass its brakes when they start,
+    // a person's "start now" included: it skips only the limit and `after`.
+    const session = origin
+      ? await braked(
+          origin,
+          "task",
+          () => createTask(task),
+          (s) => s.id,
+          { spendApproval: false }
+        )
+      : await createTask(task);
     patch(r.id, {
       status: "started",
       started_at: new Date().toISOString(),
       error: null,
       note: null,
     });
-    if (origin)
-      queueEvent(
-        origin,
-        `queued-start:${r.id}`,
-        r.id,
-        `Queued task "${session.name}" (id ${r.id.slice(0, 8)}) started on ${session.branch_name ?? "its branch"}.`
-      );
+    announce(r, session);
     return "started";
   } catch (error) {
     if (error instanceof BrakeRefused) {
       patch(r.id, { status: "queued", note: `Waiting: ${error.reason}` });
+      if (opts.force) throw error;
       return "held";
     }
     const message = (
@@ -441,7 +481,9 @@ async function tickOnce(): Promise<void> {
   if (!rows.length) return;
   const plan = planQueue(
     rows,
-    (scope) => runningIn(scope).length,
+    (scope) =>
+      runningIn(scope).length +
+      (scope.workspaceId ? (reserved.get(scope.workspaceId) ?? 0) : 0),
     limitOf,
     afterMet
   );
@@ -467,7 +509,9 @@ export function tickQueueSoon(): void {
   );
 }
 
-// A person's "start now": past the limit, its `after` and Pause.
+// A person's "start now": past the limit, its `after` and (for a task a
+// person queued) Pause. The orchestrator's queued tasks still pass its
+// brakes; a refusal is thrown.
 export async function startQueuedNow(id: string): Promise<StartOutcome> {
   const r = row(id);
   if (!r || r.status !== "queued")
@@ -511,16 +555,20 @@ export function moveQueued(id: string, by: -1 | 1): void {
 }
 
 // After a restart: a row caught between its claim and its task either got
-// its task (started) or never did (back in line).
+// its task (started: counted by the brakes and announced, which the cut-off
+// start never got to) or never did (back in line).
 export function recoverQueue(): void {
   const rows = db
-    .prepare(`SELECT id FROM task_queue WHERE status = 'starting'`)
-    .all() as { id: string }[];
-  for (const { id } of rows)
-    patch(
-      id,
-      sessionOf(id)?.task_status
-        ? { status: "started", started_at: new Date().toISOString() }
-        : { status: "queued" }
-    );
+    .prepare(`SELECT * FROM task_queue WHERE status = 'starting'`)
+    .all() as QueueRow[];
+  for (const r of rows) {
+    const session = sessionOf(r.id);
+    if (!session?.task_status) {
+      patch(r.id, { status: "queued" });
+      continue;
+    }
+    patch(r.id, { status: "started", started_at: new Date().toISOString() });
+    if (r.origin_workspace_id) recordStart(r.origin_workspace_id, "task", r.id);
+    announce(r, session);
+  }
 }
