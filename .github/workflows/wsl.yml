@@ -1,0 +1,63 @@
+name: WSL
+
+# Manual only: a spot check that the installer and the server work under
+# WSL 2 on a GitHub-hosted Windows runner. Run it from the Actions tab or
+# `gh workflow run wsl.yml --ref <branch>`.
+on:
+  workflow_dispatch:
+
+jobs:
+  wsl:
+    name: Install and smoke test in WSL 2
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Vampire/setup-wsl@v7
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: rsync curl ca-certificates
+
+      - name: Kernel
+        shell: wsl-bash {0}
+        run: cat /proc/sys/kernel/osrelease
+
+      # The checkout is on the Windows drive (/mnt/d); --local copies it into
+      # the Linux home, where AgentOS installs.
+      - name: Install
+        shell: wsl-bash {0}
+        run: scripts/agent-os install --local
+
+      # One step: WSL stops the distro, and the server, soon after a step's
+      # shell exits.
+      - name: Start, reach it from Windows, check tmux and node-pty
+        shell: wsl-bash {0}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          tmux -V
+          lsof -v 2>&1 | head -2
+          (cd ~/.agent-os/repo && node -e "
+            const p = require('node-pty').spawn('bash', ['-c', 'echo pty-ok'], {});
+            let out = ''; p.onData((d) => (out += d));
+            p.onExit(() => { if (!out.includes('pty-ok')) process.exit(1); console.log('node-pty ok'); });")
+          agent-os start
+          for _ in $(seq 1 90); do
+            curl -sf http://localhost:3011/api/projects > /dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:3011/api/projects > /dev/null
+          grep "Running under WSL 2" ~/.agent-os/agent-os.log
+          # From Windows, through WSL's localhost forwarding.
+          for host in localhost 127.0.0.1; do
+            code=$(powershell.exe -NoProfile -Command "try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 20 http://${host}:3011/api/projects).StatusCode } catch { if (\$_.Exception.Response) { [int]\$_.Exception.Response.StatusCode } else { 'unreachable' } }" | tr -d '\r')
+            echo "Windows -> http://${host}:3011/api/projects: $code"
+            [[ "$host" != localhost || "$code" == 200 ]]
+          done
+          agent-os stop
+
+      - name: Server log
+        if: always()
+        shell: wsl-bash {0}
+        run: tail -100 ~/.agent-os/agent-os.log || true

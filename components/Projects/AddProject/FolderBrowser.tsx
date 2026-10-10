@@ -38,6 +38,14 @@ export function FolderBrowser({
           </span>
         )}
       </div>
+      {data?.warning && (
+        <p
+          role="note"
+          className="border-b bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          {data.warning}
+        </p>
+      )}
       <div className="max-h-64 overflow-y-auto p-1">
         {isLoading && (
           <Loader2 className="text-muted-foreground mx-auto my-6 h-4 w-4 animate-spin" />

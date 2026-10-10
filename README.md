@@ -140,6 +140,66 @@ npm run dev  # http://localhost:3011
 Then open AgentOS, add a project from ⌘K, and press ⌥N. To use it from your
 phone, see [Mobile access](#mobile-access).
 
+### Windows (WSL2)
+
+AgentOS runs on Windows inside WSL 2, as a Linux install. WSL 1 isn't
+supported (`wsl --set-version <distro> 2`). In an Ubuntu or Debian distro,
+run the install script above: it installs Node.js, tmux, ripgrep, lsof, a
+compiler for the native modules, and `wslu`, then prints the WSL next steps.
+The installer and the server both detect WSL the same way (the kernel
+release names Microsoft, or `WSL_DISTRO_NAME` is set).
+
+- **Open it from Windows** at `http://localhost:3011`. WSL 2 forwards
+  localhost to the distro by default, and the server's loopback address is
+  what's forwarded. Use `localhost`, not `127.0.0.1`: passkeys only work on
+  localhost or https. With `networkingMode=mirrored` in `.wslconfig`
+  (Windows 11), Windows and the distro share localhost directly. From a
+  phone or another machine, install Tailscale inside the distro and use
+  [Mobile access](#mobile-access) as on Linux.
+- **Keep projects in the Linux filesystem** (`~/code/...`), not on the
+  Windows drive (`/mnt/c/...`). Git, npm and file watching are many times
+  slower there, and changes made from Windows aren't seen by file watchers
+  (inotify doesn't cross the boundary), so the "/" menu only picks up new
+  skills after its cache expires. The folder picker warns on `/mnt/<drive>`,
+  and the server log lists projects that live there.
+- **Links** open in the Windows browser through `wslview` (from `wslu`), or
+  `explorer.exe` when it isn't installed. The server never touches the
+  clipboard; copy buttons use the browser's.
+- **Approvals with a passkey** use Windows Hello in the Windows browser,
+  registered for `localhost` (a passkey made on the tailnet https address is
+  a separate one).
+- **Start at login**: `agent-os enable` writes a systemd user service, which
+  needs systemd in the distro. Add this to `/etc/wsl.conf`, then run
+  `wsl --shutdown` from Windows and reopen the terminal:
+
+  ```ini
+  [boot]
+  systemd=true
+  ```
+
+  WSL still stops an idle distro, service and all, a few seconds after its
+  last terminal closes. To keep AgentOS up without a terminal open, add this
+  to `%UserProfile%\.wslconfig` (Windows 11) and start the distro at Windows
+  login, for example with a Task Scheduler task running
+  `wsl.exe -d <distro> -- sleep infinity`:
+
+  ```ini
+  [general]
+  instanceIdleTimeout=-1
+  [wsl2]
+  vmIdleTimeout=-1
+  ```
+
+What's been verified: the WSL detection and the installer's WSL paths have
+unit tests that run on any OS, and the manual [WSL workflow](.github/workflows/wsl.yml)
+ran on a GitHub-hosted Windows runner (Windows Server 2025, Ubuntu 24.04
+under WSL 2): the installer detected WSL 2 and installed what was missing
+through apt, tmux, lsof and node-pty worked, the server started and logged
+its WSL note, and Windows reached it at both `localhost:3011` and
+`127.0.0.1:3011`. Untested: Windows Hello approvals, links opening through
+`wslview`/`explorer.exe`, mirrored networking, `agent-os enable` under
+systemd, the idle-timeout settings above, and Debian or other distros.
+
 ### Supported agents
 
 | Agent       | Chat | Resume | Fork | Auto-approve                                 |

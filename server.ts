@@ -64,6 +64,9 @@ import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
 import { releaseInterruptedClaims } from "./lib/orchestrator/ask-approvals";
 import { resumeReviews } from "./lib/orchestrator/review";
 import { claimAgentosEnv } from "./lib/agents/self-env";
+import { wslNotes, wslVersion } from "./lib/wsl";
+import { getAllProjects } from "./lib/projects";
+import { isRemoteHost } from "./lib/hosts";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -342,6 +345,15 @@ app.prepare().then(async () => {
       for (const ws of chatWss.clients) ws.close(1012, "Demo reset");
     });
     return;
+  }
+  // Under WSL: where to open it from, and projects on the slow Windows drive.
+  try {
+    const local = getAllProjects()
+      .filter((p) => !isRemoteHost(p.host_id))
+      .map((p) => p.working_directory);
+    wslNotes(wslVersion(), port, local).forEach((n) => console.log(`> ${n}`));
+  } catch (error) {
+    console.error("Checking WSL failed:", error);
   }
   // New sessions whose worktree setup a restart cut off.
   failInterruptedSetups();

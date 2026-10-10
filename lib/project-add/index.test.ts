@@ -48,6 +48,7 @@ describe("adding a project", () => {
     const listing = await listFolders("local", dir);
     expect(listing.folders).toEqual(["a", "b"]);
     expect(listing.isGitRepo).toBe(false);
+    expect(listing.warning).toBeNull();
     expect(listing.parent).toBe(path.dirname(listing.path));
   });
 
