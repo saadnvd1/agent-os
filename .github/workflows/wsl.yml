@@ -5,6 +5,8 @@ name: WSL
 # `gh workflow run wsl.yml --ref <branch>`.
 on:
   workflow_dispatch:
+  push:
+    branches: [feature/official-wsl2-support-ceee]
 
 jobs:
   wsl:
