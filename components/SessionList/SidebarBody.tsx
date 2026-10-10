@@ -102,6 +102,7 @@ export function SidebarBody({
       <SessionShelves
         shelves={shelves}
         queued={data.queued}
+        toStart={data.toStart}
         doneCollapsed={ui.doneCollapsed}
         donePages={ui.donePages}
       />

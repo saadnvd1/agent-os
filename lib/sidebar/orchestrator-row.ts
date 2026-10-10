@@ -31,3 +31,30 @@ export function orchestratorRowText(
     .join(" · ");
   return { status, asks: c.asks > 0 ? plural(c.asks, "ask") : null };
 }
+
+// The workspaces shown that have no orchestrator yet, each offered as a
+// "Start orchestrator" row. One that exists but was unpinned isn't missing.
+// Like the orchestrator row, none show under a chosen project.
+export function orchestratorsToStart(
+  overviews: readonly { workspaceId: string; sessionId: string | null }[],
+  scope: {
+    workspaces: readonly { id: string; name: string }[];
+    workspaceId: string | null;
+    projectId: string | null;
+    query: string;
+  }
+): { workspaceId: string; name: string }[] {
+  if (scope.projectId) return [];
+  const q = scope.query.trim().toLowerCase();
+  const missing = new Set(
+    overviews.filter((o) => !o.sessionId).map((o) => o.workspaceId)
+  );
+  return scope.workspaces
+    .filter(
+      (w) =>
+        missing.has(w.id) &&
+        (!scope.workspaceId || w.id === scope.workspaceId) &&
+        (!q || `${w.name} orchestrator`.toLowerCase().includes(q))
+    )
+    .map((w) => ({ workspaceId: w.id, name: w.name }));
+}
