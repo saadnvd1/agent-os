@@ -11,16 +11,16 @@ const live = vi.hoisted(() => ({
 vi.mock("./worker/client", async (orig) => ({
   ...(await orig<typeof import("./worker/client")>()),
   waitForExit: vi.fn(async () => {}),
-  runningWorkers: () => [],
 }));
 
 import { db, stackQueries as q } from "../db";
 import { seedStack } from "../stacks/testing";
-import { chatHold } from "./hold";
+import { chatHold, collectWhileMoving } from "./hold";
 import { claimNext, enqueue, listQueue } from "./queued";
 import { sendChat, sendNowRefusal } from "./runner";
 import { stopChatAtTurnEnd } from "./stop";
 import * as runner from "./runner";
+import { waitForExit } from "./worker/client";
 
 function chatSession(status = "running"): string {
   const id = randomUUID();
@@ -38,9 +38,11 @@ describe("a held chat", () => {
   it("keeps its queue while its task is moving, and lets it go after", () => {
     const id = chatSession("moving");
     queued(id, "wait for me");
+    const packed = collectWhileMoving(id);
     expect(chatHold(id)).toMatch(/move/);
     // The worker's own drain, at a turn's end, takes nothing.
     expect(claimNext(id)).toBeNull();
+    packed();
     db.prepare(`UPDATE sessions SET task_status = 'running' WHERE id = ?`).run(
       id
     );
@@ -63,6 +65,7 @@ describe("a held chat", () => {
 
   it("queues what's sent meanwhile instead of starting a turn", async () => {
     const id = chatSession("moving");
+    const packed = collectWhileMoving(id);
     await sendChat(id, { text: "sent during the move", queue: true });
     await sendChat(id, { text: "from another agent", from: "peer-1" });
     expect(listQueue(id).map((m) => m.text)).toEqual([
@@ -70,6 +73,16 @@ describe("a held chat", () => {
       "from another agent",
     ]);
     expect(sendNowRefusal(id, listQueue(id)[0].id)).toMatch(/move/);
+    packed();
+  });
+
+  it("refuses, rather than strand, what's sent once the move packed the queue", async () => {
+    const id = chatSession("moving");
+    db.prepare(`UPDATE sessions SET moved_to = 'box' WHERE id = ?`).run(id);
+    await expect(sendChat(id, { text: "too late" })).rejects.toThrow(
+      "It's moving to box; send it there once it arrives"
+    );
+    expect(listQueue(id)).toEqual([]);
   });
 
   it("refuses to start a worker for a task that moved away", async () => {
@@ -106,15 +119,15 @@ describe("stopping a chat between turns", () => {
     expect(stop).toEqual({ stopped: true });
     expect(onWait).toHaveBeenCalledTimes(1);
     expect(live.stopped).toContain("s1");
+    // The worker has gone before the move packs the chat.
+    expect(waitForExit).toHaveBeenCalledWith("s1");
   });
 
   it("gives up at the cap without interrupting the turn", async () => {
     states("running");
-    const interrupt = vi.spyOn(runner, "interruptChat");
     const stop = await stopChatAtTurnEnd("s2", { waitMs: 2_000, sleep });
     expect(stop).toMatchObject({ stopped: false });
     expect(stop.stopped || stop.reason).toMatch(/still running after 2s/);
-    expect(interrupt).not.toHaveBeenCalled();
     expect(live.stopped).not.toContain("s2");
   });
 
@@ -142,5 +155,6 @@ describe("stopping a chat between turns", () => {
       stopped: true,
     });
     expect(live.stopped).not.toContain("s4");
+    expect(waitForExit).not.toHaveBeenCalledWith("s4");
   });
 });

@@ -7,6 +7,7 @@
 
 import { chatStateNow, stopChat } from "./runner";
 import { waitForExit } from "./worker/client";
+import { registry } from "./registry";
 
 export type ChatStop = { stopped: true } | { stopped: false; reason: string };
 
@@ -34,6 +35,9 @@ export async function stopChatAtTurnEnd(
   for (let waited = 0; ; waited += POLL_MS) {
     let state;
     try {
+      // A worker still starting (for a send from before the hold) is asked
+      // once it's up, not taken for none.
+      await registry.connecting.get(sessionId);
       state = await chatStateNow(sessionId);
     } catch {
       return {

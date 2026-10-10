@@ -9,13 +9,12 @@ import { useMoveSession, useMoveTargets } from "@/data/tasks";
 type MenuItem = ComponentType<{
   onSelect?: () => void;
   className?: string;
-  disabled?: boolean;
   children: ReactNode;
 }>;
 
 // "Move to <machine>" / "Move back to this machine" for any menu (the row's
 // ⋯ and right-click menus, the pane's menu, the phone's session switcher);
-// nothing when it can't move, and disabled with why when it can't yet.
+// nothing when it can't move.
 export function MoveMenuItems({
   session,
   Item,

@@ -67,7 +67,7 @@ import {
 import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
 import { DEMO_REFUSAL, demoMode } from "../security/demo";
-import { chatHold, movedAway } from "./hold";
+import { chatHold, chatRefusal } from "./hold";
 import { getHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
 
@@ -280,10 +280,24 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
   }
 }
 
-// Its agent runs on another machine now: a worker here would fork it.
-function refuseMoved(sessionId: string): void {
-  const moved = movedAway(sessionId);
-  if (moved) throw new Error(moved);
+// Its agent runs on another machine now (a worker here would fork it), or
+// its move already took the queue.
+function refuseAway(sessionId: string): void {
+  const away = chatRefusal(sessionId);
+  if (away) throw new Error(away);
+}
+
+// Held since the caller last looked (a move or Land began while a worker
+// started): the message waits in the queue instead of starting a turn.
+function queuedIfHeld(
+  sessionId: string,
+  m: { id: string; text: string; images?: ChatImage[] } & SentBy
+): boolean {
+  refuseAway(sessionId);
+  if (!chatHold(sessionId)) return false;
+  enqueue(sessionId, { ...m, ...sentBy(m) });
+  emitQueue(sessionId);
+  return true;
 }
 
 const sentBy = ({ from, peer, origin }: SentBy): SentBy => ({
@@ -303,7 +317,7 @@ export async function sendChat(
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
-  refuseMoved(sessionId);
+  refuseAway(sessionId);
   // Its worktree is still being set up, its task hasn't launched (held by
   // Pause, say), or it's moving or landing: the message waits its turn.
   if (settingUp(sessionId) || launchPending(sessionId) || chatHold(sessionId)) {
@@ -317,9 +331,11 @@ export async function sendChat(
     return;
   }
   const live = await ensureLive(sessionId);
+  const id = `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
+  if (queuedIfHeld(sessionId, { ...input, id, text })) return;
   live.worker.command({
     type: "send",
-    id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
+    id,
     text,
     images: input.images,
     ...sentBy(input),
@@ -358,7 +374,7 @@ async function resumeQueue(sessionId: string): Promise<void> {
     holdsQueue(sessionId) ||
     launchPending(sessionId) ||
     chatHold(sessionId) ||
-    movedAway(sessionId)
+    chatRefusal(sessionId)
   )
     return;
   // Switched to the terminal: its agent runs there now, and a chat worker
@@ -467,7 +483,7 @@ async function resumeCutOff(sessionId: string): Promise<void> {
 // task hasn't launched and it isn't the launch's own first message.
 export function sendNowRefusal(sessionId: string, id: string): string | null {
   if (settingUp(sessionId)) return "It's sent once the worktree is set up";
-  const held = movedAway(sessionId) ?? chatHold(sessionId);
+  const held = chatRefusal(sessionId) ?? chatHold(sessionId);
   if (held) return held;
   if (launchPending(sessionId) && id !== firstMessageId(sessionId))
     return "It's sent once the task has started";
@@ -483,6 +499,8 @@ export async function sendQueuedNow(
   const refusal = sendNowRefusal(sessionId, id);
   if (refusal) throw new Error(refusal);
   const live = await ensureLive(sessionId);
+  const held = sendNowRefusal(sessionId, id);
+  if (held) throw new Error(held);
   if (!live.canQueue)
     throw new Error("Reload to send this: the chat is on an older version");
   live.worker.command({ type: "send_now", id, during });
@@ -516,7 +534,7 @@ export async function sendChatConfirmed(
 ): Promise<"delivered" | "queued"> {
   const text = input.text.trim();
   if (!text) throw new Error("Message is empty");
-  refuseMoved(sessionId);
+  refuseAway(sessionId);
   // A task not launched yet takes it after its first message; a held one
   // once it's let go.
   if (launchPending(sessionId) || chatHold(sessionId)) {
@@ -533,6 +551,7 @@ export async function sendChatConfirmed(
   const id = input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
   // Already taken (a retry of the same message): nothing to wait for.
   if (input.id && hasItem(sessionId, id)) return "delivered";
+  if (queuedIfHeld(sessionId, { ...input, id, text })) return "queued";
   let set = registry.listeners.get(sessionId);
   if (!set) registry.listeners.set(sessionId, (set = new Set()));
   const listeners = set;

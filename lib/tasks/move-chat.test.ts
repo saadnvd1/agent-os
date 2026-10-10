@@ -43,9 +43,11 @@ import { stopChatAtTurnEnd } from "../chat/stop";
 import { releaseChat, sendChat } from "../chat/runner";
 import { listItems } from "../chat/store";
 import { listQueue } from "../chat/queued";
+import { chatHold, chatRefusal } from "../chat/hold";
 import { exportOrResume, exportTask, markMoved } from "./move";
 import { importTask } from "./import";
 import { MOVE_TURN_WAIT_MS } from "./move-chat";
+import { MAX_CHAT_BYTES } from "./move-bundle";
 import {
   CLAUDE_ID,
   git,
@@ -115,7 +117,22 @@ function leave(id: string, cwd: string, branch: string) {
 describe("moving a chat task", () => {
   it("stops its agent between turns, then packs its history, queue and settings", async () => {
     const { id, cwd } = await seedChat("feature/chat-out");
+    let heldWhileStopping: unknown = null;
+    vi.mocked(stopChatAtTurnEnd).mockImplementation(async () => {
+      heldWhileStopping = [row(id).task_status, chatHold(id)];
+      return { stopped: true };
+    });
     const bundle = await exportTask(id, "box");
+    // Held from before the wait: what's sent meanwhile queues.
+    expect(heldWhileStopping).toEqual([
+      "moving",
+      expect.stringMatching(/move/),
+    ]);
+    // Packed: a message now would be left behind here, so it's refused.
+    expect(chatHold(id)).toBeNull();
+    expect(chatRefusal(id)).toBe(
+      "It's moving to box; send it there once it arrives"
+    );
     expect(vi.mocked(stopChatAtTurnEnd).mock.calls[0]).toEqual([
       id,
       expect.objectContaining({ waitMs: MOVE_TURN_WAIT_MS }),
@@ -200,13 +217,14 @@ describe("moving a chat task", () => {
       .prepare(`SELECT id FROM sessions WHERE moved_from = ?`)
       .all(id) as { id: string }[];
     expect(left).toEqual([]);
-    expect(
-      db
-        .prepare(
-          `SELECT COUNT(*) AS n FROM chat_items WHERE session_id NOT IN (SELECT id FROM sessions)`
-        )
-        .get()
-    ).toEqual({ n: 0 });
+    for (const table of ["chat_items", "chat_queue"])
+      expect(
+        db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM ${table} WHERE session_id NOT IN (SELECT id FROM sessions)`
+          )
+          .get()
+      ).toEqual({ n: 0 });
   });
 
   it("goes there and back with its history and queue intact", async () => {
@@ -251,6 +269,24 @@ describe("moving a chat task", () => {
         chat: { ...bundle.chat!, items: [{ id: 1 } as never] },
       })
     ).rejects.toThrow(/Bad chat item/);
+    const chat = bundle.chat!;
+    const bad: [object, RegExp][] = [
+      [{ queue: "x" }, /Bad chat queue/],
+      [{ queue: [{ ...chat.queue[0], images: 5 }] }, /Bad queued message/],
+      [
+        { queue: [{ ...chat.queue[0], createdAt: "now" }] },
+        /Bad queued message/,
+      ],
+      [{ resumeAt: 5 }, /Bad chat/],
+      [
+        { items: [{ id: "big", data: "x".repeat(MAX_CHAT_BYTES + 1) }] },
+        /too large to move/,
+      ],
+    ];
+    for (const [change, error] of bad)
+      await expect(
+        importTask({ ...bundle, chat: { ...chat, ...change } as never })
+      ).rejects.toThrow(error);
   });
 });
 
@@ -275,6 +311,28 @@ describe("moving a chat task to a linked machine", () => {
     );
     expect(row(id).task_status).toBe("running");
     expect(stopChatAtTurnEnd).not.toHaveBeenCalled();
+  });
+
+  it("won't take one back from a machine that can't hand over its chat, or can't say", async () => {
+    const mirror = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, host_id,
+         task_status, branch_name, view)
+       VALUES (?, 'Fix it', ?, '/home/alice/wt', ?, ?, 'running', 'feature/chat-back', 'chat')`
+    ).run(mirror, `claude-${mirror}`, f.projectId, hostId);
+    fetchMock.mockResolvedValueOnce(
+      json({ tasks: [], capabilities: ["move"] })
+    );
+    await expect(moveTask(mirror, "local")).rejects.toThrow(
+      "chatbox's AgentOS can't move chat tasks yet; update it first"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fetchMock.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+    await expect(moveTask(mirror, "local")).rejects.toThrow(
+      "Can't ask chatbox whether it takes chat tasks"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(row(mirror).task_status).toBe("running");
   });
 
   it("hands it over with its chat, and mirrors it as a chat", async () => {

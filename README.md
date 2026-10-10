@@ -921,8 +921,10 @@ Once linked:
   an open ask), card tasks and stacked tasks don't move yet.
 - **A chat task moves the same way**, between turns: a running turn is let
   finish (up to 3 minutes, else the move is refused and it carries on here),
-  and one waiting on your answer isn't moved. While it moves, what's sent to
-  it waits in its queue. Its chat history, queue, access and plan settings go
+  and one waiting on your answer isn't moved. What's sent to it while its
+  turn finishes waits in its queue and goes with it; once the move has packed
+  the queue, sends are refused until it arrives. Its chat history, queue,
+  access and plan settings go
   with it, and on arrival a chat worker resumes the same Claude conversation.
   Both machines need an AgentOS that can move chat tasks.
 

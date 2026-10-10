@@ -21,6 +21,7 @@ import { MAX_TRANSCRIPT_BYTES, type TaskBundle } from "./move-bundle";
 import { stepProgress } from "./move-progress";
 import { dropSessionDatabase } from "../project-config/database";
 import { releaseChat } from "../chat/runner";
+import { collectWhileMoving } from "../chat/hold";
 import { packChat, stopChatForMove } from "./move-chat";
 import {
   isClaudeSessionId,
@@ -112,6 +113,7 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
   if (exporting.has(id)) throw new Error("It's already moving");
   exporting.add(id);
   freshClaims.delete(id);
+  const packed = collectWhileMoving(id);
   try {
     const refusal = moveRefusal(session);
     if (refusal) throw new Error(refusal);
@@ -147,6 +149,9 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
     const transcript = claudeId ? await readTranscript(cwd, claudeId) : null;
     if (transcript && transcript.length > MAX_TRANSCRIPT_BYTES)
       throw new Error("The conversation is too large to move");
+    // From here a message is refused, not queued: the queue is packed.
+    const chatBundle = chat ? packChat(now) : undefined;
+    packed();
     return {
       moveId: id,
       name: session.name,
@@ -160,9 +165,10 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
         claudeId && transcript
           ? { sessionId: claudeId, cwd, home: os.homedir(), transcript }
           : null,
-      chat: chat ? packChat(now) : undefined,
+      chat: chatBundle,
     };
   } finally {
+    packed();
     exporting.delete(id);
   }
 }
