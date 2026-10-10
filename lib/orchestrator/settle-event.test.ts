@@ -55,10 +55,31 @@ describe("settleIn", () => {
     expect(await settleIn(t.w, t.s, green("b".repeat(40)))).toBe(0);
   });
 
-  it("still waits on a new check when the commit's time can't be read", async () => {
+  // Checks that sat still since before the commit don't settle it.
+  const oldCheck = (t: ReturnType<typeof setup>, sha: string) =>
+    putCheck({
+      workspaceId: t.w,
+      sessionId: t.s.id,
+      sha,
+      kind: "ci",
+      status: "pass",
+      detail: JSON.stringify({ count: 2, at: now() - 3600 }),
+    });
+
+  it("waits out a fresh commit even when its checks have sat still", async () => {
+    const t = setup();
+    oldCheck(t, "e".repeat(40));
+    commitAt = now() - 30;
+    const left = await settleIn(t.w, t.s, green("e".repeat(40)));
+    expect(left).toBeGreaterThanOrEqual(SETTLE_S - 35);
+    expect(left).toBeLessThanOrEqual(SETTLE_S - 25);
+  });
+
+  it("goes by the checks alone when the commit's time can't be read", async () => {
     const t = setup();
     commitAt = -1;
-    expect(await settleIn(t.w, t.s, green("c".repeat(40)))).toBe(SETTLE_S);
+    oldCheck(t, "c".repeat(40));
+    expect(await settleIn(t.w, t.s, green("c".repeat(40)))).toBe(0);
   });
 
   it("is undefined for anything but green CI on an open PR", async () => {
