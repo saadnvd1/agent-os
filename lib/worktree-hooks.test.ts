@@ -3,7 +3,11 @@ import { execFileSync, spawnSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { ATTRIBUTION_ERE, installWorktreeHooks } from "./worktree-hooks";
+import {
+  ATTRIBUTION_ERE,
+  commitMsgHook,
+  installWorktreeHooks,
+} from "./worktree-hooks";
 import { ATTRIBUTION } from "./tasks/code-review";
 
 let root: string;
@@ -197,5 +201,27 @@ describe("the attribution rule", () => {
         attribution
       );
     }
+  });
+
+  // git may run the hook with no locale, where the system grep reads "É" as
+  // two non-letter bytes and would strip prose the PR body check allows.
+  it("keeps a line opening with a non-ASCII letter when no locale is set", () => {
+    const hook = path.join(root, "commit-msg");
+    fs.writeFileSync(hook, commitMsgHook(path.join(root, "none")), {
+      mode: 0o755,
+    });
+    const msg = path.join(root, "MSG");
+    fs.writeFileSync(
+      msg,
+      "feat: x\n\nÉ Generated with Claude Code\n\n🤖 Generated with [Claude Code](x)\n"
+    );
+    execFileSync(hook, [msg], {
+      cwd: repo,
+      env: { PATH: "/usr/bin:/bin", NODE_ENV: "test" },
+      stdio: "pipe",
+    });
+    expect(fs.readFileSync(msg, "utf-8")).toBe(
+      "feat: x\n\nÉ Generated with Claude Code\n"
+    );
   });
 });
