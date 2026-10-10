@@ -129,7 +129,11 @@ export async function carryOutPlan(
 // work (subagents, shells) lives in its agent, so a worker still running
 // some stays until the last one ends.
 function retireIfStale(sessionId: string, live: Live): void {
-  if (live.retiring || !isStaleWorker(live.build, buildId(), live.state))
+  if (
+    live.retireSent ||
+    live.retiring ||
+    !isStaleWorker(live.build, buildId(), live.state)
+  )
     return;
   if (listQueue(sessionId).length) retire(sessionId, live);
   else if (!live.activity.tasks.size)
@@ -222,6 +226,8 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
           registry.live.delete(sessionId);
           emit(sessionId, { type: "state", state: "idle" });
         }
+        // It retired itself for a current worker: what it queued goes now.
+        if (live?.retireSent) resumed.delete(sessionId);
         // Its agent died mid-turn, with messages still queued, or with a
         // turn cut off. (One this server let go, it stopped on purpose.)
         if (live && !detached)
@@ -262,6 +268,14 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       canPlan: !!hello.caps?.includes("plan"),
       canQueue: !!hello.caps?.includes("queue"),
     };
+    // From an older build and busy, or running background work: it goes at
+    // its next turn boundary, by itself if it can. Messages meanwhile wait
+    // in the queue rather than keep it on old code (an orchestrator, fed
+    // events mid-turn, might otherwise never be idle).
+    if (hello.build !== buildId() && hello.caps?.includes("retire")) {
+      client.command({ type: "retire" });
+      live.retireSent = true;
+    }
     registry.live.set(sessionId, live);
     // A setting changed while no worker was attached (a restart, a dropped
     // socket) reaches it now; both are safe to repeat.

@@ -268,6 +268,7 @@ export type DriverEvent =
   | { type: "usage_start"; totals: UsageTotals } // the totals it started from
   | { type: "context"; context: ChatContext } // context window use
   | { type: "turn_start" } // the agent started a turn (maybe one nobody sent)
+  | { type: "at_rest" } // it has run every message it was given
   | { type: "state"; state: ChatState };
 
 // A tool call's output and diff, loaded when it's opened.

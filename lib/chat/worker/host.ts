@@ -41,6 +41,10 @@ import type { WorkerCommand, WorkerEvent } from "./protocol";
 // moment a turn ends.
 const AFTER_STOP_MS = 2000;
 
+// How long a retiring worker waits, once at rest with nothing queued, for
+// the agent's guess at the next message before it goes.
+export const RETIRE_SUGGESTION_WAIT_MS = 2 * 60 * 1000;
+
 export class ChatHost {
   state: ChatState = "idle";
   readonly streaming = new Map<string, ChatItem>();
@@ -79,6 +83,15 @@ export class ChatHost {
   // should read next.
   private stopping: "turn" | "after" | null = null;
   private stoppedAt = 0;
+  // On an older build than the server's (a "retire"): it closes at the next
+  // turn boundary, once the agent holds no message it hasn't run and runs
+  // no background work, so a current worker resumes the conversation.
+  private retiring = false;
+  private retireTimer?: NodeJS.Timeout;
+  private retireWaited = false;
+  // Messages handed to the agent while a turn ran, and not yet started: it
+  // isn't at a boundary while it still holds one.
+  private behind = 0;
   readonly done: Promise<void>;
 
   constructor(
@@ -170,6 +183,7 @@ export class ChatHost {
             this.streaming.set(e.item.id, e.item);
           else this.streaming.delete(e.item.id);
           this.record(e.item);
+          if (e.item.kind === "task") this.retireIfDone();
         } else if (e.type === "delta") {
           const item = this.streaming.get(e.id);
           if (item && "text" in item) item.text += e.text;
@@ -183,6 +197,7 @@ export class ChatHost {
         } else if (e.type === "suggestion") {
           // Kept on the session, so it's still there after a reload.
           this.setSuggestion(e.text);
+          this.retireIfDone();
         } else if (e.type === "usage") {
           this.usage = recordTurn(this.session, this.usage, e.totals);
           this.turnsRecorded++;
@@ -197,6 +212,7 @@ export class ChatHost {
           this.emit(e);
         } else if (e.type === "turn_start") {
           this.turnsStarted++;
+          if (this.behind) this.behind--;
           if (this.nowPending && --this.nowPending)
             this.stopsUpTo = this.turnsStarted;
           // A turn the agent started itself (a background task's notice)
@@ -238,6 +254,12 @@ export class ChatHost {
           // A stopped turn can still settle an approval after it ended.
           if (e.state !== "running" || this.state !== "idle")
             this.setState(e.state);
+          this.retireIfDone();
+        } else if (e.type === "at_rest") {
+          // Every message it was given has run, those it took in mid-turn
+          // too.
+          this.behind = 0;
+          this.retireIfDone();
         } else {
           this.emit(e);
         }
@@ -274,7 +296,7 @@ export class ChatHost {
   // it's sent now. Claimed (taken off the queue) before it's sent, so it can
   // only go once.
   private sendQueued(now = false, id?: string): boolean {
-    if ((!now && this.busy()) || this.closed) return false;
+    if ((!now && this.busy()) || this.closed || this.retiring) return false;
     const next = claimNext(this.session.id, id);
     if (!next) return false;
     this.emit({ type: "queue" });
@@ -292,6 +314,7 @@ export class ChatHost {
   ): void {
     this.sent.add(m.id);
     this.currentTurn = m.id;
+    if (this.busy()) this.behind++;
     // Sent now, it stops the running turn, which still ends after this.
     if (!this.busy()) now = false;
     // A turn the agent has started and not ended is what stops.
@@ -352,9 +375,11 @@ export class ChatHost {
         if (this.sent.has(cmd.id)) return;
         // Sent just as a move or Land took hold (lib/chat/hold): it waits
         // in the queue rather than start a turn the stop would cut short.
-        if (isHeld(this.session.id)) {
+        // Or for the current worker that takes over from a retiring one.
+        if (isHeld(this.session.id) || this.retiring) {
           enqueue(this.session.id, cmd);
           this.emit({ type: "queue" });
+          this.retireIfDone();
           return;
         }
         this.sent.add(cmd.id);
@@ -420,8 +445,11 @@ export class ChatHost {
         // The turn the reader asked to stop, not one that started since:
         // that one ends on its own, and this goes after it.
         if (this.busy()) {
-          if (cmd.during && cmd.during === this.currentTurn)
+          if (cmd.during && cmd.during === this.currentTurn) {
+            // Retiring, the turn just stops; the next worker sends it.
+            if (this.retiring) return this.conversation.interrupt();
             this.sendQueued(true, cmd.id);
+          }
           return;
         }
         this.sendQueued();
@@ -477,14 +505,39 @@ export class ChatHost {
           });
         }
         return;
+      case "retire":
+        this.retiring = true;
+        return this.retireIfDone();
       case "close":
         return this.close();
     }
   }
 
+  // A retiring worker goes once it's at a turn boundary: no turn running,
+  // no message handed to the agent still to run, no background work (it
+  // lives in the agent, and would be lost). With nothing queued it first
+  // waits a while for the agent's guess at the next message.
+  private retireIfDone(): void {
+    if (!this.retiring || this.closed || this.busy() || this.behind) return;
+    const background = itemsOfKind(this.session.id, "task").some(
+      (t) => t.kind === "task" && t.status === "running" && !t.ambient
+    );
+    if (background) return;
+    const queued = listQueue(this.session.id).length > 0;
+    if (!queued && this.suggestion === null && !this.retireWaited) {
+      this.retireTimer ??= setTimeout(() => {
+        this.retireWaited = true;
+        this.retireIfDone();
+      }, RETIRE_SUGGESTION_WAIT_MS);
+      return;
+    }
+    this.close();
+  }
+
   onClose: () => void = () => {};
 
   close(): void {
+    clearTimeout(this.retireTimer);
     this.closed = true;
     this.onClose();
     this.conversation.close();

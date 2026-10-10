@@ -50,6 +50,10 @@ export type WorkerCommand =
   | ({ type: "respond"; id: string } & ApprovalDecision)
   | { type: "undo"; reqId: string; checkpoint: string; dryRun: boolean }
   | { type: "stop_task"; taskId: string }
+  // It runs an older build: it takes no new message into its agent (they
+  // wait in the queue) and closes at its next turn boundary, so a current
+  // worker resumes the conversation with today's tools.
+  | { type: "retire" }
   | { type: "close" };
 
 // Worker -> server: what's live right now on connecting, then events.
@@ -67,7 +71,9 @@ export type WorkerEvent =
     }
   | Exclude<
       DriverEvent,
-      { type: "resume_id" | "usage" | "usage_start" | "suggestion" }
+      {
+        type: "resume_id" | "usage" | "usage_start" | "suggestion" | "at_rest";
+      }
     >
   // The agent's guess at the next message, or null once it's stale.
   | { type: "suggestion"; text: string | null }

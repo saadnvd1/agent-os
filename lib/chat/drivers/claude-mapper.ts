@@ -173,11 +173,11 @@ export class ClaudeMapper {
   // has run every turn it had queued. A turn still open then had no result:
   // it ends here, or nothing would end it.
   private sessionState(state?: string): DriverEvent[] {
-    if (state === "idle" && this.inTurn) {
-      this.inTurn = false;
-      return [{ type: "state", state: "idle" }];
-    }
-    return [];
+    if (state !== "idle") return [];
+    const rest: DriverEvent = { type: "at_rest" };
+    if (!this.inTurn) return [rest];
+    this.inTurn = false;
+    return [{ type: "state", state: "idle" }, rest];
   }
 
   private pendingText = false;

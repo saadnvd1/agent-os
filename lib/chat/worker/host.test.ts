@@ -1034,3 +1034,156 @@ describe("ChatHost cut-off tool calls", () => {
     host.close();
   });
 });
+
+describe("ChatHost retiring after a deploy", () => {
+  const bus = {
+    from: "agentos",
+    origin: { kind: "event" as const, label: "AgentOS" },
+  };
+
+  it("waits out a running turn, queues what arrives meanwhile, and closes once at its end", async () => {
+    const { id, host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    expect(conversation.close).not.toHaveBeenCalled();
+    // An event mid-turn waits for the current worker, not this agent.
+    await host.handle({ type: "send", id: "user-2", text: "event", ...bus });
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    // Not sent by this worker: the next one sends it.
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    await host.done;
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("doesn't close at a turn's end while its agent holds a message it took in mid-turn", async () => {
+    const { host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "send", id: "user-2", text: "event", ...bus });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    // The agent runs it as its next turn, and then it's a boundary.
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("closes once the agent says it ran everything, when it took the message into the same turn", async () => {
+    const { host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "send", id: "user-2", text: "event", ...bus });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "at_rest" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("goes straight away when idle with a guess already in", async () => {
+    const { host, conversation } = await startHost();
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    await host.handle({ type: "retire" });
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("idle with nothing queued, waits for the agent's guess, then goes", async () => {
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({ type: "retire" });
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "suggestion", text: "run the tests" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("with no guess coming, goes after a while", async () => {
+    vi.useFakeTimers();
+    try {
+      const { RETIRE_SUGGESTION_WAIT_MS } = await import("./host");
+      const { host, conversation } = await startHost();
+      await host.handle({ type: "retire" });
+      vi.advanceTimersByTime(RETIRE_SUGGESTION_WAIT_MS - 1);
+      expect(conversation.close).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(conversation.close).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps running while its background work does, and goes when it ends", async () => {
+    const { host, conversation } = await startHost();
+    const task: ChatItem = {
+      id: "task-1",
+      kind: "task",
+      taskId: "t1",
+      description: "subagent",
+      status: "running",
+      createdAt: 1,
+    };
+    conversation.events.push({ type: "item", item: task });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    await host.handle({ type: "retire" });
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({
+      type: "item",
+      item: { ...task, status: "completed" },
+    });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("send now stops the turn and leaves the message for the next worker", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "stop",
+      queue: true,
+    });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    expect(conversation.interrupt).toHaveBeenCalledOnce();
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    host.close();
+  });
+
+  it("the worker after it resumes the same conversation", async () => {
+    const { id, host, conversation } = await startHost("orchestrator", {
+      resumeId: "conv-7",
+    });
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    const { ChatHost } = await import("./host");
+    const session = getDb()
+      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .get(id) as Session;
+    current = fakeConversation();
+    const next = new ChatHost(session, () => {});
+    expect(started?.resumeId).toBe("conv-7");
+    next.close();
+  });
+});

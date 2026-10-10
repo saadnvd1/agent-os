@@ -27,6 +27,9 @@ export interface Live {
   // From an older build and idle: retired once its guess at the next
   // message is in, or this fires.
   retiring?: NodeJS.Timeout;
+  // From an older build, and told to retire itself at its next turn
+  // boundary (a worker that understands "retire" does it alone).
+  retireSent?: boolean;
 }
 
 export interface ChatActivity {
