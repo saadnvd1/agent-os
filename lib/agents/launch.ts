@@ -9,6 +9,10 @@ import { runInBackground } from "../async-operations";
 import { trustPromptKeys } from "../tasks/state";
 import { BUS_BRIEF } from "./brief";
 import { CLAUDE_STATUS_SETTINGS_FLAG } from "../program-status/claude-flag";
+import {
+  sessionProjectEnv,
+  sessionRunningBrief,
+} from "../project-config/session";
 
 const execFileAsync = promisify(execFile);
 const PROMPTS_DIR = path.join(os.homedir(), ".agent-os", "prompts");
@@ -24,10 +28,13 @@ export function ensureBusBrief(): void {
 }
 
 // Who a session is and how it reaches AgentOS, set in its tmux environment so
-// \`aos\` works from any agent CLI or plain shell inside it.
+// \`aos\` works from any agent CLI or plain shell inside it. The project's
+// agentos.json env and the session's ports come first, so neither can
+// override what AgentOS sets.
 export function agentEnv(sessionId: string): Record<string, string> {
   const port = process.env.AGENTOS_PORT || process.env.PORT || "3011";
   return {
+    ...sessionProjectEnv(sessionId),
     AGENTOS_SESSION_ID: sessionId,
     AGENTOS_URL: `http://127.0.0.1:${port}`,
     PATH: `${AOS_BIN_DIR}:${process.env.PATH ?? ""}`,
@@ -66,7 +73,9 @@ export async function launchClaude(opts: {
   fs.writeFileSync(promptFile, opts.prompt);
   fs.writeFileSync(
     briefFile,
-    [opts.brief, BUS_BRIEF].filter(Boolean).join("\n\n")
+    [opts.brief, sessionRunningBrief(opts.sessionId), BUS_BRIEF]
+      .filter(Boolean)
+      .join("\n\n")
   );
 
   const provider = getProvider("claude");

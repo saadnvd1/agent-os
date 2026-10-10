@@ -7,6 +7,7 @@
 import os from "os";
 import { db, type Session } from "../../db";
 import { agentEnv } from "../../agents/launch";
+import { sessionRunningBrief } from "../../project-config/session";
 import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
@@ -125,7 +126,12 @@ export class ChatHost {
       resumeAt: session.chat_resume_at,
       access: session.chat_access ?? "full",
       plan: !!session.chat_plan,
-      systemAppend: [extras.systemAppend, BUS_BRIEF, visuals && VISUALS_BRIEF]
+      systemAppend: [
+        extras.systemAppend,
+        sessionRunningBrief(session.id),
+        BUS_BRIEF,
+        visuals && VISUALS_BRIEF,
+      ]
         .filter(Boolean)
         .join("\n\n"),
       env,

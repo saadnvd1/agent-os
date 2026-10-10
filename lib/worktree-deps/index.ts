@@ -6,7 +6,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import type { SetupResult } from "../env-setup";
-import { cloneDeps } from "./clone";
+import { NOT_MAC, cloneDeps } from "./clone";
 import { detectPackageManager, setupEnv } from "./install";
 
 const execAsync = promisify(exec);
@@ -40,28 +40,35 @@ export async function runCommand(
 }
 
 /**
- * Clone the main checkout's node_modules, or else install: the lockfile's
- * frozen install first, then a plain one.
+ * Clone the main checkout's node_modules (or exactly agentos.json's `clone`
+ * paths), or else install: the lockfile's frozen install first, then a
+ * plain one.
  */
 export async function bringDependencies(
   result: SetupResult,
   sourcePath: string,
   worktreePath: string,
   envVars: Record<string, string>,
-  deps = { run: runCommand, clone: cloneDeps }
+  deps = { run: runCommand, clone: cloneDeps },
+  only?: string[]
 ): Promise<void> {
   const pm = detectPackageManager(worktreePath);
-  if (!pm) return;
-  result.packageManager = pm.name;
+  if (!pm && !only?.length) return;
+  if (pm) result.packageManager = pm.name;
 
-  const clone = await deps.clone({ sourcePath, worktreePath });
-  if (clone.ok) {
+  const clone = await deps.clone({ sourcePath, worktreePath, only });
+  // Off macOS only node_modules has a fallback (the install below).
+  if (!pm && !clone.ok && !clone.cloned.length && clone.reason === NOT_MAC)
+    return;
+  if (clone.ok || !pm) {
     result.steps.push({
       name: "Clone dependencies",
       command: "cp -Rc",
-      success: true,
+      success: clone.ok,
       output: clone.cloned.map((c) => `${c.rel} (${c.from})`).join(", "),
+      error: clone.ok ? undefined : clone.reason,
     });
+    if (!clone.ok) result.success = false;
     return;
   }
 
