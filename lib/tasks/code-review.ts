@@ -93,6 +93,17 @@ export function parseCodeReview(
   return found && attribution ? { ...found, attribution } : found;
 }
 
+// The AI attribution a body carries anywhere, Code review section or not.
+export function attributionIn(
+  body: string | null | undefined
+): AttributionKind | undefined {
+  if (!body) return;
+  for (const line of renderedLines(body)) {
+    const kind = attributionKind(line.trimStart());
+    if (kind) return kind;
+  }
+}
+
 // A branch AgentOS rebased itself (a stack restack): the head the task
 // pushed and reviewed, and the head the restack left.
 export interface Restacked {
@@ -108,10 +119,9 @@ export interface Restacked {
 export function codeReviewRefusal(
   section: CodeReviewSection | null | undefined,
   head: string | undefined,
-  restacked?: Restacked | null
+  restacked?: Restacked | null,
+  fix = "the task has to run /do-code-review and put a Code review section naming the reviewed commit in the PR body"
 ): string | null {
-  const fix =
-    "the task has to run /do-code-review and put a Code review section naming the reviewed commit in the PR body";
   if (section === undefined) return `the PR body couldn't be read: ${fix}`;
   if (!head) return `the PR's head commit is unknown: ${fix}`;
   if (!section) return `the PR body has no Code review section: ${fix}`;

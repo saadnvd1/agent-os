@@ -18,7 +18,10 @@ export function repoOf(task: Session): string {
 }
 
 // The task's base on origin, fetched along with its head.
-export async function fetchRefs(repo: string, task: Session): Promise<string> {
+export async function fetchRefs(
+  repo: string,
+  task: Pick<Session, "base_branch" | "branch_name">
+): Promise<string> {
   const base = task.base_branch || "main";
   await run(
     "git",

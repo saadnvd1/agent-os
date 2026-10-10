@@ -27,6 +27,7 @@ import {
   failureOf,
   holdingEscalations,
   recordFailure,
+  type GateInput,
   type GateOutcome,
 } from "./gates";
 import { addNote } from "./notes";
@@ -62,29 +63,81 @@ export async function judge(
   landing = false,
   opts: { count?: boolean } = {}
 ): Promise<Verdict> {
+  if (task.task_status !== "running")
+    return {
+      ok: false,
+      wait: false,
+      text: `${task.name} is already ${task.task_status}`,
+    };
+  const pr = await prFor(task, true);
+  if (!pr || pr.state !== "OPEN" || !pr.head)
+    return { ok: false, wait: false, text: `${task.name} has no open PR` };
+  const sha = pr.head;
+  const repo = repoOf(task);
+  return gateVerdict(
+    workspaceId,
+    { id: task.id, name: task.name, repo, refs: task, pr, sha },
+    async () => ({
+      checks: pr.checks,
+      failing: pr.failing,
+      settleIn: ciSettleIn({
+        workspaceId,
+        taskId: task.id,
+        sha,
+        checkCount: pr.checkCount ?? 0,
+        committedAt: await commitTime(repo, sha),
+      }),
+      review: getCheck(task.id, sha, "review"),
+      ...(await waitingState(task)),
+      fromCard: !!task.lh_card_id,
+      scope: getCheck(task.id, sha, "scope"),
+      stackRefusal: landing ? null : signOffRefusal(task.id),
+      codeReviewRefusal: codeReviewRefusal(
+        pr.codeReview,
+        sha,
+        restackedOf(task.id)
+      ),
+    }),
+    opts
+  );
+}
+
+// What's being merged: a task's PR, or a PR no task owns. `id` keys its
+// checks, failures and asks.
+export interface GateWork {
+  id: string;
+  name: string;
+  repo: string;
+  refs: Pick<Session, "base_branch" | "branch_name">;
+  pr: { number: number; url: string };
+  sha: string;
+}
+
+// The gates on one exact head, the same for every PR: Saad's hold, the
+// rules on the diff, then each gate.
+export async function gateVerdict(
+  workspaceId: string,
+  work: GateWork,
+  inputs: () => Promise<Omit<GateInput, "sha" | "ruleBreaks">>,
+  opts: { count?: boolean } = {}
+): Promise<Verdict> {
   const no = (text: string, wait = false): Verdict => ({
     ok: false,
     wait,
     text,
   });
-  if (task.task_status !== "running")
-    return no(`${task.name} is already ${task.task_status}`);
-  const held = holdingEscalations(task.id);
-  const pr = await prFor(task, true);
-  if (!pr || pr.state !== "OPEN" || !pr.head)
-    return no(`${task.name} has no open PR`);
-  const sha = pr.head;
+  const { pr, sha, repo } = work;
+  const held = holdingEscalations(work.id);
   if (held.length)
-    return heldVerdict(workspaceId, task, held, pr.url, sha, pr.number);
+    return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number);
 
-  const repo = repoOf(task);
-  const base = await fetchRefs(repo, task);
+  const base = await fetchRefs(repo, work.refs);
   const files = await changedFiles(repo, base, sha);
   const sensitive = mergeApprovalsOn() ? sensitiveFiles(files) : [];
   if (sensitive.length) {
     const what = sensitive.map((s) => `${s.path} (${s.why})`).join(", ");
     const why = `PR #${pr.number} at ${short(sha)} touches ${what}`;
-    return no(escalate(workspaceId, task, "sensitive", why, pr.url, sha));
+    return no(escalate(workspaceId, work, "sensitive", why, pr.url, sha));
   }
   // Here too, not only in the review: one reviewed in parts while approvals
   // were off goes to Saad once they're on.
@@ -92,38 +145,20 @@ export async function judge(
     const size = (await fullDiff(repo, base, sha)).length;
     if (size > DIFF_CAP) {
       const why = `PR #${pr.number}'s diff at ${short(sha)} is ${size} characters, too big to review whole`;
-      return no(escalate(workspaceId, task, "size", why, pr.url, sha));
+      return no(escalate(workspaceId, work, "size", why, pr.url, sha));
     }
   }
 
   const outcomes = evaluateGates({
     sha,
-    checks: pr.checks,
-    failing: pr.failing,
-    settleIn: ciSettleIn({
-      workspaceId,
-      taskId: task.id,
-      sha,
-      checkCount: pr.checkCount ?? 0,
-      committedAt: await commitTime(repo, sha),
-    }),
-    review: getCheck(task.id, sha, "review"),
-    ...(await waitingState(task)),
     ruleBreaks: ruleBreaks(files, await addedLines(repo, base, sha)),
-    fromCard: !!task.lh_card_id,
-    scope: getCheck(task.id, sha, "scope"),
-    stackRefusal: landing ? null : signOffRefusal(task.id),
-    codeReviewRefusal: codeReviewRefusal(
-      pr.codeReview,
-      sha,
-      restackedOf(task.id)
-    ),
+    ...(await inputs()),
   });
-  const head = `${task.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
+  const head = `${work.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
   const toSaad = outcomes.find((o) => o.state === "escalate");
   if (toSaad)
     return no(
-      `${head}\n- ${escalate(workspaceId, task, toSaad.gate, toSaad.reason!, pr.url, sha)}`
+      `${head}\n- ${escalate(workspaceId, work, toSaad.gate, toSaad.reason!, pr.url, sha)}`
     );
   const failed = outcomes.filter((o) => o.state === "fail");
   const waiting = outcomes.filter((o) => o.state === "wait");
@@ -133,7 +168,7 @@ export async function judge(
     ...failed.map((o) =>
       opts.count === false
         ? `- ${o.gate} failed: ${o.reason}`
-        : countFailure(workspaceId, task, o, pr.url, sha)
+        : countFailure(workspaceId, work, o, pr.url, sha)
     ),
     ...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`),
   ];
@@ -142,7 +177,7 @@ export async function judge(
 
 function countFailure(
   workspaceId: string,
-  task: Session,
+  task: { id: string; name: string },
   o: GateOutcome,
   url: string,
   sha: string

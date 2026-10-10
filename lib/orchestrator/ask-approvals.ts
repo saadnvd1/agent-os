@@ -69,14 +69,16 @@ export function refundApproval(id: number): void {
 // a restart in between leaves it claimed with nothing merged. Claims don't
 // outlive the process, so at boot every claim on a task still running goes
 // back: a task whose merge happened is merged, or its PR is, and nothing
-// can use the approval again.
+// can use the approval again. The same holds for a PR no task owns.
 export function releaseInterruptedClaims(): number {
   return db
     .prepare(
       `UPDATE orchestrator_asks SET used_at = NULL
        WHERE status = 'approved' AND used_at IS NOT NULL
          AND COALESCE(answer, '') != 'approve (void)'
-         AND subject IN (SELECT 'task:' || id FROM sessions WHERE task_status = 'running')`
+         AND (subject IN (SELECT 'task:' || id FROM sessions WHERE task_status = 'running')
+           -- A PR no task owns: a merge that happened can't happen again.
+           OR subject LIKE 'pr:%')`
     )
     .run().changes;
 }

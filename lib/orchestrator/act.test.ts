@@ -168,7 +168,7 @@ describe("workspace scoping", () => {
     );
     await expect(
       runTool(mine.workspace.id, "sign_off", { task: "#4242" })
-    ).rejects.toThrow(/No session "#4242" in this workspace/);
+    ).rejects.toThrow(/No task has PR #4242/);
   });
 });
 

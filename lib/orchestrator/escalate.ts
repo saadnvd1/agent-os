@@ -2,14 +2,13 @@
 // it escalates), one escalation note in the orchestrator's chat, and the
 // task held so the orchestrator doesn't merge it.
 
-import type { Session } from "../db";
-import { AskRefused, raiseAsk, taskSubject } from "./asks";
+import { AskRefused, raiseAsk, workSubject } from "./asks";
 import { failureOf, markEscalated, recordFailure } from "./gates";
 import { addNote } from "./notes";
 
 export function escalate(
   workspaceId: string,
-  task: Session,
+  task: { id: string; name: string },
   gate: string,
   why: string,
   url: string,
@@ -21,7 +20,7 @@ export function escalate(
   try {
     created = raiseAsk({
       workspaceId,
-      subject: taskSubject(task.id),
+      subject: workSubject(task.id),
       kind: "gate",
       title: `Merge ${task.name}?`,
       detail: why,

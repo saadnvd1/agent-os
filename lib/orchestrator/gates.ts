@@ -43,6 +43,13 @@ export interface GateInput {
   stackRefusal: string | null;
   // Why the PR body's Code review section doesn't cover this commit.
   codeReviewRefusal: string | null;
+  // Why it isn't covered yet but will be (an external PR whose own review
+  // of this commit stands in for the section).
+  codeReviewWait?: string | null;
+  // A PR no task owns has no session to read: a draft isn't ready yet, and
+  // a label saying it's blocked holds it.
+  prDraft?: string | null;
+  prBlocked?: string | null;
 }
 
 const short = (sha: string) => sha.slice(0, 7);
@@ -111,20 +118,23 @@ function checkGate(
 }
 
 export function evaluateGates(i: GateInput): GateOutcome[] {
-  const blocked: GateOutcome =
-    i.blocked !== null
-      ? {
-          gate: "blocked",
-          state: "fail",
-          reason: `the task is BLOCKED: ${i.blocked}`,
-        }
-      : i.waitingOn
+  const blocked: GateOutcome = i.prBlocked
+    ? { gate: "blocked", state: "fail", reason: i.prBlocked }
+    : i.prDraft
+      ? { gate: "blocked", state: "wait", reason: i.prDraft }
+      : i.blocked !== null
         ? {
             gate: "blocked",
             state: "fail",
-            reason: `the task is waiting on an answer: ${i.waitingOn}`,
+            reason: `the task is BLOCKED: ${i.blocked}`,
           }
-        : { gate: "blocked", state: "pass" };
+        : i.waitingOn
+          ? {
+              gate: "blocked",
+              state: "fail",
+              reason: `the task is waiting on an answer: ${i.waitingOn}`,
+            }
+          : { gate: "blocked", state: "pass" };
   const scope: GateOutcome = i.ruleBreaks.length
     ? { gate: "scope", state: "fail", reason: i.ruleBreaks.join("; ") }
     : i.fromCard
@@ -135,7 +145,9 @@ export function evaluateGates(i: GateInput): GateOutcome[] {
     : { gate: "stack", state: "pass" };
   const codeReview: GateOutcome = i.codeReviewRefusal
     ? { gate: "code-review", state: "fail", reason: i.codeReviewRefusal }
-    : { gate: "code-review", state: "pass" };
+    : i.codeReviewWait
+      ? { gate: "code-review", state: "wait", reason: i.codeReviewWait }
+      : { gate: "code-review", state: "pass" };
   return [
     ciGate(i),
     checkGate("review", i.review, i.sha),
