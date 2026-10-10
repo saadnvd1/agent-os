@@ -95,8 +95,7 @@ describe("ControlManager", () => {
     expect(pushed).toEqual(["s1:x", "s1:more\r\n"]);
     expect(m.takeActivity()).toBe(true);
     expect(m.takeActivity()).toBe(false);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(m.screen("s1")).toBe("hello\nworldmore");
+    await vi.waitFor(() => expect(m.screen("s1")).toBe("hello\nworldmore"));
   });
 
   it("drops output that arrives before its capture's reply: the capture has it", async () => {
@@ -110,8 +109,8 @@ describe("ControlManager", () => {
     await tick();
     c.say("%output %1 already-in-capture");
     c.say("%begin 4 4 1", "screen", "%end 4 4 1");
-    await settle();
-    expect(m.screen("s1")).toBe("screen");
+    // The screen is rebuilt asynchronously; a fixed wait flaked on slow CI.
+    await vi.waitFor(() => expect(m.screen("s1")).toBe("screen"));
   });
 
   it("says whether a pane printed since a time, once it knows the pane", async () => {
