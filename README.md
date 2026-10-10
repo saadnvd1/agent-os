@@ -317,9 +317,12 @@ root. Every field is optional:
 Every task and worktree session takes a **port slot**, and each named port is
 `base + slot` (a project with no `ports` still gets a `PORT` from 3100), so
 parallel sessions never share a dev server port. The slot is kept on the
-session and freed when it's done, merged, archived or deleted. The ports and
+session and freed when it's done or deleted (an archived or merged one's once
+its agent has stopped). The ports and
 `env` are exported to the setup commands, the agent and its terminals; a port
-always wins over an `env` entry of the same name. The agent's brief gets a
+always wins over an `env` entry of the same name, and `env` can't set names a
+shell, runtime, git or the agent reads (`PATH`, `NODE_OPTIONS`, `GIT_*`,
+`ANTHROPIC_*`, `AGENTOS_*`…). The agent's brief gets a
 short **Running this project** section: its ports, the dev command, how to
 wait for `ready` in one backgrounded call, the test command, the login URL on
 its own port, the browsing map and the notes. Only declared fields are

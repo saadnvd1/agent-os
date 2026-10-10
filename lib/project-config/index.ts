@@ -12,6 +12,7 @@ import {
   agentosJson,
   dispatchJson,
   legacyJson,
+  RESERVED_ENV,
   type ProjectConfig,
 } from "./schema";
 
@@ -186,7 +187,12 @@ export function projectEnv(
   config: ProjectConfig,
   ports: Record<string, number> | null
 ): Record<string, string> {
-  const env: Record<string, string> = { ...(config.env ?? {}) };
+  // Refused by the schema too; this covers a config read any other way.
+  const env: Record<string, string> = Object.fromEntries(
+    Object.entries(config.env ?? {}).filter(
+      ([name]) => !RESERVED_ENV.test(name)
+    )
+  );
   for (const [name, port] of Object.entries(ports ?? {}))
     env[name] = String(port);
   return env;

@@ -5,6 +5,7 @@ import * as path from "path";
 import { detectPackageManager, setupEnv } from "./install";
 import { setupWorktree, type SetupResult } from "../env-setup";
 import { bringDependencies } from ".";
+import { NOT_MAC } from "./clone";
 
 let dir: string;
 beforeEach(() => {
@@ -149,5 +150,94 @@ describe("bringDependencies", () => {
     );
     expect(result.success).toBe(false);
     expect(result.steps).toHaveLength(2);
+  });
+});
+
+describe("bringDependencies with a declared clone and no package manager", () => {
+  const fresh = (): SetupResult => ({
+    success: true,
+    steps: [],
+    envFilesCopied: [],
+    durationMs: 0,
+  });
+  const run = async () => {
+    throw new Error("nothing to install");
+  };
+
+  it("passes the declared paths to the clone and reports it", async () => {
+    const asked: (string[] | undefined)[] = [];
+    const result = fresh();
+    await bringDependencies(
+      result,
+      dir,
+      dir,
+      {},
+      {
+        clone: async (o) => (
+          asked.push(o.only),
+          { ok: true, cloned: [{ rel: ".venv", from: "clone" as const }] }
+        ),
+        run,
+      },
+      [".venv"]
+    );
+    expect(asked).toEqual([[".venv"]]);
+    expect(result.success).toBe(true);
+    expect(result.steps).toMatchObject([
+      { name: "Clone dependencies", success: true, output: ".venv (clone)" },
+    ]);
+  });
+
+  it("fails the setup when the clone fails, with why", async () => {
+    const result = fresh();
+    await bringDependencies(
+      result,
+      dir,
+      dir,
+      {},
+      {
+        clone: async () => ({
+          ok: false,
+          reason: "cloning .venv failed",
+          cloned: [],
+        }),
+        run,
+      },
+      [".venv"]
+    );
+    expect(result.success).toBe(false);
+    expect(result.steps).toMatchObject([
+      { success: false, error: "cloning .venv failed" },
+    ]);
+  });
+
+  it("says nothing off macOS, where there is nothing to fall back to", async () => {
+    const result = fresh();
+    await bringDependencies(
+      result,
+      dir,
+      dir,
+      {},
+      { clone: async () => ({ ok: false, reason: NOT_MAC, cloned: [] }), run },
+      [".venv"]
+    );
+    expect(result).toEqual(fresh());
+  });
+
+  it("does nothing without a package manager or a declared clone", async () => {
+    const result = fresh();
+    let cloned = false;
+    await bringDependencies(
+      result,
+      dir,
+      dir,
+      {},
+      {
+        clone: async () => ((cloned = true), { ok: true, cloned: [] }),
+        run,
+      }
+    );
+    expect(cloned).toBe(false);
+    expect(result).toEqual(fresh());
   });
 });

@@ -65,6 +65,30 @@ describe("loadProjectConfig precedence", () => {
     expect(loaded.error).toContain("cloen");
   });
 
+  it("refuses env names a shell, runtime, agent or AgentOS reads", () => {
+    for (const name of [
+      "NODE_OPTIONS",
+      "BASH_ENV",
+      "DYLD_INSERT_LIBRARIES",
+      "ANTHROPIC_BASE_URL",
+      "AGENTOS_TOKEN",
+      "PATH",
+      "HOME",
+      "GIT_SSH_COMMAND",
+    ]) {
+      const loaded = loadProjectConfig(
+        project({ "agentos.json": { env: { [name]: "x" } } })
+      );
+      expect(loaded.error, name).toContain(`env.${name}`);
+    }
+    // A .dispatch.json is held to the same rule.
+    expect(
+      loadProjectConfig(
+        project({ ".dispatch.json": { env: { NODE_OPTIONS: "x" } } })
+      ).error
+    ).toContain("env.NODE_OPTIONS");
+  });
+
   it("says when the JSON itself is broken", () => {
     const loaded = loadProjectConfig(project({ "agentos.json": "{ nope" }));
     expect(loaded.error).toMatch(/agentos\.json is not valid JSON/);
@@ -165,6 +189,14 @@ describe("ports and env", () => {
   it("gives a project with no ports a PORT", () => {
     expect(portBases({})).toEqual({ PORT: 3100 });
     expect(portBases({ ports: { WEB: 3000 } })).toEqual({ WEB: 3000 });
+  });
+
+  it("drops reserved names however the config was read", () => {
+    expect(projectEnv({ env: { NODE_OPTIONS: "x", MODE: "a" } }, null)).toEqual(
+      {
+        MODE: "a",
+      }
+    );
   });
 
   it("lets the session's ports win over the project's env", () => {

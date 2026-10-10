@@ -61,7 +61,7 @@ this change.
 |---|---|---|---|
 | `$schema` | string | Editor hint, ignored. | 1 |
 | `ports` | `{NAME: base}` | Every named port, offset by the session's slot (`base + slot`). Exported to setup, the agent and its terminals. Without it a session still gets `PORT` (base 3100). | 1 |
-| `env` | `{NAME: string}` | Exported to every session (setup, agent, terminals). Applied first, so a port or an AgentOS variable named here is overridden. Invalid names are refused by the schema. Never put secrets here: the file is committed. | 1 |
+| `env` | `{NAME: string}` | Exported to every session (setup, agent, terminals). Applied first, so a port or an AgentOS variable named here is overridden. Invalid names are refused, and so are names a shell, a runtime, git, the agent CLI or AgentOS reads (`PATH`, `HOME`, `NODE_OPTIONS`, `BASH_ENV`, `DYLD_*`, `GIT_*`, `ANTHROPIC_*`, `AGENTOS_*`…; `RESERVED_ENV` in schema.ts), because `env` reaches the agent and its terminals, not only setup. Never put secrets here: the file is committed. | 1 |
 | `setup` | string[] | Commands run in the new worktree after `copy` and `clone`, with the ports, `env`, `ROOT_WORKTREE_PATH` and `WORKTREE_PATH` exported. AgentOS's own key (legacy `.agent-os.json`). | 1 |
 | `copy` | string[] | Paths copied from the main checkout into the worktree (files or folders, relative, inside the project). Default: every root `.env*` except `*.example`. | 1 |
 | `clone` | string[] | Folders APFS-cloned from the main checkout (`node_modules` entries through the lockfile check and the spare clone; anything else cloned as is). Default: every `node_modules` found, as before. On Linux `node_modules` is installed instead. | 1 |
@@ -106,9 +106,10 @@ one for older readers.
   other session's stored ports (two projects with different bases can meet)
   and against what is listening on the machine (`lsof`), then claimed in one
   transaction.
-- A slot is freed when the session is done, merged, archived or deleted. Done
-  and delete release it directly; any end the allocator didn't see (an
-  archive, a merge noticed later) is reclaimed lazily before each allocation.
+- A slot is freed when the session is done or deleted (both release it
+  directly). An archived or merged session's slot is reclaimed lazily before
+  the next allocation, but only once its tmux session is gone, so two live
+  agents never hold one port.
 
 ## Agent environment
 

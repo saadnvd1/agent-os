@@ -75,11 +75,6 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
     projectPath,
     bundle.branch
   );
-  if (!reused) {
-    runInBackground(async () => {
-      await setupWorktree({ worktreePath, sourcePath: projectPath });
-    }, `setup-moved-${bundle.branch}`);
-  }
   const claude = bundle.claude;
   stepProgress(bundle.moveId, "conversation");
   if (claude) {
@@ -131,9 +126,16 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
 
   stepProgress(bundle.moveId, "resume");
   try {
-    // Its ports here, for the agent's environment and brief. Setup already
-    // ran without them: it starts before the row exists.
-    await allocatePorts(id, portBases(loadProjectConfig(projectPath).config));
+    // Its ports here, then its setup with them: the slot needs the row.
+    const { ports } = await allocatePorts(
+      id,
+      portBases(loadProjectConfig(projectPath).config)
+    );
+    if (!reused) {
+      runInBackground(async () => {
+        await setupWorktree({ worktreePath, sourcePath: projectPath, ports });
+      }, `setup-moved-${bundle.branch}`);
+    }
     await launchClaude({
       sessionId: id,
       tmuxName,

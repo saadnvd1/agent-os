@@ -53,14 +53,38 @@ export function sessionPorts(sessionId: string): Record<string, number> | null {
   return parsePorts(row?.ports);
 }
 
-// Ends the allocator didn't see (an archive, a merge noticed later) give
-// their slot back before the next one is handed out.
-function reclaimEnded(): void {
-  db.prepare(
-    `UPDATE sessions SET port_slot = NULL, ports = NULL, dev_server_port = NULL
-     WHERE port_slot IS NOT NULL
-       AND (archived_at IS NOT NULL OR task_status IN ('done', 'merged'))`
-  ).run();
+const tmuxAlive = (name: string) =>
+  execFileAsync("tmux", ["has-session", "-t", `=${name}`], {
+    timeout: 5000,
+  }).then(
+    () => true,
+    () => false
+  );
+
+// Ends the allocator didn't see give their slot back before the next one is
+// handed out. A done task's agent was stopped; an archived or merged one's
+// may still be running with these ports exported, so its slot is only taken
+// back once its tmux session is gone.
+async function reclaimEnded(
+  alive: (tmuxName: string) => Promise<boolean>
+): Promise<void> {
+  const rows = db
+    .prepare(
+      `SELECT id, tmux_name, task_status, host_id FROM sessions
+       WHERE port_slot IS NOT NULL
+         AND (archived_at IS NOT NULL OR task_status IN ('done', 'merged'))`
+    )
+    .all() as {
+    id: string;
+    tmux_name: string;
+    task_status: string | null;
+    host_id: string | null;
+  }[];
+  for (const row of rows) {
+    const local = !row.host_id || row.host_id === "local";
+    if (row.task_status === "done" || (local && !(await alive(row.tmux_name))))
+      releasePorts(row.id);
+  }
 }
 
 // Every port another session holds: its slot's ports, and the single port
@@ -102,7 +126,8 @@ const slotsTaken = () =>
 export async function allocatePorts(
   sessionId: string,
   bases: Record<string, number>,
-  inUse: (port: number) => Promise<boolean> = isPortInUse
+  inUse: (port: number) => Promise<boolean> = isPortInUse,
+  alive: (tmuxName: string) => Promise<boolean> = tmuxAlive
 ): Promise<{ slot: number; ports: Record<string, number> }> {
   const held = db
     .prepare(`SELECT port_slot, ports FROM sessions WHERE id = ?`)
@@ -114,7 +139,7 @@ export async function allocatePorts(
   if (held.port_slot != null && existing)
     return { slot: held.port_slot, ports: existing };
 
-  reclaimEnded();
+  await reclaimEnded(alive);
   const claim = db.transaction(
     (slot: number, ports: Record<string, number>) => {
       if (slotsTaken().has(slot)) return false;

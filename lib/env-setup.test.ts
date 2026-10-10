@@ -54,9 +54,34 @@ describe("setupWorktree with agentos.json", () => {
     expect(fs.existsSync(path.join(worktree, "link"))).toBe(false);
   });
 
+  it("never writes through a symlink the branch put in the worktree", async () => {
+    const outside = tmp("aos-outside-");
+    const { source, worktree } = checkout(
+      { copy: ["config/master.key", "link.key"] },
+      { "config/master.key": "k", "link.key": "l" }
+    );
+    fs.symlinkSync(outside, path.join(worktree, "config"));
+    fs.symlinkSync(
+      path.join(outside, "victim"),
+      path.join(worktree, "link.key")
+    );
+    const result = await setupWorktree({
+      worktreePath: worktree,
+      sourcePath: source,
+    });
+    expect(result.envFilesCopied).toEqual(["link.key"]);
+    expect(result.steps.find((s) => s.name === "Copy files")?.error).toContain(
+      "config/master.key"
+    );
+    expect(fs.readdirSync(outside)).toEqual([]);
+    expect(fs.lstatSync(path.join(worktree, "link.key")).isSymbolicLink()).toBe(
+      false
+    );
+  });
+
   it("runs setup with the ports and env exported, ports over env", async () => {
     const { source, worktree } = checkout({
-      env: { MODE: "dev", WEB: "wrong" },
+      env: { MODE: "env-sentinel-7f3a", WEB: "wrong" },
       setup: [
         'printf "%s %s %s" "$WEB" "$MODE" "$WORKTREE_PATH" > out.txt',
         "echo $WEB > port.txt",
@@ -68,12 +93,17 @@ describe("setupWorktree with agentos.json", () => {
       ports: { WEB: 3004 },
     });
     expect(result.success).toBe(true);
-    expect(read(worktree, "out.txt")).toBe(`3004 dev ${worktree}`);
+    expect(read(worktree, "out.txt")).toBe(
+      `3004 env-sentinel-7f3a ${worktree}`
+    );
     // Ports are written into the logged command; env values never are.
     expect(result.steps.map((s) => s.command)).toContain(
       "echo 3004 > port.txt"
     );
-    expect(JSON.stringify(result.steps)).not.toContain('"dev"');
+    for (const step of result.steps)
+      expect(`${step.command} ${step.output ?? ""}`).not.toContain(
+        "env-sentinel-7f3a"
+      );
   });
 
   it("reports a broken agentos.json and runs nothing of it", async () => {
@@ -95,17 +125,19 @@ describe("setupWorktree with agentos.json", () => {
     expect(fs.existsSync(path.join(worktree, "legacy"))).toBe(false);
   });
 
-  it("clones a declared folder that isn't node_modules", async () => {
-    if (process.platform !== "darwin") return;
-    const { source, worktree } = checkout(
-      { clone: [".venv"] },
-      { ".venv/bin/python": "py" }
-    );
-    const result = await setupWorktree({
-      worktreePath: worktree,
-      sourcePath: source,
-    });
-    expect(result.success).toBe(true);
-    expect(read(worktree, ".venv/bin/python")).toBe("py");
-  });
+  it.skipIf(process.platform !== "darwin")(
+    "clones a declared folder that isn't node_modules",
+    async () => {
+      const { source, worktree } = checkout(
+        { clone: [".venv"] },
+        { ".venv/bin/python": "py" }
+      );
+      const result = await setupWorktree({
+        worktreePath: worktree,
+        sourcePath: source,
+      });
+      expect(result.success).toBe(true);
+      expect(read(worktree, ".venv/bin/python")).toBe("py");
+    }
+  );
 });

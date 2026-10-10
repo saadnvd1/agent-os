@@ -161,3 +161,53 @@ describe("cloneDeps", () => {
     );
   });
 });
+
+describe("cloneDeps with agentos.json's clone", () => {
+  const declared = async (only: string[]) => {
+    const { refill, ...r } = await cloneDeps({
+      sourcePath: source,
+      worktreePath: worktree,
+      spareRoot: spares,
+      platform: "darwin",
+      only,
+    });
+    await refill;
+    return r;
+  };
+
+  it("still refuses a declared root node_modules for a different lockfile", async () => {
+    fs.writeFileSync(path.join(worktree, "package-lock.json"), '{"v":2}');
+    const r = await declared(["node_modules"]);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/lockfile differs/);
+    expect(fs.existsSync(path.join(worktree, "node_modules"))).toBe(false);
+  });
+
+  it("clones only what is declared", async () => {
+    fs.mkdirSync(path.join(source, ".venv", "bin"), { recursive: true });
+    fs.writeFileSync(path.join(source, ".venv", "bin", "python"), "py");
+    const r = await declared([".venv"]);
+    expect(r).toEqual({ ok: true, cloned: [{ rel: ".venv", from: "clone" }] });
+    expect(
+      fs.readFileSync(path.join(worktree, ".venv", "bin", "python"), "utf8")
+    ).toBe("py");
+    expect(fs.existsSync(path.join(worktree, "node_modules"))).toBe(false);
+  });
+
+  it("clones a declared folder with no lockfile anywhere", async () => {
+    fs.rmSync(path.join(source, "package-lock.json"));
+    fs.rmSync(path.join(worktree, "package-lock.json"));
+    fs.mkdirSync(path.join(source, "vendor", "bundle"), { recursive: true });
+    fs.writeFileSync(path.join(source, "vendor", "bundle", "x"), "1");
+    fs.mkdirSync(path.join(worktree, "vendor"));
+    const r = await declared(["vendor/bundle/"]);
+    expect(r).toEqual({
+      ok: true,
+      cloned: [{ rel: "vendor/bundle", from: "clone" }],
+    });
+  });
+
+  it("skips a declared path the checkout doesn't have", async () => {
+    expect(await declared(["missing"])).toEqual({ ok: true, cloned: [] });
+  });
+});

@@ -91,6 +91,7 @@ export async function copyDeclared(
   paths: string[]
 ): Promise<{ copied: string[]; refused: string[] }> {
   const root = await fs.promises.realpath(sourcePath);
+  const target = await fs.promises.realpath(worktreePath);
   const copied: string[] = [];
   const refused: string[] = [];
   for (const rel of paths) {
@@ -99,13 +100,24 @@ export async function copyDeclared(
       .catch(() => null);
     // Not there in this checkout: nothing to copy, as with a missing .env.
     if (!real) continue;
-    const dest = path.join(worktreePath, rel);
-    if (!inside(root, real) || !inside(worktreePath, path.resolve(dest))) {
+    if (!inside(root, real)) {
       refused.push(rel);
       continue;
     }
     try {
-      await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+      // The worktree is the branch's, so a symlink committed there could
+      // point the copy outside it: the folder written into is resolved, and
+      // a link in the file's own place is replaced, never written through.
+      const dir = path.join(target, path.dirname(rel));
+      await fs.promises.mkdir(dir, { recursive: true });
+      const realDir = await fs.promises.realpath(dir);
+      if (!inside(target, realDir)) {
+        refused.push(rel);
+        continue;
+      }
+      const dest = path.join(realDir, path.basename(rel));
+      const there = await fs.promises.lstat(dest).catch(() => null);
+      if (there?.isSymbolicLink()) await fs.promises.unlink(dest);
       await fs.promises.cp(real, dest, { recursive: true, force: true });
       copied.push(rel);
     } catch (error) {
