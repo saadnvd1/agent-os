@@ -15,7 +15,7 @@ import { isValidTmuxName } from "./attach";
 import { homeRelative } from "./discover";
 import { toPeerSession } from "./peer-sessions";
 import { insertMirror } from "./peer-sync";
-import { postIdempotent } from "../tasks/remote";
+import { hostTasks, postIdempotent } from "../tasks/remote";
 import type { ProjectRef } from "../tasks/project-ref";
 import {
   HostApiError,
@@ -205,30 +205,36 @@ export async function startOnPeer(
   link: HostLink,
   start: PeerStart
 ): Promise<{ session: Session; initialPrompt?: string }> {
+  // An AgentOS from before keys would make a second session on a retry,
+  // and doesn't know a carried project.
+  const keyed = await hostTasks(link)
+    .then((t) => (t.capabilities ?? []).includes("keyed-start"))
+    .catch(() => false);
+  if (start.ref && !keyed)
+    throw new Error(
+      `Update AgentOS on ${link.hostName} to start this project's sessions there`
+    );
   const there = start.ref ? null : await projectThere(link, start);
-  const res = await postIdempotent<{
-    session?: unknown;
-    initialPrompt?: unknown;
-  }>(
-    link,
-    "/api/sessions",
-    {
-      id: start.id,
-      ...(start.ref
-        ? { project: start.ref }
-        : there
-          ? { projectId: there }
-          : { workingDirectory: start.folder }),
-      agentType: start.agentType,
-      model: start.model ?? undefined,
-      access: start.access,
-      name: start.name ?? undefined,
-      prompt: start.prompt || undefined,
-      view: start.view,
-    },
-    // A carried project may be cloned there first.
-    start.ref ? 180000 : 60000
-  );
+  const body = {
+    id: start.id,
+    ...(start.ref
+      ? { project: start.ref }
+      : there
+        ? { projectId: there }
+        : { workingDirectory: start.folder }),
+    agentType: start.agentType,
+    model: start.model ?? undefined,
+    access: start.access,
+    name: start.name ?? undefined,
+    prompt: start.prompt || undefined,
+    view: start.view,
+  };
+  // A carried project may be cloned there first.
+  const timeout = start.ref ? 180000 : 60000;
+  type Answer = { session?: unknown; initialPrompt?: unknown };
+  const res = keyed
+    ? await postIdempotent<Answer>(link, "/api/sessions", body, timeout)
+    : await hostApi<Answer>(link, "/api/sessions", { body, timeout });
   const peer = toPeerSession(
     link.hostId,
     (res.session ?? {}) as Record<string, unknown>

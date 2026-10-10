@@ -25,6 +25,18 @@ export interface ProjectRef {
 
 const execFileAsync = promisify(execFile);
 
+/** A ref as another machine sent it: its shape, before anything reads it. */
+export function isProjectRef(v: unknown): v is ProjectRef {
+  const r = v as ProjectRef | null;
+  return (
+    !!r &&
+    typeof r === "object" &&
+    typeof r.name === "string" &&
+    typeof r.path === "string" &&
+    (r.remote === null || typeof r.remote === "string")
+  );
+}
+
 const REMOTE_URL = /^(https:\/\/|ssh:\/\/|git@)[\w.@:/~-]+$/;
 
 export function homeRelative(dir: string, home = os.homedir()): string {
@@ -59,12 +71,24 @@ export async function originOf(dir: string): Promise<string | null> {
   return url.trim() || null;
 }
 
+/**
+ * A remote without the credentials some origins carry
+ * (https://x-access-token:ghp_…@github.com/…): a ref goes to other
+ * machines, and into their git command lines. ssh keeps its user (git@).
+ */
+export function withoutCredentials(remote: string | null): string | null {
+  if (!remote) return remote;
+  return remote
+    .replace(/^(https?:\/\/)[^@/]*@/i, "$1")
+    .replace(/^(ssh:\/\/)([^@/:]*):[^@/]*@/i, "$1$2@");
+}
+
 export async function projectRef(project: Project): Promise<ProjectRef> {
   const dir = expandHome(project.working_directory);
   return {
     name: project.name,
     path: homeRelative(dir),
-    remote: await originOf(dir),
+    remote: withoutCredentials(await originOf(dir)),
   };
 }
 
@@ -121,10 +145,11 @@ export async function whyNotHere(ref: ProjectRef): Promise<string | null> {
   if (fs.existsSync(path.join(dir, ".git"))) return null;
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0)
     return "Its folder there isn't a git repository";
-  if (!ref.remote || !REMOTE_URL.test(ref.remote))
+  const remote = withoutCredentials(ref.remote);
+  if (!remote || !REMOTE_URL.test(remote))
     return "Not there, and no remote to clone";
   try {
-    await execFileAsync("git", ["ls-remote", "--heads", "--", ref.remote], {
+    await execFileAsync("git", ["ls-remote", "--heads", "--", remote], {
       cwd: os.homedir(),
       timeout: 15000,
       env: {

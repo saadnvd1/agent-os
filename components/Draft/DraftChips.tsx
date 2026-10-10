@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   Bot,
   FolderGit2,
@@ -72,6 +73,17 @@ export function DraftChips({
     if (!onMachines.data) return "Checking…";
     return onMachines.data[hostId] ?? null;
   };
+  // A draft kept for a machine that can no longer take the project goes
+  // back to this one, rather than failing on send.
+  const hostGone =
+    projectHere &&
+    !draft.openPr &&
+    draft.hostId !== "local" &&
+    (!machines.some((h) => h.id === draft.hostId) ||
+      (!!onMachines.data && onMachines.data[draft.hostId] != null));
+  useEffect(() => {
+    if (hostGone) onChange({ hostId: "local", useWorktree: true });
+  }, [hostGone, onChange]);
 
   const pickProject = (id: string | null) => {
     const next = newDraft(draft.id, real.find((p) => p.id === id) ?? null, {

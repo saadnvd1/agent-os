@@ -111,10 +111,22 @@ async function deliver(sessionId: string, id: string, note = "") {
 }
 
 // Starts under way, by key: a repeat while one runs gets the same answer.
+// And a terminal's first prompt, which lives only in the answer, kept a
+// while after: a repeat whose first answer was lost still types it.
 const g = globalThis as unknown as {
   __agentosStarting?: Map<string, Promise<Launched>>;
+  __agentosStartPrompts?: Map<string, { prompt: string; at: number }>;
 };
 const starting = (g.__agentosStarting ??= new Map<string, Promise<Launched>>());
+const prompts = (g.__agentosStartPrompts ??= new Map());
+export const START_PROMPT_KEEP_MS = 15 * 60_000;
+
+function keepPrompt(key: string, prompt: string | undefined) {
+  const now = Date.now();
+  for (const [k, v] of prompts)
+    if (now - v.at > START_PROMPT_KEEP_MS) prompts.delete(k);
+  if (prompt) prompts.set(key, { prompt, at: now });
+}
 
 const sessionRow = (id: string) =>
   queries.getSession(db).get(id) as Session | undefined;
@@ -133,9 +145,21 @@ export function launchSession(input: LaunchInput): Promise<Launched> {
   if (existing) {
     if (existing.task_prompt || existing.task_status || existing.archived_at)
       return Promise.reject(new Error("That id is taken"));
-    return Promise.resolve({ session: existing, repeat: true });
+    const kept = prompts.get(key);
+    return Promise.resolve({
+      session: existing,
+      repeat: true,
+      ...(kept && Date.now() - kept.at <= START_PROMPT_KEEP_MS
+        ? { initialPrompt: kept.prompt }
+        : {}),
+    });
   }
-  const p = launch(input, key).finally(() => starting.delete(key));
+  const p = launch(input, key)
+    .then((l) => {
+      keepPrompt(key, l.initialPrompt);
+      return l;
+    })
+    .finally(() => starting.delete(key));
   starting.set(key, p);
   return p;
 }

@@ -123,6 +123,57 @@ describe("launchSession (a draft's first send)", () => {
     ).rejects.toThrow(/taken/);
   });
 
+  it("hands a repeat of a terminal start its first prompt, which lives only in the answer", async () => {
+    const id = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
+    const start = () =>
+      launchSession({
+        id,
+        agentType: "claude",
+        view: "terminal",
+        prompt: "Type me once",
+        name: "term",
+      });
+    const first = await start();
+    const again = await start();
+    expect(first.initialPrompt).toBe("Type me once");
+    expect(again).toMatchObject({
+      repeat: true,
+      initialPrompt: "Type me once",
+    });
+  });
+
+  it("refuses a key naming an archived session, or a project here on a machine that isn't linked", async () => {
+    const archived = "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a";
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, archived_at)
+       VALUES (?, 'old', 'claude-o', '~', datetime('now'))`
+    ).run(archived);
+    await expect(
+      launchSession({ id: archived, agentType: "claude" })
+    ).rejects.toThrow(/taken/);
+    db.prepare(
+      `INSERT INTO hosts (id, name, ssh_target) VALUES ('ssh-only', 'box', 'me@box')`
+    ).run();
+    const project = createProject({
+      name: "here",
+      workingDirectory: makeRepo(),
+    });
+    await expect(
+      launchSession({
+        projectId: project.id,
+        hostId: "ssh-only",
+        agentType: "claude",
+      })
+    ).rejects.toThrow(/run here or on a linked machine/);
+    expect(
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM sessions WHERE host_id = 'ssh-only'`
+        )
+        .get()
+    ).toEqual({ n: 0 });
+  });
+
   it("builds the worktree first, renames its branch from the first message, then sends", async () => {
     const repo = makeRepo();
     const project = createProject({ name: "repo", workingDirectory: repo });

@@ -801,6 +801,15 @@ WebSockets with the link's device token, and only ever connects out to it.
   Fork, fresh start, move to project and check-ins are shown disabled with
   the reason. A new session started here on that machine is started by its
   AgentOS and opens in chat, like a local one.
+- A session for a project here can start on a linked machine too: pick it in
+  the draft's Machine chip. That machine finds the project by its repository
+  or folder, or clones it, as for tasks. A machine that can't (no remote, a
+  folder there that isn't a repository, no clone access, unreachable) is
+  greyed out in the chip with the reason. The session sits with the project
+  here.
+- Starts are safe to retry: the draft's id is the start's key and the
+  session's id, so a resend, or this machine retrying a start whose answer
+  was lost, gets the session the first one made instead of a second.
 - Terminals attach through its `/ws/terminal`, relayed by this server; one
   connection per session however many views show it, with flow control
   carried through. A dropped connection retries for two minutes, then says so.

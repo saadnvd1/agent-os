@@ -20,13 +20,17 @@ vi.mock("./gh", async (orig) => {
   };
 });
 
+import { NextRequest } from "next/server";
 import { getProject } from "../projects";
+import { POST as availability } from "../../app/api/projects/availability/route";
+import { POST as startSession } from "../../app/api/sessions/route";
 import {
   ensureProject,
   homeRelative,
   repoIdentity,
   safeRelative,
   whyNotHere,
+  withoutCredentials,
 } from "./project-ref";
 import { git, setupMoveRepo, type MoveFixture } from "./move-testing";
 
@@ -121,6 +125,7 @@ describe("ensureProject", () => {
   });
 
   it("says why it couldn't take a project, without cloning", async () => {
+    const before = clones.length;
     git(f.repo, "remote", "set-url", "origin", "git@github.com:me/app.git");
     expect(
       await whyNotHere({
@@ -130,26 +135,87 @@ describe("ensureProject", () => {
       })
     ).toBeNull();
     git(f.repo, "remote", "set-url", "origin", f.origin);
+    // A repository in the folder that no project names yet is taken as is.
+    git(f.tmp, "init", "-q", path.join(f.tmp, "dev", "why-repo"));
     expect(
-      await whyNotHere({ name: "k", path: "dev/kept", remote: null })
+      await whyNotHere({ name: "r", path: "dev/why-repo", remote: null })
     ).toBeNull();
     expect(
-      await whyNotHere({ name: "z", path: "dev/z", remote: null })
+      await whyNotHere({ name: "z", path: "dev/why-none", remote: null })
     ).toMatch(/no remote to clone/);
+    fs.mkdirSync(path.join(f.tmp, "dev", "why-plain"), { recursive: true });
+    fs.writeFileSync(path.join(f.tmp, "dev", "why-plain", "a"), "");
     expect(
-      await whyNotHere({ name: "n", path: "dev/notgit", remote: "https://h/x" })
+      await whyNotHere({
+        name: "n",
+        path: "dev/why-plain",
+        remote: "https://h/x",
+      })
     ).toMatch(/isn't a git repository/);
     expect(
       await whyNotHere({
         name: "u",
-        path: "dev/u",
+        path: "dev/why-u",
         remote: "https://127.0.0.1:1/u.git",
       })
     ).toBe("Can't clone it there");
     expect(await whyNotHere({ name: "o", path: "../o", remote: null })).toMatch(
       /Bad project folder/
     );
-    expect(clones).toHaveLength(1);
-    expect(fs.existsSync(path.join(f.tmp, "dev", "u"))).toBe(false);
+    expect(clones).toHaveLength(before);
+    expect(fs.existsSync(path.join(f.tmp, "dev", "why-u"))).toBe(false);
+  });
+
+  it("never lets a remote's credentials leave the machine", () => {
+    expect(
+      withoutCredentials("https://x-access-token:ghp_abc@github.com/me/app.git")
+    ).toBe("https://github.com/me/app.git");
+    expect(withoutCredentials("https://ghp_abc@github.com/me/app")).toBe(
+      "https://github.com/me/app"
+    );
+    expect(withoutCredentials("ssh://git:secret@host/me/app")).toBe(
+      "ssh://git@host/me/app"
+    );
+    expect(withoutCredentials("ssh://git@host/me/app")).toBe(
+      "ssh://git@host/me/app"
+    );
+    expect(withoutCredentials("git@github.com:me/app.git")).toBe(
+      "git@github.com:me/app.git"
+    );
+    expect(withoutCredentials(null)).toBeNull();
+  });
+});
+
+describe("a ref another machine sends", () => {
+  const post = (body: unknown) =>
+    new NextRequest("http://x/api", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+  it("is refused before anything reads it when it isn't one", async () => {
+    const bad = [
+      {},
+      { project: { name: 1, path: "dev/x", remote: null } },
+      { project: { name: "x", path: ["dev"], remote: null } },
+      { project: { name: "x", path: "dev/x", remote: 5 } },
+    ];
+    for (const body of bad) {
+      const res = await availability(post(body));
+      expect(res.status).toBe(400);
+    }
+    const before = clones.length;
+    for (const body of bad.slice(1)) {
+      const res = await startSession(post({ ...body, agentType: "claude" }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe("Bad project");
+    }
+    expect(clones).toHaveLength(before);
+    const ok = await availability(
+      post({ project: { name: "z", path: "dev/ref-none", remote: null } })
+    );
+    expect(await ok.json()).toEqual({
+      reason: "Not there, and no remote to clone",
+    });
   });
 });

@@ -4,7 +4,7 @@ import { isValidAgentType } from "@/lib/providers";
 import { clientSend } from "@/lib/chat/client-send";
 import { CHAT_ACCESS } from "@/lib/chat/events";
 import { launchSession } from "@/lib/sessions/launch";
-import type { ProjectRef } from "@/lib/tasks/project-ref";
+import { isProjectRef } from "@/lib/tasks/project-ref";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -38,6 +38,12 @@ export async function GET() {
   }
 }
 
+function projectRefOf(v: unknown) {
+  if (v === undefined || v === null) return null;
+  if (!isProjectRef(v)) throw new Error("Bad project");
+  return v;
+}
+
 // POST /api/sessions - Create a session: a draft's first send, a terminal,
 // a fork or an imported conversation. id is the client's key for a retry;
 // project (a ref) is how another machine's AgentOS names a project.
@@ -57,10 +63,7 @@ export async function POST(request: NextRequest) {
     const { session, initialPrompt, repeat } = await launchSession({
       id: str(body.id),
       projectId: str(body.projectId),
-      project:
-        body.project && typeof body.project === "object"
-          ? (body.project as ProjectRef)
-          : null,
+      project: projectRefOf(body.project),
       workingDirectory: str(body.workingDirectory),
       agentType:
         typeof body.agentType === "string" && isValidAgentType(body.agentType)
