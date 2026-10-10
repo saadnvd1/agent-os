@@ -60,6 +60,7 @@ export function SidebarBody({
     );
 
   const count =
+    shelves.orchestrators.length +
     shelves.pinned.length +
     shelves.needsYou.length +
     shelves.working.length +

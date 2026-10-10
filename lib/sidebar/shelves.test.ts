@@ -42,6 +42,7 @@ function shelves(
   });
   const ids = (rows: { session: Session }[]) => rows.map((r) => r.session.id);
   return {
+    orchestrators: ids(out.orchestrators),
     pinned: ids(out.pinned),
     needsYou: ids(out.needsYou),
     working: ids(out.working),
@@ -235,5 +236,41 @@ describe("sameRow", () => {
       ...sessions.slice(1),
     ]);
     expect(sameRow(rowOf(before, "a"), rowOf(after, "a"))).toBe(false);
+  });
+});
+
+describe("the pinned orchestrator", () => {
+  const orch = (id: string, over: Partial<Session> = {}) =>
+    session(id, {
+      role: "orchestrator",
+      project_id: null,
+      workspace_id: "w1",
+      pinned: true,
+      ...over,
+    });
+
+  it("puts only the current orchestrator on top; an old one is an ordinary row", () => {
+    const out = shelves(
+      [orch("current"), orch("old"), session("mine", { pinned: true })],
+      { old: { status: "running" } },
+      { currentOrchestrators: new Set(["current"]) }
+    );
+    expect(out.orchestrators).toEqual(["current"]);
+    expect(out.pinned).toEqual(["mine"]);
+    expect(out.working).toEqual(["old"]);
+  });
+
+  it("drops back among the sessions when unpinned, by its need", () => {
+    const out = shelves(
+      [orch("current", { pinned: false })],
+      { current: { status: "waiting", need: "answer" } },
+      { currentOrchestrators: new Set(["current"]) }
+    );
+    expect(out.orchestrators).toEqual([]);
+    expect(out.needsYou).toEqual(["current"]);
+  });
+
+  it("is an ordinary row before the orchestrators have loaded", () => {
+    expect(shelves([orch("current")]).orchestrators).toEqual([]);
   });
 });

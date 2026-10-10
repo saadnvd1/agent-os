@@ -1,7 +1,8 @@
 /**
  * Each workspace's standing orchestrator: one durable chat session that runs
  * the work across the workspace's projects (docs/plans: workspace
- * orchestrator). It's made on first open and never swept with idle sessions.
+ * orchestrator). It's made on first open, pinned, and never swept with idle
+ * sessions.
  */
 
 import fs from "fs";
@@ -53,9 +54,9 @@ export function ensureOrchestrator(workspaceId: string): Session {
   db.prepare(
     `INSERT OR IGNORE INTO sessions (id, name, tmux_name, working_directory, model,
        group_path, agent_type, auto_approve, project_id, host_id, view, chat_access,
-       role, workspace_id)
+       role, workspace_id, pinned)
      VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 0, NULL, 'local', 'chat', 'ask',
-       'orchestrator', ?)`
+       'orchestrator', ?, 1)`
   ).run(
     id,
     `${workspace.name} orchestrator`,

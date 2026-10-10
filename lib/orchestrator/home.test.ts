@@ -40,6 +40,18 @@ describe("the orchestrator's home", () => {
     expect(isOrchestrator(a.id)).toBe(true);
   });
 
+  it("starts pinned, and an unpin stays with its workspace", async () => {
+    const { setPinned } = await import("@/lib/sidebar/pin");
+    const w = createWorkspace("Pinned");
+    const other = createWorkspace("Kept");
+    const o = ensureOrchestrator(w.id);
+    expect(o.pinned).toBe(1);
+    expect(setPinned(o.id, false)).toBe(true);
+    // Opening it again (a reload, a new tab) keeps the choice.
+    expect(ensureOrchestrator(w.id).pinned).toBe(0);
+    expect(ensureOrchestrator(other.id).pinned).toBe(1);
+  });
+
   it("allows one orchestrator per workspace, enforced by the database", () => {
     const w = createWorkspace("Solo");
     ensureOrchestrator(w.id);

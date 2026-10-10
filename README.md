@@ -499,7 +499,10 @@ Sessions on other machines can receive messages but not yet send them.
 ## The sidebar
 
 One flat list of every session in the current workspace, each row naming its
-project underneath. Sessions sit on shelves: **Pinned** (pin from a row's ⋯
+project underneath. The workspace's orchestrator comes first, as a compact row
+with its state and how many of its asks wait on you; it starts pinned there,
+and unpinning it from its ⋯ menu (remembered per workspace) drops it among the
+other sessions. Sessions sit on shelves: **Pinned** (pin from a row's ⋯
 menu), **Needs you** (an approval, a question, a terminal waiting for input, a
 message typed and never sent, a failed task, or the orchestrator's open asks,
 each with a badge), **Working**,

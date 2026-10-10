@@ -1,5 +1,5 @@
-// The sidebar's one flat list, sorted onto shelves: Pinned, Needs you,
-// Working, then Done. Client-safe: no database.
+// The sidebar's one flat list, sorted onto shelves: the workspace's pinned
+// orchestrator, Pinned, Needs you, Working, then Done. Client-safe: no database.
 import type { Session } from "@/lib/db/types";
 import type { TaskState } from "@/lib/tasks/state";
 
@@ -44,6 +44,8 @@ export interface SidebarRow {
 }
 
 export interface Shelves {
+  // Each shown workspace's current orchestrator, while it's pinned.
+  orchestrators: SidebarRow[];
   pinned: SidebarRow[];
   needsYou: SidebarRow[];
   working: SidebarRow[];
@@ -92,6 +94,9 @@ export interface ShelfInput {
   projectName: (session: Session) => string;
   query?: string;
   projectId?: string | null;
+  // Each workspace's current orchestrator (its overview's sessionId). Any
+  // other orchestrator session is an ordinary row, pinned or not.
+  currentOrchestrators?: ReadonlySet<string>;
 }
 
 const newestFirst = (a: SidebarRow, b: SidebarRow) =>
@@ -132,13 +137,23 @@ export function buildShelves(input: ShelfInput): Shelves {
     else top.push(row);
   }
 
-  const shelves: Shelves = { pinned: [], needsYou: [], working: [], done: [] };
+  const shelves: Shelves = {
+    orchestrators: [],
+    pinned: [],
+    needsYou: [],
+    working: [],
+    done: [],
+  };
   for (const row of top) {
-    if (row.session.pinned) shelves.pinned.push(row);
+    const { pinned, role, id } = row.session;
+    const current = !!input.currentOrchestrators?.has(id);
+    if (pinned && current) shelves.orchestrators.push(row);
+    else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
     else if (row.need) shelves.needsYou.push(row);
     else if (row.working) shelves.working.push(row);
     else shelves.done.push(row);
   }
+  shelves.orchestrators.sort(oldestFirst);
   shelves.pinned.sort(oldestFirst);
   shelves.needsYou.sort(newestFirst);
   shelves.working.sort(newestFirst);
