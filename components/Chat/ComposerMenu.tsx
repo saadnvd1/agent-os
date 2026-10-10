@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MenuOption {
@@ -20,6 +21,7 @@ export function ComposerMenu({
   active,
   onPick,
   onHover,
+  refresh,
 }: {
   label: string;
   empty: string;
@@ -27,6 +29,8 @@ export function ComposerMenu({
   active: number;
   onPick: (index: number) => void;
   onHover: (index: number) => void;
+  // Reloads the list (a skill added since it was read).
+  refresh?: { onClick: () => void; busy: boolean };
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -43,6 +47,24 @@ export function ComposerMenu({
       aria-label={label}
       className="popover-surface absolute right-0 bottom-full left-0 mb-2 max-h-[min(55vh,340px)] overflow-x-hidden overflow-y-auto rounded-xl p-1.5"
     >
+      {refresh && (
+        <div className="flex items-center justify-between pl-2.5">
+          <span className="text-muted-foreground text-xs">{label}</span>
+          <button
+            type="button"
+            aria-label="Refresh commands"
+            title="Refresh commands"
+            disabled={refresh.busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={refresh.onClick}
+            className="text-muted-foreground hover:text-foreground flex h-11 w-11 items-center justify-center rounded-lg md:h-7 md:w-7"
+          >
+            <RefreshCw
+              className={cn("h-3.5 w-3.5", refresh.busy && "animate-spin")}
+            />
+          </button>
+        </div>
+      )}
       {options.length === 0 ? (
         <p className="text-muted-foreground px-2.5 py-2 text-sm">{empty}</p>
       ) : (

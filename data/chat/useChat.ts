@@ -133,6 +133,7 @@ export function useChat(
   const [commands, setCommands] = useState<ChatCommand[]>([]);
   const [models, setModels] = useState<ChatModel[]>([]);
   const [model, setModelState] = useState("");
+  const [refreshingCommands, setRefreshingCommands] = useState(false);
   const [access, setAccessState] = useState<ChatAccess>("full");
   const [plan, setPlanState] = useState<boolean | null>(null);
   const [context, setContext] = useState<ChatContext | null>(null);
@@ -216,6 +217,7 @@ export function useChat(
         } else if (m.type === "state") {
           setState(m.state);
         } else if (m.type === "capabilities") {
+          setRefreshingCommands(false);
           setCommands(m.commands);
           setModels(m.models);
           setModelState(m.model);
@@ -258,6 +260,7 @@ export function useChat(
       };
       ws.onclose = () => {
         setConnected(false);
+        setRefreshingCommands(false);
         setLoadingOlder(false);
         if (!closed) retry = setTimeout(connect, 1500);
       };
@@ -303,6 +306,16 @@ export function useChat(
   const setModel = useCallback((value: string) => {
     setModelState(value);
     wsRef.current?.send(JSON.stringify({ type: "set_model", model: value }));
+  }, []);
+
+  // Loads the "/" commands again, past the server's cache.
+  const refreshCommands = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws?.readyState !== WebSocket.OPEN) return;
+    setRefreshingCommands(true);
+    ws.send(JSON.stringify({ type: "refresh_commands" }));
+    // A failed load answers with an error, not a list: don't spin forever.
+    setTimeout(() => setRefreshingCommands(false), 30_000);
   }, []);
 
   const setAccess = useCallback((value: ChatAccess) => {
@@ -405,6 +418,8 @@ export function useChat(
     state,
     connected,
     commands,
+    refreshCommands,
+    refreshingCommands,
     models,
     model,
     send,

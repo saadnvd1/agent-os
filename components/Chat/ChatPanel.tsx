@@ -203,6 +203,8 @@ export function ChatPanel({
     state,
     connected,
     commands,
+    refreshCommands,
+    refreshingCommands,
     models,
     model,
     send,
@@ -444,6 +446,8 @@ export function ChatPanel({
           }}
           onStop={interrupt}
           commands={commands}
+          onRefreshCommands={refreshCommands}
+          refreshingCommands={refreshingCommands}
           models={models}
           model={model}
           onSetModel={setModel}

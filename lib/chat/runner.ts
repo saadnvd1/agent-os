@@ -26,6 +26,7 @@ import {
 import {
   capsKey,
   emitCapabilities,
+  releaseUnwatchedSoon,
   sendCapabilities,
   setChatPlan,
 } from "./settings";
@@ -67,7 +68,12 @@ import { DEMO_REFUSAL, demoMode } from "../security/demo";
 import { getHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
 
-export { setChatAccess, setChatModel, setChatPlan } from "./settings";
+export {
+  refreshCapabilities,
+  setChatAccess,
+  setChatModel,
+  setChatPlan,
+} from "./settings";
 
 function savedContext(sessionId: string): ChatContext | null {
   const raw = getSession(sessionId).chat_context;
@@ -601,7 +607,10 @@ export function watchChat(
   let set = registry.listeners.get(sessionId);
   if (!set) registry.listeners.set(sessionId, (set = new Set()));
   set.add(listener);
-  return () => set?.delete(listener);
+  return () => {
+    set?.delete(listener);
+    releaseUnwatchedSoon();
+  };
 }
 
 // The page before `before`, as the reader scrolls up.

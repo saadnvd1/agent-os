@@ -299,6 +299,8 @@ export type ChatClientMessage =
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }
   | { type: "set_plan"; plan: boolean }
+  // Loads the "/" commands again, skipping the cache.
+  | { type: "refresh_commands" }
   // Leaves plan mode and asks the agent to carry out that plan.
   | { type: "carry_plan"; id: string }
   | ({ type: "respond"; id: string } & ApprovalDecision)
