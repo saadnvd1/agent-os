@@ -249,33 +249,59 @@ async function undoFailedAdd(
     await quiet(["branch", "-D", "--", branch]);
 }
 
+// Removals in progress, by path, with the branch each one's worktree was
+// on. `git worktree remove` takes seconds on a tree with cloned
+// dependencies, and a tree read halfway through looks like every file it
+// already deleted is an uncommitted change.
+const removing = new Map<
+  string,
+  { done: Promise<void>; branch: Promise<string | null> }
+>();
+
+const removalKey = (p: string) => path.resolve(resolvePath(p));
+
+// Resolves once no removal of this worktree is running.
+export async function removalSettled(worktreePath: string): Promise<void> {
+  await removing.get(removalKey(worktreePath))?.done.catch(() => {});
+}
+
+export const removalRunning = (worktreePath: string) =>
+  removing.has(removalKey(worktreePath));
+
 /**
- * Delete a worktree and optionally its branch
+ * Delete a worktree and optionally its branch. A second call while one is
+ * running joins it, and still deletes the branch when it asks to.
  */
-export async function deleteWorktree(
+export function deleteWorktree(
   worktreePath: string,
   projectPath: string,
   deleteBranch = false
 ): Promise<void> {
-  const resolvedProjectPath = resolvePath(projectPath);
-  const resolvedWorktreePath = resolvePath(worktreePath);
+  const key = removalKey(worktreePath);
+  const repo = resolvePath(projectPath);
+  const running = removing.get(key);
+  if (running)
+    return deleteBranch
+      ? running.done.then(async () => dropBranch(repo, await running.branch))
+      : running.done;
+  // Read before anything is removed.
+  const branch = git(key, ["rev-parse", "--abbrev-ref", "HEAD"], 5000).then(
+    ({ stdout }) => stdout.trim() || null,
+    () => null
+  );
+  const done = (async () => {
+    await branch;
+    await removeWorktree(key, repo);
+    if (deleteBranch) await dropBranch(repo, await branch);
+  })().finally(() => removing.delete(key));
+  removing.set(key, { done, branch });
+  return done;
+}
 
-  // Get the branch name before removing (for optional deletion)
-  let branchName: string | null = null;
-  if (deleteBranch) {
-    try {
-      const { stdout } = await git(
-        resolvedWorktreePath,
-        ["rev-parse", "--abbrev-ref", "HEAD"],
-        5000
-      );
-      branchName = stdout.trim();
-    } catch {
-      // Ignore - worktree might already be gone
-    }
-  }
-
-  // Remove the worktree
+async function removeWorktree(
+  resolvedWorktreePath: string,
+  resolvedProjectPath: string
+): Promise<void> {
   try {
     await git(
       resolvedProjectPath,
@@ -297,20 +323,13 @@ export async function deleteWorktree(
       // Ignore prune errors
     }
   }
+}
 
-  // Optionally delete the branch
-  if (
-    deleteBranch &&
-    branchName &&
-    branchName !== "main" &&
-    branchName !== "master"
-  ) {
-    try {
-      await git(resolvedProjectPath, ["branch", "-D", "--", branchName], 10000);
-    } catch {
-      // Ignore branch deletion errors (might be merged or checked out elsewhere)
-    }
-  }
+async function dropBranch(repo: string, branch: string | null): Promise<void> {
+  if (!branch || branch === "HEAD" || branch === "main" || branch === "master")
+    return;
+  // Fails when it's checked out elsewhere; that's fine.
+  await git(repo, ["branch", "-D", "--", branch], 10000).catch(() => {});
 }
 
 /**

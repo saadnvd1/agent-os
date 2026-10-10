@@ -14,6 +14,8 @@ const cards: [string, TaskState][] = [];
 const status = new Map<string, "running" | "idle">();
 const droppedDatabases: string[] = [];
 let ghDown = false;
+// Holds a sign-off's cleanup at its first step until released.
+let cleanupGate: Promise<void> | null = null;
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
@@ -27,7 +29,10 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
             prs.set(b, { ...pr, state: "MERGED" });
         return "";
       }
-      if (cmd === "tmux") throw new Error("no tmux in tests");
+      if (cmd === "tmux") {
+        await cleanupGate;
+        throw new Error("no tmux in tests");
+      }
       return real.run(cmd, args, cwd, t);
     },
     findPR: async (_repo: string, branch: string) => prs.get(branch) ?? null,
@@ -95,6 +100,9 @@ const { putCheck } = await import("@/lib/orchestrator/checks");
 const { failureOf } = await import("@/lib/orchestrator/gates");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { doneSession } = await import("./index");
+const { signOffTask } = await import("@/lib/tasks");
+const { deleteWorktree } = await import("@/lib/worktrees");
+const { worktreeFate } = await import("./worktree");
 
 beforeEach(() => {
   ghDown = false;
@@ -491,6 +499,116 @@ const sidebarIds = async () =>
   (
     (await (await listSessions()).json()) as { sessions: { id: string }[] }
   ).sessions.map((s) => s.id);
+
+// Enough files that `git worktree remove` is still deleting when the next
+// step reads the tree, as it is with a real checkout and its dependencies.
+function bulkCommit(dir: string, branch: string): string {
+  for (let i = 0; i < 1500; i++) {
+    const d = path.join(dir, "bulk", String(i % 30));
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, `f${i}.ts`), `export const v = ${i};\n`);
+  }
+  git(dir, "add", "-A");
+  git(dir, "commit", "-qm", "bulk");
+  git(dir, "push", "-q", "origin", branch);
+  return git(dir, "rev-parse", "HEAD");
+}
+
+describe("done right after a sign-off", () => {
+  it("waits for the sign-off's cleanup instead of reading a half-deleted tree", async () => {
+    const t = setup();
+    const s = t.session("signed-clean", { task: true });
+    s.head = bulkCommit(s.dir!, s.branch);
+    t.openPR(s);
+    let release = () => {};
+    cleanupGate = new Promise((r) => (release = r));
+    try {
+      await signOffTask(s.id);
+      let finished = false;
+      const done = doneSession(s.id, { by: "direct" }).finally(
+        () => (finished = true)
+      );
+      await new Promise((r) => setTimeout(r, 300));
+      expect(finished).toBe(false);
+      expect(fs.existsSync(s.dir!)).toBe(true);
+      release();
+      const out = await done;
+      expect(out.worktree).toMatchObject({
+        action: "removed",
+        why: "its branch is merged",
+      });
+      expect(fs.existsSync(s.dir!)).toBe(false);
+    } finally {
+      cleanupGate = null;
+      release();
+    }
+  });
+
+  it("keeps uncommitted work through the sign-off's cleanup and done", async () => {
+    const t = setup();
+    const s = t.session("signed-dirty", { task: true });
+    s.head = bulkCommit(s.dir!, s.branch);
+    t.openPR(s);
+    fs.writeFileSync(path.join(s.dir!, "notes.md"), "keep me\n");
+    await signOffTask(s.id);
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.worktree).toMatchObject({
+      action: "kept",
+      why: "it has uncommitted changes (1 file: notes.md)",
+    });
+    const again = await worktreeFate(
+      { worktree_path: s.dir, base_branch: "main" },
+      { prHead: s.head }
+    );
+    expect(again).toMatchObject({ action: "kept" });
+    expect(fs.readFileSync(path.join(s.dir!, "notes.md"), "utf8")).toBe(
+      "keep me\n"
+    );
+  });
+
+  it("judges a worktree only after a removal already running ends", async () => {
+    const t = setup();
+    const s = t.session("removing", { task: true });
+    bulkCommit(s.dir!, s.branch);
+    const removal = deleteWorktree(s.dir!, t.repo, true);
+    const fate = await worktreeFate(
+      { worktree_path: s.dir, base_branch: "main" },
+      null
+    );
+    await removal;
+    expect(fate).toEqual({ action: "none" });
+  });
+
+  it("judges again when a removal starts while it reads", async () => {
+    const t = setup();
+    const s = t.session("starts-removing", { task: true });
+    bulkCommit(s.dir!, s.branch);
+    const reading = worktreeFate(
+      { worktree_path: s.dir, base_branch: "main" },
+      null
+    );
+    const removal = new Promise<void>((resolve, reject) =>
+      queueMicrotask(() =>
+        deleteWorktree(s.dir!, t.repo, true).then(resolve, reject)
+      )
+    );
+    const fate = await reading;
+    await removal;
+    expect(fate).toEqual({ action: "none" });
+  });
+
+  it("joins a running removal, and a join that asks still deletes the branch", async () => {
+    const t = setup();
+    const s = t.session("joined", { task: true });
+    bulkCommit(s.dir!, s.branch);
+    const first = deleteWorktree(s.dir!, t.repo, false);
+    const second = deleteWorktree(s.dir!, t.repo, true);
+    expect(deleteWorktree(s.dir!, t.repo, false)).toBe(first);
+    await Promise.all([first, second]);
+    expect(fs.existsSync(s.dir!)).toBe(false);
+    expect(git(t.repo, "branch", "--list", s.branch)).toBe("");
+  });
+});
 
 describe("archived sessions", () => {
   it("are hidden from the sidebar, the orchestrator and peers, never deleted, and come back on unarchive", async () => {

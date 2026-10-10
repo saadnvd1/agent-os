@@ -129,6 +129,10 @@ export async function doneSession(
       text: `${s.name} archived. In the demo, nothing is merged or cleaned up.`,
     };
   }
+  const hadWorktree = !!s.worktree_path && fs.existsSync(s.worktree_path);
+  // A sign-off just before this (the orchestrator's sign_off, then done)
+  // is still cleaning up in the background: read what it leaves.
+  await mergeSettled(s.id);
   await statusDetector.refreshCache();
   const plan = await planDone(s, opts.callerId);
   if (plan.action === "refuse") throw new Error(plan.reason);
@@ -137,7 +141,6 @@ export async function doneSession(
       `${s.name} has an open PR #${plan.pr.number}: a clean-up never merges, so Done it on its own to merge it through the gates.`
     );
 
-  const hadWorktree = !!s.worktree_path && fs.existsSync(s.worktree_path);
   const notes: string[] = [];
   let merged: string | null = null;
   let worktree: WorktreeFate;
