@@ -109,10 +109,19 @@ function LimitForm({
         <p className="text-destructive text-xs">{parsed.error}</p>
       )}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onClose}>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-11 sm:h-9"
+          onClick={onClose}
+        >
           Cancel
         </Button>
-        <Button type="submit" disabled={"error" in parsed}>
+        <Button
+          type="submit"
+          className="h-11 sm:h-9"
+          disabled={"error" in parsed}
+        >
           Save
         </Button>
       </div>

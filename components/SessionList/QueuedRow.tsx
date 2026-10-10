@@ -35,7 +35,11 @@ const DONE: Record<QueueAction, string> = {
 // (or what it waits on) where a task's status would be. It turns into the
 // task's own row when it starts.
 export function QueuedRow({ row }: { row: Row }) {
+  const ctx = useRowContext();
   const { item } = row;
+  // Tapping the row opens the task it waits on, when that's a session here.
+  const target = row.afterSessionId;
+  const open = target ? () => ctx.onSelect(target) : undefined;
   const action = useQueueAction();
   const run = (a: QueueAction) =>
     action.mutate(
@@ -66,7 +70,7 @@ export function QueuedRow({ row }: { row: Row }) {
                 disabled={disabled || busy}
                 onClick={() => run(a)}
                 className={cn(
-                  a === "remove" && "text-red-500 focus:text-red-500"
+                  a === "remove" && "text-destructive focus:text-destructive"
                 )}
               >
                 <Icon className={icon} />
@@ -87,7 +91,7 @@ export function QueuedRow({ row }: { row: Row }) {
           className={cn(
             "h-2 w-2 shrink-0 rounded-full border",
             failed
-              ? "border-red-500 bg-red-500"
+              ? "border-destructive bg-destructive"
               : item.status === "starting"
                 ? "animate-pulse border-green-500"
                 : "border-muted-foreground/50 border-dashed"
@@ -100,9 +104,7 @@ export function QueuedRow({ row }: { row: Row }) {
           <span
             className={cn(
               "rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
-              failed
-                ? "text-red-600 dark:text-red-400"
-                : "bg-muted text-muted-foreground"
+              failed ? "text-destructive" : "bg-muted text-muted-foreground"
             )}
           >
             {failed ? "Failed" : "Starting"}
@@ -111,6 +113,8 @@ export function QueuedRow({ row }: { row: Row }) {
       }
       menu={menu}
       menuLabel="Queued task actions"
+      onClick={open}
+      onActivate={open}
     >
       <span className="text-foreground truncate text-sm">{item.name}</span>
       <QueuedSubtitle row={row} />
@@ -124,12 +128,14 @@ function QueuedSubtitle({ row }: { row: Row }) {
   const { lead, after } = queuedSubtitle(item);
   const target = row.afterSessionId;
   return (
-    <span className="text-muted-foreground/70 truncate text-xs">
-      <span
-        className={cn(
-          item.status === "failed" && "text-red-600 dark:text-red-400"
-        )}
-      >
+    <span
+      className={cn(
+        "text-muted-foreground/70 text-xs",
+        // A failed start's reason is read in full, phones included.
+        item.status === "failed" ? "line-clamp-3 break-words" : "truncate"
+      )}
+    >
+      <span className={cn(item.status === "failed" && "text-destructive")}>
         {lead}
       </span>
       {after &&
@@ -139,6 +145,8 @@ function QueuedSubtitle({ row }: { row: Row }) {
             <a
               href={sessionLink("", target)}
               onClick={(e) => {
+                // The row opens it too; the link alone handles its click.
+                e.stopPropagation();
                 // A plain click opens it here; a modified one, a new tab.
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)
                   return;

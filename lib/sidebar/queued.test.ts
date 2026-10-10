@@ -128,6 +128,25 @@ describe("queuedRows", () => {
   });
 });
 
+describe("queuedRows without a workspace", () => {
+  it("keeps each project's line apart", () => {
+    const rows = queuedRows({
+      queue: [
+        item("a", { workspaceId: null, projectId: "p1" }),
+        item("b", { workspaceId: null, projectId: "p2" }),
+        item("c", { workspaceId: null, projectId: "p1" }),
+      ],
+      sessionIds: NO_SESSIONS,
+      workspaceId: null,
+    });
+    expect(
+      Object.fromEntries(
+        rows.map((r) => [r.item.id, [r.canMoveUp, r.canMoveDown]])
+      )
+    ).toEqual({ a: [false, true], b: [false, false], c: [true, false] });
+  });
+});
+
 describe("queuedSubtitle", () => {
   it("says its place, its wait, a hold, or what went wrong", () => {
     expect(queuedSubtitle(item("a", { position: 2 }))).toEqual({
