@@ -77,11 +77,15 @@ async function peerChatWaiting(
     waitingOn: null,
   };
   const view = await hostTasks(link, true)
-    .then(({ tasks }) =>
-      (Array.isArray(tasks) ? tasks : []).find((t) => t?.id === task.id)
+    .then(({ tasks, capabilities }) =>
+      // One that can't say its chat's turn can't rule out an open question.
+      Array.isArray(capabilities) && capabilities.includes("chat-turn")
+        ? (Array.isArray(tasks) ? tasks : []).find((t) => t?.id === task.id)
+        : undefined
     )
     .catch(() => undefined);
   if (!view || typeof view.state !== "string") return unread;
+  const turn = view.chatTurn;
   const said =
     typeof view.blocked === "string" ? cleanRemoteText(view.blocked) : "";
   return {
@@ -91,9 +95,15 @@ async function peerChatWaiting(
         ? `${link.hostName} reports it blocked`
         : null,
     waitingOn:
-      view.state === "needs-input"
+      turn === "waiting"
         ? `an approval or question in its chat on ${link.hostName}`
-        : null,
+        : // null: no worker running, so nothing open.
+          turn === null ||
+            turn === "running" ||
+            turn === "idle" ||
+            turn === "error"
+          ? null
+          : `its chat on ${link.hostName} couldn't say whether a question is open`,
   };
 }
 

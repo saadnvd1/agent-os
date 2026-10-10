@@ -61,7 +61,7 @@ function depsFor(
   return {
     runner,
     notify: vi.fn().mockResolvedValue(undefined),
-    interrupt: vi.fn().mockResolvedValue(undefined),
+    interrupt: vi.fn().mockResolvedValue(true),
     defaultBranch: async () => "main",
     prOf: async (_repo, branch) => (branch === "feature/c" ? openPr(12) : null),
     ...extra,
@@ -290,6 +290,7 @@ describe("restack, the review's cases", () => {
     });
     const interrupt = vi.fn(async () => {
       order.push("interrupt");
+      return true;
     });
     await restackAfterMerge(
       s.session("P"),
@@ -306,10 +307,30 @@ describe("restack, the review's cases", () => {
     expect(notify.mock.calls[0][1]).toContain("carry on where you were");
   });
 
+  it("leaves a child whose agent won't stop, keeping its parent's branch, for a later pass", async () => {
+    const { s } = seed();
+    const git = fakeGit({ conflict: "none" });
+    const interrupt = vi.fn().mockResolvedValue(false);
+    const before = s.item("C");
+    const out = await restackAfterMerge(
+      s.session("P"),
+      depsFor(git.runner, { interrupt })
+    );
+    expect(interrupt).toHaveBeenCalled();
+    expect(git.calls.some((l) => l.startsWith("git rebase"))).toBe(false);
+    expect(out.stuck).toBe(true);
+    expect(s.item("C")).toMatchObject({
+      base_tip: before.base_tip,
+      base_branch: before.base_branch,
+      error: null,
+    });
+    expect(s.item("C").note).toMatch(/Waiting for its agent to stop/);
+  });
+
   it("doesn't interrupt a grandchild whose parent's branch didn't move", async () => {
     const { s } = seed();
     const git = fakeGit({ conflict: "none" });
-    const interrupt = vi.fn().mockResolvedValue(undefined);
+    const interrupt = vi.fn().mockResolvedValue(true);
     // C was already moved: only G is looked at, and origin/feature/c is
     // still the commit G sits on.
     db.prepare(`UPDATE stack_items SET base_branch = 'main' WHERE id = ?`).run(

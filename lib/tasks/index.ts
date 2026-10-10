@@ -65,6 +65,10 @@ export interface TaskView {
   tmuxName: string;
   // How its agent runs; only a terminal task can move for now.
   view: StartView;
+  // A running chat's turn, as its worker says ("unknown": unreachable). A
+  // linked machine's blocked gate reads it: the derived state hides an open
+  // question once a PR is up.
+  chatTurn?: ChatTurn | null;
   state: TaskState;
   pr: TaskPR | null;
   // What its last BLOCKED: line asked for, while it's blocked.
@@ -260,26 +264,35 @@ export async function shellOnly(tmuxName: string): Promise<boolean> {
   return rows ? !runsSomething(rows, pid) : false;
 }
 
+// A chat's turn as its worker says: "unknown" when it can't be reached.
+type ChatTurn =
+  | NonNullable<Awaited<ReturnType<typeof chatStateNow>>>
+  | "unknown";
+
 // A chat between turns waits on the next message, as a terminal at its
 // prompt does. One whose worker can't be reached counts as busy.
-async function chatStatus(sessionId: string): Promise<"running" | "waiting"> {
-  const state = await chatStateNow(sessionId).catch(() => "running");
-  return state === "running" ? "running" : "waiting";
-}
+const chatStatus = (turn: ChatTurn | null): "running" | "waiting" =>
+  turn === "running" || turn === "unknown" ? "running" : "waiting";
 
 export async function taskView(session: Session): Promise<TaskView> {
   const live = session.task_status === "running";
   const setup = taskSetupOf(session);
   // A finished task's PR is in the database: only a running one asks gh.
   const chat = session.view === "chat";
-  const [pr, sessionStatus] = await Promise.all([
+  const [pr, chatTurn, screen] = await Promise.all([
     live ? prFor(session) : storedPR(session),
-    !live
-      ? Promise.resolve(undefined)
-      : chat
-        ? chatStatus(session.id)
-        : statusDetector.getStatus(session.tmux_name),
+    live && chat
+      ? chatStateNow(session.id).catch((): ChatTurn => "unknown")
+      : Promise.resolve(null),
+    live && !chat
+      ? statusDetector.getStatus(session.tmux_name)
+      : Promise.resolve(undefined),
   ]);
+  const sessionStatus = !live
+    ? undefined
+    : chat
+      ? chatStatus(chatTurn)
+      : screen;
   const agentGone =
     !chat && live && sessionStatus !== "dead" && sessionStatus !== undefined
       ? await shellOnly(session.tmux_name)
@@ -314,6 +327,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     baseBranch: session.base_branch,
     tmuxName: session.tmux_name,
     view: viewOf(session),
+    chatTurn,
     state,
     pr,
     blocked,
