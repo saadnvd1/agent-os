@@ -1,12 +1,8 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  LegendList,
-  type LegendListRef,
-  type MaintainScrollAtEndOptions,
-} from "@legendapp/list/react";
-import { Loader2 } from "lucide-react";
+import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { ArrowDown, Loader2 } from "lucide-react";
 import { useChat } from "@/data/chat/useChat";
 import {
   groupTimeline,
@@ -41,6 +37,7 @@ import { SetupCard } from "./SetupCard";
 import { UserTurn } from "./EventRow";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
+import { arrivalKey, useStickToBottom } from "./stick-to-bottom";
 import {
   AssistantMessage,
   CommandOutput,
@@ -140,13 +137,6 @@ const blockKey = (b: TimelineBlock) => (b.type === "item" ? b.item.id : b.id);
 const blockType = (b: TimelineBlock) =>
   b.type === "item" ? b.item.kind : b.type;
 
-// Follows the newest output while the reader is at the bottom (new items, a
-// message growing, the panel resizing) and leaves them be once they scroll up.
-const FOLLOW: MaintainScrollAtEndOptions = {
-  animated: false,
-  on: { dataChange: true, itemLayout: true, layout: true },
-};
-
 // One block, re-rendered only when its items or the actions change: a long
 // conversation doesn't redraw every message for each streamed word.
 const Block = memo(
@@ -232,11 +222,13 @@ export function ChatPanel({
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<LegendListRef>(null);
-  // Sending brings the reader back to the end, wherever they'd scrolled.
-  const toEnd = useCallback(
-    () => requestAnimationFrame(() => void listRef.current?.scrollToEnd()),
-    []
-  );
+  // Follows new output only while the reader is at the end; sending brings
+  // them back there, wherever they'd scrolled.
+  const {
+    stuck,
+    unread,
+    toBottom: toEnd,
+  } = useStickToBottom(listRef, sessionId, arrivalKey(items.at(-1)));
 
   const running = state === "running" || state === "waiting";
 
@@ -364,8 +356,6 @@ export function ChatPanel({
               )}
               estimatedItemSize={90}
               initialScrollAtEnd
-              maintainScrollAtEnd={FOLLOW}
-              maintainScrollAtEndThreshold={0.1}
               // Older pages land above without moving what the reader sees.
               maintainVisibleContentPosition
               onStartReached={hasMore ? loadOlder : undefined}
@@ -400,6 +390,18 @@ export function ChatPanel({
             />
           </ToolBodies.Provider>
         </RowState.Provider>
+        {unread && !stuck && (
+          <button
+            type="button"
+            onClick={toEnd}
+            className="group absolute bottom-1 left-1/2 flex min-h-11 -translate-x-1/2 items-center px-2"
+          >
+            <span className="bg-background text-foreground group-hover:bg-muted flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm">
+              New messages
+              <ArrowDown className="h-3.5 w-3.5" />
+            </span>
+          </button>
+        )}
       </div>
       <div className="mx-auto w-full max-w-3xl px-3 pb-3">
         <ActivityLine items={items} state={state} onStop={interrupt} />
