@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run every minute by serviceman on Saad's Mac: when origin/main moves,
 # redeploy the live instance and publish the same commit to npm. Runs in the
-# background; chat turns live in workers, so the restart interrupts nothing.
+# background. Chat turns live in workers and outlive the restart; reviews
+# and task setups don't, so the restart waits up to 10 minutes for them.
 #   sm add agentos-autodeploy "scripts/autodeploy" --cron "* * * * *"
 # Another machine (a server) runs it with AGENTOS_PUBLISH=0: deploy
 # only, and its own AGENTOS_RESTART. Only one machine publishes to npm.
@@ -34,6 +35,15 @@ published=$(cat "$state/published" 2>/dev/null || true)
 [ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
 log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
 
+# Merges land in bursts: one that's under AGENTOS_SETTLE seconds old (2
+# minutes) waits for the next run, so a burst is one build and one restart.
+# Its commit time is the merge's, so this never holds a deploy forever.
+settle="${AGENTOS_SETTLE:-120}"
+if [ "$head" != "$deployed" ] && [ "$settle" -gt 0 ] &&
+  [ $(( $(date +%s) - $(git log -1 --format=%ct "$head") )) -lt "$settle" ]; then
+  exit 0
+fi
+
 # A deploy that can't land says so once per commit, rather than retrying
 # quietly every minute (uncommitted edits in this checkout block the pull).
 alert() {
@@ -51,11 +61,15 @@ if [ "$head" != "$deployed" ]; then
     exit 1
   fi
   log "Deploying ${head:0:7}"
+  # Before the pull: the build is swapped in under the running server, so
+  # the restart follows it closely.
+  AGENTOS_QUIET_WAIT="${AGENTOS_QUIET_WAIT:-600}" scripts/wait-quiet
   if ! AGENTOS_RESTART="${AGENTOS_RESTART:-sm restart agentos}" scripts/redeploy; then
     alert "redeploy of ${head:0:7} failed; see sm logs agentos-autodeploy"
     exit 1
   fi
-  echo "$head" > "$state/deployed"
+  # The pull takes what landed while it waited, too.
+  git rev-parse HEAD > "$state/deployed"
 fi
 
 # Publishing waits minutes for npm to serve a version, so it runs on its own

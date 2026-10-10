@@ -10,7 +10,7 @@
  * the orchestrator hears the verdict as an event.
  */
 
-import type { Session } from "../db";
+import { db, type Session } from "../db";
 import type { TaskPR } from "../tasks/state";
 import { prFor } from "../tasks/session";
 import { queueEvent } from "./events";
@@ -196,4 +196,39 @@ export async function review(
     });
   if (opts.wait) return describeReview(await job);
   return `Reviewing ${task.name} at ${short(sha)} (PR #${pr.number}) in a fresh read-only process. The verdict arrives as an event; call review again to read it.`;
+}
+
+// At startup. A review is a job in the server, so one still "running" was
+// cut off by the restart: it runs again on its task's PR (the same commit
+// unless it has moved on since), and its verdict arrives as an event like
+// any other. A cut-off scope check is dropped, so the job runs it again.
+export async function resumeReviews(
+  claude: ClaudeRunner = runClaude
+): Promise<string[]> {
+  const cut = db
+    .prepare(
+      `SELECT DISTINCT workspace_id, session_id FROM orchestrator_checks
+       WHERE status = 'running' AND kind IN ('review', 'scope')`
+    )
+    .all() as { workspace_id: string; session_id: string }[];
+  db.prepare(
+    `UPDATE orchestrator_checks SET status = 'error', detail = 'Interrupted by a restart'
+     WHERE status = 'running' AND kind = 'review'`
+  ).run();
+  db.prepare(
+    `DELETE FROM orchestrator_checks WHERE status = 'running' AND kind = 'scope'`
+  ).run();
+  const resumed: string[] = [];
+  for (const row of cut) {
+    try {
+      await review(row.workspace_id, row.session_id, { claude });
+      resumed.push(row.session_id);
+    } catch (error) {
+      console.error(
+        `Not re-running the review of ${row.session_id}:`,
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+  return resumed;
 }

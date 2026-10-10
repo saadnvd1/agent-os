@@ -50,7 +50,7 @@ const { createWorkspace, setProjectWorkspace } =
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { landDeps, refundIfRefused } = await import("./signoff");
-const { review } = await import("./review");
+const { resumeReviews, review } = await import("./review");
 const { getCheck, putCheck } = await import("./checks");
 const { failureOf } = await import("./gates");
 const { listNotes } = await import("./notes");
@@ -274,6 +274,45 @@ describe("review", () => {
     );
     expect(failureOf(t.task, "review")).toBeNull();
     expect(merges).toEqual([]);
+  });
+
+  it("runs a review a restart cut off again, at the same commit, and delivers its verdict", async () => {
+    const t = setup({ card: true });
+    // Started by the server before it restarted: running, never finished.
+    putCheck({
+      workspaceId: t.w,
+      sessionId: t.task,
+      sha: t.sha,
+      kind: "review",
+      status: "running",
+    });
+    putCheck({
+      workspaceId: t.w,
+      sessionId: t.task,
+      sha: t.sha,
+      kind: "scope",
+      status: "running",
+    });
+    const r = reviewer("pass");
+    expect(await resumeReviews(r.claude)).toEqual([t.task]);
+    await vi.waitFor(() =>
+      expect(getCheck(t.task, t.sha, "scope")?.status).toBe("pass")
+    );
+    expect(getCheck(t.task, t.sha, "review")?.status).toBe("pass");
+    // One review and one scope check, both of the commit that was cut off.
+    expect(r.runs).toHaveLength(2);
+    expect(r.runs[0].prompt).toContain(t.sha);
+    const events = db
+      .prepare(
+        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE ?`
+      )
+      .all(t.w, `%review:${t.task}:${t.sha}`) as { line: string }[];
+    expect(events.map((e) => e.line)).toEqual([
+      `task add-a: review of ${t.sha.slice(0, 7)} passed`,
+    ]);
+    // Nothing is left cut off, so the next start runs nothing.
+    expect(await resumeReviews(r.claude)).toEqual([]);
+    expect(r.runs).toHaveLength(2);
   });
 });
 
