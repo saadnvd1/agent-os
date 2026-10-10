@@ -1,4 +1,6 @@
 import { useState, useCallback } from "react";
+import { toast } from "sonner";
+import { sessionLink } from "@/lib/session-url";
 
 interface UseCopyToClipboardOptions {
   /** Duration to show copied feedback (ms). Default: 1500 */
@@ -60,4 +62,14 @@ export async function writeClipboard(text: string): Promise<void> {
   const ok = document.execCommand("copy");
   document.body.removeChild(textarea);
   if (!ok) throw new Error("copy failed");
+}
+
+// A session's own address (lib/session-url), for a bookmark or another device.
+export async function copySessionLink(sessionId: string): Promise<void> {
+  try {
+    await writeClipboard(sessionLink(window.location.origin, sessionId));
+    toast.success("Link copied");
+  } catch {
+    toast.error("Could not copy to clipboard");
+  }
 }

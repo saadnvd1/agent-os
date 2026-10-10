@@ -458,6 +458,14 @@ titles and project names, and the project filter narrows the list to one
 project and holds that project's own actions: new session, terminal, dev
 server, settings, board, workspace.
 
+Every session has its own address, `/?session=<id>`: open it in a new tab,
+on a phone or from a bookmark and that session opens; **Copy link** in a row's
+⋯ menu or the pane's menu copies it. The address bar follows the focused
+pane's session, each switch is a history entry so back and forward move
+between sessions, and an address for an archived or unknown session says so
+and opens the usual home. A device that isn't paired is sent through pairing
+and comes back to the same session; the address grants nothing by itself.
+
 Rows move the moment a session changes state: the server pushes every change
 over `/ws/status` (behind the same device gate as the terminal). The same
 stream says when anything else on screen changed: database triggers mark the

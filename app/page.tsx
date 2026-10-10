@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
 import { useOpenSession } from "@/hooks/useOpenSession";
+import { useSessionUrl } from "@/hooks/useSessionUrl";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
 import { memo, useState, useEffect, useCallback, useRef } from "react";
@@ -163,7 +164,12 @@ function HomeContent() {
   const demo = useDemoMode();
 
   // Data hooks
-  const { sessions, fetchSessions } = useSessions();
+  const {
+    sessions,
+    loaded: sessionsLoaded,
+    fetchSessions,
+    reloadSessions,
+  } = useSessions();
   const { projects } = useProjects();
   const {
     startDevServerProjectId,
@@ -457,6 +463,15 @@ function HomeContent() {
       attachSession,
     ]
   );
+
+  // The address bar names the focused session, and an address opens one.
+  useSessionUrl({
+    sessions,
+    loaded: sessionsLoaded,
+    reloadSessions,
+    attachToSession,
+    isMobile,
+  });
 
   // Notification click handler
   const handleNotificationClick = useCallback(

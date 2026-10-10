@@ -10,6 +10,7 @@ import {
   GitBranch,
   GitPullRequest,
   KanbanSquare,
+  Link,
   Loader2,
   Pencil,
   Pin,
@@ -25,6 +26,7 @@ import { schedulesUiActions } from "@/stores/schedulesUi";
 import { useDoneAction } from "./useDoneAction";
 import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
+import { copySessionLink } from "@/hooks/useCopyToClipboard";
 
 const PARTS = {
   dropdown: {
@@ -100,6 +102,10 @@ export function SessionRowMenu({
           Open in new tab
         </Item>
       )}
+      <Item onClick={() => copySessionLink(session.id)}>
+        <Link className={icon} />
+        Copy link
+      </Item>
       <Item onClick={onRename}>
         <Pencil className={icon} />
         Rename
