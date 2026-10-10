@@ -6,8 +6,9 @@
 export interface CodeReviewSection {
   // The commit the review covered, as written in the section.
   sha: string | null;
-  // The first line of the body that is AI attribution, when one is.
-  attribution?: string;
+  // What kind of AI attribution the body carries, when it does: a fixed
+  // label, never the body's own text, which goes into gate messages.
+  attribution?: AttributionKind;
 }
 
 // Matched one line at a time, never across lines: the body is written by
@@ -25,6 +26,17 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 // over leading whitespace.
 export const ATTRIBUTION =
   /^(?:co-authored-by:.*(?:claude|anthropic)|claude-session:|🤖 generated with)|generated (?:with|by) \[?claude code/i;
+export type AttributionKind =
+  | "a Co-Authored-By trailer naming Claude"
+  | "a Claude-Session link"
+  | 'a "Generated with Claude Code" line';
+function attributionKind(line: string): AttributionKind | undefined {
+  if (!ATTRIBUTION.test(line)) return;
+  if (/^co-authored-by:/i.test(line))
+    return "a Co-Authored-By trailer naming Claude";
+  if (/^claude-session:/i.test(line)) return "a Claude-Session link";
+  return 'a "Generated with Claude Code" line';
+}
 const REVIEWED =
   /^[>*_ -]*reviewed(?: (?:commit|sha|at))?[*_ ]*:[*_` ]*([0-9a-f]{12,40})\b/i;
 
@@ -57,10 +69,9 @@ export function parseCodeReview(
   if (!body) return null;
   const sections: CodeReviewSection[] = [];
   let level = 0;
-  let attribution: string | undefined;
+  let attribution: AttributionKind | undefined;
   for (const line of renderedLines(body)) {
-    if (!attribution && ATTRIBUTION.test(line.trimStart()))
-      attribution = line.trim();
+    attribution ??= attributionKind(line.trimStart());
     const heading = HEADING.exec(line);
     if (heading) {
       level = heading[1].length;
@@ -101,7 +112,7 @@ export function codeReviewRefusal(
   if (!head) return `the PR's head commit is unknown: ${fix}`;
   if (!section) return `the PR body has no Code review section: ${fix}`;
   if (section.attribution)
-    return `the PR body carries AI attribution ("${section.attribution.slice(0, 80)}"): remove that line with \`gh pr edit --body-file\``;
+    return `the PR body carries AI attribution (${section.attribution}): remove it with \`gh pr edit --body-file\``;
   if (!section.sha)
     return `the PR's Code review section doesn't name the reviewed commit ("Reviewed: <sha>"): ${fix}`;
   const covers = (sha: string | null | undefined) =>

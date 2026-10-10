@@ -129,10 +129,18 @@ describe("installWorktreeHooks", () => {
   });
 
   it("a failing project hook still fails the commit", async () => {
-    projectHook(path.join(repo, ".git", "hooks"), "pre-commit", "exit 1");
+    const marks = path.join(root, "marks");
+    projectHook(
+      path.join(repo, ".git", "hooks"),
+      "pre-commit",
+      `echo refused >> '${marks}'; echo 'project says no' >&2; exit 1`
+    );
     run(repo, "worktree", "add", "-q", "-b", "feature", tree);
     await installWorktreeHooks(tree);
-    expect(() => commitWith(tree, "feat: x\n")).toThrow();
+    const before = run(tree, "rev-list", "--count", "HEAD");
+    expect(() => commitWith(tree, "feat: x\n")).toThrow(/project says no/);
+    expect(fs.readFileSync(marks, "utf-8")).toBe("refused\n");
+    expect(run(tree, "rev-list", "--count", "HEAD")).toBe(before);
   });
 
   it("is installed by createWorktree", async () => {
@@ -158,6 +166,8 @@ describe("the attribution rule", () => {
     ["🤖 Generated with [Claude Code](https://claude.com/claude-code)", true],
     ["Generated with [Claude Code](https://claude.com/claude-code)", true],
     ["_Generated with Claude Code_", true],
+    ["🤖 Generated with Codex", true],
+    ["  Claude-Session: x", true],
     ["Co-authored-by: Ada <ada@example.com>", false],
     ["Use Claude to review the diff", false],
     ["feat(agents): launch Claude with flags", false],
