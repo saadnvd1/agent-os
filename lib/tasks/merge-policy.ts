@@ -38,7 +38,14 @@ function read(key: string): MergeSettings {
 
 // Throws on a bad value; an empty one clears the row.
 function write(key: string, settings: unknown): MergeSettings {
-  const parsed = mergeSettings.parse(settings ?? {});
+  const got = mergeSettings.safeParse(settings ?? {});
+  if (!got.success)
+    throw new Error(
+      `Invalid merge settings: ${got.error.issues
+        .map((i) => `${i.path.join(".") || "(top level)"}: ${i.message}`)
+        .join("; ")}`
+    );
+  const parsed = got.data;
   const clean = Object.fromEntries(
     Object.entries(parsed).filter(([, v]) => v !== undefined)
   ) as MergeSettings;
