@@ -43,6 +43,7 @@ export const openCodeDriver: ChatDriver = {
   id: "opencode",
   plan: true,
   inProcessTools: false,
+  atRest: false,
 
   async discover({ cwd, env }) {
     const server = new OpenCodeServer(cwd, { ...process.env, ...env });

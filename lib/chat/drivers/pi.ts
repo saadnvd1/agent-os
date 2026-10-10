@@ -40,6 +40,7 @@ export const piDriver: ChatDriver = {
   id: "pi",
   plan: false,
   inProcessTools: false,
+  atRest: false,
 
   async discover({ cwd, env }) {
     const rpc = new PiRpc(

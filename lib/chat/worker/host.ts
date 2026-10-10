@@ -45,6 +45,11 @@ const AFTER_STOP_MS = 2000;
 // the agent's guess at the next message before it goes.
 export const RETIRE_SUGGESTION_WAIT_MS = 2 * 60 * 1000;
 
+// What the agent reads, ahead of its next message, in a worker that took
+// over from a retired one. Not shown in the chat.
+export const RESTARTED_NOTE =
+  "(AgentOS was updated and restarted you between turns; your tools are current.)";
+
 export class ChatHost {
   state: ChatState = "idle";
   readonly streaming = new Map<string, ChatItem>();
@@ -92,6 +97,9 @@ export class ChatHost {
   // Messages handed to the agent while a turn ran, and not yet started: it
   // isn't at a boundary while it still holds one.
   private behind = 0;
+  // Whether its driver says when that is (lib/chat/driver atRest).
+  private atRest = true;
+  private restartedNote = false;
   readonly done: Promise<void>;
 
   constructor(
@@ -111,6 +119,7 @@ export class ChatHost {
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
+    this.atRest = driver.atRest !== false;
     const cwd = session.working_directory.replace(/^~/, os.homedir());
     const env = agentEnv(session.id);
     // Every chat can show visuals, asked for like any tool under its access
@@ -240,6 +249,7 @@ export class ChatHost {
               continue;
             }
             this.nowPending = 0;
+            if (!this.atRest) this.behind = 0;
             // The next queued message goes straight on, with no idle in
             // between: the server retires a stale worker the moment it
             // hears one, and would cut that turn off.
@@ -296,7 +306,8 @@ export class ChatHost {
   // it's sent now. Claimed (taken off the queue) before it's sent, so it can
   // only go once.
   private sendQueued(now = false, id?: string): boolean {
-    if ((!now && this.busy()) || this.closed || this.retiring) return false;
+    if ((!now && this.busy()) || this.closed || this.handingOver())
+      return false;
     const next = claimNext(this.session.id, id);
     if (!next) return false;
     this.emit({ type: "queue" });
@@ -322,9 +333,11 @@ export class ChatHost {
     if (handOver) this.stopsUpTo = this.turnsStarted;
     if (now) this.nowPending++;
     this.stopping = null;
+    const text = this.restartedNote ? `${RESTARTED_NOTE}\n\n${m.text}` : m.text;
+    this.restartedNote = false;
     const checkpoint = now
-      ? this.conversation.send(m.text, m.images, { now })
-      : this.conversation.send(m.text, m.images);
+      ? this.conversation.send(text, m.images, { now })
+      : this.conversation.send(text, m.images);
     const user: ChatItem = {
       id: m.id,
       kind: "user",
@@ -376,7 +389,7 @@ export class ChatHost {
         // Sent just as a move or Land took hold (lib/chat/hold): it waits
         // in the queue rather than start a turn the stop would cut short.
         // Or for the current worker that takes over from a retiring one.
-        if (isHeld(this.session.id) || this.retiring) {
+        if (isHeld(this.session.id) || this.handingOver()) {
           enqueue(this.session.id, cmd);
           this.emit({ type: "queue" });
           this.retireIfDone();
@@ -447,7 +460,7 @@ export class ChatHost {
         if (this.busy()) {
           if (cmd.during && cmd.during === this.currentTurn) {
             // Retiring, the turn just stops; the next worker sends it.
-            if (this.retiring) return this.conversation.interrupt();
+            if (this.handingOver()) return this.conversation.interrupt();
             this.sendQueued(true, cmd.id);
           }
           return;
@@ -505,6 +518,9 @@ export class ChatHost {
           });
         }
         return;
+      case "restarted":
+        this.restartedNote = true;
+        return;
       case "retire":
         this.retiring = true;
         return this.retireIfDone();
@@ -518,11 +534,8 @@ export class ChatHost {
   // lives in the agent, and would be lost). With nothing queued it first
   // waits a while for the agent's guess at the next message.
   private retireIfDone(): void {
-    if (!this.retiring || this.closed || this.busy() || this.behind) return;
-    const background = itemsOfKind(this.session.id, "task").some(
-      (t) => t.kind === "task" && t.status === "running" && !t.ambient
-    );
-    if (background) return;
+    if (!this.handingOver() || this.closed || this.busy() || this.behind)
+      return;
     const queued = listQueue(this.session.id).length > 0;
     if (!queued && this.suggestion === null && !this.retireWaited) {
       this.retireTimer ??= setTimeout(() => {
@@ -532,6 +545,18 @@ export class ChatHost {
       return;
     }
     this.close();
+  }
+
+  // Retiring, and nothing in the background keeps it: messages wait in the
+  // queue for the next worker. While background work runs (it can run for
+  // as long as a dev server does) the worker carries on as usual.
+  private handingOver(): boolean {
+    return (
+      this.retiring &&
+      !itemsOfKind(this.session.id, "task").some(
+        (t) => t.kind === "task" && t.status === "running" && !t.ambient
+      )
+    );
   }
 
   onClose: () => void = () => {};

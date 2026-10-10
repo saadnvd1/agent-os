@@ -66,20 +66,27 @@ afterEach(() => {
 
 describe("a worker from before a deploy", () => {
   it("is told once to retire at its next turn boundary when it's mid-turn", async () => {
-    chat();
-    workers.hellos = [{ build: OLD, state: "running", caps: ALL }];
-    await reattachChats();
-    expect(workers.connects).toHaveLength(1);
-    expect(retires()).toBe(1);
-    // Its turns ending don't make the server close it under it, queue or
-    // not: it closes itself when nothing it holds is left to run.
-    workers.handlers[0].onEvent({ type: "state", state: "idle" });
-    workers.handlers[0].onEvent({ type: "state", state: "running" });
-    workers.handlers[0].onEvent({ type: "state", state: "idle" });
-    expect(workers.connects[0].commands.map((c) => c.type)).not.toContain(
-      "close"
-    );
-    expect(retires()).toBe(1);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const id = chat();
+      workers.hellos = [{ build: OLD, state: "running", caps: ALL }];
+      await reattachChats();
+      expect(workers.connects).toHaveLength(1);
+      expect(retires()).toBe(1);
+      // Its turns ending don't make the server close it under it, queue or
+      // not: it closes itself when nothing it holds is left to run.
+      enqueue(id, { id: "user-q0", text: "waiting" });
+      workers.handlers[0].onEvent({ type: "state", state: "idle" });
+      workers.handlers[0].onEvent({ type: "state", state: "running" });
+      workers.handlers[0].onEvent({ type: "state", state: "idle" });
+      vi.advanceTimersByTime(10 * 60 * 1000);
+      expect(workers.connects[0].commands.map((c) => c.type)).not.toContain(
+        "close"
+      );
+      expect(retires()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("isn't told to retire on the current build", async () => {
@@ -98,21 +105,28 @@ describe("a worker from before a deploy", () => {
     expect(retires()).toBe(0);
   });
 
-  it("once it has retired itself, a current worker resumes and sends what waited", async () => {
+  it("once it has retired itself, a current worker resumes, sends what waited and says it restarted", async () => {
     const id = chat();
+    // Queued before the restart, so the reattach already tried to send it
+    // within the last minute.
+    enqueue(id, { id: "user-q1", text: "an event that came mid-turn" });
     workers.hellos = [
       { build: OLD, state: "running", caps: ALL },
       { build: buildId(), state: "idle", caps: ALL },
     ];
     await reattachChats();
-    enqueue(id, { id: "user-q1", text: "an event that came mid-turn" });
+    expect(retires()).toBe(1);
     workers.handlers[0].onClose(false);
-    await vi.waitFor(() => expect(workers.connects).toHaveLength(2));
-    expect(workers.connects[1].spawn).toBe(true);
     await vi.waitFor(() =>
-      expect(workers.connects[1].commands).toContainEqual({ type: "drain" })
+      expect(workers.connects[1]?.commands).toContainEqual({ type: "drain" })
     );
+    expect(workers.connects[1].spawn).toBe(true);
+    const types = workers.connects[1].commands.map((c) => c.type);
+    expect(types.indexOf("restarted")).toBeGreaterThan(-1);
+    expect(types.indexOf("restarted")).toBeLessThan(types.indexOf("drain"));
     expect(retires(1)).toBe(0);
     expect(listQueue(id).map((m) => m.id)).toEqual(["user-q1"]);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(workers.connects).toHaveLength(2);
   });
 });

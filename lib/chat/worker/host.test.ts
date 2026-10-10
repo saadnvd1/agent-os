@@ -47,9 +47,12 @@ function fakeConversation() {
 
 let current: ReturnType<typeof fakeConversation>;
 let started: ChatStartOptions | undefined;
+// Whether the fake driver says when it's at rest, as Claude does.
+const driverFlags = vi.hoisted(() => ({ atRest: true }));
 vi.mock("../drivers", () => ({
   chatDriverFor: () => ({
     id: "fake",
+    atRest: driverFlags.atRest,
     start: (options: ChatStartOptions) => {
       started = options;
       return current;
@@ -1127,13 +1130,13 @@ describe("ChatHost retiring after a deploy", () => {
     }
   });
 
-  it("keeps running while its background work does, and goes when it ends", async () => {
-    const { host, conversation } = await startHost();
+  it("while its background work runs, carries on as usual, and goes once it ends", async () => {
+    const { id, host, conversation } = await startHost();
     const task: ChatItem = {
       id: "task-1",
       kind: "task",
       taskId: "t1",
-      description: "subagent",
+      description: "dev server",
       status: "running",
       createdAt: 1,
     };
@@ -1142,12 +1145,40 @@ describe("ChatHost retiring after a deploy", () => {
     await tick();
     await host.handle({ type: "retire" });
     expect(conversation.close).not.toHaveBeenCalled();
+    // A message isn't held back for as long as the shell runs.
+    await host.handle({ type: "send", id: "user-1", text: "still there?" });
+    expect(conversation.send).toHaveBeenLastCalledWith(
+      "still there?",
+      undefined
+    );
+    expect(listQueue(id)).toEqual([]);
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
     conversation.events.push({
       type: "item",
       item: { ...task, status: "completed" },
     });
     await tick();
     expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("with a driver that never says it's at rest, a turn's end is the boundary", async () => {
+    driverFlags.atRest = false;
+    try {
+      const { host, conversation } = await startHost();
+      await host.handle({ type: "send", id: "user-1", text: "work" });
+      // Steered into the running turn, as Codex does.
+      await host.handle({ type: "send", id: "user-2", text: "also", ...bus });
+      await host.handle({ type: "retire" });
+      conversation.events.push({ type: "state", state: "idle" });
+      conversation.events.push({ type: "suggestion", text: "next" });
+      await tick();
+      expect(conversation.close).toHaveBeenCalledOnce();
+    } finally {
+      driverFlags.atRest = true;
+    }
   });
 
   it("send now stops the turn and leaves the message for the next worker", async () => {
@@ -1167,12 +1198,13 @@ describe("ChatHost retiring after a deploy", () => {
     host.close();
   });
 
-  it("the worker after it resumes the same conversation", async () => {
+  it("the worker after it resumes the conversation as the agent last named it", async () => {
     const { id, host, conversation } = await startHost("orchestrator", {
       resumeId: "conv-7",
     });
     await host.handle({ type: "send", id: "user-1", text: "work" });
     await host.handle({ type: "retire" });
+    conversation.events.push({ type: "resume_id", id: "conv-8" });
     conversation.events.push({ type: "state", state: "idle" });
     conversation.events.push({ type: "suggestion", text: "next" });
     await tick();
@@ -1183,7 +1215,27 @@ describe("ChatHost retiring after a deploy", () => {
       .get(id) as Session;
     current = fakeConversation();
     const next = new ChatHost(session, () => {});
-    expect(started?.resumeId).toBe("conv-7");
+    expect(started?.resumeId).toBe("conv-8");
     next.close();
+  });
+
+  it("taking over from a retired worker, tells the agent once, ahead of its next message", async () => {
+    const { RESTARTED_NOTE } = await import("./host");
+    const { id, host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "restarted" });
+    await host.handle({ type: "send", id: "user-1", text: "an event" });
+    expect(conversation.send).toHaveBeenLastCalledWith(
+      `${RESTARTED_NOTE}\n\nan event`,
+      undefined
+    );
+    // The chat shows what was sent, not the note.
+    expect(listItems(id).find((i) => i.id === "user-1")).toMatchObject({
+      text: "an event",
+    });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "another" });
+    expect(conversation.send).toHaveBeenLastCalledWith("another", undefined);
+    host.close();
   });
 });
