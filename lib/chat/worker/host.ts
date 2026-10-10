@@ -11,7 +11,7 @@ import { sessionRunningBrief } from "../../project-config/session";
 import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
-import type { ChatConversation, ChatStartOptions } from "../driver";
+import type { ChatConversation } from "../driver";
 import type {
   ChatImage,
   ChatItem,
