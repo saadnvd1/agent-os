@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useSnapshot } from "valtio";
 import type { Session } from "@/lib/db";
-import { buildShelves, inWorkspace } from "@/lib/sidebar/shelves";
+import {
+  buildShelves,
+  inWorkspace,
+  projectsInWorkspace,
+} from "@/lib/sidebar/shelves";
 import type { TaskState } from "@/lib/tasks/state";
 import { useSessionsQuery } from "@/data/sessions";
 import { useProjectsQuery } from "@/data/projects";
 import { useTasksQuery } from "@/data/tasks";
-import { useWorkspacesQuery } from "@/data/workspaces";
-import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
+import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
+import { sidebarUi } from "@/stores/sidebarUi";
 import type { SessionStatus } from "./SessionList.types";
 
 // One empty list for queries still loading, so memos below hold.
@@ -21,11 +25,10 @@ export function useSidebarData(
   sessionStatuses: Record<string, SessionStatus> | undefined
 ) {
   const ui = useSnapshot(sidebarUi);
-  useEffect(() => sidebarUiActions.hydrate(), []);
 
   const sessionsQuery = useSessionsQuery();
   const projectsQuery = useProjectsQuery();
-  const { data: workspaces = NONE } = useWorkspacesQuery();
+  const { workspaces, workspace } = useSelectedWorkspace();
   const { data: tasks = NONE } = useTasksQuery();
 
   const sessions = useMemo(
@@ -37,10 +40,10 @@ export function useSidebarData(
     [projectsQuery.data]
   );
 
-  // A remembered workspace or project that no longer exists is "all".
-  const workspace = workspaces.find((w) => w.id === ui.workspaceId) ?? null;
-  const workspaceProjects = projects.filter(
-    (p) => !workspace || p.workspace_id === workspace.id
+  // A remembered project that no longer exists is "all".
+  const workspaceProjects = projectsInWorkspace(
+    projects,
+    workspace?.id ?? null
   );
   const project = workspaceProjects.find((p) => p.id === ui.projectId) ?? null;
 

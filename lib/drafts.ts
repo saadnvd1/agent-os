@@ -6,6 +6,7 @@
 import type { AgentType } from "./providers";
 import type { ChatAccess } from "./chat/events";
 import { resolveModelForAgent } from "./model-catalog";
+import { projectsInWorkspace } from "./sidebar/shelves";
 
 export interface Draft {
   id: string;
@@ -82,19 +83,47 @@ export function reusableDraft(
   );
 }
 
-// The project ⌥N starts in: the one you're in, else the most recently used.
+// What the sidebar has selected: a workspace and a project filter in it.
+export interface DraftScope {
+  workspaceId: string | null;
+  projectId: string | null;
+}
+
+// The project ⌥N (or the sidebar's New) starts in: the one you're in, else
+// the sidebar's project filter in the selected workspace, else the most
+// recently used, else the first.
+// With a workspace selected only its projects count, so a session viewed or
+// used last in another workspace doesn't pull the draft out of it.
 export function currentProjectId(
   viewing: { projectId: string | null } | null,
   recent: { project_id: string | null; updated_at: string }[],
-  projects: { id: string; is_uncategorized: boolean }[]
+  projects: {
+    id: string;
+    is_uncategorized: boolean;
+    workspace_id?: string | null;
+  }[],
+  scope: DraftScope = { workspaceId: null, projectId: null }
 ): string | null {
+  const here = projectsInWorkspace(projects, scope.workspaceId);
   const real = (id: string | null | undefined) =>
-    !!id && projects.some((p) => p.id === id && !p.is_uncategorized);
+    !!id && here.some((p) => p.id === id && !p.is_uncategorized);
   if (viewing && real(viewing.projectId)) return viewing.projectId;
+  // Only inside a selected workspace; "All workspaces" skips the filter.
+  if (scope.workspaceId && real(scope.projectId)) return scope.projectId;
   const latest = [...recent]
     .filter((s) => real(s.project_id))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
-  return latest?.project_id ?? projects.find((p) => real(p.id))?.id ?? null;
+  return latest?.project_id ?? here.find((p) => real(p.id))?.id ?? null;
+}
+
+// The projects "In project…" offers: the selected workspace's real ones, or
+// every real one when none is selected.
+export function pickableProjects<
+  P extends { is_uncategorized: boolean; workspace_id?: string | null },
+>(projects: P[], workspaceId: string | null): P[] {
+  return projectsInWorkspace(projects, workspaceId).filter(
+    (p) => !p.is_uncategorized
+  );
 }
 
 export type DraftKey = "current" | "choose" | "scratch";

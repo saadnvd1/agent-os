@@ -3,6 +3,7 @@ import {
   currentProjectId,
   draftKeyFor,
   newDraft,
+  pickableProjects,
   reusableDraft,
   type Draft,
   type DraftProject,
@@ -119,6 +120,95 @@ describe("currentProjectId", () => {
 
   it("is none when there are no projects", () => {
     expect(currentProjectId(null, [], [projects[0]])).toBeNull();
+  });
+
+  it("skips the filter with no workspace selected", () => {
+    expect(
+      currentProjectId(null, recent, projects, {
+        workspaceId: null,
+        projectId: "a",
+      })
+    ).toBe("b");
+  });
+
+  describe("with a workspace selected in the sidebar", () => {
+    const projects = [
+      { id: "uncategorized", is_uncategorized: true, workspace_id: null },
+      { id: "a", is_uncategorized: false, workspace_id: "w1" },
+      { id: "b", is_uncategorized: false, workspace_id: "w2" },
+      { id: "c", is_uncategorized: false, workspace_id: "w2" },
+    ];
+    const recent = [
+      { project_id: "a", updated_at: "2026-10-09 10:00:00" },
+      { project_id: "c", updated_at: "2026-10-05 10:00:00" },
+    ];
+    const w2 = { workspaceId: "w2", projectId: null };
+
+    it("stays in it while you view a session in another workspace", () => {
+      expect(currentProjectId({ projectId: "a" }, recent, projects, w2)).toBe(
+        "c"
+      );
+    });
+
+    it("takes its most recently used project, not another workspace's", () => {
+      expect(currentProjectId(null, recent, projects, w2)).toBe("c");
+    });
+
+    it("takes the sidebar's project filter over the most recent", () => {
+      expect(
+        currentProjectId(null, recent, projects, { ...w2, projectId: "b" })
+      ).toBe("b");
+    });
+
+    it("keeps a viewed project in it over the sidebar's filter", () => {
+      expect(
+        currentProjectId({ projectId: "c" }, recent, projects, {
+          ...w2,
+          projectId: "b",
+        })
+      ).toBe("c");
+    });
+
+    it("ignores a filter left over from another workspace", () => {
+      expect(
+        currentProjectId(null, recent, projects, { ...w2, projectId: "a" })
+      ).toBe("c");
+    });
+
+    it("falls back to its first project when none was used", () => {
+      expect(currentProjectId(null, [], projects, w2)).toBe("b");
+    });
+
+    it("is none when it has no projects", () => {
+      expect(
+        currentProjectId({ projectId: "a" }, recent, projects, {
+          workspaceId: "w3",
+          projectId: null,
+        })
+      ).toBeNull();
+    });
+  });
+});
+
+describe("pickableProjects", () => {
+  const projects = [
+    { id: "uncategorized", is_uncategorized: true, workspace_id: null },
+    { id: "a", is_uncategorized: false, workspace_id: "w1" },
+    { id: "b", is_uncategorized: false, workspace_id: "w2" },
+  ];
+  const ids = (ws: string | null) =>
+    pickableProjects(projects, ws).map((p) => p.id);
+
+  it("offers only the selected workspace's projects", () => {
+    expect(ids("w2")).toEqual(["b"]);
+  });
+
+  it("offers every real project with none selected", () => {
+    expect(ids(null)).toEqual(["a", "b"]);
+  });
+
+  it("offers none for a workspace with no projects", () => {
+    expect(ids("w3")).toEqual([]);
   });
 });
 
