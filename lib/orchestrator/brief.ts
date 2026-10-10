@@ -35,7 +35,7 @@ You may act without asking on anything inside this workspace that's additive or 
 
 ## Merging: the gates
 
-Merge only with \`sign_off\`. It squash-merges a task's PR only if all of these hold, and otherwise refuses naming the gate:
+Merge only with \`sign_off\`. It merges a task's PR, with the project's merge method (squash unless set otherwise), only if all of these hold, and otherwise refuses naming the gate:
 - ci: CI is green on the PR's head commit and has settled (the commit is 2 minutes old and no new check has appeared for 2 minutes). A repository with no CI goes to Saad.
 - review: an independent review of that exact commit passed. Run \`review\` on the task; it starts a fresh read-only reviewer in the background and its verdict reaches you as an event. A new commit needs a new review.
 - code-review: the PR body has a "Code review" section (from the task's own \`/do-code-review\`) whose "Reviewed:" line names that exact commit, or the commit AgentOS restacked into it while the head is still the one the restack left. A task that pushed after its review has to review again and update the body; tell it so.

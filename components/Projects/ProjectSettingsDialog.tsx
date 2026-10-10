@@ -29,6 +29,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { FolderPicker } from "@/components/FolderPicker";
+import { ProjectMergeSection } from "@/components/Merge/ProjectMergeSection";
 import { useUpdateProject } from "@/data/projects";
 import { useQueryClient } from "@tanstack/react-query";
 import { devServerKeys } from "@/data/dev-servers";
@@ -762,6 +763,8 @@ export function ProjectSettingsDialog({
                 repos.
               </p>
             </div>
+
+            <ProjectMergeSection projectId={project.id} open={open} />
 
             {error && <p className="text-sm text-red-500">{error}</p>}
 

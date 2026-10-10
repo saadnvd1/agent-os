@@ -188,13 +188,25 @@ describe("signing off and dropping there", () => {
     const r = await startOne();
     fetchMock
       .mockResolvedValueOnce(list([]))
-      .mockResolvedValueOnce(json({ success: true, head }));
-    await signOffTask(r.id!, { head });
+      .mockResolvedValueOnce(json({ success: true, head, method: "rebase" }));
+    // The method that machine's settings chose, not this one's.
+    await expect(signOffTask(r.id!, { head })).resolves.toBe("rebase");
     const [url, init] = fetchMock.mock.calls.at(-1)!;
     expect(url).toBe(`http://devbox:3011/api/tasks/${r.id}/merge`);
     expect(JSON.parse(init.body)).toEqual({ head });
     expect(row(r.id!).task_status).toBe("merged");
   });
+
+  it.each([{}, { method: "fast-forward" }])(
+    "reports no method when that machine names none it knows (%j)",
+    async (said) => {
+      const r = await startOne();
+      fetchMock
+        .mockResolvedValueOnce(list([]))
+        .mockResolvedValueOnce(json({ success: true, head, ...said }));
+      await expect(signOffTask(r.id!, { head })).resolves.toBeNull();
+    }
+  );
 
   it("refuses to ask an AgentOS that can't pin a merge", async () => {
     const r = await startOne();

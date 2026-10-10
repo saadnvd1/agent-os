@@ -48,7 +48,9 @@ export const LAND_TURN_WAIT_MS = 5 * 60_000;
 
 export const LAND_DEFAULTS: LandDeps = {
   // Waits for the restack, so its children are checked after they moved.
-  signOff: (id, head) => signOffTask(id, { wait: true, head }),
+  signOff: async (id, head) => {
+    await signOffTask(id, { wait: true, head });
+  },
   prOf: (s) => taskPR(s, true),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   refresh: refreshItems,

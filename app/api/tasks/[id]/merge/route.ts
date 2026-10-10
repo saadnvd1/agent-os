@@ -14,8 +14,8 @@ export async function POST(
   )
     return NextResponse.json({ error: "Bad head commit" }, { status: 400 });
   try {
-    await signOffTask((await params).id, { head });
-    return NextResponse.json({ success: true, head: head ?? null });
+    const method = await signOffTask((await params).id, { head });
+    return NextResponse.json({ success: true, head: head ?? null, method });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 409 });

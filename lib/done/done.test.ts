@@ -9,6 +9,8 @@ import { commitFile, git, makeRepo, WORKTREE_MARK } from "./testing";
 // Real repositories; gh, tmux, chat workers and LumifyHub are faked.
 const prs = new Map<string, TaskPR>();
 const merges: string[][] = [];
+// Every `git push origin --delete <branch>`, whether origin took it or not.
+const remoteDeletes: string[] = [];
 const killed: string[] = [];
 const cards: [string, TaskState][] = [];
 const status = new Map<string, "running" | "idle">();
@@ -29,6 +31,8 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
             prs.set(b, { ...pr, state: "MERGED" });
         return "";
       }
+      if (cmd === "git" && args[0] === "push" && args.includes("--delete"))
+        remoteDeletes.push(args.at(-1)!);
       if (cmd === "tmux") {
         await cleanupGate;
         throw new Error("no tmux in tests");
@@ -103,10 +107,14 @@ const { doneSession } = await import("./index");
 const { signOffTask } = await import("@/lib/tasks");
 const { deleteWorktree } = await import("@/lib/worktrees");
 const { worktreeFate } = await import("./worktree");
+const { setGlobalMergeSettings, setProjectMergeSettings } =
+  await import("@/lib/tasks/merge-policy");
 
 beforeEach(() => {
+  setGlobalMergeSettings({});
   ghDown = false;
   merges.length = 0;
+  remoteDeletes.length = 0;
   killed.length = 0;
   cards.length = 0;
   droppedDatabases.length = 0;
@@ -768,5 +776,140 @@ describe("the orchestrator's done tool", () => {
     expect(await runTool(t.w, "done", { session: "mine" })).toMatch(
       /^Done: mine\. Agent stopped, no worktree; archived\.$/
     );
+  });
+});
+
+describe("merge settings", () => {
+  it("merges with the project's method, which beats the global one", async () => {
+    const t = setup();
+    setGlobalMergeSettings({ method: "merge" });
+    setProjectMergeSettings(t.project.id, { method: "rebase" });
+    const s = t.session("rebased", {
+      task: true,
+      commits: { "src/r.ts": "export const r = 1;\n" },
+      live: "idle",
+    });
+    t.openPR(s);
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(merges).toEqual([
+      expect.arrayContaining(["merge", "--rebase", "--match-head-commit"]),
+    ]);
+    expect(merges[0]).not.toContain("--squash");
+    expect(out.merged).toMatch(/rebase-merged/);
+  });
+
+  it("uses the global method when the project sets none", async () => {
+    const t = setup();
+    setGlobalMergeSettings({ method: "merge" });
+    const s = t.session("merge-commit", {
+      task: true,
+      commits: { "src/m.ts": "export const m = 1;\n" },
+      live: "idle",
+    });
+    t.openPR(s);
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(merges[0]).toEqual(expect.arrayContaining(["--merge"]));
+    expect(out.merged).toMatch(/merged with a merge commit/);
+  });
+
+  it("keeps origin's branch and the worktree after a sign-off when both deletions are off", async () => {
+    const t = setup();
+    setProjectMergeSettings(t.project.id, {
+      delete_remote_branch: false,
+      delete_worktree: false,
+    });
+    const s = t.session("kept", {
+      task: true,
+      commits: { "src/k.ts": "export const k = 1;\n" },
+      live: "idle",
+    });
+    t.openPR(s);
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(merges[0]).toEqual(expect.arrayContaining(["--squash"]));
+    expect(out.worktree).toMatchObject({
+      action: "kept",
+      why: "the merge settings keep worktrees after a merge",
+    });
+    expect(fs.existsSync(s.dir!)).toBe(true);
+    expect(git(t.repo, "branch", "--list", s.branch)).not.toBe("");
+    expect(git(t.repo, "ls-remote", "--heads", "origin", s.branch)).not.toBe(
+      ""
+    );
+    expect(row(s.id).archived_at).not.toBeNull();
+  });
+
+  it("toggles each deletion on its own for a PR merged on GitHub", async () => {
+    const t = setup();
+    // Global: keep origin's branch; the project still removes its worktree.
+    setGlobalMergeSettings({ delete_remote_branch: false });
+    const s = t.session("half", {
+      task: true,
+      commits: { "src/h.ts": "export const h = 1;\n" },
+    });
+    t.openPR(s, { state: "MERGED" });
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.text).not.toContain("deleted on origin");
+    expect(git(t.repo, "ls-remote", "--heads", "origin", s.branch)).not.toBe(
+      ""
+    );
+    expect(out.worktree).toMatchObject({ action: "removed" });
+
+    setGlobalMergeSettings({ delete_worktree: false });
+    const k = t.session("half-kept", {
+      task: true,
+      commits: { "src/i.ts": "export const i = 1;\n" },
+    });
+    t.openPR(k, { state: "MERGED" });
+    const kept = await doneSession(k.id, { by: "direct" });
+    expect(kept.text).toContain("its merged branch deleted on origin");
+    expect(kept.worktree).toMatchObject({ action: "kept" });
+    expect(fs.existsSync(k.dir!)).toBe(true);
+  });
+
+  // master, not main: origin's HEAD is main, which git itself refuses to
+  // delete, so only the guard can keep master.
+  it.each(["MERGED", "OPEN"] as const)(
+    "never deletes master on origin, whatever the settings say (PR %s)",
+    async (state) => {
+      const t = setup();
+      setProjectMergeSettings(t.project.id, { delete_remote_branch: true });
+      git(t.repo, "push", "-q", "origin", "main:master");
+      const s = t.session(`on-master-${state}`, {
+        task: true,
+        worktree: false,
+        live: "idle",
+      });
+      db.prepare(`UPDATE sessions SET branch_name = 'master' WHERE id = ?`).run(
+        s.id
+      );
+      const tip = git(t.repo, "rev-parse", "origin/main");
+      t.openPR({ ...s, branch: "master", head: tip }, { state });
+      if (state === "OPEN") {
+        // The sign-off's own cleanup, which pushes the deletion.
+        await signOffTask(s.id, { wait: true });
+        expect(merges).toHaveLength(1);
+      } else {
+        const out = await doneSession(s.id, { by: "direct" });
+        expect(out.text).not.toContain("deleted on origin");
+      }
+      expect(remoteDeletes).toEqual([]);
+      expect(git(t.repo, "ls-remote", "--heads", "origin", "master")).not.toBe(
+        ""
+      );
+    }
+  );
+
+  it("still never removes uncommitted work when deletion is on", async () => {
+    const t = setup();
+    setProjectMergeSettings(t.project.id, { delete_worktree: true });
+    const s = t.session("dirty", {
+      task: true,
+      commits: { "src/u.ts": "export const u = 1;\n" },
+    });
+    t.openPR(s, { state: "MERGED" });
+    fs.writeFileSync(path.join(s.dir!, "scratch.txt"), "wip");
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.worktree).toMatchObject({ action: "kept" });
+    expect(fs.existsSync(s.dir!)).toBe(true);
   });
 });

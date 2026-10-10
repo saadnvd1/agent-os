@@ -16,6 +16,7 @@ import {
   Plus,
   Server,
   Smartphone,
+  GitMerge,
   SquareTerminal,
   Trash2,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import { newDraft } from "@/stores/drafts";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
+import { mergeUiActions } from "@/stores/mergeUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { LoadGauge } from "./LoadGauge";
@@ -113,6 +115,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             separator(),
             menuItem("Machines", props.onManageHosts, { icon: Server }),
             menuItem("Devices", devicesUiActions.open, { icon: Smartphone }),
+            menuItem("Merging", mergeUiActions.open, { icon: GitMerge }),
             ...(pinControls
               ? [
                   menuItem(
