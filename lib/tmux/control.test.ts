@@ -76,6 +76,15 @@ async function seed(c: ReturnType<typeof fakeClient>, capture: string[]) {
 // The screen applies writes on a timer of its own.
 const settle = () => new Promise((r) => setTimeout(r, 30));
 
+// The screen is rebuilt asynchronously after a capture's reply, so a fixed
+// wait flakes on a slow runner: wait for the text, then let replayed output
+// finish applying and check it again, so a passing in-between state can't.
+async function screenIs(m: ControlManager, text: string) {
+  await vi.waitFor(() => expect(m.screen("s1")).toBe(text));
+  await settle();
+  expect(m.screen("s1")).toBe(text);
+}
+
 describe("ControlManager", () => {
   it("attaches read-only without changing size, seeds the screen, then follows output", async () => {
     const { m, clients, pushed, events } = manager();
@@ -88,14 +97,14 @@ describe("ControlManager", () => {
     await seed(c, ["hello", "world"]);
     expect(c.written.join("")).toContain("display-message -p -t =s1:");
     expect(c.written.join("")).toContain("capture-pane -e -p -t =s1:");
-    expect(m.screen("s1")).toBe("hello\nworld");
+    await screenIs(m, "hello\nworld");
 
     c.say("%output %1 more\\015\\012", "%output %9 other pane");
     await tick();
     expect(pushed).toEqual(["s1:x", "s1:more\r\n"]);
     expect(m.takeActivity()).toBe(true);
     expect(m.takeActivity()).toBe(false);
-    await vi.waitFor(() => expect(m.screen("s1")).toBe("hello\nworldmore"));
+    await screenIs(m, "hello\nworldmore");
   });
 
   it("drops output that arrives before its capture's reply: the capture has it", async () => {
@@ -109,8 +118,7 @@ describe("ControlManager", () => {
     await tick();
     c.say("%output %1 already-in-capture");
     c.say("%begin 4 4 1", "screen", "%end 4 4 1");
-    // The screen is rebuilt asynchronously; a fixed wait flaked on slow CI.
-    await vi.waitFor(() => expect(m.screen("s1")).toBe("screen"));
+    await screenIs(m, "screen");
   });
 
   it("says whether a pane printed since a time, once it knows the pane", async () => {
@@ -142,8 +150,7 @@ describe("ControlManager", () => {
     c.say("%begin 3 3 1", "%1 20 4 0 0", "%end 3 3 1");
     await tick();
     c.say("%begin 4 4 1", "first", "%end 4 4 1");
-    await settle();
-    expect(m.screen("s1")).toBe("first");
+    await screenIs(m, "first");
     // The window changed: once it's quiet, the screen is read again.
     c.say("%layout-change @1 x x *");
     await tick();
@@ -167,8 +174,7 @@ describe("ControlManager", () => {
       // Printed after it, in the same read: applied on top, once.
       "%output %1 \\015\\012after"
     );
-    await settle();
-    expect(m.screen("s1")).toBe("first\nIN-CAPTURE\nafter");
+    await screenIs(m, "first\nIN-CAPTURE\nafter");
     // And it isn't read again right away for the output it applied: no
     // new resync asks for the pane (four asks so far).
     await new Promise((r) => setTimeout(r, 60));
