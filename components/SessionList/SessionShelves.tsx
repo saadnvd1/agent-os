@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { DONE_PAGE, doneLimit, type Shelves } from "@/lib/sidebar/shelves";
+import type { MachineGroup } from "@/lib/sidebar/machines";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
 import { SessionRow } from "./SessionRow";
@@ -64,6 +65,17 @@ function Shelf({
       {children}
     </section>
   );
+}
+
+// A linked machine's sessions no project here holds, under its name.
+export function MachineShelves({ groups }: { groups: MachineGroup[] }) {
+  return groups.map((g) => (
+    <Shelf key={g.hostId} label={g.name} count={g.rows.length}>
+      {g.rows.map((r) => (
+        <SessionRow key={r.session.id} row={r} />
+      ))}
+    </Shelf>
+  ));
 }
 
 // The pinned orchestrator, then Pinned, Needs you, Working and Done: once

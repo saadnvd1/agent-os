@@ -6,9 +6,9 @@
  */
 
 import { db, queries, type Project, type Session } from "../db";
-import { isValidAgentType } from "../providers";
 import { projectMatcher } from "./discover";
 import { toPeerSession } from "./peer-sessions";
+import { insertMirror } from "./peer-sync";
 import { hostApi, requireHostLink } from "./remote-api";
 
 export async function mirrorPeerSession(
@@ -35,25 +35,12 @@ export async function mirrorPeerSession(
   ) as Record<string, unknown> | undefined;
   const peer = raw ? toPeerSession(hostId, raw) : null;
   if (!peer) throw new Error(`${link.hostName} has no such session`);
-  const projectId = projectMatcher(
-    queries.getAllProjects(db).all() as Project[]
-  )(hostId, peer.path);
-  const model = typeof raw?.model === "string" ? raw.model.slice(0, 100) : "";
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
-       agent_type, project_id, host_id, view, name_source)
-     VALUES (?, ?, ?, ?, ?, 'sessions', ?, ?, ?, ?, 'user')
-     ON CONFLICT(id) DO NOTHING`
-  ).run(
-    peer.id,
-    peer.name,
-    peer.tmuxName || `${peer.agentType}-${peer.id}`,
-    peer.path || "~",
-    model,
-    isValidAgentType(peer.agentType) ? peer.agentType : "shell",
-    projectId,
-    hostId,
-    peer.view
+  insertMirror(
+    peer,
+    projectMatcher(queries.getAllProjects(db).all() as Project[])(
+      hostId,
+      peer.path
+    )
   );
   return db
     .prepare(`SELECT * FROM sessions WHERE id = ?`)

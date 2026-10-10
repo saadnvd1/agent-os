@@ -75,6 +75,7 @@ vi.mock("@/lib/agents/spawn", () => ({
   },
 }));
 vi.mock("@/lib/sessions/launch", () => ({
+  DEFAULT_START_VIEW: "chat",
   launchSession: async (o: {
     projectId: string;
     prompt: string;

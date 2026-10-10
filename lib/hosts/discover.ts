@@ -1,7 +1,6 @@
 import { WORKER_TMUX_PREFIX } from "../chat/worker/protocol";
 import type { Project, Session } from "../db";
 import type { TmuxSessionInfo } from "../status-detector";
-import type { PeerSession } from "./peer-sessions";
 
 // Folders are compared relative to ~ so a path reads the same on any machine;
 // a session only nests under a project on its own machine.
@@ -18,10 +17,10 @@ function isWithin(path: string, dir: string): boolean {
   return path === dir || path.startsWith(dir === "~" ? "~/" : `${dir}/`);
 }
 
+// A linked machine's own sessions aren't here: they're mirrored as
+// sessions (peer-sync.ts). Only tmux sessions no AgentOS started are.
 export interface DiscoveredSession extends TmuxSessionInfo {
   projectId: string | null;
-  // A session a linked machine's AgentOS runs: opened here as its mirror.
-  peer?: Pick<PeerSession, "id" | "name" | "view" | "agentType" | "state">;
 }
 
 const hostKey = (hostId: string | null | undefined, name: string) =>
@@ -51,8 +50,7 @@ export function projectMatcher(
 export function discoverSessions(
   tmuxSessions: TmuxSessionInfo[],
   projects: Project[],
-  managed: Session[],
-  peerSessions: PeerSession[] = []
+  managed: Session[]
 ): DiscoveredSession[] {
   // By machine and name: a session here doesn't hide one elsewhere.
   const managedNames = new Set(
@@ -60,39 +58,14 @@ export function discoverSessions(
       .filter((s) => s.tmux_name)
       .map((s) => hostKey(s.host_id, s.tmux_name))
   );
-  const mirrored = new Set(managed.map((s) => s.id));
   const projectFor = projectMatcher(projects);
 
-  const peers: TmuxSessionInfo[] = peerSessions
-    .filter((p) => !mirrored.has(p.id))
-    .map((p) => ({
-      name: p.tmuxName || p.id,
-      hostId: p.hostId,
-      activity: p.activity,
-      output: 0,
-      path: p.path,
-      attached: false,
-      windows: 1,
-      command: "",
-      title: "",
-      pid: 0,
-      peer: {
-        id: p.id,
-        name: p.name,
-        view: p.view,
-        agentType: p.agentType,
-        state: p.state,
-      },
-    }));
-
-  return [
-    ...tmuxSessions.filter(
+  return tmuxSessions
+    .filter(
       (t) =>
         !managedNames.has(hostKey(t.hostId, t.name)) &&
         !t.name.startsWith(WORKER_TMUX_PREFIX)
-    ),
-    ...peers,
-  ]
+    )
     .map((t) => ({ ...t, projectId: projectFor(t.hostId, t.path) }))
     .sort((a, b) => b.activity - a.activity);
 }

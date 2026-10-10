@@ -26,6 +26,7 @@ import { deleteMergedRemote } from "./remote";
 import { settleWorktree, type WorktreeFate } from "./worktree";
 import { releasePorts } from "../ports";
 import { dropSessionDatabase } from "../project-config/database";
+import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
 
 export interface DoneOptions {
   // Who asked: the orchestrator's gate failures count toward Saad, as its
@@ -35,6 +36,9 @@ export interface DoneOptions {
   callerId?: string | null;
   // Bulk clean-up: an open PR is refused, never merged.
   noMerge?: boolean;
+  // Your own Done on the row: a linked machine's session is done there.
+  // Agents and the orchestrator don't act on another machine's work.
+  onPeer?: boolean;
 }
 
 export interface DoneOutcome {
@@ -129,6 +133,13 @@ export async function doneSession(
       text: `${s.name} archived. In the demo, nothing is merged or cleaned up.`,
     };
   }
+  // A linked machine's session is done there, by its own AgentOS.
+  const peer = peerSessionLink(s);
+  if (peer && !opts.onPeer)
+    throw new Error(
+      `${s.name} runs on ${peer.hostName}: only you can mark it done, from its row.`
+    );
+  if (peer) return doneOnPeer(peer, s);
   const hadWorktree = !!s.worktree_path && fs.existsSync(s.worktree_path);
   // A sign-off just before this (the orchestrator's sign_off, then done)
   // is still cleaning up in the background: read what it leaves.

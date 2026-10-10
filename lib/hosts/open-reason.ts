@@ -7,7 +7,7 @@ import type { DiscoveredSession } from "./discover";
  * nothing.
  */
 export function openBlockedReason(
-  session: Pick<DiscoveredSession, "name" | "hostId" | "peer">,
+  session: Pick<DiscoveredSession, "name" | "hostId">,
   hostErrors: Record<string, string> = {},
   hostName = "That machine"
 ): string | null {
@@ -16,7 +16,7 @@ export function openBlockedReason(
     return /^can't reach/i.test(error)
       ? error
       : `Can't reach ${hostName}: ${error}`;
-  if (!session.peer && !isValidTmuxName(session.name))
+  if (!isValidTmuxName(session.name))
     return "Its tmux name has characters AgentOS can't attach to";
   return null;
 }

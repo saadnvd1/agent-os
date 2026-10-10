@@ -4,7 +4,7 @@ import { AlertCircle, FolderPlus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ShimmeringLoader } from "@/components/ui/skeleton";
 import type { SidebarData } from "./useSidebarData";
-import { SessionShelves } from "./SessionShelves";
+import { MachineShelves, SessionShelves } from "./SessionShelves";
 import { SidebarExtras } from "./SidebarExtras";
 import { DraftShelf } from "./DraftShelf";
 
@@ -64,7 +64,8 @@ export function SidebarBody({
     shelves.pinned.length +
     shelves.needsYou.length +
     shelves.working.length +
-    shelves.done.length;
+    shelves.done.length +
+    data.machines.length;
   const noProjects = data.projects.every((p) => p.is_uncategorized);
 
   return (
@@ -102,6 +103,7 @@ export function SidebarBody({
         doneCollapsed={ui.doneCollapsed}
         donePages={ui.donePages}
       />
+      <MachineShelves groups={data.machines} />
       <SidebarExtras
         projects={data.workspaceProjects}
         project={data.project}

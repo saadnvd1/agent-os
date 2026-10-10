@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb, queries, type Session, type Message } from "@/lib/db";
+import { peerSessionLink } from "@/lib/hosts/peer-actions";
+import { REMOTE_UNSUPPORTED } from "@/lib/hosts/remote-menu";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -30,6 +32,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 404 }
       );
     }
+
+    const peer = peerSessionLink(parent);
+    if (peer)
+      return NextResponse.json(
+        { error: REMOTE_UNSUPPORTED.fork(peer.hostName) },
+        { status: 400 }
+      );
 
     // Create new session
     const newId = randomUUID();

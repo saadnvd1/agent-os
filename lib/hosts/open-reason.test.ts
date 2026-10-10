@@ -17,19 +17,5 @@ describe("openBlockedReason", () => {
 
   it("lets an openable row open", () => {
     expect(openBlockedReason({ name: "main", hostId: "local" })).toBeNull();
-    // A linked machine's chat has no tmux name to check.
-    expect(
-      openBlockedReason({
-        name: "x y",
-        hostId: "box",
-        peer: {
-          id: "1",
-          name: "c",
-          view: "chat",
-          agentType: "claude",
-          state: null,
-        },
-      })
-    ).toBeNull();
   });
 });

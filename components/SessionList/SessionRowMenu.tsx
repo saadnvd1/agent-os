@@ -27,6 +27,8 @@ import { useDoneAction } from "./useDoneAction";
 import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { copySessionLink } from "@/hooks/useCopyToClipboard";
+import { useLinkedHostNames } from "@/data/hosts";
+import { remoteBlocks } from "@/lib/hosts/remote-menu";
 
 const PARTS = {
   dropdown: {
@@ -47,6 +49,30 @@ const PARTS = {
 
 const icon = "mr-2 h-3.5 w-3.5";
 
+interface BlockedProps {
+  kind: keyof typeof PARTS;
+  icon: typeof Copy;
+  label: string;
+  why: string;
+}
+
+// An action that can't run here yet: shown, disabled, with why.
+function BlockedItem({ kind, icon: Icon, label, why }: BlockedProps) {
+  const Item = PARTS[kind].Item;
+  return (
+    // Disabled, but the reason keeps full contrast: only the label dims.
+    <Item disabled className="items-start data-[disabled]:opacity-100">
+      <Icon className={`${icon} mt-0.5 opacity-50`} />
+      <span className="flex min-w-0 flex-col">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground text-xs leading-tight">
+          {why}
+        </span>
+      </span>
+    </Item>
+  );
+}
+
 // The row's ⋯ menu (and right-click menu): everything a session can do.
 export function SessionRowMenu({
   session,
@@ -60,6 +86,9 @@ export function SessionRowMenu({
   const ctx = useRowContext();
   const markDone = useDoneAction();
   const { Item, Separator, Sub, SubTrigger, SubContent } = PARTS[kind];
+  const linked = useLinkedHostNames();
+  // A linked machine's session: what can't reach it yet shows why.
+  const blocked = remoteBlocks(session, (id) => linked[id]);
   const summarizing = ctx.summarizingSessionId === session.id;
   const cardUrl = ctx.cardUrl(session.id);
   const others = ctx.projects.filter(
@@ -110,13 +139,29 @@ export function SessionRowMenu({
         <Pencil className={icon} />
         Rename
       </Item>
-      {session.agent_type === "claude" && !session.role && (
+      {session.agent_type === "claude" && !session.role && blocked && (
+        <BlockedItem
+          kind={kind}
+          icon={Copy}
+          label="Fork session"
+          why={blocked.fork}
+        />
+      )}
+      {!session.role && blocked && (
+        <BlockedItem
+          kind={kind}
+          icon={Sparkles}
+          label="Fresh start"
+          why={blocked.freshStart}
+        />
+      )}
+      {session.agent_type === "claude" && !session.role && !blocked && (
         <Item onClick={() => ctx.onFork(session.id)}>
           <Copy className={icon} />
           Fork session
         </Item>
       )}
-      {!session.role && (
+      {!session.role && !blocked && (
         <Item
           onClick={() => ctx.onSummarize(session.id)}
           disabled={summarizing}
@@ -142,7 +187,15 @@ export function SessionRowMenu({
         </Item>
       )}
       <MoveMenuItems session={session} Item={Item} />
-      {!session.role && others.length > 0 && (
+      {!session.role && others.length > 0 && blocked && (
+        <BlockedItem
+          kind={kind}
+          icon={FolderInput}
+          label="Move to project"
+          why={blocked.moveToProject}
+        />
+      )}
+      {!session.role && others.length > 0 && !blocked && (
         <Sub>
           <SubTrigger>
             <FolderInput className={icon} />
@@ -162,7 +215,19 @@ export function SessionRowMenu({
       )}
       {workspaceId &&
         session.role !== "orchestrator" &&
-        (!session.task_status || session.task_status === "running") && (
+        (!session.task_status || session.task_status === "running") &&
+        blocked && (
+          <BlockedItem
+            kind={kind}
+            icon={Clock}
+            label="Schedule check-ins"
+            why={blocked.schedule}
+          />
+        )}
+      {workspaceId &&
+        session.role !== "orchestrator" &&
+        (!session.task_status || session.task_status === "running") &&
+        !blocked && (
           <Item
             onClick={() =>
               schedulesUiActions.openDraft(workspaceId, {

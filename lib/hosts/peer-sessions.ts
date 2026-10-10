@@ -7,6 +7,7 @@
 
 import type { TmuxSessionInfo } from "../status-detector";
 import { isValidTmuxName } from "./attach";
+import { syncPeerMirrors } from "./peer-sync";
 import {
   cleanRemoteText,
   hostApi,
@@ -24,9 +25,17 @@ export interface PeerSession {
   agentType: string;
   state: "running" | "waiting" | "idle" | null;
   activity: number;
+  // Its row as that machine has it, for the mirror here.
+  model: string;
+  updatedAt: string | null;
+  prUrl: string | null;
+  prNumber: number | null;
+  prStatus: "open" | "merged" | "closed" | null;
 }
 
 const ID = /^[A-Za-z0-9-]{1,64}$/;
+const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+const PR_STATUS = new Set(["open", "merged", "closed"]);
 const num = (n: unknown) =>
   typeof n === "number" && Number.isFinite(n) ? n : 0;
 const text = (s: unknown, max = 300) => cleanRemoteText(s).slice(0, max);
@@ -102,23 +111,46 @@ export function toPeerSession(
   if (!ID.test(id)) return null;
   // That machine's mirrors of somewhere else's sessions aren't its own.
   if (raw.host_id && raw.host_id !== "local") return null;
+  // Its orchestrator and its tasks belong to its own workspace and gates:
+  // they're not mirrored as plain sessions here.
+  if (raw.role || raw.task_prompt || raw.task_status) return null;
   const tmuxName = typeof raw.tmux_name === "string" ? raw.tmux_name : "";
   const view = raw.view === "chat" ? "chat" : "terminal";
-  // A terminal is opened by its tmux name.
-  if (view === "terminal" && !isValidTmuxName(tmuxName)) return null;
-  const updated = Date.parse(
-    String(raw.updated_at ?? "").replace(" ", "T") + "Z"
-  );
+  // A terminal is opened by its tmux name; any name it gives must be one.
+  if (tmuxName && (!isValidTmuxName(tmuxName) || tmuxName.length > 200))
+    return null;
+  if (view === "terminal" && !tmuxName) return null;
+  const updatedAt =
+    typeof raw.updated_at === "string" && SQLITE_TIME.test(raw.updated_at)
+      ? raw.updated_at
+      : null;
+  const updated = Date.parse(String(updatedAt).replace(" ", "T") + "Z");
+  const prUrl =
+    typeof raw.pr_url === "string" &&
+    /^https:\/\/github\.com\/[^\s]{1,300}$/.test(raw.pr_url)
+      ? raw.pr_url
+      : null;
   return {
     id,
     hostId,
     name: text(raw.name, 200) || id,
-    tmuxName: isValidTmuxName(tmuxName) ? tmuxName : "",
+    tmuxName,
     path: text(raw.working_directory, 1000),
     view,
     agentType: text(raw.agent_type, 40) || "claude",
     state: null,
     activity: Number.isFinite(updated) ? Math.floor(updated / 1000) : 0,
+    model: text(raw.model, 100),
+    updatedAt,
+    prUrl,
+    prNumber:
+      prUrl && Number.isSafeInteger(raw.pr_number) && Number(raw.pr_number) > 0
+        ? Number(raw.pr_number)
+        : null,
+    prStatus:
+      prUrl && PR_STATUS.has(String(raw.pr_status))
+        ? (raw.pr_status as PeerSession["prStatus"])
+        : null,
   };
 }
 
@@ -132,21 +164,21 @@ async function refreshStatuses(link: HostLink): Promise<void> {
 }
 
 async function refreshManaged(link: HostLink): Promise<void> {
+  const askedAt = Date.now();
   const [{ sessions }] = await Promise.all([
     hostApi<{ sessions?: unknown[] }>(link, "/api/sessions", {
       timeout: 8000,
     }),
     refreshStatuses(link).catch(() => undefined),
   ]);
-  managed.set(
-    link.hostId,
-    (Array.isArray(sessions) ? sessions : [])
-      .map((s) =>
-        toPeerSession(link.hostId, (s ?? {}) as Record<string, unknown>)
-      )
-      .filter((s): s is PeerSession => !!s)
-      .map((s) => ({ ...s, state: peerStatus(link.hostId, s.id) }))
-  );
+  const list = (Array.isArray(sessions) ? sessions : [])
+    .map((s) =>
+      toPeerSession(link.hostId, (s ?? {}) as Record<string, unknown>)
+    )
+    .filter((s): s is PeerSession => !!s)
+    .map((s) => ({ ...s, state: peerStatus(link.hostId, s.id) }));
+  managed.set(link.hostId, list);
+  syncPeerMirrors(link.hostId, list, askedAt);
 }
 
 /**

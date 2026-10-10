@@ -59,6 +59,8 @@ export function workspaceSessions(
       `SELECT s.*, p.name AS project_name FROM sessions s
        JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
+         -- A linked machine's own sessions are its orchestrator's to run.
+         AND s.peer_mirror = 0
          AND (s.task_status IS NULL OR s.task_status = 'running'
            OR (s.task_status = 'merged' AND s.updated_at > datetime('now', '-1 hour')))
        ORDER BY s.created_at`

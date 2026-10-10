@@ -156,6 +156,9 @@ export function sessionTargetProblem(
   if (session.archived_at) return "session archived";
   if (session.role === "orchestrator")
     return "the orchestrator takes orchestrator schedules, not messages";
+  // Messages aren't relayed to another machine's sessions (runner.ts).
+  if (session.peer_mirror && !session.task_prompt)
+    return "it runs on a linked machine: check-ins can't message it yet";
   if (sessionWorkspace(session) !== workspaceId)
     return `${session.name} isn't in this schedule's workspace`;
   return null;
