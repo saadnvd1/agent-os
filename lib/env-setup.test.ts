@@ -57,8 +57,8 @@ describe("setupWorktree with agentos.json", () => {
   it("never writes through a symlink the branch put in the worktree", async () => {
     const outside = tmp("aos-outside-");
     const { source, worktree } = checkout(
-      { copy: ["config/master.key", "link.key"] },
-      { "config/master.key": "k", "link.key": "l" }
+      { copy: ["config/master.key", "config/deep/k", "link.key"] },
+      { "config/master.key": "k", "config/deep/k": "d", "link.key": "l" }
     );
     fs.symlinkSync(outside, path.join(worktree, "config"));
     fs.symlinkSync(
@@ -71,7 +71,7 @@ describe("setupWorktree with agentos.json", () => {
     });
     expect(result.envFilesCopied).toEqual(["link.key"]);
     expect(result.steps.find((s) => s.name === "Copy files")?.error).toContain(
-      "config/master.key"
+      "config/master.key, config/deep/k"
     );
     expect(fs.readdirSync(outside)).toEqual([]);
     expect(fs.lstatSync(path.join(worktree, "link.key")).isSymbolicLink()).toBe(

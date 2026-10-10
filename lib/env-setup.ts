@@ -80,6 +80,15 @@ export async function copyEnvFiles(
 const inside = (root: string, p: string) =>
   p === root || p.startsWith(root + path.sep);
 
+// The real path of `p`'s deepest part that exists.
+async function realExisting(p: string): Promise<string> {
+  for (let at = p; ; at = path.dirname(at)) {
+    const real = await fs.promises.realpath(at).catch(() => null);
+    if (real) return real;
+    if (path.dirname(at) === at) return at;
+  }
+}
+
 /**
  * agentos.json's `copy`: files or folders from the main checkout, each one
  * resolved (symlinks included) to a place inside it, so a project can't
@@ -109,6 +118,12 @@ export async function copyDeclared(
       // point the copy outside it: the folder written into is resolved, and
       // a link in the file's own place is replaced, never written through.
       const dir = path.join(target, path.dirname(rel));
+      // Checked before anything is created: the deepest folder already
+      // there must be inside, and what's missing is made beneath it.
+      if (!inside(target, await realExisting(dir))) {
+        refused.push(rel);
+        continue;
+      }
       await fs.promises.mkdir(dir, { recursive: true });
       const realDir = await fs.promises.realpath(dir);
       if (!inside(target, realDir)) {

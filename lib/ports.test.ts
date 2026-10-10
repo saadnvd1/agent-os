@@ -114,13 +114,53 @@ describe("allocatePorts", () => {
     db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
       merged
     );
-    const running = async () => true;
+    const asked: string[] = [];
+    const running = async (name: string) => (asked.push(name), true);
     expect((await allocatePorts(session(), bases, free, running)).slot).toBe(3);
+    expect(asked.sort()).toEqual(
+      [`claude-${archived}`, `claude-${merged}`].sort()
+    );
     expect(sessionPorts(archived)).toEqual({
       RAILS_PORT: 3001,
       VITE_PORT: 3101,
     });
     expect(sessionPorts(merged)).toEqual({ RAILS_PORT: 3002, VITE_PORT: 3102 });
+  });
+
+  it("decides each ended session by its own tmux session", async () => {
+    const alive = session();
+    const dead = session();
+    await allocatePorts(alive, bases, free, gone);
+    await allocatePorts(dead, bases, free, gone);
+    db.prepare(
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id IN (?, ?)`
+    ).run(alive, dead);
+    const got = await allocatePorts(
+      session(),
+      bases,
+      free,
+      async (name) => name === `claude-${alive}`
+    );
+    expect(got.slot).toBe(2);
+    expect(sessionPorts(alive)).not.toBeNull();
+    expect(sessionPorts(dead)).toBeNull();
+  });
+
+  it("leaves an ended session on another machine alone: its tmux isn't here", async () => {
+    const remote = session();
+    await allocatePorts(remote, bases, free, gone);
+    db.prepare(
+      `UPDATE sessions SET host_id = 'other-machine', archived_at = datetime('now') WHERE id = ?`
+    ).run(remote);
+    const asked: string[] = [];
+    await allocatePorts(
+      session(),
+      bases,
+      free,
+      async (n) => (asked.push(n), false)
+    );
+    expect(asked).toEqual([]);
+    expect(sessionPorts(remote)).toEqual({ RAILS_PORT: 3001, VITE_PORT: 3101 });
   });
 
   it("takes back a done task's slot even if a tmux session has its name", async () => {
