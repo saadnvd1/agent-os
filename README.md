@@ -312,6 +312,7 @@ root. Every field is optional:
   "ready": { "url": "/up", "port": "RAILS_PORT" },
   "test": "bundle exec rspec",
   "browse": { "login": "/dev/login", "map": "docs/browsing.md" },
+  "database": { "from": "app_development", "env": "DATABASE_NAME" },
   "notes": ["Kill your own server by port: lsof -ti tcp:$RAILS_PORT"]
 }
 ```
@@ -332,6 +333,21 @@ its own port, the browsing map and the notes. Only declared fields are
 mentioned, and `env` values never are. Keep secrets out of the file: it is
 committed.
 
+With `database`, every task and worktree session gets its **own Postgres
+database**, a copy of `from` named `<from>_aos_<hash of the session>`, made
+before setup runs and exported as `env` (default `DATABASE_NAME`, plus
+`PGPORT`/`DATABASE_PORT` and `PGHOST`/`DATABASE_HOST` when `port`/`host` are
+set), so one session's migrations never reach another's. It's copied with
+`pg_dump` into a database created from `template0`, not `createdb -T <from>`,
+which refuses while the dev server is connected to `from`. Only a local server
+is used (`host` may be `localhost`, `127.0.0.1`, `::1` or a socket folder), and
+`from` must be a plain database name. A copy left by an earlier start of the
+same session is reused. When Postgres isn't answering or the copy fails, the
+session still starts, without one, and its brief says so. The copy is dropped
+when the session is done, merged, dropped or deleted, and only one AgentOS made
+for that session (its comment names the session): `from` and any other
+database are never touched.
+
 The file is validated against
 [agentos.schema.json](lib/project-config/agentos.schema.json); a broken one
 fails the setup with every bad field named, rather than being ignored. Without
@@ -339,8 +355,8 @@ an `agentos.json`, a `.dispatch.json` is read with the same meanings, then the
 legacy `.agent-os/worktrees.json` and `.agent-os.json`. The config is always
 read from the main checkout, so an agent can't change its own environment by
 editing it, and the merge gates flag an edit to it as agent config. The full
-schema, including the fields later releases implement (a private database per
-session, MCP servers, apps, recipes), is in
+schema, including the fields later releases implement (MCP servers, apps,
+recipes), is in
 [docs/decisions/2026-10-10-agentos-json.md](docs/decisions/2026-10-10-agentos-json.md).
 
 ### Stacks

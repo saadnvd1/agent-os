@@ -12,6 +12,7 @@ const merges: string[][] = [];
 const killed: string[] = [];
 const cards: [string, TaskState][] = [];
 const status = new Map<string, "running" | "idle">();
+const droppedDatabases: string[] = [];
 let ghDown = false;
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
@@ -73,6 +74,13 @@ vi.mock("@/lib/worktrees", async (importOriginal) => ({
   isAgentOSWorktree: (p: string) => p.includes(WORKTREE_MARK),
 }));
 
+vi.mock("@/lib/project-config/database", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/project-config/database")>()),
+  dropSessionDatabase: async (id: string) => {
+    droppedDatabases.push(id);
+  },
+}));
+
 // Orchestrators' scratch folders go in a temporary home.
 vi.spyOn(os, "homedir").mockReturnValue(
   fs.mkdtempSync(path.join(os.tmpdir(), "aos-done-home-"))
@@ -93,6 +101,7 @@ beforeEach(() => {
   merges.length = 0;
   killed.length = 0;
   cards.length = 0;
+  droppedDatabases.length = 0;
 });
 
 const row = (id: string) =>
@@ -214,6 +223,8 @@ describe("done, by state", () => {
     expect(row(s.id)).toMatchObject({ task_status: "merged" });
     expect(row(s.id).archived_at).not.toBeNull();
     expect(cards).toContainEqual([s.id, "merged"]);
+    // Its private database goes with it.
+    expect(droppedDatabases).toContain(s.id);
   });
 
   it("(a) refuses on a failing gate, naming it, and merges nothing", async () => {
@@ -230,6 +241,7 @@ describe("done, by state", () => {
     // A person's done doesn't count toward sending it to Saad.
     expect(failureOf(s.id, "ci")).toBeNull();
     expect(merges).toEqual([]);
+    expect(droppedDatabases).toEqual([]);
     expect(fs.existsSync(s.dir!)).toBe(true);
     expect(row(s.id)).toMatchObject({
       task_status: "running",

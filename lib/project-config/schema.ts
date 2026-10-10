@@ -45,7 +45,7 @@ const browse = z.strictObject({
 
 const database = z.strictObject({
   from: z.string().min(1),
-  env: envName.optional(),
+  env: projectEnvName.optional(),
   port: port.optional(),
   host: z.string().optional(),
 });

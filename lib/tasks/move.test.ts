@@ -242,6 +242,7 @@ describe("arriving", () => {
         worktreePath: newCwd,
         sourcePath: expect.any(String),
         ports,
+        sessionId: arrived.id,
       })
     );
   });
