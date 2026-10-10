@@ -32,7 +32,7 @@ const git = async (cwd: string, args: string[]) =>
 // same rule as lib/tasks/code-review.ts's ATTRIBUTION for PR bodies; a test
 // keeps the two agreeing.
 export const ATTRIBUTION_ERE =
-  "^[[:space:]]*(co-authored-by:.*(claude|anthropic)|claude-session:|🤖 generated with)|generated (with|by) \\[?claude code";
+  "^[[:space:]]*(co-authored-by:.*(claude|anthropic)|claude-session:|🤖 generated with)|(^|[^[:alnum:]\"'`])generated (with|by) \\[?claude code";
 
 // The hooks husky installs; a project's own hook of any of these keeps
 // running. Not post-index-change or reference-transaction: those run on
@@ -96,11 +96,14 @@ export function commitMsgHook(own: string): string {
   return `#!/bin/sh
 # Installed by AgentOS: removes AI attribution from the commit message, then
 # runs the project's own commit-msg hook. Stripped rather than refused: a
-# refused commit invites a retry with the same trailer.
+# refused commit invites a retry with the same trailer. A UTF-8 locale so a
+# non-ASCII letter reads as one, as in the PR body check, even when git runs
+# the hook with no locale set; -a so a stray invalid byte can't turn the
+# message into a "binary file".
 msg="$1"
 pattern=${sh(ATTRIBUTION_ERE)}
-if grep -qiE "$pattern" "$msg"; then
-  grep -viE "$pattern" "$msg" |
+if LC_ALL=C.UTF-8 grep -qaiE "$pattern" "$msg"; then
+  LC_ALL=C.UTF-8 grep -vaiE "$pattern" "$msg" |
     awk 'NF == 0 { blank++; next } { if (seen && blank) print ""; blank = 0; seen = 1; print }' >"$msg.agentos" &&
     mv "$msg.agentos" "$msg"
   echo "AgentOS: removed AI attribution from the commit message; commits here never carry it." >&2
