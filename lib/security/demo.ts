@@ -51,6 +51,7 @@ export function assertDemoSandbox(env: Env = process.env, home = os.homedir()) {
 export const STATIC_SIBLINGS = [
   "archived",
   "arrived",
+  "availability",
   "browse",
   "clone",
   "detect",
