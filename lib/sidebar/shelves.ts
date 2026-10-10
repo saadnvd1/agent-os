@@ -165,6 +165,16 @@ export function inWorkspace(
   );
 }
 
+// A workspace's projects, or every project when none is selected.
+export function projectsInWorkspace<P extends { workspace_id?: string | null }>(
+  projects: P[],
+  workspaceId: string | null
+): P[] {
+  return workspaceId
+    ? projects.filter((p) => p.workspace_id === workspaceId)
+    : projects;
+}
+
 // Whether a row would draw the same: statuses are rebuilt on every push, so
 // rows compare by what they show rather than by identity.
 export function sameRow(a: SidebarRow, b: SidebarRow): boolean {

@@ -11,6 +11,8 @@ import {
   reusableDraft,
   type Draft,
 } from "@/lib/drafts";
+import { projectsInWorkspace } from "@/lib/sidebar/shelves";
+import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import {
   draftHasText,
   draftRequests,
@@ -20,6 +22,7 @@ import {
   type DraftRequest,
 } from "@/stores/drafts";
 import { paletteActions } from "@/stores/palette";
+import { sidebarUi } from "@/stores/sidebarUi";
 import { uuid } from "@/lib/uuid";
 
 interface Options {
@@ -31,11 +34,13 @@ interface Options {
 }
 
 // Opens drafts asked for anywhere: reuses a project's empty draft, else
-// makes one carrying the agent, model and access you were using.
+// makes one carrying the agent, model and access you were using. "New" and
+// "In project…" stay inside the workspace selected in the sidebar.
 export function useDraftRequests(options: Options) {
-  const latest = useRef(options);
+  const { workspace } = useSelectedWorkspace();
+  const latest = useRef({ ...options, workspaceId: workspace?.id ?? null });
   useEffect(() => {
-    latest.current = options;
+    latest.current = { ...options, workspaceId: workspace?.id ?? null };
   });
 
   useEffect(() => {
@@ -59,7 +64,10 @@ export function useDraftRequests(options: Options) {
     };
 
     const choose = (openPr?: boolean) => {
-      const real = latest.current.projects.filter((p) => !p.is_uncategorized);
+      const { projects, workspaceId } = latest.current;
+      const real = projectsInWorkspace(projects, workspaceId).filter(
+        (p) => !p.is_uncategorized
+      );
       if (real.length <= 1) return open(real[0]?.id ?? null, openPr);
       paletteActions.pick(
         openPr ? "New task in…" : "New session in…",
@@ -75,7 +83,7 @@ export function useDraftRequests(options: Options) {
     };
 
     const handle = (r: DraftRequest) => {
-      const { sessions, projects, viewing, show } = latest.current;
+      const { sessions, projects, viewing, show, workspaceId } = latest.current;
       if (r.kind === "open") return show(r.draftId);
       // Not loaded yet (once loaded, Scratch is always there): picking a
       // project now would wrongly fall back to a scratch chat.
@@ -91,7 +99,10 @@ export function useDraftRequests(options: Options) {
         : viewing.session
           ? { projectId: viewing.session.project_id }
           : null;
-      const id = currentProjectId(here, sessions, projects);
+      const id = currentProjectId(here, sessions, projects, {
+        workspaceId,
+        projectId: sidebarUi.projectId,
+      });
       if (id || r.openPr) return id ? open(id, r.openPr) : choose(true);
       open(null);
     };
