@@ -10,6 +10,7 @@ import {
 } from "./asks";
 import { getCheck } from "./checks";
 import { changedFiles, sensitiveFiles } from "./diff";
+import { holdingEscalations } from "./gates";
 import { fetchRefs, repoOf } from "./repo";
 import { titleSubject } from "./ask-text";
 import { gateTarget } from "./external-pr";
@@ -59,12 +60,16 @@ async function mergeFacts(
   const files = await changedFiles(repo, await fetchRefs(repo, refs), sha);
   const sensitive = sensitiveFiles(files);
   const review = getCheck(id, sha, "review")?.status ?? "none yet";
+  const held = holdingEscalations(id);
   return [
     `AgentOS: PR #${number} at ${sha.slice(0, 7)} changes ${files.length} file${files.length === 1 ? "" : "s"}`,
     sensitive.length
       ? `touches ${sensitive.map((f) => `${f.path} (${f.why})`).join(", ")}`
       : "",
     `review: ${review}`,
+    held.length
+      ? `held for you by the gates: ${held.map((h) => `${h.gate} (${h.last_reason ?? "no reason kept"})`).join(", ")}`
+      : "",
   ]
     .filter(Boolean)
     .join("; ");

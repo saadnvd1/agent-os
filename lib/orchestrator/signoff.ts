@@ -123,14 +123,17 @@ export async function gateVerdict(
   });
   const { pr, sha, repo } = work;
   const held = holdingEscalations(work.id);
-  if (held.length)
-    return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number);
-  // Saad approved merging this exact commit on an ask the orchestrator
-  // raised (ask_saad with its task and sha): it merges once whatever the
-  // gates say, but still only with a code review of that commit and its
-  // stack parent merged, which no answer stands in for.
+  // Saad approved merging this exact commit. On an ask the orchestrator
+  // raised (ask_saad with its task and sha), held or not, it merges once
+  // whatever the gates say, but only with a code review of that commit and
+  // its stack parent merged: the orchestrator wrote that ask, and no answer
+  // to it stands in for those. An approval of the gates' own ask on a held
+  // task merges as it always has (heldVerdict).
   const approval = latestApproval(workspaceId, workSubject(work.id));
-  if (approval?.sha === sha) {
+  if (
+    approval?.sha === sha &&
+    (approval.raised_by === "orchestrator" || !held.length)
+  ) {
     const i = await inputs();
     const refusal = i.codeReviewRefusal ?? i.stackRefusal;
     if (refusal)
@@ -139,6 +142,8 @@ export async function gateVerdict(
       );
     return { ok: true, sha, pr: pr.number, approval: approval.id };
   }
+  if (held.length)
+    return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number);
 
   const base = await fetchRefs(repo, work.refs);
   const files = await changedFiles(repo, base, sha);

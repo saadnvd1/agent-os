@@ -1338,6 +1338,35 @@ describe("a merge decision from Saad", () => {
     expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
   });
 
+  it("never lets its approval skip the code review of a held task", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    // The code-review gate fails twice and the task is held for Saad.
+    pr = { ...pr!, codeReview: null };
+    await expect(t.signOff()).rejects.toThrow(/code-review failed \(first\)/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const gate = oneGateAsk(t.w, t.task, t.sha);
+    // Saad replies rather than approving: the task stays held, and the
+    // orchestrator raises its own merge ask.
+    answerAsk(t.w, gate.id, { action: "reply", text: "why no review?" });
+    await ask(t, { task: "add-a", sha: t.sha });
+    const [raised] = openAsks(t.w);
+    expect(raised).toMatchObject({ raised_by: "orchestrator", sha: t.sha });
+    expect(raised.detail).toMatch(
+      /held for you by the gates: code-review \(the PR body has no Code review section/
+    );
+    answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
+    await expect(t.signOff()).rejects.toThrow(
+      /Saad approved this commit, but the PR body has no Code review section/
+    );
+    expect(merges).toEqual([]);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
+    // With the review in the body, that approval merges it once.
+    pr = { ...pr!, codeReview: { sha: t.sha } };
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
+  });
+
   it("keeps a plain decision ask off the task, so its approval merges nothing", async () => {
     const t = setup();
     await reviewNow(t.w, "block");
