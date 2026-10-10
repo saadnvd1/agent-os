@@ -41,14 +41,21 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+// Setup copies from the main checkout; these copy the same way.
+const copy = (rel: string, body: string) => {
+  fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true });
+  fs.writeFileSync(path.join(repo, rel), body);
+  write(rel, body);
+};
+
 describe("unsavedChanges", () => {
-  it("leaves out what setup placed and nobody touched", async () => {
-    write(".env", "A=1\n");
-    write("config/local.json", "{}\n");
-    write("config/deep/x.json", "{}\n");
+  it("leaves out what setup copied and nobody touched", async () => {
+    copy(".env", "A=1\n");
+    copy("config/local.json", "{}\n");
+    copy("config/deep/x.json", "{}\n");
     write("tracked.json", '{"from":"main"}\n');
-    write("vendor/lib.rb", "x\n");
-    await recordPlaced(wt, [".env", "config", "tracked.json"], ["vendor"]);
+    fs.writeFileSync(path.join(repo, "tracked.json"), '{"from":"main"}\n');
+    await recordPlaced(wt, repo, [".env", "config", "tracked.json"]);
     expect(await unsavedChanges(wt)).toEqual([]);
     // Kept outside the working tree.
     expect(git(wt, "status", "--porcelain", "--ignored")).not.toContain(
@@ -57,9 +64,9 @@ describe("unsavedChanges", () => {
   });
 
   it("still counts a real edit, a new file, or an edited copy", async () => {
-    write(".env", "A=1\n");
-    write("config/local.json", "{}\n");
-    await recordPlaced(wt, [".env", "config"], []);
+    copy(".env", "A=1\n");
+    copy("config/local.json", "{}\n");
+    await recordPlaced(wt, repo, [".env", "config"]);
     write(".env", "A=2\n");
     write("config/mine.ts", "work\n");
     write("tracked.json", "edited\n");
@@ -69,20 +76,36 @@ describe("unsavedChanges", () => {
     );
   });
 
-  it("doesn't take a symlink for a cloned dependency folder", async () => {
-    fs.symlinkSync(root, path.join(wt, "vendor"));
-    await recordPlaced(wt, [], ["vendor"]);
-    expect(await unsavedChanges(wt)).toEqual(["vendor"]);
+  it("never records what an agent wrote before the record was made", async () => {
+    copy(".env", "A=1\n");
+    copy("config/local.json", "{}\n");
+    // The agent got there first: an edit, and a file of its own.
+    write(".env", "A=mine\n");
+    write("config/mine.ts", "work\n");
+    await recordPlaced(wt, repo, [".env", "config"]);
+    expect(Object.keys((await readPlaced(wt)).files)).toEqual([
+      "config/local.json",
+    ]);
+    expect((await unsavedChanges(wt)).sort()).toEqual([".env", "config/"]);
+  });
+
+  it("never changes an entry once recorded", async () => {
+    copy(".env", "A=1\n");
+    await recordPlaced(wt, repo, [".env"]);
+    write(".env", "A=2\n");
+    fs.writeFileSync(path.join(repo, ".env"), "A=2\n");
+    await recordPlaced(wt, repo, [".env"]);
+    expect(await unsavedChanges(wt)).toEqual([".env"]);
   });
 
   it("never records a path outside the worktree", async () => {
-    await recordPlaced(wt, ["../repo/tracked.json", "/etc/hosts"], [".", ".."]);
-    expect(await readPlaced(wt)).toEqual({ files: {}, deps: [] });
+    await recordPlaced(wt, repo, ["../repo/tracked.json", "/etc/hosts", "."]);
+    expect(await readPlaced(wt)).toEqual({ files: {} });
   });
 
-  it("counts staged changes, even to a placed file", async () => {
-    write(".env", "A=1\n");
-    await recordPlaced(wt, [".env"], []);
+  it("counts staged changes, even to a copied file", async () => {
+    copy(".env", "A=1\n");
+    await recordPlaced(wt, repo, [".env"]);
     git(wt, "add", "-f", ".env");
     expect(await unsavedChanges(wt)).toEqual([".env"]);
   });

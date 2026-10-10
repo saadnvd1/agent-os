@@ -66,9 +66,9 @@ describe("createWorktree when an add fails partway", () => {
 
   it("stops at a timeout, says so, and cleans up", async () => {
     const { createWorktree } = await load();
-    hook("sleep 3");
+    const tries = path.join(root, "tries");
+    hook(`echo try >> '${tries}'; sleep 3`);
 
-    const started = Date.now();
     await expect(
       createWorktree({
         projectPath: repo,
@@ -76,9 +76,23 @@ describe("createWorktree when an add fails partway", () => {
         timeoutMs: 500,
       })
     ).rejects.toThrow(/timed out after/);
-    // One try, not three.
-    expect(Date.now() - started).toBeLessThan(2900);
+    // One try, not one per ref.
+    expect(fs.readFileSync(tries, "utf-8")).toBe("try\n");
     expect(branches()).toEqual(["main"]);
+  });
+
+  it("never touches a path another start already holds", async () => {
+    const { createWorktree, worktreePathFor } = await load();
+    const taken = worktreePathFor(repo, "raced");
+    fs.mkdirSync(taken, { recursive: true });
+    fs.writeFileSync(path.join(taken, "theirs.txt"), "x\n");
+
+    await expect(
+      createWorktree({ projectPath: repo, featureName: "raced" })
+    ).rejects.toThrow(/already exists/);
+    expect(fs.readFileSync(path.join(taken, "theirs.txt"), "utf-8")).toBe(
+      "x\n"
+    );
   });
 
   it("keeps a branch that has moved past its start point", async () => {

@@ -32,8 +32,6 @@ export interface SetupResult {
   success: boolean;
   steps: SetupStep[];
   envFilesCopied: string[];
-  // Dependency folders cloned from the main checkout.
-  clonedDeps?: string[];
   packageManager?: string;
   ports?: Record<string, number>;
   durationMs: number;
@@ -219,6 +217,12 @@ export async function setupWorktree(options: {
     }
   }
 
+  // What was just copied doesn't keep the worktree once the task is done
+  // (lib/done/worktree.ts), recorded before an agent can have touched it.
+  await recordPlaced(worktreePath, sourcePath, result.envFilesCopied).catch(
+    (error) => console.error("Recording copied files failed:", error)
+  );
+
   // The project's env, the session's ports over it, then the paths.
   const envVars: Record<string, string> = {
     ...projectEnv(config, options.ports ?? null),
@@ -266,14 +270,6 @@ export async function setupWorktree(options: {
       }
     }
   }
-
-  // What setup put there on purpose doesn't keep the worktree once the
-  // task is done (lib/done/worktree.ts).
-  await recordPlaced(
-    worktreePath,
-    result.envFilesCopied,
-    result.clonedDeps ?? []
-  ).catch((error) => console.error("Recording setup files failed:", error));
 
   result.durationMs = Date.now() - started;
   return result;

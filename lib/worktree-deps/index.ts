@@ -57,7 +57,6 @@ export async function bringDependencies(
   if (pm) result.packageManager = pm.name;
 
   const clone = await deps.clone({ sourcePath, worktreePath, only });
-  if (clone.cloned.length) result.clonedDeps = clone.cloned.map((c) => c.rel);
   // Off macOS only node_modules has a fallback (the install below).
   if (!pm && !clone.ok && !clone.cloned.length && clone.reason === NOT_MAC)
     return;

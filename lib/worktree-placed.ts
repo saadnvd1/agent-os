@@ -1,11 +1,14 @@
 /**
- * What AgentOS put in a worktree on purpose (env copies, agentos.json's
- * `copy`, cloned dependencies), so finishing a task can tell those from
- * work an agent left uncommitted. The record lives in the worktree's own
- * git directory: outside the working tree, and gone with the worktree.
+ * What AgentOS copied into a worktree on purpose (env files, agentos.json's
+ * `copy`), so finishing a task can tell those from work an agent left
+ * uncommitted. The record lives in the worktree's own git directory:
+ * outside the working tree, and gone with the worktree.
  *
- * A copied file only counts as AgentOS's while its content is still what
- * was copied; once an agent edits it, it is work like any other.
+ * Each file is recorded with the hash of its SOURCE in the main checkout,
+ * and only when the worktree's copy matches it, so nothing an agent wrote
+ * can be recorded. It counts as AgentOS's only while its content is still
+ * exactly that; once an agent edits it, it is work like any other. Cloned
+ * dependencies aren't recorded: they're gitignored, so git never lists them.
  */
 
 import { createHash } from "crypto";
@@ -20,10 +23,8 @@ const MANIFEST = "agentos-placed.json";
 const MAX_FILES = 2000;
 
 export interface Placed {
-  // Relative path -> sha256 of each regular file as placed.
-  files: Record<string, string>;
-  // Dependency folders cloned from the main checkout.
-  deps: string[];
+  // Relative path -> the size and sha256 of each regular file as copied.
+  files: Record<string, { size: number; sha: string }>;
 }
 
 async function gitText(cwd: string, args: string[]): Promise<string> {
@@ -40,10 +41,16 @@ const manifestPath = async (worktree: string) =>
     MANIFEST
   );
 
+// Streamed, so a big file doesn't hold the event loop.
 async function sha(file: string): Promise<string> {
-  return createHash("sha256")
-    .update(await fs.promises.readFile(file))
-    .digest("hex");
+  const hash = createHash("sha256");
+  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+  return hash.digest("hex");
+}
+
+async function regularFile(file: string) {
+  const st = await fs.promises.lstat(file).catch(() => null);
+  return st?.isFile() ? st : null;
 }
 
 // Every regular file under `dir`, relative to `base`; null past the cap or
@@ -81,33 +88,41 @@ function inside(rel: string): string | null {
 }
 
 /**
- * Records what setup placed. `copied` are files or folders, `deps` cloned
- * dependency folders, all relative to the worktree. Adds to an earlier
- * record rather than replacing it.
+ * Records the files setup just copied from `source` (files or folders,
+ * relative to both). A file is recorded only when the worktree's copy is
+ * identical to its source, and an entry already recorded is never changed.
  */
 export async function recordPlaced(
   worktree: string,
-  copied: string[],
-  deps: string[]
+  source: string,
+  copied: string[]
 ): Promise<void> {
   const placed = await readPlaced(worktree);
+  const files: string[] = [];
   for (const rel of copied.map(inside).filter((r) => r !== null)) {
     const st = await fs.promises
-      .lstat(path.join(worktree, rel))
+      .lstat(path.join(source, rel))
       .catch(() => null);
-    if (st?.isFile()) placed.files[rel] = await sha(path.join(worktree, rel));
-    else if (st?.isDirectory()) {
-      const files = await filesUnder(worktree, rel);
-      for (const f of files ?? [])
-        placed.files[f] = await sha(path.join(worktree, f));
-    }
+    if (st?.isFile()) files.push(rel);
+    else if (st?.isDirectory())
+      files.push(...((await filesUnder(source, rel)) ?? []));
   }
-  const cloned = deps.map(inside).filter((r) => r !== null);
-  placed.deps = [...new Set([...placed.deps, ...cloned])];
-  await fs.promises.writeFile(
-    await manifestPath(worktree),
-    JSON.stringify(placed)
-  );
+  let added = 0;
+  for (const rel of files) {
+    if (placed.files[rel]) continue;
+    const from = await regularFile(path.join(source, rel));
+    const to = await regularFile(path.join(worktree, rel));
+    if (!from || !to || from.size !== to.size) continue;
+    const want = await sha(path.join(source, rel));
+    if ((await sha(path.join(worktree, rel))) !== want) continue;
+    placed.files[rel] = { size: from.size, sha: want };
+    added++;
+  }
+  if (added)
+    await fs.promises.writeFile(
+      await manifestPath(worktree),
+      JSON.stringify(placed)
+    );
 }
 
 export async function readPlaced(worktree: string): Promise<Placed> {
@@ -115,12 +130,9 @@ export async function readPlaced(worktree: string): Promise<Placed> {
     const got = JSON.parse(
       await fs.promises.readFile(await manifestPath(worktree), "utf-8")
     );
-    return {
-      files: got && typeof got.files === "object" ? got.files : {},
-      deps: Array.isArray(got?.deps) ? got.deps : [],
-    };
+    return { files: got && typeof got.files === "object" ? got.files : {} };
   } catch {
-    return { files: {}, deps: [] };
+    return { files: {} };
   }
 }
 
@@ -147,8 +159,8 @@ async function unchanged(
   const want = placed.files[rel];
   if (!want) return false;
   const file = path.join(worktree, rel);
-  const st = await fs.promises.lstat(file).catch(() => null);
-  return !!st?.isFile() && (await sha(file)) === want;
+  const st = await regularFile(file);
+  return st?.size === want.size && (await sha(file)) === want.sha;
 }
 
 // Whether one status entry is only what AgentOS placed, untouched.
@@ -159,12 +171,6 @@ async function isPlaced(
   placed: Placed
 ): Promise<boolean> {
   const rel = entry.replace(/\/$/, "");
-  if (xy === "??" && placed.deps.includes(rel)) {
-    const st = await fs.promises
-      .lstat(path.join(worktree, rel))
-      .catch(() => null);
-    return !!st?.isDirectory();
-  }
   if (xy === " M") return unchanged(worktree, rel, placed);
   if (xy !== "??") return false;
   if (!entry.endsWith("/")) return unchanged(worktree, rel, placed);

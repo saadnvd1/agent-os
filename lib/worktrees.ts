@@ -118,11 +118,6 @@ export async function createWorktree(
   const projectName = getRepoName(resolvedProjectPath);
   const worktreePath = worktreePathFor(projectPath, featureName);
 
-  // Check if worktree path already exists
-  if (fs.existsSync(worktreePath)) {
-    throw new Error(`Worktree path already exists: ${worktreePath}`);
-  }
-
   // Ensure worktrees directory exists
   await ensureWorktreesDir();
 
@@ -138,7 +133,15 @@ export async function createWorktree(
 
   const timeout = options.timeoutMs ?? worktreeAddTimeout();
   const errors: Error[] = [];
-  for (const ref of refFormats) {
+  for (const [i, ref] of refFormats.entries()) {
+    // The path is claimed (an empty folder, which git accepts) before each
+    // try, so a start racing this one fails here, and the cleanup below
+    // only ever removes what this call made.
+    if (!(await claim(worktreePath))) {
+      if (i === 0)
+        throw new Error(`Worktree path already exists: ${worktreePath}`);
+      break;
+    }
     try {
       await git(
         resolvedProjectPath,
@@ -157,7 +160,10 @@ export async function createWorktree(
       errors.push(failed);
       // A failed add can still have made the branch and part of the
       // worktree, which would fail every later try with "already exists".
-      await undoFailedAdd(resolvedProjectPath, worktreePath, branchName, ref);
+      // "Already exists" means the branch isn't this try's to delete.
+      await undoFailedAdd(resolvedProjectPath, worktreePath, branchName, ref, {
+        keepBranch: /already exists/i.test(failed.message),
+      });
       // A timeout is the machine, not the ref: another try only waits again.
       if (isTimeout(error)) break;
     }
@@ -166,6 +172,12 @@ export async function createWorktree(
     `Failed to create worktree: ${firstRealError(errors).message}`
   );
 }
+
+const claim = (dir: string) =>
+  fs.promises.mkdir(dir).then(
+    () => true,
+    () => false
+  );
 
 const ADD_TIMEOUT_MS = 120_000;
 const MAX_ADD_TIMEOUT_MS = 600_000;
@@ -201,25 +213,25 @@ export function firstRealError(errors: Error[]): Error {
   return errors.find((e) => !isMissingRef(e)) ?? errors[errors.length - 1];
 }
 
-// Removes what a failed add left: its worktree (the path didn't exist before
-// this call) and its branch, only while the branch is still exactly its
-// start point, so nothing committed on it is ever deleted.
+// Removes what a failed add left: its worktree (at a path this call
+// claimed) and its branch, only while the branch is still exactly its start
+// point, so nothing committed on it is ever deleted.
 async function undoFailedAdd(
   repo: string,
   worktreePath: string,
   branch: string,
-  ref: string
+  ref: string,
+  { keepBranch }: { keepBranch: boolean }
 ): Promise<void> {
   const quiet = (args: string[]) => git(repo, args, 30000).catch(() => null);
-  if (fs.existsSync(worktreePath)) {
-    // Twice forced: an add cut short leaves its worktree locked.
-    await quiet(["worktree", "remove", "-f", "-f", "--", worktreePath]);
-    await fs.promises
-      .rm(worktreePath, { recursive: true, force: true })
-      .catch(() => {});
-  }
+  // Twice forced: an add cut short leaves its worktree locked.
+  await quiet(["worktree", "remove", "-f", "-f", "--", worktreePath]);
+  await fs.promises
+    .rm(worktreePath, { recursive: true, force: true })
+    .catch(() => {});
   await quiet(["worktree", "unlock", "--", worktreePath]);
   await quiet(["worktree", "prune"]);
+  if (keepBranch) return;
   const tip = await quiet([
     "rev-parse",
     "--verify",

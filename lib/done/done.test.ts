@@ -395,26 +395,45 @@ describe("done, by state", () => {
     });
   });
 
-  it("files setup placed don't keep a worktree; an edit to one does", async () => {
+  it("files setup copied don't keep a worktree; an edit to one does", async () => {
     const t = setup();
+    fs.writeFileSync(path.join(t.repo, ".env.local"), "KEY=1\n");
     const a = t.session("setup-only");
-    fs.writeFileSync(path.join(a.dir!, ".env.local"), "KEY=1\n");
-    fs.mkdirSync(path.join(a.dir!, "deps"));
-    fs.writeFileSync(path.join(a.dir!, "deps", "x.js"), "1\n");
-    await recordPlaced(a.dir!, [".env.local"], ["deps"]);
+    fs.copyFileSync(
+      path.join(t.repo, ".env.local"),
+      path.join(a.dir!, ".env.local")
+    );
+    await recordPlaced(a.dir!, t.repo, [".env.local"]);
     const outA = await doneSession(a.id, { by: "direct" });
     expect(outA.worktree).toMatchObject({ action: "removed" });
     expect(fs.existsSync(a.dir!)).toBe(false);
 
     const b = t.session("setup-edited");
-    fs.writeFileSync(path.join(b.dir!, ".env.local"), "KEY=1\n");
-    await recordPlaced(b.dir!, [".env.local"], []);
+    fs.copyFileSync(
+      path.join(t.repo, ".env.local"),
+      path.join(b.dir!, ".env.local")
+    );
+    await recordPlaced(b.dir!, t.repo, [".env.local"]);
     fs.writeFileSync(path.join(b.dir!, ".env.local"), "KEY=2\n");
     const outB = await doneSession(b.id, { by: "direct" });
     expect(outB.worktree).toMatchObject({
       action: "kept",
       why: "it has uncommitted changes (1 file: .env.local)",
     });
+  });
+
+  it("keeps a worktree whose changes can't be read", async () => {
+    const t = setup();
+    const s = t.session("unreadable");
+    // repoOf still answers; reading the status is what fails.
+    const index = git(s.dir!, "rev-parse", "--git-path", "index").trim();
+    fs.writeFileSync(path.resolve(s.dir!, index), "not an index");
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.worktree).toMatchObject({
+      action: "kept",
+      why: "its uncommitted changes can't be checked",
+    });
+    expect(fs.existsSync(s.dir!)).toBe(true);
   });
 
   it("(c) a task with no PR ends as done, not dropped, and its card moves to Done", async () => {
