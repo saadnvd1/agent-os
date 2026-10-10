@@ -42,7 +42,9 @@ function page(start: string, listed = ["a", "b", "c"]) {
   const notFound: string[] = [];
   let unlisted: string[] = [];
   let shown: string | null = null;
+  // The page reports focus from an effect: on change only.
   const show = (id: string | null) => {
+    if (id === shown) return;
     shown = id;
     sync.focusChanged(id);
   };
@@ -105,6 +107,9 @@ describe("address helpers", () => {
       "/a/..//evil.example",
       "/%2e//evil.example",
       "/api/sessions?x=1",
+      "/\\evil.example/?session=a",
+      "/.//evil.example?session=a",
+      "/a?session=a",
       "/\t/evil.example",
       "/\n/evil.example",
     ]) {
@@ -160,6 +165,23 @@ describe("SessionUrlSync", () => {
     expect(p.shown()).toBe("b");
     expect(p.b.current()).toBe("/?session=b");
     expect(p.b.entries).toHaveLength(1);
+  });
+
+  it("an address naming what's already shown doesn't hold up the next switch", async () => {
+    const p = page("/?session=a");
+    p.pick("a");
+    await p.sync.start();
+    p.pick("b");
+    expect(p.b.current()).toBe("/?session=b");
+  });
+
+  it("back before the list has loaded waits for it rather than not finding", async () => {
+    const p = page("/?session=a", []);
+    p.b.env.push("/?session=b");
+    p.b.back();
+    await p.sync.popstate();
+    expect(p.notFound).toEqual([]);
+    expect(p.shown()).toBeNull();
   });
 
   it("writes the restored session into a bare address without a new entry", async () => {
