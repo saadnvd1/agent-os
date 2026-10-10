@@ -20,6 +20,8 @@ import { moveRefusal } from "./move-guard";
 import { MAX_TRANSCRIPT_BYTES, type TaskBundle } from "./move-bundle";
 import { stepProgress } from "./move-progress";
 import { dropSessionDatabase } from "../project-config/database";
+import { releaseChat } from "../chat/runner";
+import { packChat, stopChatForMove } from "./move-chat";
 import {
   isClaudeSessionId,
   latestSessionId,
@@ -115,8 +117,15 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
     if (refusal) throw new Error(refusal);
     if (claimMoving(id, to).fresh) freshClaims.add(id);
     const cwd = session.working_directory;
+    // A chat is held from here on (lib/chat/hold): its turn ends, and what's
+    // sent meanwhile waits in its queue and goes with it.
+    const chat = session.view === "chat";
+    if (chat) {
+      stepProgress(id, "turn");
+      await stopChatForMove(id, () => {});
+    }
     stepProgress(id, "save");
-    await stopAgent(session.tmux_name);
+    if (!chat) await stopAgent(session.tmux_name);
     if ((await git(cwd, "status", "--porcelain")).trim()) {
       await git(cwd, "add", "-A");
       await git(
@@ -132,7 +141,9 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
     await pushOwnBranch(cwd, session.branch_name);
     stepProgress(id, "conversation");
 
-    const claudeId = await claudeIdFor(session);
+    // Its worker kept the conversation's id up to date until it closed.
+    const now = getTaskSession(id);
+    const claudeId = await claudeIdFor(now);
     const transcript = claudeId ? await readTranscript(cwd, claudeId) : null;
     if (transcript && transcript.length > MAX_TRANSCRIPT_BYTES)
       throw new Error("The conversation is too large to move");
@@ -149,6 +160,7 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
         claudeId && transcript
           ? { sessionId: claudeId, cwd, home: os.homedir(), transcript }
           : null,
+      chat: chat ? packChat(now) : undefined,
     };
   } finally {
     exporting.delete(id);
@@ -195,7 +207,9 @@ export function markMoved(id: string, to: string): void {
 /**
  * moving -> running: start the agent again in its worktree on its
  * conversation. Already running means a repeat of a resume that worked, so
- * it leaves that agent alone.
+ * it leaves that agent alone. A chat stopped between turns, so it isn't
+ * relaunched: what was queued while it was held goes now, and anything sent
+ * later starts its worker on the same conversation.
  */
 export async function resumeTask(id: string, note?: string): Promise<void> {
   if (exporting.has(id)) throw new Error("It's moving right now");
@@ -222,6 +236,7 @@ export async function resumeTask(id: string, note?: string): Promise<void> {
 
 async function relaunch(session: Session, note?: string): Promise<void> {
   const id = session.id;
+  if (session.view === "chat") return releaseChat(id);
   const claudeId = await claudeIdFor(session);
   await stopAgent(session.tmux_name);
   await launchClaude({

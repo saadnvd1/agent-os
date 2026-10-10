@@ -8,12 +8,17 @@
 import os from "os";
 import { db, type Session } from "../db";
 import { isRemoteHost } from "../hosts";
-import { requireHostLink } from "../hosts/remote-api";
+import { requireHostLink, type HostLink } from "../hosts/remote-api";
 import { getTaskSession } from "./session";
 import { exportOrResume, markMoved, resumeTask, type TaskBundle } from "./move";
 import { moveRefusal } from "./move-guard";
 import { arrived as arrivedHere, importTask } from "./import";
-import { forgetHostTasks, postIdempotent, unknownOutcome } from "./remote";
+import {
+  forgetHostTasks,
+  hostTasks,
+  postIdempotent,
+  unknownOutcome,
+} from "./remote";
 import { arrivedThere, settleMovedOut, tell } from "./move-recover";
 import {
   finishProgress,
@@ -60,6 +65,20 @@ export async function moveTask(id: string, toHostId: string): Promise<Session> {
   }
 }
 
+// A machine on an older AgentOS would take a chat task as a terminal one,
+// or refuse to hand one over.
+async function requireChatMoves(link: HostLink): Promise<void> {
+  const { capabilities = [] } = await hostTasks(link, true).catch((err) => {
+    throw new Error(
+      `Can't ask ${link.hostName} whether it takes chat tasks: ${(err as Error).message}`
+    );
+  });
+  if (!capabilities.includes("chat-move"))
+    throw new Error(
+      `${link.hostName}'s AgentOS can't move chat tasks yet; update it first`
+    );
+}
+
 const unconfirmed = (where: string, err: unknown) =>
   new Error(
     `Couldn't confirm the move with ${where} (${(err as Error).message}). It's paused as "moving": press Move again to finish it.`
@@ -67,7 +86,13 @@ const unconfirmed = (where: string, err: unknown) =>
 
 async function moveOut(session: Session, hostId: string): Promise<Session> {
   const link = requireHostLink(hostId);
-  startProgress(session.id, link.hostName, moveSteps("out", link.hostName));
+  const chat = session.view === "chat";
+  if (chat) await requireChatMoves(link);
+  startProgress(
+    session.id,
+    link.hostName,
+    moveSteps("out", link.hostName, chat)
+  );
   // A retry: if an earlier try arrived, it runs there now.
   if (session.task_status === "moving") {
     const there = await arrivedThere(link, session.id).catch((err) => {
@@ -96,6 +121,7 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
 
 async function moveIn(mirror: Session): Promise<Session> {
   const link = requireHostLink(mirror.host_id);
+  if (mirror.view === "chat") await requireChatMoves(link);
   startProgress(mirror.id, "this machine", moveSteps("in", link.hostName));
   const path = `/api/tasks/${encodeURIComponent(mirror.id)}`;
   // A retry after it arrived here but that machine didn't hear: tidy up.

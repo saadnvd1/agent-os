@@ -456,7 +456,10 @@ Merging goes bottom-up. Signing off a card whose parent hasn't merged is
 refused; after a parent merges, every card stacked on it (grandchildren
 included) is rebased and its PR retargeted, and its agent is told. **Land**
 merges every PR in order after checking all of them are open and green, and
-waits for each restacked PR's checks before merging it. A conflict stops on
+waits for each restacked PR's checks before merging it. A chat card's agent
+is stopped between turns before anything merges (Land waits up to 5 minutes
+for a running turn, and refuses, naming the card, if it doesn't end), and
+what it's sent during the land waits in its queue. A conflict stops on
 that card with the exact command to fix it.
 
 ### Schedules
@@ -903,8 +906,7 @@ Once linked:
   live state, opens its chat (or terminal) through that machine's AgentOS,
   and sends sign-off and drop to it (pinned to the reviewed commit). Opened
   while it still sets up, it shows that machine's setup steps and joins the
-  agent once it starts. Tasks open as chats unless Terminal is picked, and
-  only a terminal task can move.
+  agent once it starts. Tasks open as chats unless Terminal is picked.
 - **Move** carries a running task between this machine and a linked one,
   either way. The source stops the agent, commits anything uncommitted as
   `wip: moving to <machine>`, pushes the branch and hands over Claude's
@@ -917,6 +919,12 @@ Once linked:
   press Move again to finish it, or **Resume here**, which first asks the
   other machine whether it arrived. Tasks waiting on you (an escalated gate or
   an open ask), card tasks and stacked tasks don't move yet.
+- **A chat task moves the same way**, between turns: a running turn is let
+  finish (up to 3 minutes, else the move is refused and it carries on here),
+  and one waiting on your answer isn't moved. While it moves, what's sent to
+  it waits in its queue. Its chat history, queue, access and plan settings go
+  with it, and on arrival a chat worker resumes the same Claude conversation.
+  Both machines need an AgentOS that can move chat tasks.
 
 Works for any project. Requests to the other machine carry its device token,
 so it can sit behind a proxy that never trusts loopback. Linking needs this

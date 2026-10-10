@@ -58,6 +58,8 @@ export const stackNotice = (to: string, body: string) => ({
 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// The note on an item left alone because its agent was still working.
+export const AGENT_BUSY = "Waiting for its agent to stop";
 // How long a chat's turn may take to stop after it's interrupted.
 export const CHAT_STOP_WAIT_MS = 10_000;
 
@@ -308,7 +310,7 @@ async function restackItems(
     // again on a later pass.
     if (!(await deps.interrupt(session))) {
       q.updateItem(db, item.id, {
-        note: `Waiting for its agent to stop to restack onto ${onto}`,
+        note: `${AGENT_BUSY} to restack onto ${onto}`,
       });
       stuck ||= direct;
       continue;

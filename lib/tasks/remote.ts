@@ -25,6 +25,7 @@ export const TASK_CAPABILITIES = [
   "move",
   "chat-turn",
   "keyed-start",
+  "chat-move",
 ] as const;
 
 export interface HostTasks {

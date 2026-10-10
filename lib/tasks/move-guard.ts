@@ -8,10 +8,8 @@
 
 import { db, type Session } from "../db";
 import { escalations } from "../orchestrator/gates";
-import { CHAT_MOVE_REFUSAL } from "./move-targets";
 
 export function moveRefusal(session: Session): string | null {
-  if (session.view === "chat") return CHAT_MOVE_REFUSAL;
   if (escalations(session.id).length)
     return "It's waiting on you (an escalated gate), so it stays here";
   const ask = db

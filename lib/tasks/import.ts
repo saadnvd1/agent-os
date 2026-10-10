@@ -24,6 +24,8 @@ import { ensureProject } from "./project-ref";
 import { checkoutBranchWorktree } from "./branch-worktree";
 import { rewritePaths, writeTranscript } from "./transcript";
 import { stepProgress } from "./move-progress";
+import { dropChat, unpackChat } from "./move-chat";
+import { sendChat, stopChat } from "../chat/runner";
 import {
   arrivalNote,
   InProgressError,
@@ -80,16 +82,16 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
     bundle.branch
   );
   const claude = bundle.claude;
+  const paths = claude && {
+    from: { cwd: claude.cwd, home: claude.home },
+    to: { cwd: worktreePath, home: os.homedir() },
+  };
   stepProgress(bundle.moveId, "conversation");
-  if (claude) {
+  if (claude && paths) {
     await writeTranscript(
       worktreePath,
       claude.sessionId,
-      rewritePaths(
-        claude.transcript,
-        { cwd: claude.cwd, home: claude.home },
-        { cwd: worktreePath, home: os.homedir() }
-      )
+      rewritePaths(claude.transcript, paths.from, paths.to)
     );
   }
 
@@ -100,6 +102,7 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
     bundle.model || project.default_model
   );
   const baseBranch = bundle.baseBranch ?? "main";
+  const brief = buildTaskBrief({ branch: bundle.branch, baseBranch });
   // Checked and written with no await between, so two can't both pass.
   db.transaction(() => {
     refuseBusyBranch(project.id, bundle.branch);
@@ -122,10 +125,12 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
     queries
       .updateSessionWorktree(db)
       .run(worktreePath, bundle.branch, baseBranch, null, id);
+    // A chat's worker reads its brief from the row; a terminal's is passed.
     db.prepare(
-      `UPDATE sessions SET task_prompt = ?, task_status = 'running', name_source = 'user',
+      `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', name_source = 'user',
          claude_session_id = ?, moved_from = ? WHERE id = ?`
-    ).run(bundle.prompt, claude?.sessionId ?? null, bundle.moveId, id);
+    ).run(bundle.prompt, brief, claude?.sessionId ?? null, bundle.moveId, id);
+    if (bundle.chat) unpackChat(id, bundle.chat, paths);
   })();
 
   stepProgress(bundle.moveId, "resume");
@@ -145,21 +150,35 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
         });
       }, `setup-moved-${bundle.branch}`);
     }
-    await launchClaude({
-      sessionId: id,
-      tmuxName,
-      cwd: worktreePath,
-      model,
-      prompt: claude
-        ? arrivalNote(bundle, worktreePath)
-        : `${bundle.prompt}\n\n${arrivalNote(bundle, worktreePath)}`,
-      resume: claude?.sessionId,
-      brief: buildTaskBrief({ branch: bundle.branch, baseBranch }),
-    });
+    const prompt = claude
+      ? arrivalNote(bundle, worktreePath)
+      : `${bundle.prompt}\n\n${arrivalNote(bundle, worktreePath)}`;
+    if (bundle.chat) {
+      // Its worker starts on the carried conversation, takes the note
+      // first, then what was queued.
+      await sendChat(id, {
+        text: prompt,
+        origin: { kind: "system", label: "AgentOS move", body: prompt },
+      });
+    } else {
+      await launchClaude({
+        sessionId: id,
+        tmuxName,
+        cwd: worktreePath,
+        model,
+        prompt,
+        resume: claude?.sessionId,
+        brief,
+      });
+    }
   } catch (err) {
     // Nothing runs here, so the source may resume it: leave no row behind,
     // and no database (the drop reads the row before it goes).
     void dropSessionDatabase(id);
+    if (bundle.chat) {
+      stopChat(id);
+      dropChat(id);
+    }
     db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
     throw err;
   }

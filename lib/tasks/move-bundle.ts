@@ -4,12 +4,18 @@
  */
 
 import { isBranchName } from "../git";
+import { CHAT_ACCESS, type ChatAccess } from "../chat/events";
 import type { ProjectRef } from "./project-ref";
 import { isClaudeSessionId } from "./transcript";
 
 // A long task's conversation runs to a few MB; this is far past that.
 export const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
-export const MAX_BUNDLE_BYTES = MAX_TRANSCRIPT_BYTES + 1024 * 1024;
+// A chat's history as the UI shows it, and its queue (images inline). The
+// whole bundle stays under what a linked machine reads of an answer
+// (lib/hosts/remote-api), since a move back here reads it as one.
+export const MAX_CHAT_BYTES = 12 * 1024 * 1024;
+export const MAX_BUNDLE_BYTES =
+  MAX_TRANSCRIPT_BYTES + MAX_CHAT_BYTES + 1024 * 1024;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const isSessionId = (id: unknown): id is string =>
@@ -41,6 +47,58 @@ export interface TaskBundle {
     home: string;
     transcript: string;
   } | null;
+  // A chat task's own state; absent for a terminal task, or from a machine
+  // that predates chat moves.
+  chat?: ChatBundle;
+}
+
+export interface ChatBundle {
+  // chat_items, oldest first: the item's id and its JSON.
+  items: { id: string; data: string }[];
+  // chat_queue, in send order: what was waiting when it left.
+  queue: {
+    id: string;
+    text: string;
+    images: string | null;
+    sentBy: string | null;
+    createdAt: number;
+  }[];
+  access: ChatAccess;
+  plan: boolean;
+  // An undo's resume point not yet used up, and the context meter.
+  resumeAt: string | null;
+  context: string | null;
+}
+
+const isStr = (v: unknown): v is string => typeof v === "string";
+const isStrOrNull = (v: unknown) => v === null || isStr(v);
+
+function validateChat(c: ChatBundle): ChatBundle {
+  if (!c || typeof c !== "object" || !Array.isArray(c.items))
+    throw new Error("Bad chat");
+  if (!Array.isArray(c.queue)) throw new Error("Bad chat queue");
+  if (!CHAT_ACCESS.includes(c.access)) throw new Error("Bad chat access");
+  let bytes = 0;
+  for (const i of c.items) {
+    if (!i || !isStr(i.id) || !isStr(i.data)) throw new Error("Bad chat item");
+    bytes += i.id.length + i.data.length;
+  }
+  for (const m of c.queue) {
+    if (
+      !m ||
+      !isStr(m.id) ||
+      !isStr(m.text) ||
+      !isStrOrNull(m.images) ||
+      !isStrOrNull(m.sentBy) ||
+      !Number.isFinite(m.createdAt)
+    )
+      throw new Error("Bad queued message");
+    bytes += m.id.length + m.text.length + (m.images?.length ?? 0);
+  }
+  if (bytes > MAX_CHAT_BYTES) throw new Error("The chat is too large to move");
+  if (!isStrOrNull(c.resumeAt) || !isStrOrNull(c.context))
+    throw new Error("Bad chat");
+  return { ...c, plan: !!c.plan };
 }
 
 export function validateBundle(b: TaskBundle): TaskBundle {
@@ -72,6 +130,7 @@ export function validateBundle(b: TaskBundle): TaskBundle {
   }
   return {
     ...b,
+    chat: b.chat ? validateChat(b.chat) : undefined,
     name: b.name.slice(0, 200),
     from: String(b.from || "another machine")
       .replace(/[^\w.@ -]/g, "")

@@ -32,7 +32,7 @@ export function MoveTaskButton({
           size="sm"
           variant="outline"
           className="h-11 sm:h-8"
-          disabled={resume.isPending || !!t.blocked}
+          disabled={resume.isPending}
           onClick={() => {
             onError(null);
             move({ id: task.id, name: task.name, hostId: task.hostId }, t);
@@ -42,11 +42,6 @@ export function MoveTaskButton({
           {t.hostId === "local" ? "Move here" : t.label}
         </Button>
       ))}
-      {targets.some((t) => t.blocked) && (
-        <span className="text-muted-foreground self-center text-xs">
-          {targets[0].blocked}
-        </span>
-      )}
       {stuckHere && (
         <Button
           size="sm"

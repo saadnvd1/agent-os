@@ -67,6 +67,7 @@ import {
 import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
 import { DEMO_REFUSAL, demoMode } from "../security/demo";
+import { chatHold, movedAway } from "./hold";
 import { getHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
 
@@ -279,6 +280,12 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
   }
 }
 
+// Its agent runs on another machine now: a worker here would fork it.
+function refuseMoved(sessionId: string): void {
+  const moved = movedAway(sessionId);
+  if (moved) throw new Error(moved);
+}
+
 const sentBy = ({ from, peer, origin }: SentBy): SentBy => ({
   from,
   peer,
@@ -296,9 +303,10 @@ export async function sendChat(
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
-  // Its worktree is still being set up, or its task hasn't launched (held
-  // by Pause, say): the message waits its turn.
-  if (settingUp(sessionId) || launchPending(sessionId)) {
+  refuseMoved(sessionId);
+  // Its worktree is still being set up, its task hasn't launched (held by
+  // Pause, say), or it's moving or landing: the message waits its turn.
+  if (settingUp(sessionId) || launchPending(sessionId) || chatHold(sessionId)) {
     enqueue(sessionId, {
       id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
       text,
@@ -348,7 +356,9 @@ async function resumeQueue(sessionId: string): Promise<void> {
   if (
     !listQueue(sessionId).length ||
     holdsQueue(sessionId) ||
-    launchPending(sessionId)
+    launchPending(sessionId) ||
+    chatHold(sessionId) ||
+    movedAway(sessionId)
   )
     return;
   // Switched to the terminal: its agent runs there now, and a chat worker
@@ -457,6 +467,8 @@ async function resumeCutOff(sessionId: string): Promise<void> {
 // task hasn't launched and it isn't the launch's own first message.
 export function sendNowRefusal(sessionId: string, id: string): string | null {
   if (settingUp(sessionId)) return "It's sent once the worktree is set up";
+  const held = movedAway(sessionId) ?? chatHold(sessionId);
+  if (held) return held;
   if (launchPending(sessionId) && id !== firstMessageId(sessionId))
     return "It's sent once the task has started";
   return null;
@@ -504,8 +516,10 @@ export async function sendChatConfirmed(
 ): Promise<"delivered" | "queued"> {
   const text = input.text.trim();
   if (!text) throw new Error("Message is empty");
-  // A task not launched yet takes it after its first message.
-  if (launchPending(sessionId)) {
+  refuseMoved(sessionId);
+  // A task not launched yet takes it after its first message; a held one
+  // once it's let go.
+  if (launchPending(sessionId) || chatHold(sessionId)) {
     enqueue(sessionId, {
       id: input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
       text,
@@ -648,6 +662,13 @@ export function stopChat(sessionId: string): void {
     void ensureLive(sessionId, false)
       .then(() => stopChat(sessionId))
       .catch(() => {});
+}
+
+// Lets go of a chat that was held (./hold): what was queued meanwhile is
+// sent now, by a fresh worker.
+export async function releaseChat(sessionId: string): Promise<void> {
+  resumed.delete(sessionId);
+  await resumeQueue(sessionId);
 }
 
 export function chatState(sessionId: string): ChatState | null {
