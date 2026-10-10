@@ -50,6 +50,7 @@ vi.mock("node-pty", () => ({
 const pending = vi.hoisted(() => new Set<string>());
 vi.mock("../tasks/start", () => ({
   launchPending: (id: string) => pending.has(id),
+  launchHold: () => null,
 }));
 vi.mock("../agents/launch", () => ({
   agentEnv: () => ({ AGENTOS_SESSION_ID: "x" }),
@@ -84,6 +85,7 @@ vi.mock("./peer-pty", () => ({
 }));
 
 const { serveTerminal, SHELL_AFTER_MS } = await import("./connection");
+const { RECHECK_MS } = await import("./pending-launch");
 
 function connect(query = "flow=1") {
   const ws = Object.assign(new EventEmitter(), {
@@ -189,13 +191,30 @@ describe("serveTerminal", () => {
     typed.ws.emit("close");
   });
 
-  it("refuses to attach a task still setting up, starting nothing", () => {
+  it("shows a task still setting up, with no shell, then attaches to its launch", () => {
     pending.add("task-1");
     const { say, sent, ws } = connect();
     say({ type: "attach", spec: { sessionName: "t1", sessionId: "task-1" } });
+    vi.advanceTimersByTime(SHELL_AFTER_MS + 100);
+    say({ type: "input", data: "ls\r" });
     expect(ptys).toHaveLength(0);
-    expect(String(sent[0]?.data)).toContain("still setting up");
+    expect(String(sent[0]?.data)).toContain("Setting up this task");
+    pending.delete("task-1");
+    vi.advanceTimersByTime(RECHECK_MS);
+    expect(ptys).toHaveLength(1);
+    // Attaches to what the launch made; never creates a bare agent.
+    expect(isAttach(ptys[0])).toBe(true);
     ws.emit("close");
+  });
+
+  it("stops waiting when the view closes", () => {
+    pending.add("task-2");
+    const { say, ws } = connect();
+    say({ type: "attach", spec: { sessionName: "t2", sessionId: "task-2" } });
+    ws.emit("close");
+    pending.delete("task-2");
+    vi.advanceTimersByTime(RECHECK_MS * 2);
+    expect(ptys).toHaveLength(0);
   });
 
   it("keeps a resize within bounds and ignores one that isn't numbers", () => {
@@ -219,6 +238,17 @@ describe("serveTerminal", () => {
     expect(ptys[0].written).toEqual(["x", "y"]);
     a.ws.emit("close");
     b.ws.emit("close");
+  });
+
+  it("never gives a session's view a shell when its tmux detaches", () => {
+    const { say, sent, ws } = connect();
+    say({ type: "attach", spec: { sessionName: "s5", sessionId: "sess-5" } });
+    ptys[0].end(1);
+    expect(sent.at(-1)).toEqual({ type: "detached", code: 1 });
+    say({ type: "input", data: "ls\r" });
+    vi.advanceTimersByTime(SHELL_AFTER_MS + 100);
+    expect(ptys).toHaveLength(1);
+    ws.emit("close");
   });
 
   it("goes back to a shell of its own when tmux detaches", () => {

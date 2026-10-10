@@ -46,10 +46,46 @@ const setups = (g.__agentosSetups ??= new Map());
 const sessionOf = new WeakMap<SetupView, string>();
 const moved = (view: SetupView) => {
   const id = sessionOf.get(view);
-  if (id) notifyTopic(`setup:${id}`);
+  if (id) setupMoved(id);
 };
 
-export function startSetup(sessionId: string, branch: string): SetupView {
+// In-process listeners too: a terminal waiting on a task's launch redraws
+// and attaches as it moves, without polling.
+const watchers = ((
+  g as { __agentosSetupWatchers?: Map<string, Set<() => void>> }
+).__agentosSetupWatchers ??= new Map());
+
+export function watchSetup(sessionId: string, fn: () => void): () => void {
+  let set = watchers.get(sessionId);
+  if (!set) watchers.set(sessionId, (set = new Set()));
+  set.add(fn);
+  return () => {
+    set.delete(fn);
+    if (!set.size && watchers.get(sessionId) === set)
+      watchers.delete(sessionId);
+  };
+}
+
+export function setupMoved(sessionId: string): void {
+  notifyTopic(`setup:${sessionId}`);
+  for (const fn of [...(watchers.get(sessionId) ?? [])]) {
+    try {
+      fn();
+    } catch (err) {
+      console.error(`[setup] watcher for ${sessionId} failed:`, err);
+    }
+  }
+}
+
+// A task's view is its progress only: whether its queue is held is the
+// launch's to say (lib/tasks/launch-gate), not a failed install's.
+const isTask = new WeakSet<SetupView>();
+
+export function startSetup(
+  sessionId: string,
+  branch: string,
+  opts: { task?: boolean } = {}
+): SetupView {
   const view: SetupView = {
     status: "running",
     stages: ORDER.map((id) => ({ id, label: LABELS[id], state: "pending" })),
@@ -60,6 +96,7 @@ export function startSetup(sessionId: string, branch: string): SetupView {
   };
   setups.set(sessionId, view);
   sessionOf.set(view, sessionId);
+  if (opts.task) isTask.add(view);
   moved(view);
   return view;
 }
@@ -91,6 +128,7 @@ export function settingUp(sessionId: string): boolean {
 export function holdsQueue(sessionId: string): boolean {
   if (settingUp(sessionId)) return true;
   const live = setups.get(sessionId);
+  if (live && isTask.has(live)) return false;
   if ((live ? live.status : savedSetup(sessionId)) !== "failed") return false;
   return !db
     .prepare(
