@@ -173,6 +173,9 @@ describe("the attribution rule", () => {
     ["feat(agents): launch Claude with flags", false],
     ["Generated with a script", false],
     ["> **Generated with Claude Code**", true],
+    ["É Generated with Claude Code", false],
+    ["'Generated with Claude Code' footer", false],
+    ["`Generated with Claude Code` is stripped", false],
     [
       '"Generated with Claude Code" footer in PR bodies, despite the brief.',
       false,

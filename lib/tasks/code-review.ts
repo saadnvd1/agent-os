@@ -27,7 +27,7 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 // emoji at most: prose that quotes one ("the "Generated with Claude Code"
 // footer") isn't one.
 export const ATTRIBUTION =
-  /^(?:co-authored-by:.*(?:claude|anthropic)|claude-session:|🤖 generated with|[^a-z0-9"'`]*generated (?:with|by) \[?claude code)/i;
+  /^(?:co-authored-by:.*(?:claude|anthropic)|claude-session:|🤖 generated with|[^\p{L}\p{N}"'`]*generated (?:with|by) \[?claude code)/iu;
 export type AttributionKind =
   | "a Co-Authored-By trailer naming Claude"
   | "a Claude-Session link"
