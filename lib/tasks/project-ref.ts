@@ -7,6 +7,8 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { createProject, getAllProjects } from "../projects";
 import { isRemoteHost } from "../hosts";
 import type { Project } from "../db";
@@ -20,6 +22,8 @@ export interface ProjectRef {
   // The origin remote's URL; null when the repo has none.
   remote: string | null;
 }
+
+const execFileAsync = promisify(execFile);
 
 const REMOTE_URL = /^(https:\/\/|ssh:\/\/|git@)[\w.@:/~-]+$/;
 
@@ -100,4 +104,37 @@ export async function ensureProject(ref: ProjectRef): Promise<Project> {
     name: ref.name || path.basename(dir),
     workingDirectory: `~/${path.relative(os.homedir(), dir)}`,
   });
+}
+
+/**
+ * Why this machine can't find or clone a ref's project, without cloning
+ * it (a clone check asks the remote, never prompting); null when it can.
+ */
+export async function whyNotHere(ref: ProjectRef): Promise<string | null> {
+  let dir: string;
+  try {
+    if (await findProject(ref)) return null;
+    dir = path.join(os.homedir(), safeRelative(ref.path));
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+  if (fs.existsSync(path.join(dir, ".git"))) return null;
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0)
+    return `~/${ref.path} is there but isn't a git repository`;
+  if (!ref.remote || !REMOTE_URL.test(ref.remote))
+    return `${ref.name} isn't there and has no remote to clone`;
+  try {
+    await execFileAsync("git", ["ls-remote", "--heads", "--", ref.remote], {
+      cwd: os.homedir(),
+      timeout: 15000,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: "0",
+        GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes",
+      },
+    });
+    return null;
+  } catch {
+    return `Can't clone ${ref.name} there`;
+  }
 }

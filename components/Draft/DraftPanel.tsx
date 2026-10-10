@@ -83,7 +83,11 @@ export function DraftPanel({
       }
       const { session, initialPrompt } = await launch.mutateAsync({
         projectId: project?.id ?? null,
-        hostId: project ? undefined : draft.hostId,
+        id: draft.id,
+        hostId:
+          !project || draft.hostId !== project.host_id
+            ? draft.hostId
+            : undefined,
         agentType: draft.agentType,
         model: draft.model,
         access: draft.access,

@@ -88,6 +88,41 @@ describe("launchSession (a draft's first send)", () => {
     expect(sent[0]).toEqual({ sessionId: session.id, id: queued.id });
   });
 
+  it("makes one session for a repeated key, even while the first is starting", async () => {
+    const id = "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b";
+    const start = () =>
+      launchSession({
+        id,
+        agentType: "claude",
+        prompt: "Just once",
+        name: "once",
+      });
+    const [a, b] = await Promise.all([start(), start()]);
+    const c = await start();
+    expect([a.session.id, b.session.id, c.session.id]).toEqual([id, id, id]);
+    expect([a.repeat, b.repeat, c.repeat]).toEqual([undefined, true, true]);
+    expect(
+      db.prepare(`SELECT COUNT(*) AS n FROM sessions WHERE id = ?`).get(id)
+    ).toEqual({ n: 1 });
+    await until(() => sent.length === 1);
+    expect(listQueue(id)).toHaveLength(1);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("refuses a key that isn't a session id, or names a task", async () => {
+    await expect(
+      launchSession({ id: "../x", agentType: "claude" })
+    ).rejects.toThrow(/Bad session id/);
+    const task = "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d";
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_prompt, task_status)
+       VALUES (?, 't', 'claude-t', '~', 'do it', 'running')`
+    ).run(task);
+    await expect(
+      launchSession({ id: task, agentType: "claude" })
+    ).rejects.toThrow(/taken/);
+  });
+
   it("builds the worktree first, renames its branch from the first message, then sends", async () => {
     const repo = makeRepo();
     const project = createProject({ name: "repo", workingDirectory: repo });

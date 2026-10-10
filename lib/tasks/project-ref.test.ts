@@ -26,6 +26,7 @@ import {
   homeRelative,
   repoIdentity,
   safeRelative,
+  whyNotHere,
 } from "./project-ref";
 import { git, setupMoveRepo, type MoveFixture } from "./move-testing";
 
@@ -117,5 +118,38 @@ describe("ensureProject", () => {
       ensureProject({ name: "n", path: "../out", remote: "https://h/x" })
     ).rejects.toThrow(/Bad project folder/);
     expect(clones).toHaveLength(1);
+  });
+
+  it("says why it couldn't take a project, without cloning", async () => {
+    git(f.repo, "remote", "set-url", "origin", "git@github.com:me/app.git");
+    expect(
+      await whyNotHere({
+        name: "app",
+        path: "x/app",
+        remote: "https://github.com/me/app",
+      })
+    ).toBeNull();
+    git(f.repo, "remote", "set-url", "origin", f.origin);
+    expect(
+      await whyNotHere({ name: "k", path: "dev/kept", remote: null })
+    ).toBeNull();
+    expect(
+      await whyNotHere({ name: "z", path: "dev/z", remote: null })
+    ).toMatch(/no remote to clone/);
+    expect(
+      await whyNotHere({ name: "n", path: "dev/notgit", remote: "https://h/x" })
+    ).toMatch(/isn't a git repository/);
+    expect(
+      await whyNotHere({
+        name: "u",
+        path: "dev/u",
+        remote: "https://127.0.0.1:1/u.git",
+      })
+    ).toBe("Can't clone u there");
+    expect(await whyNotHere({ name: "o", path: "../o", remote: null })).toMatch(
+      /Bad project folder/
+    );
+    expect(clones).toHaveLength(1);
+    expect(fs.existsSync(path.join(f.tmp, "dev", "u"))).toBe(false);
   });
 });

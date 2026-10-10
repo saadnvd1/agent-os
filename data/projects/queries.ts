@@ -21,6 +21,24 @@ export function useProjectsQuery() {
   });
 }
 
+// Per linked machine, why it can't take a session for this project (null
+// where it can). Asks each machine, so only while a draft needs it.
+export function useProjectMachinesQuery(projectId: string | null) {
+  return useQuery({
+    queryKey: projectKeys.machines(projectId ?? ""),
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId!)}/machines`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      return data.machines as Record<string, string | null>;
+    },
+    enabled: !!projectId,
+    staleTime: 60000,
+  });
+}
+
 export function useToggleProject() {
   const queryClient = useQueryClient();
 

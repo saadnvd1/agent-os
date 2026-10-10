@@ -4,6 +4,7 @@ import { isValidAgentType } from "@/lib/providers";
 import { clientSend } from "@/lib/chat/client-send";
 import { CHAT_ACCESS } from "@/lib/chat/events";
 import { launchSession } from "@/lib/sessions/launch";
+import type { ProjectRef } from "@/lib/tasks/project-ref";
 
 // GET /api/sessions - List all sessions and groups
 export async function GET() {
@@ -38,7 +39,8 @@ export async function GET() {
 }
 
 // POST /api/sessions - Create a session: a draft's first send, a terminal,
-// a fork or an imported conversation.
+// a fork or an imported conversation. id is the client's key for a retry;
+// project (a ref) is how another machine's AgentOS names a project.
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try {
@@ -52,8 +54,13 @@ export async function POST(request: NextRequest) {
     return { prompt: text, images };
   };
   try {
-    const { session, initialPrompt } = await launchSession({
+    const { session, initialPrompt, repeat } = await launchSession({
+      id: str(body.id),
       projectId: str(body.projectId),
+      project:
+        body.project && typeof body.project === "object"
+          ? (body.project as ProjectRef)
+          : null,
       workingDirectory: str(body.workingDirectory),
       agentType:
         typeof body.agentType === "string" && isValidAgentType(body.agentType)
@@ -73,7 +80,7 @@ export async function POST(request: NextRequest) {
       systemPrompt: str(body.systemPrompt),
     });
     const db = getDb();
-    const claudeSessionId = str(body.claudeSessionId);
+    const claudeSessionId = repeat ? null : str(body.claudeSessionId);
     // An imported conversation resumes the agent's own session.
     if (claudeSessionId)
       db.prepare("UPDATE sessions SET claude_session_id = ? WHERE id = ?").run(
@@ -81,7 +88,7 @@ export async function POST(request: NextRequest) {
         session.id
       );
     // A fork starts with its parent's messages.
-    if (session.parent_session_id) {
+    if (session.parent_session_id && !repeat) {
       const parentMessages = queries
         .getSessionMessages(db)
         .all(session.parent_session_id) as Array<{

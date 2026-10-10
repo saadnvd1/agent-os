@@ -179,8 +179,11 @@ export function useMoveSessionToProject() {
 }
 
 export interface LaunchSessionInput {
+  // The draft's id: the session's, and a resend's key to the same one.
+  id: string;
   projectId: string | null;
-  // A scratch chat's machine; a project's sessions run where it lives.
+  // A scratch chat's machine; a project's sessions run where it lives, or
+  // on a linked machine.
   hostId?: string;
   agentType: AgentType;
   model: string;

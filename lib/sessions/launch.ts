@@ -15,6 +15,12 @@ import { getProject } from "../projects";
 import { getHost, isRemoteHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
 import { startOnPeer } from "../hosts/peer-actions";
+import { isSessionId } from "../tasks/move-bundle";
+import {
+  ensureProject,
+  projectRef,
+  type ProjectRef,
+} from "../tasks/project-ref";
 import { supportsChat } from "../chat/capabilities";
 import { enqueue, editQueued, listQueue } from "../chat/queued";
 import { sendQueuedNow } from "../chat/runner";
@@ -39,7 +45,12 @@ export const startView = (v: unknown): StartView | undefined =>
 export const SCRATCH_DIR = path.join(os.homedir(), ".agent-os", "scratch");
 
 export interface LaunchInput {
+  // The client's key for this start (a draft's id): it becomes the
+  // session's id, and a repeat with it returns that session.
+  id?: string | null;
   projectId?: string | null;
+  // How another machine's AgentOS names its project: found or cloned here.
+  project?: ProjectRef | null;
   workingDirectory?: string | null;
   agentType: AgentType;
   model?: string | null;
@@ -47,7 +58,8 @@ export interface LaunchInput {
   // agent with its own skip-permissions flag.
   access?: ChatAccess;
   autoApprove?: boolean;
-  // A scratch chat's machine. A project's sessions run where it lives.
+  // A scratch chat's machine. A project's sessions run where it lives,
+  // or on a machine linked to this one.
   hostId?: string | null;
   useWorktree?: boolean;
   baseBranch?: string | null;
@@ -65,6 +77,8 @@ export interface Launched {
   session: Session;
   // For a terminal session, the prompt it starts with.
   initialPrompt?: string;
+  // A repeated key: the session an earlier start made.
+  repeat?: boolean;
 }
 
 const expand = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
@@ -96,12 +110,54 @@ async function deliver(sessionId: string, id: string, note = "") {
   await sendQueuedNow(sessionId, id);
 }
 
-export async function launchSession(input: LaunchInput): Promise<Launched> {
-  const project = input.projectId ? getProject(input.projectId) : undefined;
+// Starts under way, by key: a repeat while one runs gets the same answer.
+const g = globalThis as unknown as {
+  __agentosStarting?: Map<string, Promise<Launched>>;
+};
+const starting = (g.__agentosStarting ??= new Map<string, Promise<Launched>>());
+
+const sessionRow = (id: string) =>
+  queries.getSession(db).get(id) as Session | undefined;
+
+/**
+ * A session for a start, made once per key: a retry whose first answer was
+ * lost (a timeout, a restart) gets the session the first one made.
+ */
+export function launchSession(input: LaunchInput): Promise<Launched> {
+  const key = input.id ?? null;
+  if (key === null) return launch(input, randomUUID());
+  if (!isSessionId(key)) return Promise.reject(new Error("Bad session id"));
+  const running = starting.get(key);
+  if (running) return running.then((l) => ({ ...l, repeat: true }));
+  const existing = sessionRow(key);
+  if (existing) {
+    if (existing.task_prompt || existing.task_status || existing.archived_at)
+      return Promise.reject(new Error("That id is taken"));
+    return Promise.resolve({ session: existing, repeat: true });
+  }
+  const p = launch(input, key).finally(() => starting.delete(key));
+  starting.set(key, p);
+  return p;
+}
+
+async function launch(input: LaunchInput, id: string): Promise<Launched> {
+  const project = input.project
+    ? await ensureProject(input.project)
+    : input.projectId
+      ? getProject(input.projectId)
+      : undefined;
   const scratch = !project || project.is_uncategorized;
-  const hostId = (scratch && input.hostId) || project?.host_id || "local";
-  if (!getHost(hostId)) throw new Error(`Unknown machine: ${hostId}`);
-  const remote = isRemoteHost(hostId);
+  const hostId = (scratch ? input.hostId : null) || project?.host_id || "local";
+  // A project here can start on a linked machine, which finds or clones it.
+  const carried =
+    !scratch && !!input.hostId && input.hostId !== hostId && hostId === "local";
+  if (!scratch && input.hostId && input.hostId !== hostId && !carried)
+    throw new Error("This project's sessions run where it lives");
+  const runOn = carried ? input.hostId! : hostId;
+  if (!getHost(runOn)) throw new Error(`Unknown machine: ${runOn}`);
+  if (carried && !hostLink(runOn))
+    throw new Error("A project's sessions run here or on a linked machine");
+  const remote = isRemoteHost(runOn);
   const useWorktree = !!input.useWorktree && !scratch;
   if (useWorktree && remote)
     throw new Error("Worktrees are not available on other machines yet");
@@ -112,12 +168,14 @@ export async function launchSession(input: LaunchInput): Promise<Launched> {
     input.workingDirectory?.trim() || project?.working_directory || "~";
   if (scratch) folder = remote ? "~" : folder === "~" ? SCRATCH_DIR : folder;
   // A linked machine's AgentOS starts it there; it is mirrored here.
-  const link = remote ? hostLink(hostId) : null;
+  const link = remote ? hostLink(runOn) : null;
   if (link) {
     if (input.images?.length)
       throw new Error(`Images can't be sent to ${link.hostName} yet`);
     return startOnPeer(link, {
+      id,
       project: scratch ? null : (project ?? null),
+      ref: carried && project ? await projectRef(project) : undefined,
       folder,
       agentType: input.agentType,
       model: input.model,
@@ -131,7 +189,6 @@ export async function launchSession(input: LaunchInput): Promise<Launched> {
   if (scratch && projectPath === SCRATCH_DIR)
     await fs.promises.mkdir(SCRATCH_DIR, { recursive: true });
 
-  const id = randomUUID();
   const agentType = input.agentType;
   const model = resolveModelForAgent(
     agentType,
@@ -166,7 +223,7 @@ export async function launchSession(input: LaunchInput): Promise<Launched> {
       agentType,
       input.autoApprove || input.access === "full" ? 1 : 0,
       project?.id ?? "uncategorized",
-      hostId
+      runOn
     );
   db.prepare(
     `UPDATE sessions SET view = ?, name_source = ?, setup_status = ? WHERE id = ?`

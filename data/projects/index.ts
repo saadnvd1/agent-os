@@ -7,5 +7,6 @@ export {
   useRenameProject,
   useUpdateProject,
   useDetectDevServers,
+  useProjectMachinesQuery,
 } from "./queries";
 export * from "./add";

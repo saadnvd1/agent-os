@@ -15,6 +15,7 @@ import { AGENT_OPTIONS, agentLabel } from "@/lib/agent-options";
 import { resolveModelForAgent } from "@/lib/model-catalog";
 import type { GitCheck } from "@/data/git/queries";
 import { useAgentStatusQuery } from "@/data/agents";
+import { useProjectMachinesQuery } from "@/data/projects";
 import type { AgentProbe } from "@/lib/agents/probe";
 import { ChipHeading, ChipItem, ChipMenu, ChipToggle } from "./Chip";
 
@@ -44,11 +45,14 @@ export function DraftChips({
 }) {
   const real = projects.filter((p) => !p.is_uncategorized);
   const project = real.find((p) => p.id === draft.projectId) ?? null;
-  // A task runs on another machine through that machine's own AgentOS, so
-  // only linked ones; a scratch chat runs over ssh on any.
-  const machines = draft.openPr
-    ? hosts.filter((h) => h.id === "local" || Boolean(h.linked))
-    : hosts;
+  const projectHere = !!project && (project.host_id || "local") === "local";
+  // A task, or a session for a project here, runs on another machine through
+  // that machine's own AgentOS, so only linked ones; a scratch chat runs
+  // over ssh on any.
+  const machines =
+    draft.openPr || projectHere
+      ? hosts.filter((h) => h.id === "local" || Boolean(h.linked))
+      : hosts;
   const host = hosts.find((h) => h.id === draft.hostId);
   const local = draft.hostId === "local";
   // Which agents are installed and signed in, on this machine: a draft for
@@ -56,9 +60,18 @@ export function DraftChips({
   const { data: localProbes } = useAgentStatusQuery();
   const probes = local ? localProbes : undefined;
   const base = draft.baseBranch ?? git?.defaultBranch ?? "main";
-  // A project's sessions run where it lives; a scratch chat or a task can
-  // go anywhere.
-  const canMove = !project || draft.openPr;
+  // A project elsewhere runs where it lives; a scratch chat, a task or a
+  // project here can go to another machine.
+  const canMove = !project || draft.openPr || projectHere;
+  // Which linked machines have the project or can clone it.
+  const checkMachines = projectHere && !draft.openPr && machines.length > 1;
+  const onMachines = useProjectMachinesQuery(checkMachines ? project.id : null);
+  const unavailable = (hostId: string): string | null => {
+    if (!checkMachines || hostId === "local") return null;
+    if (onMachines.isError) return "Couldn't check this machine";
+    if (!onMachines.data) return "Checking…";
+    return onMachines.data[hostId] ?? null;
+  };
 
   const pickProject = (id: string | null) => {
     const next = newDraft(draft.id, real.find((p) => p.id === id) ?? null, {
@@ -111,6 +124,8 @@ export function DraftChips({
             <ChipItem
               key={h.id}
               checked={h.id === draft.hostId}
+              disabled={!!unavailable(h.id)}
+              hint={unavailable(h.id) ?? undefined}
               onSelect={() =>
                 onChange({
                   hostId: h.id,

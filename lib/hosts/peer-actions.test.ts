@@ -422,4 +422,97 @@ describe("starting a session on a linked machine", () => {
       peer_mirror: 1,
     });
   });
+
+  it("retries a start whose answer was lost with the same key, and mirrors one session", async () => {
+    const { peer, hostId } = await setup();
+    const id = randomUUID();
+    const keys = new Set<string>();
+    let calls = 0;
+    peer.routes["/api/projects"] = () => ({ projects: [] });
+    peer.routes["/api/sessions"] = ({ body }) => {
+      const key = (body as { id: string }).id;
+      // The first one lands there, but its answer never comes back.
+      keys.add(key);
+      if (++calls === 1) return { $status: 502, error: "bad gateway" };
+      return {
+        session: {
+          id: key,
+          name: "once",
+          tmux_name: `claude-${key}`,
+          view: "chat",
+          agent_type: "claude",
+          working_directory: "/home/me",
+        },
+      };
+    };
+    const { session } = await launchSession({
+      id,
+      hostId,
+      agentType: "claude",
+      prompt: "hi",
+    });
+    const starts = peer.calls.filter((c) => c.path === "/api/sessions");
+    expect(starts.map((c) => (c.body as { id: string }).id)).toEqual([id, id]);
+    expect([...keys]).toEqual([id]);
+    expect(session).toMatchObject({ id, host_id: hostId, peer_mirror: 1 });
+    // A resend from the draft gets the same session, without asking again.
+    const again = await launchSession({ id, hostId, agentType: "claude" });
+    expect(again).toMatchObject({ session: { id }, repeat: true });
+    expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
+      2
+    );
+  });
+
+  it("starts a session for a project here on a linked machine, which finds or clones it", async () => {
+    const { peer, hostId } = await setup();
+    const dir = `~/dev/carried-${randomUUID().slice(0, 8)}`;
+    const projectId = project("local", dir);
+    const id = randomUUID();
+    peer.routes["/api/sessions"] = ({ body }) => ({
+      session: {
+        id: (body as { id: string }).id,
+        name: "hi",
+        tmux_name: `claude-${id}`,
+        view: "chat",
+        agent_type: "claude",
+        working_directory: `/home/me/${dir.slice(2)}`,
+      },
+    });
+    const { session } = await launchSession({
+      id,
+      projectId,
+      hostId,
+      agentType: "claude",
+      prompt: "hi",
+    });
+    expect(peer.calls.map((c) => c.path)).toEqual(["/api/sessions"]);
+    expect(peer.calls[0].body).toMatchObject({
+      id,
+      project: { name: "app", path: dir.slice(2), remote: null },
+      view: DEFAULT_START_VIEW,
+    });
+    expect(session).toMatchObject({
+      id,
+      host_id: hostId,
+      project_id: projectId,
+      view: "chat",
+    });
+    // That machine's listing has no project here for its folder: it keeps this one.
+    syncPeerMirrors(
+      hostId,
+      [listed(hostId, id, { working_directory: `/home/me/${dir.slice(2)}` })],
+      later()
+    );
+    expect(row(id)?.project_id).toBe(projectId);
+  });
+
+  it("keeps a project that lives on another machine there", async () => {
+    const { hostId } = await setup();
+    const elsewhere = linkedHost("http://127.0.0.1:9", TOKEN);
+    cleanups.push(elsewhere.remove);
+    const projectId = project(elsewhere.hostId, "~/dev/app");
+    await expect(
+      launchSession({ projectId, hostId, agentType: "claude" })
+    ).rejects.toThrow(/run where it lives/);
+  });
 });
