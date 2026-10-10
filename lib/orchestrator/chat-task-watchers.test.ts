@@ -66,6 +66,8 @@ const { waitingState } = await import("./task-state");
 const { evaluateGates } = await import("./gates");
 const { sessionFacts } = await import("./facts");
 const { conditionsFor } = await import("./conditions");
+const { recordConditions, pendingEvents, markDelivered } =
+  await import("./events");
 const { readSession } = await import("./read");
 const { dropTask, taskView } = await import("@/lib/tasks");
 const { moveRefusal } = await import("@/lib/tasks/move-guard");
@@ -194,6 +196,57 @@ describe.each(VIEWS)("a %s task", (view) => {
     expect(after.blocked).toBeNull();
     expect(gate(after)).toMatchObject({ state: "pass" });
     expect((await taskView(row(t.id))).state).toBe("working");
+  });
+
+  it("tells the orchestrator of a BLOCKED: line or prompt there on its first look, once", async () => {
+    const blocked = task(view, {
+      said: "BLOCKED: need the prod key",
+      state: "idle",
+    });
+    const asking = task(view, {
+      said: "Cleaning up",
+      state: "idle",
+      prompt: true,
+    });
+    const look = async (
+      t: typeof blocked,
+      at: number,
+      quiet = new Set<string>()
+    ) => {
+      const w = t.ws.workspace.id;
+      const facts = await sessionFacts(w);
+      recordConditions(
+        w,
+        conditionsFor(facts, [], at, quiet),
+        facts.map((f) => f.id),
+        at
+      );
+      return pendingEvents(w);
+    };
+    const now = Date.now();
+    for (const [t, line] of [
+      [blocked, /BLOCKED: [\s\S]*need the prod key/],
+      [asking, /needs input/],
+    ] as const) {
+      expect(await look(t, now)).toEqual([]);
+      const ready = await look(t, now + 15_000);
+      expect(ready.map((e) => e.line)).toEqual([expect.stringMatching(line)]);
+      markDelivered(
+        ready.map((e) => e.id),
+        now + 16_000
+      );
+      expect(await look(t, now + 30_000)).toEqual([]);
+    }
+
+    // One the orchestrator just messaged is most likely waiting on it.
+    const quiet = task(view, {
+      said: "Which key?",
+      state: "idle",
+      prompt: true,
+    });
+    const hush = new Set([quiet.id]);
+    await look(quiet, now, hush);
+    expect(await look(quiet, now + 15_000, hush)).toEqual([]);
   });
 
   it("holds the gate and raises needs-input while it waits on an approval or prompt", async () => {
