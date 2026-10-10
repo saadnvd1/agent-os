@@ -92,7 +92,7 @@ describe("relayChatSocket", () => {
     expect(peer.sockets).toHaveLength(0);
   });
 
-  it("says when the other machine can't be reached", async () => {
+  it("says once that the other machine can't be reached, and keeps trying", async () => {
     peer = await fakePeer(TOKEN);
     const url = peer.url;
     await peer.close();
@@ -106,8 +106,29 @@ describe("relayChatSocket", () => {
       () => {},
       (m) => failed.push(m)
     );
-    await until(() => browser.closedWith !== null);
-    expect(browser.closedWith?.[0]).toBe(1011);
+    await until(() => failed.length === 1);
     expect(failed[0]).toContain("Can't reach AgentOS on box");
+    // A send meanwhile is refused, not held for later.
+    browser.say({ type: "send", text: "lost?" });
+    expect(failed[1]).toContain("Not sent");
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(failed).toHaveLength(2);
+    expect(browser.closedWith).toBeNull();
+    browser.emit("close");
+  });
+
+  it("reconnects when the other side drops, with a fresh snapshot", async () => {
+    peer = await fakePeer(TOKEN);
+    peer.onSocket(({ ws }) =>
+      ws.send(JSON.stringify({ type: "snapshot", items: [], state: "idle" }))
+    );
+    const r = relay();
+    await until(() => r.sent.length === 1);
+    peer.sockets[0].ws.terminate();
+    await until(() => r.sent.length === 2, 4000);
+    expect(r.sent[1]).toMatchObject({ type: "snapshot" });
+    expect(r.failed).toEqual(["Lost AgentOS on box; reconnecting"]);
+    expect(r.browser.closedWith).toBeNull();
+    r.browser.emit("close");
   });
 });

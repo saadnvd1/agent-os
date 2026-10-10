@@ -1,4 +1,5 @@
 import { SSH_OPTIONS, loginShellCommand, shellQuote } from "./ssh";
+import { isValidTmuxName } from "./tmux-name";
 
 export interface AttachSpec {
   sessionName: string;
@@ -12,11 +13,7 @@ export interface AttachSpec {
   env?: Record<string, string>;
 }
 
-const TMUX_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
-
-export function isValidTmuxName(name: string): boolean {
-  return TMUX_NAME_PATTERN.test(name);
-}
+export { isValidTmuxName };
 
 // "~" and "$HOME" must expand on the machine the session runs on.
 function cwdArg(cwd: string): string {

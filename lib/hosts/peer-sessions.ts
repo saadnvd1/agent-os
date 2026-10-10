@@ -34,11 +34,21 @@ const text = (s: unknown, max = 300) => cleanRemoteText(s).slice(0, max);
 // The other machine's statuses run its full status pass: asked at most this often.
 export const PEER_STATUS_MS = 5000;
 
-const managed = new Map<string, PeerSession[]>();
-const statuses = new Map<
-  string,
-  { at: number; byId: Record<string, { status?: unknown }> }
->();
+// One per process, like the status detector that fills it: the custom
+// server and the Next.js routes each load this module.
+const g = globalThis as unknown as {
+  __agentosPeerSessions?: {
+    managed: Map<string, PeerSession[]>;
+    statuses: Map<
+      string,
+      { at: number; byId: Record<string, { status?: unknown }> }
+    >;
+  };
+};
+const { managed, statuses } = (g.__agentosPeerSessions ??= {
+  managed: new Map(),
+  statuses: new Map(),
+});
 
 /** Linked machines' managed sessions, as last listed (none once unlinked). */
 export function peerManagedSessions(): PeerSession[] {

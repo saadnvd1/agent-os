@@ -41,7 +41,7 @@ vi.mock("@/lib/status-detector", async (importOriginal) => ({
     clearUnsent: (name: string) => clearUnsent(name),
     signature: () => "same",
     refreshCache: async () => {},
-    listSessions: async () => [{ name: NAME }],
+    listSessions: async () => [{ name: NAME, hostId: "local" }],
     cleanup: () => {},
     hostErrors: () => ({}),
     getStatus: () => screen(),
@@ -181,7 +181,10 @@ describe("collectStatuses", () => {
       detail: "Which one?",
       unread: false,
     });
-    expect(screenNeed.mock.calls[0][2]).toEqual({ question: true });
+    expect(screenNeed.mock.calls[0][2]).toEqual({
+      question: true,
+      hostId: "local",
+    });
     const touched = () =>
       (
         getDb()
@@ -208,7 +211,10 @@ describe("collectStatuses", () => {
       detail: "fix the test",
     });
     // Its own questions come as reports, not from the screen.
-    expect(screenNeed.mock.calls[0][2]).toEqual({ question: false });
+    expect(screenNeed.mock.calls[0][2]).toEqual({
+      question: false,
+      hostId: "local",
+    });
 
     screenNeed.mockClear();
     applyProgramReport(NAME, { state: "working", id: "" }, "claude");
