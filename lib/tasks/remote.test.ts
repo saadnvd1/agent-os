@@ -197,6 +197,17 @@ describe("signing off and dropping there", () => {
     expect(row(r.id!).task_status).toBe("merged");
   });
 
+  it.each([{}, { method: "fast-forward" }])(
+    "reports no method when that machine names none it knows (%j)",
+    async (said) => {
+      const r = await startOne();
+      fetchMock
+        .mockResolvedValueOnce(list([]))
+        .mockResolvedValueOnce(json({ success: true, head, ...said }));
+      await expect(signOffTask(r.id!, { head })).resolves.toBeNull();
+    }
+  );
+
   it("refuses to ask an AgentOS that can't pin a merge", async () => {
     const r = await startOne();
     fetchMock.mockResolvedValueOnce(json({ tasks: [] }));

@@ -9,6 +9,8 @@ import { commitFile, git, makeRepo, WORKTREE_MARK } from "./testing";
 // Real repositories; gh, tmux, chat workers and LumifyHub are faked.
 const prs = new Map<string, TaskPR>();
 const merges: string[][] = [];
+// Every `git push origin --delete <branch>`, whether origin took it or not.
+const remoteDeletes: string[] = [];
 const killed: string[] = [];
 const cards: [string, TaskState][] = [];
 const status = new Map<string, "running" | "idle">();
@@ -29,6 +31,8 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
             prs.set(b, { ...pr, state: "MERGED" });
         return "";
       }
+      if (cmd === "git" && args[0] === "push" && args.includes("--delete"))
+        remoteDeletes.push(args.at(-1)!);
       if (cmd === "tmux") {
         await cleanupGate;
         throw new Error("no tmux in tests");
@@ -110,6 +114,7 @@ beforeEach(() => {
   setGlobalMergeSettings({});
   ghDown = false;
   merges.length = 0;
+  remoteDeletes.length = 0;
   killed.length = 0;
   cards.length = 0;
   droppedDatabases.length = 0;
@@ -861,21 +866,24 @@ describe("merge settings", () => {
     expect(fs.existsSync(k.dir!)).toBe(true);
   });
 
+  // master, not main: origin's HEAD is main, which git itself refuses to
+  // delete, so only the guard can keep master.
   it.each(["MERGED", "OPEN"] as const)(
-    "never deletes main on origin, whatever the settings say (PR %s)",
+    "never deletes master on origin, whatever the settings say (PR %s)",
     async (state) => {
       const t = setup();
       setProjectMergeSettings(t.project.id, { delete_remote_branch: true });
-      const s = t.session(`on-main-${state}`, {
+      git(t.repo, "push", "-q", "origin", "main:master");
+      const s = t.session(`on-master-${state}`, {
         task: true,
         worktree: false,
         live: "idle",
       });
-      db.prepare(`UPDATE sessions SET branch_name = 'main' WHERE id = ?`).run(
+      db.prepare(`UPDATE sessions SET branch_name = 'master' WHERE id = ?`).run(
         s.id
       );
       const tip = git(t.repo, "rev-parse", "origin/main");
-      t.openPR({ ...s, branch: "main", head: tip }, { state });
+      t.openPR({ ...s, branch: "master", head: tip }, { state });
       if (state === "OPEN") {
         // The sign-off's own cleanup, which pushes the deletion.
         await signOffTask(s.id, { wait: true });
@@ -884,7 +892,8 @@ describe("merge settings", () => {
         const out = await doneSession(s.id, { by: "direct" });
         expect(out.text).not.toContain("deleted on origin");
       }
-      expect(git(t.repo, "ls-remote", "--heads", "origin", "main")).not.toBe(
+      expect(remoteDeletes).toEqual([]);
+      expect(git(t.repo, "ls-remote", "--heads", "origin", "master")).not.toBe(
         ""
       );
     }
