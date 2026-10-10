@@ -12,19 +12,25 @@ export const orchestratorKeys = {
 };
 
 async function json<T>(res: Response): Promise<T> {
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Request failed");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
 
-const post = async (url: string, body: object) =>
-  json(
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-  );
+// A request that never got an answer (AgentOS restarting, offline) says so,
+// rather than the browser's bare "Failed to fetch".
+export const post = async (url: string, body: object) => {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => {
+    throw new Error(
+      "Couldn't reach AgentOS, so this may not be saved. Try again."
+    );
+  });
+  return json(res);
+};
 
 // Every workspace's orchestrator: open asks, paused, tasks in review.
 export function useOrchestratorsQuery() {
@@ -46,6 +52,32 @@ export function useOrchestratorsQuery() {
 export function useOrchestratorOverview(workspaceId: string | null) {
   const { data } = useOrchestratorsQuery();
   return data?.find((o) => o.workspaceId === workspaceId) ?? null;
+}
+
+export function withoutAsk(
+  list: OrchestratorOverview[] | undefined,
+  workspaceId: string,
+  askId: number
+): OrchestratorOverview[] | undefined {
+  return list?.map((o) =>
+    o.workspaceId === workspaceId
+      ? { ...o, asks: o.asks.filter((a) => a.id !== askId) }
+      : o
+  );
+}
+
+// Only the card whose answer failed comes back, in its place: others
+// answered meanwhile stay answered.
+export function withAskBack(
+  list: OrchestratorOverview[] | undefined,
+  workspaceId: string,
+  ask: AskView
+): OrchestratorOverview[] | undefined {
+  return list?.map((o) =>
+    o.workspaceId === workspaceId && !o.asks.some((a) => a.id === ask.id)
+      ? { ...o, asks: [...o.asks, ask].sort((a, b) => a.id - b.id) }
+      : o
+  );
 }
 
 export type AskAction =
@@ -78,17 +110,26 @@ export function useAnswerAsk(workspaceId: string) {
         : undefined;
       return post(url, { ...answer, binding: ask.binding, assertion });
     },
+    // The card leaves at once, and comes back if the answer wasn't recorded.
     onMutate: async ({ ask: { id: askId } }) => {
       await queryClient.cancelQueries({ queryKey: orchestratorKeys.all });
+      const removed = queryClient
+        .getQueryData<OrchestratorOverview[]>(orchestratorKeys.all)
+        ?.find((o) => o.workspaceId === workspaceId)
+        ?.asks.find((a) => a.id === askId);
       queryClient.setQueryData<OrchestratorOverview[]>(
         orchestratorKeys.all,
-        (prev) =>
-          prev?.map((o) =>
-            o.workspaceId === workspaceId
-              ? { ...o, asks: o.asks.filter((a) => a.id !== askId) }
-              : o
-          )
+        (prev) => withoutAsk(prev, workspaceId, askId)
       );
+      return { removed };
+    },
+    onError: (_error, _answer, context) => {
+      const removed = context?.removed;
+      if (removed)
+        queryClient.setQueryData<OrchestratorOverview[]>(
+          orchestratorKeys.all,
+          (prev) => withAskBack(prev, workspaceId, removed)
+        );
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: orchestratorKeys.all });

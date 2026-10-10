@@ -3,7 +3,7 @@
 
 import type { Session } from "../db";
 import { AskRefused, raiseAsk, taskSubject } from "./asks";
-import { unspentApproval } from "./ask-approvals";
+import { latestApproval } from "./ask-approvals";
 import type { FailureRow } from "./gates";
 import type { Verdict } from "./signoff";
 
@@ -17,7 +17,7 @@ export function heldVerdict(
   sha: string,
   pr: number
 ): Verdict {
-  const approval = unspentApproval(workspaceId, taskSubject(task.id));
+  const approval = latestApproval(workspaceId, taskSubject(task.id));
   if (approval?.sha === sha)
     return { ok: true, sha, pr, approval: approval.id };
   if (approval) {

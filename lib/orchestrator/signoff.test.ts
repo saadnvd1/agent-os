@@ -57,8 +57,11 @@ const { listNotes } = await import("./notes");
 const { listItems } = await import("@/lib/chat/store");
 const { claudeArgs } = await import("./claude-cli");
 const { seedSession } = await import("./testing");
-const { answerAsk, getAsk, openAsks } = await import("./asks");
+const { answerAsk, getAsk, openAsks, raiseAsk, BRAKE_SUBJECT } =
+  await import("./asks");
 const { setMergeApprovals } = await import("./merge-approvals");
+const { releaseInterruptedClaims, spendApproval } =
+  await import("./ask-approvals");
 
 // The one ask a task's escalation leaves on Saad's list.
 function oneGateAsk(w: string, task: string, sha: string) {
@@ -541,6 +544,80 @@ describe("sign_off", () => {
     await expect(t.signOff()).rejects.toThrow(/Asked him again/);
     expect(oneGateAsk(t.w, t.task, next).id).not.toBe(first.id);
     expect(merges).toEqual([]);
+  });
+
+  // Approves the first commit, moves the head, and approves the new one too.
+  async function approveTwice(t: ReturnType<typeof setup>) {
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const first = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, first.id, { action: "approve" });
+    const next = t.push("src/b.ts", "export const b = 2;\n");
+    await expect(t.signOff()).rejects.toThrow(/Asked him again/);
+    const second = oneGateAsk(t.w, t.task, next);
+    answerAsk(t.w, second.id, { action: "approve" });
+    return { first, second, next };
+  }
+
+  it("with two approvals for different commits, merges on the newest", async () => {
+    const t = setup({ approvals: true });
+    const { first, second, next } = await approveTwice(t);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", next],
+    ]);
+    expect(getAsk(t.w, second.id)?.used_at).toBeTruthy();
+    expect(getAsk(t.w, first.id)?.used_at).toBeNull();
+  });
+
+  it("honours an approval whose merge a restart cut off", async () => {
+    const t = setup({ approvals: true });
+    const { first, second, next } = await approveTwice(t);
+    // sign_off claimed it, then the server died before merging or giving
+    // it back.
+    expect(spendApproval(second.id)).toBe(true);
+    // The older approval, of a commit that's gone, doesn't stand in for it.
+    await expect(t.signOff()).rejects.toThrow(/is with Saad/);
+    expect(openAsks(t.w)).toEqual([]);
+
+    expect(releaseInterruptedClaims()).toBe(1);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", next],
+    ]);
+    expect(getAsk(t.w, second.id)?.used_at).toBeTruthy();
+    expect(getAsk(t.w, first.id)?.used_at).toBeNull();
+  });
+
+  it("keeps a used brake approval and a voided one spent across a restart", async () => {
+    const t = setup({ approvals: true });
+    const { second } = await approveTwice(t);
+    spendApproval(second.id);
+    db.prepare(
+      `UPDATE orchestrator_asks SET answer = 'approve (void)' WHERE id = ?`
+    ).run(second.id);
+    const { ask: brake } = raiseAsk({
+      workspaceId: t.w,
+      subject: BRAKE_SUBJECT,
+      kind: "brake",
+      title: "Start past the brakes?",
+      brakeKey: "spend",
+    });
+    answerAsk(t.w, brake.id, { action: "approve" });
+    expect(spendApproval(brake.id)).toBe(true);
+
+    expect(releaseInterruptedClaims()).toBe(0);
+    expect(getAsk(t.w, second.id)?.used_at).toBeTruthy();
+    expect(getAsk(t.w, brake.id)?.used_at).toBeTruthy();
+  });
+
+  it("keeps a claim on a merged task spent across a restart", async () => {
+    const t = setup({ approvals: true });
+    const { second } = await approveTwice(t);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    releaseInterruptedClaims();
+    expect(getAsk(t.w, second.id)?.used_at).toBeTruthy();
   });
 
   it("fails the review gate on blocking findings", async () => {
