@@ -347,6 +347,24 @@ describe("ensureSessionDatabase", () => {
     expect(pg.dbs.has(databaseName("app_dev", id))).toBe(false);
   });
 
+  it("doesn't remake a cut-short copy for a session that ended meanwhile", async () => {
+    const id = session();
+    const name = databaseName("app_dev", id);
+    pg.dbs.set(name, `agentos session ${id} (copying)`);
+    const run = pg.run;
+    pg.run = async (cmd, args, env) => {
+      if (cmd === "psql" && args.includes("-c"))
+        await dropSessionDatabase(id, run);
+      return run(cmd, args, env);
+    };
+    const made = await ensureSessionDatabase(id, decl, pg.run);
+    expect(made?.error).toContain("ended before its copy was made");
+    expect(pg.calls.some((c) => c[0] === "createdb" || c[0] === "dropdb")).toBe(
+      false
+    );
+    expect(sessionDatabase(id)).toBeNull();
+  });
+
   it("drops a copy it reused for a session that ended meanwhile", async () => {
     const id = session();
     const name = databaseName("app_dev", id);
