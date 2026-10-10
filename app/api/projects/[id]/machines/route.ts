@@ -19,9 +19,9 @@ export async function GET(
     return NextResponse.json({
       machines: await projectOnPeers(await projectRef(project)),
     });
-  } catch (error) {
+  } catch {
     // A project outside the home folder has no place on another machine.
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = "Its folder is outside your home folder";
     return NextResponse.json({
       machines: Object.fromEntries(
         [...linkedHostIds()].map((id) => [id, reason])

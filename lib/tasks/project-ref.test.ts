@@ -145,7 +145,7 @@ describe("ensureProject", () => {
         path: "dev/u",
         remote: "https://127.0.0.1:1/u.git",
       })
-    ).toBe("Can't clone u there");
+    ).toBe("Can't clone it there");
     expect(await whyNotHere({ name: "o", path: "../o", remote: null })).toMatch(
       /Bad project folder/
     );

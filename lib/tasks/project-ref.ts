@@ -120,9 +120,9 @@ export async function whyNotHere(ref: ProjectRef): Promise<string | null> {
   }
   if (fs.existsSync(path.join(dir, ".git"))) return null;
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0)
-    return `~/${ref.path} is there but isn't a git repository`;
+    return "Its folder there isn't a git repository";
   if (!ref.remote || !REMOTE_URL.test(ref.remote))
-    return `${ref.name} isn't there and has no remote to clone`;
+    return "Not there, and no remote to clone";
   try {
     await execFileAsync("git", ["ls-remote", "--heads", "--", ref.remote], {
       cwd: os.homedir(),
@@ -135,6 +135,6 @@ export async function whyNotHere(ref: ProjectRef): Promise<string | null> {
     });
     return null;
   } catch {
-    return `Can't clone ${ref.name} there`;
+    return "Can't clone it there";
   }
 }

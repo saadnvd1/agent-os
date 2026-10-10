@@ -309,8 +309,8 @@ export async function projectOnPeers(
         return [
           link.hostId,
           err instanceof HostApiError && err.status === 404
-            ? `Update AgentOS on ${link.hostName} first`
-            : `Can't reach ${link.hostName}`,
+            ? "Needs a newer AgentOS there"
+            : "Can't reach it",
         ];
       }
     })
