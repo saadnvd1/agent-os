@@ -11,6 +11,8 @@ const workers = vi.hoisted(() => ({
   state: "idle" as "idle" | "running",
   // Its socket file is there, but nothing answers on it.
   dead: false,
+  // Up, but too busy to say hello in time.
+  slow: false,
   started: [] as {
     sessionId: string;
     handlers: WorkerHandlers;
@@ -25,7 +27,11 @@ vi.mock("./worker/client", async (original) => ({
     spawn: boolean,
     handlers: WorkerHandlers
   ) => {
-    if (workers.dead && !spawn) throw new Error("connect ECONNREFUSED");
+    if (workers.dead && !spawn)
+      throw Object.assign(new Error("connect ECONNREFUSED"), {
+        code: "ECONNREFUSED",
+      });
+    if (workers.slow && !spawn) throw new Error("No hello from worker");
     const { buildId } = await import("../build");
     const { saveItem } = await import("./store");
     const started = {
@@ -273,6 +279,22 @@ describe("a worker killed hard, its socket left behind", () => {
     } finally {
       workers.running = [];
       workers.dead = false;
+      forget(id);
+    }
+  });
+});
+
+describe("a worker slow to answer at a restart", () => {
+  it("is left to finish its turn", async () => {
+    const { id } = task();
+    workers.running = [id];
+    workers.slow = true;
+    try {
+      await reattachChats();
+      expect(sends(id)).toEqual([]);
+    } finally {
+      workers.running = [];
+      workers.slow = false;
       forget(id);
     }
   });
