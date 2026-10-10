@@ -38,20 +38,19 @@ import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
 import { ContextMeter } from "./ContextMeter";
 import { SetupCard } from "./SetupCard";
+import { UserTurn } from "./EventRow";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
 import {
   AssistantMessage,
   CommandOutput,
   Compacted,
-  PeerMessage,
   SkillChip,
   ErrorMessage,
   NoteLine,
   Reasoning,
   Todos,
   TurnEnd,
-  UserMessage,
 } from "./Messages";
 
 interface ItemActions {
@@ -66,9 +65,8 @@ interface ItemActions {
 function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
   switch (item.kind) {
     case "user":
-      if (item.peer) return <PeerMessage item={item} peer={item.peer} />;
       return (
-        <UserMessage
+        <UserTurn
           item={item}
           onUndo={
             item.checkpoint && actions.onUndo

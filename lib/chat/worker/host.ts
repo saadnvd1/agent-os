@@ -16,7 +16,7 @@ import type {
   ChatImage,
   ChatItem,
   ChatState,
-  PeerMessage,
+  SentBy,
   UsageTotals,
 } from "../events";
 import {
@@ -277,7 +277,7 @@ export class ChatHost {
     const next = claimNext(this.session.id, id);
     if (!next) return false;
     this.emit({ type: "queue" });
-    this.sendUser({ id: next.id, text: next.text, images: next.images }, now);
+    this.sendUser(next, now);
     return true;
   }
 
@@ -286,9 +286,7 @@ export class ChatHost {
       id: string;
       text: string;
       images?: ChatImage[];
-      from?: string;
-      peer?: PeerMessage;
-    },
+    } & SentBy,
     now = false
   ): void {
     this.sent.add(m.id);
@@ -310,6 +308,7 @@ export class ChatHost {
       images: m.images,
       from: m.from,
       peer: m.peer,
+      origin: m.origin,
       createdAt: Date.now(),
       checkpoint,
     };
@@ -358,6 +357,7 @@ export class ChatHost {
           images: cmd.images,
           from: cmd.from,
           peer: cmd.peer,
+          origin: cmd.origin,
           createdAt: Date.now(),
         };
         const local = cmd.images?.length
@@ -385,6 +385,7 @@ export class ChatHost {
           this.stopping &&
           !cmd.from &&
           !cmd.peer &&
+          !cmd.origin &&
           this.busy() &&
           !listQueue(this.session.id).length
         ) {

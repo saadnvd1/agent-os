@@ -8,7 +8,7 @@ import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { statusDetector } from "../status-detector";
 import { sendChatConfirmed } from "../chat/runner";
-import type { PeerMessage } from "../chat/events";
+import type { ChatOrigin, PeerMessage } from "../chat/events";
 import { sessionRowInfo } from "../session-meta";
 import { previousNames } from "../session-names";
 import { deliverToPane, type Delivery } from "./delivery";
@@ -145,7 +145,7 @@ function pairTimestamps(a: string | null, b: string): number[] {
 async function deliver(
   to: Session,
   line: string,
-  from: { name: string; peer?: PeerMessage }
+  from: { name: string; peer?: PeerMessage; origin?: ChatOrigin }
 ): Promise<Delivery> {
   // A linked machine's own session: an agent's message would reach it as
   // the user's (see runner.ts), so none is relayed yet.
@@ -162,6 +162,7 @@ async function deliver(
         text: line,
         from: from.name,
         peer: from.peer,
+        origin: from.origin,
       });
       return { state };
     } catch (error) {
@@ -185,6 +186,9 @@ export async function sendMessage(opts: {
   body: string;
   // Who it's from when no session sent it (a schedule); the user otherwise.
   fromLabel?: string;
+  // How chat shows it when no session sent it (fromLabel is what the
+  // agent reads). The user's own message, sent from the UI, has none.
+  origin?: ChatOrigin;
 }): Promise<{ message: BusMessageView; delivery: Delivery; note?: string }> {
   const body = opts.body.trim();
   if (!body) throw new Error("Message is empty");
@@ -215,7 +219,13 @@ export async function sendMessage(opts: {
   const delivery = await deliver(
     to,
     wakeLine({ fromName, fromId: from?.id ?? null, body }),
-    { name: fromName, peer: from ? { sessionId: from.id, body } : undefined }
+    {
+      name: fromName,
+      peer: from ? { sessionId: from.id, body } : undefined,
+      origin: from
+        ? { kind: "peer", label: from.name, sessionId: from.id }
+        : opts.origin,
+    }
   );
   if (delivery.state !== "failed") {
     db.prepare(

@@ -14,6 +14,7 @@ import type {
   ChatState,
   DriverEvent,
   FileSuggestion,
+  ChatOrigin,
   PeerMessage,
 } from "../events";
 import type { UndoResult } from "../driver";
@@ -30,6 +31,7 @@ export type WorkerCommand =
       images?: ChatImage[];
       from?: string;
       peer?: PeerMessage;
+      origin?: ChatOrigin;
       // From the composer: waits its turn behind a running one, in the
       // queue, rather than joining it.
       queue?: boolean;

@@ -1,5 +1,6 @@
-import type { ChatState } from "../chat/events";
+import type { ChatOrigin, ChatState } from "../chat/events";
 import {
+  isAnswer,
   deliveriesSince,
   lastDeliveredAt,
   logDeliveries,
@@ -21,7 +22,7 @@ export const AGENTOS_SENDER = "agentos";
 
 export type ChatSender = (
   sessionId: string,
-  input: { text: string; from: string }
+  input: { text: string; from: string; origin: ChatOrigin }
 ) => Promise<void>;
 
 // After a failed send, wait 5s, then 10s, 20s ... up to 5 minutes.
@@ -78,6 +79,13 @@ export async function deliverEvents(opts: {
 
   const ids = pending.map((e) => e.id);
   const text = [...new Set(pending.map((e) => e.line))].join("\n");
+  // Saad's answers to asks, shown in chat as his decisions.
+  const decided = [...new Set(pending.filter(isAnswer).map((e) => e.line))];
+  const origin: ChatOrigin = {
+    kind: "event",
+    label: "AgentOS",
+    ...(decided.length ? { decided } : {}),
+  };
   markDelivered(ids, now);
   const logged = logDeliveries(
     workspaceId,
@@ -85,7 +93,11 @@ export async function deliverEvents(opts: {
     now
   );
   try {
-    await opts.send(opts.orchestratorId, { text, from: AGENTOS_SENDER });
+    await opts.send(opts.orchestratorId, {
+      text,
+      from: AGENTOS_SENDER,
+      origin,
+    });
     failing.delete(workspaceId);
     return text;
   } catch (error) {

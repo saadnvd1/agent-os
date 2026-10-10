@@ -194,6 +194,35 @@ describe("sendMessage to a chat session", () => {
       ),
       from: name,
       peer: { sessionId: sender, body: "rebased, tests green" },
+      origin: { kind: "peer", label: name, sessionId: sender },
+    });
+  });
+
+  it("passes what a system message is for chat, leaving the agent's text as it was", async () => {
+    const { project } = setup();
+    const to = seedSession({
+      projectId: project.id,
+      name: `chat-${randomUUID().slice(0, 6)}`,
+      view: "chat",
+    });
+    sendChatConfirmed.mockClear();
+    const origin = {
+      kind: "system",
+      label: "Load monitor",
+      body: "hot",
+    } as const;
+    await bus.sendMessage({
+      fromId: null,
+      to,
+      body: "hot",
+      fromLabel: "AgentOS load monitor",
+      origin,
+    });
+    expect(sendChatConfirmed).toHaveBeenCalledWith(to, {
+      text: "[AgentOS message from AgentOS load monitor (via AgentOS)]: hot.",
+      from: "AgentOS load monitor",
+      peer: undefined,
+      origin,
     });
   });
 
@@ -208,7 +237,7 @@ describe("sendMessage to a chat session", () => {
     await bus.sendMessage({ fromId: null, to, body: "hello" });
     expect(sendChatConfirmed).toHaveBeenCalledWith(
       to,
-      expect.objectContaining({ peer: undefined })
+      expect.objectContaining({ peer: undefined, origin: undefined })
     );
   });
 });

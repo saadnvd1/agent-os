@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  Bot,
-  Check,
-  ChevronRight,
-  Circle,
-  CircleDot,
-  Sparkles,
-} from "lucide-react";
-import type { ChatItem, PeerMessage as Peer } from "@/lib/chat/events";
+import { Check, ChevronRight, Circle, CircleDot, Sparkles } from "lucide-react";
+import type { ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
 import { CopyButton } from "./CopyButton";
@@ -60,24 +53,6 @@ export function UserMessage({
         </div>
       )}
       {onUndo && <UndoButton onClick={onUndo} />}
-    </div>
-  );
-}
-
-// A message another agent session sent over the bus: its words, from the
-// other side of the conversation, without the reply instructions the agent
-// reading it gets.
-export function PeerMessage({ item, peer }: { item: Of<"user">; peer: Peer }) {
-  return (
-    <div className="flex flex-col items-start gap-1">
-      <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-        <Bot className="text-primary h-3.5 w-3.5" />
-        <span className="text-foreground/80 font-medium">{item.from}</span>
-        <span>sent a message</span>
-      </span>
-      <div className="bg-primary/[0.07] max-w-[85%] rounded-2xl rounded-tl-md px-3.5 py-2 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap">
-        {peer.body}
-      </div>
     </div>
   );
 }

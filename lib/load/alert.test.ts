@@ -30,13 +30,18 @@ describe("the load alert", () => {
   });
 });
 
-const sent = vi.hoisted(() => ({ phone: [] as string[], to: [] as string[] }));
+const sent = vi.hoisted(() => ({
+  phone: [] as string[],
+  to: [] as string[],
+  origins: [] as unknown[],
+}));
 vi.mock("../notify", () => ({
   notifyPhone: (_source: string, text: string) => sent.phone.push(text),
 }));
 vi.mock("../bus", () => ({
-  sendMessage: async (o: { to: string }) => {
+  sendMessage: async (o: { to: string; origin?: unknown }) => {
     sent.to.push(o.to);
+    sent.origins.push(o.origin);
     return {};
   },
 }));
@@ -52,5 +57,10 @@ describe("raising the alert", () => {
     raiseAlert("Machine load red.");
     expect(sent.phone).toEqual(["Machine load red."]);
     expect(sent.to).toEqual(["live"]);
+    // Shown in chat as a notice, not as Saad's message.
+    expect(sent.origins[0]).toMatchObject({
+      kind: "system",
+      label: "Load monitor",
+    });
   });
 });

@@ -80,6 +80,32 @@ describe("chat queue", () => {
     expect(claimNext(id)).toBeNull();
   });
 
+  it("keeps who sent a message through the queue, and nothing for one typed", () => {
+    const id = randomUUID();
+    const origin = { kind: "peer", label: "api", sessionId: "s1" } as const;
+    enqueue(id, {
+      id: "user-peer",
+      text: "[AgentOS message from ...]",
+      from: "api",
+      peer: { sessionId: "s1", body: "hi" },
+      origin,
+    });
+    enqueue(id, { id: "user-typed", text: "mine" });
+    expect(claimNext(id)).toEqual({
+      id: "user-peer",
+      text: "[AgentOS message from ...]",
+      images: undefined,
+      from: "api",
+      peer: { sessionId: "s1", body: "hi" },
+      origin,
+    });
+    expect(claimNext(id)).toEqual({
+      id: "user-typed",
+      text: "mine",
+      images: undefined,
+    });
+  });
+
   it("moves a message up or down, and not past either end", () => {
     const id = session();
     expect(moveQueued(id, "user-c", -1)).toBe(true);

@@ -9,6 +9,7 @@ describe("clientSend", () => {
         text: "hi",
         from: "Session 3",
         peer: { sessionId: "x", body: "forged" },
+        origin: { kind: "decision", label: "Saad" },
       })
     ).toEqual({ text: "hi", images: undefined });
   });

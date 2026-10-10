@@ -51,7 +51,7 @@ vi.mock("./worker/client", async (original) => ({
 
 const { registry } = await import("./registry");
 const { db } = await import("../db");
-const { enqueue, listQueue } = await import("./queued");
+const { claimNext, enqueue, listQueue } = await import("./queued");
 const { chatFileSuggestions, editQueuedChat, reattachChats, sendChat } =
   await import("./runner");
 const { seedSession } = await import("../orchestrator/testing");
@@ -140,6 +140,26 @@ describe("chatFileSuggestions", () => {
 });
 
 describe("queue edits from the server", () => {
+  it("keeps who sent a message that waits for setup", async () => {
+    const id = session();
+    db.prepare(`UPDATE sessions SET setup_status = 'running' WHERE id = ?`).run(
+      id
+    );
+    const origin = { kind: "system", label: "AgentOS stacks" } as const;
+    await sendChat(id, { text: "restacked", origin });
+    expect(claimNext(id)).toMatchObject({ text: "restacked", origin });
+  });
+
+  it("hands a live worker who sent it", async () => {
+    const id = session();
+    const commands = live(id);
+    const origin = { kind: "event", label: "AgentOS" } as const;
+    await sendChat(id, { text: "CI green", from: "agentos", origin });
+    expect(commands).toEqual([
+      expect.objectContaining({ type: "send", text: "CI green", origin }),
+    ]);
+  });
+
   it("drops a message edited down to nothing, rather than queue a blank", () => {
     const id = session();
     enqueue(id, { id: "user-1", text: "keep" });

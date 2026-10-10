@@ -53,6 +53,40 @@ export interface PeerMessage {
   body: string;
 }
 
+// What sent a message the reader didn't type, set where it's sent so chat
+// shows it as an event rather than as theirs. The agent's text is unchanged.
+export type ChatOriginKind =
+  // AgentOS telling the orchestrator what changed (PRs, CI, reviews, asks).
+  | "event"
+  // Another agent session, over the bus.
+  | "peer"
+  // A saved schedule, on its timer.
+  | "schedule"
+  // AgentOS itself: the load monitor, stacks.
+  | "system"
+  // The reader's own decision, made outside the composer (a plan carried out).
+  | "decision";
+
+export interface ChatOrigin {
+  kind: ChatOriginKind;
+  // Who it's from: "AgentOS", a session's or a schedule's name.
+  label: string;
+  // The session that sent it, to link to.
+  sessionId?: string;
+  // What chat shows, when not the text the agent got (which carries who
+  // it's from and how to reply).
+  body?: string;
+  // Lines of an event batch that are the reader's answers to asks.
+  decided?: string[];
+}
+
+// Who sent a message, carried with it through the queue and the worker.
+export interface SentBy {
+  from?: string;
+  peer?: PeerMessage;
+  origin?: ChatOrigin;
+}
+
 export interface McpServerView {
   name: string;
   status: "connected" | "failed" | "needs-auth" | "pending" | "disabled";
@@ -97,6 +131,7 @@ export type ChatItem =
       // Sent by another agent session: shown as its body, while the agent
       // gets the full text with how to reply.
       peer?: PeerMessage;
+      origin?: ChatOrigin;
       // The provider's id for this message, to undo file changes back to it.
       checkpoint?: string;
     })

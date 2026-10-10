@@ -1,3 +1,4 @@
+import type { ChatOrigin } from "../chat/events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "crypto";
 import { db } from "../db";
@@ -22,16 +23,21 @@ vi.mock("../tasks", async (importOriginal) => ({
 const sends: {
   id: string;
   text: string;
+  origin?: ChatOrigin;
   settle: (ok: boolean) => void;
 }[] = [];
 vi.mock("../chat/runner", () => ({
   // As after a restart: known only by asking the worker.
   chatStateNow: async (id: string) => chatStates.get(id) ?? null,
-  sendChatConfirmed: (id: string, input: { text: string }) =>
+  sendChatConfirmed: (
+    id: string,
+    input: { text: string; origin?: ChatOrigin }
+  ) =>
     new Promise((resolve, reject) =>
       sends.push({
         id,
         text: input.text,
+        origin: input.origin,
         settle: (ok) =>
           ok ? resolve("delivered") : reject(new Error("worker gone")),
       })
@@ -204,6 +210,12 @@ describe("start links the run only once the prompt is in", () => {
     const run = realDeps.start(target("orchestrator"), () => {});
     await flush();
     expect(sends[0].text).toMatch(/^\[Scheduled message "Triage" for p-/);
+    // Chat shows it as the schedule's, by its prompt.
+    expect(sends[0].origin).toMatchObject({
+      kind: "schedule",
+      label: "Triage",
+      body: expect.not.stringContaining("[Scheduled message"),
+    });
     sends[0].settle(true);
     await run;
   });

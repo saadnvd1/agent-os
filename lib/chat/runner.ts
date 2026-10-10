@@ -13,7 +13,7 @@ import type {
   ChatContext,
   ChatImage,
   ChatState,
-  PeerMessage,
+  SentBy,
   UndoPreview,
 } from "./events";
 import {
@@ -101,7 +101,11 @@ export async function carryOutPlan(
   await setChatPlan(sessionId, false);
   await sendChatConfirmed(
     sessionId,
-    { id: `user-carry-${planId}`, text: CARRY_OUT },
+    {
+      id: `user-carry-${planId}`,
+      text: CARRY_OUT,
+      origin: { kind: "decision", label: "Saad" },
+    },
     timeoutMs
   );
   const carried = { ...item, carried: true };
@@ -239,16 +243,20 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
   }
 }
 
+const sentBy = ({ from, peer, origin }: SentBy): SentBy => ({
+  from,
+  peer,
+  origin,
+});
+
 export async function sendChat(
   sessionId: string,
   input: {
     text: string;
     images?: ChatImage[];
-    from?: string;
-    peer?: PeerMessage;
     // Typed in the composer: waits in the queue while a turn runs.
     queue?: boolean;
-  }
+  } & SentBy
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
@@ -259,6 +267,7 @@ export async function sendChat(
       id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
       text,
       images: input.images,
+      ...sentBy(input),
     });
     emitQueue(sessionId);
     return;
@@ -269,8 +278,7 @@ export async function sendChat(
     id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
     text,
     images: input.images,
-    from: input.from,
-    peer: input.peer,
+    ...sentBy(input),
     queue: input.queue,
   });
 }
@@ -376,7 +384,7 @@ export async function chatFileSuggestions(
 // only then has it accepted it. "queued" when a turn was already running.
 export async function sendChatConfirmed(
   sessionId: string,
-  input: { text: string; from?: string; peer?: PeerMessage; id?: string },
+  input: { text: string; id?: string } & SentBy,
   timeoutMs = 10_000
 ): Promise<"delivered" | "queued"> {
   const text = input.text.trim();
@@ -386,6 +394,7 @@ export async function sendChatConfirmed(
     enqueue(sessionId, {
       id: input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
       text,
+      ...sentBy(input),
     });
     emitQueue(sessionId);
     return "queued";
@@ -421,8 +430,7 @@ export async function sendChatConfirmed(
       type: "send",
       id,
       text,
-      from: input.from,
-      peer: input.peer,
+      ...sentBy(input),
     });
     await accepted;
   } finally {

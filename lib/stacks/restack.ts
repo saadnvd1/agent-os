@@ -49,7 +49,12 @@ export interface RestackDeps {
 const defaults: RestackDeps = {
   runner: (cmd, args, cwd) => run(cmd, args, cwd, 120000),
   notify: async (to, body) => {
-    await sendMessage({ fromId: null, to, body }).catch(() => {});
+    await sendMessage({
+      fromId: null,
+      to,
+      body,
+      origin: { kind: "system", label: "AgentOS stacks", body },
+    }).catch(() => {});
   },
   interrupt: async (session) => {
     const sent = await run(
