@@ -17,6 +17,8 @@ import { programSummary } from "../program-status/store";
 import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
 import { storedPR } from "../tasks/session";
+import { commitTime, repoOf } from "./repo";
+import { ciSettleIn } from "./task-state";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -34,7 +36,14 @@ export interface SessionFacts {
   lastActive: number;
   // Work that should end in a PR: a task, or a session on its own branch.
   branch: string | null;
-  task: { state: TaskState; pr: TaskPR | null; blocked: string | null } | null;
+  task: {
+    state: TaskState;
+    pr: TaskPR | null;
+    blocked: string | null;
+    // With CI green on the PR's head: seconds until it counts as settled
+    // (task-state.ts), when the CI-green event goes out.
+    ciSettleIn?: number;
+  } | null;
   stack: {
     id: string;
     name: string;
@@ -167,8 +176,34 @@ export async function statusOf(s: Session): Promise<{
   return { status, activity: info.subtitle, needsInput: raw === "waiting" };
 }
 
+// A commit's time never changes: read once per sha.
+const committed = new Map<string, number>();
+
+async function settleIn(
+  workspaceId: string,
+  s: Session,
+  pr: TaskPR | null
+): Promise<number | undefined> {
+  if (pr?.state !== "OPEN" || pr.checks !== "pass" || !pr.head) return;
+  let at = committed.get(pr.head);
+  if (at === undefined) {
+    at = await commitTime(repoOf(s), pr.head).catch(() => 0);
+    if (at) committed.set(pr.head, at);
+  }
+  return ciSettleIn({
+    workspaceId,
+    taskId: s.id,
+    sha: pr.head,
+    checkCount: pr.checkCount ?? 0,
+    committedAt: at,
+  });
+}
+
 // A finished task's state is in the database: no gh call for it.
-async function taskFacts(s: Session): Promise<SessionFacts["task"]> {
+async function taskFacts(
+  workspaceId: string,
+  s: Session
+): Promise<SessionFacts["task"]> {
   if (!s.task_status) return null;
   if (s.task_status !== "running") {
     const pr = storedPR(s);
@@ -176,7 +211,12 @@ async function taskFacts(s: Session): Promise<SessionFacts["task"]> {
     return { state, pr, blocked: null };
   }
   const view = await taskView(s);
-  return { state: view.state, pr: view.pr, blocked: view.blocked };
+  return {
+    state: view.state,
+    pr: view.pr,
+    blocked: view.blocked,
+    ciSettleIn: await settleIn(workspaceId, s, view.pr),
+  };
 }
 
 export async function sessionFacts(
@@ -187,7 +227,7 @@ export async function sessionFacts(
     workspaceSessions(workspaceId).map(async (s) => {
       const [{ status, activity, needsInput }, task] = await Promise.all([
         statusOf(s),
-        taskFacts(s),
+        taskFacts(workspaceId, s),
       ]);
       return {
         id: s.id,

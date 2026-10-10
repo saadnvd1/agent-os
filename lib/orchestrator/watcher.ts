@@ -54,7 +54,12 @@ export async function diffWorkspace(
   const working =
     facts.some((f) => f.status === "running") ||
     stacks.some((s) => s.status === "running" || s.status === "landing");
-  return now + (working ? DIFF_BUSY_MS : DIFF_IDLE_MS);
+  // Look again as CI settles, so its event isn't a whole interval late.
+  const settles = facts
+    .map((f) => f.task?.ciSettleIn ?? 0)
+    .filter((s) => s > 0)
+    .map((s) => now + s * 1000 + 1000);
+  return Math.min(now + (working ? DIFF_BUSY_MS : DIFF_IDLE_MS), ...settles);
 }
 
 async function tick(): Promise<void> {

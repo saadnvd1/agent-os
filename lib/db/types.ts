@@ -47,6 +47,8 @@ export interface Session {
   chat_suggestion: string | null;
   // Its last worker retired cleanly after a deploy (0/1): the agent hears so.
   chat_restarted?: boolean | number;
+  // The digest of the tools its last chat worker gave the agent.
+  chat_tools_digest?: string | null;
   // Plan mode (0/1 from SQLite), and the context meter's last reading (JSON).
   chat_plan: boolean | number;
   chat_context: string | null;

@@ -131,6 +131,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
       updates.push("view = ?");
       values.push(body.view);
+      // A terminal agent starts with the current tools: a restarted note
+      // waiting for the next chat worker is stale once it has run.
+      if (body.view === "terminal") updates.push("chat_restarted = 0");
     }
 
     // Handle name change - also rename tmux session and git branch (for worktrees)

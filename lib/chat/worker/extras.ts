@@ -8,7 +8,11 @@ export type RoleExtras = Pick<
   | "allowedTools"
   | "disallowedTools"
   | "permissionMode"
->;
+> & {
+  // A digest of the tools AgentOS gives this role (an orchestrator's): the
+  // worker after a deploy tells the agent only when it changed.
+  toolsDigest?: string;
+};
 
 // What a session's role adds to its chat. An orchestrator's module loads
 // only for one; a task's chat gets its brief, as its terminal agent would.

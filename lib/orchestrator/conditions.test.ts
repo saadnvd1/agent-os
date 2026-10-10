@@ -15,7 +15,7 @@ describe("conditionsFor", () => {
       "task add-auth: PR #12 opened (CI pending)",
     ]);
     expect(lines([withTask("s", { pr: pr({ checks: "pass" }) })])).toContain(
-      "task add-auth: CI green"
+      "task add-auth: CI green and settled"
     );
     expect(
       lines([withTask("s", { pr: pr({ checks: "fail", failing: "lint" }) })])
@@ -30,6 +30,19 @@ describe("conditionsFor", () => {
     ).toContain(
       'task add-auth: BLOCKED: <untrusted source="add-auth">need the key</untrusted>'
     );
+  });
+
+  it("holds CI green back until it has settled, as sign_off's ci gate does", () => {
+    const green = (ciSettleIn: number) =>
+      lines([withTask("s", { pr: pr({ checks: "pass" }), ciSettleIn })]);
+    expect(green(90).some((l) => l.includes("settled"))).toBe(false);
+    expect(green(0)).toContain("task add-auth: CI green and settled");
+    // A failure is news at once.
+    expect(
+      lines([
+        withTask("s", { pr: pr({ checks: "fail" }), ciSettleIn: 90 }),
+      ]).some((l) => l.endsWith("CI failed"))
+    ).toBe(true);
   });
 
   it("counts only a real block as needs input, fenced", () => {

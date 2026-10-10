@@ -235,3 +235,11 @@ describe("untrusted text", () => {
     expect(out.endsWith("</untrusted>")).toBe(true);
   });
 });
+
+describe("orchestratorToolsDigest", () => {
+  it("is stable for the same tools", async () => {
+    const { orchestratorToolsDigest } = await import("./tools");
+    expect(orchestratorToolsDigest()).toMatch(/^[0-9a-f]{16}$/);
+    expect(orchestratorToolsDigest()).toBe(orchestratorToolsDigest());
+  });
+});

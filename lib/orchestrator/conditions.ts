@@ -74,10 +74,13 @@ function sessionConditions(
     add("merged", `${who}: merged`);
   else if (pr?.state === "OPEN") {
     add(`pr:${pr.number}`, `${who}: PR #${pr.number} opened (${ciWord(pr)})`);
-    if (pr.checks === "pass" || pr.checks === "fail")
+    // Green is news once it has settled, when sign_off's ci gate passes,
+    // so the orchestrator doesn't sign off into the settle window and poll.
+    const settling = pr.checks === "pass" && (f.task?.ciSettleIn ?? 0) > 0;
+    if ((pr.checks === "pass" && !settling) || pr.checks === "fail")
       add(
         `ci:${pr.number}:${pr.head ?? ""}:${pr.checks}`,
-        `${who}: ${ciWord(pr)}`
+        `${who}: ${ciWord(pr)}${pr.checks === "pass" ? " and settled" : ""}`
       );
   }
 
