@@ -77,7 +77,8 @@ const { recordPreviousName } = await import("../session-names");
 const { realDeps } = await import("./start");
 const { runSlot } = await import("./run");
 const { tick } = await import("./scheduler");
-const { createSchedule, listRuns, updateSchedule } = await import("./store");
+const { createSchedule, getSchedule, listRuns, updateSchedule } =
+  await import("./store");
 const { checkInInput } = await import(".");
 const { everyCron } = await import("./cron");
 
@@ -105,6 +106,19 @@ function setup(view: "chat" | "terminal" = "chat") {
     CREATED
   );
   return { ws, project, sessionId, name, schedule };
+}
+
+// Seeded, not made: making one writes a folder in the real home.
+function seedOrchestrator(workspaceId: string): string {
+  const id = randomUUID();
+  const name = db
+    .prepare(`SELECT name FROM workspaces WHERE id = ?`)
+    .get(workspaceId) as { name: string };
+  db.prepare(
+    `INSERT INTO sessions (id, name, tmux_name, working_directory, view, role, workspace_id)
+     VALUES (?, ?, ?, '/tmp', 'chat', 'orchestrator', ?)`
+  ).run(id, `${name.name} orchestrator`, `claude-${id}`, workspaceId);
+  return id;
 }
 
 // The chat's worker exited (idle 30 minutes): the server no longer has it.
@@ -196,6 +210,47 @@ describe("message schedules: who can aim them where", () => {
         targetSessionId: orch.id,
       })
     ).toThrow(/orchestrator takes orchestrator schedules/);
+  });
+
+  it("a check-in on the orchestrator follows whichever session is orchestrator", async () => {
+    const { ws } = setup();
+    const first = seedOrchestrator(ws.id);
+    const input = checkInInput({
+      session: first,
+      from: first,
+      every: "30m",
+      prompt: "check in",
+    });
+    expect(input).toMatchObject({
+      kind: "orchestrator",
+      targetSessionId: null,
+      createdBySessionId: first,
+    });
+    expect(() =>
+      checkInInput({ session: first, cron: "*/5 * * * *", prompt: "p" })
+    ).toThrow(/every 10 minutes/);
+    const schedule = createSchedule(input, CREATED);
+    await runSlot(schedule, at("2026-10-07T13:30:00Z"), "schedule", realDeps);
+    expect(workers.sends.at(-1)).toMatchObject({ sessionId: first });
+    expect(workers.sends.at(-1)!.text).toContain(
+      `set up by agent session "${ws.name} orchestrator" (${first.slice(0, 8)}), not by the user`
+    );
+
+    // The orchestrator is replaced: the next run goes to the new one.
+    db.prepare(`DELETE FROM sessions WHERE id = ?`).run(first);
+    const second = seedOrchestrator(ws.id);
+    const run = await runSlot(
+      schedule,
+      at("2026-10-07T14:00:00Z"),
+      "schedule",
+      realDeps
+    );
+    expect(run).toMatchObject({ outcome: "started", sessionId: second });
+    expect(workers.sends.at(-1)).toMatchObject({ sessionId: second });
+    expect(workers.sends.at(-1)!.text).toContain(
+      `set up by agent session "a session that's gone"`
+    );
+    expect(getSchedule(schedule.id)!.enabled).toBe(true);
   });
 
   it("an agent schedules only in its own workspace", () => {
@@ -320,43 +375,62 @@ describe("message schedules: runs", () => {
     });
   });
 
-  it("an archived session fails and notifies once until a run works again", async () => {
-    const { sessionId, schedule } = setup();
-    phone.length = 0;
-    db.prepare(
-      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
-    ).run(sessionId);
-    await tick(realDeps, at("2026-10-07T13:10:05Z"));
-    await tick(realDeps, at("2026-10-07T13:20:05Z"));
-    expect(listRuns(schedule.id).map((r) => [r.outcome, r.detail])).toEqual([
-      ["failed", "session archived"],
-      ["failed", "session archived"],
-    ]);
-    expect(phone).toEqual([`Schedule "Check-ins" failed: session archived`]);
-
-    // Back, works, then fails again: that's news again.
-    db.prepare(`UPDATE sessions SET archived_at = NULL WHERE id = ?`).run(
-      sessionId
-    );
-    await tick(realDeps, at("2026-10-07T13:30:05Z"));
-    expect(listRuns(schedule.id)[0].outcome).toBe("started");
-    db.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
-    await tick(realDeps, at("2026-10-07T13:40:05Z"));
-    expect(listRuns(schedule.id)[0]).toMatchObject({
-      outcome: "failed",
-      detail: "session no longer exists",
-    });
-    expect(phone).toHaveLength(2);
-  });
+  it.each([
+    [
+      "deleted",
+      `DELETE FROM sessions WHERE id = ?`,
+      "session no longer exists",
+    ],
+    [
+      "archived",
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`,
+      "session archived",
+    ],
+  ])(
+    "a %s session pauses the schedule after one failure, with one notice",
+    async (_, gone, why) => {
+      const { ws, sessionId, schedule } = setup();
+      phone.length = 0;
+      db.prepare(gone).run(sessionId);
+      await tick(realDeps, at("2026-10-07T13:10:05Z"));
+      await tick(realDeps, at("2026-10-07T13:20:05Z"));
+      await tick(realDeps, at("2026-10-07T13:30:05Z"));
+      expect(listRuns(schedule.id).map((r) => [r.outcome, r.detail])).toEqual([
+        ["failed", `${why}; paused`],
+      ]);
+      expect(getSchedule(schedule.id)!.enabled).toBe(false);
+      const notice = `Schedule "Check-ins" is paused: ${why}. Point it at another session or delete it.`;
+      expect(phone).toEqual([notice]);
+      // A notice, not something for Saad to decide.
+      expect(
+        db
+          .prepare(
+            `SELECT kind, text FROM orchestrator_notes WHERE workspace_id = ?`
+          )
+          .all(ws.id)
+      ).toEqual([{ kind: "pause", text: notice }]);
+      // Turning it back on means pointing it somewhere that exists.
+      expect(() => updateSchedule(schedule.id, { enabled: true })).toThrow(
+        `Can't message that session: ${why}`
+      );
+    }
+  );
 
   it("a delivery that fails is recorded as FAILED with why", async () => {
     const { sessionId, schedule } = setup("terminal");
     // Its terminal isn't running.
     panes.delete(`claude-${sessionId}`);
+    phone.length = 0;
     await tick(realDeps, at("2026-10-07T13:10:05Z"));
-    expect(listRuns(schedule.id)[0]).toMatchObject({
-      outcome: "failed",
-      detail: "FAILED: its terminal isn't running",
-    });
+    await tick(realDeps, at("2026-10-07T13:20:05Z"));
+    expect(listRuns(schedule.id).map((r) => [r.outcome, r.detail])).toEqual([
+      ["failed", "FAILED: its terminal isn't running"],
+      ["failed", "FAILED: its terminal isn't running"],
+    ]);
+    // Its session is still there: it keeps trying, and says so once.
+    expect(getSchedule(schedule.id)!.enabled).toBe(true);
+    expect(phone).toEqual([
+      `Schedule "Check-ins" failed: FAILED: its terminal isn't running`,
+    ]);
   });
 });

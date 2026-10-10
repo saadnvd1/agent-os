@@ -7,6 +7,8 @@ import {
   lastSettledBefore,
   lastStarted,
   pausedFor,
+  pauseSchedule,
+  targetGone,
   targetProblem,
   type RunTrigger,
   type Schedule,
@@ -26,7 +28,9 @@ export interface RunDeps {
     onSession: (sessionId: string) => void
   ) => Promise<Started>;
   stillRunning: (schedule: Schedule, run: ScheduleRun) => Promise<boolean>;
-  notify: (schedule: Schedule, why: string) => void;
+  // A failure the first time it happens; "paused" when the schedule turned
+  // itself off because its session is gone.
+  notify: (schedule: Schedule, why: string, paused?: boolean) => void;
 }
 
 // A start the orchestrator's brakes held: the run is skipped, and the slot
@@ -72,19 +76,28 @@ export async function runSlot(
   const joined = (...parts: (string | null)[]) =>
     parts.filter(Boolean).join(": ") || null;
   const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  const tell = (why: string, paused?: boolean) => {
+    try {
+      deps.notify(schedule, why, paused);
+    } catch (e) {
+      console.error(`[schedules] couldn't notify about ${schedule.name}:`, e);
+    }
+  };
   const fail = (why: string): RunResult => {
     // Once until it works again: a schedule that keeps failing notifies the
     // first time, not every run.
-    if (lastSettledBefore(schedule.id, runId)?.outcome !== "failed") {
-      try {
-        deps.notify(schedule, why);
-      } catch (e) {
-        console.error(`[schedules] couldn't notify about ${schedule.name}:`, e);
-      }
-    }
+    if (lastSettledBefore(schedule.id, runId)?.outcome !== "failed") tell(why);
     return done("failed", why);
   };
 
+  // Its session is gone and won't come back: the schedule turns itself off
+  // and says so once, instead of failing every slot.
+  const gone = targetGone(schedule);
+  if (gone) {
+    if (!pauseSchedule(schedule.id)) return fail(gone);
+    tell(gone, true);
+    return done("failed", `${gone}; paused`);
+  }
   const target = targetProblem(schedule);
   if (target) return fail(target);
   if (pausedFor(schedule))

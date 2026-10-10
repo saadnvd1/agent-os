@@ -135,6 +135,16 @@ export function sessionWorkspace(session: Session): string | null {
     : null;
 }
 
+// Why a session will never take a message again, or null: deleted,
+// archived, or a task that's finished.
+function goneReason(session: Session | null): string | null {
+  if (!session) return "session no longer exists";
+  if (session.archived_at) return "session archived";
+  if (session.task_status && session.task_status !== "running")
+    return "session finished";
+  return null;
+}
+
 // Why a session can't take a scheduled message, or null.
 export function sessionTargetProblem(
   sessionId: string | null,
@@ -142,12 +152,10 @@ export function sessionTargetProblem(
 ): string | null {
   if (!sessionId) return "Pick a session to message";
   const session = getSessionRow(sessionId);
-  if (!session) return "session no longer exists";
-  if (session.archived_at) return "session archived";
+  const gone = goneReason(session);
+  if (gone || !session) return gone;
   if (session.role === "orchestrator")
     return "the orchestrator takes orchestrator schedules, not messages";
-  if (session.task_status && session.task_status !== "running")
-    return "session finished";
   if (sessionWorkspace(session) !== workspaceId)
     return `${session.name} isn't in this schedule's workspace`;
   return null;
@@ -443,6 +451,25 @@ export function targetProblem(schedule: Schedule): string | null {
   if (project.workspace_id !== schedule.workspace_id)
     return `${project.name} moved out of this schedule's workspace; edit the schedule`;
   return null;
+}
+
+// Why a message schedule's session is gone for good, or null. Its
+// schedule pauses rather than failing every slot.
+export function targetGone(schedule: Schedule): string | null {
+  if (schedule.kind !== "message" || !schedule.target_session_id) return null;
+  return goneReason(getSessionRow(schedule.target_session_id));
+}
+
+// Turns a schedule off. True only for the call that did it, so one run
+// raises the notice however many ticks race to it.
+export function pauseSchedule(id: string): boolean {
+  return (
+    db
+      .prepare(
+        `UPDATE schedules SET enabled = 0, updated_at = datetime('now') WHERE id = ? AND enabled = 1`
+      )
+      .run(id).changes === 1
+  );
 }
 
 // Every session this schedule's runs started, newest first.

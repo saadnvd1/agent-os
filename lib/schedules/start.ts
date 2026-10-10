@@ -10,7 +10,7 @@ import { getProject } from "../projects";
 import { resolveModelForAgent } from "../model-catalog";
 import { createTask, isFinished, taskView } from "../tasks";
 import { chatStateNow, sendChatConfirmed } from "../chat/runner";
-import { ensureOrchestrator } from "../orchestrator/home";
+import { ensureOrchestrator, getOrchestrator } from "../orchestrator/home";
 import { addNote } from "../orchestrator/notes";
 import { notifyStatusChanged } from "../status/hub";
 import { formatRunTime } from "./cron";
@@ -95,15 +95,34 @@ export function scheduledMessage(
   return `[Scheduled message "${schedule.name}"${where}${who}]\n${schedule.prompt}`;
 }
 
+// The agent session that set a schedule up, or null for Saad. Still named
+// when it's gone: its request is a peer's either way.
+function creatorOf(schedule: Schedule): Pick<Session, "id" | "name"> | null {
+  const id = schedule.created_by_session_id;
+  if (!id) return null;
+  return (
+    (queries.getSession(db).get(id) as Session | undefined) ?? {
+      id,
+      name: "a session that's gone",
+    }
+  );
+}
+
+// To whichever session is the workspace's orchestrator at the time, so a
+// schedule aimed at it outlives the session that was orchestrator when it
+// was made.
 async function postToOrchestrator(
   schedule: Schedule,
   onSession: OnSession
 ): Promise<string> {
   const orchestrator = ensureOrchestrator(schedule.workspace_id);
   const project = schedule.project_id ? getProject(schedule.project_id) : null;
+  const creator = creatorOf(schedule);
   await sendChatConfirmed(orchestrator.id, {
-    text: scheduledMessage(schedule, project?.name ?? null),
-    from: fromLabel(schedule),
+    text: scheduledMessage(schedule, project?.name ?? null, creator),
+    from: creator
+      ? `${fromLabel(schedule)}, set up by "${creator.name}"`
+      : fromLabel(schedule),
   });
   onSession(orchestrator.id);
   return orchestrator.id;
@@ -117,16 +136,7 @@ async function messageSession(
 ): Promise<Started> {
   const target = schedule.target_session_id;
   if (!target) throw new Error("Pick a session to message");
-  const creator = schedule.created_by_session_id
-    ? (queries.getSession(db).get(schedule.created_by_session_id) as
-        | Session
-        | undefined)
-    : undefined;
-  const creatorRef =
-    creator ??
-    (schedule.created_by_session_id
-      ? { id: schedule.created_by_session_id, name: "a session that's gone" }
-      : null);
+  const creatorRef = creatorOf(schedule);
   const { delivery } = await sendMessage({
     fromId: null,
     fromLabel: creatorRef
@@ -186,13 +196,26 @@ export async function stillRunning(
       return schedule.target_session_id
         ? sessionBusy(schedule.target_session_id)
         : false;
-    case "orchestrator":
-      // A message: done once it's delivered.
-      return false;
+    case "orchestrator": {
+      // A message: done once it's delivered. An agent's check-in, like one
+      // to any session, waits while the orchestrator is still working.
+      if (!schedule.created_by_session_id) return false;
+      const orchestrator = getOrchestrator(schedule.workspace_id);
+      return orchestrator ? sessionBusy(orchestrator.id) : false;
+    }
   }
 }
 
-function notify(schedule: Schedule, why: string): void {
+function notify(schedule: Schedule, why: string, paused?: boolean): void {
+  if (paused) {
+    // Not something to decide now: Saad re-targets or deletes it when he
+    // gets to it.
+    const text = `Schedule "${schedule.name}" is paused: ${why}. Point it at another session or delete it.`;
+    console.error(`[schedules] ${text}`);
+    addNote(schedule.workspace_id, text, "pause");
+    notifyPhone(`schedule:${schedule.id}`, text);
+    return;
+  }
   console.error(`[schedules] ${schedule.name} failed: ${why}`);
   addNote(
     schedule.workspace_id,
