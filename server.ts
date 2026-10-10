@@ -61,6 +61,7 @@ import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
 import os from "os";
 import { resumeHeldStarts, resumeTaskStarts } from "./lib/tasks/start";
 import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
+import { releaseInterruptedClaims } from "./lib/orchestrator/ask-approvals";
 import { claimAgentosEnv } from "./lib/agents/self-env";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -85,6 +86,8 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(async () => {
+  // Before any request: merge approvals a restart cut off mid-merge go back.
+  releaseInterruptedClaims();
   const policy: AccessPolicy = {
     bound: [],
     extraHosts: [],

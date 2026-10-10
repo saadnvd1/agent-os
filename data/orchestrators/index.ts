@@ -12,19 +12,25 @@ export const orchestratorKeys = {
 };
 
 async function json<T>(res: Response): Promise<T> {
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Request failed");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
 
-const post = async (url: string, body: object) =>
-  json(
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-  );
+// A request that never got an answer (AgentOS restarting, offline) says so,
+// rather than the browser's bare "Failed to fetch".
+const post = async (url: string, body: object) => {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => {
+    throw new Error(
+      "Couldn't reach AgentOS, so your answer may not be recorded. Try again."
+    );
+  });
+  return json(res);
+};
 
 // Every workspace's orchestrator: open asks, paused, tasks in review.
 export function useOrchestratorsQuery() {
@@ -78,8 +84,12 @@ export function useAnswerAsk(workspaceId: string) {
         : undefined;
       return post(url, { ...answer, binding: ask.binding, assertion });
     },
+    // The card leaves at once, and comes back if the answer wasn't recorded.
     onMutate: async ({ ask: { id: askId } }) => {
       await queryClient.cancelQueries({ queryKey: orchestratorKeys.all });
+      const previous = queryClient.getQueryData<OrchestratorOverview[]>(
+        orchestratorKeys.all
+      );
       queryClient.setQueryData<OrchestratorOverview[]>(
         orchestratorKeys.all,
         (prev) =>
@@ -89,6 +99,11 @@ export function useAnswerAsk(workspaceId: string) {
               : o
           )
       );
+      return { previous };
+    },
+    onError: (_error, _answer, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(orchestratorKeys.all, context.previous);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: orchestratorKeys.all });
