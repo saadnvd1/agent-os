@@ -124,24 +124,24 @@ describe("createSkillWatcher", { timeout: 45_000 }, () => {
     const dir = tmp();
     const real = tmp();
     fs.symlinkSync(real, path.join(dir, "linked"));
-    // The first watcher per path is the module's own: on Linux, Node builds a
-    // recursive watch from more fs.watch calls of its own, after it.
-    const opened = new Map<string, fs.FSWatcher>();
+    // The module's own watchers: they always say whether they're
+    // recursive. Node's (Linux builds a recursive watch from more) don't.
+    const opened: [string, fs.FSWatcher][] = [];
     const spy = vi.spyOn(fs, "watch").mockImplementation(((
       ...args: Parameters<typeof fs.watch>
     ) => {
       const w = watchReal(...args);
-      const p = String(args[0]);
-      if (!opened.has(p)) {
-        opened.set(p, w);
+      const o = args[1];
+      if (typeof o === "object" && o !== null && "recursive" in o) {
+        opened.push([String(args[0]), w]);
         vi.spyOn(w, "close");
       }
       return w;
     }) as typeof fs.watch);
     try {
       const calls = watched(dir);
-      // The folder and the linked skill.
-      expect([...opened.keys()]).toEqual(expect.arrayContaining([dir, real]));
+      // The folder and the linked skill, once each.
+      expect(opened.map(([p]) => p).sort()).toEqual([dir, real].sort());
       await sleep(WARM);
       await touchUntil(
         () => fs.writeFileSync(path.join(dir, "x.md"), String(Math.random())),
@@ -149,8 +149,7 @@ describe("createSkillWatcher", { timeout: 45_000 }, () => {
       );
       watcher!.release("claude:/p");
       expect(watcher!.keys()).toEqual([]);
-      expect(opened.get(dir)!.close).toHaveBeenCalled();
-      expect(opened.get(real)!.close).toHaveBeenCalled();
+      for (const [, w] of opened) expect(w.close).toHaveBeenCalled();
     } finally {
       spy.mockRestore();
     }
