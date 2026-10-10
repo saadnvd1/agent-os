@@ -1,6 +1,6 @@
 # `agentos.json`: a project describes how its sessions run
 
-Date: 2026-10-10. Status: accepted; part 1 implemented.
+Date: 2026-10-10. Status: accepted; parts 1 and 2 implemented.
 
 ## Decision
 
@@ -127,6 +127,51 @@ command, the login URL on its own port and the browsing map, then the notes.
 Nothing is rendered for a field the project didn't declare: a confident
 falsehood about how to run the project is worse than silence. `env` values
 are never rendered.
+
+## Database (part 2)
+
+A session with a worktree gets `<from>_aos_<12 hex of sha256(session id)>`,
+truncated to Postgres's 63 bytes, made in its setup before the setup commands
+(which may migrate it), and recorded on the session row (`database`, JSON),
+which is where its env and brief read it from. As in dispatch, the copy is
+`createdb -T template0` then `pg_dump -f` and `psql -1 -v ON_ERROR_STOP=1 -f`,
+never `createdb -T <from>`: that refuses while anything is connected to
+`from`, and the dev server in the main checkout always is.
+
+- **Proof of ownership.** `createdb` gives the copy the comment `agentos
+session <id> (copying)`, and the restore's own transaction sets it to
+  `agentos session <id>`. A database is reused or dropped only with its own
+  session's comment, so `from`, dispatch's copies and anything else are
+  never touched, even under a matching name. A copy interrupted mid-restore
+  (still "copying") is dropped and made again; a complete one is reused, so
+  a second start of the session keeps what it migrated.
+- **Local only.** `from` must be a plain name (never a connection string or
+  URL, which `pg_dump` would take as one), `host` only `localhost`,
+  `127.0.0.1`, `::1` or one socket folder (never a comma list, which libpq
+  would try host by host), and the inherited `PGHOST`,
+  `PGHOSTADDR`, `PGSERVICE`, `PGSERVICEFILE` and `PGDATABASE` are cleared
+  from every command's env. Sessions on another machine get none.
+- **Unlike dispatch, a failure doesn't refuse the session.** Postgres not
+  answering, a missing `from` or a failed copy leaves the session without
+  one: the setup log shows the failed step (without failing the setup, whose
+  note to the agent is about dependencies), `env` isn't set, and the brief
+  says the app is on the shared database, not to migrate or write there.
+- **Dropped** when the session is done (with its agent), merged or dropped
+  as a task, moved to another machine, or deleted, with `dropdb --force`:
+  the session is over, and a dev server left running in its worktree would
+  hold the drop off. The drop is never waited on (it reads the row first),
+  and every command but the copy itself times out in a minute, so Postgres
+  can't hold up a merge. A drop that fails is logged and the record kept.
+- **Recorded before it's made.** The row names the copy as `pending` before
+  `createdb`, so a copy cut short by a restart, or a session ended during
+  its copy, is still found and dropped; a copy that finishes after its
+  session was deleted drops itself. A pending copy isn't exported or
+  briefed as the session's.
+- **A drop leaves a mark.** A drop with nothing to drop yet, or one that
+  dropped the copy, writes `{"dropped":true}`, and every write of the copy's
+  record is a compare-and-set over the last one. So a session that ends
+  before or during its setup's database step never gets a copy afterwards:
+  the step stops before `createdb`, or drops what it finished or reused.
 
 ## Consequences
 

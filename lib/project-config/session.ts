@@ -10,6 +10,7 @@ import { getProject } from "../projects";
 import { sessionPorts } from "../ports";
 import { loadProjectConfig, projectEnv, type LoadedConfig } from "./index";
 import { runningBrief } from "./brief";
+import { databaseEnv, sessionDatabase } from "./database";
 
 export const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 
@@ -39,7 +40,10 @@ export function sessionConfig(
 export function sessionProjectEnv(sessionId: string): Record<string, string> {
   try {
     const { config, ports } = sessionConfig(sessionId);
-    return projectEnv(config, ports);
+    return {
+      ...projectEnv(config, ports),
+      ...(config.database ? databaseEnv(sessionDatabase(sessionId)) : {}),
+    };
   } catch (error) {
     console.error(`[project-config] env for ${sessionId}:`, error);
     return {};
@@ -49,7 +53,9 @@ export function sessionProjectEnv(sessionId: string): Record<string, string> {
 export function sessionRunningBrief(sessionId: string): string {
   try {
     const { config, source, ports } = sessionConfig(sessionId);
-    return source ? runningBrief(config, ports ?? {}) : "";
+    return source
+      ? runningBrief(config, ports ?? {}, sessionDatabase(sessionId))
+      : "";
   } catch (error) {
     console.error(`[project-config] brief for ${sessionId}:`, error);
     return "";

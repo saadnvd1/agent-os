@@ -71,6 +71,8 @@ export interface Session {
   // Port slot and the ports it resolves to, JSON {NAME: port} (lib/ports.ts)
   port_slot?: number | null;
   ports?: string | null;
+  // Its private Postgres copy, JSON (lib/project-config/database.ts)
+  database?: string | null;
   // PR tracking
   pr_url: string | null;
   pr_number: number | null;

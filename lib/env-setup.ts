@@ -11,6 +11,7 @@ import * as path from "path";
 import { bringDependencies, runCommand } from "./worktree-deps";
 import { loadProjectConfig, projectEnv, withPorts } from "./project-config";
 import { recordPlaced } from "./worktree-placed";
+import { databaseEnv, ensureSessionDatabase } from "./project-config/database";
 
 export interface SetupStep {
   name: string;
@@ -152,6 +153,8 @@ export async function setupWorktree(options: {
   sourcePath: string;
   // The session's ports (lib/ports.ts), exported to the setup commands.
   ports?: Record<string, number> | null;
+  // The session it's for: its private database is made when declared.
+  sessionId?: string;
   skipInstall?: boolean;
   progress?: SetupProgress;
 }): Promise<SetupResult> {
@@ -223,9 +226,34 @@ export async function setupWorktree(options: {
     (error) => console.error("Recording copied files failed:", error)
   );
 
-  // The project's env, the session's ports over it, then the paths.
+  // The session's own database, before setup commands migrate it. One that
+  // can't be made doesn't fail the setup: the brief says the session has
+  // none, and the failed step shows why.
+  let database: Record<string, string> = {};
+  if (config.database && options.sessionId) {
+    const made = await ensureSessionDatabase(
+      options.sessionId,
+      config.database
+    );
+    if (made) {
+      database = databaseEnv(made);
+      result.steps.push({
+        name: "Private database",
+        command: `copy ${made.from}`,
+        success: !!made.name,
+        output: made.name
+          ? `${made.reused ? "Reused" : "Copied into"} ${made.name}`
+          : undefined,
+        error: made.error,
+      });
+    }
+  }
+
+  // The project's env, the session's ports and database over it, then the
+  // paths.
   const envVars: Record<string, string> = {
     ...projectEnv(config, options.ports ?? null),
+    ...database,
     ROOT_WORKTREE_PATH: sourcePath,
     WORKTREE_PATH: worktreePath,
   };

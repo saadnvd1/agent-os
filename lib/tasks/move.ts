@@ -19,6 +19,7 @@ import { projectRef } from "./project-ref";
 import { moveRefusal } from "./move-guard";
 import { MAX_TRANSCRIPT_BYTES, type TaskBundle } from "./move-bundle";
 import { stepProgress } from "./move-progress";
+import { dropSessionDatabase } from "../project-config/database";
 import {
   isClaudeSessionId,
   latestSessionId,
@@ -181,10 +182,14 @@ export async function exportOrResume(
 }
 
 export function markMoved(id: string, to: string): void {
-  db.prepare(
-    `UPDATE sessions SET task_status = 'moved', moved_to = ?
+  const moved = db
+    .prepare(
+      `UPDATE sessions SET task_status = 'moved', moved_to = ?
        WHERE id = ? AND task_status IN ('running', 'moving')`
-  ).run(to, id);
+    )
+    .run(to, id).changes;
+  // It goes on there with a copy of its own.
+  if (moved) void dropSessionDatabase(id);
 }
 
 /**

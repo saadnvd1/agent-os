@@ -14,6 +14,7 @@ import { stopChat } from "../chat/runner";
 import { run } from "./gh";
 import { canSignOff } from "./state";
 import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
+import { dropSessionDatabase } from "../project-config/database";
 
 // After a merge (`merged`), the worktree goes only if nothing in it would
 // be lost; a drop removes it whatever it holds.
@@ -30,6 +31,8 @@ async function cleanup(
     ["kill-session", "-t", `=${session.tmux_name}`],
     repo
   ).catch(() => {});
+  // Never waited on: the row is read now, and Postgres can't hold this up.
+  void dropSessionDatabase(session.id);
   if (session.worktree_path && opts.merged) {
     const fate = await settleWorktree(session, opts.merged).catch(() => null);
     if (fate?.action === "kept")

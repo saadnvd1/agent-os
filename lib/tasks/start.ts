@@ -65,7 +65,7 @@ async function prepare(
     sessionId,
     portBases(loadProjectConfig(sourcePath).config)
   );
-  return setupWorktree({ worktreePath, sourcePath, ports });
+  return setupWorktree({ worktreePath, sourcePath, ports, sessionId });
 }
 
 // `earlier` is a setup already done (a held start resuming): it isn't run again,

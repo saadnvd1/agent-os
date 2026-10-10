@@ -1019,6 +1019,19 @@ const migrations: Migration[] = [
       db.exec(`UPDATE sessions SET pinned = 1 WHERE role = 'orchestrator'`);
     },
   },
+  {
+    id: 48,
+    name: "session_database",
+    up: (db) => {
+      // The session's private Postgres copy, or why it has none, as JSON
+      // (lib/project-config/database.ts).
+      const columns = db.prepare(`PRAGMA table_info(sessions)`).all() as {
+        name: string;
+      }[];
+      if (!columns.some((c) => c.name === "database"))
+        db.exec(`ALTER TABLE sessions ADD COLUMN database TEXT`);
+    },
+  },
 ];
 
 // `upTo`: stop after this id (tests that start from an older database).

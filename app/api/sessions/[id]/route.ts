@@ -7,6 +7,7 @@ import {
   mainCheckoutOf,
 } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
+import { dropSessionDatabase } from "@/lib/project-config/database";
 import { killWorker } from "@/lib/orchestration";
 import { hostExec, hostExecFile } from "@/lib/hosts";
 import { shellQuote } from "@/lib/hosts/ssh";
@@ -225,6 +226,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       } catch (error) {
         console.error(`Failed to kill worker ${worker.id}:`, error);
       }
+      void dropSessionDatabase(worker.id);
       queries.deleteSession(db).run(worker.id);
     }
 
@@ -232,6 +234,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (existing.dev_server_port) {
       releasePort(id);
     }
+
+    // Its private Postgres copy: the row is read now, the drop runs on.
+    void dropSessionDatabase(id);
 
     // Delete from database immediately for instant UI feedback
     stopChat(id);

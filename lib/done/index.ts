@@ -25,6 +25,7 @@ import { planDone } from "./plan";
 import { deleteMergedRemote } from "./remote";
 import { settleWorktree, type WorktreeFate } from "./worktree";
 import { releasePorts } from "../ports";
+import { dropSessionDatabase } from "../project-config/database";
 
 export interface DoneOptions {
   // Who asked: the orchestrator's gate failures count toward Saad, as its
@@ -57,6 +58,8 @@ async function stopAgent(s: Session): Promise<void> {
     `tmux kill-session -t ${shellQuote(`=${s.tmux_name}`)} 2>/dev/null || true`
   ).catch(() => {});
   releasePorts(s.id);
+  // Never waited on: the row is read now, and Postgres can't hold this up.
+  void dropSessionDatabase(s.id);
 }
 
 function worktreeLine(f: WorktreeFate): string {

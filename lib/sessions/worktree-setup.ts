@@ -125,6 +125,7 @@ export async function setUpWorktree(input: WorktreeSetupInput): Promise<void> {
         worktreePath: wt.worktreePath,
         sourcePath: projectPath,
         ports,
+        sessionId,
         progress: {
           onStage: (stage) => enterStage(view, stage),
           onStep: (step) => logStep(view, step),

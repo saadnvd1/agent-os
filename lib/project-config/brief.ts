@@ -12,10 +12,12 @@ import {
   withPorts,
   type ProjectConfig,
 } from "./index";
+import { databaseBrief, type SessionDatabase } from "./database";
 
 export function runningBrief(
   config: ProjectConfig,
-  ports: Record<string, number>
+  ports: Record<string, number>,
+  database: SessionDatabase | null = null
 ): string {
   const lines: string[] = [];
   const names = Object.entries(ports);
@@ -30,6 +32,8 @@ export function runningBrief(
     lines.push(
       `- It's up when this exits 0: \`${ready}\`. Wait with ONE Bash call with run_in_background: \`until ${ready}; do sleep 1; done\`, and keep working until it notifies you. Don't poll by hand or sleep in the foreground.`
     );
+  const db = databaseBrief(config.database, database);
+  if (db) lines.push(db);
   if (config.test) lines.push(`- Tests: \`${withPorts(config.test, ports)}\``);
   const browse = config.browse;
   const port = portFor(browse?.port, ports);
