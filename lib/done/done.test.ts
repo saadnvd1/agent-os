@@ -861,6 +861,35 @@ describe("merge settings", () => {
     expect(fs.existsSync(k.dir!)).toBe(true);
   });
 
+  it.each(["MERGED", "OPEN"] as const)(
+    "never deletes main on origin, whatever the settings say (PR %s)",
+    async (state) => {
+      const t = setup();
+      setProjectMergeSettings(t.project.id, { delete_remote_branch: true });
+      const s = t.session(`on-main-${state}`, {
+        task: true,
+        worktree: false,
+        live: "idle",
+      });
+      db.prepare(`UPDATE sessions SET branch_name = 'main' WHERE id = ?`).run(
+        s.id
+      );
+      const tip = git(t.repo, "rev-parse", "origin/main");
+      t.openPR({ ...s, branch: "main", head: tip }, { state });
+      if (state === "OPEN") {
+        // The sign-off's own cleanup, which pushes the deletion.
+        await signOffTask(s.id, { wait: true });
+        expect(merges).toHaveLength(1);
+      } else {
+        const out = await doneSession(s.id, { by: "direct" });
+        expect(out.text).not.toContain("deleted on origin");
+      }
+      expect(git(t.repo, "ls-remote", "--heads", "origin", "main")).not.toBe(
+        ""
+      );
+    }
+  );
+
   it("still never removes uncommitted work when deletion is on", async () => {
     const t = setup();
     setProjectMergeSettings(t.project.id, { delete_worktree: true });

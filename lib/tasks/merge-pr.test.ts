@@ -85,6 +85,18 @@ describe("mergePR", () => {
     ).rejects.toThrow(/merge commit method[\s\S]*"Allow merge commits"/);
   });
 
+  it("doesn't blame the method for another refusal when the repository can't be read", async () => {
+    mergeError =
+      "Pull request is not mergeable: the base branch policy prohibits the merge";
+    repoView = null;
+    const err = await mergePR({
+      repo: "/r",
+      number: 9,
+      method: "rebase",
+    }).catch((e: Error) => e);
+    expect((err as Error).message).toBe(mergeError);
+  });
+
   it("passes any other refusal through unchanged", async () => {
     mergeError =
       "Pull request is not mergeable: the base branch policy prohibits the merge";

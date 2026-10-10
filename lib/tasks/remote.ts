@@ -5,6 +5,7 @@
  * state, sign-off and drop.
  */
 
+import { MERGE_METHODS, type MergeMethod } from "./merge-methods";
 import { db, type Project, type Session } from "../db";
 import {
   HostApiError,
@@ -129,12 +130,15 @@ export function setMirrorStatus(id: string, status: TaskStatus): void {
   ).run(status, id);
 }
 
-/** Sign off or drop on the machine that runs it. */
+/**
+ * Sign off or drop on the machine that runs it. A merge returns the method
+ * that machine merged with; null when it doesn't say (an older AgentOS).
+ */
 export async function remoteTaskAction(
   session: Session,
   action: "merge" | "drop",
   head?: string
-): Promise<void> {
+): Promise<MergeMethod | null> {
   const link = requireHostLink(session.host_id);
   // An AgentOS that predates pinned merges would ignore the head and merge
   // whatever the PR is at: refuse before asking it.
@@ -145,7 +149,7 @@ export async function remoteTaskAction(
         `${link.hostName}'s AgentOS can't pin a merge to a commit; update it first`
       );
   }
-  const res = await hostApi<{ head?: string | null }>(
+  const res = await hostApi<{ head?: string | null; method?: unknown }>(
     link,
     `/api/tasks/${encodeURIComponent(session.id)}/${action}`,
     { body: head ? { head } : {}, timeout: 300000 }
@@ -156,4 +160,5 @@ export async function remoteTaskAction(
     throw new Error(
       `${link.hostName} merged without confirming it was ${head.slice(0, 7)}`
     );
+  return MERGE_METHODS.find((m) => m === res.method) ?? null;
 }

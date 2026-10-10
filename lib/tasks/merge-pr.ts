@@ -77,7 +77,7 @@ export function refusedMethodMessage(
 }
 
 const sounds = (text: string) =>
-  /not allowed|isn't allowed|is not enabled|disabled|merge method/i.test(text);
+  /merg[\w ]{0,20}(are|is) (not allowed|disabled)|merge method/i.test(text);
 
 export async function mergePR(req: MergeRequest): Promise<void> {
   try {

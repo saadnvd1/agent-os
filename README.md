@@ -792,7 +792,7 @@ it may do on its own, and the lines that always come back to you as asks.
   is stored against that sha. A diff over 80k characters is reviewed in up
   to 6 parts of whole files, each against the task, and fails if any part
   does; a single file over 80k, or more than 6 parts, goes to you. A task from a card also gets a scope check against the card.
-  `sign_off` squash-merges only that commit when CI is green and settled on
+  `sign_off` merges only that commit (with the project's merge method) when CI is green and settled on
   it (2 minutes with no new check), its review passed, nothing is
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent

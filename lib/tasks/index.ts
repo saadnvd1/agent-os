@@ -1,6 +1,6 @@
 /**
  * Async tasks: a prompt becomes an agent working alone in its own worktree,
- * which ends by opening a PR. A human signs off (squash-merge + cleanup) or
+ * which ends by opening a PR. A human signs off (merge + cleanup) or
  * drops it.
  */
 

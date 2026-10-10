@@ -106,19 +106,18 @@ async function finishMerge(
 // Merge the PR with the project's merge method; the restack and cleanup
 // run after it in the background (`wait` to wait for them). The checks are
 // re-read here: the button is not the guard. With `head`, GitHub merges
-// only that commit. Returns the method it merged with.
+// only that commit. Returns the method it merged with (null when a linked
+// machine merged it and didn't say).
 export async function signOffTask(
   id: string,
   opts: { wait?: boolean; head?: string } = {}
-): Promise<MergeMethod> {
+): Promise<MergeMethod | null> {
   const session = getTaskSession(id);
   if (session.task_status !== "running")
     throw new Error(`Task is already ${session.task_status}`);
   // Its own machine checks the gates and merges.
-  if (isMirror(session)) {
-    await remoteTaskAction(session, "merge", opts.head);
-    return sessionMergePolicy(session).method;
-  }
+  // That machine's settings chose the method; null if it didn't say.
+  if (isMirror(session)) return remoteTaskAction(session, "merge", opts.head);
   const repo = projectPathFor(session);
   if (!repo) throw new Error("Task has no project");
   const refusal = signOffRefusal(id);
@@ -176,7 +175,10 @@ export async function dropTask(id: string): Promise<void> {
   const session = getTaskSession(id);
   if (session.task_status !== "running")
     throw new Error(`Task is already ${session.task_status}`);
-  if (isMirror(session)) return remoteTaskAction(session, "drop");
+  if (isMirror(session)) {
+    await remoteTaskAction(session, "drop");
+    return;
+  }
   const repo = projectPathFor(session);
   if (!repo) throw new Error("Task has no project");
   const children = liveChildren(id);

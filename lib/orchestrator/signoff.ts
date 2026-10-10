@@ -209,7 +209,7 @@ export async function mergeJudged(
 ): Promise<string> {
   if (verdict.approval && !spendApproval(verdict.approval))
     throw new Error(`Saad's approval for ${task.name} was already used`);
-  let method: MergeMethod = "squash";
+  let method: MergeMethod | null = null;
   await refundIfRefused(task.id, verdict.approval, async () => {
     method = await signOffTask(task.id, { head: verdict.sha, wait: opts.wait });
   });
@@ -219,7 +219,7 @@ export async function mergeJudged(
       ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on Saad's approval of that commit.`
       : `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}): CI green, review passed, in scope.`
   );
-  return `Merged ${task.name}: PR #${verdict.pr} ${MERGED_AS[method]} at ${short(verdict.sha)}.`;
+  return `Merged ${task.name}: PR #${verdict.pr} ${method ? MERGED_AS[method] : "merged"} at ${short(verdict.sha)}.`;
 }
 
 // An approval is claimed before the merge, so two merges can't both use it,

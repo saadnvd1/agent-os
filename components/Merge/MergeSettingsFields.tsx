@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import {
   Select,
   SelectContent,
@@ -45,11 +46,14 @@ function Field({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const id = useId();
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium">{label}</label>
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger className="h-11 md:h-9">
+        <SelectTrigger id={id} className="h-11 md:h-9">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

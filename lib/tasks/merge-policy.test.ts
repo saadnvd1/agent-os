@@ -74,11 +74,15 @@ describe("mergePolicy", () => {
 
   it("refuses a method that doesn't exist, and clears on empty", () => {
     const p = project();
+    setProjectMergeSettings(p.id, { method: "merge" });
     expect(() =>
       setProjectMergeSettings(p.id, { method: "fast-forward" })
-    ).toThrow();
-    expect(() => setProjectMergeSettings(p.id, { delete: true })).toThrow();
-    setProjectMergeSettings(p.id, { method: "merge" });
+    ).toThrow(/^Invalid merge settings: method: /);
+    expect(() => setProjectMergeSettings(p.id, { delete: true })).toThrow(
+      /^Invalid merge settings: \(top level\): .*"delete"/i
+    );
+    // A refused write leaves what was there.
+    expect(projectMergeSettings(p.id)).toEqual({ method: "merge" });
     expect(projectMergeSettings(p.id)).toEqual({ method: "merge" });
     setProjectMergeSettings(p.id, { method: undefined });
     expect(projectMergeSettings(p.id)).toEqual({});

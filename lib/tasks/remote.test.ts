@@ -188,8 +188,9 @@ describe("signing off and dropping there", () => {
     const r = await startOne();
     fetchMock
       .mockResolvedValueOnce(list([]))
-      .mockResolvedValueOnce(json({ success: true, head }));
-    await signOffTask(r.id!, { head });
+      .mockResolvedValueOnce(json({ success: true, head, method: "rebase" }));
+    // The method that machine's settings chose, not this one's.
+    await expect(signOffTask(r.id!, { head })).resolves.toBe("rebase");
     const [url, init] = fetchMock.mock.calls.at(-1)!;
     expect(url).toBe(`http://devbox:3011/api/tasks/${r.id}/merge`);
     expect(JSON.parse(init.body)).toEqual({ head });
