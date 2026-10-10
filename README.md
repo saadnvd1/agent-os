@@ -217,7 +217,9 @@ links to it by absolute path. The tools read files and reach the web, so
 under **Ask first** they ask like any other tool. Previews need Chrome, Chromium, Brave or Edge
 installed (or `AGENTOS_CHROME` pointing at one).
 
-Chat runs on this machine; sessions on other machines use the terminal.
+Chat runs on this machine, and on linked machines through their own AgentOS
+(see [Machines](#machines)); sessions on machines reached over ssh only use
+the terminal.
 Drivers for other agent CLIs plug into `lib/chat/drivers`; undo, `@file`
 suggestions and visuals are Claude-only for now, and plan mode is Claude and
 OpenCode.
@@ -729,6 +731,29 @@ the same project.
 On other machines, files, git, worktrees, dev servers and summarize are not
 available yet; the terminal, status, rename and send-keys are.
 
+### Sessions on a linked machine
+
+Once a machine is linked (below), this AgentOS talks to the AgentOS running
+there instead of running tmux over ssh. That machine owns its sessions: their
+processes, chats and state. This one is a client of it, over HTTP and
+WebSockets with the link's device token, and only ever connects out to it.
+
+- Its sessions are listed by its AgentOS: tmux sessions it didn't start in
+  the project they sit in (or **Elsewhere**), and sessions it manages, chats
+  included. Opening one of those mirrors it here (same id), so it stays in the
+  sidebar and opens like a local one.
+- Terminals attach through its `/ws/terminal`, relayed by this server; one
+  connection per session however many views show it, with flow control
+  carried through. A dropped connection retries for two minutes, then says so.
+- Chats open in the chat view through its `/ws/chat`, retried the same way
+  while the chat stays open. Messages from agents
+  (`aos send`) and schedules aren't relayed to another machine's chats: they'd
+  arrive there as yours.
+- The orchestrator asks that machine for a linked task's screen before
+  clearing it; a screen it can't get counts as possibly blocked.
+- ssh stays for machines that aren't linked. A row that can't be opened
+  (the machine unreachable, a name tmux can't attach) is greyed out and says why.
+
 ### Tasks on another machine
 
 A machine that runs its own AgentOS can take tasks. Run AgentOS there (any
@@ -743,8 +768,8 @@ Once linked:
 - **New task → Run on** picks the machine (`aos task --on devbox <project> ...`
   does the same). That machine creates the worktree, runs the agent and opens
   the PR on its own. This one lists the task in the sidebar and Tasks with its
-  live state, attaches its terminal over ssh, and sends sign-off and drop to
-  it (pinned to the reviewed commit).
+  live state, attaches its terminal through that machine's AgentOS, and sends
+  sign-off and drop to it (pinned to the reviewed commit).
 - **Move** carries a running task between this machine and a linked one,
   either way. The source stops the agent, commits anything uncommitted as
   `wip: moving to <machine>`, pushes the branch and hands over Claude's

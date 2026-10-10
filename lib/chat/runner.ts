@@ -63,6 +63,8 @@ import {
 import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
 import { DEMO_REFUSAL, demoMode } from "../security/demo";
+import { getHost } from "../hosts";
+import { hostLink } from "../hosts/remote-api";
 
 export { setChatAccess, setChatModel, setChatPlan } from "./settings";
 
@@ -159,8 +161,17 @@ function emitQueue(sessionId: string): void {
 function checkChattable(session: Session): void {
   if (!chatDriverFor(session.agent_type))
     throw new Error(`${session.agent_type} sessions can't run as chat yet`);
-  if (session.host_id && session.host_id !== "local")
-    throw new Error("Chat runs on this machine only for now");
+  if (session.host_id && session.host_id !== "local") {
+    // A linked machine's AgentOS runs its own chats, and the chat view
+    // reaches them through it (./peer-relay). What's sent from here by an
+    // agent or a schedule isn't relayed: it would arrive there as yours.
+    const name = getHost(session.host_id)?.name ?? "That machine";
+    throw new Error(
+      hostLink(session.host_id)
+        ? `${name}'s AgentOS runs this chat; open it to send from here`
+        : `${name} isn't linked to its AgentOS; link it in Machines to chat with its sessions`
+    );
+  }
 }
 
 // The session's worker, connected; started first if none is running,

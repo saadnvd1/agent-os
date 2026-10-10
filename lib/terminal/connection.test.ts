@@ -54,7 +54,34 @@ vi.mock("../tasks/start", () => ({
 vi.mock("../agents/launch", () => ({
   agentEnv: () => ({ AGENTOS_SESSION_ID: "x" }),
 }));
-vi.mock("../hosts", () => ({ sshTargetFor: () => null }));
+// Machines: "box" is linked to its AgentOS, "old" is reached over ssh only.
+vi.mock("../hosts", () => ({
+  sshTargetFor: (id?: string) =>
+    id === "box" ? "me@box" : id === "old" ? "me@old" : null,
+}));
+vi.mock("../hosts/remote-api", () => ({
+  hostLink: (id?: string) =>
+    id === "box"
+      ? { hostId: "box", hostName: "box", url: "http://box:3011", token: "t" }
+      : null,
+}));
+const peers = vi.hoisted(
+  () => [] as { link: { hostId: string }; spec: Record<string, unknown> }[]
+);
+vi.mock("./peer-pty", () => ({
+  PeerPty: class {
+    constructor(link: { hostId: string }, spec: Record<string, unknown>) {
+      peers.push({ link, spec });
+    }
+    onData() {}
+    onExit() {}
+    write() {}
+    resize() {}
+    pause() {}
+    resume() {}
+    kill() {}
+  },
+}));
 
 const { serveTerminal, SHELL_AFTER_MS } = await import("./connection");
 
@@ -80,11 +107,64 @@ const isAttach = (p: (typeof ptys)[number]) =>
 beforeEach(() => {
   vi.useFakeTimers();
   ptys.length = 0;
+  peers.length = 0;
   pending.clear();
 });
 afterEach(() => vi.useRealTimers());
 
 describe("serveTerminal", () => {
+  it("attaches a linked machine's session through its AgentOS, not ssh", () => {
+    const { say, ws, rescan } = connect();
+    say({
+      type: "attach",
+      spec: { sessionName: "main", hostId: "box", attachOnly: true },
+    });
+    expect(ptys).toHaveLength(0);
+    expect(peers).toHaveLength(1);
+    expect(peers[0].link.hostId).toBe("box");
+    expect(peers[0].spec.sessionName).toBe("main");
+    expect(rescan).not.toHaveBeenCalled();
+    ws.emit("close");
+  });
+
+  it("falls back to ssh for a machine that isn't linked", () => {
+    const { say, ws } = connect();
+    say({
+      type: "attach",
+      spec: { sessionName: "main", hostId: "old", attachOnly: true },
+    });
+    expect(peers).toHaveLength(0);
+    expect(ptys).toHaveLength(1);
+    expect(ptys[0].file).toBe("ssh");
+    expect(ptys[0].args).toContain("me@old");
+    ws.emit("close");
+  });
+
+  it("keeps a local and a linked session of the same name apart", () => {
+    const a = connect();
+    const b = connect();
+    a.say({ type: "attach", spec: { sessionName: "same", attachOnly: true } });
+    b.say({
+      type: "attach",
+      spec: { sessionName: "same", hostId: "box", attachOnly: true },
+    });
+    expect(ptys.filter(isAttach)).toHaveLength(1);
+    expect(peers).toHaveLength(1);
+    a.ws.emit("close");
+    b.ws.emit("close");
+  });
+
+  it("refuses a tmux name a linked machine couldn't attach", () => {
+    const { say, sent, ws } = connect();
+    say({
+      type: "attach",
+      spec: { sessionName: "bad;name", hostId: "box", attachOnly: true },
+    });
+    expect(peers).toHaveLength(0);
+    expect(String(sent[0]?.data)).toContain("Invalid tmux session name");
+    ws.emit("close");
+  });
+
   it("never starts a shell for a view that attaches at once", () => {
     const { say, ws, rescan } = connect();
     say({ type: "attach", spec: { sessionName: "s1", attachOnly: true } });

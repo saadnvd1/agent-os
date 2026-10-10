@@ -13,6 +13,8 @@
 import { db } from "../db";
 import { chatState } from "../chat/runner";
 import { statusDetector } from "../status-detector";
+import { hostLink } from "../hosts/remote-api";
+import { peerStatus } from "../hosts/peer-sessions";
 import { getWorkspace } from "../workspaces";
 import { workspaceSessions } from "./facts";
 import { addNote } from "./notes";
@@ -59,11 +61,17 @@ export async function runningCount(
       running.add(s.id);
       continue;
     }
-    const busy =
-      s.view === "chat"
+    const host = s.host_id || "local";
+    // A linked machine's task counts as running unless that machine says
+    // it isn't: the brake errs toward holding starts.
+    const busy = hostLink(host)
+      ? peerStatus(host, s.id) !== "idle" &&
+        peerStatus(host, s.id) !== "waiting"
+      : s.view === "chat"
         ? chatState(s.id) === "running"
-        : statusDetector.sessionExists(s.tmux_name) &&
-          (await statusDetector.getStatus(s.tmux_name)) === "running";
+        : statusDetector.sessionExists(s.tmux_name, host) &&
+          (await statusDetector.getStatus(s.tmux_name, undefined, host)) ===
+            "running";
     if (busy) running.add(s.id);
   }
   for (const { target } of startsSince(workspaceId, now - WARMUP_MS))

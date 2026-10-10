@@ -1,7 +1,13 @@
 import type { EventEmitter } from "events";
 import * as pty from "node-pty";
-import { buildAttachProcess, type AttachSpec } from "../hosts/attach";
+import {
+  buildAttachProcess,
+  buildTmuxAttachCommand,
+  type AttachSpec,
+} from "../hosts/attach";
 import { sshTargetFor } from "../hosts";
+import { hostLink } from "../hosts/remote-api";
+import { PeerPty } from "./peer-pty";
 import { agentEnv } from "../agents/launch";
 import { launchPending } from "../tasks/start";
 import {
@@ -147,7 +153,24 @@ export function serveTerminal(
       }
       // Local sessions join the agent bus: who they are and where AgentOS is.
       if (spec.sessionId && !sshTarget) spec.env = agentEnv(spec.sessionId);
-      const { file, args } = buildAttachProcess(spec, sshTarget, shell);
+      // A linked machine's session attaches through its own AgentOS; ssh is
+      // only for machines that aren't linked.
+      const link = sshTarget ? hostLink(spec.hostId) : null;
+      // Checked here too: a name the other side would refuse fails now.
+      if (link) buildTmuxAttachCommand(spec);
+      const spawnAttach = link
+        ? () => new PeerPty(link, spec, cols, rows)
+        : (() => {
+            const { file, args } = buildAttachProcess(spec, sshTarget, shell);
+            return () =>
+              pty.spawn(file, args, {
+                name: "xterm-256color",
+                cols,
+                rows,
+                cwd: process.env.HOME || "/",
+                env,
+              });
+          })();
       cancelShell();
       const previous = own;
       own = null;
@@ -170,19 +193,7 @@ export function serveTerminal(
       const key = `${spec.hostId || "local"}:${spec.sessionName}`;
       const shared_ = shared.open(
         key,
-        (onGone) =>
-          new SharedAttach(
-            pty.spawn(file, args, {
-              name: "xterm-256color",
-              cols,
-              rows,
-              cwd: process.env.HOME || "/",
-              env,
-            }),
-            cols,
-            rows,
-            onGone
-          )
+        (onGone) => new SharedAttach(spawnAttach(), cols, rows, onGone)
       );
       view = { attach: shared_, viewer };
       shared_.join(viewer);

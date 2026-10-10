@@ -85,7 +85,12 @@ export function TaskRow({ task }: { task: TaskView }) {
           <Button
             size="sm"
             variant="outline"
+            // Its machine can't be reached: say why rather than open nothing.
+            aria-disabled={!!task.hostError}
+            title={task.hostError ?? undefined}
+            className={cn(task.hostError && "cursor-not-allowed opacity-60")}
             onClick={() => {
+              if (task.hostError) return;
               tmuxAttachActions.request(task.tmuxName, task.hostId ?? "local");
               tasksUiActions.setPanelOpen(false);
             }}

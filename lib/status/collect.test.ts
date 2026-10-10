@@ -17,6 +17,8 @@ import {
 const SID = "0b5f4c1e-1111-4222-8333-944445555666";
 const NAME = `claude-${SID}`;
 let fg = "claude";
+// More listed sessions, on other machines.
+let extra: { name: string; hostId: string }[] = [];
 const screen = vi.fn(async (): Promise<string> => "running");
 const screenNeed = vi.fn(
   (_name: string, _screen: string, _opts: object): ScreenNeed | null => null
@@ -41,7 +43,7 @@ vi.mock("@/lib/status-detector", async (importOriginal) => ({
     clearUnsent: (name: string) => clearUnsent(name),
     signature: () => "same",
     refreshCache: async () => {},
-    listSessions: async () => [{ name: NAME }],
+    listSessions: async () => [{ name: NAME, hostId: "local" }, ...extra],
     cleanup: () => {},
     hostErrors: () => ({}),
     getStatus: () => screen(),
@@ -181,7 +183,10 @@ describe("collectStatuses", () => {
       detail: "Which one?",
       unread: false,
     });
-    expect(screenNeed.mock.calls[0][2]).toEqual({ question: true });
+    expect(screenNeed.mock.calls[0][2]).toEqual({
+      question: true,
+      hostId: "local",
+    });
     const touched = () =>
       (
         getDb()
@@ -208,7 +213,10 @@ describe("collectStatuses", () => {
       detail: "fix the test",
     });
     // Its own questions come as reports, not from the screen.
-    expect(screenNeed.mock.calls[0][2]).toEqual({ question: false });
+    expect(screenNeed.mock.calls[0][2]).toEqual({
+      question: false,
+      hostId: "local",
+    });
 
     screenNeed.mockClear();
     applyProgramReport(NAME, { state: "working", id: "" }, "claude");
@@ -275,6 +283,37 @@ describe("collectStatuses", () => {
       await collectStatuses();
       expect(clearUnsent, state).toHaveBeenCalledWith(NAME);
       expect(screenNeed).not.toHaveBeenCalled();
+    }
+  });
+
+  it("takes a linked machine's sessions' state from it, never its screens", async () => {
+    const { linkedHost } = await import("@/lib/__fixtures__/linked-host");
+    const host = linkedHost("http://127.0.0.1:9", "tok");
+    const mirror = "7c1d2e3f-aaaa-4bbb-8ccc-dddd00001111";
+    getDb()
+      .prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id) VALUES (?, 'there', 'there', '/tmp', ?)`
+      )
+      .run(mirror, host.hostId);
+    (
+      globalThis as unknown as {
+        __agentosPeerSessions: {
+          statuses: Map<string, { at: number; byId: object }>;
+        };
+      }
+    ).__agentosPeerSessions.statuses.set(host.hostId, {
+      at: Date.now(),
+      byId: { [mirror]: { status: "waiting" } },
+    });
+    extra = [{ name: "there", hostId: host.hostId }];
+    captured.mockClear();
+    try {
+      const { statuses } = await collectStatuses();
+      expect(statuses[mirror]).toMatchObject({ status: "waiting" });
+      expect(captured.mock.calls.map((c) => c[0])).not.toContain("there");
+    } finally {
+      extra = [];
+      host.remove();
     }
   });
 });

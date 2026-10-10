@@ -18,6 +18,8 @@ import { hostExecFile, listHosts } from "./hosts";
 import { WORKING_LINE } from "./claude-working-line";
 import { controlManager } from "./tmux/control";
 import { isValidTmuxName } from "./hosts/attach";
+import { hostLink } from "./hosts/remote-api";
+import { peerTmuxSessions } from "./hosts/peer-sessions";
 
 // Configuration constants
 const CONFIG = {
@@ -207,6 +209,11 @@ interface SessionCache {
 
 const LIST_FORMAT =
   "#{session_name}\t#{session_activity}\t#{window_activity}\t#{session_path}\t#{session_attached}\t#{session_windows}\t#{pane_current_command}\t#{pane_pid}\t#{pane_title}";
+
+// Sessions are told apart by machine and name: two machines may each have
+// a "main", and neither hides the other.
+export const sessionKey = (hostId: string, name: string) =>
+  `${hostId}\t${name}`;
 
 async function listHostSessions(hostId: string): Promise<TmuxSessionInfo[]> {
   const { stdout } = await hostExecFile(
@@ -455,6 +462,8 @@ class SessionStatusDetector {
   // When each machine was last listed.
   private hostListedAt = new Map<string, number>();
   private refreshing: Promise<void> | null = null;
+  // Linked machines being asked right now (see refreshPeer).
+  private peersAsked = new Set<string>();
   private refreshed = new Set<() => void>();
 
   // One list-sessions per machine that's due, in parallel; the others keep
@@ -471,13 +480,21 @@ class SessionStatusDetector {
   private async list(): Promise<void> {
     const listedAt = Date.now();
     const watched = (controlManager()?.size() ?? 0) > 0;
-    const hosts = listHosts().filter((h) => {
+    const due = listHosts().filter((h) => {
       const last = this.hostListedAt.get(h.id) ?? 0;
       const every =
         h.id === "local" && watched
           ? CONFIG.WATCHED_CACHE_MS
           : CONFIG.CACHE_VALIDITY_MS;
       return listedAt - last >= every;
+    });
+    // A linked machine's AgentOS lists its own sessions, in the background:
+    // a slow one, or one that's asking this machine back, never holds up
+    // this listing. ssh is for the rest.
+    const hosts = due.filter((h) => {
+      const link = hostLink(h.id);
+      if (link) this.refreshPeer(link);
+      return !link;
     });
     const results = await Promise.allSettled(
       hosts.map((h) => listHostSessions(h.id))
@@ -486,7 +503,8 @@ class SessionStatusDetector {
     const fresh = new Set(hosts.map((h) => h.id));
     const data = new Map<string, TmuxSessionInfo>();
     for (const info of this.cache.data.values())
-      if (!fresh.has(info.hostId)) data.set(info.name, info);
+      if (!fresh.has(info.hostId))
+        data.set(sessionKey(info.hostId, info.name), info);
     const hostErrors = new Map(
       [...this.cache.hostErrors].filter(([id]) => !fresh.has(id))
     );
@@ -494,12 +512,14 @@ class SessionStatusDetector {
       const hostId = hosts[i].id;
       this.hostListedAt.set(hostId, listedAt);
       if (result.status === "fulfilled") {
-        for (const info of result.value) data.set(info.name, info);
+        for (const info of result.value)
+          data.set(sessionKey(info.hostId, info.name), info);
         return;
       }
       hostErrors.set(hostId, String(result.reason?.message || result.reason));
       for (const info of this.cache.data.values()) {
-        if (info.hostId === hostId) data.set(info.name, info);
+        if (info.hostId === hostId)
+          data.set(sessionKey(info.hostId, info.name), info);
       }
     });
 
@@ -509,7 +529,49 @@ class SessionStatusDetector {
       listedAt: hosts.length ? listedAt : this.cache.listedAt,
       updatedAt: Date.now(),
     };
-    if (hosts.length) for (const fn of this.refreshed) fn();
+    if (hosts.length) this.notifyRefreshed();
+  }
+
+  private refreshPeer(link: NonNullable<ReturnType<typeof hostLink>>): void {
+    const hostId = link.hostId;
+    if (this.peersAsked.has(hostId)) return;
+    this.peersAsked.add(hostId);
+    this.hostListedAt.set(hostId, Date.now());
+    void peerTmuxSessions(link)
+      .then(
+        (list) => {
+          const data = new Map(
+            [...this.cache.data].filter(([, i]) => i.hostId !== hostId)
+          );
+          for (const info of list)
+            data.set(sessionKey(info.hostId, info.name), info);
+          const hostErrors = new Map(this.cache.hostErrors);
+          hostErrors.delete(hostId);
+          this.cache = { ...this.cache, data, hostErrors };
+        },
+        (err) => {
+          // Its last known sessions stand; the error says why they're old.
+          const hostErrors = new Map(this.cache.hostErrors);
+          hostErrors.set(hostId, String(err?.message || err));
+          this.cache = { ...this.cache, hostErrors };
+        }
+      )
+      .finally(() => {
+        this.peersAsked.delete(hostId);
+        this.notifyRefreshed();
+      });
+  }
+
+  // A listener's throw is its own: it never rejects a listing, nor (from a
+  // background refresh no one awaits) takes the process down.
+  private notifyRefreshed(): void {
+    for (const fn of this.refreshed) {
+      try {
+        fn();
+      } catch (err) {
+        console.error("[status] refresh listener failed:", err);
+      }
+    }
   }
 
   /** The next refresh lists this machine again (a session came or went). */
@@ -524,21 +586,46 @@ class SessionStatusDetector {
     return () => this.refreshed.delete(fn);
   }
 
-  paneProcess(name: string): number | undefined {
-    return this.cache.data.get(name)?.pid || undefined;
-  }
-
-  sessionExists(name: string): boolean {
-    return this.cache.data.has(name);
-  }
-
-  getTimestamp(name: string): number {
-    return this.cache.data.get(name)?.activity || 0;
-  }
-
-  titleFor(name: string): string {
+  // A session by name on a machine; with no machine given, this one's
+  // first, then any (callers that only know a name mean a local session).
+  private info(name: string, hostId?: string): TmuxSessionInfo | undefined {
+    if (hostId) return this.cache.data.get(sessionKey(hostId, name));
     return (
-      controlManager()?.title(name) || this.cache.data.get(name)?.title || ""
+      this.cache.data.get(sessionKey("local", name)) ??
+      [...this.cache.data.values()].find((i) => i.name === name)
+    );
+  }
+
+  private hostOf(name: string, hostId?: string): string {
+    return this.info(name, hostId)?.hostId ?? hostId ?? "local";
+  }
+
+  private keyOf(name: string, hostId?: string): string {
+    return sessionKey(this.hostOf(name, hostId), name);
+  }
+
+  // This machine's tmux control client knows only this machine's sessions.
+  private control(name: string, hostId?: string) {
+    return this.hostOf(name, hostId) === "local" ? controlManager() : null;
+  }
+
+  paneProcess(name: string, hostId?: string): number | undefined {
+    return this.info(name, hostId)?.pid || undefined;
+  }
+
+  sessionExists(name: string, hostId?: string): boolean {
+    return !!this.info(name, hostId);
+  }
+
+  getTimestamp(name: string, hostId?: string): number {
+    return this.info(name, hostId)?.activity || 0;
+  }
+
+  titleFor(name: string, hostId?: string): string {
+    return (
+      this.control(name, hostId)?.title(name) ||
+      this.info(name, hostId)?.title ||
+      ""
     );
   }
 
@@ -546,8 +633,8 @@ class SessionStatusDetector {
     return this.cache.listedAt;
   }
 
-  foregroundFor(name: string): string | undefined {
-    return this.cache.data.get(name)?.command;
+  foregroundFor(name: string, hostId?: string): string | undefined {
+    return this.info(name, hostId)?.command;
   }
 
   // Changes whenever any session's output, title or program does, so a
@@ -555,13 +642,14 @@ class SessionStatusDetector {
   signature(): string {
     return [...this.cache.data.values()]
       .map(
-        (i) => `${i.name}:${i.activity}:${i.command}:${this.titleFor(i.name)}`
+        (i) =>
+          `${i.hostId}:${i.name}:${i.activity}:${i.command}:${this.titleFor(i.name, i.hostId)}`
       )
       .join("\n");
   }
 
   hostFor(name: string): string | undefined {
-    return this.cache.data.get(name)?.hostId;
+    return this.info(name)?.hostId;
   }
 
   async listSessions(): Promise<TmuxSessionInfo[]> {
@@ -579,9 +667,16 @@ class SessionStatusDetector {
   }
 
   // tmux run directly (no shell); "" when the pane is gone.
-  private async capture(name: string, colours: boolean): Promise<string> {
+  private async capture(
+    name: string,
+    colours: boolean,
+    hostId?: string
+  ): Promise<string> {
+    // A linked machine's screens are its AgentOS's to read, not ssh's.
+    const host = this.hostOf(name, hostId);
+    if (hostLink(host)) return "";
     try {
-      const { stdout } = await hostExecFile(this.hostFor(name), "tmux", [
+      const { stdout } = await hostExecFile(host, "tmux", [
         "capture-pane",
         ...(colours ? ["-e"] : []),
         "-t",
@@ -597,41 +692,43 @@ class SessionStatusDetector {
   // What's on screen now, read from tmux itself: what a gate decides on
   // (a BLOCKED: line) is never the kept copy. A watched session is asked
   // over its control client, so this still starts no process.
-  async capturePane(name: string): Promise<string> {
-    const asked = await controlManager()?.query(
+  async capturePane(name: string, hostId?: string): Promise<string> {
+    const asked = await this.control(name, hostId)?.query(
       name,
       `capture-pane -p -t =${name}:`
     );
     if (asked) return asked.join("\n").trim();
-    return (await this.capture(name, false)).trim();
+    return (await this.capture(name, false, hostId)).trim();
   }
 
   // The visible pane with its colours, for screenNeed and getStatus; read
   // again only when it may have changed (screenStillFresh), or always when
   // `fresh` (a reported question is being checked against the screen).
-  async captureScreen(name: string, fresh = false): Promise<string> {
+  async captureScreen(
+    name: string,
+    fresh = false,
+    hostId?: string
+  ): Promise<string> {
+    const control = this.control(name, hostId);
+    const key = this.keyOf(name, hostId);
     // Kept from the pane's own output by its control client: as current as
     // a capture, at no cost. Asked to be fresh (a reported question checked
     // against the screen), it's read from tmux, over the client if watched.
     if (!fresh) {
-      const live = controlManager()?.screen(name);
+      const live = control?.screen(name);
       if (live != null) return live.trimEnd();
     } else if (isValidTmuxName(name)) {
-      const asked = await controlManager()?.query(
+      const asked = await control?.query(
         name,
         `capture-pane -e -p -t =${name}:`
       );
       if (asked) return asked.join("\n").trimEnd();
     }
-    const output = this.cache.data.get(name)?.output ?? 0;
-    const cached = this.screens.get(name);
+    const output = this.info(name, hostId)?.output ?? 0;
+    const cached = this.screens.get(key);
     const now = Date.now();
     // Its control client saw nothing printed since that read: it holds.
-    if (
-      !fresh &&
-      cached &&
-      controlManager()?.printedSince(name, cached.at) === false
-    )
+    if (!fresh && cached && control?.printedSince(name, cached.at) === false)
       return cached.text;
     if (
       !fresh &&
@@ -639,8 +736,8 @@ class SessionStatusDetector {
       screenStillFresh(cached, output, this.cache.listedAt, now)
     )
       return cached.text;
-    const text = (await this.capture(name, true)).trimEnd();
-    this.screens.set(name, { output, at: now, text });
+    const text = (await this.capture(name, true, hostId)).trimEnd();
+    this.screens.set(key, { output, at: now, text });
     return text;
   }
 
@@ -653,9 +750,10 @@ class SessionStatusDetector {
   screenNeed(
     name: string,
     screen: string,
-    { question = true } = {},
+    { question = true, hostId }: { question?: boolean; hostId?: string } = {},
     now = Date.now()
   ): ScreenNeed | null {
+    const key = this.keyOf(name, hostId);
     const text = screenText(screen);
     const asked = question ? findQuestion(screen) : null;
     const typed =
@@ -664,12 +762,12 @@ class SessionStatusDetector {
       !checkWaitingPatterns(text)
         ? readInputBox(screen)
         : null;
-    if (!typed) this.unsent.delete(name);
+    if (!typed) this.unsent.delete(key);
     if (asked !== null) return { need: "answer", detail: clip(asked, 200) };
     if (!typed) return null;
-    const seen = this.unsent.get(name);
+    const seen = this.unsent.get(key);
     if (!seen || seen.text !== typed) {
-      this.unsent.set(name, { text: typed, since: now, shown: false });
+      this.unsent.set(key, { text: typed, since: now, shown: false });
       return null;
     }
     if (now - seen.since < UNSENT_MS) return null;
@@ -677,8 +775,8 @@ class SessionStatusDetector {
     return { need: "unsent", detail: clip(typed, 120) };
   }
 
-  clearUnsent(name: string): void {
-    this.unsent.delete(name);
+  clearUnsent(name: string, hostId?: string): void {
+    this.unsent.delete(this.keyOf(name, hostId));
   }
 
   /** Typed text that has just become unsent, and isn't shown yet. */
@@ -688,8 +786,8 @@ class SessionStatusDetector {
     return false;
   }
 
-  private getTracker(name: string, timestamp: number): StateTracker {
-    let tracker = this.trackers.get(name);
+  private getTracker(key: string, timestamp: number): StateTracker {
+    let tracker = this.trackers.get(key);
     if (!tracker) {
       tracker = {
         lastChangeTime: Date.now() - CONFIG.ACTIVITY_COOLDOWN_MS,
@@ -698,7 +796,7 @@ class SessionStatusDetector {
         spikeWindowStart: null,
         spikeChangeCount: 0,
       };
-      this.trackers.set(name, tracker);
+      this.trackers.set(key, tracker);
     }
     return tracker;
   }
@@ -765,21 +863,23 @@ class SessionStatusDetector {
 
   async getStatus(
     sessionName: string,
-    screen?: string
+    screen?: string,
+    hostId?: string
   ): Promise<SessionStatus> {
     await this.refreshCache();
+    const key = this.keyOf(sessionName, hostId);
 
     // Dead check
-    if (!this.sessionExists(sessionName)) {
-      this.trackers.delete(sessionName);
+    if (!this.sessionExists(sessionName, hostId)) {
+      this.trackers.delete(key);
       return "dead";
     }
 
-    const timestamp = this.getTimestamp(sessionName);
-    const tracker = this.getTracker(sessionName, timestamp);
+    const timestamp = this.getTimestamp(sessionName, hostId);
+    const tracker = this.getTracker(key, timestamp);
     const content =
       screen === undefined
-        ? await this.capturePane(sessionName)
+        ? await this.capturePane(sessionName, hostId)
         : screenText(screen);
 
     // 1. Busy indicators in last 10 lines (highest priority - Claude is actively working)
@@ -811,8 +911,8 @@ class SessionStatusDetector {
     return this.getIdleOrWaiting(tracker);
   }
 
-  acknowledge(sessionName: string): void {
-    const tracker = this.trackers.get(sessionName);
+  acknowledge(sessionName: string, hostId?: string): void {
+    const tracker = this.trackers.get(this.keyOf(sessionName, hostId));
     if (tracker) tracker.acknowledged = true;
   }
 
@@ -825,15 +925,9 @@ class SessionStatusDetector {
   }
 
   cleanup(): void {
-    for (const [name] of this.trackers) {
-      if (!this.sessionExists(name)) this.trackers.delete(name);
-    }
-    for (const name of this.unsent.keys()) {
-      if (!this.sessionExists(name)) this.unsent.delete(name);
-    }
-    for (const name of this.screens.keys()) {
-      if (!this.sessionExists(name)) this.screens.delete(name);
-    }
+    for (const map of [this.trackers, this.unsent, this.screens])
+      for (const key of map.keys())
+        if (!this.cache.data.has(key)) map.delete(key);
   }
 }
 

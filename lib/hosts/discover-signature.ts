@@ -1,6 +1,7 @@
 import { getDb, queries, type Project, type Session } from "../db";
 import { statusDetector } from "../status-detector";
 import { discoverSessions } from "./discover";
+import { peerManagedSessions } from "./peer-sessions";
 
 // What the discovered-sessions list shows, minus activity times: when this
 // changes, browsers refetch /api/tmux/discover (pushed as "discovered").
@@ -10,10 +11,13 @@ export function discoveredSignature(): string {
   const found = discoverSessions(
     statusDetector.cachedSessions(),
     queries.getAllProjects(db).all() as Project[],
-    queries.getAllSessions(db).all() as Session[]
+    queries.getAllSessions(db).all() as Session[],
+    peerManagedSessions()
   );
   return JSON.stringify([
-    found.map((s) => [s.hostId, s.name, s.projectId, s.path]).sort(),
+    found
+      .map((s) => [s.hostId, s.name, s.projectId, s.path, s.peer?.state])
+      .sort(),
     statusDetector.hostErrors(),
   ]);
 }

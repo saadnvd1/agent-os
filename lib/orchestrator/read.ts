@@ -6,6 +6,8 @@ import { resolveRef } from "../bus/resolve";
 import { previousNames } from "../session-names";
 import { hostExec } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
+import { hostLink } from "../hosts/remote-api";
+import { peerPane } from "../hosts/peer-sessions";
 import { workspaceSessions } from "./facts";
 import { untrusted } from "./untrusted";
 
@@ -90,11 +92,17 @@ export async function readSession(
     const body = text ? untrusted(s.name, tail(text, n)) : "(no messages yet)";
     return `${s.name} (chat), last ${n} lines:\n${body}`;
   }
+  const link = hostLink(s.host_id);
+  if (link) {
+    const lines = await peerPane(link, s.id);
+    const body = lines ? tail(lines.join("\n"), n) : "";
+    return `${s.name} (terminal on ${link.hostName}), last ${n} lines:\n${body ? untrusted(s.name, body) : "(couldn't be read)"}`;
+  }
   await statusDetector.refreshCache();
-  if (!statusDetector.sessionExists(s.tmux_name))
+  if (!statusDetector.sessionExists(s.tmux_name, s.host_id || "local"))
     return `${s.name} (terminal): its terminal isn't running.`;
   const { stdout: pane } = await hostExec(
-    statusDetector.hostFor(s.tmux_name),
+    s.host_id || "local",
     `tmux capture-pane -t ${shellQuote(`=${s.tmux_name}:`)} -p -J -S -${n}`
   );
   const body = tail(pane, n);

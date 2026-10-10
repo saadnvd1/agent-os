@@ -31,6 +31,7 @@ import {
 import { clientSend } from "./client-send";
 import { DEMO_CHAT_READS, handleDemoChat } from "./demo";
 import { titleChatFromMessage } from "../session-titles";
+import { peerChatLink, relayChatSocket } from "./peer-relay";
 import type {
   ChatClientMessage,
   ChatServerMessage,
@@ -41,6 +42,8 @@ export interface ChatSocket {
   on(event: "message", fn: (raw: Buffer) => void): unknown;
   on(event: "close" | "error", fn: () => void): unknown;
   close(code?: number, reason?: string): void;
+  // What's queued to the browser and not yet sent (a real socket has it).
+  bufferedAmount?: number;
 }
 
 // Closed because the session it watched no longer exists.
@@ -94,6 +97,18 @@ export function serveChatSocket(
   };
 
   if (!sessionExists(sessionId)) return gone();
+  // A linked machine's session: its own AgentOS serves the chat.
+  const link = demo ? null : peerChatLink(sessionId);
+  if (link) {
+    const paged = params.get("paged");
+    return relayChatSocket(
+      ws,
+      link,
+      { session: sessionId, ...(paged && { paged }) },
+      send,
+      (message) => reply(errorItem(message))
+    );
+  }
   try {
     unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
   } catch (err) {

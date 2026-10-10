@@ -10,6 +10,7 @@ import {
   plainText,
   readInputBox,
   statusDetector,
+  sessionKey,
   type SessionStatus,
 } from "../status-detector";
 import type { AgentType } from "../providers";
@@ -32,6 +33,8 @@ import type { SessionNeed } from "../sidebar/shelves";
 import { openAskCount } from "../orchestrator/asks";
 import { lastUserTask } from "../chat/store";
 import { hostExecFile, isRemoteHost } from "../hosts";
+import { linkedHostIds } from "../hosts/remote-api";
+import { peerStatus } from "../hosts/peer-sessions";
 import {
   applyProgramReport,
   dropProgramTransient,
@@ -40,8 +43,8 @@ import {
 import type { ProgramSummary } from "../program-status/records";
 
 // tmux run directly, no shell; a failure reads as empty output.
-const tmuxOn = (sessionName: string, args: string[]) =>
-  hostExecFile(statusDetector.hostFor(sessionName), "tmux", args).catch(() => ({
+const tmuxOn = (hostId: string, args: string[]) =>
+  hostExecFile(hostId, "tmux", args).catch(() => ({
     stdout: "",
   }));
 
@@ -67,18 +70,25 @@ export interface StatusSnapshot {
   hostErrors: Record<string, string>;
 }
 
-async function getTmuxSessions(): Promise<string[]> {
+// Sessions whose screens are read here: this machine's, and those of
+// machines reached over ssh. A linked machine reads its own and says.
+async function getTmuxSessions(): Promise<{ name: string; hostId: string }[]> {
   const sessions = await statusDetector.listSessions();
-  return sessions.map((s) => s.name);
+  const linked = linkedHostIds();
+  return sessions
+    .filter((s) => !linked.has(s.hostId))
+    .map((s) => ({ name: s.name, hostId: s.hostId }));
 }
 
 // A session watched through control mode answers over its client: no
 // process started. Others are asked with `tmux` as before.
 async function askTmux(
   sessionName: string,
+  hostId: string,
   args: string[]
 ): Promise<{ stdout: string }> {
-  const lines = await controlManager()?.query(
+  const control = hostId === "local" ? controlManager() : null;
+  const lines = await control?.query(
     sessionName,
     // tmux's command syntax: plain words as they are, anything else (a
     // format's "#{...}") in single quotes. Session names are [\w.-] only.
@@ -86,12 +96,15 @@ async function askTmux(
       .map((a) => (/^[\w=:.-]+$/.test(a) ? a : `'${a.replace(/'/g, "")}'`))
       .join(" ")
   );
-  return lines ? { stdout: lines.join("\n") } : tmuxOn(sessionName, args);
+  return lines ? { stdout: lines.join("\n") } : tmuxOn(hostId, args);
 }
 
-async function getTmuxSessionCwd(sessionName: string): Promise<string | null> {
+async function getTmuxSessionCwd(
+  sessionName: string,
+  hostId: string
+): Promise<string | null> {
   try {
-    const { stdout } = await askTmux(sessionName, [
+    const { stdout } = await askTmux(sessionName, hostId, [
       "display-message",
       "-t",
       sessionName,
@@ -107,10 +120,11 @@ async function getTmuxSessionCwd(sessionName: string): Promise<string | null> {
 
 // Get Claude session ID from tmux environment variable
 async function getClaudeSessionIdFromEnv(
-  sessionName: string
+  sessionName: string,
+  hostId: string
 ): Promise<string | null> {
   try {
-    const { stdout } = await askTmux(sessionName, [
+    const { stdout } = await askTmux(sessionName, hostId, [
       "show-environment",
       "-t",
       sessionName,
@@ -151,12 +165,14 @@ export function resumeIdWait(
 
 async function getClaudeSessionId(
   sessionName: string,
+  hostId: string,
   agent: AgentType
 ): Promise<string | null> {
-  const cached = claudeIds.get(sessionName);
+  const key = sessionKey(hostId, sessionName);
+  const cached = claudeIds.get(key);
   if (cached && Date.now() - cached.at < cached.wait) return cached.id;
-  const id = await findResumeIdFor(sessionName, agent);
-  claudeIds.set(sessionName, {
+  const id = await findResumeIdFor(sessionName, hostId, agent);
+  claudeIds.set(key, {
     id,
     at: Date.now(),
     wait: resumeIdWait(cached, id),
@@ -168,14 +184,15 @@ async function getClaudeSessionId(
 // its environment; every agent's session files say it on this machine.
 async function findResumeIdFor(
   sessionName: string,
+  hostId: string,
   agent: AgentType
 ): Promise<string | null> {
   if (agent === "claude") {
-    const envId = await getClaudeSessionIdFromEnv(sessionName);
+    const envId = await getClaudeSessionIdFromEnv(sessionName, hostId);
     if (envId) return envId;
   }
-  if (isRemoteHost(statusDetector.hostFor(sessionName))) return null;
-  const cwd = await getTmuxSessionCwd(sessionName);
+  if (isRemoteHost(hostId)) return null;
+  const cwd = await getTmuxSessionCwd(sessionName, hostId);
   return cwd ? findResumeId(agent, cwd) : null;
 }
 
@@ -235,50 +252,53 @@ async function collect(): Promise<StatusSnapshot> {
     sessions,
     db
       .prepare(
-        `SELECT id, tmux_name, agent_type FROM sessions WHERE archived_at IS NULL AND (view IS NULL OR view != 'chat')`
+        `SELECT id, tmux_name, agent_type, host_id FROM sessions WHERE archived_at IS NULL AND (view IS NULL OR view != 'chat')`
       )
       .all() as {
       id: string;
       tmux_name: string | null;
       agent_type: string | null;
+      host_id: string | null;
     }[],
     (name) => UUID_PATTERN.test(name),
     getSessionIdFromName
   );
-  const paneOf = new Map(panes.map((p) => [p.name, p]));
-  const managedSessions = panes.map((p) => p.name);
 
   const statusMap: Record<string, SessionStatusResponse> = {};
   const sessionsToUpdate: string[] = [];
 
   // Process all sessions in parallel for speed
-  const sessionPromises = managedSessions.map(async (sessionName) => {
+  const sessionPromises = panes.map(async (pane) => {
+    const { name: sessionName, hostId } = pane;
+    // Programs report their state (OSC 7501) only from this machine's panes.
+    const local = hostId === "local";
+    const programOf = () => (local ? programSummary(sessionName) : null);
     // Working and blocked end with the program that reported them.
-    const fg = statusDetector.foregroundFor(sessionName);
-    if (fg) dropProgramTransient(sessionName, fg, statusDetector.listedAt());
-    const pane = paneOf.get(sessionName);
+    const fg = statusDetector.foregroundFor(sessionName, hostId);
+    if (fg && local)
+      dropProgramTransient(sessionName, fg, statusDetector.listedAt());
     const agentType =
-      pane?.agentType ?? getAgentTypeFromSessionName(sessionName);
+      pane.agentType ?? getAgentTypeFromSessionName(sessionName);
     // A reported question is checked against the screen as it is now.
-    const asked = programSummary(sessionName)?.state === "blocked";
+    const asked = programOf()?.state === "blocked";
     const [screen, claudeSessionId] = await Promise.all([
-      statusDetector.captureScreen(sessionName, asked),
-      getClaudeSessionId(sessionName, agentType),
+      statusDetector.captureScreen(sessionName, asked, hostId),
+      getClaudeSessionId(sessionName, hostId, agentType),
     ]);
     // Read after the screen: a question reported meanwhile is still within
     // its grace and isn't taken as dismissed.
-    let program = programSummary(sessionName);
+    let program = programOf();
     if (questionDismissed(program, screen)) {
       applyProgramReport(sessionName, {
         state: "idle",
         id: "",
         app: program?.app,
       });
-      program = programSummary(sessionName);
+      program = programOf();
     }
     const status = program
       ? null
-      : await statusDetector.getStatus(sessionName, screen);
+      : await statusDetector.getStatus(sessionName, screen, hostId);
     // A program that reports working or blocked knows better than its
     // screen; its own questions come as blocked reports.
     const busy =
@@ -286,14 +306,18 @@ async function collect(): Promise<StatusSnapshot> {
       program?.state === "blocked" ||
       status === "running";
     // Text typed before a send isn't unsent: forget it while it works.
-    if (busy) statusDetector.clearUnsent(sessionName);
+    if (busy) statusDetector.clearUnsent(sessionName, hostId);
     const screenNeed = busy
       ? null
-      : statusDetector.screenNeed(sessionName, screen, { question: !program });
-    const id = pane?.id ?? getSessionIdFromName(sessionName);
+      : statusDetector.screenNeed(sessionName, screen, {
+          question: !program,
+          hostId,
+        });
+    const id = pane.id;
 
     return {
       sessionName,
+      hostId,
       id,
       status,
       program,
@@ -309,6 +333,7 @@ async function collect(): Promise<StatusSnapshot> {
 
   for (const {
     sessionName,
+    hostId,
     id,
     status,
     program,
@@ -323,7 +348,7 @@ async function collect(): Promise<StatusSnapshot> {
       lastLine,
       claudeSessionId,
       agentType,
-      title: statusDetector.titleFor(sessionName),
+      title: statusDetector.titleFor(sessionName, hostId),
     };
     // A question on screen, or a message typed and never sent: it needs you
     // whether or not you've seen it, like a blocked program.
@@ -396,10 +421,32 @@ async function collect(): Promise<StatusSnapshot> {
       );
   }
 
+  // A linked machine's sessions: its AgentOS says how they are.
+  const linked = linkedHostIds();
+  const mirrors = (
+    db
+      .prepare(
+        `SELECT id, tmux_name, agent_type, host_id FROM sessions
+          WHERE archived_at IS NULL AND host_id IS NOT NULL AND host_id != 'local'`
+      )
+      .all() as Pick<Session, "id" | "tmux_name" | "agent_type" | "host_id">[]
+  ).filter((s) => linked.has(s.host_id));
+  for (const s of mirrors) {
+    const status = peerStatus(s.host_id, s.id);
+    if (status)
+      statusMap[s.id] = {
+        sessionName: s.tmux_name,
+        status,
+        agentType: s.agent_type,
+      };
+  }
+
   // Chat sessions have no tmux pane: their live conversation is the status.
+  // A linked machine's chats are its own (above).
   for (const session of db
     .prepare(
-      `SELECT * FROM sessions WHERE view = 'chat' AND archived_at IS NULL`
+      `SELECT * FROM sessions WHERE view = 'chat' AND archived_at IS NULL
+         AND (host_id IS NULL OR host_id = 'local')`
     )
     .all() as Session[]) {
     const state = chatState(session.id);
