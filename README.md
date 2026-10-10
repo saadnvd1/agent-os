@@ -255,8 +255,12 @@ the terminal resumes it (`claude --resume`, `codex resume`, `opencode
 terminal so only one side drives it. Each chat conversation runs in its own
 worker process (in tmux, like terminal sessions), so restarting or updating
 AgentOS never cuts off a turn: the server reconnects to running workers when
-it starts. A worker from an older build stays while its background work
-(subagents, shells) runs. A turn whose worker did go away mid-step is resumed
+it starts. A worker from an older build finishes its turn, and any
+background work (subagents, shells), then hands over at the next turn
+boundary: messages that arrive meanwhile wait in the queue, and a current
+worker resumes the same conversation with this build's tools and sends them.
+An orchestrator fed events mid-turn picks up new tools this way with nobody
+restarting it. A turn whose worker did go away mid-step is resumed
 once, with a note telling the agent to check what it was doing, and a task's
 orchestrator hears about it. History is kept in AgentOS.
 

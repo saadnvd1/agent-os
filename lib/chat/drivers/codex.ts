@@ -12,6 +12,7 @@ export const codexDriver: ChatDriver = {
   id: "codex",
   plan: false,
   inProcessTools: false,
+  atRest: false,
 
   async discover({ cwd, env }) {
     const rpc = new CodexRpc(

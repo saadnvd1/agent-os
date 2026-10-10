@@ -41,6 +41,19 @@ import type { WorkerCommand, WorkerEvent } from "./protocol";
 // moment a turn ends.
 const AFTER_STOP_MS = 2000;
 
+// How long a retiring worker waits, once at rest with nothing queued, for
+// the agent's guess at the next message before it goes.
+export const RETIRE_SUGGESTION_WAIT_MS = 2 * 60 * 1000;
+// How long, idle, a message the agent holds may go without starting a turn
+// before a retiring worker stops waiting for it (a background task's notice
+// the agent never turned into one).
+export const RETIRE_REST_WAIT_MS = 30 * 1000;
+
+// What the agent reads, ahead of its next message, in the worker after one
+// that retired cleanly (sessions.chat_restarted). Not shown in the chat.
+export const RESTARTED_NOTE =
+  "(AgentOS was updated and restarted you between turns; your tools are current.)";
+
 export class ChatHost {
   state: ChatState = "idle";
   readonly streaming = new Map<string, ChatItem>();
@@ -79,6 +92,21 @@ export class ChatHost {
   // should read next.
   private stopping: "turn" | "after" | null = null;
   private stoppedAt = 0;
+  // On an older build than the server's (a "retire"): it closes at the next
+  // turn boundary, once the agent holds no message it hasn't run and runs
+  // no background work, so a current worker resumes the conversation.
+  private retiring = false;
+  private retireTimer?: NodeJS.Timeout;
+  private retireWaited = false;
+  // Messages handed to the agent while a turn ran, and not yet started: it
+  // isn't at a boundary while it still holds one.
+  private behind = 0;
+  private restTimer?: NodeJS.Timeout;
+  // Background tasks seen running: one that ends is a notice the agent runs.
+  private runningTasks = new Set<string>();
+  // Whether its driver says when that is (lib/chat/driver atRest).
+  private atRest = true;
+  private restartedNote = false;
   readonly done: Promise<void>;
 
   constructor(
@@ -98,6 +126,7 @@ export class ChatHost {
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
+    this.atRest = driver.atRest !== false;
     const cwd = session.working_directory.replace(/^~/, os.homedir());
     const env = agentEnv(session.id);
     // Every chat can show visuals, asked for like any tool under its access
@@ -144,6 +173,7 @@ export class ChatHost {
       permissionMode: extras.permissionMode,
     });
     this.suggestion = session.chat_suggestion ?? null;
+    this.restartedNote = !!session.chat_restarted;
     // Sends that already made it in, from before a reconnect.
     for (const item of itemsOfKind(session.id, "user")) this.sent.add(item.id);
     // Nothing runs yet in a worker just started: a tool call still saved as
@@ -170,6 +200,12 @@ export class ChatHost {
             this.streaming.set(e.item.id, e.item);
           else this.streaming.delete(e.item.id);
           this.record(e.item);
+          if (e.item.kind === "task" && !e.item.ambient) {
+            if (e.item.status === "running")
+              this.runningTasks.add(e.item.taskId);
+            else if (this.runningTasks.delete(e.item.taskId)) this.behind++;
+            this.retireIfDone();
+          }
         } else if (e.type === "delta") {
           const item = this.streaming.get(e.id);
           if (item && "text" in item) item.text += e.text;
@@ -183,6 +219,7 @@ export class ChatHost {
         } else if (e.type === "suggestion") {
           // Kept on the session, so it's still there after a reload.
           this.setSuggestion(e.text);
+          this.retireIfDone();
         } else if (e.type === "usage") {
           this.usage = recordTurn(this.session, this.usage, e.totals);
           this.turnsRecorded++;
@@ -197,6 +234,9 @@ export class ChatHost {
           this.emit(e);
         } else if (e.type === "turn_start") {
           this.turnsStarted++;
+          if (this.behind) this.behind--;
+          clearTimeout(this.restTimer);
+          this.restTimer = undefined;
           if (this.nowPending && --this.nowPending)
             this.stopsUpTo = this.turnsStarted;
           // A turn the agent started itself (a background task's notice)
@@ -224,6 +264,7 @@ export class ChatHost {
               continue;
             }
             this.nowPending = 0;
+            if (!this.atRest) this.behind = 0;
             // The next queued message goes straight on, with no idle in
             // between: the server retires a stale worker the moment it
             // hears one, and would cut that turn off.
@@ -238,6 +279,12 @@ export class ChatHost {
           // A stopped turn can still settle an approval after it ended.
           if (e.state !== "running" || this.state !== "idle")
             this.setState(e.state);
+          this.retireIfDone();
+        } else if (e.type === "at_rest") {
+          // Every message it was given has run, those it took in mid-turn
+          // too.
+          this.behind = 0;
+          this.retireIfDone();
         } else {
           this.emit(e);
         }
@@ -274,7 +321,8 @@ export class ChatHost {
   // it's sent now. Claimed (taken off the queue) before it's sent, so it can
   // only go once.
   private sendQueued(now = false, id?: string): boolean {
-    if ((!now && this.busy()) || this.closed) return false;
+    if ((!now && this.busy()) || this.closed || this.handingOver())
+      return false;
     const next = claimNext(this.session.id, id);
     if (!next) return false;
     this.emit({ type: "queue" });
@@ -292,6 +340,7 @@ export class ChatHost {
   ): void {
     this.sent.add(m.id);
     this.currentTurn = m.id;
+    if (this.busy()) this.behind++;
     // Sent now, it stops the running turn, which still ends after this.
     if (!this.busy()) now = false;
     // A turn the agent has started and not ended is what stops.
@@ -299,9 +348,16 @@ export class ChatHost {
     if (handOver) this.stopsUpTo = this.turnsStarted;
     if (now) this.nowPending++;
     this.stopping = null;
+    const text = this.restartedNote ? `${RESTARTED_NOTE}\n\n${m.text}` : m.text;
+    if (this.restartedNote) {
+      this.restartedNote = false;
+      db.prepare(`UPDATE sessions SET chat_restarted = 0 WHERE id = ?`).run(
+        this.session.id
+      );
+    }
     const checkpoint = now
-      ? this.conversation.send(m.text, m.images, { now })
-      : this.conversation.send(m.text, m.images);
+      ? this.conversation.send(text, m.images, { now })
+      : this.conversation.send(text, m.images);
     const user: ChatItem = {
       id: m.id,
       kind: "user",
@@ -352,10 +408,19 @@ export class ChatHost {
         if (this.sent.has(cmd.id)) return;
         // Sent just as a move or Land took hold (lib/chat/hold): it waits
         // in the queue rather than start a turn the stop would cut short.
-        if (isHeld(this.session.id)) {
-          enqueue(this.session.id, cmd);
-          this.emit({ type: "queue" });
-          return;
+        // Or for the current worker that takes over from a retiring one.
+        const held = isHeld(this.session.id);
+        if (held || this.handingOver()) {
+          try {
+            enqueue(this.session.id, cmd);
+            this.emit({ type: "queue" });
+            this.retireIfDone();
+            return;
+          } catch (error) {
+            // A full queue can't lose it: retiring, the agent takes it as
+            // before, and the worker goes at a later boundary.
+            if (held) throw error;
+          }
         }
         this.sent.add(cmd.id);
         await this.modeChange.catch(() => {});
@@ -420,8 +485,11 @@ export class ChatHost {
         // The turn the reader asked to stop, not one that started since:
         // that one ends on its own, and this goes after it.
         if (this.busy()) {
-          if (cmd.during && cmd.during === this.currentTurn)
+          if (cmd.during && cmd.during === this.currentTurn) {
+            // Retiring, the turn just stops; the next worker sends it.
+            if (this.handingOver()) return this.conversation.interrupt();
             this.sendQueued(true, cmd.id);
+          }
           return;
         }
         this.sendQueued();
@@ -477,14 +545,60 @@ export class ChatHost {
           });
         }
         return;
+      case "retire":
+        this.retiring = true;
+        return this.retireIfDone();
       case "close":
         return this.close();
     }
   }
 
+  // A retiring worker goes once it's at a turn boundary: no turn running,
+  // no message handed to the agent still to run, no background work (it
+  // lives in the agent, and would be lost). With nothing queued it first
+  // waits a while for the agent's guess at the next message.
+  private retireIfDone(): void {
+    if (!this.handingOver() || this.closed || this.busy()) return;
+    if (this.behind) {
+      this.restTimer ??= setTimeout(() => {
+        this.restTimer = undefined;
+        this.behind = 0;
+        this.retireIfDone();
+      }, RETIRE_REST_WAIT_MS);
+      return;
+    }
+    const queued = listQueue(this.session.id).length > 0;
+    if (!queued && this.suggestion === null && !this.retireWaited) {
+      this.retireTimer ??= setTimeout(() => {
+        this.retireWaited = true;
+        this.retireIfDone();
+      }, RETIRE_SUGGESTION_WAIT_MS);
+      return;
+    }
+    // Retired cleanly (a crash sets nothing): the next worker says so.
+    db.prepare(`UPDATE sessions SET chat_restarted = 1 WHERE id = ?`).run(
+      this.session.id
+    );
+    this.close();
+  }
+
+  // Retiring, and nothing in the background keeps it: messages wait in the
+  // queue for the next worker. While background work runs (it can run for
+  // as long as a dev server does) the worker carries on as usual.
+  private handingOver(): boolean {
+    return (
+      this.retiring &&
+      !itemsOfKind(this.session.id, "task").some(
+        (t) => t.kind === "task" && t.status === "running" && !t.ambient
+      )
+    );
+  }
+
   onClose: () => void = () => {};
 
   close(): void {
+    clearTimeout(this.retireTimer);
+    clearTimeout(this.restTimer);
     this.closed = true;
     this.onClose();
     this.conversation.close();

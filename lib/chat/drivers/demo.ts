@@ -117,6 +117,7 @@ export const demoDriver: ChatDriver = {
   id: "demo",
   plan: false,
   inProcessTools: false,
+  atRest: false,
   start: () => demoConversation(),
   discover: async () => ({ commands: [], models: [] }),
 };

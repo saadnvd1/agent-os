@@ -80,6 +80,10 @@ export interface ChatDriver {
   // unless a driver says otherwise.
   plan?: boolean;
   inProcessTools?: boolean;
+  // Says when it has run every message it was given (an "at_rest" event),
+  // as Claude does. Without it, a turn's end is that point: a message sent
+  // mid-turn joins the turn or is run before it ends.
+  atRest?: boolean;
   start(options: ChatStartOptions): ChatConversation;
   // What the agent offers in a folder (its commands, skills and models),
   // without starting a conversation. Ends whatever it started once `signal`

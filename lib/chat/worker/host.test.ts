@@ -47,9 +47,12 @@ function fakeConversation() {
 
 let current: ReturnType<typeof fakeConversation>;
 let started: ChatStartOptions | undefined;
+// Whether the fake driver says when it's at rest, as Claude does.
+const driverFlags = vi.hoisted(() => ({ atRest: true }));
 vi.mock("../drivers", () => ({
   chatDriverFor: () => ({
     id: "fake",
+    atRest: driverFlags.atRest,
     start: (options: ChatStartOptions) => {
       started = options;
       return current;
@@ -1032,5 +1035,296 @@ describe("ChatHost cut-off tool calls", () => {
       item: expect.objectContaining({ id: "t1", status: "stopped" }),
     });
     host.close();
+  });
+});
+
+describe("ChatHost retiring after a deploy", () => {
+  const bus = {
+    from: "agentos",
+    origin: { kind: "event" as const, label: "AgentOS" },
+  };
+
+  it("waits out a running turn, queues what arrives meanwhile, and closes once at its end", async () => {
+    const { id, host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    expect(conversation.close).not.toHaveBeenCalled();
+    // An event mid-turn waits for the current worker, not this agent.
+    await host.handle({ type: "send", id: "user-2", text: "event", ...bus });
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    // Not sent by this worker: the next one sends it.
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    await host.done;
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("doesn't close at a turn's end while its agent holds a message it took in mid-turn", async () => {
+    const { host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "send", id: "user-2", text: "event", ...bus });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    // The agent runs it as its next turn, and then it's a boundary.
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("closes once the agent says it ran everything, when it took the message into the same turn", async () => {
+    const { host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "send", id: "user-2", text: "event", ...bus });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "at_rest" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("goes straight away when idle with a guess already in", async () => {
+    const { host, conversation } = await startHost();
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    await host.handle({ type: "retire" });
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("idle with nothing queued, waits for the agent's guess, then goes", async () => {
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({ type: "retire" });
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "suggestion", text: "run the tests" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("with no guess coming, goes after a while", async () => {
+    vi.useFakeTimers();
+    try {
+      const { RETIRE_SUGGESTION_WAIT_MS } = await import("./host");
+      const { host, conversation } = await startHost();
+      await host.handle({ type: "retire" });
+      vi.advanceTimersByTime(RETIRE_SUGGESTION_WAIT_MS - 1);
+      expect(conversation.close).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(conversation.close).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("while its background work runs, carries on as usual, and goes once it ends", async () => {
+    const { id, host, conversation } = await startHost();
+    const task: ChatItem = {
+      id: "task-1",
+      kind: "task",
+      taskId: "t1",
+      description: "dev server",
+      status: "running",
+      createdAt: 1,
+    };
+    conversation.events.push({ type: "item", item: task });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    await host.handle({ type: "retire" });
+    expect(conversation.close).not.toHaveBeenCalled();
+    // A message isn't held back for as long as the shell runs.
+    await host.handle({ type: "send", id: "user-1", text: "still there?" });
+    expect(conversation.send).toHaveBeenLastCalledWith(
+      "still there?",
+      undefined
+    );
+    expect(listQueue(id)).toEqual([]);
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({
+      type: "item",
+      item: { ...task, status: "completed" },
+    });
+    await tick();
+    // Its notice is the agent's next turn: that runs here first.
+    expect(conversation.close).not.toHaveBeenCalled();
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("a background task's notice that never starts a turn doesn't keep it for long", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { RETIRE_REST_WAIT_MS } = await import("./host");
+      const { host, conversation } = await startHost();
+      const task: ChatItem = {
+        id: "task-2",
+        kind: "task",
+        taskId: "t2",
+        description: "subagent",
+        status: "running",
+        createdAt: 1,
+      };
+      conversation.events.push({ type: "item", item: task });
+      conversation.events.push({ type: "suggestion", text: "next" });
+      await vi.advanceTimersByTimeAsync(0);
+      await host.handle({ type: "retire" });
+      conversation.events.push({
+        type: "item",
+        item: { ...task, status: "stopped" },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      vi.advanceTimersByTime(RETIRE_REST_WAIT_MS - 1);
+      expect(conversation.close).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(conversation.close).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("with the queue full, the agent takes a message as before rather than lose it", async () => {
+    const { MAX_QUEUED } = await import("../queued");
+    const { id, host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    for (let i = 0; i < MAX_QUEUED; i++)
+      await host.handle({ type: "send", id: `user-q${i}`, text: "e", ...bus });
+    expect(listQueue(id)).toHaveLength(MAX_QUEUED);
+    await host.handle({
+      type: "send",
+      id: "user-over",
+      text: "one more",
+      ...bus,
+    });
+    expect(conversation.send).toHaveBeenLastCalledWith("one more", undefined);
+    expect(listItems(id).some((i) => i.id === "user-over")).toBe(true);
+    host.close();
+  });
+
+  it("with a driver that never says it's at rest, a turn's end is the boundary", async () => {
+    driverFlags.atRest = false;
+    try {
+      const { host, conversation } = await startHost();
+      await host.handle({ type: "send", id: "user-1", text: "work" });
+      // Steered into the running turn, as Codex does.
+      await host.handle({ type: "send", id: "user-2", text: "also", ...bus });
+      await host.handle({ type: "retire" });
+      conversation.events.push({ type: "state", state: "idle" });
+      conversation.events.push({ type: "suggestion", text: "next" });
+      await tick();
+      expect(conversation.close).toHaveBeenCalledOnce();
+    } finally {
+      driverFlags.atRest = true;
+    }
+  });
+
+  it("send now stops the turn and leaves the message for the next worker", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "stop",
+      queue: true,
+    });
+    await host.handle({ type: "send_now", id: "user-2", during: "user-1" });
+    expect(conversation.interrupt).toHaveBeenCalledOnce();
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    host.close();
+  });
+
+  it("the worker after it resumes the conversation as the agent last named it", async () => {
+    const { id, host, conversation } = await startHost("orchestrator", {
+      resumeId: "conv-7",
+    });
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "resume_id", id: "conv-8" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    const { ChatHost } = await import("./host");
+    const session = getDb()
+      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .get(id) as Session;
+    current = fakeConversation();
+    const next = new ChatHost(session, () => {});
+    expect(started?.resumeId).toBe("conv-8");
+    next.close();
+  });
+
+  it("after a clean retire, the next worker tells the agent once, ahead of its next message", async () => {
+    const { RESTARTED_NOTE, ChatHost } = await import("./host");
+    const { id, host, conversation } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-0", text: "work" });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    const row = () =>
+      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+    // Kept in the database, so a server restart in between doesn't lose it,
+    // nor a next worker that goes before sending anything.
+    current = fakeConversation();
+    new ChatHost(row(), () => {}).close();
+    current = fakeConversation();
+    const next = new ChatHost(row(), () => {});
+    await next.handle({ type: "send", id: "user-1", text: "an event" });
+    expect(current.send).toHaveBeenLastCalledWith(
+      `${RESTARTED_NOTE}\n\nan event`,
+      undefined
+    );
+    // The chat shows what was sent, not the note.
+    expect(listItems(id).find((i) => i.id === "user-1")).toMatchObject({
+      text: "an event",
+    });
+    current.events.push({ type: "state", state: "idle" });
+    await tick();
+    await next.handle({ type: "send", id: "user-2", text: "another" });
+    expect(current.send).toHaveBeenLastCalledWith("another", undefined);
+    next.close();
+    current = fakeConversation();
+    const later = new ChatHost(row(), () => {});
+    await later.handle({ type: "send", id: "user-3", text: "later" });
+    expect(current.send).toHaveBeenLastCalledWith("later", undefined);
+    later.close();
+  });
+
+  it("a worker that goes any other way (a crash, a stop) leaves no note", async () => {
+    const { ChatHost } = await import("./host");
+    const { id, host } = await startHost("orchestrator");
+    await host.handle({ type: "send", id: "user-0", text: "work" });
+    await host.handle({ type: "retire" });
+    host.close();
+    current = fakeConversation();
+    const next = new ChatHost(
+      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      () => {}
+    );
+    await next.handle({ type: "send", id: "user-1", text: "hello" });
+    expect(current.send).toHaveBeenLastCalledWith("hello", undefined);
+    next.close();
   });
 });
