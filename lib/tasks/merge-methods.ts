@@ -49,3 +49,11 @@ export const METHOD_LABEL: Record<MergeMethod, string> = {
   merge: "merge commit",
   rebase: "rebase",
 };
+
+export interface MergeOverride {
+  projectId: string;
+  name: string;
+  // Only the fields each level sets.
+  project: MergeSettings;
+  config: MergeSettings;
+}

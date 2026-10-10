@@ -1,41 +1,9 @@
 "use client";
 
-import { Switch } from "@/components/ui/switch";
+import { SettingToggle as Toggle } from "@/components/Settings/SettingToggle";
 import { useNetworkQuery, useUpdateNetwork } from "@/data/devices";
 import { TailscaleCard } from "./TailscaleCard";
 import { ConnectCard } from "./ConnectCard";
-
-function Toggle({
-  title,
-  detail,
-  checked,
-  locked,
-  onChange,
-}: {
-  title: string;
-  detail: string;
-  checked: boolean;
-  locked: boolean;
-  onChange: (on: boolean) => void;
-}) {
-  return (
-    <label className="bg-muted/40 flex items-start gap-3 rounded-lg px-3 py-2.5">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-muted-foreground text-xs">
-          {detail}
-          {locked ? " Can't be changed from here." : ""}
-        </p>
-      </div>
-      <Switch
-        checked={checked}
-        disabled={locked}
-        onCheckedChange={onChange}
-        className="mt-0.5"
-      />
-    </label>
-  );
-}
 
 export function NetworkSection({
   open,
@@ -75,13 +43,6 @@ export function NetworkSection({
         onChange={(requirePairingOnTailnet) =>
           update.mutate({ requirePairingOnTailnet })
         }
-      />
-      <Toggle
-        title="Require my approval to merge sensitive or large PRs"
-        detail="PRs touching CI, deploys, secrets, build scripts, agent config or AgentOS's security code, or too big to review whole, wait for you to approve them with your passkey. Off, they merge through the usual gates, and a big PR is reviewed in parts."
-        checked={data.mergeApprovals.on}
-        locked={data.mergeApprovals.locked || !canManage}
-        onChange={(mergeApprovals) => update.mutate({ mergeApprovals })}
       />
       {update.error && (
         <p className="text-destructive text-xs">{update.error.message}</p>

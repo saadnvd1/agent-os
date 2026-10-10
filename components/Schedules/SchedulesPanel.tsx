@@ -11,18 +11,11 @@ import {
   Smartphone,
   Trash2,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useWorkspacesQuery } from "@/data/workspaces";
 import { useNotifySettings } from "@/data/notify";
-import { phoneNotifyUiActions } from "@/stores/phoneNotifyUi";
+import { settingsUiActions } from "@/stores/settingsUi";
 import {
   useArchiveSchedule,
   useRunSchedule,
@@ -215,7 +208,7 @@ function PhoneLine() {
   return (
     <button
       type="button"
-      onClick={() => phoneNotifyUiActions.setOpen(true)}
+      onClick={() => settingsUiActions.open("notifications")}
       className="text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg px-1 text-left text-xs md:min-h-8"
     >
       <Smartphone className="h-3.5 w-3.5 shrink-0" />
@@ -226,7 +219,8 @@ function PhoneLine() {
   );
 }
 
-export function SchedulesDialog() {
+// Settings > Schedules: one workspace's schedules, or all of them.
+export function SchedulesPanel() {
   const snap = useSnapshot(schedulesUi);
   const [chosen, setView] = useState<View>({ mode: "list" });
   // Opened from a session's "Schedule check-ins": straight to the form.
@@ -234,7 +228,7 @@ export function SchedulesDialog() {
     snap.draft && chosen.mode === "list" ? { mode: "form" } : chosen;
   const { data: schedules = [], isPending } = useSchedulesQuery(
     snap.workspaceId,
-    snap.open
+    true
   );
   const { data: workspaces = [] } = useWorkspacesQuery();
   const wsName = workspaces.find((w) => w.id === snap.workspaceId)?.name;
@@ -243,10 +237,6 @@ export function SchedulesDialog() {
       ? schedules.find((s) => s.id === view.id)
       : undefined;
 
-  const onOpenChange = (open: boolean) => {
-    schedulesUiActions.setOpen(open);
-    if (!open) setView({ mode: "list" });
-  };
   const back = () => {
     schedulesUiActions.clearDraft();
     setView(
@@ -257,92 +247,89 @@ export function SchedulesDialog() {
   };
 
   return (
-    <Dialog open={snap.open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-xl overflow-y-auto [&>*]:min-w-0">
-        <DialogHeader className="flex-row items-center gap-2 space-y-0 text-left">
-          {view.mode !== "list" && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Back"
-              className="-ml-2 h-11 w-11 md:h-8 md:w-8"
-              onClick={back}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          )}
-          <DialogTitle className="min-w-0 flex-1 truncate">
-            {view.mode === "form"
-              ? view.id
-                ? "Edit schedule"
-                : "New schedule"
-              : `Schedules${wsName ? ` · ${wsName}` : ""}`}
-          </DialogTitle>
-          {view.mode === "list" && (
-            <Button
-              size="sm"
-              className="mr-8 h-11 md:h-8"
-              onClick={() => setView({ mode: "form" })}
-            >
-              <Plus className="h-4 w-4" />
-              New
-            </Button>
-          )}
-        </DialogHeader>
-        <DialogDescription className="sr-only">
-          Schedules start agent work at set times.
-        </DialogDescription>
-
+    <div className="space-y-4 [&>*]:min-w-0">
+      <div className="flex items-center gap-2">
+        {view.mode !== "list" && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Back"
+            className="-ml-2 h-11 w-11 md:h-8 md:w-8"
+            onClick={back}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
+        <h3 className="min-w-0 flex-1 truncate text-sm font-medium">
+          {view.mode === "form"
+            ? view.id
+              ? "Edit schedule"
+              : "New schedule"
+            : wsName
+              ? `In ${wsName}`
+              : "In every workspace"}
+        </h3>
         {view.mode === "list" && (
-          <div className="space-y-2">
-            {isPending &&
-              [0, 1].map((i) => (
-                <div
-                  key={i}
-                  className="bg-muted/40 h-14 animate-pulse rounded-xl"
-                />
-              ))}
-            {!isPending && schedules.length === 0 && (
-              <div className="flex flex-col items-center gap-2 py-8 text-center">
-                <Clock className="text-primary h-6 w-6" />
-                <p className="text-muted-foreground max-w-xs text-sm">
-                  Nothing scheduled. A schedule starts a task or a session, or
-                  messages the orchestrator or any session, at the times you
-                  pick, whether AgentOS is open or not.
-                </p>
-              </div>
-            )}
-            {schedules.map((s) => (
-              <ScheduleRow
-                key={s.id}
-                s={s}
-                onOpen={() => setView({ mode: "detail", id: s.id })}
+          <Button
+            size="sm"
+            className="h-11 md:h-8"
+            onClick={() => setView({ mode: "form" })}
+          >
+            <Plus className="h-4 w-4" />
+            New
+          </Button>
+        )}
+      </div>
+
+      {view.mode === "list" && (
+        <div className="space-y-2">
+          {isPending &&
+            [0, 1].map((i) => (
+              <div
+                key={i}
+                className="bg-muted/40 h-14 animate-pulse rounded-xl"
               />
             ))}
-            {!isPending && <PhoneLine />}
-          </div>
-        )}
-        {view.mode === "detail" && (
-          <Detail
-            id={view.id}
-            onEdit={() => setView({ mode: "form", id: view.id })}
-            onGone={() => setView({ mode: "list" })}
-          />
-        )}
-        {view.mode === "form" && (!view.id || editing) && (
-          <ScheduleForm
-            key={view.id ?? snap.draft?.targetSessionId ?? "new"}
-            workspaceId={snap.workspaceId}
-            existing={editing}
-            draft={view.id ? null : snap.draft}
-            onDone={(id) => {
-              schedulesUiActions.clearDraft();
-              setView({ mode: "detail", id });
-            }}
-            onCancel={back}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+          {!isPending && schedules.length === 0 && (
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <Clock className="text-primary h-6 w-6" />
+              <p className="text-muted-foreground max-w-xs text-sm">
+                Nothing scheduled. A schedule starts a task or a session, or
+                messages the orchestrator or any session, at the times you pick,
+                whether AgentOS is open or not.
+              </p>
+            </div>
+          )}
+          {schedules.map((s) => (
+            <ScheduleRow
+              key={s.id}
+              s={s}
+              onOpen={() => setView({ mode: "detail", id: s.id })}
+            />
+          ))}
+          {!isPending && <PhoneLine />}
+        </div>
+      )}
+      {view.mode === "detail" && (
+        <Detail
+          id={view.id}
+          onEdit={() => setView({ mode: "form", id: view.id })}
+          onGone={() => setView({ mode: "list" })}
+        />
+      )}
+      {view.mode === "form" && (!view.id || editing) && (
+        <ScheduleForm
+          key={view.id ?? snap.draft?.targetSessionId ?? "new"}
+          workspaceId={snap.workspaceId}
+          existing={editing}
+          draft={view.id ? null : snap.draft}
+          onDone={(id) => {
+            schedulesUiActions.clearDraft();
+            setView({ mode: "detail", id });
+          }}
+          onCancel={back}
+        />
+      )}
+    </div>
   );
 }

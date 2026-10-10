@@ -1,14 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useSnapshot } from "valtio";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,11 +8,10 @@ import {
   useSaveTelegram,
   useTestNotify,
 } from "@/data/notify";
-import { phoneNotifyUi, phoneNotifyUiActions } from "@/stores/phoneNotifyUi";
 
 // Where failed schedule runs and `aos notify` messages go. The bot token is
 // write-only: the page only ever learns whether one is set.
-function Form() {
+export function PhoneNotifyForm() {
   const { data: settings, isPending } = useNotifySettings();
   const save = useSaveTelegram();
   const test = useTestNotify();
@@ -152,22 +143,5 @@ function Form() {
         )}
       </form>
     </div>
-  );
-}
-
-export function PhoneNotifyDialog() {
-  const snap = useSnapshot(phoneNotifyUi);
-  return (
-    <Dialog open={snap.open} onOpenChange={phoneNotifyUiActions.setOpen}>
-      <DialogContent className="max-h-[90dvh] max-w-md overflow-y-auto [&>*]:min-w-0">
-        <DialogHeader className="text-left">
-          <DialogTitle>Phone notifications</DialogTitle>
-          <DialogDescription className="sr-only">
-            Where AgentOS sends notifications for your phone.
-          </DialogDescription>
-        </DialogHeader>
-        {snap.open && <Form />}
-      </DialogContent>
-    </Dialog>
   );
 }

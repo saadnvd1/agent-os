@@ -10,7 +10,7 @@ import {
 import { TasksButton } from "@/components/Tasks/TasksButton";
 import { MessagesButton } from "@/components/Bus/MessagesButton";
 import { DocsButton } from "@/components/LumifyHub/Docs/DocsButton";
-import { NotificationSettings } from "@/components/NotificationSettings";
+import { NotificationsMenu } from "@/components/NotificationsMenu";
 import type { ViewProps } from "./types";
 import { newDraft } from "@/stores/drafts";
 import { paletteActions } from "@/stores/palette";
@@ -59,12 +59,7 @@ type AppActionsProps = Pick<
   | "sessions"
   | "sessionStatuses"
   | "activeSession"
-  | "showNotificationSettings"
-  | "setShowNotificationSettings"
   | "notificationSettings"
-  | "permissionGranted"
-  | "updateSettings"
-  | "requestPermission"
   | "attachToSession"
 >;
 
@@ -72,12 +67,7 @@ export function DesktopAppActions({
   sessions,
   sessionStatuses,
   activeSession,
-  showNotificationSettings,
-  setShowNotificationSettings,
   notificationSettings,
-  permissionGranted,
-  updateSettings,
-  requestPermission,
   attachToSession,
 }: AppActionsProps) {
   return (
@@ -102,16 +92,11 @@ export function DesktopAppActions({
           <p className="text-muted-foreground text-xs">⌘K</p>
         </TooltipContent>
       </Tooltip>
-      <NotificationSettings
-        open={showNotificationSettings}
-        onOpenChange={setShowNotificationSettings}
+      <NotificationsMenu
         settings={notificationSettings}
-        permissionGranted={permissionGranted}
         waitingSessions={sessions
           .filter((s) => sessionStatuses[s.id]?.status === "waiting")
           .map((s) => ({ id: s.id, name: s.name }))}
-        onUpdateSettings={updateSettings}
-        onRequestPermission={requestPermission}
         onSelectSession={(id) => {
           const session = sessions.find((s) => s.id === id);
           if (session) attachToSession(session);

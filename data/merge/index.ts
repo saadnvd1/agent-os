@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   MergeMethod,
+  MergeOverride,
   MergePolicy,
   MergeSettings,
   ResolvedMergePolicy,
@@ -15,6 +16,7 @@ export const mergeKeys = {
 export interface GlobalMergeState {
   settings: MergeSettings;
   defaults: MergePolicy;
+  overrides: MergeOverride[];
 }
 
 export interface ProjectMergeState {

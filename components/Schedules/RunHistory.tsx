@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { ScheduleRun, ScheduleView } from "@/lib/schedules";
 import { formatRunTime } from "@/lib/schedules/cron";
 import { cn } from "@/lib/utils";
-import { schedulesUiActions } from "@/stores/schedulesUi";
+import { settingsUiActions } from "@/stores/settingsUi";
 import { sessionOpenActions } from "@/stores/sessionOpen";
 
 const TONE = {
@@ -82,7 +82,7 @@ export function RunHistory({
                   type="button"
                   onClick={() => {
                     sessionOpenActions.request(r.session_id!);
-                    schedulesUiActions.setOpen(false);
+                    settingsUiActions.close();
                   }}
                   className="text-primary -mr-2 flex min-h-11 shrink-0 items-center gap-1 px-2 text-xs font-medium"
                 >

@@ -4,8 +4,6 @@ import { useSnapshot } from "valtio";
 import { useTheme } from "next-themes";
 import {
   Archive,
-  Bell,
-  Clock,
   Code,
   FolderGit2,
   FolderPlus,
@@ -17,8 +15,6 @@ import {
   MessagesSquare,
   Moon,
   Plus,
-  Smartphone,
-  GitMerge,
   Sun,
   Workflow,
 } from "lucide-react";
@@ -28,16 +24,13 @@ import { useWorkspacesQuery } from "@/data/workspaces";
 import { usePaletteCommands } from "@/hooks/usePaletteCommands";
 import { archivedUiActions } from "@/stores/archivedUi";
 import { busUiActions } from "@/stores/busUi";
-import { devicesUiActions } from "@/stores/devicesUi";
-import { mergeUiActions } from "@/stores/mergeUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { newDraft } from "@/stores/drafts";
 import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
-import { schedulesUiActions } from "@/stores/schedulesUi";
-import { phoneNotifyUiActions } from "@/stores/phoneNotifyUi";
 import { usageUiActions } from "@/stores/usageUi";
+import { settingsCommands } from "@/components/Settings/commands";
 import { DRAFT_KEYS } from "@/lib/drafts";
 
 const LAST_THEME = "agentOS-last-theme-";
@@ -61,12 +54,10 @@ export function useAppCommands({
   sessions,
   onSelectSession,
   onSearchCode,
-  onNotificationSettings,
 }: {
   sessions: Session[];
   onSelectSession: (session: Session) => void;
   onSearchCode: () => void;
-  onNotificationSettings?: () => void;
 }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { data: workspaces = [] } = useWorkspacesQuery();
@@ -155,22 +146,6 @@ export function useAppCommands({
       run: tasksUiActions.openPanel,
     },
     {
-      id: "app.schedules",
-      title: "Schedules",
-      group: "Go to",
-      keywords: ["cron", "timer", "recurring", "every day"],
-      icon: Clock,
-      run: () => schedulesUiActions.open(current?.id ?? null),
-    },
-    {
-      id: "app.phone-notifications",
-      title: "Phone notifications",
-      group: "Go to",
-      keywords: ["telegram", "notify", "alerts", "push"],
-      icon: Smartphone,
-      run: () => phoneNotifyUiActions.setOpen(true),
-    },
-    {
       id: "app.messages",
       title: "Messages",
       group: "Go to",
@@ -185,34 +160,7 @@ export function useAppCommands({
       icon: Archive,
       run: () => archivedUiActions.open(),
     },
-    {
-      id: "app.devices",
-      title: "Devices",
-      group: "Go to",
-      keywords: ["phone", "pair", "passkeys"],
-      icon: Smartphone,
-      run: devicesUiActions.open,
-    },
-    {
-      id: "app.merging",
-      title: "Merge settings",
-      group: "Settings",
-      keywords: ["merge", "squash", "rebase", "branch", "worktree"],
-      icon: GitMerge,
-      run: mergeUiActions.open,
-    },
-    ...(onNotificationSettings
-      ? [
-          {
-            id: "app.notifications",
-            title: "Notification settings",
-            group: "Settings",
-            keywords: ["settings", "alerts"],
-            icon: Bell,
-            run: onNotificationSettings,
-          },
-        ]
-      : []),
+    ...settingsCommands(current?.id ?? null),
     {
       id: "app.theme",
       title: dark ? "Switch to light theme" : "Switch to dark theme",
