@@ -32,7 +32,7 @@ const git = async (cwd: string, args: string[]) =>
 // same rule as lib/tasks/code-review.ts's ATTRIBUTION for PR bodies; a test
 // keeps the two agreeing.
 export const ATTRIBUTION_ERE =
-  "^[[:space:]]*(co-authored-by:.*(claude|anthropic)|claude-session:|🤖 generated with|[^[:alnum:]\"'`]*generated (with|by) \\[?claude code)";
+  "^[[:space:]]*(co-authored-by:.*(claude|anthropic)|claude-session:|🤖 generated with)|(^|[^[:alnum:]\"'`])generated (with|by) \\[?claude code";
 
 // The hooks husky installs; a project's own hook of any of these keeps
 // running. Not post-index-change or reference-transaction: those run on

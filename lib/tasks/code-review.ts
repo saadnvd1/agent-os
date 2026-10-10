@@ -23,11 +23,13 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 // The same rule as the commit-msg hook's ATTRIBUTION_ERE in
 // lib/worktree-hooks.ts; a test keeps the two agreeing.
 // Tested on the line with its indent trimmed, so nothing here backtracks
-// over leading whitespace. A footer starts its line, after markdown or an
-// emoji at most: prose that quotes one ("the "Generated with Claude Code"
-// footer") isn't one.
+// over leading whitespace. "Generated with Claude Code" counts anywhere in a
+// line (after HTML, a :robot: shortcode, a list number or a sentence, it
+// still renders as a footer) unless a quote or a letter sits right before it:
+// prose that quotes the footer ("the 'Generated with Claude Code' footer")
+// isn't one.
 export const ATTRIBUTION =
-  /^(?:co-authored-by:.*(?:claude|anthropic)|claude-session:|🤖 generated with|[^\p{L}\p{N}"'`]*generated (?:with|by) \[?claude code)/iu;
+  /^(?:co-authored-by:.*(?:claude|anthropic)|claude-session:|🤖 generated with)|(?:^|[^\p{L}\p{N}"'`])generated (?:with|by) \[?claude code/iu;
 export type AttributionKind =
   | "a Co-Authored-By trailer naming Claude"
   | "a Claude-Session link"
