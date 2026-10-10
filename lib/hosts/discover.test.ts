@@ -55,4 +55,40 @@ describe("discoverSessions", () => {
     );
     assert.equal(found.length, 0);
   });
+
+  it("hides only the managed session on its own machine", () => {
+    const found = discoverSessions(
+      [tmux("main", "~/x"), tmux("main", "~/x", "box")],
+      [],
+      [{ id: "s", tmux_name: "main", host_id: "local" } as Session]
+    );
+    assert.deepEqual(
+      found.map((s) => s.hostId),
+      ["box"]
+    );
+  });
+
+  it("lists a linked machine's managed sessions until mirrored here", () => {
+    const peer = (id: string) => ({
+      id,
+      hostId: "box",
+      name: `chat ${id}`,
+      tmuxName: "",
+      path: "~/x",
+      view: "chat" as const,
+      agentType: "claude",
+      state: "running" as const,
+      activity: 5,
+    });
+    const found = discoverSessions(
+      [],
+      [],
+      [{ id: "b", tmux_name: "", host_id: "box" } as Session],
+      [peer("a"), peer("b")]
+    );
+    assert.equal(found.length, 1);
+    assert.equal(found[0].peer?.id, "a");
+    assert.equal(found[0].peer?.view, "chat");
+    assert.equal(found[0].hostId, "box");
+  });
 });

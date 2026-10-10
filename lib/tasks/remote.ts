@@ -1,7 +1,7 @@
 /**
  * Tasks that run on another machine's AgentOS. That machine schedules them;
  * this one keeps a mirror row (same id, the host's id) so the sidebar lists
- * them and the terminal attaches over ssh, and asks that machine for their
+ * them and the terminal attaches through that machine's AgentOS, and asks it for their
  * state, sign-off and drop.
  */
 

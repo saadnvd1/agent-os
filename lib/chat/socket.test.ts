@@ -189,3 +189,48 @@ describe("/ws/chat in demo mode", () => {
     expect(sent.at(-1)?.type).toBe("history");
   });
 });
+
+describe("/ws/chat for a linked machine's session", () => {
+  it("is served by that machine's AgentOS, not run here", async () => {
+    const { fakePeer, until } = await import("../__fixtures__/fake-peer");
+    const peer = await fakePeer("tok");
+    peer.onSocket(({ ws }) =>
+      ws.send(JSON.stringify({ type: "snapshot", items: [], state: "idle" }))
+    );
+    const hostId = randomUUID();
+    const db = getDb();
+    db.prepare(
+      `INSERT INTO hosts (id, name, ssh_target) VALUES (?, 'box', 'me@box')`
+    ).run(hostId);
+    db.prepare(
+      `INSERT INTO host_links (host_id, url, token) VALUES (?, ?, 'tok')`
+    ).run(hostId, peer.url);
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, view) VALUES (?, 'c', ?, '/tmp', ?, 'chat')`
+    ).run(id, `claude-${id}`, hostId);
+    try {
+      const { ws, sent } = open(id);
+      await until(() => sent.length === 1);
+      expect(sent[0].type).toBe("snapshot");
+      expect(peer.sockets[0].url.searchParams.get("session")).toBe(id);
+      ws.message({ type: "interrupt" });
+      await until(() => peer.sockets[0].got.length === 1);
+      expect(peer.sockets[0].got[0]).toEqual({ type: "interrupt" });
+      ws.emit("close");
+    } finally {
+      remove(id);
+      db.prepare(`DELETE FROM hosts WHERE id = ?`).run(hostId);
+      await peer.close();
+    }
+  });
+
+  it("an unlinked machine's chat is refused, saying to link it", async () => {
+    const id = session();
+    const { ws, sent } = open(id);
+    ws.message({ type: "send", text: "hello" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(errors(sent).join(" ")).toContain("isn't linked");
+    remove(id);
+  });
+});
