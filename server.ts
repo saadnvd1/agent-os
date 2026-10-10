@@ -61,6 +61,7 @@ import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
 import os from "os";
 import { resumeHeldStarts, resumeTaskStarts } from "./lib/tasks/start";
 import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
+import { claimAgentosEnv } from "./lib/agents/self-env";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -69,7 +70,7 @@ const hostname = "127.0.0.1";
 const pFlagIndex = process.argv.indexOf("-p");
 const portArg = pFlagIndex !== -1 ? process.argv[pFlagIndex + 1] : undefined;
 const port = parseInt(portArg || process.env.PORT || "3011", 10);
-process.env.AGENTOS_PORT = String(port);
+claimAgentosEnv(port);
 // Demo mode: seeded data, nothing that runs code (lib/security/demo).
 const demo = demoMode();
 if (demo) assertDemoSandbox();

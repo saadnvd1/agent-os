@@ -7,8 +7,7 @@
 
 import { writeFileSync, existsSync, readFileSync } from "fs";
 import path from "path";
-
-const AGENTOS_URL = process.env.AGENTOS_URL || "http://localhost:3011";
+import { selfUrl } from "./agents/self-env";
 
 interface McpConfig {
   mcpServers: Record<
@@ -56,7 +55,7 @@ export function ensureMcpConfig(
     command: "npx",
     args: ["tsx", orchestrationServerPath],
     env: {
-      AGENTOS_URL,
+      AGENTOS_URL: selfUrl(),
       CONDUCTOR_SESSION_ID: sessionId,
     },
   };

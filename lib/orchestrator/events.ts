@@ -9,7 +9,8 @@
  * - one that clears after it's sent is remembered (cleared_at), and coming
  *   back within REFIRE_MS doesn't send it again;
  * - a session or stack item seen for the first time has its current state
- *   taken as known, not sent as news (a `seen:` marker per subject).
+ *   taken as known, not sent as news (a `seen:` marker per subject), except
+ *   a wait on someone (BLOCKED:, needs input), which is sent like any other.
  */
 
 import { db } from "../db";
@@ -83,8 +84,9 @@ export function recordConditions(
     for (const c of current.values()) {
       const row = byKey.get(c.key);
       if (!row) {
-        // A subject's first look is known state; anything else starts unarmed.
-        const known = fresh.has(c.subject);
+        // A subject's first look is known state, but for a wait on someone;
+        // anything else starts unarmed.
+        const known = fresh.has(c.subject) && !c.waiting;
         insert.run(
           workspaceId,
           c.key,
