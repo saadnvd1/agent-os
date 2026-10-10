@@ -111,10 +111,15 @@ export function toPeerSession(
   if (!ID.test(id)) return null;
   // That machine's mirrors of somewhere else's sessions aren't its own.
   if (raw.host_id && raw.host_id !== "local") return null;
+  // Its orchestrator and its tasks belong to its own workspace and gates:
+  // they're not mirrored as plain sessions here.
+  if (raw.role || raw.task_prompt || raw.task_status) return null;
   const tmuxName = typeof raw.tmux_name === "string" ? raw.tmux_name : "";
   const view = raw.view === "chat" ? "chat" : "terminal";
-  // A terminal is opened by its tmux name.
-  if (view === "terminal" && !isValidTmuxName(tmuxName)) return null;
+  // A terminal is opened by its tmux name; any name it gives must be one.
+  if (tmuxName && (!isValidTmuxName(tmuxName) || tmuxName.length > 200))
+    return null;
+  if (view === "terminal" && !tmuxName) return null;
   const updatedAt =
     typeof raw.updated_at === "string" && SQLITE_TIME.test(raw.updated_at)
       ? raw.updated_at
@@ -129,7 +134,7 @@ export function toPeerSession(
     id,
     hostId,
     name: text(raw.name, 200) || id,
-    tmuxName: isValidTmuxName(tmuxName) ? tmuxName : "",
+    tmuxName,
     path: text(raw.working_directory, 1000),
     view,
     agentType: text(raw.agent_type, 40) || "claude",

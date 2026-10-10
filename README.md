@@ -766,10 +766,16 @@ there instead of running tmux over ssh. That machine owns its sessions: their
 processes, chats and state. This one is a client of it, over HTTP and
 WebSockets with the link's device token, and only ever connects out to it.
 
-- Its sessions are listed by its AgentOS: tmux sessions it didn't start in
-  the project they sit in (or **Elsewhere**), and sessions it manages, chats
-  included. Opening one of those mirrors it here (same id), so it stays in the
-  sidebar and opens like a local one.
+- The sessions its AgentOS runs are sessions here: each is mirrored (same id)
+  as soon as it's listed, with the same row, menu and address as a local one.
+  One whose folder is in a project you have for that machine sits with that
+  project's sessions; the rest are listed under the machine's name. Its
+  orchestrator and its tasks stay with it. **Elsewhere** is only for tmux
+  sessions no AgentOS started.
+- From the menu, rename, done (and its undo) and delete run on that machine.
+  Fork, fresh start, move to project and check-ins are shown disabled with
+  the reason. A new session started here on that machine is started by its
+  AgentOS and opens in chat, like a local one.
 - Terminals attach through its `/ws/terminal`, relayed by this server; one
   connection per session however many views show it, with flow control
   carried through. A dropped connection retries for two minutes, then says so.

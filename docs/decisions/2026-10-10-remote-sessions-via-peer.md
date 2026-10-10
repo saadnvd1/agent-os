@@ -140,3 +140,14 @@ peer with the link's token (`lib/hosts/peer-actions.ts`). Done refuses anything
 that is a task there, so it never merges. Fork, fresh start, move to project
 and check-ins are shown disabled, with the reason
 (`lib/hosts/remote-menu.ts`). Task mirrors keep their own paths.
+
+A mirror is marked (`sessions.peer_mirror`), never inferred from its host:
+a session this machine started on that machine over ssh is still its own.
+The peer's orchestrator and its tasks aren't mirrored as plain sessions,
+since they belong to its workspace and its gates. Mirrors stay out of this
+machine's orchestrator, and agents' messages aren't relayed to them.
+
+A new session started from here on a linked machine is started by that
+machine's AgentOS, in the project at the same folder, and opens in chat like
+a local one (`DEFAULT_START_VIEW` in `lib/sessions/launch.ts`, which the
+orchestrator's starts use too).

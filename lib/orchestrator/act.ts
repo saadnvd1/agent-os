@@ -9,7 +9,11 @@ import { chatState, interruptChat } from "../chat/runner";
 import { hostExec, isRemoteHost } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { spawnSession } from "../agents/spawn";
-import { launchSession } from "../sessions/launch";
+import {
+  DEFAULT_START_VIEW,
+  launchSession,
+  type StartView,
+} from "../sessions/launch";
 import { createTask, dropTask } from "../tasks";
 import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
@@ -51,11 +55,9 @@ export async function send(
     : `Delivered to ${to.name}.`;
 }
 
-export type StartView = "chat" | "terminal";
-
 // What the orchestrator starts opens as a chat, as a new session in the UI
-// does; terminal is for a job that needs a TUI.
-export const DEFAULT_START_VIEW: StartView = "chat";
+// does (one default, in launch.ts); terminal is for a job that needs a TUI.
+export { DEFAULT_START_VIEW, type StartView };
 
 export async function startTask(
   workspaceId: string,

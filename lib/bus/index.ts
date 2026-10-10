@@ -147,6 +147,13 @@ async function deliver(
   line: string,
   from: { name: string; peer?: PeerMessage }
 ): Promise<Delivery> {
+  // A linked machine's own session: an agent's message would reach it as
+  // the user's (see runner.ts), so none is relayed yet.
+  if (to.peer_mirror && !to.task_prompt)
+    return {
+      state: "failed",
+      why: "it runs on a linked machine: message it from there",
+    };
   // Chat sessions get the message as their next prompt, tagged with who
   // sent it so chat shows it as theirs.
   if (to.view === "chat") {

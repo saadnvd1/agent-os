@@ -60,11 +60,12 @@ interface BlockedProps {
 function BlockedItem({ kind, icon: Icon, label, why }: BlockedProps) {
   const Item = PARTS[kind].Item;
   return (
-    <Item disabled className="items-start">
-      <Icon className={`${icon} mt-0.5`} />
+    // Disabled, but the reason keeps full contrast: only the label dims.
+    <Item disabled className="items-start data-[disabled]:opacity-100">
+      <Icon className={`${icon} mt-0.5 opacity-50`} />
       <span className="flex min-w-0 flex-col">
-        <span>{label}</span>
-        <span className="text-muted-foreground text-[11px] leading-tight">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground text-xs leading-tight">
           {why}
         </span>
       </span>

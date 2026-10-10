@@ -12,10 +12,11 @@ export interface MachineGroup {
 
 /** A linked machine's session that no project here holds. */
 export function onMachineOnly(
-  session: Pick<Session, "host_id" | "project_id" | "role">,
+  session: Pick<Session, "host_id" | "project_id" | "role" | "peer_mirror">,
   linked: Record<string, string>
 ): boolean {
   return (
+    !!session.peer_mirror &&
     !!session.host_id &&
     !!linked[session.host_id] &&
     !session.project_id &&

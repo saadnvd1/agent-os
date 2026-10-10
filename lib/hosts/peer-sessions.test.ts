@@ -24,6 +24,58 @@ describe("what a linked machine says", () => {
     expect(toPeerSession("box", { id: "../etc", tmux_name: "x" })).toBeNull();
     expect(toPeerSession("box", { id: "a", tmux_name: "bad name" })).toBeNull();
     expect(toTmuxInfo("box", { name: "a;b" })).toBeNull();
+    // A chat's tmux name, when it gives one, is checked too.
+    expect(
+      toPeerSession("box", { id: "a", view: "chat", tmux_name: "-x y" })
+    ).toBeNull();
+  });
+
+  it("leaves its orchestrator and its tasks to it", () => {
+    const base = { id: "a", view: "chat" };
+    expect(toPeerSession("box", { ...base, role: "orchestrator" })).toBeNull();
+    expect(toPeerSession("box", { ...base, task_prompt: "ship" })).toBeNull();
+    expect(
+      toPeerSession("box", { ...base, task_status: "running" })
+    ).toBeNull();
+  });
+
+  it("keeps a PR and a time only in the shapes AgentOS writes them", () => {
+    const pr = (extra: object) =>
+      toPeerSession("box", { id: "a", view: "chat", ...extra });
+    expect(
+      pr({
+        pr_url: "https://github.com/o/r/pull/7",
+        pr_number: 7,
+        pr_status: "open",
+        updated_at: "2026-10-10 12:00:00",
+        model: "m".repeat(300),
+      })
+    ).toMatchObject({
+      prUrl: "https://github.com/o/r/pull/7",
+      prNumber: 7,
+      prStatus: "open",
+      updatedAt: "2026-10-10 12:00:00",
+      model: "m".repeat(100),
+    });
+    for (const url of [
+      "javascript:alert(1)",
+      "http://github.com/o/r/pull/7",
+      "https://evil.example/o/r/pull/7",
+      "https://github.com/o/r/pull/7 x",
+    ])
+      expect(
+        pr({ pr_url: url, pr_number: 7, pr_status: "open" })
+      ).toMatchObject({
+        prUrl: null,
+        prNumber: null,
+        prStatus: null,
+      });
+    const good = { pr_url: "https://github.com/o/r/pull/7" };
+    for (const n of [-1, 0, "7", 1e20, 1.5])
+      expect(pr({ ...good, pr_number: n })?.prNumber).toBeNull();
+    expect(pr({ ...good, pr_status: "pwned" })?.prStatus).toBeNull();
+    for (const t of ["2026-10-10T12:00:00Z", "2026-10-10 12:00:00; x", 5])
+      expect(pr({ updated_at: t })?.updatedAt).toBeNull();
     expect(toTmuxInfo("box", { name: "ok", title: 7 })?.hostId).toBe("box");
   });
 });
@@ -72,6 +124,26 @@ describe("asking a linked machine", async () => {
     );
     expect(managed.map((s) => [s.id, s.state])).toEqual([["s-1", "running"]]);
     expect(peerStatus(link.hostId, "s-1")).toBe("running");
+  });
+
+  it("drops a mirror once that machine stops listing it", async () => {
+    const { peer, link } = await setup();
+    const rows = () =>
+      (
+        getDb()
+          .prepare(`SELECT id FROM sessions WHERE host_id = ? ORDER BY id`)
+          .all(link.hostId) as { id: string }[]
+      ).map((r) => r.id);
+    let listed = ["m-1", "m-2"];
+    peer.routes["/api/tmux/discover"] = () => ({ sessions: [] });
+    peer.routes["/api/sessions"] = () => ({
+      sessions: listed.map((id) => ({ id, name: id, view: "chat" })),
+    });
+    await peerTmuxSessions(link);
+    expect(rows()).toEqual(["m-1", "m-2"]);
+    listed = ["m-1"];
+    await peerTmuxSessions(link);
+    expect(rows()).toEqual(["m-1"]);
   });
 
   it("keeps the last list when asking fails, and drops it once unlinked", async () => {

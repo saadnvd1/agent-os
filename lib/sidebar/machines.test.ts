@@ -32,9 +32,11 @@ const input = (sessions: Session[]) => ({
 describe("a linked machine's sessions in the sidebar", () => {
   const sessions = [
     s("here"),
-    s("mapped", { host_id: "box", project_id: "p" }),
-    s("loose", { host_id: "box", project_id: null }),
-    s("unlinked", { host_id: "ssh-only", project_id: null }),
+    s("mapped", { host_id: "box", project_id: "p", peer_mirror: 1 }),
+    s("loose", { host_id: "box", project_id: null, peer_mirror: 1 }),
+    s("unlinked", { host_id: "ssh-only", project_id: null, peer_mirror: 1 }),
+    // Started here over ssh on a linked machine: this machine's own.
+    s("ssh", { host_id: "box", project_id: null }),
   ];
 
   it("sits with its project's sessions when its folder maps to one", () => {
@@ -64,8 +66,9 @@ describe("a linked machine's sessions in the sidebar", () => {
 
 describe("remoteBlocks", () => {
   it("gives every action that can't reach the machine its reason", () => {
-    const blocks = remoteBlocks(s("x", { host_id: "box" }), (id) =>
-      id === "box" ? "homelab" : undefined
+    const blocks = remoteBlocks(
+      s("x", { host_id: "box", peer_mirror: 1 }),
+      (id) => (id === "box" ? "homelab" : undefined)
     );
     expect(blocks).toEqual({
       fork: "Runs on homelab: fork it there",
@@ -75,12 +78,19 @@ describe("remoteBlocks", () => {
     });
   });
 
-  it("blocks nothing on this machine, an unlinked one, or a task mirror", () => {
+  it("blocks nothing on this machine, an unlinked one, a task mirror, or an ssh start", () => {
     const name = (id: string) => (id === "box" ? "homelab" : undefined);
     expect(remoteBlocks(s("x"), name)).toBeNull();
-    expect(remoteBlocks(s("x", { host_id: "ssh-only" }), name)).toBeNull();
     expect(
-      remoteBlocks(s("x", { host_id: "box", task_prompt: "go" }), name)
+      remoteBlocks(s("x", { host_id: "ssh-only", peer_mirror: 1 }), name)
     ).toBeNull();
+    expect(
+      remoteBlocks(
+        s("x", { host_id: "box", task_prompt: "go", peer_mirror: 1 }),
+        name
+      )
+    ).toBeNull();
+    // Started here over ssh: its own menu.
+    expect(remoteBlocks(s("x", { host_id: "box" }), name)).toBeNull();
   });
 });

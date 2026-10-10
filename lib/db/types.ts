@@ -74,6 +74,8 @@ export interface Session {
   // Its private Postgres copy, JSON (lib/project-config/database.ts)
   database?: string | null;
   // PR tracking
+  // 1: a linked machine's own session, shown here (lib/hosts/peer-sync.ts).
+  peer_mirror?: number;
   pr_url: string | null;
   pr_number: number | null;
   pr_status: "open" | "merged" | "closed" | null;

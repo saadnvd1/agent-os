@@ -20,10 +20,14 @@ export type RemoteAction = keyof typeof REMOTE_UNSUPPORTED;
  * one this machine runs (or a task mirror, which keeps its own menu).
  */
 export function remoteBlocks(
-  session: { host_id: string | null; task_prompt: string | null },
+  session: {
+    host_id: string | null;
+    task_prompt: string | null;
+    peer_mirror?: number;
+  },
   linkedHostName: (hostId: string) => string | undefined
 ): Record<RemoteAction, string> | null {
-  if (!session.host_id || session.host_id === "local" || session.task_prompt)
+  if (!session.peer_mirror || !session.host_id || session.task_prompt)
     return null;
   const host = linkedHostName(session.host_id);
   if (!host) return null;

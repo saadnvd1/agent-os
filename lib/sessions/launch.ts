@@ -13,6 +13,8 @@ import type { ChatAccess, ChatImage } from "../chat/events";
 import { resolveModelForAgent } from "../model-catalog";
 import { getProject } from "../projects";
 import { getHost, isRemoteHost } from "../hosts";
+import { hostLink } from "../hosts/remote-api";
+import { startOnPeer } from "../hosts/peer-actions";
 import { supportsChat } from "../chat/capabilities";
 import { enqueue, editQueued, listQueue } from "../chat/queued";
 import { sendQueuedNow } from "../chat/runner";
@@ -24,6 +26,12 @@ import { draftFeature } from "./branch";
 import { setUpWorktree } from "./worktree-setup";
 
 // Where a chat with no project works.
+export type StartView = "chat" | "terminal";
+
+// What a new session opens as unless asked otherwise, here or on a linked
+// machine. The one default: orchestrator starts use it too.
+export const DEFAULT_START_VIEW: StartView = "chat";
+
 export const SCRATCH_DIR = path.join(os.homedir(), ".agent-os", "scratch");
 
 export interface LaunchInput {
@@ -99,6 +107,22 @@ export async function launchSession(input: LaunchInput): Promise<Launched> {
   let folder =
     input.workingDirectory?.trim() || project?.working_directory || "~";
   if (scratch) folder = remote ? "~" : folder === "~" ? SCRATCH_DIR : folder;
+  // A linked machine's AgentOS starts it there; it is mirrored here.
+  const link = remote ? hostLink(hostId) : null;
+  if (link) {
+    if (input.images?.length)
+      throw new Error(`Images can't be sent to ${link.hostName} yet`);
+    return startOnPeer(link, {
+      project: scratch ? null : (project ?? null),
+      folder,
+      agentType: input.agentType,
+      model: input.model,
+      access: input.access,
+      name: input.name,
+      prompt: input.prompt?.trim(),
+      view: input.view ?? DEFAULT_START_VIEW,
+    });
+  }
   const projectPath = expand(folder);
   if (scratch && projectPath === SCRATCH_DIR)
     await fs.promises.mkdir(SCRATCH_DIR, { recursive: true });
@@ -112,7 +136,7 @@ export async function launchSession(input: LaunchInput): Promise<Launched> {
   const view =
     input.view === "terminal" || !supportsChat(agentType) || remote
       ? "terminal"
-      : "chat";
+      : DEFAULT_START_VIEW;
   const text = input.prompt?.trim() ?? "";
   const naming: Naming = text
     ? await nameFor(text, projectPath, input.name)

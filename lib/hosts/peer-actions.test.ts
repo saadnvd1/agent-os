@@ -5,10 +5,15 @@ import { db, type Session } from "../db";
 import { fakePeer } from "../__fixtures__/fake-peer";
 import { linkedHost } from "../__fixtures__/linked-host";
 import { doneSession } from "../done";
+import { DEFAULT_START_VIEW, launchSession } from "../sessions/launch";
 import { syncPeerMirrors } from "./peer-sync";
 import { toPeerSession, type PeerSession } from "./peer-sessions";
 import { PATCH, DELETE } from "../../app/api/sessions/[id]/route";
 import { POST as fork } from "../../app/api/sessions/[id]/fork/route";
+import { POST as unarchive } from "../../app/api/sessions/[id]/unarchive/route";
+import { sessionTargetProblem } from "../schedules/store";
+import { workspaceSessions } from "../orchestrator/facts";
+import { peerSessionLink } from "./peer-actions";
 
 const TOKEN = "tok";
 const cleanups: (() => unknown)[] = [];
@@ -156,7 +161,35 @@ describe("actions on a linked machine's session", () => {
     expect(peer.calls).toEqual([]);
   });
 
-  it("deletes it there, then the mirror; one already gone there goes too", async () => {
+  it("refuses a rename that machine refuses, and an empty one", async () => {
+    const { peer, id } = await mirrored();
+    peer.routes[`/api/sessions/${id}`] = () => ({ $status: 409, error: "no" });
+    const res = await PATCH(req({ name: "new" }), params(id));
+    expect(res.status).toBe(502);
+    expect(row(id)?.name).toBe("fix it");
+    const empty = await PATCH(req({ name: "  " }), params(id));
+    expect(empty.status).toBe(400);
+    expect(peer.calls).toHaveLength(1);
+  });
+
+  it("refuses a move to another project without asking that machine", async () => {
+    const { peer, id } = await mirrored();
+    const res = await PATCH(req({ projectId: "elsewhere" }), params(id));
+    expect(res.status).toBe(400);
+    expect(peer.calls).toEqual([]);
+  });
+
+  it("deletes it there, then the mirror", async () => {
+    const { peer, id } = await mirrored();
+    peer.routes[`/api/sessions/${id}`] = ({ method }) =>
+      method === "GET" ? { session: { id } } : { success: true };
+    const res = await DELETE(req(undefined, "DELETE"), params(id));
+    expect(res.status).toBe(200);
+    expect(peer.calls.map((c) => c.method)).toEqual(["GET", "DELETE"]);
+    expect(row(id)).toBeUndefined();
+  });
+
+  it("removes a mirror that machine no longer has, asking nothing else", async () => {
     const { peer, id } = await mirrored();
     peer.routes[`/api/sessions/${id}`] = () => ({
       $status: 404,
@@ -164,48 +197,83 @@ describe("actions on a linked machine's session", () => {
     });
     const res = await DELETE(req(undefined, "DELETE"), params(id));
     expect(res.status).toBe(200);
-    expect(peer.calls[0]).toMatchObject({ method: "DELETE" });
+    expect(peer.calls.map((c) => c.method)).toEqual(["GET"]);
     expect(row(id)).toBeUndefined();
   });
 
   it("keeps the mirror when that machine refuses the delete", async () => {
     const { peer, id } = await mirrored();
-    peer.routes[`/api/sessions/${id}`] = () => ({
-      $status: 409,
-      error: "not now",
-    });
+    peer.routes[`/api/sessions/${id}`] = ({ method }) =>
+      method === "GET"
+        ? { session: { id } }
+        : { $status: 409, error: "not now" };
     const res = await DELETE(req(undefined, "DELETE"), params(id));
     expect(res.status).toBe(502);
     expect((await res.json()).error).toMatch(/not now/);
     expect(row(id)).toBeDefined();
   });
 
-  it("is done there and archived here", async () => {
+  it("never deletes one of that machine's tasks from here", async () => {
+    const { peer, id } = await mirrored();
+    peer.routes[`/api/sessions/${id}`] = () => ({
+      session: { id, task_prompt: "ship it" },
+    });
+    const res = await DELETE(req(undefined, "DELETE"), params(id));
+    expect(res.status).toBe(502);
+    expect((await res.json()).error).toMatch(/is a task on box/);
+    expect(peer.calls.map((c) => c.method)).toEqual(["GET"]);
+    expect(row(id)).toBeDefined();
+  });
+
+  it("is done there and archived here, and undone there too", async () => {
     const { peer, id } = await mirrored();
     peer.routes[`/api/sessions/${id}`] = () => ({ session: { id } });
     peer.routes[`/api/sessions/${id}/done`] = () => ({
       outcome: { text: "Done: fix it.", worktree: { action: "none" } },
     });
+    peer.routes[`/api/sessions/${id}/unarchive`] = () => ({ session: { id } });
     const outcome = await doneSession(id, { by: "direct" });
     expect(outcome.text).toBe("box: Done: fix it.");
     expect(outcome.merged).toBeNull();
-    expect(peer.calls.map((c) => c.path)).toEqual([
-      `/api/sessions/${id}`,
-      `/api/sessions/${id}/done`,
+    expect(peer.calls).toEqual([
+      { method: "GET", path: `/api/sessions/${id}`, body: undefined },
+      { method: "POST", path: `/api/sessions/${id}/done`, body: {} },
     ]);
     expect(row(id)?.archived_at).toBeTruthy();
+    const res = await unarchive(req(undefined, "POST"), params(id));
+    expect(res.status).toBe(200);
+    expect(peer.calls.at(-1)).toMatchObject({
+      method: "POST",
+      path: `/api/sessions/${id}/unarchive`,
+    });
+    expect(row(id)?.archived_at).toBeNull();
   });
 
-  it("never asks that machine to done one of its tasks", async () => {
+  it("never asks that machine to done its tasks, its orchestrator, or what it can't name", async () => {
     const { peer, id } = await mirrored();
-    peer.routes[`/api/sessions/${id}`] = () => ({
-      session: { id, task_prompt: "ship it" },
-    });
-    await expect(doneSession(id, { by: "direct" })).rejects.toThrow(
-      /is a task on box/
-    );
-    expect(peer.calls.map((c) => c.path)).toEqual([`/api/sessions/${id}`]);
+    for (const [there, why] of [
+      [{ id, task_prompt: "ship it" }, /is a task on box/],
+      [{ id, task_status: "running" }, /is a task on box/],
+      [{ id, role: "orchestrator" }, /isn't marked done on box/],
+      [{ id: "someone-else" }, /didn't say what/],
+      [null, /didn't say what/],
+    ] as const) {
+      peer.routes[`/api/sessions/${id}`] = () => ({ session: there });
+      await expect(doneSession(id, { by: "direct" })).rejects.toThrow(why);
+    }
+    expect(peer.calls.every((c) => c.method === "GET")).toBe(true);
     expect(row(id)?.archived_at).toBeNull();
+  });
+
+  it("refuses done on one already archived, asking nothing", async () => {
+    const { peer, id } = await mirrored();
+    db.prepare(
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
+    ).run(id);
+    await expect(doneSession(id, { by: "direct" })).rejects.toThrow(
+      /already archived/
+    );
+    expect(peer.calls).toEqual([]);
   });
 
   it("refuses a fork with the reason the menu shows", async () => {
@@ -214,5 +282,83 @@ describe("actions on a linked machine's session", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("Runs on box: fork it there");
     expect(peer.calls).toEqual([]);
+  });
+
+  it("is left to that machine's orchestrator, not this one's", async () => {
+    const { hostId } = await setup();
+    const projectId = project(hostId, "~/dev/app");
+    db.prepare(`UPDATE projects SET workspace_id = 'ws-peer' WHERE id = ?`).run(
+      projectId
+    );
+    const id = randomUUID();
+    syncPeerMirrors(hostId, [listed(hostId, id)], []);
+    expect(row(id)?.project_id).toBe(projectId);
+    expect(workspaceSessions("ws-peer").map((s) => s.id)).not.toContain(id);
+  });
+
+  it("refuses a check-in on it", async () => {
+    const { id } = await mirrored();
+    expect(sessionTargetProblem(id, "any")).toMatch(/runs on a linked machine/);
+  });
+
+  it("leaves a session this machine started there over ssh to its own paths", async () => {
+    const { peer, hostId } = await setup();
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id)
+       VALUES (?, 'ssh one', 'claude-z', '~', ?)`
+    ).run(id, hostId);
+    expect(peerSessionLink(row(id)!)).toBeNull();
+    // Not listed there, so never dropped by a listing.
+    syncPeerMirrors(hostId, [], [id]);
+    expect(row(id)).toBeDefined();
+    expect(peer.calls).toEqual([]);
+  });
+});
+
+describe("starting a session on a linked machine", () => {
+  it("starts it there in chat, in the project at the same folder, and mirrors it", async () => {
+    const { peer, hostId } = await setup();
+    const projectId = project(hostId, "~/dev/app");
+    const id = randomUUID();
+    peer.routes["/api/projects"] = () => ({
+      projects: [
+        { id: "uncategorized", is_uncategorized: 1, working_directory: "~" },
+        { id: "theirs", working_directory: "/home/me/dev/app" },
+      ],
+    });
+    peer.routes["/api/sessions"] = ({ body }) => ({
+      session: {
+        id,
+        name: "hi there",
+        tmux_name: `claude-${id}`,
+        view: "chat",
+        agent_type: "claude",
+        working_directory: "/home/me/dev/app",
+        prompt: (body as { prompt: string }).prompt,
+      },
+    });
+    const { session } = await launchSession({
+      projectId,
+      agentType: "claude",
+      prompt: "hi",
+    });
+    expect(peer.calls.at(-1)).toMatchObject({
+      method: "POST",
+      path: "/api/sessions",
+      body: {
+        projectId: "theirs",
+        agentType: "claude",
+        prompt: "hi",
+        view: DEFAULT_START_VIEW,
+      },
+    });
+    expect(DEFAULT_START_VIEW).toBe("chat");
+    expect(session).toMatchObject({
+      id,
+      host_id: hostId,
+      project_id: projectId,
+      view: "chat",
+    });
   });
 });
