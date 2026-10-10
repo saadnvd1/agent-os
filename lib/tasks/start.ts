@@ -19,6 +19,9 @@ import { isPaused } from "../orchestrator/pause";
 import { brakesEnabled } from "../orchestrator/brakes";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
 import { inBackground } from "../lumifyhub/task-cards";
+import { enqueue } from "../chat/queued";
+import { sendQueuedNow } from "../chat/runner";
+import { hasItem } from "../chat/store";
 import { expandHome } from "./session";
 import { recordSetup, setupNote, setupOutcome, type TaskSetup } from "./setup";
 
@@ -114,18 +117,22 @@ export async function finishTaskStart(
       ms: setup.ms,
       error: "Not launched: the task was closed during setup",
     });
+  const prompt = (session.task_prompt ?? "") + setupNote(setup);
   try {
-    // Only this launch creates the task's tmux session; one already there
-    // (opened from an old client, say) is a bare agent without the task.
-    await killTmux(session.tmux_name);
-    await launchClaude({
-      sessionId,
-      tmuxName: session.tmux_name,
-      cwd: session.worktree_path,
-      model: session.model,
-      prompt: (session.task_prompt ?? "") + setupNote(setup),
-      brief: session.task_brief ?? undefined,
-    });
+    if (session.view === "chat") await launchChat(sessionId, prompt);
+    else {
+      // Only this launch creates the task's tmux session; one already there
+      // (opened from an old client, say) is a bare agent without the task.
+      await killTmux(session.tmux_name);
+      await launchClaude({
+        sessionId,
+        tmuxName: session.tmux_name,
+        cwd: session.worktree_path,
+        model: session.model,
+        prompt,
+        brief: session.task_brief ?? undefined,
+      });
+    }
   } catch (error) {
     const message = `The agent did not launch: ${asError(error).message}`;
     // A stack shows why its card stopped.
@@ -136,6 +143,18 @@ export async function finishTaskStart(
     return done({ status: "failed", ms: setup.ms, error: message });
   }
   return done(setup);
+}
+
+// A chat task's first message, under one id: a start resumed after a
+// restart neither loses it nor sends it twice. Its worker adds the brief.
+export const firstMessageId = (sessionId: string) =>
+  `user-task-start-${sessionId}`;
+
+async function launchChat(sessionId: string, prompt: string): Promise<void> {
+  const id = firstMessageId(sessionId);
+  if (hasItem(sessionId, id)) return;
+  enqueue(sessionId, { id, text: prompt });
+  await sendQueuedNow(sessionId, id);
 }
 
 interface SetupColumns {
@@ -171,20 +190,28 @@ const tmuxAlive = (name: string) =>
 // Starts a restart cut off: setup is recorded only after the launch, so one
 // still "running" never launched, unless its tmux session is up and its
 // prompt was written (a session without one isn't the agent, and the launch
-// replaces it).
+// replaces it), or for a chat, its first message was taken.
 export async function resumeTaskStarts(
   alive: (tmuxName: string) => Promise<boolean> = tmuxAlive
 ): Promise<string[]> {
   const rows = db
     .prepare(
-      `SELECT id, tmux_name, setup_ms, setup_error FROM sessions
+      `SELECT id, tmux_name, view, setup_ms, setup_error FROM sessions
        WHERE setup_status = 'running' AND task_status = 'running'
          AND archived_at IS NULL`
     )
-    .all() as ({ id: string; tmux_name: string } & SetupColumns)[];
+    .all() as ({
+    id: string;
+    tmux_name: string;
+    view: string;
+  } & SetupColumns)[];
   const resumed = resumeHeldStarts();
   for (const row of rows) {
-    if (fs.existsSync(promptFileFor(row.id)) && (await alive(row.tmux_name))) {
+    const launched =
+      row.view === "chat"
+        ? hasItem(row.id, firstMessageId(row.id))
+        : fs.existsSync(promptFileFor(row.id)) && (await alive(row.tmux_name));
+    if (launched) {
       recordSetup(db, row.id, { status: "ok", ms: null, error: null });
       continue;
     }

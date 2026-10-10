@@ -67,11 +67,18 @@ export async function runTool(
     }
     case "start_task": {
       const a = p(tool, raw);
-      return startTask(w, a.project, a.prompt, a.base, a.name);
+      return startTask(w, a.project, a.prompt, {
+        base: a.base,
+        name: a.name,
+        view: a.view,
+      });
     }
     case "start_session": {
       const a = p(tool, raw);
-      return startSession(w, a.project, a.prompt, a.name);
+      return startSession(w, a.project, a.prompt, {
+        name: a.name,
+        view: a.view,
+      });
     }
     case "stack": {
       const a = p(tool, raw);

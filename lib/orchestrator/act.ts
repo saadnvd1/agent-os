@@ -5,10 +5,11 @@
  */
 
 import { sendMessage } from "../bus";
-import { interruptChat } from "../chat/runner";
+import { chatState, interruptChat } from "../chat/runner";
 import { hostExec, isRemoteHost } from "../hosts";
 import { shellQuote } from "../hosts/ssh";
 import { spawnSession } from "../agents/spawn";
+import { launchSession } from "../sessions/launch";
 import { createTask, dropTask } from "../tasks";
 import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
@@ -41,17 +42,26 @@ export async function send(
   });
   if (delivery.state === "failed")
     return `FAILED to reach ${to.name}: ${delivery.why}. It's in its inbox (aos inbox).`;
+  // A terminal at a prompt refuses the message; a chat queues it behind
+  // the approval or question, which only a person answers.
+  if (delivery.state === "queued" && chatState(to.id) === "waiting")
+    return `Queued for ${to.name}, but it's waiting on an approval or question in its chat: it sees this only once that's answered. Read it to see what it asks.`;
   return delivery.state === "queued"
     ? `Queued for ${to.name}: it's busy and will see it after this turn.`
     : `Delivered to ${to.name}.`;
 }
 
+export type StartView = "chat" | "terminal";
+
+// What the orchestrator starts opens as a chat, as a new session in the UI
+// does; terminal is for a job that needs a TUI.
+export const DEFAULT_START_VIEW: StartView = "chat";
+
 export async function startTask(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  base?: string,
-  name?: string
+  opts: { base?: string; name?: string; view?: StartView } = {}
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
   // Its brakes read this machine's usage, not the other machine's account.
@@ -59,6 +69,7 @@ export async function startTask(
     throw new Error(
       `${project.name} runs on another machine; the orchestrator starts tasks on this one only for now`
     );
+  const view = opts.view ?? DEFAULT_START_VIEW;
   const task = await braked(
     workspaceId,
     "task",
@@ -66,28 +77,44 @@ export async function startTask(
       createTask({
         projectId: project.id,
         prompt,
-        name,
-        baseBranch: base || undefined,
+        name: opts.name,
+        baseBranch: opts.base || undefined,
+        view,
       }),
     (s) => s.id
   );
-  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
 }
 
 export async function startSession(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  name?: string
+  opts: { name?: string; view?: StartView } = {}
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
+  const view = opts.view ?? DEFAULT_START_VIEW;
+  if (view === "chat" && isRemoteHost(project.host_id))
+    throw new Error("Spawning on other machines isn't supported yet");
   const session = await braked(
     workspaceId,
     "session",
-    () => spawnSession({ project: project.id, prompt, name }),
+    async () =>
+      view === "chat"
+        ? (
+            await launchSession({
+              projectId: project.id,
+              agentType: "claude",
+              prompt,
+              name: opts.name,
+              view,
+              access: "full",
+            })
+          ).session
+        : spawnSession({ project: project.id, prompt, name: opts.name }),
     (s) => s.id
   );
-  return `Started session "${session.name}" (id ${session.id.slice(0, 8)}) in ${project.name}.`;
+  return `Started session "${session.name}" (id ${session.id.slice(0, 8)}, ${session.view}) in ${project.name}.`;
 }
 
 function itemLine(i: StackItemView): string {

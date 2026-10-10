@@ -2,8 +2,8 @@
 // live inputs to the blocked and ci gates.
 
 import type { Session } from "../db";
-import { chatState } from "../chat/runner";
-import { lastItems } from "../chat/store";
+import { chatStateNow } from "../chat/runner";
+import { saidSinceLastMessage } from "../chat/store";
 import { blockedReason } from "../tasks/state";
 import { checkWaitingPatterns, statusDetector } from "../status-detector";
 import { getCheck, putCheck } from "./checks";
@@ -17,16 +17,18 @@ export async function waitingState(
   task: Session
 ): Promise<{ blocked: string | null; waitingOn: string | null }> {
   if (task.view === "chat") {
-    const last = lastItems(task.id, 2, "assistant")
-      .map((i) => (i.kind === "assistant" ? i.text : ""))
-      .join("\n");
-    const reason = blockedReason(last);
+    const reason = blockedReason(saidSinceLastMessage(task.id));
+    // Asked of a worker still running from before a restart, too; one
+    // that can't be reached can't be cleared.
+    const state = await chatStateNow(task.id).catch(() => "unknown");
     return {
       blocked: reason === null ? null : untrusted(task.name, reason),
       waitingOn:
-        chatState(task.id) === "waiting"
+        state === "waiting"
           ? "an approval or question in its chat"
-          : null,
+          : state === "unknown"
+            ? "its chat worker couldn't be reached, so an open approval or question can't be ruled out"
+            : null,
     };
   }
   // A linked machine reads its own screens: asked, and an answer it can't

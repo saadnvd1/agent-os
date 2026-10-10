@@ -66,6 +66,17 @@ export function lastItems(
   return rows.reverse().map((r) => JSON.parse(r.data) as ChatItem);
 }
 
+// What the agent has said since the last message to it, as text: where a
+// chat task's BLOCKED: line stays until someone answers it.
+export function saidSinceLastMessage(sessionId: string, n = 20): string {
+  const items = lastItems(sessionId, n);
+  return items
+    .slice(items.findLastIndex((i) => i.kind === "user") + 1)
+    .map((i) => (i.kind === "assistant" ? i.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function itemsOfKind<K extends ChatItem["kind"]>(
   sessionId: string,
   kind: K

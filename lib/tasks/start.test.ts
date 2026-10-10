@@ -32,12 +32,33 @@ vi.mock("../agents/launch", () => ({
   promptFileFor: (id: string) => promptFile(id),
 }));
 
+// A chat worker taking a queued message: it leaves the queue and becomes
+// the chat's first item.
+const sendQueuedNow = vi.fn(async (sessionId: string, id: string) => {
+  const { deleteQueued } = await import("../chat/queued");
+  const { saveItem } = await import("../chat/store");
+  deleteQueued(sessionId, id);
+  saveItem(sessionId, {
+    id,
+    kind: "user",
+    text: "sent",
+    createdAt: Date.now(),
+  });
+});
+vi.mock("../chat/runner", () => ({
+  sendQueuedNow: (sessionId: string, id: string) =>
+    sendQueuedNow(sessionId, id),
+}));
+
 const { db } = await import("../db");
 const { seedSession, seedWorkspace } = await import("../orchestrator/testing");
 const { setPaused } = await import("../orchestrator/pause");
 const { taskSetupOf } = await import("./setup");
+const { listQueue } = await import("../chat/queued");
+const { itemsOfKind } = await import("../chat/store");
 const {
   finishTaskStart,
+  firstMessageId,
   launchHold,
   launchPending,
   resumeHeldStarts,
@@ -65,8 +86,15 @@ const setupOf = (id: string) =>
     db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as object
   );
 
+function seedChatTask(projectId: string): string {
+  const id = seedTask(projectId);
+  db.prepare(`UPDATE sessions SET view = 'chat' WHERE id = ?`).run(id);
+  return id;
+}
+
 let ws: ReturnType<typeof seedWorkspace>;
 beforeEach(() => {
+  sendQueuedNow.mockClear();
   setupWorktree.mockReset().mockResolvedValue(ok());
   launchClaude.mockReset().mockResolvedValue();
   tmuxCalls.length = 0;
@@ -267,5 +295,66 @@ describe("resumeTaskStarts", () => {
     expect(resumed).not.toContain(finished);
     expect(resumed).not.toContain(dropped);
     await vi.waitFor(() => expect(setupOf(cut)?.status).toBe("ok"));
+  });
+});
+
+describe("a chat task's start, beside a terminal task's", () => {
+  it("sends the same prompt as the chat's first message, with no terminal", async () => {
+    const terminal = seedTask(ws.app.id);
+    const chat = seedChatTask(ws.app.id);
+    await finishTaskStart(terminal);
+    await finishTaskStart(chat);
+    expect(launchClaude).toHaveBeenCalledTimes(1);
+    expect(launchClaude.mock.calls[0][0].prompt).toBe("Do it");
+    expect(tmuxCalls.flat().join(" ")).not.toContain(chat);
+    expect(sendQueuedNow).toHaveBeenCalledWith(chat, firstMessageId(chat));
+    expect(itemsOfKind(chat, "user").map((i) => i.id)).toEqual([
+      firstMessageId(chat),
+    ]);
+    expect(setupOf(terminal)?.status).toBe("ok");
+    expect(setupOf(chat)?.status).toBe("ok");
+  });
+
+  it("tells both agents about a failed setup", async () => {
+    setupWorktree.mockResolvedValue({
+      ...ok(),
+      success: false,
+      steps: [{ name: "i", command: "npm ci", success: false, error: "E404" }],
+    });
+    const chat = seedChatTask(ws.app.id);
+    sendQueuedNow.mockImplementationOnce(async (sessionId, id) => {
+      expect(listQueue(sessionId).find((m) => m.id === id)?.text).toContain(
+        "E404"
+      );
+    });
+    await finishTaskStart(chat);
+    expect(sendQueuedNow).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a chat launch that failed, as a terminal's", async () => {
+    const chat = seedChatTask(ws.app.id);
+    sendQueuedNow.mockRejectedValueOnce(new Error("worker didn't start"));
+    await finishTaskStart(chat);
+    expect(setupOf(chat)?.error).toMatch(/did not launch: worker didn't start/);
+  });
+
+  it("after a restart, relaunches only the start whose message wasn't taken, once", async () => {
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'ok' WHERE setup_status IN ('running', 'held')`
+    ).run();
+    const taken = seedChatTask(ws.app.id);
+    await finishTaskStart(taken);
+    db.prepare(`UPDATE sessions SET setup_status = 'running' WHERE id = ?`).run(
+      taken
+    );
+    const cut = seedChatTask(ws.app.id);
+    const resumed = await resumeTaskStarts(async () => false);
+    expect(resumed).toEqual([cut]);
+    await vi.waitFor(() => expect(setupOf(cut)?.status).toBe("ok"));
+    // A second resume of the same start finds its message taken.
+    await finishTaskStart(cut);
+    expect(itemsOfKind(cut, "user")).toHaveLength(1);
+    expect(setupOf(taken)?.status).toBe("ok");
+    expect(launchClaude).not.toHaveBeenCalled();
   });
 });

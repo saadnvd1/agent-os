@@ -8,6 +8,10 @@ import { seedSession, seedWorkspace } from "./testing";
 
 const hostCalls: string[] = [];
 const started: string[] = [];
+// How each start asked to run.
+const views: { kind: string; view: string }[] = [];
+// Chat sessions waiting on an approval, and how a chat send went.
+const waitingChats = new Set<string>();
 // What typing into a pane comes to; the pane checks have their own tests.
 let paneResult: import("@/lib/bus").Delivery = { state: "delivered" };
 
@@ -42,8 +46,13 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => ({
 // Starts make a session row and nothing else: no worktree, no tmux.
 vi.mock("@/lib/tasks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tasks")>()),
-  createTask: async (o: { projectId: string; prompt: string }) => {
+  createTask: async (o: {
+    projectId: string;
+    prompt: string;
+    view?: string;
+  }) => {
     started.push(o.prompt);
+    views.push({ kind: "task", view: o.view ?? "terminal" });
     const id = seedSession({
       projectId: o.projectId,
       name: o.prompt,
@@ -60,9 +69,33 @@ vi.mock("@/lib/tasks", async (importOriginal) => ({
 vi.mock("@/lib/agents/spawn", () => ({
   spawnSession: async (o: { project: string; prompt: string }) => {
     started.push(o.prompt);
+    views.push({ kind: "session", view: "terminal" });
     const id = seedSession({ projectId: o.project, name: o.prompt });
-    return { id, name: o.prompt } as Session;
+    return { id, name: o.prompt, view: "terminal" } as Session;
   },
+}));
+vi.mock("@/lib/sessions/launch", () => ({
+  launchSession: async (o: {
+    projectId: string;
+    prompt: string;
+    view?: string;
+    access?: string;
+  }) => {
+    started.push(o.prompt);
+    views.push({ kind: "session", view: `${o.view}/${o.access}` });
+    const id = seedSession({
+      projectId: o.projectId,
+      name: o.prompt,
+      view: "chat",
+    });
+    return { session: { id, name: o.prompt, view: "chat" } as Session };
+  },
+}));
+vi.mock("@/lib/chat/runner", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/chat/runner")>()),
+  chatState: (id: string) => (waitingChats.has(id) ? "waiting" : null),
+  sendChatConfirmed: async (id: string) =>
+    waitingChats.has(id) ? "queued" : "delivered",
 }));
 vi.mock("./usage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./usage")>()),
@@ -177,21 +210,94 @@ describe("acting inside the workspace", () => {
     }
   });
 
-  it("starts a task and a session in its own projects", async () => {
+  it("starts a task and a session in its own projects, as chats", async () => {
     const { mine } = twoWorkspaces();
     const w = mine.workspace.id;
+    views.length = 0;
     expect(
       await runTool(w, "start_task", {
         project: mine.api.name,
         prompt: "add rate limits",
       })
-    ).toMatch(/Started task "add rate limits" \(id \w{8}\) in api-/);
+    ).toMatch(/Started task "add rate limits" \(id \w{8}, chat\) in api-/);
     expect(
       await runTool(w, "start_session", {
         project: mine.app.name,
         prompt: "look at logs",
       })
-    ).toMatch(/Started session "look at logs" \(id \w{8}\)/);
+    ).toMatch(/Started session "look at logs" \(id \w{8}, chat\)/);
+    expect(views).toEqual([
+      { kind: "task", view: "chat" },
+      { kind: "session", view: "chat/full" },
+    ]);
+  });
+
+  it("starts in a terminal when asked to, for a job that needs a TUI", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    views.length = 0;
+    expect(
+      await runTool(w, "start_task", {
+        project: mine.api.name,
+        prompt: "profile the tui",
+        view: "terminal",
+      })
+    ).toMatch(/\(id \w{8}, terminal\)/);
+    expect(
+      await runTool(w, "start_session", {
+        project: mine.app.name,
+        prompt: "drive htop",
+        view: "terminal",
+      })
+    ).toMatch(/\(id \w{8}, terminal\)/);
+    expect(views).toEqual([
+      { kind: "task", view: "terminal" },
+      { kind: "session", view: "terminal" },
+    ]);
+    await expect(
+      runTool(w, "start_task", {
+        project: mine.api.name,
+        prompt: "x",
+        view: "tmux",
+      })
+    ).rejects.toThrow(/Bad arguments for start_task: view/);
+  });
+
+  it("says when a chat it messaged is waiting on an approval, as a terminal's menu does", async () => {
+    const { mine } = twoWorkspaces();
+    ensureOrchestrator(mine.workspace.id);
+    // The terminal at a prompt refuses; the chat queues it behind the card.
+    paneResult = {
+      state: "failed",
+      why: "it is showing a menu or prompt waiting for an answer",
+    };
+    waitingChats.add(mine.chat);
+    try {
+      const terminal = await runTool(mine.workspace.id, "send", {
+        session: "add-auth",
+        message: "status?",
+      });
+      expect(terminal).toMatch(
+        /^FAILED to reach add-auth: it is showing a menu/
+      );
+      const chat = await runTool(mine.workspace.id, "send", {
+        session: "chat-one",
+        message: "status?",
+      });
+      expect(chat).toMatch(
+        /^Queued for chat-one, but it's waiting on an approval or question in its chat/
+      );
+      waitingChats.delete(mine.chat);
+      expect(
+        await runTool(mine.workspace.id, "send", {
+          session: "chat-one",
+          message: "status?",
+        })
+      ).toMatch(/^Delivered to chat-one/);
+    } finally {
+      paneResult = { state: "delivered" };
+      waitingChats.clear();
+    }
   });
 
   it("stops a terminal session by its own tmux name", async () => {

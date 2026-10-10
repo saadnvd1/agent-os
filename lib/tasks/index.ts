@@ -34,6 +34,8 @@ import { finishTaskStart } from "./start";
 import { isRemoteHost } from "../hosts";
 import { isMirror, startRemoteTask } from "./remote";
 import { remoteTaskViews } from "./remote-views";
+import { chatStateNow } from "../chat/runner";
+import { saidSinceLastMessage } from "../chat/store";
 
 export * from "./state";
 export { codeReviewRefusal, parseCodeReview } from "./code-review";
@@ -84,6 +86,8 @@ export async function createTask(opts: {
   hostId?: string;
   // The caller's key for it: a retry with the same id gets the same task.
   id?: string;
+  // How its agent runs: in a terminal (the default) or as a chat.
+  view?: "chat" | "terminal";
 }): Promise<Session> {
   if (opts.id) {
     const existing = queries.getSession(db).get(opts.id) as Session | undefined;
@@ -115,6 +119,8 @@ async function startTask(
   if (!project || project.is_uncategorized) throw new Error("Pick a project");
   const hostId = opts.hostId ?? project.host_id;
   if (isRemoteHost(hostId)) {
+    if (opts.view === "chat")
+      throw new Error("Chat tasks run on this machine only for now");
     if (opts.base || opts.cardId)
       throw new Error(
         "Stacked and card tasks run on this machine only for now"
@@ -174,7 +180,7 @@ async function startTask(
     .run(wt.worktreePath, wt.branchName, baseBranch, null, id);
   // Everything the launch needs is on the row, so a restart can resume it.
   db.prepare(
-    `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ? WHERE id = ?`
+    `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ? WHERE id = ?`
   ).run(
     prompt,
     buildTaskBrief({
@@ -183,6 +189,7 @@ async function startTask(
       stack: opts.base?.stack,
     }),
     naming.source,
+    opts.view === "chat" ? "chat" : "terminal",
     id
   );
   opts.onCreated?.(id);
@@ -214,27 +221,39 @@ export async function shellOnly(tmuxName: string): Promise<boolean> {
   return rows ? !runsSomething(rows, pid) : false;
 }
 
+// A chat between turns waits on the next message, as a terminal at its
+// prompt does. One whose worker can't be reached counts as busy.
+async function chatStatus(sessionId: string): Promise<"running" | "waiting"> {
+  const state = await chatStateNow(sessionId).catch(() => "running");
+  return state === "running" ? "running" : "waiting";
+}
+
 export async function taskView(session: Session): Promise<TaskView> {
   const live = session.task_status === "running";
   const setup = taskSetupOf(session);
   // A finished task's PR is in the database: only a running one asks gh.
+  const chat = session.view === "chat";
   const [pr, sessionStatus] = await Promise.all([
     live ? prFor(session) : storedPR(session),
-    live
-      ? statusDetector.getStatus(session.tmux_name)
-      : Promise.resolve(undefined),
+    !live
+      ? Promise.resolve(undefined)
+      : chat
+        ? chatStatus(session.id)
+        : statusDetector.getStatus(session.tmux_name),
   ]);
   const agentGone =
-    live && sessionStatus !== "dead" && sessionStatus !== undefined
+    !chat && live && sessionStatus !== "dead" && sessionStatus !== undefined
       ? await shellOnly(session.tmux_name)
       : false;
   const blocked =
     live && sessionStatus === "waiting"
       ? blockedReason(
-          (await statusDetector.capturePane(session.tmux_name))
-            .split("\n")
-            .slice(-15)
-            .join("\n")
+          chat
+            ? saidSinceLastMessage(session.id)
+            : (await statusDetector.capturePane(session.tmux_name))
+                .split("\n")
+                .slice(-15)
+                .join("\n")
         )
       : null;
   const project = session.project_id ? getProject(session.project_id) : null;
