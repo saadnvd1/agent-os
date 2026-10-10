@@ -26,7 +26,7 @@ const post = async (url: string, body: object) => {
     body: JSON.stringify(body),
   }).catch(() => {
     throw new Error(
-      "Couldn't reach AgentOS, so your answer may not be recorded. Try again."
+      "Couldn't reach AgentOS, so this may not be saved. Try again."
     );
   });
   return json(res);
@@ -87,9 +87,10 @@ export function useAnswerAsk(workspaceId: string) {
     // The card leaves at once, and comes back if the answer wasn't recorded.
     onMutate: async ({ ask: { id: askId } }) => {
       await queryClient.cancelQueries({ queryKey: orchestratorKeys.all });
-      const previous = queryClient.getQueryData<OrchestratorOverview[]>(
-        orchestratorKeys.all
-      );
+      const removed = queryClient
+        .getQueryData<OrchestratorOverview[]>(orchestratorKeys.all)
+        ?.find((o) => o.workspaceId === workspaceId)
+        ?.asks.find((a) => a.id === askId);
       queryClient.setQueryData<OrchestratorOverview[]>(
         orchestratorKeys.all,
         (prev) =>
@@ -99,11 +100,25 @@ export function useAnswerAsk(workspaceId: string) {
               : o
           )
       );
-      return { previous };
+      return { removed };
     },
+    // Only this card comes back: others answered meanwhile stay answered.
     onError: (_error, _answer, context) => {
-      if (context?.previous)
-        queryClient.setQueryData(orchestratorKeys.all, context.previous);
+      const removed = context?.removed;
+      if (!removed) return;
+      queryClient.setQueryData<OrchestratorOverview[]>(
+        orchestratorKeys.all,
+        (prev) =>
+          prev?.map((o) =>
+            o.workspaceId === workspaceId &&
+            !o.asks.some((a) => a.id === removed.id)
+              ? {
+                  ...o,
+                  asks: [...o.asks, removed].sort((a, b) => a.id - b.id),
+                }
+              : o
+          )
+      );
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: orchestratorKeys.all });

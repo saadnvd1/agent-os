@@ -87,7 +87,14 @@ const handle = app.getRequestHandler();
 
 app.prepare().then(async () => {
   // Before any request: merge approvals a restart cut off mid-merge go back.
-  releaseInterruptedClaims();
+  // Bookkeeping: a failure is logged and never stops the server starting.
+  try {
+    const released = releaseInterruptedClaims();
+    if (released)
+      console.log(`Released ${released} merge approval(s) a restart cut off`);
+  } catch (error) {
+    console.error("Releasing interrupted merge approvals failed:", error);
+  }
   const policy: AccessPolicy = {
     bound: [],
     extraHosts: [],
