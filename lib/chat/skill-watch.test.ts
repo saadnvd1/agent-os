@@ -39,24 +39,37 @@ describe("skillFolders", () => {
 });
 
 describe("createSkillWatcher", { timeout: 45_000 }, () => {
-  it("reports a burst of changes once, after it settles", async () => {
-    const dir = tmp();
-    const calls = watched(dir, 500);
-    await sleep(WARM);
-    let round = 0;
-    const bursts = await touchUntil(
-      () => {
-        round++;
-        for (let i = 0; i < 5; i++)
-          fs.writeFileSync(path.join(dir, `c${i}.md`), String(round));
-      },
-      () => calls.length > 0
-    );
-    await sleep(1000);
-    // Five writes, one reload (per burst, should one have gone unseen).
-    expect(calls.length).toBeGreaterThan(0);
-    expect(calls.length).toBeLessThanOrEqual(bursts);
-    expect(new Set(calls)).toEqual(new Set(["claude:/p"]));
+  it("reports a burst of changes once, after it settles", () => {
+    // The events fired by hand: real ones arrive when the OS likes (macOS
+    // even replays a new folder's own creation late).
+    const fire: ((e: string, name: string) => void)[] = [];
+    const spy = vi.spyOn(fs, "watch").mockImplementation(((
+      _p: string,
+      _o: unknown,
+      listener: (e: string, name: string) => void
+    ) => {
+      fire.push(listener);
+      return { on() {}, close() {} };
+    }) as unknown as typeof fs.watch);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const calls = watched(tmp(), 300);
+      expect(fire).toHaveLength(1);
+      for (let i = 0; i < 5; i++) {
+        fire[0]("rename", `c${i}.md`);
+        vi.advanceTimersByTime(100);
+      }
+      expect(calls).toEqual([]);
+      vi.advanceTimersByTime(300);
+      expect(calls).toEqual(["claude:/p"]);
+      // A later change is a reload of its own.
+      fire[0]("change", "c0.md");
+      vi.advanceTimersByTime(300);
+      expect(calls).toEqual(["claude:/p", "claude:/p"]);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
+    }
   });
 
   it("sees an edit inside a skill linked in as a symlink", async () => {
@@ -111,18 +124,24 @@ describe("createSkillWatcher", { timeout: 45_000 }, () => {
     const dir = tmp();
     const real = tmp();
     fs.symlinkSync(real, path.join(dir, "linked"));
-    const opened: fs.FSWatcher[] = [];
+    // The first watcher per path is the module's own: on Linux, Node builds a
+    // recursive watch from more fs.watch calls of its own, after it.
+    const opened = new Map<string, fs.FSWatcher>();
     const spy = vi.spyOn(fs, "watch").mockImplementation(((
       ...args: Parameters<typeof fs.watch>
     ) => {
       const w = watchReal(...args);
-      opened.push(w);
-      vi.spyOn(w, "close");
+      const p = String(args[0]);
+      if (!opened.has(p)) {
+        opened.set(p, w);
+        vi.spyOn(w, "close");
+      }
       return w;
     }) as typeof fs.watch);
     try {
       const calls = watched(dir);
-      expect(opened).toHaveLength(2); // the folder and the linked skill
+      // The folder and the linked skill.
+      expect([...opened.keys()]).toEqual(expect.arrayContaining([dir, real]));
       await sleep(WARM);
       await touchUntil(
         () => fs.writeFileSync(path.join(dir, "x.md"), String(Math.random())),
@@ -130,7 +149,8 @@ describe("createSkillWatcher", { timeout: 45_000 }, () => {
       );
       watcher!.release("claude:/p");
       expect(watcher!.keys()).toEqual([]);
-      for (const w of opened) expect(w.close).toHaveBeenCalled();
+      expect(opened.get(dir)!.close).toHaveBeenCalled();
+      expect(opened.get(real)!.close).toHaveBeenCalled();
     } finally {
       spy.mockRestore();
     }
