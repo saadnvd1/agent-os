@@ -159,3 +159,20 @@ export const DRAFT_KEYS: Record<DraftKey, string> = {
   choose: "⌥⇧N",
   scratch: "⌃⌥N",
 };
+
+/**
+ * A draft for a project here, kept for a machine that can no longer take
+ * it: gone from the machines it may use, or refusing with a reason. Never
+ * before both lists have loaded, and never for a task or this machine.
+ */
+export function draftHostGone(
+  draft: Pick<Draft, "hostId" | "openPr">,
+  projectHere: boolean,
+  machines: { id: string }[] | null,
+  reasons: Record<string, string | null> | null
+): boolean {
+  if (!machines || !projectHere || draft.openPr || draft.hostId === "local")
+    return false;
+  if (!machines.some((h) => h.id === draft.hostId)) return true;
+  return !!reasons && reasons[draft.hostId] != null;
+}

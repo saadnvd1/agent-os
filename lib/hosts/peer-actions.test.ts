@@ -543,28 +543,37 @@ describe("starting a session on a linked machine", () => {
     expect(row(id)?.project_id).toBe(projectId);
   });
 
-  it("never retries a start on an AgentOS that doesn't take keys, nor carries a project to it", async () => {
-    const { peer, hostId } = await setup();
-    peer.routes["/api/tasks"] = () => ({ tasks: [], capabilities: ["move"] });
-    peer.routes["/api/projects"] = () => ({ projects: [] });
-    peer.routes["/api/sessions"] = () => ({
-      $status: 502,
-      error: "bad gateway",
-    });
-    await expect(
-      launchSession({ id: randomUUID(), hostId, agentType: "claude" })
-    ).rejects.toThrow(/bad gateway/);
-    expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
-      1
-    );
-    const projectId = project("local", `~/dev/old-${randomUUID().slice(0, 8)}`);
-    await expect(
-      launchSession({ projectId, hostId, agentType: "claude" })
-    ).rejects.toThrow(/Update AgentOS/);
-    expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
-      1
-    );
-  });
+  it.each([
+    ["doesn't take keys", () => ({ tasks: [], capabilities: ["move"] })],
+    ["can't say what it takes", () => ({ $status: 500, error: "down" })],
+  ])(
+    "never retries a start on an AgentOS that %s, nor carries a project to it",
+    async (_, tasks) => {
+      const { peer, hostId } = await setup();
+      peer.routes["/api/tasks"] = tasks;
+      peer.routes["/api/projects"] = () => ({ projects: [] });
+      peer.routes["/api/sessions"] = () => ({
+        $status: 502,
+        error: "bad gateway",
+      });
+      await expect(
+        launchSession({ id: randomUUID(), hostId, agentType: "claude" })
+      ).rejects.toThrow(/bad gateway/);
+      expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
+        1
+      );
+      const projectId = project(
+        "local",
+        `~/dev/old-${randomUUID().slice(0, 8)}`
+      );
+      await expect(
+        launchSession({ projectId, hostId, agentType: "claude" })
+      ).rejects.toThrow(/Update AgentOS/);
+      expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
+        1
+      );
+    }
+  );
 
   it("keeps a project that lives on another machine there", async () => {
     const { hostId } = await setup();

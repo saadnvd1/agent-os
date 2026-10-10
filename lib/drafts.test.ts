@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   currentProjectId,
+  draftHostGone,
   draftKeyFor,
   newDraft,
   pickableProjects,
@@ -242,5 +243,34 @@ describe("draftKeyFor", () => {
     expect(key({ mod: false, shiftKey: true })).toBeNull();
     expect(key({ code: "KeyM" })).toBeNull();
     expect(key({ altKey: true, shiftKey: true })).toBeNull();
+  });
+});
+
+describe("draftHostGone", () => {
+  const box = { hostId: "box", openPr: false };
+  const machines = [{ id: "local" }, { id: "box" }];
+
+  it("sends a draft back here when its machine is gone or refuses the project", () => {
+    expect(draftHostGone(box, true, [{ id: "local" }], null)).toBe(true);
+    expect(
+      draftHostGone(box, true, machines, { box: "Can't clone it there" })
+    ).toBe(true);
+  });
+
+  it("keeps it while the machine can take it or nothing has loaded yet", () => {
+    expect(draftHostGone(box, true, machines, { box: null })).toBe(false);
+    expect(draftHostGone(box, true, machines, null)).toBe(false);
+    expect(draftHostGone(box, true, null, null)).toBe(false);
+  });
+
+  it("leaves tasks, scratch chats, projects elsewhere and this machine alone", () => {
+    const gone = [{ id: "local" }];
+    expect(draftHostGone({ ...box, openPr: true }, true, gone, null)).toBe(
+      false
+    );
+    expect(draftHostGone(box, false, gone, null)).toBe(false);
+    expect(draftHostGone({ ...box, hostId: "local" }, true, gone, null)).toBe(
+      false
+    );
   });
 });

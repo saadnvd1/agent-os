@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import type { Host } from "@/lib/db";
 import type { Project } from "@/lib/db";
-import { newDraft, type Draft } from "@/lib/drafts";
+import { draftHostGone, newDraft, type Draft } from "@/lib/drafts";
 import { AGENT_OPTIONS, agentLabel } from "@/lib/agent-options";
 import { resolveModelForAgent } from "@/lib/model-catalog";
 import type { GitCheck } from "@/data/git/queries";
@@ -35,12 +35,15 @@ export function DraftChips({
   draft,
   projects,
   hosts,
+  hostsLoaded,
   git,
   onChange,
 }: {
   draft: Draft;
   projects: Project[];
   hosts: Host[];
+  // Until it has, no machine counts as gone.
+  hostsLoaded: boolean;
   git: GitCheck | undefined;
   onChange: (patch: Partial<Draft>) => void;
 }) {
@@ -75,12 +78,12 @@ export function DraftChips({
   };
   // A draft kept for a machine that can no longer take the project goes
   // back to this one, rather than failing on send.
-  const hostGone =
-    projectHere &&
-    !draft.openPr &&
-    draft.hostId !== "local" &&
-    (!machines.some((h) => h.id === draft.hostId) ||
-      (!!onMachines.data && onMachines.data[draft.hostId] != null));
+  const hostGone = draftHostGone(
+    draft,
+    projectHere,
+    hostsLoaded ? machines : null,
+    onMachines.isSuccess ? onMachines.data : null
+  );
   useEffect(() => {
     if (hostGone) onChange({ hostId: "local", useWorktree: true });
   }, [hostGone, onChange]);

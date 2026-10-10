@@ -27,7 +27,7 @@ import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
 import { saveItem } from "../chat/store";
 import type { ChatItem } from "../chat/events";
-import { launchSession, SCRATCH_DIR } from "./launch";
+import { launchSession, SCRATCH_DIR, START_PROMPT_KEEP_MS } from "./launch";
 import {
   finishSetup,
   holdsQueue,
@@ -140,6 +140,17 @@ describe("launchSession (a draft's first send)", () => {
       repeat: true,
       initialPrompt: "Type me once",
     });
+
+    // Only for a while: a repeat long after doesn't type it again.
+    const later = Date.now() + START_PROMPT_KEEP_MS + 1000;
+    const now = vi.spyOn(Date, "now").mockReturnValue(later);
+    try {
+      const late = await start();
+      expect(late.repeat).toBe(true);
+      expect(late.initialPrompt).toBeUndefined();
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("refuses a key naming an archived session, or a project here on a machine that isn't linked", async () => {

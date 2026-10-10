@@ -27,6 +27,7 @@ import { POST as startSession } from "../../app/api/sessions/route";
 import {
   ensureProject,
   homeRelative,
+  projectRef,
   repoIdentity,
   safeRelative,
   whyNotHere,
@@ -166,7 +167,20 @@ describe("ensureProject", () => {
     expect(fs.existsSync(path.join(f.tmp, "dev", "why-u"))).toBe(false);
   });
 
-  it("never lets a remote's credentials leave the machine", () => {
+  it("never lets a remote's credentials leave the machine", async () => {
+    git(
+      f.repo,
+      "remote",
+      "set-url",
+      "origin",
+      "https://x-access-token:ghp_abc@github.com/me/app.git"
+    );
+    try {
+      const ref = await projectRef(getProject(f.projectId)!);
+      expect(ref.remote).toBe("https://github.com/me/app.git");
+    } finally {
+      git(f.repo, "remote", "set-url", "origin", f.origin);
+    }
     expect(
       withoutCredentials("https://x-access-token:ghp_abc@github.com/me/app.git")
     ).toBe("https://github.com/me/app.git");

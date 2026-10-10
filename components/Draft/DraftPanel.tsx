@@ -36,7 +36,7 @@ export function DraftPanel({
   const { drafts, hydrated } = useSnapshot(draftsStore);
   const draft = drafts[draftId] as Draft | undefined;
   const { attachSession } = usePanes();
-  const { data: hosts = [] } = useHostsQuery();
+  const { data: hosts = [], isSuccess: hostsLoaded } = useHostsQuery();
   const project = projects.find((p) => p.id === draft?.projectId) ?? null;
   const { data: git } = useGitCheck(
     project && draft?.hostId === "local" ? project.working_directory : ""
@@ -120,6 +120,7 @@ export function DraftPanel({
           draft={draft}
           projects={projects}
           hosts={hosts}
+          hostsLoaded={hostsLoaded}
           git={git}
           onChange={(patch) => draftsActions.update(draft.id, patch)}
         />
