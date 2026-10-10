@@ -19,7 +19,7 @@ vi.mock("@/lib/tasks", async (importOriginal) => ({
   },
 }));
 vi.mock("@/lib/agents/spawn", () => ({
-  findProject: () => ({ id: "p1" }),
+  findProject: () => ({ id: projectId }),
   spawnSession: async () => ({ id: "s1", name: "s" }),
 }));
 vi.mock("@/lib/lumifyhub/task-cards", async (importOriginal) => ({
@@ -43,14 +43,21 @@ const post = (body: object) =>
     body: JSON.stringify(body),
   });
 
+// A real project: starting checks it exists (and whether to queue).
+const { createProject } = await import("../projects");
+const projectId = createProject({
+  name: `paths-${randomUUID().slice(0, 6)}`,
+  workingDirectory: "/tmp",
+}).id;
+
 beforeEach(() => void (calls.length = 0));
 
 describe("the view a task starts in, by how it was started", () => {
   it("New → task (POST /api/tasks): the default, or the pick", async () => {
     const { POST } = await import("@/app/api/tasks/route");
-    await POST(post({ projectId: "p1", prompt: "x" }));
-    await POST(post({ projectId: "p1", prompt: "x", view: "terminal" }));
-    await POST(post({ projectId: "p1", prompt: "x", view: "tmux" }));
+    await POST(post({ projectId, prompt: "x" }));
+    await POST(post({ projectId, prompt: "x", view: "terminal" }));
+    await POST(post({ projectId, prompt: "x", view: "tmux" }));
     expect(calls.map((c) => c.view)).toEqual([
       undefined,
       "terminal",
@@ -74,7 +81,7 @@ describe("the view a task starts in, by how it was started", () => {
   it("a LumifyHub card's Run", async () => {
     const { POST } =
       await import("@/app/api/lumifyhub/cards/[cardId]/run/route");
-    await POST(post({ projectId: "p1" }), {
+    await POST(post({ projectId }), {
       params: Promise.resolve({ cardId: randomUUID() }),
     });
     expect(calls).toHaveLength(1);
