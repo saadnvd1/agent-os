@@ -1,20 +1,25 @@
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-// The installer's WSL paths, run on any OS: `uname`, `ps` and the browser
-// openers are fakes on PATH, and the kernel release is a file. Only this
-// environment, so a run inside WSL isn't told it's WSL.
+// The installer's WSL paths, run on any OS: `uname`, `ps`, the browser
+// openers and the package managers are fakes, and the kernel release is a
+// file. PATH is only the test's own bin (fakes plus links to a few basic
+// tools) and the environment only this, so a run inside WSL sees neither
+// the real wslview nor WSL_DISTRO_NAME.
 const LIB = join(import.meta.dirname);
+const TOOLS = ["tr", "cat", "sed", "cut", "awk", "head", "grep", "mkdir"];
 
 let dir: string;
 
@@ -31,18 +36,20 @@ function run(
 ) {
   writeFileSync(join(dir, "osrelease"), osrelease);
   return spawnSync(
-    "bash",
+    "/bin/bash",
     [
       "-euo",
       "pipefail",
       "-c",
-      `source "${LIB}/common.sh"; source "${LIB}/commands.sh"; ${script}`,
+      `source "${LIB}/common.sh"; source "${LIB}/prerequisites.sh"; source "${LIB}/commands.sh"; ${script}`,
+      // $0, which `agent-os enable` writes into the unit.
+      join(dir, "agent-os"),
     ],
     {
       cwd: dir,
       encoding: "utf8",
       env: {
-        PATH: `${join(dir, "bin")}:/usr/bin:/bin`,
+        PATH: join(dir, "bin"),
         HOME: dir,
         NODE_ENV: "test",
         AGENTOS_OSRELEASE_FILE: join(dir, "osrelease"),
@@ -55,7 +62,14 @@ function run(
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "aos-wsl-"));
   mkdirSync(join(dir, "bin"));
+  for (const tool of TOOLS) {
+    const real = ["/usr/bin", "/bin"]
+      .map((d) => join(d, tool))
+      .find(existsSync);
+    if (real) symlinkSync(real, join(dir, "bin", tool));
+  }
   fake("uname", 'echo "Linux"');
+  fake("realpath", 'echo "$1"');
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -125,5 +139,70 @@ describe("wsl_next_steps", () => {
 
   it("flags WSL 1", () => {
     expect(steps("init", "1")).toContain("WSL 1");
+  });
+});
+
+describe("agent-os enable", () => {
+  const enable = (pid1: string) => {
+    fake("ps", `echo ${pid1}`);
+    fake("systemctl", `echo "systemctl $*" >> "${dir}/systemctl.log"`);
+    mkdirSync(join(dir, "repo"));
+    return run(`WSL=2 OS=debian REPO_DIR="${dir}/repo"; cmd_enable`, "");
+  };
+  const unit = () => join(dir, ".config/systemd/user/agent-os.service");
+
+  it("under WSL without systemd, explains wsl.conf and writes nothing", () => {
+    const r = enable("init");
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).toContain("systemd=true");
+    expect(existsSync(unit())).toBe(false);
+    expect(existsSync(join(dir, "systemctl.log"))).toBe(false);
+  });
+
+  it("with systemd, writes and enables the user service", () => {
+    const r = enable("systemd");
+    expect(r.status).toBe(0);
+    expect(readFileSync(unit(), "utf8")).toContain(
+      `ExecStart=${join(dir, "agent-os")} start-foreground`
+    );
+    expect(readFileSync(join(dir, "systemctl.log"), "utf8")).toContain(
+      "systemctl --user enable agent-os"
+    );
+  });
+});
+
+describe("installing prerequisites", () => {
+  // sudo runs nothing, it only records what it was asked.
+  const sudoLog = () => {
+    const p = join(dir, "sudo.log");
+    return existsSync(p) ? readFileSync(p, "utf8") : "";
+  };
+  beforeEach(() => fake("sudo", `echo "$*" >> "${dir}/sudo.log"`));
+
+  it("refreshes apt once per run", () => {
+    expect(run("apt_install tmux; apt_install lsof", "").status).toBe(0);
+    expect(sudoLog()).toBe(
+      "apt-get update\napt-get install -y tmux\napt-get install -y lsof\n"
+    );
+  });
+
+  it("installs wslu only under WSL on Debian, and only when missing", () => {
+    run("WSL=0 OS=debian; install_wslu", "");
+    run("WSL=2 OS=redhat; install_wslu", "");
+    expect(sudoLog()).toBe("");
+    fake("wslview", "true");
+    run("WSL=2 OS=debian; install_wslu", "");
+    expect(sudoLog()).toBe("");
+    rmSync(join(dir, "bin", "wslview"));
+    run("WSL=2 OS=debian; install_wslu", "");
+    expect(sudoLog()).toContain("apt-get install -y wslu");
+  });
+
+  it("fails, rather than reporting success, when a distro can't install what's missing", () => {
+    fake("node", "echo v22.0.0");
+    const r = run("WSL=0 OS=linux; check_and_install_prerequisites", "");
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("Still missing: tmux");
+    expect(r.stdout).not.toContain("Prerequisites installed");
   });
 });
