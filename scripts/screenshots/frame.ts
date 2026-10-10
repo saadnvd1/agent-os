@@ -70,6 +70,12 @@ const CAPTIONS: Record<string, Caption> = {
       "A linked machine's sessions sit next to yours, and open, rename and finish the same way.",
     layout: "window",
   },
+  queued: {
+    headline: "Tasks wait their turn",
+    subline:
+      "Over the workspace's task limit, or after another task, a task queues and starts on its own.",
+    layout: "window",
+  },
   terminal: {
     headline: "The terminal is always there",
     subline:

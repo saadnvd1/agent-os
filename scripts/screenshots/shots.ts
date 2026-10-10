@@ -214,4 +214,22 @@ export const SHOTS: Shot[] = [
       },
     ],
   },
+  {
+    name: "queued",
+    parts: [
+      {
+        id: "desktop",
+        device: "desktop",
+        keepFocus: true,
+        setup: async (page) => {
+          await openSession(page, CHAT);
+          await closeGitDrawer(page);
+          await page
+            .getByText("webhook-signing-keys", { exact: true })
+            .click({ button: "right" });
+          await page.waitForTimeout(800);
+        },
+      },
+    ],
+  },
 ];

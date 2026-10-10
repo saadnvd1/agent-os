@@ -310,6 +310,7 @@ async function seedDb(): Promise<void> {
 
   seedOrchestrator(db, workspaceIds.get("Work")!, sessionIds, now);
   seedLinkedMachine(db);
+  seedQueue(db, workspaceIds.get("Work")!, projectIds, sessionIds);
 
   for (const m of BUS) {
     const name = (key: string | null) =>
@@ -379,6 +380,45 @@ function seedOrchestrator(
       `-${ask.minutesAgo} minutes`
     );
   }
+}
+
+// Two tasks waiting their turn: one in line, one until idempotency-keys is
+// finished. The limit sits below the tasks already running, so neither
+// ever starts.
+function seedQueue(
+  db: Db,
+  workspaceId: string,
+  projectIds: Map<string, string>,
+  sessionIds: Map<string, string>
+): void {
+  db.prepare(`UPDATE workspaces SET max_running_tasks = 2 WHERE id = ?`).run(
+    workspaceId
+  );
+  const insert = db.prepare(
+    `INSERT INTO task_queue (id, project_id, prompt, name, view, after_task,
+       origin_workspace_id, position, created_at)
+     VALUES (?, ?, ?, ?, 'chat', ?, ?, ?, datetime('now', ?))`
+  );
+  insert.run(
+    randomUUID(),
+    projectIds.get("storefront"),
+    "Add a Reorder button to past orders.",
+    "reorder-button",
+    null,
+    workspaceId,
+    1,
+    "-7 minutes"
+  );
+  insert.run(
+    randomUUID(),
+    projectIds.get("payments-api"),
+    "Read the webhook signing keys from the secrets store, not the env.",
+    "webhook-signing-keys",
+    sessionIds.get("idem"),
+    workspaceId,
+    2,
+    "-5 minutes"
+  );
 }
 
 // A machine linked to its own AgentOS: the stand-in in peer.ts.

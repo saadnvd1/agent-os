@@ -29,13 +29,13 @@ sensitive or large PRs wait for you too. [More](#orchestrator)
 
 A task gets its own git worktree, branch and ports, opens as a chat, runs
 the project's code review before it opens its PR, and waits for your
-sign-off. A workspace can cap how many tasks run at once; the rest queue
-and start in order, and `aos task --after` holds one until another finishes.
-[More](#tasks)
+sign-off. A workspace's **Task limit** caps how many run at once; the rest
+wait under **Queued** with their place in line and start on their own, and
+`aos task --after` holds one until another finishes. [More](#tasks)
 
 ![A task's chat: the edit, the tests, the code review and the PR it opened](screenshots/task-chat.png)
 
-![Tasks in different states: needs input, working, merged](screenshots/tasks.png)
+![Two queued tasks in the sidebar, one in line and one waiting on another task, with its menu open](screenshots/queued.png)
 
 ### Nothing starts until you send
 
@@ -50,8 +50,10 @@ and base branch are chips on it, model and access sit under the composer, and
 
 Link another machine that runs AgentOS and its sessions show up next to
 yours, with the same rows, menu and address. Their chats and terminals are
-relayed through this server, new sessions and tasks can start there, and a
-running terminal task can move between machines. [More](#machines)
+relayed through this server. Pick the machine on a draft to start a session
+or task there, even for a project that only lives here (it finds or clones
+the repository), and move a running terminal task between machines.
+[More](#machines)
 
 ![A linked machine's sessions listed under its name in the sidebar](screenshots/machines.png)
 
@@ -364,6 +366,8 @@ this repository's CI fails one too. The review agents are in
 [.claude/skills](.claude/skills/README.md).
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
+
+![Tasks in different states: needs input, working, merged](screenshots/tasks.png)
 
 Tracking PRs stays inside GitHub's GraphQL quota (5,000 points an hour).
 Only running tasks are asked about: a finished task's PR comes from the
