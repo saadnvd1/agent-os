@@ -41,6 +41,8 @@ function keysFor(topic: string): QueryKey[] {
       return [hostKeys.list()];
     case "discovered":
       return [hostKeys.discovered()];
+    case "task_queue":
+      return [taskKeys.all];
     case "stacks":
     case "stack_items":
       return [stackKeys.all];

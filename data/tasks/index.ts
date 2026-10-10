@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TaskView } from "@/lib/tasks";
+import type { QueuedTaskView } from "@/lib/tasks/queue";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "./keys";
 import { usePollWhenOffline } from "../push/connection";
@@ -44,7 +45,11 @@ export function useCreateTask() {
       baseBranch?: string;
       hostId?: string;
     }) =>
-      json<{ session: { id: string } }>(
+      // Over the workspace's running task limit it's queued instead.
+      json<
+        | { session: { id: string }; queued?: undefined }
+        | { session?: undefined; queued: QueuedTaskView }
+      >(
         await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

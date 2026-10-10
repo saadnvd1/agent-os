@@ -23,8 +23,13 @@ export const TABLES_WATCHED_45 = [
   "dev_servers",
 ] as const;
 
+export const TABLES_WATCHED_50 = ["task_queue"] as const;
+
 // Every table any migration watches, for the browser's topic map to cover.
-export const WATCHED_TABLES: readonly string[] = [...TABLES_WATCHED_45];
+export const WATCHED_TABLES: readonly string[] = [
+  ...TABLES_WATCHED_45,
+  ...TABLES_WATCHED_50,
+];
 
 export function installChangeTriggers(
   db: Database.Database,

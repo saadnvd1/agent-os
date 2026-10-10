@@ -41,19 +41,34 @@ export function createWorkspace(name: string): Workspace {
   return getWorkspace(id)!;
 }
 
+// A limit on running tasks: a whole number from 1, or null for none.
+function taskLimit(value: unknown, current: number | null): number | null {
+  if (value === undefined) return current;
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1)
+    throw new Error("The running task limit is a whole number from 1, or none");
+  return value;
+}
+
 export function updateWorkspace(
   id: string,
-  updates: { name?: string; collapsed?: boolean; sortOrder?: number }
+  updates: {
+    name?: string;
+    collapsed?: boolean;
+    sortOrder?: number;
+    maxRunningTasks?: number | null;
+  }
 ): Workspace | null {
   const existing = getWorkspace(id);
   if (!existing) return null;
   const name = updates.name?.trim() || existing.name;
   db.prepare(
-    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ? WHERE id = ?`
+    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ?, max_running_tasks = ? WHERE id = ?`
   ).run(
     name,
     (updates.collapsed ?? existing.collapsed) ? 1 : 0,
     updates.sortOrder ?? existing.sort_order,
+    taskLimit(updates.maxRunningTasks, existing.max_running_tasks),
     id
   );
   return getWorkspace(id);

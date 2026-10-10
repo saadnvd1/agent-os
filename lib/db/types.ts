@@ -184,6 +184,8 @@ export interface Workspace {
   orch_brake: string | null;
   // Set while Saad has the orchestrator paused.
   orch_paused_at: string | null;
+  // Tasks running at once before new ones queue (lib/tasks/queue.ts); null: no limit.
+  max_running_tasks: number | null;
   created_at: string;
 }
 

@@ -62,7 +62,7 @@ export function DraftPanel({
       if (draft.openPr) {
         if (!project) throw new Error("Pick a project for a task");
         if (images.length) throw new Error("A task takes text only");
-        const { session } = await createTask.mutateAsync({
+        const { session, queued } = await createTask.mutateAsync({
           projectId: project.id,
           prompt: text,
           model: draft.model,
@@ -70,6 +70,12 @@ export function DraftPanel({
           hostId: draft.hostId !== project.host_id ? draft.hostId : undefined,
         });
         draftsActions.remove(draft.id);
+        if (queued) {
+          toast.success(
+            `Task queued (position ${queued.position}): it starts by itself when a slot frees`
+          );
+          return;
+        }
         attachSession(paneId, session.id, `claude-${session.id}`);
         toast.success("Task started: it opens a pull request when done");
         return;

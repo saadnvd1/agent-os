@@ -233,6 +233,46 @@ describe("acting inside the workspace", () => {
     ]);
   });
 
+  it("queues a task with after, and tells the orchestrator when it starts", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    started.length = 0;
+    const text = await runTool(w, "start_task", {
+      project: mine.app.name,
+      prompt: "follow up on auth",
+      name: "auth follow-up",
+      after: "add-auth",
+    });
+    expect(text).toMatch(
+      /^Queued \(position 1\) task "auth follow-up" \(id \w{8}\) in app-\w+, after add-auth\./
+    );
+    expect(started).not.toContain("follow up on auth");
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      mine.task
+    );
+    const { tickQueue } = await import("@/lib/tasks/queue");
+    await tickQueue();
+    expect(started).toContain("follow up on auth");
+    const events = db
+      .prepare(
+        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE 'once:queued-start:%'`
+      )
+      .all(w) as { line: string }[];
+    expect(events.map((e) => e.line)).toEqual([
+      expect.stringMatching(
+        /^Queued task "follow up on auth" \(id \w{8}\) started/
+      ),
+    ]);
+    // An after outside the workspace isn't found.
+    await expect(
+      runTool(w, "start_task", {
+        project: mine.app.name,
+        prompt: "x",
+        after: "nothing-like-this",
+      })
+    ).rejects.toThrow(/No running or queued task matches/);
+  });
+
   it("starts in a terminal when asked to, for a job that needs a TUI", async () => {
     const { mine } = twoWorkspaces();
     const w = mine.workspace.id;

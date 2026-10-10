@@ -54,6 +54,15 @@ export const TOOL_SHAPES = {
       .optional()
       .describe("A short name, 2-6 words (default: one made from the prompt)"),
     view,
+    after: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe(
+        'Queue it until this task finishes (id or name), or "any" for whichever running task finishes first'
+      ),
   },
   start_session: {
     project,

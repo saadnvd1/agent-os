@@ -60,6 +60,7 @@ export const STATIC_SIBLINGS = [
   "init-script",
   "items",
   "network",
+  "queue",
   "status",
 ];
 // No leading "-": an id that reaches a command line can't read as an option.
@@ -86,6 +87,7 @@ const READS = [
   "groups/.+",
   "tasks",
   "tasks/arrived",
+  "tasks/queue",
   "stacks",
   "stacks/[id]",
   "schedules",
