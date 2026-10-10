@@ -290,6 +290,9 @@ export function deleteProject(id: string): boolean {
   // Delete dev server configs (templates)
   queries.deleteProjectDevServers(db).run(id);
 
+  // Its merge settings override (lib/tasks/merge-policy.ts)
+  db.prepare(`DELETE FROM settings WHERE key = ?`).run(`merge.project.${id}`);
+
   // Delete project
   queries.deleteProject(db).run(id);
   return true;

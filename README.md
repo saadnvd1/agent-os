@@ -302,9 +302,37 @@ done** turned on (**New task** in ⌘K, the sidebar's New menu or the Tasks
 panel opens one). AgentOS creates a git worktree and branch, starts Claude there in tmux
 with a brief to finish by pushing and opening a pull request, and tracks it:
 Working, Needs input, Blocked, Ready for review, Checks failing or Agent
-exited. **Sign off & merge** squash-merges the PR (refused while CI is failing
+exited. **Sign off & merge** merges the PR (refused while CI is failing
 or pending), then removes the session, worktree and branches. **Drop** closes
 the PR and removes everything. Agents never merge their own work.
+
+**Merging settings.** How a PR merges (sign-off, Done, Land and the
+orchestrator's external PRs alike) and what's cleaned up after it are set in
+the sidebar menu's **Merging** (or ⌘K → Merge settings) for every project,
+and overridden per project in its **Project Settings → Merging** or in its
+`agentos.json`:
+
+```json
+{
+  "merge": {
+    "method": "rebase",
+    "delete_remote_branch": true,
+    "delete_worktree": false
+  }
+}
+```
+
+`method` is `squash` (the default), `merge` (a merge commit) or `rebase`.
+GitHub enforces the repository's allowed methods: if it refuses the one set,
+the merge fails with a message naming the method and the repository setting
+to turn on (Settings → General → Pull Requests), and AgentOS never falls back
+to another method. The project's settings show a method its repository has
+turned off. `delete_remote_branch` and `delete_worktree` (both on by default)
+delete the branch on origin and the local worktree with its branch after a
+merge. With either on, `main`, `master` and `HEAD` are never deleted, nor a
+branch a stacked task still targets, nor a worktree holding uncommitted work
+or commits the merge didn't include. The most specific setting wins: the
+project's, then `agentos.json`, then the global one.
 
 **Queued tasks.** A workspace can limit how many tasks run at once (none by
 default; set it from the workspace menu's **Task limit**, or `PATCH /api/workspaces/<id>` with `{"maxRunningTasks": 3}`, or
@@ -397,9 +425,13 @@ root. Every field is optional:
   "test": "bundle exec rspec",
   "browse": { "login": "/dev/login", "map": "docs/browsing.md" },
   "database": { "from": "app_development", "env": "DATABASE_NAME" },
-  "notes": ["Kill your own server by port: lsof -ti tcp:$RAILS_PORT"]
+  "notes": ["Kill your own server by port: lsof -ti tcp:$RAILS_PORT"],
+  "merge": { "method": "squash" }
 }
 ```
+
+`merge` sets the project's merge method and branch clean-up (see
+[Merging settings](#tasks)).
 
 Every task and worktree session takes a **port slot**, and each named port is
 `base + slot` (a project with no `ports` still gets a `PORT` from 3100), so
@@ -454,7 +486,10 @@ only its own commits. At most three run at once without a PR (adjustable).
 
 Merging goes bottom-up. Signing off a card whose parent hasn't merged is
 refused; after a parent merges, every card stacked on it (grandchildren
-included) is rebased and its PR retargeted, and its agent is told. **Land**
+included) is rebased and its PR retargeted, and its agent is told. This works
+with every merge method: only the child's own commits are replayed onto the
+default branch, whether the parent was squashed, rebased or merged with a
+merge commit. **Land**
 merges every PR in order after checking all of them are open and green, and
 waits for each restacked PR's checks before merging it. A chat card's agent
 is stopped between turns before anything merges (Land waits up to 5 minutes

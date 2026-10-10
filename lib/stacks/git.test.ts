@@ -7,6 +7,7 @@ import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { run } from "../tasks/gh";
 import { restackBranch, type Runner } from "./git";
+import { MERGE_METHODS, type MergeMethod } from "../tasks/merge-methods";
 
 const runner: Runner = (cmd, args, cwd) => run(cmd, args, cwd);
 const git = async (cwd: string, ...args: string[]) =>
@@ -40,13 +41,30 @@ async function branch(
   return wt;
 }
 
-// Squash-merge a branch into main on origin, the way `gh pr merge --squash` does.
-async function squashMerge(name: string) {
-  await git(repo, "merge", "-q", "--squash", `origin/${name}`);
-  await git(repo, "commit", "-q", "-m", `${name} (squashed)`);
+// Merge a branch into main on origin the way `gh pr merge` does with each
+// method: one squashed commit, a merge commit keeping the branch's commits,
+// or the branch's commits replayed onto main as new commits.
+async function ghMerge(name: string, method: MergeMethod) {
+  if (method === "squash") {
+    await git(repo, "merge", "-q", "--squash", `origin/${name}`);
+    await git(repo, "commit", "-q", "-m", `${name} (squashed)`);
+  } else if (method === "merge") {
+    await git(
+      repo,
+      "merge",
+      "-q",
+      "--no-ff",
+      "-m",
+      `Merge ${name}`,
+      `origin/${name}`
+    );
+  } else {
+    await git(repo, "cherry-pick", `main..origin/${name}`);
+  }
   await git(repo, "push", "-q", "origin", "main");
   await git(repo, "fetch", "-q", "origin");
 }
+const squashMerge = (name: string) => ghMerge(name, "squash");
 
 const subjects = async (range: string) =>
   (await git(repo, "log", "--format=%s", range)).split("\n").filter(Boolean);
@@ -70,64 +88,69 @@ beforeEach(async () => {
 });
 
 describe("a stack on real git", () => {
-  it("cuts the child from the parent's pushed tip, and after the squash leaves each level its own commits", async () => {
-    await branch("feature/p", "origin/main", [
-      ["p1.txt", "p1"],
-      ["p2.txt", "p2"],
-    ]);
-    const pTip = await git(repo, "rev-parse", "origin/feature/p");
-    const cWt = await branch("feature/c", pTip, [["c.txt", "c"]]);
-    const cTip = await git(repo, "rev-parse", "origin/feature/c");
-    const gWt = await branch("feature/g", cTip, [["g.txt", "g"]]);
-    // Before the merge each PR's diff is its own commits only.
-    expect(await subjects("origin/feature/p..origin/feature/c")).toEqual([
-      "feature/c: c.txt",
-    ]);
+  it.each(MERGE_METHODS)(
+    "cuts the child from the parent's pushed tip, and after a %s merge leaves each level its own commits",
+    async (method) => {
+      await branch("feature/p", "origin/main", [
+        ["p1.txt", "p1"],
+        ["p2.txt", "p2"],
+      ]);
+      const pTip = await git(repo, "rev-parse", "origin/feature/p");
+      const cWt = await branch("feature/c", pTip, [["c.txt", "c"]]);
+      const cTip = await git(repo, "rev-parse", "origin/feature/c");
+      const gWt = await branch("feature/g", cTip, [["g.txt", "g"]]);
+      // Before the merge each PR's diff is its own commits only.
+      expect(await subjects("origin/feature/p..origin/feature/c")).toEqual([
+        "feature/c: c.txt",
+      ]);
 
-    await squashMerge("feature/p");
-    const child = await restackBranch(
-      {
-        name: "C",
-        repo,
-        worktree: cWt,
-        branch: "feature/c",
-        oldTip: pTip,
-        onto: "main",
-        retargetPr: null,
-      },
-      runner
-    );
-    expect(child).toMatchObject({
-      ok: true,
-      newTip: await git(repo, "rev-parse", "origin/main"),
-    });
-    expect(await subjects("origin/main..origin/feature/c")).toEqual([
-      "feature/c: c.txt",
-    ]);
+      // Main moved on meanwhile, so a rebase merge writes new commits.
+      await commit(repo, "other.txt", "other", "other work on main");
+      await ghMerge("feature/p", method);
+      const child = await restackBranch(
+        {
+          name: "C",
+          repo,
+          worktree: cWt,
+          branch: "feature/c",
+          oldTip: pTip,
+          onto: "main",
+          retargetPr: null,
+        },
+        runner
+      );
+      expect(child).toMatchObject({
+        ok: true,
+        newTip: await git(repo, "rev-parse", "origin/main"),
+      });
+      expect(await subjects("origin/main..origin/feature/c")).toEqual([
+        "feature/c: c.txt",
+      ]);
 
-    const grand = await restackBranch(
-      {
-        name: "G",
-        repo,
-        worktree: gWt,
-        branch: "feature/g",
-        oldTip: cTip,
-        onto: "feature/c",
-        retargetPr: null,
-      },
-      runner
-    );
-    expect(grand).toMatchObject({
-      ok: true,
-      newTip: await git(repo, "rev-parse", "origin/feature/c"),
-    });
-    expect(await subjects("origin/feature/c..origin/feature/g")).toEqual([
-      "feature/g: g.txt",
-    ]);
-    expect(
-      await git(repo, "diff", "--name-only", "origin/main...origin/feature/g")
-    ).toBe("c.txt\ng.txt");
-  });
+      const grand = await restackBranch(
+        {
+          name: "G",
+          repo,
+          worktree: gWt,
+          branch: "feature/g",
+          oldTip: cTip,
+          onto: "feature/c",
+          retargetPr: null,
+        },
+        runner
+      );
+      expect(grand).toMatchObject({
+        ok: true,
+        newTip: await git(repo, "rev-parse", "origin/feature/c"),
+      });
+      expect(await subjects("origin/feature/c..origin/feature/g")).toEqual([
+        "feature/g: g.txt",
+      ]);
+      expect(
+        await git(repo, "diff", "--name-only", "origin/main...origin/feature/g")
+      ).toBe("c.txt\ng.txt");
+    }
+  );
 
   it("aborts a conflict and leaves the worktree as it was", async () => {
     await branch("feature/p", "origin/main", [["p.txt", "p"]]);

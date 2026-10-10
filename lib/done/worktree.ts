@@ -8,6 +8,8 @@ import fs from "fs";
 import type { Session } from "../db";
 import { getDefaultBranch } from "../git";
 import { run } from "../tasks/gh";
+import { mergePolicy } from "../tasks/merge-policy";
+import { getProject } from "../projects";
 import {
   deleteWorktree,
   isAgentOSWorktree,
@@ -99,11 +101,14 @@ export type FatePreview =
   | Exclude<WorktreeFate, { action: "removed" }>
   | { action: "remove"; why: string; repo: string };
 
+type Judged = Pick<Session, "worktree_path" | "base_branch"> &
+  Partial<Pick<Session, "project_id">>;
+
 // Decides without touching anything, after any removal already running
 // (a sign-off's cleanup, just before a done) has finished: a tree read
 // while git deletes it lists every deleted file as a change.
 export async function worktreeFate(
-  session: Pick<Session, "worktree_path" | "base_branch">,
+  session: Judged,
   merged: MergedAs | null
 ): Promise<FatePreview> {
   const path = session.worktree_path;
@@ -114,17 +119,22 @@ export async function worktreeFate(
   }
 }
 
-// Uncommitted work always keeps it; a merged branch goes only if every
-// commit on it was in the merge or is on a remote; an unmerged one only if
-// it has no commits of its own.
+// Uncommitted work always keeps it; a merged branch goes only if the merge
+// settings delete worktrees and every commit on it was in the merge or is
+// on a remote; an unmerged one only if it has no commits of its own.
 async function judge(
-  session: Pick<Session, "worktree_path" | "base_branch">,
+  session: Judged,
   merged: MergedAs | null
 ): Promise<FatePreview> {
   const path = session.worktree_path;
   if (!path || !fs.existsSync(path)) return { action: "none" };
   const keep = (why: string) => ({ action: "kept" as const, why, path });
   if (!isAgentOSWorktree(path)) return keep("it isn't an AgentOS worktree");
+  if (merged && session.project_id) {
+    const project = getProject(session.project_id);
+    if (project && !mergePolicy(project).delete_worktree)
+      return keep("the merge settings keep worktrees after a merge");
+  }
   const repo = await repoOf(path).catch(() => null);
   if (!repo) return keep("it isn't a git worktree any more");
   // What AgentOS placed itself (env copies, cloned dependencies) and
@@ -159,7 +169,7 @@ async function judge(
 // Removes the worktree (and its local branch) when nothing would be lost,
 // and says so only once it's really gone.
 export async function settleWorktree(
-  session: Pick<Session, "worktree_path" | "base_branch">,
+  session: Judged,
   merged: MergedAs | null
 ): Promise<WorktreeFate> {
   const fate = await worktreeFate(session, merged);

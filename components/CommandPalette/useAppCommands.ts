@@ -18,6 +18,7 @@ import {
   Moon,
   Plus,
   Smartphone,
+  GitMerge,
   Sun,
   Workflow,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import { usePaletteCommands } from "@/hooks/usePaletteCommands";
 import { archivedUiActions } from "@/stores/archivedUi";
 import { busUiActions } from "@/stores/busUi";
 import { devicesUiActions } from "@/stores/devicesUi";
+import { mergeUiActions } from "@/stores/mergeUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { tasksUiActions } from "@/stores/tasksUi";
@@ -190,6 +192,14 @@ export function useAppCommands({
       keywords: ["phone", "pair", "passkeys"],
       icon: Smartphone,
       run: devicesUiActions.open,
+    },
+    {
+      id: "app.merging",
+      title: "Merge settings",
+      group: "Settings",
+      keywords: ["merge", "squash", "rebase", "branch", "worktree"],
+      icon: GitMerge,
+      run: mergeUiActions.open,
     },
     ...(onNotificationSettings
       ? [

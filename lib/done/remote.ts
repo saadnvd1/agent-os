@@ -6,6 +6,7 @@ import type { Session } from "../db";
 import type { TaskPR } from "../tasks";
 import { run } from "../tasks/gh";
 import { projectPathFor } from "../tasks/session";
+import { PROTECTED_BRANCHES } from "../tasks/finish";
 import { liveChildren } from "../stacks/guard";
 
 export async function deleteMergedRemote(
@@ -14,7 +15,14 @@ export async function deleteMergedRemote(
 ): Promise<boolean> {
   const repo = projectPathFor(s);
   const branch = s.branch_name;
-  if (!repo || !branch || !pr?.head || liveChildren(s.id).length) return false;
+  if (
+    !repo ||
+    !branch ||
+    PROTECTED_BRANCHES.has(branch) ||
+    !pr?.head ||
+    liveChildren(s.id).length
+  )
+    return false;
   const line = await run(
     "git",
     ["ls-remote", "--heads", "origin", `refs/heads/${branch}`],

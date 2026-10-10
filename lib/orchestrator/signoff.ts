@@ -7,6 +7,7 @@
  * is with Saad the orchestrator doesn't merge it; he signs it off or drops it.
  */
 
+import { MERGED_AS, type MergeMethod } from "../tasks/merge-policy";
 import { prFor } from "../tasks/session";
 import { codeReviewRefusal, signOffTask } from "../tasks";
 import { signOffRefusal } from "../stacks/guard";
@@ -208,16 +209,17 @@ export async function mergeJudged(
 ): Promise<string> {
   if (verdict.approval && !spendApproval(verdict.approval))
     throw new Error(`Saad's approval for ${task.name} was already used`);
-  await refundIfRefused(task.id, verdict.approval, () =>
-    signOffTask(task.id, { head: verdict.sha, wait: opts.wait })
-  );
+  let method: MergeMethod = "squash";
+  await refundIfRefused(task.id, verdict.approval, async () => {
+    method = await signOffTask(task.id, { head: verdict.sha, wait: opts.wait });
+  });
   addNote(
     workspaceId,
     verdict.approval
       ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on Saad's approval of that commit.`
       : `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}): CI green, review passed, in scope.`
   );
-  return `Merged ${task.name}: PR #${verdict.pr} squash-merged at ${short(verdict.sha)}.`;
+  return `Merged ${task.name}: PR #${verdict.pr} ${MERGED_AS[method]} at ${short(verdict.sha)}.`;
 }
 
 // An approval is claimed before the merge, so two merges can't both use it,

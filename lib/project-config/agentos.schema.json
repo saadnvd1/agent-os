@@ -274,6 +274,22 @@
       "type": "string",
       "minLength": 1
     },
+    "merge": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["squash", "merge", "rebase"]
+        },
+        "delete_remote_branch": {
+          "type": "boolean"
+        },
+        "delete_worktree": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
     "notion": {
       "type": "object",
       "properties": {

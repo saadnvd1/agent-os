@@ -24,6 +24,7 @@ import { demoMode } from "../security/demo";
 import { planDone } from "./plan";
 import { deleteMergedRemote } from "./remote";
 import { settleWorktree, type WorktreeFate } from "./worktree";
+import { sessionMergePolicy } from "../tasks/finish";
 import { releasePorts } from "../ports";
 import { dropSessionDatabase } from "../project-config/database";
 import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
@@ -163,7 +164,11 @@ export async function doneSession(
     worktree = await settleWorktree(s, { prHead: m.sha });
   } else {
     if (plan.mark) mark(s, plan.mark, plan.pr);
-    if (plan.mark === "merged" && (await deleteMergedRemote(s, plan.pr)))
+    if (
+      plan.mark === "merged" &&
+      sessionMergePolicy(s).delete_remote_branch &&
+      (await deleteMergedRemote(s, plan.pr))
+    )
       notes.push("its merged branch deleted on origin");
     await stopAgent(s);
     worktree = await settleWorktree(s, plan.merged);

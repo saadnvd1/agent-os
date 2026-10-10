@@ -88,6 +88,13 @@ const MessagesDialog = dynamic(
   () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
   { ssr: false }
 );
+const MergeSettingsDialog = dynamic(
+  () =>
+    import("@/components/Merge/MergeSettingsDialog").then(
+      (m) => m.MergeSettingsDialog
+    ),
+  { ssr: false }
+);
 const DevicesDialog = dynamic(
   () =>
     import("@/components/Devices/DevicesDialog").then((m) => m.DevicesDialog),
@@ -138,6 +145,7 @@ const AppDialogs = memo(function AppDialogs() {
       <AddProjectDialog />
       <MessagesDialog />
       <DevicesDialog />
+      <MergeSettingsDialog />
       <ArchivedDialog />
       <CleanupDialog />
       <LumifyHubDialogs />

@@ -12,12 +12,26 @@ import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
 import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
 import { stopChat } from "../chat/runner";
 import { run } from "./gh";
+import {
+  mergePolicy,
+  type MergeMethod,
+  type MergePolicy,
+} from "./merge-policy";
+import { mergePR } from "./merge-pr";
+import { getProject } from "../projects";
 import { canSignOff } from "./state";
 import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
 import { dropSessionDatabase } from "../project-config/database";
 
+// Never deleted, whatever a setting says.
+export const PROTECTED_BRANCHES = new Set(["main", "master", "HEAD"]);
+
+export const sessionMergePolicy = (session: Session): MergePolicy =>
+  mergePolicy(session.project_id ? getProject(session.project_id) : null);
+
 // After a merge (`merged`), the worktree goes only if nothing in it would
-// be lost; a drop removes it whatever it holds.
+// be lost and the merge settings delete worktrees; a drop removes it
+// whatever it holds.
 async function cleanup(
   session: Session,
   repo: string,
@@ -42,7 +56,11 @@ async function cleanup(
   }
   // A stacked child's PR targets this branch: deleting it on origin would
   // make GitHub close that PR, and a closed PR can't be retargeted.
-  if (session.branch_name && !keepRemoteBranch) {
+  if (
+    session.branch_name &&
+    !keepRemoteBranch &&
+    !PROTECTED_BRANCHES.has(session.branch_name)
+  ) {
     await run(
       "git",
       ["push", "origin", "--delete", session.branch_name],
@@ -64,7 +82,8 @@ const afterMerge = new Map<string, Promise<void>>();
 async function finishMerge(
   session: Session,
   repo: string,
-  prHead: string | null
+  prHead: string | null,
+  policy: MergePolicy
 ): Promise<void> {
   // Before cleanup deletes this branch on origin: children are retargeted
   // first. One that could not be moved keeps the branch alive.
@@ -75,7 +94,7 @@ async function finishMerge(
     }
   );
   await cleanup(session, repo, {
-    keepRemoteBranch: stuck,
+    keepRemoteBranch: stuck || !policy.delete_remote_branch,
     merged: { prHead },
   });
   // After cleanup's fetch, so the base branch holds the merged files.
@@ -84,18 +103,22 @@ async function finishMerge(
   );
 }
 
-// Squash-merge the PR; the restack and cleanup run after it in the
-// background (`wait` to wait for them). The checks are re-read here: the
-// button is not the guard. With `head`, GitHub merges only that commit.
+// Merge the PR with the project's merge method; the restack and cleanup
+// run after it in the background (`wait` to wait for them). The checks are
+// re-read here: the button is not the guard. With `head`, GitHub merges
+// only that commit. Returns the method it merged with.
 export async function signOffTask(
   id: string,
   opts: { wait?: boolean; head?: string } = {}
-): Promise<void> {
+): Promise<MergeMethod> {
   const session = getTaskSession(id);
   if (session.task_status !== "running")
     throw new Error(`Task is already ${session.task_status}`);
   // Its own machine checks the gates and merges.
-  if (isMirror(session)) return remoteTaskAction(session, "merge", opts.head);
+  if (isMirror(session)) {
+    await remoteTaskAction(session, "merge", opts.head);
+    return sessionMergePolicy(session).method;
+  }
   const repo = projectPathFor(session);
   if (!repo) throw new Error("Task has no project");
   const refusal = signOffRefusal(id);
@@ -107,20 +130,15 @@ export async function signOffTask(
     throw new Error(
       `The PR moved to ${pr!.head.slice(0, 7)} after ${opts.head.slice(0, 7)} was checked`
     );
+  const policy = sessionMergePolicy(session);
   signingOff.add(id);
   try {
-    await run(
-      "gh",
-      [
-        "pr",
-        "merge",
-        String(pr!.number),
-        "--squash",
-        ...(opts.head ? ["--match-head-commit", opts.head] : []),
-      ],
+    await mergePR({
       repo,
-      120000
-    );
+      number: pr!.number,
+      method: policy.method,
+      head: opts.head,
+    });
     db.prepare(
       `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
     ).run(id);
@@ -140,10 +158,12 @@ export async function signOffTask(
   const done = finishMerge(
     session,
     repo,
-    opts.head ?? pr!.head ?? null
+    opts.head ?? pr!.head ?? null,
+    policy
   ).finally(() => afterMerge.delete(id));
   afterMerge.set(id, done);
   if (opts.wait) await done;
+  return policy.method;
 }
 
 export function mergeSettled(id: string): Promise<void> {

@@ -5,6 +5,7 @@
  */
 
 import { z } from "zod";
+import { MERGE_METHODS } from "../tasks/merge-methods";
 
 export const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const envName = z.string().regex(ENV_NAME, "must be a shell variable name");
@@ -69,6 +70,14 @@ const cards = z.looseObject({
     .optional(),
 });
 
+// How a task's PR merges and what goes after it. The same shape is the
+// global and per-project setting (lib/tasks/merge-policy.ts).
+export const mergeSettings = z.strictObject({
+  method: z.enum(MERGE_METHODS).optional(),
+  delete_remote_branch: z.boolean().optional(),
+  delete_worktree: z.boolean().optional(),
+});
+
 const alias = z.string().regex(/^[a-z0-9-]+$/, "must be [a-z0-9-]");
 
 const shape = {
@@ -118,6 +127,7 @@ const shape = {
     .optional(),
   repos: z.array(z.string().min(1)).optional(),
   review_skill: z.string().min(1).optional(),
+  merge: mergeSettings.optional(),
   notion: z
     .looseObject({
       vault: z

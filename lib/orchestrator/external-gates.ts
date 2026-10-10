@@ -10,6 +10,8 @@
  * does carry is held to the same rules as a task's.
  */
 
+import { MERGED_AS, mergePolicy } from "../tasks/merge-policy";
+import { mergePR } from "../tasks/merge-pr";
 import { attributionIn, codeReviewRefusal } from "../tasks/code-review";
 import { run } from "../tasks/gh";
 import { refundApproval, spendApproval } from "./ask-approvals";
@@ -150,22 +152,15 @@ export async function signOffExternal(
   if (!verdict.ok) throw new Error(verdict.text);
   if (verdict.approval && !spendApproval(verdict.approval))
     throw new Error(`Saad's approval for ${ext.name} was already used`);
+  const { method } = mergePolicy(ext.project);
   try {
-    await run(
-      "gh",
-      [
-        "pr",
-        "merge",
-        String(ext.number),
-        "--repo",
-        ext.slug,
-        "--squash",
-        "--match-head-commit",
-        verdict.sha,
-      ],
-      ext.repo,
-      120000
-    );
+    await mergePR({
+      repo: ext.repo,
+      number: ext.number,
+      slug: ext.slug,
+      method,
+      head: verdict.sha,
+    });
   } catch (error) {
     if (verdict.approval && !(await mergedNow(ext)))
       refundApproval(verdict.approval);
@@ -182,7 +177,7 @@ export async function signOffExternal(
       ? `Merged ${ext.name} (not an AgentOS task, ${short(verdict.sha)}) on Saad's approval of that commit.`
       : `Merged ${ext.name} (not an AgentOS task, ${short(verdict.sha)}): CI green, review passed, in scope.`
   );
-  return `Merged ${ext.name}: squash-merged at ${short(verdict.sha)}.`;
+  return `Merged ${ext.name}: ${MERGED_AS[method]} at ${short(verdict.sha)}.`;
 }
 
 export async function reviewExternal(

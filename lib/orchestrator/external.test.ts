@@ -95,6 +95,7 @@ const { slugOfRemote } = await import("./repo-slug");
 const { namedAfter } = await import("./external-sessions");
 const { setMergeApprovals } = await import("./merge-approvals");
 const { seedSession } = await import("./testing");
+const { setProjectMergeSettings } = await import("@/lib/tasks/merge-policy");
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-external-"));
@@ -248,6 +249,28 @@ describe("sign_off on a PR no task owns", () => {
         "--repo",
         "o/r",
         "--squash",
+        "--match-head-commit",
+        t.sha,
+      ],
+    ]);
+  });
+
+  it("merges with the project's merge method", async () => {
+    const t = setup();
+    setProjectMergeSettings(t.projectId, { method: "merge" });
+    await reviewTarget(t.w, "#50", { wait: true, claude: passing });
+    const done = await runTool(t.w, "sign_off", { task: "#50" });
+    expect(done).toBe(
+      `Merged o/r#50: merged with a merge commit at ${t.sha.slice(0, 7)}.`
+    );
+    expect(merges).toEqual([
+      [
+        "pr",
+        "merge",
+        "50",
+        "--repo",
+        "o/r",
+        "--merge",
         "--match-head-commit",
         t.sha,
       ],

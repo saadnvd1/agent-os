@@ -1,8 +1,10 @@
 /**
- * After a stacked parent squash-merges: move EVERY descendant, in order.
- * Direct children have their PR retargeted to the default branch and are
- * rebased `--onto origin/<default> <old parent tip>`, so the squashed
- * parent's commits drop out of their diff. Grandchildren are then rebased
+ * After a stacked parent merges: move EVERY descendant, in order. Direct
+ * children have their PR retargeted to the default branch and are rebased
+ * `--onto origin/<default> <old parent tip>`, so only their own commits are
+ * replayed. That holds for every merge method: a squash or rebase merge
+ * rewrote the parent's commits (they drop out of the child's diff), and a
+ * merge commit kept them (the child lands on top of it). Grandchildren are then rebased
  * onto their parent's rewritten branch the same way, and keep targeting it.
  */
 
