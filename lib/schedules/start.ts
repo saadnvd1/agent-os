@@ -10,6 +10,7 @@ import { getProject } from "../projects";
 import { resolveModelForAgent } from "../model-catalog";
 import { createTask, isFinished, taskView } from "../tasks";
 import { chatStateNow, sendChatConfirmed } from "../chat/runner";
+import type { ChatOrigin } from "../chat/events";
 import { ensureOrchestrator, getOrchestrator } from "../orchestrator/home";
 import { addNote } from "../orchestrator/notes";
 import { notifyStatusChanged } from "../status/hub";
@@ -75,6 +76,7 @@ async function startSession(
   await sendChatConfirmed(id, {
     text: schedule.prompt,
     from: fromLabel(schedule),
+    origin: scheduleOrigin(schedule, null),
   });
   onSession(id);
   return id;
@@ -108,6 +110,19 @@ function creatorOf(schedule: Schedule): Pick<Session, "id" | "name"> | null {
   );
 }
 
+// Shown as its prompt, linked to the agent session that set it up if one did.
+export function scheduleOrigin(
+  schedule: Pick<Schedule, "name" | "prompt">,
+  creator: Pick<Session, "id"> | null
+): ChatOrigin {
+  return {
+    kind: "schedule",
+    label: schedule.name,
+    sessionId: creator?.id,
+    body: schedule.prompt,
+  };
+}
+
 // To whichever session is the workspace's orchestrator at the time, so a
 // schedule aimed at it outlives the session that was orchestrator when it
 // was made.
@@ -123,6 +138,7 @@ async function postToOrchestrator(
     from: creator
       ? `${fromLabel(schedule)}, set up by "${creator.name}"`
       : fromLabel(schedule),
+    origin: scheduleOrigin(schedule, creator),
   });
   onSession(orchestrator.id);
   return orchestrator.id;
@@ -144,6 +160,7 @@ async function messageSession(
       : fromLabel(schedule),
     to: target,
     body: scheduledMessage(schedule, null, creatorRef),
+    origin: scheduleOrigin(schedule, creatorRef),
   });
   if (delivery.state === "failed") throw new Error(`FAILED: ${delivery.why}`);
   onSession(target);

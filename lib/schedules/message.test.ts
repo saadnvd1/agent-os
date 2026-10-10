@@ -9,7 +9,12 @@ const workers = vi.hoisted(() => ({
   running: [] as string[],
   state: "idle" as "idle" | "running",
   started: [] as string[],
-  sends: [] as { sessionId: string; text: string; from?: string }[],
+  sends: [] as {
+    sessionId: string;
+    text: string;
+    from?: string;
+    origin?: unknown;
+  }[],
 }));
 vi.mock("../chat/worker/client", async (original) => ({
   ...(await original<typeof import("../chat/worker/client")>()),
@@ -26,7 +31,12 @@ vi.mock("../chat/worker/client", async (original) => ({
       client: {
         command: (cmd: WorkerCommand) => {
           if (cmd.type !== "send") return;
-          workers.sends.push({ sessionId, text: cmd.text, from: cmd.from });
+          workers.sends.push({
+            sessionId,
+            text: cmd.text,
+            from: cmd.from,
+            origin: cmd.origin,
+          });
           setTimeout(() =>
             handlers.onEvent({
               type: "item",
@@ -145,6 +155,12 @@ describe("message schedules: the target", () => {
     expect(workers.sends.at(-1)).toMatchObject({
       sessionId,
       from: "Schedule Check-ins",
+      // Shown in the chat as the schedule's, by its prompt.
+      origin: {
+        kind: "schedule",
+        label: "Check-ins",
+        body: schedule.prompt,
+      },
     });
     expect(workers.sends.at(-1)!.text).toContain("How's it going?");
   });
@@ -301,6 +317,7 @@ describe("message schedules: who can aim them where", () => {
     await runSlot(schedule, at("2026-10-07T13:10:00Z"), "schedule", realDeps);
     const sent = workers.sends.filter((m) => m.sessionId === sessionId).at(-1)!;
     expect(sent.from).toBe(`Schedule ${schedule.name}, set up by "planner"`);
+    expect(sent.origin).toMatchObject({ kind: "schedule", sessionId: agent });
     expect(sent.text).toContain(
       `set up by agent session "planner" (${agent.slice(0, 8)}), not by the user`
     );

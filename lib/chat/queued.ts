@@ -1,5 +1,5 @@
 import { db } from "../db";
-import type { ChatImage, QueuedMessage } from "./events";
+import type { ChatImage, QueuedMessage, SentBy } from "./events";
 
 // Messages written while a turn runs, kept in SQLite so a reload or a
 // restart never loses them. The worker sends them in order when the turn
@@ -14,6 +14,7 @@ interface Row {
   id: string;
   text: string;
   images: string | null;
+  sent_by: string | null;
   created_at: number;
 }
 
@@ -43,9 +44,10 @@ export function listQueue(sessionId: string): QueuedMessage[] {
 // At the back. A retried send with the same id is only queued once.
 export function enqueue(
   sessionId: string,
-  m: { id: string; text: string; images?: ChatImage[] }
+  m: { id: string; text: string; images?: ChatImage[] } & SentBy
 ): void {
   const images = m.images?.length ? JSON.stringify(m.images) : null;
+  const sentBy: SentBy = { from: m.from, peer: m.peer, origin: m.origin };
   if (m.text.length > MAX_QUEUED_TEXT)
     throw new Error("That message is too long to queue");
   if (images && images.length > MAX_QUEUED_IMAGES)
@@ -56,8 +58,8 @@ export function enqueue(
   if (n >= MAX_QUEUED)
     throw new Error(`The queue is full (${MAX_QUEUED} messages)`);
   db.prepare(
-    `INSERT OR IGNORE INTO chat_queue (id, session_id, position, text, images, image_count, created_at)
-     VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM chat_queue WHERE session_id = ?), ?, ?, ?, ?)`
+    `INSERT OR IGNORE INTO chat_queue (id, session_id, position, text, images, image_count, sent_by, created_at)
+     VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM chat_queue WHERE session_id = ?), ?, ?, ?, ?, ?)`
   ).run(
     m.id,
     sessionId,
@@ -65,6 +67,7 @@ export function enqueue(
     m.text,
     images,
     m.images?.length ?? 0,
+    m.from || m.peer || m.origin ? JSON.stringify(sentBy) : null,
     Date.now()
   );
 }
@@ -75,13 +78,13 @@ export function claimNext(
   sessionId: string,
   // That message only, if it's still there.
   id?: string
-): { id: string; text: string; images?: ChatImage[] } | null {
+): ({ id: string; text: string; images?: ChatImage[] } & SentBy) | null {
   const row = db
     .prepare(
       `DELETE FROM chat_queue WHERE session_id = ? AND id = (
          SELECT id FROM chat_queue WHERE session_id = ? AND (? IS NULL OR id = ?)
          ORDER BY position, created_at LIMIT 1
-       ) RETURNING id, text, images, created_at`
+       ) RETURNING id, text, images, sent_by, created_at`
     )
     .get(sessionId, sessionId, id ?? null, id ?? null) as Row | undefined;
   if (!row) return null;
@@ -89,6 +92,7 @@ export function claimNext(
     id: row.id,
     text: row.text,
     images: row.images ? (JSON.parse(row.images) as ChatImage[]) : undefined,
+    ...(row.sent_by ? (JSON.parse(row.sent_by) as SentBy) : {}),
   };
 }
 

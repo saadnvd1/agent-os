@@ -38,6 +38,11 @@ export function raiseAlert(text: string): void {
       to: orch.id,
       body: `${text} ${BACK_OFF}`,
       fromLabel: "AgentOS load monitor",
+      origin: {
+        kind: "system",
+        label: "Load monitor",
+        body: `${text} ${BACK_OFF}`,
+      },
     }).catch((err) =>
       console.error(
         `[load] couldn't tell ${orch.name}:`,

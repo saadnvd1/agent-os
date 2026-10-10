@@ -183,6 +183,52 @@ describe("ChatHost", () => {
   });
 });
 
+describe("ChatHost origins", () => {
+  it("marks a typed message as tagged with no origin, so it stays the reader's", async () => {
+    const { id, host } = await startHost();
+    await host.handle({
+      type: "send",
+      id: "user-1",
+      text: '[Scheduled message "x"] typed',
+    });
+    const [item] = listItems(id);
+    expect(item).toMatchObject({ kind: "user", tagged: true });
+    expect(item).not.toHaveProperty("origin", expect.anything());
+    host.close();
+  });
+
+  it("stores what sent an event, and the agent gets its text unchanged", async () => {
+    const { id, host, conversation } = await startHost();
+    const origin = { kind: "event", label: "AgentOS" } as const;
+    await host.handle({
+      type: "send",
+      id: "user-1",
+      text: "task x: review of 7ead8e8 passed",
+      from: "agentos",
+      origin,
+    });
+    expect(conversation.send).toHaveBeenCalledWith(
+      "task x: review of 7ead8e8 passed",
+      undefined
+    );
+    expect(listItems(id)[0]).toMatchObject({ kind: "user", origin });
+    host.close();
+  });
+
+  it("keeps a queued message's origin when it's sent", async () => {
+    const { id, host } = await startHost();
+    const origin = {
+      kind: "schedule",
+      label: "Triage",
+      body: "triage",
+    } as const;
+    enqueue(id, { id: "user-q", text: "[Scheduled message]", origin });
+    await host.handle({ type: "drain" });
+    expect(listItems(id)[0]).toMatchObject({ id: "user-q", origin });
+    host.close();
+  });
+});
+
 describe("ChatHost queue", () => {
   const userTexts = (id: string) =>
     listItems(id).flatMap((i) => (i.kind === "user" ? [i.text] : []));

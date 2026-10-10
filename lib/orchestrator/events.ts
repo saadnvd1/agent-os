@@ -36,6 +36,10 @@ const SEEN = "seen:";
 // A one-off event that isn't a condition (a review finished): sent once,
 // never cleared by a diff.
 const ONCE = "once:";
+// The key of Saad's answer to an ask, queued as a one-off line.
+export const answerKey = (askId: number) => `ask:${askId}`;
+export const isAnswer = (e: Pick<EventRow, "key">) =>
+  e.key.startsWith(`${ONCE}ask:`);
 
 const iso = (ms: number) => new Date(ms).toISOString();
 

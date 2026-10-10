@@ -3,6 +3,7 @@ import os from "os";
 import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { ChatSender } from "./deliver";
+import type { ChatOrigin } from "@/lib/chat/events";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -53,8 +54,10 @@ function workspace() {
       ...(link && { link }),
     });
   const sent: string[] = [];
+  const origins: ChatOrigin[] = [];
   const send: ChatSender = async (_id, input) => {
     sent.push(input.text);
+    origins.push(input.origin);
   };
   let clock = Date.now();
   // Each delivery a batch window after the last, so only pause holds it.
@@ -69,7 +72,7 @@ function workspace() {
     });
   };
   const orchNeedsYou = () => needsYou(getSession(orch.id)!, "idle");
-  return { ...ws, w, orch, ask, sent, deliver, orchNeedsYou };
+  return { ...ws, w, orch, ask, sent, origins, deliver, orchNeedsYou };
 }
 
 describe("the ask lifecycle", () => {
@@ -125,6 +128,23 @@ describe("the ask lifecycle", () => {
     expect(() =>
       answerAsk(t.w, post.id, { action: "reply", text: " " })
     ).toThrow();
+  });
+
+  it("tags the batch as AgentOS's, with the answers as Saad's decisions", async () => {
+    const t = workspace();
+    await t.ask("Pay for the domain?");
+    const [ask] = openAsks(t.w);
+    queueEvent(t.w, "review:x", null, "task x: review of 7ead8e8 passed");
+    answerAsk(t.w, ask.id, { action: "approve" });
+    await t.deliver();
+    const decided = [
+      'ask "Pay for the domain?": approved (this item only, not standing permission)',
+    ];
+    expect(t.sent[0].split("\n")).toEqual([
+      "task x: review of 7ead8e8 passed",
+      ...decided,
+    ]);
+    expect(t.origins[0]).toEqual({ kind: "event", label: "AgentOS", decided });
   });
 
   it("refuses a kind it doesn't raise itself", async () => {

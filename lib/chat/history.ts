@@ -6,7 +6,7 @@ export function sentPrompts(items: ChatItem[]): string[] {
   const out: string[] = [];
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
-    if (item.kind !== "user" || item.peer || item.from) continue;
+    if (item.kind !== "user" || item.peer || item.from || item.origin) continue;
     const text = item.text.trim();
     if (text && text !== out[out.length - 1]) out.push(text);
   }

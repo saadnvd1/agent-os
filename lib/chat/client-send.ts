@@ -1,7 +1,7 @@
 import type { ChatImage } from "./events";
 
 // What a browser's send may carry: its text and images. Who a message is
-// from (`from`, `peer`) is set by the agent bus alone, never by a client.
+// from (`from`, `peer`, `origin`) is set by the server alone, never by a client.
 export function clientSend(msg: unknown): {
   text: string;
   images?: ChatImage[];

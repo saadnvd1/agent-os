@@ -46,10 +46,19 @@ export interface RestackDeps {
   prOf: (repo: string, branch: string) => Promise<TaskPR | null>;
 }
 
+// From the user as far as the agent reads it, as before; chat shows it as
+// AgentOS's.
+export const stackNotice = (to: string, body: string) => ({
+  fromId: null,
+  to,
+  body,
+  origin: { kind: "system", label: "AgentOS stacks", body } as const,
+});
+
 const defaults: RestackDeps = {
   runner: (cmd, args, cwd) => run(cmd, args, cwd, 120000),
   notify: async (to, body) => {
-    await sendMessage({ fromId: null, to, body }).catch(() => {});
+    await sendMessage(stackNotice(to, body)).catch(() => {});
   },
   interrupt: async (session) => {
     const sent = await run(

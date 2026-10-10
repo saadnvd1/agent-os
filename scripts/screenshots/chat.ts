@@ -169,6 +169,44 @@ export function docsConversation(start: number): ChatItem[] {
       kind: "turn_end",
       durationMs: 31000,
     },
+    // What reaches a chat without anyone typing it: rows, not bubbles.
+    {
+      id: "user-peer",
+      createdAt: start + 120000,
+      kind: "user",
+      text: '[AgentOS message from "checkout-totals" (5e1f0c2a)]: Does the docs search index pick up the new checkout pages? Reply with: aos send 5e1f0c2a "<message>"',
+      from: "checkout-totals",
+      peer: {
+        sessionId: "5e1f0c2a",
+        body: "Does the docs search index pick up the new checkout pages?",
+      },
+      // Unlinked: the demo's session ids are made when it's seeded.
+      origin: { kind: "peer", label: "checkout-totals" },
+    },
+    {
+      id: "user-schedule",
+      createdAt: start + 180000,
+      kind: "user",
+      text: "Check the docs build for broken links and fix any you find.",
+      from: "Schedule Nightly links",
+      origin: {
+        kind: "schedule",
+        label: "Nightly links",
+        body: "Check the docs build for broken links and fix any you find.",
+      },
+    },
+    {
+      id: "user-load",
+      createdAt: start + 240000,
+      kind: "user",
+      text: "[AgentOS message from AgentOS load monitor (via AgentOS)]: Machine load is high (load 14 on 8 cores). Ask your running tasks to use targeted tests and hold off on full suites, type checks and builds until it clears. Nothing has been stopped.",
+      from: "AgentOS load monitor",
+      origin: {
+        kind: "system",
+        label: "Load monitor",
+        body: "Machine load is high (load 14 on 8 cores). Ask your running tasks to use targeted tests and hold off on full suites, type checks and builds until it clears. Nothing has been stopped.",
+      },
+    },
   ];
 }
 

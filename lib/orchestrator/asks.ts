@@ -7,7 +7,7 @@
  */
 
 import { db } from "../db";
-import { queueEvent } from "./events";
+import { answerKey, queueEvent } from "./events";
 import { addNote } from "./notes";
 import { cleanTitle, classifyKind, titleSubject } from "./ask-text";
 import { revokePasskey } from "../security/passkeys";
@@ -270,7 +270,7 @@ export function answerAsk(
       `UPDATE orchestrator_asks SET status = ?, answer = ?, resolved_at = datetime('now') WHERE id = ?`
     ).run(STATUS_OF[answer.action], text, id);
     if (ask.kind === "passkey") settlePasskeyAsk(ask, answer.action);
-    else queueEvent(workspaceId, `ask:${id}`, null, line);
+    else queueEvent(workspaceId, answerKey(id), null, line);
   })();
   addNote(workspaceId, `Saad answered ${line}`, "ask");
   return getAsk(workspaceId, id)!;
