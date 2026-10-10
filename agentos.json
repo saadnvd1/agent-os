@@ -1,7 +1,7 @@
 {
   "$schema": "./lib/project-config/agentos.schema.json",
   "ports": { "PORT": 3100 },
-  "dev": "mkdir -p .dev-tmux && env -u TMUX TMUX_TMPDIR=\"$PWD/.dev-tmux\" DB_PATH=\"$PWD/.dev.db\" npm run dev",
+  "dev": "mkdir -p .dev-tmux && env -u TMUX NODE_ENV=development TMUX_TMPDIR=\"$PWD/.dev-tmux\" DB_PATH=\"$PWD/.dev.db\" npm run dev",
   "ready": { "url": "/api/projects" },
   "test": "npm run typecheck && npx vitest run <the test files you touched>",
   "notes": [
