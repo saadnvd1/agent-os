@@ -21,7 +21,10 @@ for (const key of [
   });
 
 // The sections themselves fetch; here only which one shows matters.
-const stub = (name: string) => () => createElement("p", null, `body:${name}`);
+const stub = (name: string) =>
+  function Stub() {
+    return createElement("p", null, `body:${name}`);
+  };
 vi.mock("@/components/Merge/GlobalMergeSection", () => ({
   GlobalMergeSection: stub("merging"),
 }));
@@ -123,6 +126,34 @@ describe("SettingsDialog", () => {
     ).toBeNull();
     await flush();
     expect(search()).toBe("?settings");
+  });
+
+  it("closes from its own button", async () => {
+    await mount();
+    await act(async () => settingsUiActions.open("devices"));
+    const close = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close settings"]'
+    )!;
+    await act(async () => close.click());
+    expect(settingsUi.open).toBe(false);
+  });
+
+  it("moves focus to what replaced the button pressed", async () => {
+    await mount();
+    await act(async () => settingsUiActions.open());
+    await act(async () => {
+      navButton("Devices").focus();
+      navButton("Devices").click();
+    });
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(
+      "Devices & access"
+    );
+    await act(async () =>
+      document
+        .querySelector<HTMLButtonElement>('button[aria-label="All settings"]')!
+        .click()
+    );
+    expect(document.activeElement).toBe(navButton("Devices"));
   });
 
   it("opens from the address on load, keeping the session", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import { useSnapshot } from "valtio";
 import {
   ArrowLeft,
@@ -10,10 +10,12 @@ import {
   GitMerge,
   LayoutGrid,
   Smartphone,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogTitle,
@@ -100,6 +102,22 @@ export const SettingsDialog = memo(function SettingsDialog({
   // A wide screen always shows a section; a phone shows the list first.
   const shown = section ?? SETTINGS_SECTIONS[0];
 
+  // On a phone the button just pressed (a section, or Back) is hidden by the
+  // switch, so focus moves to what replaced it.
+  const bodyRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const lastSection = useRef(section);
+  useEffect(() => {
+    const was = lastSection.current;
+    lastSection.current = section;
+    if (!open || was === section) return;
+    if (section) bodyRef.current?.focus({ preventScroll: true });
+    else
+      navRef.current
+        ?.querySelector<HTMLElement>(`[data-section="${was}"]`)
+        ?.focus({ preventScroll: true });
+  }, [open, section]);
+
   const onOpenChange = (o: boolean) => {
     if (o) return;
     settingsUiActions.close();
@@ -109,6 +127,7 @@ export const SettingsDialog = memo(function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        showCloseButton={false}
         // Focus the dialog, not the first section: that may not be the one
         // shown, and its ring would say it was.
         onOpenAutoFocus={(e) => {
@@ -118,11 +137,12 @@ export const SettingsDialog = memo(function SettingsDialog({
         className={cn(
           "flex flex-col gap-0 overflow-hidden p-0",
           "md:h-[min(85dvh,760px)] md:max-w-3xl",
-          // Full screen on a phone.
-          "max-md:inset-0 max-md:h-dvh max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none"
+          // Full screen on a phone, inside the safe areas and above the
+          // keyboard (--app-height, like the palette).
+          "max-md:inset-x-0 max-md:top-[var(--app-top,0px)] max-md:h-[var(--app-height,100dvh)] max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:pt-[env(safe-area-inset-top)]"
         )}
       >
-        <div className="flex min-h-14 shrink-0 items-center gap-1 border-b px-4 pr-12 md:px-6">
+        <div className="flex min-h-14 shrink-0 items-center gap-1 border-b px-4 md:px-6">
           {section && (
             <Button
               variant="ghost"
@@ -140,6 +160,16 @@ export const SettingsDialog = memo(function SettingsDialog({
               <span className="md:hidden">{SECTION_INFO[section].label}</span>
             )}
           </DialogTitle>
+          <DialogClose asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close settings"
+              className="-mr-2 ml-auto h-11 w-11 shrink-0 md:h-8 md:w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
           <DialogDescription className="sr-only">
             Every AgentOS setting: merging, workspaces, devices, notifications
             and schedules.
@@ -148,9 +178,10 @@ export const SettingsDialog = memo(function SettingsDialog({
 
         <div className="flex min-h-0 flex-1">
           <nav
+            ref={navRef}
             aria-label="Settings sections"
             className={cn(
-              "w-full shrink-0 overflow-y-auto p-2 md:w-56 md:border-r",
+              "w-full shrink-0 overflow-y-auto p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:w-56 md:border-r",
               section && "max-md:hidden"
             )}
           >
@@ -162,6 +193,7 @@ export const SettingsDialog = memo(function SettingsDialog({
                   <li key={id}>
                     <button
                       type="button"
+                      data-section={id}
                       aria-current={current ? "page" : undefined}
                       onClick={() => settingsUiActions.show(id)}
                       className={cn(
@@ -187,9 +219,11 @@ export const SettingsDialog = memo(function SettingsDialog({
           </nav>
 
           <section
+            ref={bodyRef}
+            tabIndex={-1}
             aria-label={SECTION_INFO[shown].label}
             className={cn(
-              "min-w-0 flex-1 overflow-y-auto px-4 py-4 md:px-6",
+              "min-w-0 flex-1 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] outline-none md:px-6",
               !section && "max-md:hidden"
             )}
           >
