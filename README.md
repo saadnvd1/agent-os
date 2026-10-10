@@ -865,13 +865,20 @@ it may do on its own, and the lines that always come back to you as asks.
   is stored against that sha. A diff over 80k characters is reviewed in up
   to 6 parts of whole files, each against the task, and fails if any part
   does; a single file over 80k, or more than 6 parts, goes to you. A task from a card also gets a scope check against the card.
+  When you change a running task's scope, the orchestrator tells it with
+  `send` and `scope_change`, which records the message on the task's brief
+  (`brief_amendments`, logged in its chat): the review and the card's scope
+  check judge the PR against the brief as amended, the amendments winning,
+  and a "Scope change" note in the PR body counts only where one backs it.
   `sign_off` merges only that commit (with the project's merge method) when CI is green and settled on
   it (2 minutes with no new check), its review passed, nothing is
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent
   has merged, and the PR body's Code review section names that commit. `land` judges each item again at its own head right before
   merging it. The second failure of a gate or a repo with no CI goes to you
-  as an ask, and the orchestrator stops merging that task.
+  as an ask, and the orchestrator stops merging that task. Failures count per
+  task and gate: a review that blocks counts when its verdict arrives, once
+  per commit, whether or not `sign_off` ever reads it.
 - **External PRs and sessions:** `review` and `sign_off` also take an open
   PR no AgentOS task owns (dispatch, a person, dependabot) by `#N`,
   `owner/repo#N` or URL, as long as its repository is one of the workspace's
@@ -909,6 +916,12 @@ it may do on its own, and the lines that always come back to you as asks.
 approved`). An approval covers that one item only: a held task's approval
   lets `sign_off` merge it once, at the commit you approved (a new commit
   asks again), and a brake's lets one start through, for that brake only.
+  The orchestrator can ask you itself whether to merge a PR the gates won't
+  pass, by giving `ask_saad` the task and its head sha: the ask is pinned to
+  that commit, opens with what AgentOS knows about it (files changed,
+  sensitive files, the review's verdict) and links the PR, and your approval
+  lets `sign_off` merge it once, at that commit, with a code review of it in
+  the PR body. It never rewrites an ask the gates raised.
   An ask closes itself when its task is merged or dropped, or the brakes
   lift. At most 10 are open per workspace, titles that say the same thing
   fold into one, a declined subject isn't asked again for 6 hours, and a

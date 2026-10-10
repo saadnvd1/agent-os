@@ -577,6 +577,42 @@ describe("Saad's approvals on an external PR", () => {
     );
   });
 
+  it("links an ask_saad merge decision to the PR's head and merges it once on his approval", async () => {
+    const t = setup();
+    putCheck({
+      workspaceId: t.w,
+      sessionId: "pr:o/r#50",
+      sha: t.sha,
+      kind: "review",
+      status: "block",
+      detail: "one bug",
+    });
+    await expect(
+      runTool(t.w, "ask_saad", {
+        title: "Merge o/r#50 without its review?",
+        detail: "Dispatch reviewed it its own way.",
+        kind: "decision",
+        task: "o/r#50",
+        sha: t.sha.slice(0, 8),
+      })
+    ).resolves.toMatch(/sign_off merges it once/);
+    const [ask] = openAsks(t.w);
+    expect(ask).toMatchObject({
+      subject: "pr:o/r#50",
+      kind: "gate",
+      sha: t.sha,
+    });
+    expect(ask.detail).toMatch(
+      /AgentOS: PR #50 at [0-9a-f]{7} changes 1 file; review: block\n/
+    );
+    answerAsk(t.w, ask.id, { action: "approve" }, t.sha);
+    await expect(runTool(t.w, "sign_off", { task: "#50" })).resolves.toBe(
+      `Merged o/r#50: squash-merged at ${t.sha.slice(0, 7)}.`
+    );
+    expect(merges).toHaveLength(1);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
+  });
+
   it("releases a claim a restart cut off", () => {
     const t = setup();
     const id = Number(

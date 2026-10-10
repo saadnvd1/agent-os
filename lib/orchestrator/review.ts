@@ -11,6 +11,7 @@
  */
 
 import { db, type Session } from "../db";
+import { amendmentsOf } from "./amendments";
 import type { TaskPR } from "../tasks/state";
 import { prFor } from "../tasks/session";
 import { EXTERNAL_PREFIX } from "./asks";
@@ -19,8 +20,8 @@ import { clearStaleRunning, getCheck, putCheck, type CheckRow } from "./checks";
 import { runClaude, type ClaudeRunner } from "./claude-cli";
 import { changedFiles, fullDiff } from "./diff";
 import { diffParts } from "./diff-parts";
-import { escalate } from "./escalate";
-import { holdingEscalations } from "./gates";
+import { countFailure, escalate } from "./escalate";
+import { checkGate, holdingEscalations } from "./gates";
 import { mergeApprovalsOn } from "./merge-approvals";
 import {
   baseReviewSkill,
@@ -69,7 +70,7 @@ export interface ReviewTarget {
   goal: string;
   repo: string;
   refs: Pick<Session, "base_branch" | "branch_name">;
-  pr: Pick<TaskPR, "number" | "url">;
+  pr: Pick<TaskPR, "number" | "url" | "scopeChange">;
   task?: Session;
 }
 
@@ -111,6 +112,8 @@ async function reviewJob(
   }
   const files = await changedFiles(repo, base, sha);
   const skill = await baseReviewSkill(repo, base);
+  const amendments = task ? amendmentsOf(task.id).map((a) => a.text) : [];
+  const scope = task ? { amendments, scopeClaim: pr.scopeChange ?? null } : {};
   const dir = await checkout(repo, sha);
   try {
     const verdicts = [];
@@ -134,6 +137,7 @@ async function reviewJob(
           files,
           diff: part,
           skill,
+          ...scope,
           ...(parts.length > 1 ? { part: { n: i + 1, of: parts.length } } : {}),
         }),
         schema: REVIEW_SCHEMA,
@@ -148,11 +152,45 @@ async function reviewJob(
       ...combineVerdicts(verdicts),
     });
     if (task?.lh_card_id)
-      await checkScope({ workspaceId, task, sha, files, parts, claude });
+      await checkScope({
+        workspaceId,
+        task,
+        sha,
+        files,
+        parts,
+        amendments,
+        claude,
+      });
     return done;
   } finally {
     await removeCheckout(repo, dir);
   }
+}
+
+// A blocking verdict counts against the gate when it arrives, not only
+// when sign_off reads it: the orchestrator often has the task fix it
+// without signing off, and that was a failure too.
+function countVerdicts(
+  workspaceId: string,
+  target: ReviewTarget,
+  sha: string
+): string {
+  const escalated: string[] = [];
+  for (const gate of ["review", "scope"] as const) {
+    if (gate === "scope" && !target.task?.lh_card_id) continue;
+    const o = checkGate(gate, getCheck(target.id, sha, gate), sha);
+    if (o.state !== "fail") continue;
+    try {
+      if (countFailure(workspaceId, target, o, target.pr.url, sha).escalated)
+        escalated.push(gate);
+    } catch (e) {
+      // The verdict's event still goes out; sign_off counts it again.
+      console.error(`[review] counting ${target.label}'s ${gate} failure:`, e);
+    }
+  }
+  return escalated.length
+    ? `; the ${escalated.join(" and ")} gate failed twice, so it's with Saad now`
+    : "";
 }
 
 export interface ReviewOpts {
@@ -212,7 +250,7 @@ export async function reviewAt(
         workspaceId,
         `review:${target.id}:${sha}`,
         target.id,
-        `${target.label}: review of ${short(sha)} ${said}`
+        `${target.label}: review of ${short(sha)} ${said}${countVerdicts(workspaceId, target, sha)}`
       );
       return done;
     });

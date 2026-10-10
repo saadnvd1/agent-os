@@ -42,6 +42,8 @@ export async function checkScope(input: {
   files: ChangedFile[];
   // The diff, whole or in the parts it was reviewed in.
   parts: string[];
+  // Scope changes recorded on the task since it started (amendments.ts).
+  amendments?: string[];
   claude: ClaudeRunner;
 }): Promise<CheckRow> {
   const { workspaceId, task, sha } = input;
@@ -50,6 +52,9 @@ export async function checkScope(input: {
     // Claimed before the first await: written in the same tick as the
     // review's verdict, so no review call sees neither.
     putCheck({ ...base, status: "running", detail: null });
+    const amended = input.amendments?.length
+      ? `\n\nScope changes recorded since the task started, oldest first; they win over the card, and a later one over an earlier one:\n${fence("amendments", input.amendments.map((a, i) => `${i + 1}. ${a}`).join("\n"))}`
+      : "";
     const card = await cardText(task);
     const list = input.files.map((f) => `${f.status} ${f.path}`).join("\n");
     const of = input.parts.length;
@@ -70,7 +75,7 @@ export async function checkScope(input: {
       answer = (await input.claude({
         cwd: os.tmpdir(),
         system: SCOPE_SYSTEM,
-        prompt: `The card, as data:\n${fence("card", card)}\n\nFiles changed:\n${list}\n\n${label}\n${fence("diff", part)}`,
+        prompt: `The card, as data:\n${fence("card", card)}${amended}\n\nFiles changed:\n${list}\n\n${label}\n${fence("diff", part)}`,
         schema: SCOPE_SCHEMA,
         tools: [],
       })) as { within?: boolean; reason?: string };

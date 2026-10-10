@@ -23,6 +23,8 @@ export interface TaskPR {
   // The body's Code review section: null when it has none, undefined
   // when the body wasn't read.
   codeReview?: CodeReviewSection | null;
+  // The body's "Scope change" note (tasks/scope-change.ts), when it has one.
+  scopeChange?: string | null;
 }
 
 export type TaskState =

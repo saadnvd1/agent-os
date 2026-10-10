@@ -22,17 +22,11 @@ import {
   ruleBreaks,
   sensitiveFiles,
 } from "./diff";
-import { escalate } from "./escalate";
-import {
-  evaluateGates,
-  failureOf,
-  holdingEscalations,
-  recordFailure,
-  type GateInput,
-  type GateOutcome,
-} from "./gates";
+import { countFailure, escalate } from "./escalate";
+import { evaluateGates, holdingEscalations, type GateInput } from "./gates";
 import { addNote } from "./notes";
-import { refundApproval, spendApproval } from "./ask-approvals";
+import { latestApproval, refundApproval, spendApproval } from "./ask-approvals";
+import { workSubject } from "./asks";
 import { heldVerdict } from "./held";
 import { mergeApprovalsOn } from "./merge-approvals";
 import { isPaused } from "./pause";
@@ -131,6 +125,20 @@ export async function gateVerdict(
   const held = holdingEscalations(work.id);
   if (held.length)
     return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number);
+  // Saad approved merging this exact commit on an ask the orchestrator
+  // raised (ask_saad with its task and sha): it merges once whatever the
+  // gates say, but still only with a code review of that commit and its
+  // stack parent merged, which no answer stands in for.
+  const approval = latestApproval(workspaceId, workSubject(work.id));
+  if (approval?.sha === sha) {
+    const i = await inputs();
+    const refusal = i.codeReviewRefusal ?? i.stackRefusal;
+    if (refusal)
+      return no(
+        `${work.name} (PR #${pr.number} at ${short(sha)}): Saad approved this commit, but ${refusal}`
+      );
+    return { ok: true, sha, pr: pr.number, approval: approval.id };
+  }
 
   const base = await fetchRefs(repo, work.refs);
   const files = await changedFiles(repo, base, sha);
@@ -169,25 +177,11 @@ export async function gateVerdict(
     ...failed.map((o) =>
       opts.count === false
         ? `- ${o.gate} failed: ${o.reason}`
-        : countFailure(workspaceId, work, o, pr.url, sha)
+        : countFailure(workspaceId, work, o, pr.url, sha).line
     ),
     ...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`),
   ];
   return no(`${head}\n${lines.join("\n")}`, !failed.length);
-}
-
-function countFailure(
-  workspaceId: string,
-  task: { id: string; name: string },
-  o: GateOutcome,
-  url: string,
-  sha: string
-): string {
-  const n = recordFailure(workspaceId, task.id, o.gate, o.reason ?? "");
-  const line = `- ${o.gate} failed (${n === 1 ? "first" : "again"}): ${o.reason}`;
-  if (n < 2 || failureOf(task.id, o.gate)?.escalated_at) return line;
-  const why = `the ${o.gate} gate failed twice: ${o.reason}`;
-  return `${line}\n  ${escalate(workspaceId, task, o.gate, why, url, sha)}`;
 }
 
 export async function signOff(

@@ -44,7 +44,7 @@ function attributionKind(line: string): AttributionKind | undefined {
 const REVIEWED =
   /^[>*_ -]*reviewed(?: (?:commit|sha|at))?[*_ ]*:[*_` ]*([0-9a-f]{12,40})\b/i;
 
-function renderedLines(body: string): string[] {
+export function renderedLines(body: string): string[] {
   let text = body.slice(0, MAX_BODY);
   for (let at = text.indexOf("<!--"); at >= 0; at = text.indexOf("<!--", at)) {
     const end = text.indexOf("-->", at + 4);

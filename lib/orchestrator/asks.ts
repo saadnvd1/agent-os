@@ -49,6 +49,9 @@ export const DECLINE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 export class AskRefused extends Error {}
 
+// The most of an ask's detail that's kept.
+export const MAX_DETAIL = 2000;
+
 export type AskStatus = "open" | "approved" | "declined" | "resolved";
 
 export interface AskRow {
@@ -66,6 +69,9 @@ export interface AskRow {
   resolved_at: string | null;
   used_at: string | null;
   brake_key: string | null;
+  // "orchestrator" for a merge ask it raised with ask_saad; null when the
+  // gates, the brakes or AgentOS raised or last wrote it.
+  raised_by: string | null;
 }
 
 export type AskAnswer =
@@ -118,7 +124,10 @@ function refusal(
   return null;
 }
 
-function openBySubject(workspaceId: string, subject: string): AskRow | null {
+export function openBySubject(
+  workspaceId: string,
+  subject: string
+): AskRow | null {
   return (
     (db
       .prepare(
@@ -148,19 +157,21 @@ export function raiseAsk(input: {
   link?: string | null;
   sha?: string | null;
   brakeKey?: string | null;
+  raisedBy?: "orchestrator" | null;
 }): { ask: AskRow; created: boolean } {
   const title = cleanTitle(input.title);
   if (!title) throw new Error("An ask needs a title");
-  const detail = cap(input.detail ?? "", 2000);
+  const detail = cap(input.detail ?? "", MAX_DETAIL);
   const link = input.link ? cap(input.link, 500) : null;
   const kind = classifyKind(input.kind, title, detail);
   const sha = input.sha ?? null;
   const brakeKey = input.brakeKey ?? null;
+  const raisedBy = input.raisedBy ?? null;
   return db.transaction(() => {
     const open = openBySubject(input.workspaceId, input.subject);
     if (open) {
       db.prepare(
-        `UPDATE orchestrator_asks SET kind = ?, title = ?, detail = ?, link = ?, sha = ?, brake_key = ? WHERE id = ?`
+        `UPDATE orchestrator_asks SET kind = ?, title = ?, detail = ?, link = ?, sha = ?, brake_key = ?, raised_by = ? WHERE id = ?`
       ).run(
         kind,
         title,
@@ -168,6 +179,7 @@ export function raiseAsk(input: {
         link ?? open.link,
         sha ?? open.sha,
         brakeKey ?? open.brake_key,
+        raisedBy,
         open.id
       );
       return { ask: getAsk(input.workspaceId, open.id)!, created: false };
@@ -176,8 +188,8 @@ export function raiseAsk(input: {
     if (refused) throw new AskRefused(refused);
     const { lastInsertRowid } = db
       .prepare(
-        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, brake_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, brake_key, raised_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.workspaceId,
@@ -187,7 +199,8 @@ export function raiseAsk(input: {
         detail,
         link,
         sha,
-        brakeKey
+        brakeKey,
+        raisedBy
       );
     return {
       ask: getAsk(input.workspaceId, Number(lastInsertRowid))!,

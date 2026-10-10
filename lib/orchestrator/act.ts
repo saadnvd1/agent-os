@@ -20,6 +20,7 @@ import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
 import { doneSession } from "../done";
+import { amendBrief, amendmentsOf } from "./amendments";
 import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
 import { addNote } from "./notes";
@@ -34,26 +35,41 @@ function orchestratorId(workspaceId: string): string {
 
 // Sent as the orchestrator, so the bus's pair limit and the event
 // watcher's quiet window both know who spoke.
+// With `scopeChange`, the message is also recorded on the task as an
+// amendment to its brief, before it's sent, so its review judges the PR
+// against the brief as amended.
 export async function send(
   workspaceId: string,
   ref: string,
-  message: string
+  message: string,
+  opts: { scopeChange?: boolean } = {}
 ): Promise<string> {
   const to = findWorkspaceSession(workspaceId, ref);
+  let amended = "";
+  if (opts.scopeChange) {
+    if (to.task_status !== "running")
+      throw new Error(
+        `${to.name} isn't a running task; a scope change is recorded only on one`
+      );
+    amendBrief(workspaceId, to.id, message);
+    // In the decision log, so Saad sees every change of scope it records.
+    addNote(workspaceId, `Scope change for ${to.name}: ${message}`);
+    amended = ` Recorded as scope change ${amendmentsOf(to.id).length} on its brief: reviews from now on judge against it (call review with fresh to judge the current head again).`;
+  }
   const { delivery } = await sendMessage({
     fromId: orchestratorId(workspaceId),
     to: to.id,
     body: message,
   });
   if (delivery.state === "failed")
-    return `FAILED to reach ${to.name}: ${delivery.why}. It's in its inbox (aos inbox).`;
+    return `FAILED to reach ${to.name}: ${delivery.why}. It's in its inbox (aos inbox).${amended}`;
   // A terminal at a prompt refuses the message; a chat queues it behind
   // the approval or question, which only a person answers.
   if (delivery.state === "queued" && chatState(to.id) === "waiting")
-    return `Queued for ${to.name}, but it's waiting on an approval or question in its chat: it sees this only once that's answered. Read it to see what it asks.`;
+    return `Queued for ${to.name}, but it's waiting on an approval or question in its chat: it sees this only once that's answered. Read it to see what it asks.${amended}`;
   return delivery.state === "queued"
-    ? `Queued for ${to.name}: it's busy and will see it after this turn.`
-    : `Delivered to ${to.name}.`;
+    ? `Queued for ${to.name}: it's busy and will see it after this turn.${amended}`
+    : `Delivered to ${to.name}.${amended}`;
 }
 
 // What the orchestrator starts opens as a chat, as a new session in the UI

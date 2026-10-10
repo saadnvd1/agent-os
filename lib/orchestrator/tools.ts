@@ -53,7 +53,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Every session in this workspace: project, view, status, what it's doing, task/PR/CI state and stack position; then external sessions (tmux sessions AgentOS didn't start, here or on other machines, working in a workspace repository), read-only, with their branch's PR.",
   read: "The end of one session's terminal or chat, or an external session's screen, as plain text (capped at about 4k tokens).",
   cards: "Cards on this workspace's linked LumifyHub boards, by list.",
-  send: "Message a session in this workspace over the bus. It arrives as its next prompt.",
+  send: "Message a session in this workspace over the bus. It arrives as its next prompt. When Saad changes a running task's scope, tell it with scope_change set, so its review judges the PR against the brief as amended.",
   orchestrators:
     "Every workspace, and whether it has an orchestrator you can message.",
   message_orchestrator:
@@ -75,7 +75,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   sign_off:
     "Merge a PR, with its project's merge method, through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL (an external PR). Refuses with the failing gate, or a repository outside the workspace.",
   ask_saad:
-    "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event.",
+    "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event. To ask whether to merge a PR the gates refuse, give task and sha (its head): his approval lets sign_off merge it once, at that commit.",
 };
 
 export function orchestratorTools(
