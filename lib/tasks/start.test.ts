@@ -339,6 +339,8 @@ describe("a chat task's start, beside a terminal task's", () => {
     sendQueuedNow.mockRejectedValueOnce(new Error("worker didn't start"));
     await finishTaskStart(chat);
     expect(setupOf(chat)?.error).toMatch(/did not launch: worker didn't start/);
+    // Its prompt isn't left queued for a later drain to send unasked.
+    expect(listQueue(chat)).toEqual([]);
   });
 
   it("after a restart, relaunches only the start whose message wasn't taken, once", async () => {

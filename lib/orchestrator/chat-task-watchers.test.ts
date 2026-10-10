@@ -290,7 +290,7 @@ describe.each(VIEWS)("a %s task not launched yet", (view) => {
 
 describe("a chat task not launched yet", () => {
   it("queues what's sent to it, so nothing starts its agent before the launch", async () => {
-    const { sendChat, sendChatConfirmed, sendQueuedNow } =
+    const { sendChat, sendChatConfirmed, sendNowRefusal, sendQueuedNow } =
       await import("@/lib/chat/runner");
     const { listQueue } = await import("@/lib/chat/queued");
     const { firstMessageId } = await import("@/lib/tasks/launch-gate");
@@ -310,7 +310,14 @@ describe("a chat task not launched yet", () => {
     await expect(sendQueuedNow(t.id, listQueue(t.id)[0].id)).rejects.toThrow(
       /once the task has started/
     );
-    expect(firstMessageId(t.id)).not.toBe(listQueue(t.id)[0].id);
+    // Only the launch's own first message gets through, and once it has
+    // launched, anything does.
+    expect(sendNowRefusal(t.id, listQueue(t.id)[0].id)).toMatch(/started/);
+    expect(sendNowRefusal(t.id, firstMessageId(t.id))).toBeNull();
+    db.prepare(`UPDATE sessions SET setup_status = 'ok' WHERE id = ?`).run(
+      t.id
+    );
+    expect(sendNowRefusal(t.id, listQueue(t.id)[0].id)).toBeNull();
   });
 });
 

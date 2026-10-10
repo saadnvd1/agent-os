@@ -19,7 +19,7 @@ import { isPaused } from "../orchestrator/pause";
 import { brakesEnabled } from "../orchestrator/brakes";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
 import { inBackground } from "../lumifyhub/task-cards";
-import { enqueue, listQueue } from "../chat/queued";
+import { deleteQueued, enqueue, listQueue } from "../chat/queued";
 import { sendQueuedNow } from "../chat/runner";
 import { hasItem } from "../chat/store";
 import { firstMessageId, launchPending } from "./launch-gate";
@@ -125,6 +125,8 @@ export async function finishTaskStart(
       });
     }
   } catch (error) {
+    // Not left to a later drain, which would start the agent unasked.
+    deleteQueued(sessionId, firstMessageId(sessionId));
     const message = `The agent did not launch: ${asError(error).message}`;
     // A stack shows why its card stopped.
     db.prepare(`UPDATE stack_items SET error = ? WHERE session_id = ?`).run(

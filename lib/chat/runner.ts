@@ -330,16 +330,23 @@ async function resumeQueue(sessionId: string): Promise<void> {
 // Sends a queued message now: a running turn stops for it, as on Esc.
 // `during`: the user message whose turn the reader saw running, so a turn
 // that started since (the next queued one) isn't the one stopped.
+// Why a queued message can't go now: its worktree is setting up, or its
+// task hasn't launched and it isn't the launch's own first message.
+export function sendNowRefusal(sessionId: string, id: string): string | null {
+  if (settingUp(sessionId)) return "It's sent once the worktree is set up";
+  if (launchPending(sessionId) && id !== firstMessageId(sessionId))
+    return "It's sent once the task has started";
+  return null;
+}
+
 export async function sendQueuedNow(
   sessionId: string,
   id: string,
   during?: string
 ) {
   if (!listQueue(sessionId).some((m) => m.id === id)) return;
-  if (settingUp(sessionId))
-    throw new Error("It's sent once the worktree is set up");
-  if (launchPending(sessionId) && id !== firstMessageId(sessionId))
-    throw new Error("It's sent once the task has started");
+  const refusal = sendNowRefusal(sessionId, id);
+  if (refusal) throw new Error(refusal);
   const live = await ensureLive(sessionId);
   if (!live.canQueue)
     throw new Error("Reload to send this: the chat is on an older version");
