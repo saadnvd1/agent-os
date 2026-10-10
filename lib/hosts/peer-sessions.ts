@@ -33,6 +33,8 @@ const text = (s: unknown, max = 300) => cleanRemoteText(s).slice(0, max);
 
 // The other machine's statuses run its full status pass: asked at most this often.
 export const PEER_STATUS_MS = 5000;
+// A reading older than this is unknown.
+export const PEER_STATUS_STALE_MS = 30_000;
 
 // One per process, like the status detector that fills it: the custom
 // server and the Next.js routes each load this module.
@@ -61,9 +63,14 @@ export function peerManagedSessions(): PeerSession[] {
 /** The other machine's own status for a session, as it reports it. */
 export function peerStatus(
   hostId: string,
-  sessionId: string
+  sessionId: string,
+  now = Date.now()
 ): PeerSession["state"] {
-  const s = statuses.get(hostId)?.byId[sessionId]?.status;
+  // An old answer from a machine that has since stopped answering is no
+  // answer: callers count unknown as busy.
+  const entry = statuses.get(hostId);
+  if (!entry || now - entry.at > PEER_STATUS_STALE_MS) return null;
+  const s = entry.byId[sessionId]?.status;
   return s === "running" || s === "waiting" || s === "idle" ? s : null;
 }
 

@@ -115,7 +115,13 @@ export class PeerPty implements Pty {
 
   private finish(code: number, why?: string): void {
     if (this.done) return;
-    if (why) this.data(`\r\n\x1b[31m${why}\x1b[0m\r\n`);
+    // Best effort: the output may be what broke.
+    if (why)
+      try {
+        this.data(`\r\n\x1b[31m${why}\x1b[0m\r\n`);
+      } catch {
+        // Ending is what matters.
+      }
     this.kill();
     this.exit({ exitCode: code });
   }

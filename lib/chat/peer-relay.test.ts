@@ -147,11 +147,12 @@ describe("relayChatSocket over time", async () => {
     const socks: Sock[] = [];
     const browser = new Browser();
     const failed: string[] = [];
+    const sent: string[] = [];
     relayChatSocket(
       browser,
       { hostId: "box", hostName: "box", url: "http://box:3011", token: "t" },
       { session: "s1" },
-      () => {},
+      (d) => void sent.push(d),
       (m) => failed.push(m),
       () => {
         const s = Object.assign(new EventEmitter(), {
@@ -165,7 +166,7 @@ describe("relayChatSocket over time", async () => {
       },
       () => t
     );
-    return { browser, socks, failed, at: (ms: number) => (t = ms) };
+    return { browser, socks, failed, sent, at: (ms: number) => (t = ms) };
   }
 
   it("stops retrying once the peer has been gone too long", () => {
@@ -206,10 +207,12 @@ describe("relayChatSocket over time", async () => {
       h.socks[0].emit("open");
       (h.browser as unknown as { bufferedAmount: number }).bufferedAmount =
         64 * 1024 * 1024;
-      const sent: string[] = [];
       h.socks[0].emit("message", Buffer.from("{}"));
-      expect(sent).toEqual([]);
+      expect(h.sent).toEqual([]);
       expect(h.failed[0]).toContain("faster than it can be shown");
+      // And it comes back with a fresh connection.
+      vi.advanceTimersByTime(1000);
+      expect(h.socks).toHaveLength(2);
       h.browser.emit("close");
     } finally {
       vi.useRealTimers();

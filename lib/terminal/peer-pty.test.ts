@@ -236,4 +236,16 @@ describe("PeerPty against a misbehaving or absent peer", async () => {
     expect(h.exit()).toBe(1);
     expect(h.out()).toContain("more than this terminal could take");
   });
+
+  it("ends that terminal, not the server, when showing its output throws", async () => {
+    const h = harness();
+    await Promise.resolve();
+    h.opened(h.socks[0]);
+    h.pty.onData(() => {
+      throw new Error("screen full");
+    });
+    const frame = JSON.stringify({ type: "output", data: "x" });
+    expect(() => h.socks[0].emit("message", Buffer.from(frame))).not.toThrow();
+    expect(h.exit()).toBe(1);
+  });
 });

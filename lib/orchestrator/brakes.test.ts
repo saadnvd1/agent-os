@@ -407,3 +407,54 @@ describe("a brake on Saad's asks list", () => {
     await expect(ws.start("y")).resolves.toMatch(/Started/);
   });
 });
+
+describe("the running brake and a linked machine's tasks", () => {
+  it("counts them running unless that machine said otherwise lately", async () => {
+    const { runningCount } = await import("./brakes");
+    const { linkedHost } = await import("@/lib/__fixtures__/linked-host");
+    const { getDb } = await import("@/lib/db");
+    const peer = (
+      globalThis as unknown as {
+        __agentosPeerSessions: {
+          statuses: Map<string, { at: number; byId: object }>;
+        };
+      }
+    ).__agentosPeerSessions;
+    const ws = workspace();
+    const host = linkedHost("http://127.0.0.1:9", "tok");
+    try {
+      const before = await runningCount(ws.workspace.id);
+      const [unknown, running, idle] = ["unknown", "running", "idle"].map(
+        (n) => {
+          const id = seedSession({
+            projectId: ws.api.id,
+            name: `peer-${n}`,
+            task: true,
+          });
+          getDb()
+            .prepare(`UPDATE sessions SET host_id = ? WHERE id = ?`)
+            .run(host.hostId, id);
+          return id;
+        }
+      );
+      peer.statuses.set(host.hostId, {
+        at: Date.now(),
+        byId: {
+          [running]: { status: "running" },
+          [idle]: { status: "idle" },
+        },
+      });
+      // No word on one, busy, idle: two count.
+      expect(await runningCount(ws.workspace.id)).toBe(before + 2);
+      expect(unknown).toBeTruthy();
+      // An old "idle" from a machine that stopped answering is unknown.
+      peer.statuses.set(host.hostId, {
+        at: Date.now() - 60_000,
+        byId: { [idle]: { status: "idle" } },
+      });
+      expect(await runningCount(ws.workspace.id)).toBe(before + 3);
+    } finally {
+      host.remove();
+    }
+  });
+});

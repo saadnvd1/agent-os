@@ -61,3 +61,33 @@ describe("statusOf with a program's own report", () => {
     expect((await statusOf(session)).status).toBe("idle");
   });
 });
+
+describe("statusOf for a linked machine's session", () => {
+  it("is what that machine says, and running when it says nothing", async () => {
+    const { linkedHost } = await import("@/lib/__fixtures__/linked-host");
+    const host = linkedHost("http://127.0.0.1:9", "tok");
+    const peer = (
+      globalThis as unknown as {
+        __agentosPeerSessions: {
+          statuses: Map<string, { at: number; byId: object }>;
+        };
+      }
+    ).__agentosPeerSessions;
+    const there = {
+      ...session,
+      id: "facts-peer",
+      host_id: host.hostId,
+    } as Session;
+    try {
+      // Never dead for lack of a local tmux session; busy when unknown.
+      expect((await statusOf(there)).status).toBe("running");
+      peer.statuses.set(host.hostId, {
+        at: Date.now(),
+        byId: { "facts-peer": { status: "idle" } },
+      });
+      expect((await statusOf(there)).status).toBe("idle");
+    } finally {
+      host.remove();
+    }
+  });
+});

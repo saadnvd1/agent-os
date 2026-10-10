@@ -237,9 +237,13 @@ describe("/ws/chat for a linked machine's session", () => {
       )
       .run(id, `claude-${id}`, host.hostId);
     try {
-      const { ws } = open(id, true);
+      const { ws, sent } = open(id, true);
+      // Served here, as a demo serves every chat: a snapshot of this
+      // machine's (empty) copy, and the demo's answer to the send.
+      expect(sent[0]?.type).toBe("snapshot");
       ws.message({ type: "send", text: "hi" });
-      await new Promise((r) => setTimeout(r, 100));
+      const { until } = await import("../__fixtures__/fake-peer");
+      await until(() => sent.length > 1);
       expect(peer.upgrades).toEqual([]);
       ws.emit("close");
     } finally {

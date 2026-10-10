@@ -529,7 +529,7 @@ class SessionStatusDetector {
       listedAt: hosts.length ? listedAt : this.cache.listedAt,
       updatedAt: Date.now(),
     };
-    if (hosts.length) for (const fn of this.refreshed) fn();
+    if (hosts.length) this.notifyRefreshed();
   }
 
   private refreshPeer(link: NonNullable<ReturnType<typeof hostLink>>): void {
@@ -558,8 +558,20 @@ class SessionStatusDetector {
       )
       .finally(() => {
         this.peersAsked.delete(hostId);
-        for (const fn of this.refreshed) fn();
+        this.notifyRefreshed();
       });
+  }
+
+  // A listener's throw is its own: it never rejects a listing, nor (from a
+  // background refresh no one awaits) takes the process down.
+  private notifyRefreshed(): void {
+    for (const fn of this.refreshed) {
+      try {
+        fn();
+      } catch (err) {
+        console.error("[status] refresh listener failed:", err);
+      }
+    }
   }
 
   /** The next refresh lists this machine again (a session came or went). */

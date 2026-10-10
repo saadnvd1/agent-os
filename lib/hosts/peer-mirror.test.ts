@@ -79,9 +79,9 @@ describe("mirrorPeerSession", () => {
   });
 
   it("refuses a machine that isn't linked", async () => {
-    await expect(
-      mirrorPeerSession(randomUUID(), randomUUID())
-    ).rejects.toThrow();
+    await expect(mirrorPeerSession(randomUUID(), randomUUID())).rejects.toThrow(
+      /isn't linked/
+    );
   });
 });
 
