@@ -27,8 +27,9 @@ const ICON: Record<ChatOriginKind, LucideIcon> = {
   decision: UserCheck,
 };
 
-// Longer than this, or more than one line, and it opens on a tap.
-const SHORT = 140;
+// Longer than this (what fits beside a source on a phone), or more than one line,
+// and it opens on a tap.
+const SHORT = 32;
 
 const clock = (at: number) =>
   new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
