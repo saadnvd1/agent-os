@@ -10,7 +10,7 @@ import { getWorkspace } from "../workspaces";
 import { conditionsFor, recentlyMessaged, stackFacts } from "./conditions";
 import { deliverEvents } from "./deliver";
 import { recordConditions } from "./events";
-import { sessionFacts } from "./facts";
+import { sessionFacts, type SessionFacts } from "./facts";
 import { listOrchestrators } from "./home";
 import { BRAKE_SUBJECT, openAsks } from "./asks";
 import { settleStaleAsks } from "./ask-settle";
@@ -54,7 +54,16 @@ export async function diffWorkspace(
   const working =
     facts.some((f) => f.status === "running") ||
     stacks.some((s) => s.status === "running" || s.status === "landing");
-  // Look again as CI settles, so its event isn't a whole interval late.
+  return nextDiffAt(now, facts, working);
+}
+
+// Soon while anything works, and right as a PR's CI settles, so its
+// event isn't a whole interval late.
+export function nextDiffAt(
+  now: number,
+  facts: Pick<SessionFacts, "task">[],
+  working: boolean
+): number {
   const settles = facts
     .map((f) => f.task?.ciSettleIn ?? 0)
     .filter((s) => s > 0)

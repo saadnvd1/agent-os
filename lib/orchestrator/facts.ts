@@ -179,7 +179,7 @@ export async function statusOf(s: Session): Promise<{
 // A commit's time never changes: read once per sha.
 const committed = new Map<string, number>();
 
-async function settleIn(
+export async function settleIn(
   workspaceId: string,
   s: Session,
   pr: TaskPR | null

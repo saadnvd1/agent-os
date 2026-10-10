@@ -236,10 +236,38 @@ describe("untrusted text", () => {
   });
 });
 
-describe("orchestratorToolsDigest", () => {
-  it("is stable for the same tools", async () => {
-    const { orchestratorToolsDigest } = await import("./tools");
+describe("toolsDigest", () => {
+  it("changes with a tool's description, arguments or the permissions, and only then", async () => {
+    const { z } = await import("zod");
+    const { orchestratorToolsDigest, toolsDigest } = await import("./tools");
+    const base = () =>
+      toolsDigest(
+        { note: "Add a line" },
+        { note: { text: z.string() } },
+        { allowedTools: ["a"] }
+      );
+    expect(base()).toBe(base());
+    expect(
+      toolsDigest(
+        { note: "Add a line to the log" },
+        { note: { text: z.string() } },
+        { allowedTools: ["a"] }
+      )
+    ).not.toBe(base());
+    expect(
+      toolsDigest(
+        { note: "Add a line" },
+        { note: { text: z.string(), tone: z.string().optional() } },
+        { allowedTools: ["a"] }
+      )
+    ).not.toBe(base());
+    expect(
+      toolsDigest(
+        { note: "Add a line" },
+        { note: { text: z.string() } },
+        { allowedTools: ["a", "b"] }
+      )
+    ).not.toBe(base());
     expect(orchestratorToolsDigest()).toMatch(/^[0-9a-f]{16}$/);
-    expect(orchestratorToolsDigest()).toBe(orchestratorToolsDigest());
   });
 });

@@ -98,13 +98,21 @@ export function orchestratorTools(
 // arguments and permissions. A worker after a deploy tells the agent its
 // tools changed only when this did.
 export function orchestratorToolsDigest(): string {
-  const tools = TOOLS.map((name) => [
+  return toolsDigest(DESCRIPTIONS, TOOL_SHAPES, ORCHESTRATOR_PERMISSIONS);
+}
+
+export function toolsDigest(
+  descriptions: Record<string, string>,
+  shapes: Record<string, z.ZodRawShape>,
+  permissions: object
+): string {
+  const tools = Object.keys(shapes).map((name) => [
     name,
-    DESCRIPTIONS[name],
-    z.toJSONSchema(z.object(TOOL_SHAPES[name])),
+    descriptions[name],
+    z.toJSONSchema(z.object(shapes[name])),
   ]);
   return createHash("sha256")
-    .update(JSON.stringify([tools, ORCHESTRATOR_PERMISSIONS]))
+    .update(JSON.stringify([tools, permissions]))
     .digest("hex")
     .slice(0, 16);
 }
