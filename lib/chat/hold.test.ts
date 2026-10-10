@@ -17,7 +17,8 @@ import { db, stackQueries as q } from "../db";
 import { seedStack } from "../stacks/testing";
 import { chatHold, collectWhileMoving } from "./hold";
 import { claimNext, enqueue, listQueue } from "./queued";
-import { sendChat, sendNowRefusal } from "./runner";
+import { sendChat, sendChatConfirmed, sendNowRefusal } from "./runner";
+import { registry, type Live } from "./registry";
 import { stopChatAtTurnEnd } from "./stop";
 import * as runner from "./runner";
 import { waitForExit } from "./worker/client";
@@ -85,6 +86,30 @@ describe("a held chat", () => {
     expect(listQueue(id)).toEqual([]);
   });
 
+  it("queues a send whose worker was still starting when the move began", async () => {
+    const id = chatSession("running");
+    const command = vi.fn();
+    let started!: (live: Live) => void;
+    registry.connecting.set(id, new Promise<Live>((r) => (started = r)));
+    const send = sendChat(id, { text: "raced the move", queue: true });
+    const confirmed = sendChatConfirmed(id, { text: "raced too" });
+    // The move starts while the worker spins up.
+    db.prepare(`UPDATE sessions SET task_status = 'moving' WHERE id = ?`).run(
+      id
+    );
+    const packed = collectWhileMoving(id);
+    started({ worker: { command }, state: "idle" } as unknown as Live);
+    await send;
+    expect(await confirmed).toBe("queued");
+    expect(command).not.toHaveBeenCalled();
+    expect(listQueue(id).map((m) => m.text)).toEqual([
+      "raced the move",
+      "raced too",
+    ]);
+    packed();
+    registry.connecting.delete(id);
+  });
+
   it("refuses to start a worker for a task that moved away", async () => {
     const id = chatSession("moved");
     await expect(sendChat(id, { text: "hi" })).rejects.toThrow(
@@ -147,6 +172,23 @@ describe("stopping a chat between turns", () => {
       reason: expect.stringMatching(/isn't answering/),
     });
     expect(live.stopped).not.toContain("s3");
+  });
+
+  it("waits for a worker still starting, then stops it", async () => {
+    states("idle");
+    let started!: () => void;
+    registry.connecting.set(
+      "s5",
+      new Promise<Live>((r) => (started = () => r({} as Live)))
+    );
+    const stop = stopChatAtTurnEnd("s5", { waitMs: 60_000, sleep });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(runner.chatStateNow).not.toHaveBeenCalledWith("s5");
+    started();
+    expect(await stop).toEqual({ stopped: true });
+    expect(live.stopped).toContain("s5");
+    expect(waitForExit).toHaveBeenCalledWith("s5");
+    registry.connecting.delete("s5");
   });
 
   it("has nothing to stop when no worker runs", async () => {

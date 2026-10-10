@@ -557,13 +557,18 @@ export async function sendChatConfirmed(
   const listeners = set;
   let listener: Listener = () => {};
   let timer: NodeJS.Timeout | undefined;
+  // The worker queued it rather than start a turn (a hold took effect).
+  let queuedByWorker = false;
+  const inQueue = (queue: { id: string }[]) =>
+    (queuedByWorker = queue.some((q) => q.id === id));
   const accepted = new Promise<void>((resolve, reject) => {
     listener = (m) => {
       if (m.type === "item" && m.item.id === id) resolve();
+      else if (m.type === "queue" && inQueue(m.queue)) resolve();
     };
     timer = setTimeout(() => {
       // The event can be missed across a reconnect; the row can't.
-      if (hasItem(sessionId, id)) resolve();
+      if (hasItem(sessionId, id) || inQueue(listQueue(sessionId))) resolve();
       else
         reject(
           new Error(
@@ -585,7 +590,7 @@ export async function sendChatConfirmed(
     clearTimeout(timer);
     listeners.delete(listener);
   }
-  return wasBusy ? "queued" : "delivered";
+  return queuedByWorker || wasBusy ? "queued" : "delivered";
 }
 
 export function respondChat(
