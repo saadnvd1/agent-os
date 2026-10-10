@@ -257,25 +257,58 @@ describe("ensureSessionDatabase", () => {
   it("records the copy before making it, so a cut-short one is dropped at the end", async () => {
     const id = session();
     const name = databaseName("app_dev", id);
-    // The server stops mid-restore: the row says pending, the database exists.
+    // AgentOS stops mid-restore: the restore never returns.
     const run = pg.run;
+    let seen: unknown = null;
+    let restoring!: () => void;
+    const started = new Promise<void>((r) => (restoring = r));
     pg.run = async (cmd, args, env) => {
       if (cmd === "psql" && args.includes("-f")) {
-        expect(sessionDatabase(id)).toMatchObject({ name, pending: true });
-        throw new Error("AgentOS restarted");
+        seen = sessionDatabase(id);
+        restoring();
+        return new Promise(() => {});
       }
       return run(cmd, args, env);
     };
-    await ensureSessionDatabase(id, decl, pg.run);
-    db.prepare(`UPDATE sessions SET database = ? WHERE id = ?`).run(
-      JSON.stringify({ name, from: "app_dev", env: "DB_NAME", pending: true }),
-      id
-    );
+    void ensureSessionDatabase(id, decl, pg.run);
+    await started;
+    expect(seen).toMatchObject({ name, pending: true });
+    expect(pg.dbs.get(name)).toBe(`agentos session ${id} (copying)`);
+    // What the code recorded is what the agent and the end see.
     expect(sessionProjectEnv(id).DB_NAME).toBeUndefined();
     expect(sessionRunningBrief(id)).toContain("cut short");
-    pg.run = run;
-    await dropSessionDatabase(id, pg.run);
+    await dropSessionDatabase(id, run);
     expect(pg.dbs.has(name)).toBe(false);
+    expect(sessionDatabase(id)).toBeNull();
+  });
+
+  it("keeps a copy that threw after createdb recorded, so the end drops it", async () => {
+    const id = session();
+    const name = databaseName("app_dev", id);
+    const run = pg.run;
+    pg.run = async (cmd, args, env) => {
+      if (cmd === "pg_dump") throw new Error("disk full");
+      return run(cmd, args, env);
+    };
+    const made = await ensureSessionDatabase(id, decl, pg.run);
+    expect(made).toMatchObject({ name, pending: true, error: "disk full" });
+    expect(sessionRunningBrief(id)).toContain("disk full");
+    await dropSessionDatabase(id, run);
+    expect(pg.dbs.has(name)).toBe(false);
+  });
+
+  it("drops a copy finished after the session ended and its drop ran", async () => {
+    const id = session();
+    const name = databaseName("app_dev", id);
+    const run = pg.run;
+    pg.run = async (cmd, args, env) => {
+      // The session is done between the record and createdb.
+      if (cmd === "createdb") await dropSessionDatabase(id, run);
+      return run(cmd, args, env);
+    };
+    expect(await ensureSessionDatabase(id, decl, pg.run)).toBeNull();
+    expect(pg.dbs.has(name)).toBe(false);
+    expect(sessionDatabase(id)).toBeNull();
   });
 
   it("drops the copy it made when the session was deleted meanwhile", async () => {
@@ -288,6 +321,18 @@ describe("ensureSessionDatabase", () => {
     };
     expect(await ensureSessionDatabase(id, decl, pg.run)).toBeNull();
     expect(pg.dbs.has(databaseName("app_dev", id))).toBe(false);
+  });
+
+  it("accepts one socket folder, and talks to it", async () => {
+    const id = session();
+    const made = await ensureSessionDatabase(
+      id,
+      { from: "app_dev", host: "/var/run/postgresql" },
+      pg.run
+    );
+    expect(made?.name).toBe(databaseName("app_dev", id));
+    for (const env of pg.envs) expect(env.PGHOST).toBe("/var/run/postgresql");
+    expect(sessionProjectEnv(id).PGHOST).toBe("/var/run/postgresql");
   });
 
   it("never inherits a PGHOST when the project names none", async () => {

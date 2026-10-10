@@ -21,11 +21,16 @@ vi.mock("../worktrees", async (orig) => ({
 }));
 vi.mock("../env-setup", () => ({ setupWorktree: vi.fn(async () => ({})) }));
 vi.mock("../agents/launch", () => ({ launchClaude: vi.fn(async () => {}) }));
+vi.mock("../project-config/database", async (orig) => ({
+  ...(await orig<typeof import("../project-config/database")>()),
+  dropSessionDatabase: vi.fn(async () => {}),
+}));
 
 import { db } from "../db";
 import { createHost } from "../hosts";
 import { launchClaude } from "../agents/launch";
 import { setupWorktree } from "../env-setup";
+import { dropSessionDatabase } from "../project-config/database";
 import { sessionPorts } from "../ports";
 import { exportOrResume, exportTask, markMoved, resumeTask } from "./move";
 import { importTask } from "./import";
@@ -49,7 +54,10 @@ afterAll(() => {
   f.restore();
   fs.rmSync(WT_ROOT, { recursive: true, force: true });
 });
-beforeEach(() => vi.mocked(launchClaude).mockReset());
+beforeEach(() => {
+  vi.mocked(launchClaude).mockReset();
+  vi.mocked(dropSessionDatabase).mockReset();
+});
 
 describe("leaving", () => {
   it("claims the task as moving, commits and pushes what was uncommitted, and hands over the conversation", async () => {
@@ -80,6 +88,10 @@ describe("leaving", () => {
     await exportTask(id, "box");
     await expect(exportTask(id, "box")).resolves.toMatchObject({ moveId: id });
     markMoved(id, "box");
+    // It goes on there with a database of its own; this one's is dropped once.
+    expect(dropSessionDatabase).toHaveBeenCalledWith(id);
+    markMoved(id, "box");
+    expect(dropSessionDatabase).toHaveBeenCalledTimes(1);
     await expect(exportTask(id, "box")).rejects.toThrow(/already moved/);
   });
 
@@ -262,7 +274,17 @@ describe("arriving", () => {
     const bundle = await exportTask(id, "box");
     markMoved(id, "box");
     vi.mocked(launchClaude).mockRejectedValueOnce(new Error("no tmux"));
+    // Its database is dropped while its row is still there to name it.
+    let rowAtDrop = -1;
+    vi.mocked(dropSessionDatabase).mockImplementation(async (sid) => {
+      rowAtDrop = (
+        db
+          .prepare(`SELECT COUNT(*) AS n FROM sessions WHERE id = ?`)
+          .get(sid) as { n: number }
+      ).n;
+    });
     await expect(importTask(bundle)).rejects.toThrow(/no tmux/);
+    expect(rowAtDrop).toBe(1);
     const left = db
       .prepare(`SELECT COUNT(*) AS n FROM sessions WHERE moved_from = ?`)
       .get(id) as { n: number };

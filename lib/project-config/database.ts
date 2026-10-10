@@ -278,22 +278,44 @@ export async function ensureSessionDatabase(
     .prepare(`SELECT host_id FROM sessions WHERE id = ?`)
     .get(sessionId) as { host_id: string | null } | undefined;
   if (!row || !isLocal(row.host_id)) return null;
-  const save = (state: SessionDatabase) =>
-    db
-      .prepare(`UPDATE sessions SET database = ? WHERE id = ?`)
-      .run(JSON.stringify(state), sessionId).changes;
+  // Each write only over the last one: a drop that ran meanwhile cleared
+  // the record, and the copy made after it must not be written back.
+  let last = sessionDatabase(sessionId);
+  let written = (
+    db.prepare(`SELECT database FROM sessions WHERE id = ?`).get(sessionId) as
+      | { database: string | null }
+      | undefined
+  )?.database;
+  const save = (state: SessionDatabase) => {
+    const json = JSON.stringify(state);
+    const changed = db
+      .prepare(
+        `UPDATE sessions SET database = ? WHERE id = ? AND database IS ?`
+      )
+      .run(json, sessionId, written ?? null).changes;
+    if (changed) {
+      written = json;
+      last = state;
+    }
+    return changed;
+  };
   let state: SessionDatabase;
   try {
     state = await makeDatabase(sessionId, declared, run, save);
   } catch (error) {
-    state = {
-      name: null,
-      from: declared.from,
-      env: declared.env ?? "DATABASE_NAME",
-      error: oneLine((error as Error).message),
-    };
+    const error_ = oneLine((error as Error).message);
+    // A copy already begun stays recorded (pending), so the end drops it.
+    state = last?.pending
+      ? { ...last, error: error_ }
+      : {
+          name: null,
+          from: declared.from,
+          env: declared.env ?? "DATABASE_NAME",
+          error: error_,
+        };
   }
-  // The session was deleted while its copy was made: nothing would drop it.
+  // The session was deleted, or ended and its drop ran, while the copy was
+  // made: nothing else would drop it.
   if (!save(state) && state.name) {
     await dropDatabase(sessionId, state, run).catch(() => {});
     return null;
