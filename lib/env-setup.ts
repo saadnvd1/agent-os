@@ -10,6 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { bringDependencies, runCommand } from "./worktree-deps";
 import { loadProjectConfig, projectEnv, withPorts } from "./project-config";
+import { recordPlaced } from "./worktree-placed";
 
 export interface SetupStep {
   name: string;
@@ -215,6 +216,12 @@ export async function setupWorktree(options: {
       });
     }
   }
+
+  // What was just copied doesn't keep the worktree once the task is done
+  // (lib/done/worktree.ts), recorded before an agent can have touched it.
+  await recordPlaced(worktreePath, sourcePath, result.envFilesCopied).catch(
+    (error) => console.error("Recording copied files failed:", error)
+  );
 
   // The project's env, the session's ports over it, then the paths.
   const envVars: Record<string, string> = {

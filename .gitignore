@@ -1,5 +1,6 @@
 # Dependencies
-node_modules/
+# No trailing slash: a symlinked node_modules is ignored too.
+node_modules
 
 # Build output
 dist/

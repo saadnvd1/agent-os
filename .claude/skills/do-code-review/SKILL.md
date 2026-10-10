@@ -95,7 +95,7 @@ _Found by: review-security_
 
 1. Fix every Blocking and High finding. Fix Medium ones when the fix is small and in scope; otherwise defer them with a reason.
 2. Commit, then re-run only the agents that had confirmed findings, on the new diff, and verify again. Stop after two rounds of fixes: list what's still open.
-3. The commit you finally reviewed is the PR's head. Put this section at the end of the PR body (`gh pr create --body-file`, or `gh pr edit <n> --body-file` later):
+3. The commit you finally reviewed is the PR's head. Put this section at the end of the PR body (`gh pr create --body-file`, or `gh pr edit <n> --body-file` later; write the body file and any review notes in your scratchpad or `$TMPDIR`, never in the worktree, where an uncommitted file keeps the worktree from being removed when the task is done):
 
 ```
 ## Code review

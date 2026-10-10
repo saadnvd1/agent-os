@@ -44,6 +44,7 @@ export function buildTaskBrief(opts: {
 ${CODE_REVIEW_SECTION}
   Merges are refused without it, and when its "Reviewed:" commit is not the PR's head: if you push again, review again and update the body (\`gh pr edit --body-file\`). Then stop and wait.
 - Never merge the pull request, never push to ${opts.baseBranch}, and never delete branches or worktrees. A human reviews and merges.${opts.stack ? stackedLines(opts.baseBranch, opts.stack) : ""}
+- Write scratch files (PR bodies, review notes, logs, test output) outside the worktree, in your scratchpad or \$TMPDIR. Anything uncommitted left in the worktree keeps it from being removed when the task is done.
 - Do not add any AI or assistant attribution to commits or the pull request.
 - If you are blocked or need a decision only a human can make, print one line starting with "BLOCKED:" that says what you need, then stop and wait.`;
 }

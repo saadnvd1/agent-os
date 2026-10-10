@@ -9,6 +9,7 @@ import type { Session } from "../db";
 import { getDefaultBranch } from "../git";
 import { run } from "../tasks/gh";
 import { deleteWorktree, isAgentOSWorktree } from "../worktrees";
+import { describeChanges, unsavedChanges } from "../worktree-placed";
 
 export type WorktreeFate =
   | { action: "none" }
@@ -93,7 +94,7 @@ export type FatePreview =
   | Exclude<WorktreeFate, { action: "removed" }>
   | { action: "remove"; why: string; repo: string };
 
-// Decides without touching anything. Uncommitted changes always keep it;
+// Decides without touching anything. Uncommitted work always keeps it;
 // a merged branch goes only if every commit on it was in the merge or is
 // on a remote; an unmerged one only if it has no commits of its own.
 export async function worktreeFate(
@@ -106,8 +107,12 @@ export async function worktreeFate(
   if (!isAgentOSWorktree(path)) return keep("it isn't an AgentOS worktree");
   const repo = await repoOf(path).catch(() => null);
   if (!repo) return keep("it isn't a git worktree any more");
-  const dirty = await git(path, "status", "--porcelain").catch(() => "?");
-  if (dirty) return keep("it has uncommitted changes");
+  // What AgentOS placed itself (env copies, cloned dependencies) and
+  // nobody has touched since isn't work; anything else is.
+  const unsaved = await unsavedChanges(path).catch(() => null);
+  if (!unsaved) return keep("its uncommitted changes can't be checked");
+  if (unsaved.length)
+    return keep(`it has uncommitted changes (${describeChanges(unsaved)})`);
   if (merged) {
     const stray = await strayCommits(path, merged).catch(() => null);
     if (stray === null) return keep("its commits can't be checked");
