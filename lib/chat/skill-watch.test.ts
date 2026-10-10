@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSkillWatcher,
   skillFolders,
@@ -13,6 +13,8 @@ const tmp = () =>
   fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "skw-")));
 // macOS's file events take a moment to start after a watch is opened.
 const WARM = 700;
+
+const watchReal = fs.watch.bind(fs);
 
 let watcher: SkillWatcher | undefined;
 afterEach(() => watcher?.close());
@@ -27,8 +29,8 @@ function watched(folder: string, debounceMs = 100) {
 describe("skillFolders", () => {
   it("lists the user's and the project's skill and command folders", () => {
     expect(skillFolders("/p", "/h")).toEqual([
-      "/h/.claude/skills",
-      "/h/.claude/commands",
+      "/h/skills",
+      "/h/commands",
       "/p/.claude/skills",
       "/p/.agents/skills",
       "/p/.claude/commands",
@@ -105,14 +107,33 @@ describe("createSkillWatcher", { timeout: 45_000 }, () => {
     expect(calls).toEqual([]);
   });
 
-  it("stops once no key reads the folder", async () => {
+  it("closes its watchers once no key reads the folder", async () => {
     const dir = tmp();
-    const calls = watched(dir);
-    watcher!.release("claude:/p");
-    expect(watcher!.keys()).toEqual([]);
-    fs.writeFileSync(path.join(dir, "x.md"), "x");
-    await sleep(1000);
-    expect(calls).toEqual([]);
+    const real = tmp();
+    fs.symlinkSync(real, path.join(dir, "linked"));
+    const opened: fs.FSWatcher[] = [];
+    const spy = vi.spyOn(fs, "watch").mockImplementation(((
+      ...args: Parameters<typeof fs.watch>
+    ) => {
+      const w = watchReal(...args);
+      opened.push(w);
+      vi.spyOn(w, "close");
+      return w;
+    }) as typeof fs.watch);
+    try {
+      const calls = watched(dir);
+      expect(opened).toHaveLength(2); // the folder and the linked skill
+      await sleep(WARM);
+      await touchUntil(
+        () => fs.writeFileSync(path.join(dir, "x.md"), String(Math.random())),
+        () => calls.length > 0
+      );
+      watcher!.release("claude:/p");
+      expect(watcher!.keys()).toEqual([]);
+      for (const w of opened) expect(w.close).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("skips a folder it can't watch", () => {

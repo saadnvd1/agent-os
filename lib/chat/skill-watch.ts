@@ -16,12 +16,13 @@ import os from "os";
 import path from "path";
 import { SKILL_DIRS } from "../agents/skill-dirs";
 
-const GLOBAL_DIRS = [".claude/skills", ".claude/commands"];
+const claudeDir = () =>
+  process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
 
 // The folders the commands for an agent in `cwd` come from.
-export function skillFolders(cwd: string, home = os.homedir()): string[] {
+export function skillFolders(cwd: string, user = claudeDir()): string[] {
   const dirs = [
-    ...GLOBAL_DIRS.map((d) => path.join(home, d)),
+    ...["skills", "commands"].map((d) => path.join(user, d)),
     ...SKILL_DIRS.map((d) => path.join(cwd, d)),
   ];
   return [...new Set(dirs.map((d) => path.resolve(d)))];
@@ -147,9 +148,13 @@ export function createSkillWatcher(
       let mine = byKey.get(key);
       if (!mine) byKey.set(key, (mine = new Set()));
       for (const p of paths) {
-        if (mine.has(p)) continue;
-        mine.add(p);
         let f = folders.get(p);
+        // Seen again (each load): re-armed, in case an event was missed.
+        if (mine.has(p) && f) {
+          arm(f);
+          continue;
+        }
+        mine.add(p);
         if (!f) {
           folders.set(
             p,

@@ -134,6 +134,7 @@ export function useChat(
   const [models, setModels] = useState<ChatModel[]>([]);
   const [model, setModelState] = useState("");
   const [refreshingCommands, setRefreshingCommands] = useState(false);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [access, setAccessState] = useState<ChatAccess>("full");
   const [plan, setPlanState] = useState<boolean | null>(null);
   const [context, setContext] = useState<ChatContext | null>(null);
@@ -315,8 +316,13 @@ export function useChat(
     setRefreshingCommands(true);
     ws.send(JSON.stringify({ type: "refresh_commands" }));
     // A failed load answers with an error, not a list: don't spin forever.
-    setTimeout(() => setRefreshingCommands(false), 30_000);
+    clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(
+      () => setRefreshingCommands(false),
+      35_000
+    );
   }, []);
+  useEffect(() => () => clearTimeout(refreshTimer.current), []);
 
   const setAccess = useCallback((value: ChatAccess) => {
     setAccessState(value);
