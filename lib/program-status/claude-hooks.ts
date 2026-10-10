@@ -1,6 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { NO_ATTRIBUTION } from "../agents/attribution";
 
 const DIR = path.join(os.homedir(), ".agent-os");
 const HOOK = path.join(DIR, "bin", "agentos-status");
@@ -19,8 +20,11 @@ const EVENTS = [
 ];
 const TOOL_EVENTS = new Set(["PreToolUse", "PermissionRequest", "PostToolUse"]);
 
+// The flag settings every terminal Claude AgentOS starts reads: the status
+// hooks, and no AI attribution on its commits and PRs.
 export function claudeStatusSettings(hook = HOOK) {
   return {
+    attribution: NO_ATTRIBUTION,
     hooks: Object.fromEntries(
       EVENTS.map((event) => [
         event,

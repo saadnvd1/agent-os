@@ -83,10 +83,15 @@ this change.
 | `notion`       | `{vault: {project, token}}`             | Which secret-store entry holds the Notion token (a name, never the token).                                                                                                                                                                                                                                                                                                                                                                                                      | 5    |
 | `formerly`     | string[]                                | Paths the project used to live at, so its history follows it.                                                                                                                                                                                                                                                                                                                                                                                                                   | 5    |
 
-Git hooks (part 4) need no field: like dispatch, AgentOS will point the
+Git hooks (part 4) need no field: like dispatch, AgentOS points the
 session's worktree at a per-session hooks folder that runs the project's own
 hooks, so they don't need declaring. If a project ever needs to opt out, that
-is a new `hooks` field then.
+is a new `hooks` field then. Implemented in `lib/worktree-hooks.ts`: the
+folder sits in the worktree's own git directory, `core.hooksPath` is set with
+`--worktree` (the main checkout keeps its husky hooks), and its commit-msg
+hook strips AI attribution before running the project's own. Claude sessions
+also start with Claude Code's `attribution` setting hidden, and a PR body
+carrying attribution fails the code review gate (`lib/tasks/code-review.ts`).
 
 Naming: dispatch's names are kept, snake_case included, so a `.dispatch.json`
 can be renamed to `agentos.json` with no edits (except `workspace`, above).

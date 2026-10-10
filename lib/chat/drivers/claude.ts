@@ -13,6 +13,7 @@ import { toChatContext, usageTotals } from "../context";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
 import { SuggestionTrace } from "./suggestion-trace";
 import { redact } from "../../orchestrator/untrusted";
+import { NO_ATTRIBUTION } from "../../agents/attribution";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
 // Code login. Asks for approval through chat cards unless given full access,
@@ -194,6 +195,7 @@ export const claudeDriver: ChatDriver = {
             { matcher: "ExitPlanMode", hooks: [approvals.proposePlan] },
           ],
         },
+        settings: { attribution: NO_ATTRIBUTION },
         enableFileCheckpointing: true,
         includePartialMessages: true,
         // Each background task has its own Stop, so Stop on the turn spares
