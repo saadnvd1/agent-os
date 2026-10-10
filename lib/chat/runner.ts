@@ -219,7 +219,11 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
         // Its agent died mid-turn, with messages still queued, or with a
         // turn cut off. (One this server let go, it stopped on purpose.)
         if (live && !detached)
-          void resumeInterrupted(sessionId).then(() => resumeQueue(sessionId));
+          void resumeInterrupted(sessionId)
+            .then(() => resumeQueue(sessionId))
+            .catch((error) =>
+              console.error(`Not resuming ${sessionId}:`, error)
+            );
       },
     };
     let { client, hello } = await connectWorker(sessionId, spawn, handlers);
@@ -366,6 +370,18 @@ async function resumeQueue(sessionId: string): Promise<void> {
 // that's cut off again is left for the orchestrator.
 const resuming = new Set<string>();
 export async function resumeInterrupted(sessionId: string): Promise<void> {
+  // Called unawaited (a socket's close, startup): nothing may escape it.
+  try {
+    await resumeCutOff(sessionId);
+  } catch (error) {
+    console.error(
+      `Not resuming ${sessionId}'s cut-off turn:`,
+      error instanceof Error ? error.message : error
+    );
+  }
+}
+
+async function resumeCutOff(sessionId: string): Promise<void> {
   const row = db
     .prepare(
       `SELECT s.name, s.view, s.archived_at, s.task_status, s.role,
@@ -420,11 +436,6 @@ export async function resumeInterrupted(sessionId: string): Promise<void> {
         sessionId,
         `task ${row.name}: interrupted by a restart, resumed`
       );
-  } catch (error) {
-    console.error(
-      `Not resuming ${sessionId}'s cut-off turn:`,
-      error instanceof Error ? error.message : error
-    );
   } finally {
     resuming.delete(cut.resumeId);
   }

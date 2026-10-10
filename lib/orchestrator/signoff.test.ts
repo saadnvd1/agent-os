@@ -302,17 +302,76 @@ describe("review", () => {
     // One review and one scope check, both of the commit that was cut off.
     expect(r.runs).toHaveLength(2);
     expect(r.runs[0].prompt).toContain(t.sha);
-    const events = db
-      .prepare(
-        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE ?`
-      )
-      .all(t.w, `%review:${t.task}:${t.sha}`) as { line: string }[];
-    expect(events.map((e) => e.line)).toEqual([
-      `task add-a: review of ${t.sha.slice(0, 7)} passed`,
-    ]);
+    // The verdict's event follows the checkout's removal.
+    await vi.waitFor(() =>
+      expect(
+        (
+          db
+            .prepare(
+              `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE ?`
+            )
+            .all(t.w, `%review:${t.task}:${t.sha}`) as { line: string }[]
+        ).map((e) => e.line)
+      ).toEqual([`task add-a: review of ${t.sha.slice(0, 7)} passed`])
+    );
     // Nothing is left cut off, so the next start runs nothing.
     expect(await resumeReviews(r.claude)).toEqual([]);
     expect(r.runs).toHaveLength(2);
+  });
+
+  it("doesn't run again a cut-off review of a task that has finished", async () => {
+    const t = setup();
+    putCheck({
+      workspaceId: t.w,
+      sessionId: t.task,
+      sha: t.sha,
+      kind: "review",
+      status: "running",
+    });
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      t.task
+    );
+    const r = reviewer("pass");
+    expect(await resumeReviews(r.claude)).toEqual([]);
+    expect(r.runs).toEqual([]);
+    expect(getCheck(t.task, t.sha, "review")?.status).toBe("error");
+  });
+
+  it("says so when a cut-off review's commit isn't the PR's head any more", async () => {
+    const t = setup();
+    putCheck({
+      workspaceId: t.w,
+      sessionId: t.task,
+      sha: t.sha,
+      kind: "review",
+      status: "running",
+    });
+    const next = t.push("src/b.ts", "export const b = 2;\n");
+    const r = reviewer("pass");
+    await resumeReviews(r.claude);
+    await vi.waitFor(() =>
+      expect(getCheck(t.task, next, "review")?.status).toBe("pass")
+    );
+    // The old commit never passes on the strength of the new review.
+    expect(getCheck(t.task, t.sha, "review")?.status).toBe("error");
+    const line = (sha: string) =>
+      (
+        db
+          .prepare(
+            `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE ?`
+          )
+          .get(t.w, `%review:${t.task}:${sha}`) as { line: string } | undefined
+      )?.line;
+    expect(line(t.sha)).toMatch(
+      new RegExp(
+        `review of ${t.sha.slice(0, 7)} was cut off by a restart and not run again: Reviewing add-a at ${next.slice(0, 7)}`
+      )
+    );
+    await vi.waitFor(() =>
+      expect(line(next)).toBe(
+        `task add-a: review of ${next.slice(0, 7)} passed`
+      )
+    );
   });
 });
 

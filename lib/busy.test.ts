@@ -19,6 +19,12 @@ describe("inFlight", () => {
     db.prepare(`UPDATE sessions SET setup_status = 'running' WHERE id = ?`).run(
       task
     );
+    // Neither an archived session's setup nor a CI settle check is in flight.
+    const gone = seedSession({ projectId: app.id, name: "gone", task: true });
+    db.prepare(
+      `UPDATE sessions SET setup_status = 'running', archived_at = datetime('now') WHERE id = ?`
+    ).run(gone);
+    putCheck({ ...row, sha: "c".repeat(40), kind: "ci", status: "running" });
     expect(inFlight()).toEqual({
       reviews: before.reviews + 1,
       setups: before.setups + 1,

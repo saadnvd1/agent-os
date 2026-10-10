@@ -199,18 +199,25 @@ export async function review(
 }
 
 // At startup. A review is a job in the server, so one still "running" was
-// cut off by the restart: it runs again on its task's PR (the same commit
-// unless it has moved on since), and its verdict arrives as an event like
-// any other. A cut-off scope check is dropped, so the job runs it again.
+// cut off by the restart: it runs again on its task's PR, and its verdict
+// arrives as an event like any other. A cut-off scope check is dropped, so
+// the job runs it again. A commit that isn't reviewed again (the task has
+// pushed since, or finished) gets an event saying so, rather than none.
 export async function resumeReviews(
   claude: ClaudeRunner = runClaude
 ): Promise<string[]> {
   const cut = db
     .prepare(
-      `SELECT DISTINCT workspace_id, session_id FROM orchestrator_checks
-       WHERE status = 'running' AND kind IN ('review', 'scope')`
+      `SELECT DISTINCT c.workspace_id, c.session_id, c.sha, s.name
+       FROM orchestrator_checks c JOIN sessions s ON s.id = c.session_id
+       WHERE c.status = 'running' AND c.kind IN ('review', 'scope')`
     )
-    .all() as { workspace_id: string; session_id: string }[];
+    .all() as {
+    workspace_id: string;
+    session_id: string;
+    sha: string;
+    name: string;
+  }[];
   db.prepare(
     `UPDATE orchestrator_checks SET status = 'error', detail = 'Interrupted by a restart'
      WHERE status = 'running' AND kind = 'review'`
@@ -219,16 +226,31 @@ export async function resumeReviews(
     `DELETE FROM orchestrator_checks WHERE status = 'running' AND kind = 'scope'`
   ).run();
   const resumed: string[] = [];
+  const why = new Map<string, string>();
   for (const row of cut) {
+    if (why.has(row.session_id)) continue;
     try {
-      await review(row.workspace_id, row.session_id, { claude });
+      why.set(
+        row.session_id,
+        await review(row.workspace_id, row.session_id, { claude })
+      );
       resumed.push(row.session_id);
     } catch (error) {
-      console.error(
-        `Not re-running the review of ${row.session_id}:`,
-        error instanceof Error ? error.message : error
+      why.set(
+        row.session_id,
+        error instanceof Error ? error.message : String(error)
       );
     }
+  }
+  for (const row of cut) {
+    const now = getCheck(row.session_id, row.sha, "review");
+    if (now && now.status !== "error") continue;
+    queueEvent(
+      row.workspace_id,
+      `review:${row.session_id}:${row.sha}`,
+      row.session_id,
+      `task ${row.name}: review of ${short(row.sha)} was cut off by a restart and not run again: ${why.get(row.session_id)}`
+    );
   }
   return resumed;
 }

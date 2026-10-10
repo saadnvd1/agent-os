@@ -181,6 +181,69 @@ describe("a turn a restart cut off", () => {
   });
 });
 
+describe("a cut-off turn that isn't resumed", () => {
+  it("is one from over an hour ago", async () => {
+    const { id } = task();
+    db.prepare(
+      `UPDATE chat_items SET data = json_set(data, '$.createdAt', ?) WHERE session_id = ?`
+    ).run(Date.now() - 2 * 60 * 60 * 1000, id);
+    try {
+      await reattachChats();
+      expect(sends(id)).toEqual([]);
+    } finally {
+      forget(id);
+    }
+  });
+});
+
+describe("a local command after a finished turn", () => {
+  it("isn't taken for a cut-off turn", async () => {
+    const { id } = task();
+    saveItem(id, item({ id: "end-1", kind: "turn_end" }));
+    saveItem(id, item({ id: "user-mcp", kind: "user", text: "/mcp" }));
+    saveItem(
+      id,
+      item({ id: "mcp-1", kind: "mcp", servers: [] } as Partial<ChatItem> &
+        Pick<ChatItem, "id" | "kind">)
+    );
+    try {
+      await reattachChats();
+      expect(sends(id)).toEqual([]);
+    } finally {
+      forget(id);
+    }
+  });
+});
+
+describe("a turn that started over an hour ago", () => {
+  it("is resumed when what it did last is recent", async () => {
+    const { id } = task();
+    db.prepare(
+      `UPDATE sessions SET updated_at = datetime('now', '-3 hours') WHERE id = ?`
+    ).run(id);
+    try {
+      await reattachChats();
+      expect(sends(id)).toHaveLength(1);
+    } finally {
+      forget(id);
+    }
+  });
+});
+
+describe("a cut-off turn outside a task", () => {
+  it("is resumed with no orchestrator event", async () => {
+    const { id, w } = task();
+    db.prepare(`UPDATE sessions SET task_status = NULL WHERE id = ?`).run(id);
+    try {
+      await reattachChats();
+      expect(sends(id)).toHaveLength(1);
+      expect(events(w, id)).toEqual([]);
+    } finally {
+      forget(id);
+    }
+  });
+});
+
 describe("a worker that dies mid-turn", () => {
   it("is replaced, and the agent told to carry on", async () => {
     const { id } = task();
