@@ -775,18 +775,24 @@ describe("the reviewer can't be steered by the PR", () => {
     const t = setup({ card: true });
     t.push("a/big.txt", "a".repeat(50_000));
     t.push("b/big.txt", "b".repeat(50_000));
-    let scoped = 0;
+    const scoped: string[] = [];
     await review(t.w, "add-a", {
       wait: true,
       claude: async (run) => {
         if (run.tools.length)
           return { verdict: "pass", summary: "ok", findings: [] };
-        return ++scoped === 2
+        scoped.push(run.prompt);
+        // Out of scope only for what part 2 really carries.
+        return run.prompt.includes("b".repeat(100))
           ? { within: false, reason: "part 2 adds billing" }
           : { within: true, reason: "on the card" };
       },
     });
-    expect(scoped).toBe(2);
+    expect(scoped).toHaveLength(2);
+    expect(scoped[0]).toContain("Part 1 of 2");
+    expect(scoped[0]).toContain("a".repeat(100));
+    expect(scoped[0]).not.toContain("b".repeat(100));
+    expect(scoped[1]).toContain("Part 2 of 2");
     expect(getCheck(t.task, pr!.head!, "scope")?.status).toBe("block");
     await expect(t.signOff()).rejects.toThrow(/scope failed/);
     expect(merges).toEqual([]);
@@ -798,6 +804,17 @@ describe("the reviewer can't be steered by the PR", () => {
     t.push("b/big.txt", "b".repeat(50_000));
     const { runs } = await reviewNow(t.w);
     expect(runs.filter((r) => !r.tools.length)).toHaveLength(2);
+    expect(getCheck(t.task, pr!.head!, "scope")?.status).toBe("pass");
+  });
+
+  it("runs a card task's scope check again when a restart lost it", async () => {
+    const t = setup({ card: true });
+    await reviewNow(t.w);
+    db.prepare(
+      `DELETE FROM orchestrator_checks WHERE session_id = ? AND kind = 'scope'`
+    ).run(t.task);
+    const { runs } = await reviewNow(t.w);
+    expect(runs.filter((r) => !r.tools.length)).toHaveLength(1);
     expect(getCheck(t.task, pr!.head!, "scope")?.status).toBe("pass");
   });
 

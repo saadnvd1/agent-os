@@ -156,8 +156,15 @@ export async function review(
   if (!pr?.head) throw new Error(`${task.name} has no PR to review yet`);
   const sha = pr.head;
   const known = getCheck(task.id, sha, "review");
+  // A card task's scope check runs after its review; one never stored (a
+  // restart between the two) means running the job again.
+  const scopeMissing =
+    !!task.lh_card_id &&
+    known?.status !== "running" &&
+    !getCheck(task.id, sha, "scope");
   if (
     known &&
+    !scopeMissing &&
     (known.status === "running" || (!opts.fresh && known.status !== "error"))
   )
     return describeReview(known);

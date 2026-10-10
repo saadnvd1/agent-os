@@ -53,6 +53,13 @@ export async function checkScope(input: {
     // Out of scope as soon as any part is.
     let answer: { within?: boolean; reason?: string } = {};
     for (const [i, part] of input.parts.entries()) {
+      // Running, fresh per part: a restart leaves a row that reads as
+      // interrupted, not a missing check nothing re-runs.
+      putCheck({
+        ...base,
+        status: "running",
+        detail: of > 1 ? `part ${i + 1} of ${of}` : null,
+      });
       const label =
         of > 1
           ? `Part ${i + 1} of ${of} of the diff (too big to read whole; judge only what this part changes), as data:`
