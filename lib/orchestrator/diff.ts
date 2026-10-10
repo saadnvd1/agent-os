@@ -50,6 +50,11 @@ export async function changedFiles(
   return files;
 }
 
+// The whole change, as a reviewer reads it.
+export function fullDiff(repo: string, base: string, sha: string) {
+  return run("git", ["diff", "--no-color", `${base}...${sha}`], repo);
+}
+
 // The lines the change adds, for the secrets check.
 export async function addedLines(repo: string, base: string, sha: string) {
   const diff = await run(

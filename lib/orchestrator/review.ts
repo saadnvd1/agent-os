@@ -13,11 +13,10 @@
 import type { Session } from "../db";
 import type { TaskPR } from "../tasks/state";
 import { prFor } from "../tasks/session";
-import { run } from "../tasks/gh";
 import { queueEvent } from "./events";
 import { clearStaleRunning, getCheck, putCheck, type CheckRow } from "./checks";
 import { runClaude, type ClaudeRunner } from "./claude-cli";
-import { changedFiles } from "./diff";
+import { changedFiles, fullDiff } from "./diff";
 import { diffParts } from "./diff-parts";
 import { escalate } from "./escalate";
 import { holdingEscalations } from "./gates";
@@ -68,11 +67,7 @@ async function reviewJob(
   const row = { workspaceId, sessionId: task.id, sha };
   const repo = repoOf(task);
   const base = await fetchRefs(repo, task);
-  const diff = await run(
-    "git",
-    ["diff", "--no-color", `${base}...${sha}`],
-    repo
-  );
+  const diff = await fullDiff(repo, base, sha);
   const parts =
     diff.length <= DIFF_CAP
       ? [diff]
@@ -105,6 +100,15 @@ async function reviewJob(
   try {
     const verdicts = [];
     for (const [i, part] of parts.entries()) {
+      // Each part can take its own 15 minutes: a fresh row each time keeps
+      // a long review from reading as one a restart left behind.
+      if (i > 0)
+        putCheck({
+          ...row,
+          kind: "review",
+          status: "running",
+          detail: `part ${i + 1} of ${parts.length}`,
+        });
       const answer = await claude({
         cwd: dir,
         system: REVIEW_SYSTEM,

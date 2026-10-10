@@ -771,6 +771,75 @@ describe("the reviewer can't be steered by the PR", () => {
     expect(getCheck(t.task, pr!.head!, "scope")?.status).toBe("block");
   });
 
+  it("checks every part of a big card task against its card", async () => {
+    const t = setup({ card: true });
+    t.push("a/big.txt", "a".repeat(50_000));
+    t.push("b/big.txt", "b".repeat(50_000));
+    let scoped = 0;
+    await review(t.w, "add-a", {
+      wait: true,
+      claude: async (run) => {
+        if (run.tools.length)
+          return { verdict: "pass", summary: "ok", findings: [] };
+        return ++scoped === 2
+          ? { within: false, reason: "part 2 adds billing" }
+          : { within: true, reason: "on the card" };
+      },
+    });
+    expect(scoped).toBe(2);
+    expect(getCheck(t.task, pr!.head!, "scope")?.status).toBe("block");
+    await expect(t.signOff()).rejects.toThrow(/scope failed/);
+    expect(merges).toEqual([]);
+  });
+
+  it("passes a big card task's scope only when every part is within the card", async () => {
+    const t = setup({ card: true });
+    t.push("a/big.txt", "a".repeat(50_000));
+    t.push("b/big.txt", "b".repeat(50_000));
+    const { runs } = await reviewNow(t.w);
+    expect(runs.filter((r) => !r.tools.length)).toHaveLength(2);
+    expect(getCheck(t.task, pr!.head!, "scope")?.status).toBe("pass");
+  });
+
+  it("keeps a long review in parts from reading as interrupted", async () => {
+    const t = setup();
+    t.push("a/big.txt", "a".repeat(50_000));
+    t.push("b/big.txt", "b".repeat(50_000));
+    const seen: (string | null | undefined)[] = [];
+    await review(t.w, "add-a", {
+      wait: true,
+      claude: async () => {
+        seen.push(getCheck(t.task, pr!.head!, "review")?.detail);
+        return { verdict: "pass", summary: "ok", findings: [] };
+      },
+    });
+    expect(seen).toEqual([null, "part 2 of 2"]);
+  });
+
+  it("releases a size hold once approvals are off, and reviews it in parts", async () => {
+    const t = setup({ approvals: true });
+    t.push("a/big.txt", "a".repeat(50_000));
+    t.push("b/big.txt", "b".repeat(50_000));
+    expect((await reviewNow(t.w)).runs).toEqual([]);
+    await expect(t.signOff()).rejects.toThrow(/is with Saad \(size/);
+    setMergeApprovals(false);
+    expect((await reviewNow(t.w)).runs).toHaveLength(2);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+  });
+
+  it("sends a big diff reviewed in parts to Saad once approvals are switched on", async () => {
+    const t = setup();
+    t.push("a/big.txt", "a".repeat(50_000));
+    t.push("b/big.txt", "b".repeat(50_000));
+    await reviewNow(t.w);
+    expect(getCheck(t.task, pr!.head!, "review")?.status).toBe("pass");
+    setMergeApprovals(true);
+    await expect(t.signOff()).rejects.toThrow(
+      /Escalated to Saad: PR #7's diff at .* too big to review whole/
+    );
+    expect(merges).toEqual([]);
+  });
+
   it("sends a file too big to review even alone to Saad, approvals off or not", async () => {
     const t = setup();
     t.push("big.txt", "x".repeat(90_000));

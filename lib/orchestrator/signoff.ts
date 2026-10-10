@@ -14,7 +14,13 @@ import { getStack, landInBackground } from "../stacks";
 import { LAND_DEFAULTS } from "../stacks/land";
 import { db, stackQueries, type Session } from "../db";
 import { getCheck } from "./checks";
-import { addedLines, changedFiles, ruleBreaks, sensitiveFiles } from "./diff";
+import {
+  addedLines,
+  changedFiles,
+  fullDiff,
+  ruleBreaks,
+  sensitiveFiles,
+} from "./diff";
 import { escalate } from "./escalate";
 import {
   evaluateGates,
@@ -29,7 +35,7 @@ import { heldVerdict } from "./held";
 import { mergeApprovalsOn } from "./merge-approvals";
 import { isPaused } from "./pause";
 import { commitTime, fetchRefs, repoOf } from "./repo";
-import { review } from "./review";
+import { DIFF_CAP, review } from "./review";
 import { workspaceStack, workspaceTask } from "./targets";
 import { ciSettleIn, waitingState } from "./task-state";
 
@@ -79,6 +85,15 @@ export async function judge(
     const what = sensitive.map((s) => `${s.path} (${s.why})`).join(", ");
     const why = `PR #${pr.number} at ${short(sha)} touches ${what}`;
     return no(escalate(workspaceId, task, "sensitive", why, pr.url, sha));
+  }
+  // Here too, not only in the review: one reviewed in parts while approvals
+  // were off goes to Saad once they're on.
+  if (mergeApprovalsOn()) {
+    const size = (await fullDiff(repo, base, sha)).length;
+    if (size > DIFF_CAP) {
+      const why = `PR #${pr.number}'s diff at ${short(sha)} is ${size} characters, too big to review whole`;
+      return no(escalate(workspaceId, task, "size", why, pr.url, sha));
+    }
   }
 
   const outcomes = evaluateGates({
