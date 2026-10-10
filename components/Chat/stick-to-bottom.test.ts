@@ -113,6 +113,7 @@ describe("stickToBottom", () => {
   afterEach(() => {
     ctl.dispose();
     el.remove();
+    delete (document as Partial<Document>).elementFromPoint;
   });
 
   // New output arriving: the content grows, then the observer fires.
@@ -271,7 +272,7 @@ describe("stickToBottom", () => {
       ({ top: linePos - box.top, height: 20, width: 300 }) as DOMRect;
     el.getBoundingClientRect = () =>
       ({ top: 0, bottom: 500, left: 0, width: 400, height: 500 }) as DOMRect;
-    document.elementFromPoint = () => line;
+    document.elementFromPoint = () => line; // jsdom has none; removed after
 
     wheel(el, -100);
     el.scrollTop = 700; // the reader settles here, the line 120px down
@@ -358,6 +359,27 @@ describe("useStickToBottom", () => {
     act(() => hook.toBottom());
     expect(hook).toMatchObject({ stuck: true, unread: false });
     expect(box.top).toBe(box.height - box.view);
+  });
+
+  const frame = () =>
+    act(() => new Promise<void>((r) => requestAnimationFrame(() => r())));
+
+  it("follows new output to the end while the reader is there", async () => {
+    box.height += 300;
+    await render("s1", "a:5");
+    await frame();
+    expect(box.top).toBe(box.height - box.view);
+  });
+
+  it("binds once the list has mounted its scroller", async () => {
+    act(() => root.unmount());
+    (list as { current: unknown }).current = null;
+    root = createRoot(document.createElement("div"));
+    await render("s1", "a:0");
+    (list as { current: unknown }).current = { getScrollableNode: () => el };
+    await frame();
+    scrollUp();
+    expect(hook.stuck).toBe(false);
   });
 
   it("starts stuck again in another conversation", async () => {
