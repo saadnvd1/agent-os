@@ -50,6 +50,8 @@ function setup(
     refresh: async () => {},
     waitMs: 90_000,
     everyMs: 30_000,
+    stopChat: vi.fn(async () => ({ stopped: true as const })),
+    releaseChat: vi.fn(async () => {}),
   };
   return { s, deps, merged };
 }
@@ -209,5 +211,72 @@ describe("landStack", () => {
     expect(q.get(db, s.stackId)!.error).toBe(
       "stopped at C: review of c2 has blocking findings\nLanded so far: P"
     );
+  });
+  describe("with a chat child", () => {
+    const asChat = (sessionId: string) =>
+      db
+        .prepare(`UPDATE sessions SET view = 'chat' WHERE id = ?`)
+        .run(sessionId);
+
+    it("stops it between turns before merging, holds it through the land, then lets it go", async () => {
+      const { s, deps, merged } = setup();
+      const child = s.item("C").session_id!;
+      asChat(child);
+      let landingWhenStopped = "";
+      deps.stopChat = vi.fn(async () => {
+        landingWhenStopped = q.get(db, s.stackId)!.status;
+        return { stopped: true as const };
+      });
+      await landStack(s.stackId, deps);
+      expect(merged).toEqual(["P", "C"]);
+      expect(vi.mocked(deps.stopChat).mock.calls.map(([x]) => x.id)).toEqual([
+        child,
+      ]);
+      // Held: the stack was landing, which is what queues its messages.
+      expect(landingWhenStopped).toBe("landing");
+      expect(deps.releaseChat).toHaveBeenCalledWith(child);
+      expect(q.get(db, s.stackId)!.status).toBe("landed");
+    });
+
+    it("refuses before merging anything when one won't stop, and says why", async () => {
+      const { s, deps, merged } = setup();
+      const child = s.item("C").session_id!;
+      asChat(child);
+      deps.stopChat = vi.fn(async () => ({
+        stopped: false as const,
+        reason:
+          "its agent's turn was still running after 5 min; try again once it ends",
+      }));
+      await landStack(s.stackId, deps);
+      expect(merged).toEqual([]);
+      const { status, error } = q.get(db, s.stackId)!;
+      expect(status).toBe("failed");
+      expect(error).toContain("these agents didn't stop between turns");
+      expect(error).toContain(
+        "C: its agent's turn was still running after 5 min"
+      );
+      expect(error).toContain("nothing was merged");
+      // Not left held: what it was sent goes on.
+      expect(deps.releaseChat).toHaveBeenCalledWith(child);
+    });
+
+    it("stops after a merge whose child's agent was still working, rather than merge it unrestacked", async () => {
+      const { s, deps, merged } = setup();
+      const signOff = deps.signOff;
+      deps.signOff = vi.fn(async (id: string, head?: string) => {
+        await signOff(id, head);
+        // The restack found its agent busy and left it alone.
+        if (q.itemForSession(db, id)!.ticket === "P")
+          q.updateItem(db, s.item("C").id, {
+            base_tip: "p-tip",
+            note: "Waiting for its agent to stop to restack onto main",
+          });
+      });
+      await landStack(s.stackId, deps);
+      expect(merged).toEqual(["P"]);
+      expect(q.get(db, s.stackId)!.error).toContain(
+        "C's agent didn't stop, so it wasn't restacked"
+      );
+    });
   });
 });

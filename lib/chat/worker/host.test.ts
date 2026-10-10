@@ -270,6 +270,28 @@ describe("ChatHost queue", () => {
     host.close();
   });
 
+  it("holds a send that lands as a move or Land takes hold, and what's queued, until it's let go", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "long job" });
+    getDb()
+      .prepare(`UPDATE sessions SET task_status = 'moving' WHERE id = ?`)
+      .run(id);
+    await host.handle({ type: "send", id: "user-2", text: "in flight" });
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.text)).toEqual(["in flight"]);
+    // The turn ends: nothing queued starts while it's held.
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(host.state).toBe("idle");
+    getDb()
+      .prepare(`UPDATE sessions SET task_status = 'running' WHERE id = ?`)
+      .run(id);
+    await host.handle({ type: "drain" });
+    expect(conversation.send).toHaveBeenLastCalledWith("in flight", undefined);
+    host.close();
+  });
+
   it("lets a message from the bus join the running turn, unqueued", async () => {
     const { id, host, conversation } = await startHost();
     await host.handle({ type: "send", id: "user-1", text: "long job" });

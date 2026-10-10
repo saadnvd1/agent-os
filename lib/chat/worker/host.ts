@@ -27,6 +27,7 @@ import {
   settle,
 } from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
+import { isHeld } from "../hold";
 import { recordTurn, startingTotals } from "../../usage/turns";
 import {
   VISUALS_BRIEF,
@@ -349,6 +350,13 @@ export class ChatHost {
     switch (cmd.type) {
       case "send": {
         if (this.sent.has(cmd.id)) return;
+        // Sent just as a move or Land took hold (lib/chat/hold): it waits
+        // in the queue rather than start a turn the stop would cut short.
+        if (isHeld(this.session.id)) {
+          enqueue(this.session.id, cmd);
+          this.emit({ type: "queue" });
+          return;
+        }
         this.sent.add(cmd.id);
         await this.modeChange.catch(() => {});
         const user = {

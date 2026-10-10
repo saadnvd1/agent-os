@@ -4,7 +4,9 @@
  * section in its body for its head commit. Each sign-off restacks
  * what sits on it, so a restacked PR's checks are waited out again (its green
  * was against the parent's branch). It stops at the first failure and says
- * what landed.
+ * what landed. A chat item's agent is stopped between turns before anything
+ * merges, and held until the land ends (lib/chat/hold), so no restack has to
+ * cut a turn short or wait on one.
  */
 
 import { db, stackQueries as q, type Session, type StackItemRow } from "../db";
@@ -18,6 +20,9 @@ import {
 import { itemName } from "./guard";
 import { refreshItems } from "./tick";
 import { outputOf } from "./git";
+import { AGENT_BUSY } from "./restack";
+import { stopChatAtTurnEnd, type ChatStop } from "../chat/stop";
+import { releaseChat } from "../chat/runner";
 
 // Asked right before each merge: the commit that may merge, a reason to
 // wait (and ask again), or a reason to stop the land.
@@ -33,7 +38,13 @@ export interface LandDeps {
   refresh: (stackId: string) => Promise<void>;
   waitMs: number;
   everyMs: number;
+  // Stop a chat item's agent at the end of its turn, and let it go again.
+  stopChat: (session: Session) => Promise<ChatStop>;
+  releaseChat: (sessionId: string) => Promise<void>;
 }
+
+// How long a chat item's running turn may take to end before Land gives up.
+export const LAND_TURN_WAIT_MS = 5 * 60_000;
 
 export const LAND_DEFAULTS: LandDeps = {
   // Waits for the restack, so its children are checked after they moved.
@@ -43,6 +54,8 @@ export const LAND_DEFAULTS: LandDeps = {
   refresh: refreshItems,
   waitMs: 45 * 60_000,
   everyMs: 30_000,
+  stopChat: (s) => stopChatAtTurnEnd(s.id, { waitMs: LAND_TURN_WAIT_MS }),
+  releaseChat,
 };
 
 const sessionOf = (id: string | null) =>
@@ -127,6 +140,7 @@ export async function landStack(
     progress: "Checking every PR",
   });
   const landed: string[] = [];
+  const held: string[] = [];
   try {
     await deps.refresh(stackId);
     const items = q
@@ -156,6 +170,24 @@ export async function landStack(
       throw new Stop(`not landing, fix these first:\n${missing.join("\n")}`);
     }
 
+    // Every item a merge below it restacks: its agent stops between turns
+    // now, while nothing has merged. The stack is 'landing', so what's sent
+    // to them waits in their queues until it ends.
+    const busy: string[] = [];
+    for (const item of items) {
+      const session = sessionOf(item.session_id);
+      if (session?.view !== "chat") continue;
+      held.push(session.id);
+      progress(`Letting ${itemName(item)}'s agent finish its turn`);
+      const stop = await deps.stopChat(session);
+      if (!stop.stopped) busy.push(`${itemName(item)}: ${stop.reason}`);
+    }
+    if (busy.length) {
+      throw new Stop(
+        `not landing, these agents didn't stop between turns:\n${busy.join("\n")}\nLand again once they're idle; nothing was merged.`
+      );
+    }
+
     const tips = new Map(items.map((i) => [i.id, i.base_tip]));
     for (const [n, before] of items.entries()) {
       const item = q.item(db, before.id)!;
@@ -182,17 +214,25 @@ export async function landStack(
         throw new Stop(`stopped at ${name}: ${outputOf(e)}`);
       });
       landed.push(name);
-      const stuck = q
+      const children = q
         .items(db, stackId)
-        .find(
+        .filter(
           (c) =>
             c.parent_item_id === item.id &&
-            c.error &&
             (c.status === "pr" || c.status === "running")
         );
+      const stuck = children.find((c) => c.error);
       if (stuck) {
         throw new Stop(
           `stopped after ${name}: ${itemName(stuck)} could not be restacked. ${stuck.error}`
+        );
+      }
+      // Its agent was still working (one that started after the check
+      // above): it wasn't restacked, so it can't merge yet.
+      const waiting = children.find((c) => c.note?.startsWith(AGENT_BUSY));
+      if (waiting) {
+        throw new Stop(
+          `stopped after ${name}: ${itemName(waiting)}'s agent didn't stop, so it wasn't restacked onto the new base. Land again once it's idle.`
         );
       }
     }
@@ -214,4 +254,12 @@ export async function landStack(
       error: `${error instanceof Stop ? error.message : outputOf(error)}\nLanded so far: ${so}`,
     });
   }
+  // The stack isn't 'landing' any more, which lifts the hold: what they
+  // were sent meanwhile (a restack's notice) goes now.
+  for (const id of held)
+    await deps
+      .releaseChat(id)
+      .catch((error: unknown) =>
+        console.error(`Not resuming chat ${id} after the land:`, error)
+      );
 }

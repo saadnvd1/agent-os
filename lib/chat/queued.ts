@@ -1,4 +1,5 @@
 import { db } from "../db";
+import { HELD_SQL } from "./hold";
 import type { ChatImage, QueuedMessage, SentBy } from "./events";
 
 // Messages written while a turn runs, kept in SQLite so a reload or a
@@ -73,7 +74,8 @@ export function enqueue(
 }
 
 // Takes the first message off the queue: once claimed, it's this caller's
-// to send, and an edit or delete racing it finds nothing.
+// to send, and an edit or delete racing it finds nothing. Nothing is taken
+// while the chat is held (./hold).
 export function claimNext(
   sessionId: string,
   // That message only, if it's still there.
@@ -81,12 +83,12 @@ export function claimNext(
 ): ({ id: string; text: string; images?: ChatImage[] } & SentBy) | null {
   const row = db
     .prepare(
-      `DELETE FROM chat_queue WHERE session_id = ? AND id = (
-         SELECT id FROM chat_queue WHERE session_id = ? AND (? IS NULL OR id = ?)
+      `DELETE FROM chat_queue WHERE session_id = @sid AND NOT ${HELD_SQL} AND id = (
+         SELECT id FROM chat_queue WHERE session_id = @sid AND (@id IS NULL OR id = @id)
          ORDER BY position, created_at LIMIT 1
        ) RETURNING id, text, images, sent_by, created_at`
     )
-    .get(sessionId, sessionId, id ?? null, id ?? null) as Row | undefined;
+    .get({ sid: sessionId, id: id ?? null }) as Row | undefined;
   if (!row) return null;
   return {
     id: row.id,

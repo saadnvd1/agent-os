@@ -22,9 +22,14 @@ const g = globalThis as unknown as {
 };
 const entries = (g.__agentosMoveProgress ??= new Map<string, MoveProgress>());
 
-export function moveSteps(direction: "out" | "in", machine: string) {
+export function moveSteps(
+  direction: "out" | "in",
+  machine: string,
+  chat = false
+) {
   return direction === "out"
     ? [
+        ...(chat ? [["turn", "Letting the agent finish its turn"]] : []),
         ["save", "Saving uncommitted work"],
         ["push", "Pushing the branch"],
         ["conversation", "Packing up the conversation"],

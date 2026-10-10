@@ -5,6 +5,7 @@ import type { ChatItem, ChatState } from "./events";
 
 const { registry, emit } = await import("./registry");
 const { saveItem } = await import("./store");
+const { enqueue, listQueue } = await import("./queued");
 const { sendChatConfirmed } = await import("./runner");
 const { seedSession } = await import("../orchestrator/testing");
 const { createProject } = await import("../projects");
@@ -68,6 +69,25 @@ describe("sendChatConfirmed", () => {
       emit(sid, { type: "item", item: userItem(cmd) })
     );
     await expect(sendChatConfirmed(id, { text: "hi" })).resolves.toBe("queued");
+  });
+
+  it("is queued when the worker queued it under a hold that just began", async () => {
+    const { id } = fakeWorker("idle", (sid, cmd) => {
+      // What the worker does for a send that lands as a move or Land holds it.
+      enqueue(sid, cmd);
+      emit(sid, { type: "queue", queue: listQueue(sid) });
+    });
+    await expect(sendChatConfirmed(id, { text: "held" }, 200)).resolves.toBe(
+      "queued"
+    );
+    expect(listQueue(id).map((m) => m.text)).toEqual(["held"]);
+  });
+
+  it("trusts the stored queue when the worker's queue event was missed", async () => {
+    const { id } = fakeWorker("idle", (sid, cmd) => enqueue(sid, cmd));
+    await expect(sendChatConfirmed(id, { text: "held" }, 50)).resolves.toBe(
+      "queued"
+    );
   });
 
   it("isn't confirmed by some other item", async () => {
