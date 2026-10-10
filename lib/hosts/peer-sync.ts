@@ -59,10 +59,16 @@ export function syncPeerMirrors(
 ): void {
   const complete = listed.length <= MAX_PEER_MIRRORS;
   listed = listed.slice(0, MAX_PEER_MIRRORS);
-  const projectFor = projectMatcher(
-    queries.getAllProjects(db).all() as Project[]
+  const projects = queries.getAllProjects(db).all() as Project[];
+  const projectFor = projectMatcher(projects);
+  const here = new Set(
+    projects
+      .filter((p) => !p.is_uncategorized && (p.host_id || "local") === "local")
+      .map((p) => p.id)
   );
-  const owner = db.prepare(`SELECT host_id FROM sessions WHERE id = ?`);
+  const owner = db.prepare(
+    `SELECT host_id, project_id FROM sessions WHERE id = ?`
+  );
   // That machine lists the id, so it's its session: a row mirrored on open
   // before this column existed is marked too.
   const update = db.prepare(
@@ -82,8 +88,13 @@ export function syncPeerMirrors(
   const drop = db.prepare(`DELETE FROM sessions WHERE id = ?`);
   db.transaction(() => {
     for (const peer of listed) {
-      const projectId = projectFor(hostId, peer.path);
-      const row = owner.get(peer.id) as { host_id: string } | undefined;
+      const row = owner.get(peer.id) as
+        | { host_id: string; project_id: string | null }
+        | undefined;
+      // One started here for a project here keeps it (lib/hosts/peer-actions.ts).
+      const kept =
+        row?.project_id && here.has(row.project_id) ? row.project_id : null;
+      const projectId = projectFor(hostId, peer.path) ?? kept;
       // An id that's this machine's own (a task moved there) stays its own.
       if (!row) {
         insertMirror(peer, projectId);

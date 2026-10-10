@@ -27,7 +27,7 @@ import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
 import { saveItem } from "../chat/store";
 import type { ChatItem } from "../chat/events";
-import { launchSession, SCRATCH_DIR } from "./launch";
+import { launchSession, SCRATCH_DIR, START_PROMPT_KEEP_MS } from "./launch";
 import {
   finishSetup,
   holdsQueue,
@@ -86,6 +86,103 @@ describe("launchSession (a draft's first send)", () => {
     expect(queued.text).toBe("What's the tallest mountain?");
     await until(() => sent.length === 1);
     expect(sent[0]).toEqual({ sessionId: session.id, id: queued.id });
+  });
+
+  it("makes one session for a repeated key, even while the first is starting", async () => {
+    const id = "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b";
+    const start = () =>
+      launchSession({
+        id,
+        agentType: "claude",
+        prompt: "Just once",
+        name: "once",
+      });
+    const [a, b] = await Promise.all([start(), start()]);
+    const c = await start();
+    expect([a.session.id, b.session.id, c.session.id]).toEqual([id, id, id]);
+    expect([a.repeat, b.repeat, c.repeat]).toEqual([undefined, true, true]);
+    expect(
+      db.prepare(`SELECT COUNT(*) AS n FROM sessions WHERE id = ?`).get(id)
+    ).toEqual({ n: 1 });
+    await until(() => sent.length === 1);
+    expect(listQueue(id)).toHaveLength(1);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("refuses a key that isn't a session id, or names a task", async () => {
+    await expect(
+      launchSession({ id: "../x", agentType: "claude" })
+    ).rejects.toThrow(/Bad session id/);
+    const task = "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d";
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_prompt, task_status)
+       VALUES (?, 't', 'claude-t', '~', 'do it', 'running')`
+    ).run(task);
+    await expect(
+      launchSession({ id: task, agentType: "claude" })
+    ).rejects.toThrow(/taken/);
+  });
+
+  it("hands a repeat of a terminal start its first prompt, which lives only in the answer", async () => {
+    const id = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
+    const start = () =>
+      launchSession({
+        id,
+        agentType: "claude",
+        view: "terminal",
+        prompt: "Type me once",
+        name: "term",
+      });
+    const first = await start();
+    const again = await start();
+    expect(first.initialPrompt).toBe("Type me once");
+    expect(again).toMatchObject({
+      repeat: true,
+      initialPrompt: "Type me once",
+    });
+
+    // Only for a while: a repeat long after doesn't type it again.
+    const later = Date.now() + START_PROMPT_KEEP_MS + 1000;
+    const now = vi.spyOn(Date, "now").mockReturnValue(later);
+    try {
+      const late = await start();
+      expect(late.repeat).toBe(true);
+      expect(late.initialPrompt).toBeUndefined();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("refuses a key naming an archived session, or a project here on a machine that isn't linked", async () => {
+    const archived = "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a";
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, archived_at)
+       VALUES (?, 'old', 'claude-o', '~', datetime('now'))`
+    ).run(archived);
+    await expect(
+      launchSession({ id: archived, agentType: "claude" })
+    ).rejects.toThrow(/taken/);
+    db.prepare(
+      `INSERT INTO hosts (id, name, ssh_target) VALUES ('ssh-only', 'box', 'me@box')`
+    ).run();
+    const project = createProject({
+      name: "here",
+      workingDirectory: makeRepo(),
+    });
+    await expect(
+      launchSession({
+        projectId: project.id,
+        hostId: "ssh-only",
+        agentType: "claude",
+      })
+    ).rejects.toThrow(/run here or on a linked machine/);
+    expect(
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM sessions WHERE host_id = 'ssh-only'`
+        )
+        .get()
+    ).toEqual({ n: 0 });
   });
 
   it("builds the worktree first, renames its branch from the first message, then sends", async () => {

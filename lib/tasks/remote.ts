@@ -18,8 +18,14 @@ import type { TaskStatus } from "./state";
 import type { TaskView } from "./index";
 
 // What this machine's task API does, for another machine deciding whether
-// it can trust it with a pinned merge or a move.
-export const TASK_CAPABILITIES = ["pinned-merge", "move", "chat-turn"] as const;
+// it can trust it with a pinned merge or a move; keyed-start: a session
+// start takes a key, so it's safe to retry (lib/sessions/launch.ts).
+export const TASK_CAPABILITIES = [
+  "pinned-merge",
+  "move",
+  "chat-turn",
+  "keyed-start",
+] as const;
 
 export interface HostTasks {
   tasks: TaskView[];

@@ -36,7 +36,7 @@ export function DraftPanel({
   const { drafts, hydrated } = useSnapshot(draftsStore);
   const draft = drafts[draftId] as Draft | undefined;
   const { attachSession } = usePanes();
-  const { data: hosts = [] } = useHostsQuery();
+  const { data: hosts = [], isSuccess: hostsLoaded } = useHostsQuery();
   const project = projects.find((p) => p.id === draft?.projectId) ?? null;
   const { data: git } = useGitCheck(
     project && draft?.hostId === "local" ? project.working_directory : ""
@@ -81,9 +81,13 @@ export function DraftPanel({
         toast.success("Task started: it opens a pull request when done");
         return;
       }
-      const { session, initialPrompt } = await launch.mutateAsync({
+      const { session, initialPrompt, repeat } = await launch.mutateAsync({
         projectId: project?.id ?? null,
-        hostId: project ? undefined : draft.hostId,
+        id: draft.id,
+        hostId:
+          !project || draft.hostId !== project.host_id
+            ? draft.hostId
+            : undefined,
         agentType: draft.agentType,
         model: draft.model,
         access: draft.access,
@@ -92,7 +96,14 @@ export function DraftPanel({
         prompt: text,
         images: images.length ? images : undefined,
       });
-      if (initialPrompt) setPendingPrompt(session.id, initialPrompt);
+      // A resend whose first answer was lost: the terminal still needs its
+      // first prompt, and this is the text that was sent.
+      const prompt =
+        initialPrompt ??
+        (repeat && session.view === "terminal" && text.trim()
+          ? text
+          : undefined);
+      if (prompt) setPendingPrompt(session.id, prompt);
       draftsActions.remove(draft.id);
       attachSession(
         paneId,
@@ -116,6 +127,7 @@ export function DraftPanel({
           draft={draft}
           projects={projects}
           hosts={hosts}
+          hostsLoaded={hostsLoaded}
           git={git}
           onChange={(patch) => draftsActions.update(draft.id, patch)}
         />

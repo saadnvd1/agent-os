@@ -159,3 +159,18 @@ export const DRAFT_KEYS: Record<DraftKey, string> = {
   choose: "⌥⇧N",
   scratch: "⌃⌥N",
 };
+
+/**
+ * A draft for a project here, kept for a machine it may no longer use (it
+ * was unlinked). Not one that only refuses or can't be reached now: a
+ * resend there may find the session a lost answer already made.
+ */
+export function draftHostGone(
+  draft: Pick<Draft, "hostId" | "openPr">,
+  projectHere: boolean,
+  machines: { id: string }[] | null
+): boolean {
+  if (!machines || !projectHere || draft.openPr || draft.hostId === "local")
+    return false;
+  return !machines.some((h) => h.id === draft.hostId);
+}

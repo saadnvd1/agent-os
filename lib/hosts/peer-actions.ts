@@ -15,11 +15,14 @@ import { isValidTmuxName } from "./attach";
 import { homeRelative } from "./discover";
 import { toPeerSession } from "./peer-sessions";
 import { insertMirror } from "./peer-sync";
+import { hostTasks, postIdempotent } from "../tasks/remote";
+import type { ProjectRef } from "../tasks/project-ref";
 import {
   HostApiError,
   cleanRemoteText,
   hostApi,
   hostLink,
+  linkedHostIds,
   type HostLink,
 } from "./remote-api";
 
@@ -175,9 +178,13 @@ export async function unarchiveOnPeer(
 }
 
 export interface PeerStart {
+  // The start's key and the session's id there: a retry reuses it.
+  id: string;
   // This machine's project, and the folder to use when that machine has
   // no project there.
   project: { id: string; working_directory: string } | null;
+  // A project here, carried over: that machine finds or clones it.
+  ref?: ProjectRef;
   folder: string;
   agentType: string;
   model?: string | null;
@@ -190,19 +197,98 @@ export interface PeerStart {
 /**
  * A new session on a linked machine, started by its own AgentOS (so it
  * opens in chat there like here) and mirrored here. Its project there is
- * the one at the same folder, relative to ~.
+ * the one a carried ref finds or clones, else the one at the same folder,
+ * relative to ~. The start's key makes a retry safe: that machine answers
+ * a repeat with the session the first made.
  */
 export async function startOnPeer(
   link: HostLink,
   start: PeerStart
-): Promise<{ session: Session; initialPrompt?: string }> {
+): Promise<{ session: Session; initialPrompt?: string; repeat?: boolean }> {
+  // An AgentOS from before keys would make a second session on a retry,
+  // and doesn't know a carried project.
+  const keyed = await hostTasks(link)
+    .then((t) => (t.capabilities ?? []).includes("keyed-start"))
+    .catch(() => false);
+  if (start.ref && !keyed)
+    throw new Error(
+      `Update AgentOS on ${link.hostName} to start this project's sessions there`
+    );
+  const there = start.ref ? null : await projectThere(link, start);
+  const body = {
+    id: start.id,
+    ...(start.ref
+      ? { project: start.ref }
+      : there
+        ? { projectId: there }
+        : { workingDirectory: start.folder }),
+    agentType: start.agentType,
+    model: start.model ?? undefined,
+    access: start.access,
+    name: start.name ?? undefined,
+    prompt: start.prompt || undefined,
+    view: start.view,
+  };
+  // A carried project may be cloned there first.
+  const timeout = start.ref ? 180000 : 60000;
+  type Answer = {
+    session?: unknown;
+    initialPrompt?: unknown;
+    repeat?: unknown;
+  };
+  const res = keyed
+    ? await postIdempotent<Answer>(link, "/api/sessions", body, timeout)
+    : await hostApi<Answer>(link, "/api/sessions", { body, timeout });
+  const peer = toPeerSession(
+    link.hostId,
+    (res.session ?? {}) as Record<string, unknown>
+  );
+  if (!peer) throw new Error(`${link.hostName} started something unreadable`);
+  // Its answer must be the session asked for (or, from an AgentOS that
+  // doesn't take a key, a new one): never one of this machine's own rows.
+  const claimed = new Error(
+    `${link.hostName} answered with a session that isn't its new one`
+  );
+  const before = row(peer.id);
+  if (before && !(peer.id === start.id && isMirrorOf(before, link)))
+    throw claimed;
+  insertMirror(peer, start.project?.id ?? null);
+  const s = row(peer.id);
+  if (!s || !isMirrorOf(s, link)) throw claimed;
+  // Listed before this answer came, it was mirrored without a project here.
+  if (start.project && !s.project_id)
+    db.prepare(`UPDATE sessions SET project_id = ? WHERE id = ?`).run(
+      start.project.id,
+      s.id
+    );
+  const initialPrompt =
+    s.view === "terminal" && typeof res.initialPrompt === "string"
+      ? res.initialPrompt.slice(0, 100_000)
+      : undefined;
+  // A session that machine already had for the key: the draft may need
+  // to type its own first prompt.
+  return {
+    session: row(s.id),
+    initialPrompt,
+    ...(res.repeat === true ? { repeat: true } : {}),
+  };
+}
+
+const isMirrorOf = (s: Session, link: HostLink) =>
+  s.host_id === link.hostId && !!s.peer_mirror && !s.task_prompt;
+
+// That machine's project at the same folder, relative to ~.
+async function projectThere(
+  link: HostLink,
+  start: PeerStart
+): Promise<string | null> {
   const dir = homeRelative(start.project?.working_directory ?? start.folder);
   const { projects } = await hostApi<{ projects?: unknown[] }>(
     link,
     "/api/projects",
     { timeout: 8000 }
   );
-  const there = (Array.isArray(projects) ? projects : [])
+  const found = (Array.isArray(projects) ? projects : [])
     .map((p) => (p ?? {}) as Record<string, unknown>)
     .find(
       (p) =>
@@ -210,41 +296,40 @@ export async function startOnPeer(
         typeof p.working_directory === "string" &&
         homeRelative(p.working_directory) === dir
     );
-  // No retry: a start isn't safe to repeat.
-  const res = await hostApi<{ session?: unknown; initialPrompt?: unknown }>(
-    link,
-    "/api/sessions",
-    {
-      body: {
-        ...(there && typeof there.id === "string"
-          ? { projectId: there.id }
-          : { workingDirectory: start.folder }),
-        agentType: start.agentType,
-        model: start.model ?? undefined,
-        access: start.access,
-        name: start.name ?? undefined,
-        prompt: start.prompt || undefined,
-        view: start.view,
-      },
-      timeout: 60000,
-    }
+  return found && typeof found.id === "string" ? found.id : null;
+}
+
+/**
+ * Why a linked machine can't take a session for a project here, per
+ * machine; null where it can (it has the project or can clone it).
+ */
+export async function projectOnPeers(
+  ref: ProjectRef
+): Promise<Record<string, string | null>> {
+  const links = [...linkedHostIds()]
+    .map((id) => hostLink(id))
+    .filter((l): l is HostLink => !!l);
+  const answers = await Promise.all(
+    links.map(async (link): Promise<[string, string | null]> => {
+      try {
+        const { reason } = await hostApi<{ reason?: unknown }>(
+          link,
+          "/api/projects/availability",
+          { body: { project: ref }, timeout: 20000 }
+        );
+        return [
+          link.hostId,
+          reason == null ? null : cleanRemoteText(reason).slice(0, 200),
+        ];
+      } catch (err) {
+        return [
+          link.hostId,
+          err instanceof HostApiError && err.status === 404
+            ? "Needs a newer AgentOS there"
+            : "Can't reach it",
+        ];
+      }
+    })
   );
-  const peer = toPeerSession(
-    link.hostId,
-    (res.session ?? {}) as Record<string, unknown>
-  );
-  if (!peer) throw new Error(`${link.hostName} started something unreadable`);
-  // Its answer must be a new session: never one of this machine's rows.
-  const claimed = new Error(
-    `${link.hostName} answered with a session that isn't its new one`
-  );
-  if (row(peer.id)) throw claimed;
-  insertMirror(peer, start.project?.id ?? null);
-  const s = row(peer.id);
-  if (!s || s.host_id !== link.hostId || !s.peer_mirror) throw claimed;
-  const initialPrompt =
-    s.view === "terminal" && typeof res.initialPrompt === "string"
-      ? res.initialPrompt.slice(0, 100_000)
-      : undefined;
-  return { session: s, initialPrompt };
+  return Object.fromEntries(answers);
 }

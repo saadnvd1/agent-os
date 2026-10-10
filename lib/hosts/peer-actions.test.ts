@@ -156,6 +156,34 @@ describe("syncPeerMirrors", () => {
   });
 });
 
+describe("a mirror's project", () => {
+  it("follows that machine's folder, and keeps a project here only when none matches", async () => {
+    const { hostId } = await setup();
+    const theirs = project(hostId, "~/dev/app");
+    const id = randomUUID();
+    syncPeerMirrors(hostId, [listed(hostId, id)], later());
+    expect(row(id)?.project_id).toBe(theirs);
+    // Its folder there no longer matches: a project of that machine's isn't kept.
+    syncPeerMirrors(
+      hostId,
+      [listed(hostId, id, { working_directory: "/home/me/elsewhere" })],
+      later()
+    );
+    expect(row(id)?.project_id).toBeNull();
+    // One started for a project here keeps it; a match there still wins.
+    const mine = project("local", "~/dev/mine");
+    db.prepare(`UPDATE sessions SET project_id = ? WHERE id = ?`).run(mine, id);
+    syncPeerMirrors(
+      hostId,
+      [listed(hostId, id, { working_directory: "/home/me/elsewhere" })],
+      later()
+    );
+    expect(row(id)?.project_id).toBe(mine);
+    syncPeerMirrors(hostId, [listed(hostId, id)], later());
+    expect(row(id)?.project_id).toBe(theirs);
+  });
+});
+
 describe("actions on a linked machine's session", () => {
   async function mirrored() {
     const { peer, hostId } = await setup();
@@ -421,5 +449,142 @@ describe("starting a session on a linked machine", () => {
       view: "chat",
       peer_mirror: 1,
     });
+  });
+
+  it("retries a start whose answer was lost with the same key, and mirrors one session", async () => {
+    const { peer, hostId } = await setup();
+    const id = randomUUID();
+    const keys = new Set<string>();
+    let calls = 0;
+    peer.routes["/api/tasks"] = () => ({
+      tasks: [],
+      capabilities: ["keyed-start"],
+    });
+    peer.routes["/api/projects"] = () => ({ projects: [] });
+    peer.routes["/api/sessions"] = ({ body }) => {
+      const key = (body as { id: string }).id;
+      // The first one lands there, but its answer never comes back.
+      keys.add(key);
+      if (++calls === 1) return { $status: 502, error: "bad gateway" };
+      return {
+        repeat: true,
+        session: {
+          id: key,
+          name: "once",
+          tmux_name: `claude-${key}`,
+          view: "chat",
+          agent_type: "claude",
+          working_directory: "/home/me",
+        },
+      };
+    };
+    const { session, repeat } = await launchSession({
+      id,
+      hostId,
+      agentType: "claude",
+      prompt: "hi",
+    });
+    // It answered the retry with the session the first made, and says so.
+    expect(repeat).toBe(true);
+    const starts = peer.calls.filter((c) => c.path === "/api/sessions");
+    expect(starts.map((c) => (c.body as { id: string }).id)).toEqual([id, id]);
+    expect([...keys]).toEqual([id]);
+    expect(session).toMatchObject({ id, host_id: hostId, peer_mirror: 1 });
+    // A resend from the draft gets the same session, without asking again.
+    const again = await launchSession({ id, hostId, agentType: "claude" });
+    expect(again).toMatchObject({ session: { id }, repeat: true });
+    expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
+      2
+    );
+  });
+
+  it("starts a session for a project here on a linked machine, which finds or clones it", async () => {
+    const { peer, hostId } = await setup();
+    const dir = `~/dev/carried-${randomUUID().slice(0, 8)}`;
+    const projectId = project("local", dir);
+    const id = randomUUID();
+    peer.routes["/api/tasks"] = () => ({
+      tasks: [],
+      capabilities: ["keyed-start"],
+    });
+    peer.routes["/api/sessions"] = ({ body }) => ({
+      session: {
+        id: (body as { id: string }).id,
+        name: "hi",
+        tmux_name: `claude-${id}`,
+        view: "chat",
+        agent_type: "claude",
+        working_directory: `/home/me/${dir.slice(2)}`,
+      },
+    });
+    const { session } = await launchSession({
+      id,
+      projectId,
+      hostId,
+      agentType: "claude",
+      prompt: "hi",
+    });
+    const starts = peer.calls.filter((c) => c.path === "/api/sessions");
+    expect(starts).toHaveLength(1);
+    expect(starts[0].body).toMatchObject({
+      id,
+      project: { name: "app", path: dir.slice(2), remote: null },
+      view: DEFAULT_START_VIEW,
+    });
+    expect(session).toMatchObject({
+      id,
+      host_id: hostId,
+      project_id: projectId,
+      view: "chat",
+    });
+    // That machine's listing has no project here for its folder: it keeps this one.
+    syncPeerMirrors(
+      hostId,
+      [listed(hostId, id, { working_directory: `/home/me/${dir.slice(2)}` })],
+      later()
+    );
+    expect(row(id)?.project_id).toBe(projectId);
+  });
+
+  it.each([
+    ["doesn't take keys", () => ({ tasks: [], capabilities: ["move"] })],
+    ["can't say what it takes", () => ({ $status: 500, error: "down" })],
+  ])(
+    "never retries a start on an AgentOS that %s, nor carries a project to it",
+    async (_, tasks) => {
+      const { peer, hostId } = await setup();
+      peer.routes["/api/tasks"] = tasks;
+      peer.routes["/api/projects"] = () => ({ projects: [] });
+      peer.routes["/api/sessions"] = () => ({
+        $status: 502,
+        error: "bad gateway",
+      });
+      await expect(
+        launchSession({ id: randomUUID(), hostId, agentType: "claude" })
+      ).rejects.toThrow(/bad gateway/);
+      expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
+        1
+      );
+      const projectId = project(
+        "local",
+        `~/dev/old-${randomUUID().slice(0, 8)}`
+      );
+      await expect(
+        launchSession({ projectId, hostId, agentType: "claude" })
+      ).rejects.toThrow(/Update AgentOS/);
+      expect(peer.calls.filter((c) => c.path === "/api/sessions")).toHaveLength(
+        1
+      );
+    }
+  );
+
+  it("keeps a project that lives on another machine there", async () => {
+    const { hostId } = await setup();
+    const elsewhere = linkedHost("http://127.0.0.1:9", TOKEN);
+    cleanups.push(elsewhere.remove);
+    const projectId = project(elsewhere.hostId, "~/dev/app");
+    await expect(
+      launchSession({ projectId, hostId, agentType: "claude" })
+    ).rejects.toThrow(/run where it lives/);
   });
 });

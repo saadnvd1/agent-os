@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   currentProjectId,
+  draftHostGone,
   draftKeyFor,
   newDraft,
   pickableProjects,
@@ -242,5 +243,27 @@ describe("draftKeyFor", () => {
     expect(key({ mod: false, shiftKey: true })).toBeNull();
     expect(key({ code: "KeyM" })).toBeNull();
     expect(key({ altKey: true, shiftKey: true })).toBeNull();
+  });
+});
+
+describe("draftHostGone", () => {
+  const box = { hostId: "box", openPr: false };
+
+  it("sends a draft back here when its machine was unlinked", () => {
+    expect(draftHostGone(box, true, [{ id: "local" }])).toBe(true);
+  });
+
+  it("keeps it while the machine is listed (even if it refuses now) or nothing has loaded", () => {
+    expect(draftHostGone(box, true, [{ id: "local" }, { id: "box" }])).toBe(
+      false
+    );
+    expect(draftHostGone(box, true, null)).toBe(false);
+  });
+
+  it("leaves tasks, scratch chats, projects elsewhere and this machine alone", () => {
+    const gone = [{ id: "local" }];
+    expect(draftHostGone({ ...box, openPr: true }, true, gone)).toBe(false);
+    expect(draftHostGone(box, false, gone)).toBe(false);
+    expect(draftHostGone({ ...box, hostId: "local" }, true, gone)).toBe(false);
   });
 });

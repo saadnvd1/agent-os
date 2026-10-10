@@ -179,8 +179,11 @@ export function useMoveSessionToProject() {
 }
 
 export interface LaunchSessionInput {
+  // The draft's id: the session's, and a resend's key to the same one.
+  id: string;
   projectId: string | null;
-  // A scratch chat's machine; a project's sessions run where it lives.
+  // A scratch chat's machine; a project's sessions run where it lives, or
+  // on a linked machine.
   hostId?: string;
   agentType: AgentType;
   model: string;
@@ -194,6 +197,8 @@ export interface LaunchSessionInput {
 interface LaunchSessionResponse {
   session: Session;
   initialPrompt?: string;
+  // The key's session already existed: an earlier send made it.
+  repeat?: boolean;
 }
 
 // A draft's first send: the session is made now, and shows in the list
