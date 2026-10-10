@@ -141,7 +141,9 @@ Shift+Enter is always a newline, and three of them at the end of a code block
 leave it.
 
 Type `/` in the composer for every slash command and skill the agent knows,
-yours included, filtered as you type. Commands such as `/compact`, `/usage`
+yours included, filtered as you type. A skill or command you add or edit
+(in `~/.claude/skills`, `~/.claude/commands` or the project's own) shows up
+on its own; the menu's refresh button reloads the list now. Commands such as `/compact`, `/usage`
 and `/context` run in chat and show their output inline; skills the agent
 invokes on its own appear as a chip. `/model` (or the picker under the
 composer) switches the model mid-conversation. `/mcp` lists the session's MCP

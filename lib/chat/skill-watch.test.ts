@@ -136,6 +136,30 @@ describe("createSkillWatcher", { timeout: 45_000 }, () => {
     }
   });
 
+  it("re-arms on each watch, so a missed event doesn't leave it blind", () => {
+    const project = tmp();
+    const skills = path.join(project, ".claude", "skills");
+    const spy = vi.spyOn(fs, "watch");
+    try {
+      watched(skills);
+      expect(spy).not.toHaveBeenCalledWith(
+        skills,
+        expect.anything(),
+        expect.anything()
+      );
+      // Made with no event seen; the next load watches it all the same.
+      fs.mkdirSync(skills, { recursive: true });
+      watcher!.watch("claude:/p", [skills]);
+      expect(spy).toHaveBeenCalledWith(
+        skills,
+        { recursive: true },
+        expect.any(Function)
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("skips a folder it can't watch", () => {
     watcher = createSkillWatcher(() => {});
     expect(() => watcher!.watch("k", ["/nonexistent/a/b/c"])).not.toThrow();

@@ -87,15 +87,35 @@ const DISCOVER_TIMEOUT_MS = 30_000;
 // Agent processes started at once by a change to a folder many chats read.
 const RELOADS_AT_ONCE = 2;
 
-function timeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Discovery timed out")), ms);
-      timer.unref?.();
-    }),
-  ]).finally(() => clearTimeout(timer));
+// Discovery, ended (the agent process with it) if it takes too long.
+async function discoverWithin(
+  driver: NonNullable<ReturnType<typeof chatDriverFor>>,
+  session: Session,
+  ms: number
+) {
+  const ac = new AbortController();
+  const timer = setTimeout(
+    () => ac.abort(new Error("Discovery timed out")),
+    ms
+  );
+  timer.unref?.();
+  try {
+    return await Promise.race([
+      driver.discover({
+        cwd: cwdOf(session),
+        env: agentEnv(session.id),
+        signal: ac.signal,
+      }),
+      // For a driver that doesn't watch the signal itself.
+      new Promise<never>((_, reject) =>
+        ac.signal.addEventListener("abort", () => reject(ac.signal.reason), {
+          once: true,
+        })
+      ),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Shared across module instances, like the registry: the watcher calls back
@@ -161,10 +181,7 @@ async function loadCapabilities(
   w.watcher.watch(key, skillFolders(cwdOf(session)));
   const gen = ++w.gen;
   const done = (async () => {
-    const found = await timeout(
-      driver.discover({ cwd: cwdOf(session), env: agentEnv(session.id) }),
-      DISCOVER_TIMEOUT_MS
-    );
+    const found = await discoverWithin(driver, session, DISCOVER_TIMEOUT_MS);
     if (w.loads.get(key)?.gen !== gen) return;
     registry.caps.set(key, {
       ...found,

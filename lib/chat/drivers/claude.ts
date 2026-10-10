@@ -124,7 +124,7 @@ export const claudeDriver: ChatDriver = {
   // Claude Code reports its commands, skills and models while starting up,
   // before any message, so a short-lived start tells the composer what's
   // available without spending a turn.
-  async discover({ cwd, env }) {
+  async discover({ cwd, env, signal }) {
     const input = new InputQueue<SDKUserMessage>();
     const q = query({
       prompt: input,
@@ -136,7 +136,16 @@ export const claudeDriver: ChatDriver = {
       },
     });
     try {
-      const init = await q.initializationResult();
+      // An agent that hangs while starting is closed below, not left behind.
+      const init = await Promise.race([
+        q.initializationResult(),
+        new Promise<never>((_, reject) => {
+          if (signal?.aborted) reject(signal.reason);
+          signal?.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+      ]);
       return {
         commands: (init.commands ?? []).map(toCommand),
         models: (init.models ?? []).map((m) => ({

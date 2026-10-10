@@ -16,15 +16,17 @@ process.env.CLAUDE_CONFIG_DIR = tmp("skr-home-");
 // Each discovery reads the project's skill folder, as Claude Code does. A
 // test can hold one open, after it has read, with `gate`.
 let gate: Promise<void> | null = null;
-const discover = vi.fn(async ({ cwd }: { cwd: string }) => {
-  const dir = path.join(cwd, ".claude", "skills");
-  const names = fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
-  if (gate) await gate;
-  return {
-    commands: names.map((name) => ({ name, description: "" })),
-    models: [],
-  };
-});
+const discover = vi.fn(
+  async ({ cwd }: { cwd: string; signal?: AbortSignal }) => {
+    const dir = path.join(cwd, ".claude", "skills");
+    const names = fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
+    if (gate) await gate;
+    return {
+      commands: names.map((name) => ({ name, description: "" })),
+      models: [],
+    };
+  }
+);
 vi.mock("./drivers", () => ({
   chatDriverFor: () => ({ id: "claude", discover }),
 }));
@@ -152,6 +154,32 @@ describe("chat commands", { timeout: 45_000 }, () => {
     expect(discover).toHaveBeenCalledTimes(2);
     open();
     await all;
+    expect(discover).toHaveBeenCalledTimes(3);
+  });
+
+  it("ends a discovery that hangs, and frees the key's reloads", async () => {
+    const { id, key } = await openChat();
+    let aborted = false;
+    discover.mockImplementationOnce(
+      ({ signal }: { cwd: string; signal?: AbortSignal }) =>
+        new Promise((_, reject) =>
+          signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(signal.reason);
+          })
+        )
+    );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const hung = refreshCapabilities(id).catch((e: Error) => e.message);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await hung).toBe("Discovery timed out");
+      expect(aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+    // The next reload runs rather than waiting on the hung one.
+    await reloadCapabilities(key);
     expect(discover).toHaveBeenCalledTimes(3);
   });
 
