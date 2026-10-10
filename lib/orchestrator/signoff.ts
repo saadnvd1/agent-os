@@ -1,10 +1,10 @@
 /**
  * `sign_off` and `land`: merges only through the gates, pinned to the
- * commit that was judged. Anything touching CI config, build and hook
- * scripts, agent config, deploys or secrets handling goes to Saad whatever
- * the gates say, as does a repository with no CI and a gate failing twice
- * on a task. Once a task is with Saad the orchestrator doesn't merge it; he
- * signs it off or drops it.
+ * commit that was judged. With merge approvals on (merge-approvals.ts),
+ * anything touching CI config, build and hook scripts, agent config, deploys
+ * or secrets handling goes to Saad whatever the gates say. A repository with
+ * no CI and a gate failing twice on a task go to him either way. Once a task
+ * is with Saad the orchestrator doesn't merge it; he signs it off or drops it.
  */
 
 import { prFor } from "../tasks/session";
@@ -14,21 +14,28 @@ import { getStack, landInBackground } from "../stacks";
 import { LAND_DEFAULTS } from "../stacks/land";
 import { db, stackQueries, type Session } from "../db";
 import { getCheck } from "./checks";
-import { addedLines, changedFiles, ruleBreaks, sensitiveFiles } from "./diff";
+import {
+  addedLines,
+  changedFiles,
+  fullDiff,
+  ruleBreaks,
+  sensitiveFiles,
+} from "./diff";
 import { escalate } from "./escalate";
 import {
-  escalations,
   evaluateGates,
   failureOf,
+  holdingEscalations,
   recordFailure,
   type GateOutcome,
 } from "./gates";
 import { addNote } from "./notes";
 import { refundApproval, spendApproval } from "./ask-approvals";
 import { heldVerdict } from "./held";
+import { mergeApprovalsOn } from "./merge-approvals";
 import { isPaused } from "./pause";
 import { commitTime, fetchRefs, repoOf } from "./repo";
-import { review } from "./review";
+import { DIFF_CAP, review } from "./review";
 import { workspaceStack, workspaceTask } from "./targets";
 import { ciSettleIn, waitingState } from "./task-state";
 
@@ -62,7 +69,7 @@ export async function judge(
   });
   if (task.task_status !== "running")
     return no(`${task.name} is already ${task.task_status}`);
-  const held = escalations(task.id);
+  const held = holdingEscalations(task.id);
   const pr = await prFor(task, true);
   if (!pr || pr.state !== "OPEN" || !pr.head)
     return no(`${task.name} has no open PR`);
@@ -73,11 +80,20 @@ export async function judge(
   const repo = repoOf(task);
   const base = await fetchRefs(repo, task);
   const files = await changedFiles(repo, base, sha);
-  const sensitive = sensitiveFiles(files);
+  const sensitive = mergeApprovalsOn() ? sensitiveFiles(files) : [];
   if (sensitive.length) {
     const what = sensitive.map((s) => `${s.path} (${s.why})`).join(", ");
     const why = `PR #${pr.number} at ${short(sha)} touches ${what}`;
     return no(escalate(workspaceId, task, "sensitive", why, pr.url, sha));
+  }
+  // Here too, not only in the review: one reviewed in parts while approvals
+  // were off goes to Saad once they're on.
+  if (mergeApprovalsOn()) {
+    const size = (await fullDiff(repo, base, sha)).length;
+    if (size > DIFF_CAP) {
+      const why = `PR #${pr.number}'s diff at ${short(sha)} is ${size} characters, too big to review whole`;
+      return no(escalate(workspaceId, task, "size", why, pr.url, sha));
+    }
   }
 
   const outcomes = evaluateGates({

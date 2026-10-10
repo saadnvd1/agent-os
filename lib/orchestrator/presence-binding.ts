@@ -9,6 +9,7 @@ export const askPresence = (askId: number, binding: string) =>
   `ask:${askId}:${binding}`;
 export const resumePresence = (workspaceId: string) => `resume:${workspaceId}`;
 export const revokePresence = (passkeyId: string) => `revoke:${passkeyId}`;
+export const APPROVALS_OFF_PRESENCE = "approvals-off";
 
 export function presenceBinding(b: {
   purpose?: PresencePurpose;
@@ -33,6 +34,8 @@ export function presenceBinding(b: {
       return resumePresence(b.workspaceId);
     case "enroll":
       return "enroll";
+    case "approvals-off":
+      return APPROVALS_OFF_PRESENCE;
     case "revoke":
       if (!b.passkeyId) throw new PresenceError("Which passkey?");
       return revokePresence(b.passkeyId);

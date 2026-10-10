@@ -1,8 +1,9 @@
 /**
  * What a task's PR changes, read from git at its exact head commit, and the
  * plain rules a merge is held to before any model looks at it: nothing
- * outside the repository, no secrets, not only lockfiles, and nothing
- * touching CI, deploys or secrets handling without Saad.
+ * outside the repository, no secrets, not only lockfiles, and, while merge
+ * approvals are on, nothing touching CI, deploys or secrets handling
+ * without Saad.
  */
 
 import path from "path";
@@ -49,6 +50,11 @@ export async function changedFiles(
   return files;
 }
 
+// The whole change, as a reviewer reads it.
+export function fullDiff(repo: string, base: string, sha: string) {
+  return run("git", ["diff", "--no-color", `${base}...${sha}`], repo);
+}
+
 // The lines the change adds, for the secrets check.
 export async function addedLines(repo: string, base: string, sha: string) {
   const diff = await run(
@@ -92,7 +98,8 @@ const SENSITIVE: { why: string; test: RegExp }[] = [
   },
 ];
 
-// Files a merge must go to Saad for, whatever the gates say.
+// Files a merge goes to Saad for, whatever the gates say, while merge
+// approvals are on (merge-approvals.ts).
 export function sensitiveFiles(
   files: ChangedFile[]
 ): { path: string; why: string }[] {

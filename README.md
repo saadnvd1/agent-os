@@ -676,17 +676,22 @@ it may do on its own, and the lines that always come back to you as asks.
   settings or MCP servers from anywhere (so nothing the PR ships runs), gets
   an allowlisted environment, can only Read/Grep/Glob inside the checkout,
   and follows the repo's review agents' rules (`.claude/agents/review-*.md`), or its review skill, as the base branch has them. The verdict
-  is stored against that sha, and a diff over 80k characters goes to you
-  instead. A task from a card also gets a scope check against the card.
+  is stored against that sha. A diff over 80k characters is reviewed in up
+  to 6 parts of whole files, each against the task, and fails if any part
+  does; a single file over 80k, or more than 6 parts, goes to you. A task from a card also gets a scope check against the card.
   `sign_off` squash-merges only that commit when CI is green and settled on
   it (2 minutes with no new check), its review passed, nothing is
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent
   has merged, and the PR body's Code review section names that commit. `land` judges each item again at its own head right before
-  merging it. The second failure of a gate, a repo with no CI, or any change
-  to CI config, build and hook scripts, agent config, deploy scripts or
-  secrets handling goes to you as an ask, and the orchestrator stops merging
-  that task.
+  merging it. The second failure of a gate or a repo with no CI goes to you
+  as an ask, and the orchestrator stops merging that task.
+- **Merge approvals** (Settings → Devices, off by default): on, any change to
+  CI config, build and hook scripts, agent config, deploy scripts, secrets
+  handling or AgentOS's security code, and any diff over 80k characters, goes
+  to you as an ask whatever the gates say, and merges once on your passkey.
+  Off, those merge through the gates like any other PR. Switching it off
+  again needs your passkey.
 - **Decision log:** `note` and the brakes and escalations write to
   `orchestrator_notes`, and each line shows in its chat.
 - **Events:** the server sends it one short line per event (a PR opened, CI
@@ -715,7 +720,8 @@ approved`). An approval covers that one item only: a held task's approval
   filed as that hard line.
 - **Proof it's you:** only this machine, the tailnet, or a paired device you
   switched to "Can approve" in Devices may answer asks or pause. Approving a
-  hard line, a gate, a brake or a new passkey, and Resume, also need a
+  hard line, a gate, a brake or a new passkey, Resume, and switching merge
+  approvals off, also need a
   passkey (Touch ID or Face ID, user verification required) on a challenge
   bound to that one ask at its current commit or brake: single use, two
   minutes. Agents on this machine reach every route but can't make your

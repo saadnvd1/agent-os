@@ -19,6 +19,12 @@ vi.mock("@/lib/status-detector", () => ({
   },
 }));
 
+// Settings → Devices reads these; the tests never touch the machine's.
+vi.mock("@/lib/tailscale", () => ({
+  tailscaleStatus: async () => ({ state: "missing" }),
+}));
+vi.mock("@/lib/security/reach", () => ({ reachableAt: async () => [] }));
+
 const { db } = await import("@/lib/db");
 const { ensureOrchestrator } = await import("./home");
 const { seedWorkspace } = await import("./testing");
@@ -39,6 +45,9 @@ const optionsRoute = await import("@/app/api/presence/options/route");
 const revokeRoute = await import("@/app/api/presence/passkeys/[id]/route");
 const registerOptionsRoute =
   await import("@/app/api/presence/register/options/route");
+const networkRoute = await import("@/app/api/devices/network/route");
+const { mergeApprovalsOn, setMergeApprovals } =
+  await import("./merge-approvals");
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-approve-"));
@@ -177,6 +186,69 @@ describe("answering an ask needs a person", () => {
     expect(
       (await call({ action: "approve", binding: "ask:name" })).status
     ).toBe(200);
+  });
+});
+
+describe("merge approvals", () => {
+  const put = (body: object, who: Who = LOOPBACK) =>
+    networkRoute.PUT(request("/api/devices/network", body, who, "PUT"));
+
+  it("are off by default, and switching them off again needs a passkey", async () => {
+    setup();
+    const key = softAuthenticator();
+    key.register();
+    expect(mergeApprovalsOn()).toBe(false);
+    expect((await put({ mergeApprovals: true })).status).toBe(200);
+    expect(mergeApprovalsOn()).toBe(true);
+    // Anything on this machine reaches loopback: off needs a person.
+    expect((await put({ mergeApprovals: false })).status).toBe(403);
+    expect(mergeApprovalsOn()).toBe(true);
+    const assertion = await proof(key, { purpose: "approvals-off" });
+    const res = await put({ mergeApprovals: false, assertion });
+    expect(res.status).toBe(200);
+    expect(
+      ((await res.json()) as { mergeApprovals: { on: boolean } }).mergeApprovals
+        .on
+    ).toBe(false);
+  });
+
+  it("can't be switched from a paired device off the tailnet", async () => {
+    setup();
+    const device = mintDevice("phone").device.id;
+    const res = await put({ mergeApprovals: true }, { via: "device", device });
+    expect(res.status).toBe(403);
+    expect(mergeApprovalsOn()).toBe(false);
+  });
+
+  it("leave hard-line asks needing a passkey while off", async () => {
+    const t = setup();
+    softAuthenticator().register();
+    setMergeApprovals(false);
+    for (const kind of [
+      "public",
+      "money",
+      "irreversible",
+      "credentials",
+      "product",
+    ] as const) {
+      const { ask } = raiseAsk({
+        workspaceId: t.w,
+        subject: `title:${kind}`,
+        kind,
+        title: `Do the ${kind} thing?`,
+        detail: "",
+      });
+      const res = await askRoute.POST(
+        request(
+          `/api/workspaces/${t.w}/orchestrator/asks/${ask.id}`,
+          { action: "approve", binding: `title:${kind}` },
+          LOOPBACK
+        ),
+        { params: Promise.resolve({ id: t.w, askId: String(ask.id) }) }
+      );
+      expect(res.status).toBe(403);
+      expect(getAsk(t.w, ask.id)?.status).toBe("open");
+    }
   });
 });
 

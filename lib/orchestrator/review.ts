@@ -4,20 +4,23 @@
  * detached checkout of that commit, with Read/Grep/Glob limited to it and no
  * shell, and its verdict is stored against the sha. When the task came from
  * a card, a second run checks the change against the card. A diff too big
- * to read whole goes to Saad instead of being judged on a part. Both run in
- * the background; the orchestrator hears the verdict as an event.
+ * to read whole is reviewed in parts (diff-parts.ts), each against the task,
+ * and fails if any part does; with merge approvals on it goes to Saad
+ * instead, as does one too big even in parts. Both run in the background;
+ * the orchestrator hears the verdict as an event.
  */
 
 import type { Session } from "../db";
 import type { TaskPR } from "../tasks/state";
 import { prFor } from "../tasks/session";
-import { run } from "../tasks/gh";
 import { queueEvent } from "./events";
 import { clearStaleRunning, getCheck, putCheck, type CheckRow } from "./checks";
 import { runClaude, type ClaudeRunner } from "./claude-cli";
-import { changedFiles } from "./diff";
+import { changedFiles, fullDiff } from "./diff";
+import { diffParts } from "./diff-parts";
 import { escalate } from "./escalate";
-import { escalations } from "./gates";
+import { holdingEscalations } from "./gates";
+import { mergeApprovalsOn } from "./merge-approvals";
 import {
   baseReviewSkill,
   checkout,
@@ -26,6 +29,7 @@ import {
   repoOf,
 } from "./repo";
 import {
+  combineVerdicts,
   REVIEW_SCHEMA,
   reviewPrompt,
   REVIEW_SYSTEM,
@@ -36,8 +40,10 @@ import { workspaceTask } from "./targets";
 import { untrusted } from "./untrusted";
 
 const short = (sha: string) => sha.slice(0, 7);
-// The most diff a reviewer is given; more goes to Saad.
+// The most diff one reviewer is given, and the most parts a change too big
+// for one is cut into; more goes to Saad.
 export const DIFF_CAP = 80000;
+export const MAX_PARTS = 6;
 
 export function describeReview(row: CheckRow): string {
   const at = short(row.sha);
@@ -61,14 +67,26 @@ async function reviewJob(
   const row = { workspaceId, sessionId: task.id, sha };
   const repo = repoOf(task);
   const base = await fetchRefs(repo, task);
-  const diff = await run(
-    "git",
-    ["diff", "--no-color", `${base}...${sha}`],
-    repo
-  );
-  if (diff.length > DIFF_CAP) {
-    const why = `PR #${pr.number}'s diff at ${short(sha)} is ${diff.length} characters, too big to review whole`;
-    escalate(workspaceId, task, "size", why, pr.url, sha);
+  const diff = await fullDiff(repo, base, sha);
+  const parts =
+    diff.length <= DIFF_CAP
+      ? [diff]
+      : mergeApprovalsOn()
+        ? null
+        : diffParts(diff, DIFF_CAP, MAX_PARTS);
+  if (!parts) {
+    const approvals = mergeApprovalsOn();
+    const why = `PR #${pr.number}'s diff at ${short(sha)} is ${diff.length} characters, too big to review ${approvals ? "whole" : `in ${MAX_PARTS} parts of ${DIFF_CAP}`}`;
+    // "size" is the approval merge approvals asks for; "unreviewable" holds
+    // the task whatever that switch says.
+    escalate(
+      workspaceId,
+      task,
+      approvals ? "size" : "unreviewable",
+      why,
+      pr.url,
+      sha
+    );
     return putCheck({
       ...row,
       kind: "review",
@@ -80,17 +98,42 @@ async function reviewJob(
   const skill = await baseReviewSkill(repo, base);
   const dir = await checkout(repo, sha);
   try {
-    const answer = await claude({
-      cwd: dir,
-      system: REVIEW_SYSTEM,
-      prompt: reviewPrompt({ task, sha, base, files, diff, skill }),
-      schema: REVIEW_SCHEMA,
-      tools: ["Read", "Grep", "Glob"],
-      allow: [`Read(/${dir}/**)`, `Grep(/${dir}/**)`, `Glob(/${dir}/**)`],
+    const verdicts = [];
+    for (const [i, part] of parts.entries()) {
+      // Each part can take its own 15 minutes: a fresh row each time keeps
+      // a long review from reading as one a restart left behind.
+      if (i > 0)
+        putCheck({
+          ...row,
+          kind: "review",
+          status: "running",
+          detail: `part ${i + 1} of ${parts.length}`,
+        });
+      const answer = await claude({
+        cwd: dir,
+        system: REVIEW_SYSTEM,
+        prompt: reviewPrompt({
+          task,
+          sha,
+          base,
+          files,
+          diff: part,
+          skill,
+          ...(parts.length > 1 ? { part: { n: i + 1, of: parts.length } } : {}),
+        }),
+        schema: REVIEW_SCHEMA,
+        tools: ["Read", "Grep", "Glob"],
+        allow: [`Read(/${dir}/**)`, `Grep(/${dir}/**)`, `Glob(/${dir}/**)`],
+      });
+      verdicts.push(toVerdict(answer));
+    }
+    const done = putCheck({
+      ...row,
+      kind: "review",
+      ...combineVerdicts(verdicts),
     });
-    const done = putCheck({ ...row, kind: "review", ...toVerdict(answer) });
     if (task.lh_card_id)
-      await checkScope({ workspaceId, task, sha, files, diff, claude });
+      await checkScope({ workspaceId, task, sha, files, parts, claude });
     return done;
   } finally {
     await removeCheckout(repo, dir);
@@ -106,15 +149,22 @@ export async function review(
   const task = workspaceTask(workspaceId, ref);
   if (task.task_status !== "running")
     throw new Error(`${task.name} is already ${task.task_status}`);
-  const held = escalations(task.id);
+  const held = holdingEscalations(task.id);
   if (held.length)
     return `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
   const pr = await prFor(task, true);
   if (!pr?.head) throw new Error(`${task.name} has no PR to review yet`);
   const sha = pr.head;
   const known = getCheck(task.id, sha, "review");
+  // A card task's scope check runs after its review; one never stored (a
+  // restart between the two) means running the job again.
+  const scopeMissing =
+    !!task.lh_card_id &&
+    known?.status !== "running" &&
+    !getCheck(task.id, sha, "scope");
   if (
     known &&
+    !scopeMissing &&
     (known.status === "running" || (!opts.fresh && known.status !== "error"))
   )
     return describeReview(known);

@@ -9,6 +9,7 @@
 import { db } from "../db";
 import type { ChecksVerdict } from "../tasks/state";
 import type { CheckRow } from "./checks";
+import { APPROVAL_GATES, mergeApprovalsOn } from "./merge-approvals";
 import { untrusted } from "./untrusted";
 
 export type GateName =
@@ -191,4 +192,14 @@ export function escalations(sessionId: string): FailureRow[] {
       `SELECT * FROM orchestrator_gate_failures WHERE session_id = ? AND escalated_at IS NOT NULL`
     )
     .all(sessionId) as FailureRow[];
+}
+
+// The escalations that still hold the task: one only Saad's approval was
+// asked for (sensitive files, size) lets go once that approval is switched
+// off, and the task goes through the gates like any other.
+export function holdingEscalations(sessionId: string): FailureRow[] {
+  const held = escalations(sessionId);
+  return mergeApprovalsOn()
+    ? held
+    : held.filter((h) => !APPROVAL_GATES.includes(h.gate));
 }

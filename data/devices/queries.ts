@@ -3,6 +3,7 @@ import type { Device } from "@/lib/security/devices";
 import type { NetworkState } from "@/lib/security/network-state";
 import type { PairingOffer } from "@/lib/security/pair-qr";
 import { deviceKeys } from "./keys";
+import { provePresence } from "../presence";
 
 async function json<T>(res: Response): Promise<T> {
   const data = await res.json();
@@ -35,16 +36,23 @@ export function useNetworkQuery(enabled = true) {
 export function useUpdateNetwork() {
   const queryClient = useQueryClient();
   return useMutation({
+    // Switching merge approvals off needs a passkey.
     mutationFn: async (body: {
       lan?: boolean;
       requirePairingOnTailnet?: boolean;
       connect?: boolean;
+      mergeApprovals?: boolean;
     }) =>
       json<NetworkState>(
         await fetch("/api/devices/network", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            ...body,
+            ...(body.mergeApprovals === false
+              ? { assertion: await provePresence({ purpose: "approvals-off" }) }
+              : {}),
+          }),
         })
       ),
     onSuccess: (data) => queryClient.setQueryData(deviceKeys.network(), data),

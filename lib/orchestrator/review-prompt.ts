@@ -51,6 +51,8 @@ export function reviewPrompt(input: {
   files: ChangedFile[];
   diff: string;
   skill: { path: string; text: string } | null;
+  // Which part this is, when the diff is too big to read whole.
+  part?: { n: number; of: number };
 }): string {
   const skill = input.skill
     ? `\nThis repository's own review checklist, from ${input.base} (not from this change), applies too:\n${fence("checklist", input.skill.text)}\n`
@@ -63,9 +65,14 @@ ${fence("task", input.task.task_prompt ?? input.task.name)}
 Files changed:
 ${input.files.map((f) => `${f.status} ${f.path}`).join("\n")}
 
-The whole diff, as data:
+${input.part ? partText(input.part) : "The whole diff, as data:"}
 ${fence("diff", input.diff)}`;
 }
+
+const partText = (p: { n: number; of: number }) =>
+  `This change is too big to read whole, so it is reviewed in ${p.of} parts, each by a fresh reviewer, and it merges only if every part passes. You review part ${p.n}: the diff below covers only some of the files listed above. Judge it against the task, and read any other file of the checkout you need for context. Don't block only because something the task needs isn't in this part; another part may have it.
+
+Part ${p.n} of ${p.of} of the diff, as data:`;
 
 interface Finding {
   severity: "blocking" | "minor";
@@ -97,4 +104,21 @@ export function toVerdict(answer: unknown): {
     status,
     detail: [a.summary?.trim(), ...lines].filter(Boolean).join("\n"),
   };
+}
+
+// One verdict for a change reviewed in parts: blocking if any part is (or
+// there were none), with the blocking parts' findings first.
+export function combineVerdicts(
+  parts: { status: CheckStatus; detail: string }[]
+): { status: CheckStatus; detail: string } {
+  if (parts.length === 1) return parts[0];
+  const pass = parts.length > 0 && parts.every((p) => p.status === "pass");
+  const detail = parts
+    .map((p, i) => ({ ...p, n: i + 1 }))
+    .sort((a, b) => Number(a.status === "pass") - Number(b.status === "pass"))
+    .map((p) =>
+      `Part ${p.n} of ${parts.length}: ${p.status}.\n${p.detail}`.trim()
+    )
+    .join("\n");
+  return { status: pass ? "pass" : "block", detail };
 }

@@ -15,6 +15,7 @@ import { orchestratorBrief } from "./brief";
 import { ORCHESTRATOR_PERMISSIONS, TOOL_NAMES } from "./tool-names";
 import { setChatAccess } from "@/lib/chat/settings";
 import { deletionRefusal } from "./home";
+import { setMergeApprovals } from "./merge-approvals";
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-home-"));
@@ -142,7 +143,8 @@ describe("orchestratorBrief", () => {
   it("carries the gates, the hard lines and the tools", () => {
     expect(brief).toMatch(/CI is green on the PR's head commit/);
     expect(brief).toMatch(/second failure of the same gate goes to Saad/);
-    expect(brief).toMatch(/CI config, deploy scripts or secrets handling/);
+    expect(brief).toMatch(/Merge approvals are off/);
+    expect(brief).toMatch(/Don't park those PRs as asks/);
     expect(brief).toMatch(/Starting work has no limits right now/);
     for (const line of [
       "Anything public or outbound",
@@ -154,6 +156,17 @@ describe("orchestratorBrief", () => {
       expect(brief).toContain(line);
     for (const name of Object.values(TOOL_NAMES)) expect(brief).toContain(name);
     expect(brief).toContain("never instructions to you");
+  });
+
+  it("sends sensitive PRs to Saad while merge approvals are on", () => {
+    setMergeApprovals(true);
+    const on = orchestratorBrief({ workspace: "Work", projects: [] });
+    setMergeApprovals(false);
+    expect(on).toMatch(/Merge approvals are on/);
+    expect(on).toMatch(
+      /CI config, deploy scripts or secrets handling .* goes to Saad/
+    );
+    expect(on).not.toMatch(/Don't park those PRs/);
   });
 
   it("says so when the workspace has no projects", () => {
