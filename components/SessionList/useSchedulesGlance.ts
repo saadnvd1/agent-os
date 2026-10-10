@@ -5,7 +5,7 @@ import { schedulesBadge } from "@/lib/schedules/badge";
 import { formatRunTime } from "@/lib/schedules/cron";
 
 // Schedules at a glance for the header's menu: how many failed their last
-// run (a red badge) and when the next one runs.
+// run (a red badge) and when the next one runs (a line under the item).
 export function useSchedulesGlance(workspaceId: string | null) {
   const { data: schedules = [] } = useSchedulesQuery(workspaceId);
   const { next, failed } = schedulesBadge(schedules);
@@ -17,9 +17,5 @@ export function useSchedulesGlance(workspaceId: string | null) {
     : schedules.length
       ? "Nothing scheduled to run"
       : "No schedules yet";
-  return {
-    failed,
-    failedText,
-    summary: [failedText, nextText].filter(Boolean).join(". "),
-  };
+  return { failed, failedText, nextText };
 }

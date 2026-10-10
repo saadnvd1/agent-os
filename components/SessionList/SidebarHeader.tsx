@@ -93,7 +93,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
             menuItem("Schedules", () => schedulesUiActions.open(workspaceId), {
               icon: Clock,
-              title: schedules.summary,
+              description: schedules.nextText,
               badge: schedules.failed > 0 && (
                 <span className="text-destructive flex items-center gap-1.5 text-xs font-medium tabular-nums">
                   <span aria-hidden className={failedDot} />
