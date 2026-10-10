@@ -733,7 +733,12 @@ it may do on its own, and the lines that always come back to you as asks.
   linked boards' cards), plus acting tools: `send`, `start_task`,
   `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `note`,
   `review`, `sign_off` and `ask_saad`. All are served in-process to its chat, refuse
-  any target outside its workspace, and validate their arguments. The route
+  any target outside its workspace, and validate their arguments. The one
+  exception is other orchestrators: `orchestrators` lists every workspace and
+  whether it has one, and `message_orchestrator` messages another workspace's
+  current orchestrator by workspace name (never any other session there). It
+  arrives marked as from that orchestrator and fenced as untrusted, so it can't
+  approve, answer an ask or pass a gate. The route
   they call answers only the orchestrator's worker, by a per-orchestrator
   secret. Its shell runs only `aos` commands that read.
 - **Brakes:** every start is refused, with the reason, while 4 sessions run in

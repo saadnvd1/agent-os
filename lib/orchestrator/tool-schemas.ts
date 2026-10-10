@@ -33,6 +33,11 @@ export const TOOL_SHAPES = {
     board: ref("One board, by board or project name").optional(),
   },
   send: { session, message: z.string().trim().min(1).max(8000) },
+  orchestrators: {},
+  message_orchestrator: {
+    workspace: ref("Another workspace's name, from orchestrators"),
+    message: z.string().trim().min(1).max(8000),
+  },
   start_task: {
     project,
     prompt: z

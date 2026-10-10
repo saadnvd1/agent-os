@@ -15,6 +15,7 @@ import { sessionFacts } from "./facts";
 import { resolveStaleAsks } from "./ask-settle";
 import { addNote } from "./notes";
 import { askSaad } from "./ask-tool";
+import { listOrchestratorPeers, messageOrchestrator } from "./cross";
 import { PAUSED_REFUSAL } from "./pause";
 import { readSession } from "./read";
 import { review } from "./review";
@@ -26,6 +27,7 @@ export { isToolName, TOOLS, type ToolName } from "./tool-schemas";
 // What a pause stops: everything that changes the workspace or spends.
 const ACTING = new Set<ToolName>([
   "send",
+  "message_orchestrator",
   "start_task",
   "start_session",
   "stack",
@@ -64,6 +66,13 @@ export async function runTool(
     case "send": {
       const a = p(tool, raw);
       return send(w, a.session, a.message);
+    }
+    case "orchestrators":
+      p(tool, raw);
+      return listOrchestratorPeers(w);
+    case "message_orchestrator": {
+      const a = p(tool, raw);
+      return messageOrchestrator(w, a.workspace, a.message);
     }
     case "start_task": {
       const a = p(tool, raw);
