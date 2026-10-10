@@ -122,15 +122,11 @@ describe("currentProjectId", () => {
     expect(currentProjectId(null, [], [projects[0]])).toBeNull();
   });
 
-  it("takes the sidebar's project filter with no workspace selected", () => {
-    const all = { workspaceId: null };
-    expect(
-      currentProjectId(null, recent, projects, { ...all, projectId: "a" })
-    ).toBe("a");
+  it("skips the filter with no workspace selected", () => {
     expect(
       currentProjectId(null, recent, projects, {
-        ...all,
-        projectId: "uncategorized",
+        workspaceId: null,
+        projectId: "a",
       })
     ).toBe("b");
   });

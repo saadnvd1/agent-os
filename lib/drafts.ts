@@ -90,7 +90,8 @@ export interface DraftScope {
 }
 
 // The project ⌥N (or the sidebar's New) starts in: the one you're in, else
-// the sidebar's project filter, else the most recently used, else the first.
+// the sidebar's project filter in the selected workspace, else the most
+// recently used, else the first.
 // With a workspace selected only its projects count, so a session viewed or
 // used last in another workspace doesn't pull the draft out of it.
 export function currentProjectId(
@@ -107,7 +108,8 @@ export function currentProjectId(
   const real = (id: string | null | undefined) =>
     !!id && here.some((p) => p.id === id && !p.is_uncategorized);
   if (viewing && real(viewing.projectId)) return viewing.projectId;
-  if (real(scope.projectId)) return scope.projectId;
+  // Only inside a selected workspace; "All workspaces" skips the filter.
+  if (scope.workspaceId && real(scope.projectId)) return scope.projectId;
   const latest = [...recent]
     .filter((s) => real(s.project_id))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
