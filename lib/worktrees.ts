@@ -14,6 +14,7 @@ import {
   slugify,
   generateBranchName,
 } from "./git";
+import { installWorktreeHooks } from "./worktree-hooks";
 
 const execFileAsync = promisify(execFile);
 
@@ -147,6 +148,14 @@ export async function createWorktree(
         resolvedProjectPath,
         ["worktree", "add", "-b", branchName, "--", worktreePath, ref],
         timeout
+      );
+      // Best effort: a worktree without the hook still works, it just
+      // doesn't strip attribution.
+      await installWorktreeHooks(worktreePath).catch((err) =>
+        console.error(
+          `[worktrees] hooks not installed in ${worktreePath}:`,
+          err
+        )
       );
       return {
         worktreePath,

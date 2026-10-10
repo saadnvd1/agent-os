@@ -97,6 +97,34 @@ describe("parseCodeReview on hostile bodies", () => {
   });
 });
 
+describe("AI attribution in the PR body", () => {
+  const body = (footer: string) =>
+    `## Summary\nA change.\n\n## Code review\nReviewed: ${HEAD}\n\n${footer}\n`;
+
+  it("is found and refuses the merge, naming the line", () => {
+    for (const footer of [
+      "🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+      "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+    ]) {
+      const section = parseCodeReview(body(footer));
+      expect(section).toEqual({ sha: HEAD, attribution: footer });
+      expect(codeReviewRefusal(section, HEAD)).toContain(footer);
+    }
+  });
+
+  it("isn't read from a fenced example, and a clean body passes", () => {
+    const fenced = body("```\n🤖 Generated with [Claude Code](x)\n```");
+    expect(parseCodeReview(fenced)).toEqual({ sha: HEAD });
+    expect(codeReviewRefusal(parseCodeReview(fenced), HEAD)).toBeNull();
+  });
+
+  it("stays fast on a line of whitespace", () => {
+    const started = performance.now();
+    parseCodeReview(" ".repeat(60_000) + "x");
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+});
+
 describe("codeReviewRefusal", () => {
   it("passes a review of the head commit", () => {
     expect(codeReviewRefusal({ sha: "4f2a9c1" }, HEAD)).toBeNull();
