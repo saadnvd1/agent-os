@@ -39,21 +39,25 @@ export function insertMirror(
   );
 }
 
-/**
- * Brings the mirrors of one machine in line with its listing: new sessions
- * get a row, listed ones take its name, view, PR and time, and a mirror it
- * listed before and doesn't now (deleted, archived or moved there) goes.
- * A task's mirror is left alone: its state comes from that machine's tasks.
- */
 // One listing mirrors at most this many: a listing is another machine's
 // answer, and each entry becomes a row.
 export const MAX_PEER_MIRRORS = 500;
 
+/**
+ * Brings the mirrors of one machine in line with its listing: new sessions
+ * get a row, listed ones take its name, view, PR and time, and a mirror it
+ * doesn't list (deleted, archived or moved there) goes. Read from the rows,
+ * so a restart forgets nothing; only rows made before the listing was asked
+ * for (`askedAt`, ms), so an older answer arriving late never drops a
+ * session started since; and never from a cut-short listing. Rows that
+ * aren't marked mirrors, and task mirrors, are left alone.
+ */
 export function syncPeerMirrors(
   hostId: string,
   listed: PeerSession[],
-  gone: string[]
+  askedAt: number
 ): void {
+  const complete = listed.length <= MAX_PEER_MIRRORS;
   listed = listed.slice(0, MAX_PEER_MIRRORS);
   const projectFor = projectMatcher(
     queries.getAllProjects(db).all() as Project[]
@@ -70,10 +74,12 @@ export function syncPeerMirrors(
          AND pr_url IS ? AND pr_number IS ? AND pr_status IS ?
          AND updated_at IS COALESCE(?, updated_at) AND peer_mirror = 1)`
   );
-  const drop = db.prepare(
-    `DELETE FROM sessions WHERE id = ? AND host_id = ? AND peer_mirror = 1
-       AND task_prompt IS NULL AND archived_at IS NULL`
+  const mirrors = db.prepare(
+    `SELECT id FROM sessions WHERE host_id = ? AND peer_mirror = 1
+       AND task_prompt IS NULL AND archived_at IS NULL
+       AND created_at < datetime(?, 'unixepoch')`
   );
+  const drop = db.prepare(`DELETE FROM sessions WHERE id = ?`);
   db.transaction(() => {
     for (const peer of listed) {
       const projectId = projectFor(hostId, peer.path);
@@ -97,6 +103,11 @@ export function syncPeerMirrors(
       ];
       update.run(...fields, peer.id, hostId, ...fields);
     }
-    for (const id of gone) drop.run(id, hostId);
+    if (!complete) return;
+    const now = new Set(listed.map((p) => p.id));
+    const rows = mirrors.all(hostId, Math.floor(askedAt / 1000)) as {
+      id: string;
+    }[];
+    for (const { id } of rows) if (!now.has(id)) drop.run(id);
   })();
 }

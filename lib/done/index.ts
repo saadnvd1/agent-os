@@ -36,6 +36,9 @@ export interface DoneOptions {
   callerId?: string | null;
   // Bulk clean-up: an open PR is refused, never merged.
   noMerge?: boolean;
+  // Your own Done on the row: a linked machine's session is done there.
+  // Agents and the orchestrator don't act on another machine's work.
+  onPeer?: boolean;
 }
 
 export interface DoneOutcome {
@@ -132,6 +135,10 @@ export async function doneSession(
   }
   // A linked machine's session is done there, by its own AgentOS.
   const peer = peerSessionLink(s);
+  if (peer && !opts.onPeer)
+    throw new Error(
+      `${s.name} runs on ${peer.hostName}: only you can mark it done, from its row.`
+    );
   if (peer) return doneOnPeer(peer, s);
   const hadWorktree = !!s.worktree_path && fs.existsSync(s.worktree_path);
   // A sign-off just before this (the orchestrator's sign_off, then done)

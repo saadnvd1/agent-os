@@ -52,6 +52,8 @@ function scopeSessions(scope: DoneScope): Session[] {
       `SELECT * FROM sessions
        WHERE project_id IN (${projectIds.map(() => "?").join(", ")})
          AND role IS NULL AND archived_at IS NULL
+         -- A linked machine's own sessions are cleaned up there.
+         AND peer_mirror = 0
          AND (task_status IS NULL OR task_status = 'running')
        ORDER BY created_at`
     )

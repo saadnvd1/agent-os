@@ -234,10 +234,17 @@ export async function startOnPeer(
     (res.session ?? {}) as Record<string, unknown>
   );
   if (!peer) throw new Error(`${link.hostName} started something unreadable`);
+  // Its answer must be a new session: never one of this machine's rows.
+  const claimed = new Error(
+    `${link.hostName} answered with a session that isn't its new one`
+  );
+  if (row(peer.id)) throw claimed;
   insertMirror(peer, start.project?.id ?? null);
+  const s = row(peer.id);
+  if (!s || s.host_id !== link.hostId || !s.peer_mirror) throw claimed;
   const initialPrompt =
-    typeof res.initialPrompt === "string"
+    s.view === "terminal" && typeof res.initialPrompt === "string"
       ? res.initialPrompt.slice(0, 100_000)
       : undefined;
-  return { session: row(peer.id), initialPrompt };
+  return { session: s, initialPrompt };
 }

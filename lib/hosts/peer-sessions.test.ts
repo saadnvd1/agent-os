@@ -126,7 +126,7 @@ describe("asking a linked machine", async () => {
     expect(peerStatus(link.hostId, "s-1")).toBe("running");
   });
 
-  it("drops a mirror once that machine stops listing it", async () => {
+  it("drops a mirror once that machine stops listing it, across restarts", async () => {
     const { peer, link } = await setup();
     const rows = () =>
       (
@@ -141,6 +141,13 @@ describe("asking a linked machine", async () => {
     });
     await peerTmuxSessions(link);
     expect(rows()).toEqual(["m-1", "m-2"]);
+    // Made a while ago, and read from the rows: a restart in between (an
+    // empty listing in memory) forgets nothing.
+    getDb()
+      .prepare(
+        `UPDATE sessions SET created_at = datetime('now', '-1 minute') WHERE host_id = ?`
+      )
+      .run(link.hostId);
     listed = ["m-1"];
     await peerTmuxSessions(link);
     expect(rows()).toEqual(["m-1"]);

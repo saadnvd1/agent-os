@@ -164,6 +164,7 @@ async function refreshStatuses(link: HostLink): Promise<void> {
 }
 
 async function refreshManaged(link: HostLink): Promise<void> {
+  const askedAt = Date.now();
   const [{ sessions }] = await Promise.all([
     hostApi<{ sessions?: unknown[] }>(link, "/api/sessions", {
       timeout: 8000,
@@ -176,12 +177,8 @@ async function refreshManaged(link: HostLink): Promise<void> {
     )
     .filter((s): s is PeerSession => !!s)
     .map((s) => ({ ...s, state: peerStatus(link.hostId, s.id) }));
-  // Listed last time and not now: it left that machine's sidebar.
-  const now = new Set(list.map((s) => s.id));
-  const before: PeerSession[] = managed.get(link.hostId) ?? [];
-  const gone = before.map((s) => s.id).filter((id) => !now.has(id));
   managed.set(link.hostId, list);
-  syncPeerMirrors(link.hostId, list, gone);
+  syncPeerMirrors(link.hostId, list, askedAt);
 }
 
 /**

@@ -6,7 +6,7 @@ import { fakePeer } from "../__fixtures__/fake-peer";
 import { linkedHost } from "../__fixtures__/linked-host";
 import { doneSession } from "../done";
 import { DEFAULT_START_VIEW, launchSession } from "../sessions/launch";
-import { syncPeerMirrors } from "./peer-sync";
+import { MAX_PEER_MIRRORS, syncPeerMirrors } from "./peer-sync";
 import { toPeerSession, type PeerSession } from "./peer-sessions";
 import { PATCH, DELETE } from "../../app/api/sessions/[id]/route";
 import { POST as fork } from "../../app/api/sessions/[id]/fork/route";
@@ -39,6 +39,9 @@ const listed = (hostId: string, id: string, extra: object = {}) =>
     updated_at: "2026-10-10 12:00:00",
     ...extra,
   }) as PeerSession;
+
+// A listing asked for after everything so far was made.
+const later = () => Date.now() + 2000;
 
 const row = (id: string) =>
   db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
@@ -75,7 +78,7 @@ describe("syncPeerMirrors", () => {
         listed(hostId, a),
         listed(hostId, b, { working_directory: "/home/me/dev/other" }),
       ],
-      []
+      Date.now()
     );
     expect(row(a)).toMatchObject({ host_id: hostId, project_id: projectId });
     expect(row(a)?.updated_at).toBe("2026-10-10 12:00:00");
@@ -85,7 +88,7 @@ describe("syncPeerMirrors", () => {
   it("follows the listing, and drops a mirror only once that machine stops listing it", async () => {
     const { hostId } = await setup();
     const id = randomUUID();
-    syncPeerMirrors(hostId, [listed(hostId, id)], []);
+    syncPeerMirrors(hostId, [listed(hostId, id)], Date.now());
     syncPeerMirrors(
       hostId,
       [
@@ -96,15 +99,36 @@ describe("syncPeerMirrors", () => {
           pr_status: "open",
         }),
       ],
-      []
+      Date.now()
     );
     expect(row(id)).toMatchObject({
       name: "renamed there",
       pr_number: 7,
       pr_status: "open",
     });
-    syncPeerMirrors(hostId, [], [id]);
+    syncPeerMirrors(hostId, [], later());
     expect(row(id)).toBeUndefined();
+  });
+
+  it("never drops a session made after the listing was asked for, or from a cut-short one", async () => {
+    const { hostId } = await setup();
+    const id = randomUUID();
+    syncPeerMirrors(hostId, [listed(hostId, id)], Date.now());
+    // An older answer arriving late.
+    syncPeerMirrors(hostId, [], Date.now() - 5000);
+    expect(row(id)).toBeDefined();
+    const many = Array.from({ length: MAX_PEER_MIRRORS + 1 }, () =>
+      listed(hostId, randomUUID())
+    );
+    syncPeerMirrors(hostId, many, later());
+    expect(row(id)).toBeDefined();
+    expect(
+      (
+        db
+          .prepare(`SELECT COUNT(*) AS n FROM sessions WHERE host_id = ?`)
+          .get(hostId) as { n: number }
+      ).n
+    ).toBe(MAX_PEER_MIRRORS + 1);
   });
 
   it("leaves this machine's own rows and task mirrors alone", async () => {
@@ -122,7 +146,11 @@ describe("syncPeerMirrors", () => {
       `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, task_prompt)
        VALUES (?, 'task', 'claude-y', '~', ?, 'do it')`
     ).run(task, hostId);
-    syncPeerMirrors(hostId, [listed(hostId, mine, { name: "theirs" })], [task]);
+    syncPeerMirrors(
+      hostId,
+      [listed(hostId, mine, { name: "theirs" })],
+      later()
+    );
     expect(row(mine)).toMatchObject({ name: "mine", host_id: "local" });
     expect(row(task)?.name).toBe("task");
   });
@@ -132,7 +160,7 @@ describe("actions on a linked machine's session", () => {
   async function mirrored() {
     const { peer, hostId } = await setup();
     const id = randomUUID();
-    syncPeerMirrors(hostId, [listed(hostId, id)], []);
+    syncPeerMirrors(hostId, [listed(hostId, id)], Date.now());
     return { peer, hostId, id };
   }
 
@@ -232,7 +260,7 @@ describe("actions on a linked machine's session", () => {
       outcome: { text: "Done: fix it.", worktree: { action: "none" } },
     });
     peer.routes[`/api/sessions/${id}/unarchive`] = () => ({ session: { id } });
-    const outcome = await doneSession(id, { by: "direct" });
+    const outcome = await doneSession(id, { by: "direct", onPeer: true });
     expect(outcome.text).toBe("box: Done: fix it.");
     expect(outcome.merged).toBeNull();
     expect(peer.calls).toEqual([
@@ -259,10 +287,21 @@ describe("actions on a linked machine's session", () => {
       [null, /didn't say what/],
     ] as const) {
       peer.routes[`/api/sessions/${id}`] = () => ({ session: there });
-      await expect(doneSession(id, { by: "direct" })).rejects.toThrow(why);
+      await expect(
+        doneSession(id, { by: "direct", onPeer: true })
+      ).rejects.toThrow(why);
     }
     expect(peer.calls.every((c) => c.method === "GET")).toBe(true);
     expect(row(id)?.archived_at).toBeNull();
+  });
+
+  it("never lets an agent or the orchestrator done it", async () => {
+    const { peer, id } = await mirrored();
+    for (const by of ["direct", "orchestrator"] as const)
+      await expect(doneSession(id, { by })).rejects.toThrow(
+        /only you can mark it done/
+      );
+    expect(peer.calls).toEqual([]);
   });
 
   it("refuses done on one already archived, asking nothing", async () => {
@@ -270,9 +309,9 @@ describe("actions on a linked machine's session", () => {
     db.prepare(
       `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
     ).run(id);
-    await expect(doneSession(id, { by: "direct" })).rejects.toThrow(
-      /already archived/
-    );
+    await expect(
+      doneSession(id, { by: "direct", onPeer: true })
+    ).rejects.toThrow(/already archived/);
     expect(peer.calls).toEqual([]);
   });
 
@@ -291,7 +330,7 @@ describe("actions on a linked machine's session", () => {
       projectId
     );
     const id = randomUUID();
-    syncPeerMirrors(hostId, [listed(hostId, id)], []);
+    syncPeerMirrors(hostId, [listed(hostId, id)], Date.now());
     expect(row(id)?.project_id).toBe(projectId);
     expect(workspaceSessions("ws-peer").map((s) => s.id)).not.toContain(id);
   });
@@ -310,13 +349,34 @@ describe("actions on a linked machine's session", () => {
     ).run(id, hostId);
     expect(peerSessionLink(row(id)!)).toBeNull();
     // Not listed there, so never dropped by a listing.
-    syncPeerMirrors(hostId, [], [id]);
+    syncPeerMirrors(hostId, [], later());
     expect(row(id)).toBeDefined();
     expect(peer.calls).toEqual([]);
   });
 });
 
 describe("starting a session on a linked machine", () => {
+  it("refuses an answer naming a session this machine already has", async () => {
+    const { peer, hostId } = await setup();
+    const mine = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id)
+       VALUES (?, 'mine', 'claude-m', '~', 'local')`
+    ).run(mine);
+    cleanups.push(() =>
+      db.prepare(`DELETE FROM sessions WHERE id = ?`).run(mine)
+    );
+    peer.routes["/api/projects"] = () => ({ projects: [] });
+    peer.routes["/api/sessions"] = () => ({
+      session: { id: mine, view: "terminal", tmux_name: "x" },
+      initialPrompt: "do something else",
+    });
+    await expect(
+      launchSession({ hostId, agentType: "claude", prompt: "hi" })
+    ).rejects.toThrow(/isn't its new one/);
+    expect(row(mine)).toMatchObject({ host_id: "local", name: "mine" });
+  });
+
   it("starts it there in chat, in the project at the same folder, and mirrors it", async () => {
     const { peer, hostId } = await setup();
     const projectId = project(hostId, "~/dev/app");
@@ -359,6 +419,7 @@ describe("starting a session on a linked machine", () => {
       host_id: hostId,
       project_id: projectId,
       view: "chat",
+      peer_mirror: 1,
     });
   });
 });

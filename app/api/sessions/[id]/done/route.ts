@@ -8,7 +8,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const outcome = await doneSession((await params).id, { by: "direct" });
+    const outcome = await doneSession((await params).id, {
+      by: "direct",
+      onPeer: true,
+    });
     return NextResponse.json({ outcome });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
