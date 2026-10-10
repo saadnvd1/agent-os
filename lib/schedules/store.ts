@@ -135,11 +135,10 @@ export function sessionWorkspace(session: Session): string | null {
     : null;
 }
 
-// Why a session will never take a message again, or null: deleted,
-// archived, or a task that's finished.
+// Why a session will never take a message again, or null: deleted, or a
+// task that's finished. An archived one can come back.
 function goneReason(session: Session | null): string | null {
   if (!session) return "session no longer exists";
-  if (session.archived_at) return "session archived";
   if (session.task_status && session.task_status !== "running")
     return "session finished";
   return null;
@@ -154,6 +153,7 @@ export function sessionTargetProblem(
   const session = getSessionRow(sessionId);
   const gone = goneReason(session);
   if (gone || !session) return gone;
+  if (session.archived_at) return "session archived";
   if (session.role === "orchestrator")
     return "the orchestrator takes orchestrator schedules, not messages";
   if (sessionWorkspace(session) !== workspaceId)
@@ -211,7 +211,13 @@ function validate(
     throw new Error(
       "A task or session schedule runs at most once an hour; for more often, post to the orchestrator"
     );
-  if (message && minGapMinutes(cron, timezone) < MESSAGE_MIN_GAP_MINUTES)
+  // An agent's check-in on the orchestrator is a message too.
+  const agentCheckIn =
+    input.kind === "orchestrator" && !!input.createdBySessionId;
+  if (
+    (message || agentCheckIn) &&
+    minGapMinutes(cron, timezone) < MESSAGE_MIN_GAP_MINUTES
+  )
     throw new Error(
       `A message schedule runs at most every ${MESSAGE_MIN_GAP_MINUTES} minutes`
     );
@@ -281,6 +287,7 @@ export function updateSchedule(
           ? current.target_session_id
           : patch.targetSessionId,
       enabled: patch.enabled ?? current.enabled,
+      createdBySessionId: current.created_by_session_id,
     },
     id
   );

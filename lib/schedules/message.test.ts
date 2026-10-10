@@ -226,10 +226,22 @@ describe("message schedules: who can aim them where", () => {
       targetSessionId: null,
       createdBySessionId: first,
     });
+    // An agent's check-in on the orchestrator is held to a message's limit,
+    // when it's made and when it's edited.
     expect(() =>
-      checkInInput({ session: first, cron: "*/5 * * * *", prompt: "p" })
+      createSchedule(
+        checkInInput({
+          session: first,
+          from: first,
+          cron: "*/5 * * * *",
+          prompt: "p",
+        })
+      )
     ).toThrow(/every 10 minutes/);
     const schedule = createSchedule(input, CREATED);
+    expect(() => updateSchedule(schedule.id, { cron: "*/5 * * * *" })).toThrow(
+      /every 10 minutes/
+    );
     await runSlot(schedule, at("2026-10-07T13:30:00Z"), "schedule", realDeps);
     expect(workers.sends.at(-1)).toMatchObject({ sessionId: first });
     expect(workers.sends.at(-1)!.text).toContain(
@@ -382,9 +394,9 @@ describe("message schedules: runs", () => {
       "session no longer exists",
     ],
     [
-      "archived",
-      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`,
-      "session archived",
+      "finished",
+      `UPDATE sessions SET task_status = 'done' WHERE id = ?`,
+      "session finished",
     ],
   ])(
     "a %s session pauses the schedule after one failure, with one notice",
@@ -415,6 +427,50 @@ describe("message schedules: runs", () => {
       );
     }
   );
+
+  it("an archived session fails and notifies once, and stays on: it can come back", async () => {
+    const { sessionId, schedule } = setup();
+    phone.length = 0;
+    db.prepare(
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
+    ).run(sessionId);
+    await tick(realDeps, at("2026-10-07T13:10:05Z"));
+    await tick(realDeps, at("2026-10-07T13:20:05Z"));
+    expect(listRuns(schedule.id).map((r) => [r.outcome, r.detail])).toEqual([
+      ["failed", "session archived"],
+      ["failed", "session archived"],
+    ]);
+    expect(phone).toEqual([`Schedule "Check-ins" failed: session archived`]);
+    expect(getSchedule(schedule.id)!.enabled).toBe(true);
+    db.prepare(`UPDATE sessions SET archived_at = NULL WHERE id = ?`).run(
+      sessionId
+    );
+    await tick(realDeps, at("2026-10-07T13:30:05Z"));
+    expect(listRuns(schedule.id)[0].outcome).toBe("started");
+  });
+
+  it("an agent's check-in on the orchestrator waits while it's working; Saad's doesn't", async () => {
+    const { ws } = setup();
+    const orch = seedOrchestrator(ws.id);
+    const agentMade = createSchedule(
+      checkInInput({ session: orch, from: orch, prompt: "check in" }),
+      CREATED
+    );
+    const saved = createSchedule(
+      checkInInput({ session: orch, prompt: "report", name: "Report" }),
+      CREATED
+    );
+    await tick(realDeps, at("2026-10-07T13:30:05Z"));
+    expect(listRuns(agentMade.id)[0]).toMatchObject({ outcome: "started" });
+    expect(listRuns(saved.id)[0]).toMatchObject({ outcome: "started" });
+    registry.live.get(orch)!.state = "running";
+    await tick(realDeps, at("2026-10-07T14:00:05Z"));
+    expect(listRuns(agentMade.id)[0]).toMatchObject({
+      outcome: "skipped",
+      detail: "still running",
+    });
+    expect(listRuns(saved.id)[0]).toMatchObject({ outcome: "started" });
+  });
 
   it("a delivery that fails is recorded as FAILED with why", async () => {
     const { sessionId, schedule } = setup("terminal");

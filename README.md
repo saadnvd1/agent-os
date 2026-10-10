@@ -378,7 +378,8 @@ a project and a prompt, and starts one of:
   after 30 minutes) is started again to take it. The run records `delivered`,
   `queued` or why it failed. **Schedule check-ins** in a session's **⋯** menu
   fills one in. The session is stored by id, so renaming it changes nothing.
-  When the session is deleted, archived or a finished task, the schedule
+  An archived session fails the run until it's back. When the session is
+  deleted or a finished task, the schedule
   turns itself off on the first run that finds it gone and says so once, in
   the orchestrator's chat and on your phone; point it at another session or
   delete it. The orchestrator isn't a target (it has its own kind):

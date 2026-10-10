@@ -7,15 +7,7 @@
 
 import { getProject } from "../projects";
 import { resolveSession } from "../bus";
-import {
-  cronError,
-  DEFAULT_TIMEZONE,
-  describeCron,
-  everyCron,
-  isTimezone,
-  MESSAGE_MIN_GAP_MINUTES,
-  minGapMinutes,
-} from "./cron";
+import { describeCron, everyCron } from "./cron";
 import { runSlot, type RunDeps, type RunResult } from "./run";
 import { nextRunAt } from "./scheduler";
 import { realDeps } from "./start";
@@ -90,18 +82,7 @@ export function checkInInput(opts: {
   const cron = opts.cron?.trim() || everyCron(opts.every ?? "30m");
   // The workspace's orchestrator is kept as "its orchestrator", not this
   // session's id: each run goes to whichever session is orchestrator then.
-  // Held to a message's limit: createSchedule checks the rest.
   const orchestrator = session.role === "orchestrator";
-  const tz = opts.timezone?.trim() || DEFAULT_TIMEZONE;
-  if (
-    orchestrator &&
-    !cronError(cron) &&
-    isTimezone(tz) &&
-    minGapMinutes(cron, tz) < MESSAGE_MIN_GAP_MINUTES
-  )
-    throw new Error(
-      `A message schedule runs at most every ${MESSAGE_MIN_GAP_MINUTES} minutes`
-    );
   return {
     workspaceId,
     name: opts.name?.trim() || `Check-in: ${session.name}`.slice(0, 80),
