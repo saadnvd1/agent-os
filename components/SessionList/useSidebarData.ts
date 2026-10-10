@@ -10,6 +10,7 @@ import {
 } from "@/lib/sidebar/shelves";
 import type { TaskState } from "@/lib/tasks/state";
 import { machineGroups, onMachineOnly } from "@/lib/sidebar/machines";
+import { orchestratorsToStart } from "@/lib/sidebar/orchestrator-row";
 import { useSessionsQuery } from "@/data/sessions";
 import { useLinkedHostNames } from "@/data/hosts";
 import { useProjectsQuery } from "@/data/projects";
@@ -157,10 +158,22 @@ export function useSidebarData(
     [projects]
   );
 
+  const toStart = useMemo(
+    () =>
+      orchestratorsToStart(orchestrators, {
+        workspaces,
+        workspaceId: workspace?.id ?? null,
+        projectId: project?.id ?? null,
+        query: ui.query,
+      }),
+    [orchestrators, workspaces, workspace, project, ui.query]
+  );
+
   return {
     ui,
     shelves,
     queued,
+    toStart,
     machines,
     sessions,
     projects,

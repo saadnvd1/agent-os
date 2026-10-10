@@ -8,6 +8,7 @@ import * as CM from "@/components/ui/context-menu";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { orchestratorRowText } from "@/lib/sidebar/orchestrator-row";
 import { cn } from "@/lib/utils";
+import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowRename } from "./RowParts";
@@ -44,24 +45,14 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
   );
 
   const content = (
-    <div
-      role="button"
-      tabIndex={0}
+    <RowFrame
       title={`${label}\n${summary}`}
-      onClick={() => !renaming && ctx.onSelect(session.id)}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          ctx.onSelect(session.id);
-        }
-      }}
-      className={cn(
-        "group border-border/70 relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors",
+      onActivate={() => !renaming && ctx.onSelect(session.id)}
+      className={
         active
           ? "bg-primary/10 border-primary/30"
           : "bg-muted/50 hover:bg-muted"
-      )}
+      }
     >
       <Workflow
         aria-hidden
@@ -128,7 +119,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
           {menu("dropdown")}
         </DM.DropdownMenuContent>
       </DM.DropdownMenu>
-    </div>
+    </RowFrame>
   );
 
   return (
@@ -140,6 +131,67 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
     </CM.ContextMenu>
   );
 }, sameProps);
+
+// A workspace with no orchestrator yet: the same row, muted, that makes,
+// pins and opens one.
+export function OrchestratorStartRow({
+  workspaceId,
+  name,
+}: {
+  workspaceId: string;
+  name: string;
+}) {
+  return (
+    <RowFrame
+      title={`${name}\nStart orchestrator`}
+      onActivate={() => orchestratorOpenActions.request(workspaceId)}
+      className="hover:bg-muted/50 border-dashed"
+    >
+      <Workflow
+        aria-hidden
+        className="text-muted-foreground/50 h-4 w-4 shrink-0"
+      />
+      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="text-muted-foreground min-w-0 truncate text-[13px] font-medium">
+          {name}
+        </span>
+        <span className="text-muted-foreground/70 mt-0.5 truncate text-xs">
+          Start orchestrator
+        </span>
+      </span>
+    </RowFrame>
+  );
+}
+
+// The orchestrator rows' shared shape: a bordered card a tap or Enter opens.
+// The rest goes on the div, for the context menu trigger's props and ref.
+function RowFrame({
+  onActivate,
+  className,
+  ...rest
+}: Omit<React.ComponentProps<"div">, "onClick" | "onKeyDown"> & {
+  onActivate: () => void;
+}) {
+  return (
+    <div
+      {...rest}
+      role="button"
+      tabIndex={0}
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+      className={cn(
+        "group border-border/70 relative flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors",
+        className
+      )}
+    />
+  );
+}
 
 // Its counts come from the row context, which changes when they do.
 function sameProps(a: { row: SidebarRow }, b: { row: SidebarRow }) {

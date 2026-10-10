@@ -7,7 +7,7 @@ import type { MachineGroup } from "@/lib/sidebar/machines";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
 import { SessionRow } from "./SessionRow";
-import { OrchestratorPinRow } from "./OrchestratorPinRow";
+import { OrchestratorPinRow, OrchestratorStartRow } from "./OrchestratorPinRow";
 import { QueuedRow } from "./QueuedRow";
 import type { QueuedRow as QueuedRowData } from "@/lib/sidebar/queued";
 
@@ -80,16 +80,18 @@ export function MachineShelves({ groups }: { groups: MachineGroup[] }) {
   ));
 }
 
-// The pinned orchestrator, then Pinned, Needs you, Working, Queued and
-// Done: once for the whole list.
+// The pinned orchestrator (or a row to start one), then Pinned, Needs you,
+// Working, Queued and Done: once for the whole list.
 export function SessionShelves({
   shelves,
   queued,
+  toStart,
   doneCollapsed,
   donePages,
 }: {
   shelves: Shelves;
   queued: QueuedRowData[];
+  toStart: { workspaceId: string; name: string }[];
   doneCollapsed: boolean;
   donePages: number;
 }) {
@@ -97,10 +99,13 @@ export function SessionShelves({
   const hidden = shelves.done.length - shown.length;
   return (
     <>
-      {shelves.orchestrators.length > 0 && (
+      {shelves.orchestrators.length + toStart.length > 0 && (
         <section aria-label="Orchestrator" className="space-y-1 pt-2">
           {shelves.orchestrators.map((r) => (
             <OrchestratorPinRow key={r.session.id} row={r} />
+          ))}
+          {toStart.map((w) => (
+            <OrchestratorStartRow key={w.workspaceId} {...w} />
           ))}
         </section>
       )}
