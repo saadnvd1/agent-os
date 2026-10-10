@@ -75,6 +75,15 @@ describe("quotePick", () => {
     expect(quotePick(sel, root)?.text).toBe("Its last line.");
   });
 
+  it("leaves out the user's text when a selection runs into it", () => {
+    const into = select([text("#a1 p", 1), 0], [text("#u2 p"), 6]);
+    const pick = quotePick(into, root)!;
+    expect(pick.text).toBe("Its last line.");
+    expect(pick.ranges).toHaveLength(1);
+    const from = select([text("#u2 p"), 2], [text("#a2 p", 0), 4]);
+    expect(quotePick(from, root)?.text).toBe("Open");
+  });
+
   it("quotes only the replies' text when a selection spans two", () => {
     const sel = select([text("#a1 p", 1), 4], [text("#a2 p", 0), 7]);
     const pick = quotePick(sel, root)!;
