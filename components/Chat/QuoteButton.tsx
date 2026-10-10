@@ -2,36 +2,28 @@
 
 import { useEffect, useState, type RefObject } from "react";
 import { Quote } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useCoarsePointer } from "./composer/useCoarsePointer";
+import { placeQuote, quotePick, type Placement } from "./quote-selection";
 
 interface Picked {
   text: string;
-  // Where to float it, in viewport pixels: above the selection's top.
-  x: number;
-  y: number;
+  // Where to float it, in viewport pixels; null when scrolled out of view.
+  at: Placement | null;
 }
 
-// Text selected inside a reply (an element marked data-quotable).
 function readSelection(root: HTMLElement): Picked | null {
   const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
-  const range = sel.getRangeAt(0);
-  const start =
-    range.startContainer instanceof Element
-      ? range.startContainer
-      : range.startContainer.parentElement;
-  const end =
-    range.endContainer instanceof Element
-      ? range.endContainer
-      : range.endContainer.parentElement;
-  const quotable = start?.closest("[data-quotable]");
-  if (!quotable || !root.contains(quotable) || !quotable.contains(end)) {
-    return null;
-  }
-  const text = sel.toString();
-  if (!text.trim()) return null;
-  const rect = range.getBoundingClientRect();
-  return { text, x: rect.left + rect.width / 2, y: rect.top };
+  const pick = sel && quotePick(sel, root);
+  if (!pick) return null;
+  const rects = pick.ranges.map((r) => r.getBoundingClientRect());
+  const box = {
+    top: Math.min(...rects.map((r) => r.top)),
+    bottom: Math.max(...rects.map((r) => r.bottom)),
+    left: Math.min(...rects.map((r) => r.left)),
+    right: Math.max(...rects.map((r) => r.right)),
+  };
+  return { text: pick.text, at: placeQuote(box, root.getBoundingClientRect()) };
 }
 
 // "Quote" for a selection in a reply. With a mouse it floats over the
@@ -83,11 +75,16 @@ export function QuoteButton({
       Quote
     </button>
   );
-  if (coarse) return <div className="mb-2 flex justify-center">{button}</div>;
+  if (coarse)
+    return <div className="mb-2 flex justify-center select-none">{button}</div>;
+  if (!picked.at) return null;
   return (
     <div
-      className="fixed z-40 -translate-x-1/2 -translate-y-full pb-2"
-      style={{ left: picked.x, top: picked.y }}
+      className={cn(
+        "fixed z-40 -translate-x-1/2 select-none",
+        picked.at.side === "above" ? "-translate-y-full pb-2" : "pt-2"
+      )}
+      style={{ left: picked.at.x, top: picked.at.y }}
     >
       {button}
     </div>
