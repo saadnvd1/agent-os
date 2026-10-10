@@ -172,6 +172,16 @@ describe("the attribution rule", () => {
     ["Use Claude to review the diff", false],
     ["feat(agents): launch Claude with flags", false],
     ["Generated with a script", false],
+    ["> **Generated with Claude Code**", true],
+    [
+      '"Generated with Claude Code" footer in PR bodies, despite the brief.',
+      false,
+    ],
+    [
+      "Sessions put a 'Generated with [Claude Code]' footer in PR bodies",
+      false,
+    ],
+    ["A footer like `Generated with Claude Code` is stripped", false],
   ];
 
   it("matches the same lines in the commit-msg hook and the PR body check", () => {
