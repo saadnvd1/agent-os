@@ -28,7 +28,8 @@ async function cleanup(
     ["kill-session", "-t", `=${session.tmux_name}`],
     repo
   ).catch(() => {});
-  await dropSessionDatabase(session.id);
+  // Never waited on: the row is read now, and Postgres can't hold this up.
+  void dropSessionDatabase(session.id);
   if (session.worktree_path && opts.merged) {
     const fate = await settleWorktree(session, opts.merged).catch(() => null);
     if (fate?.action === "kept")

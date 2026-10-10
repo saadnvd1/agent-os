@@ -340,11 +340,11 @@ before setup runs and exported as `env` (default `DATABASE_NAME`, plus
 set), so one session's migrations never reach another's. It's copied with
 `pg_dump` into a database created from `template0`, not `createdb -T <from>`,
 which refuses while the dev server is connected to `from`. Only a local server
-is used (`host` may be `localhost`, `127.0.0.1`, `::1` or a socket folder), and
+is used (`host` may be `localhost`, `127.0.0.1`, `::1` or one socket folder), and
 `from` must be a plain database name. A copy left by an earlier start of the
 same session is reused. When Postgres isn't answering or the copy fails, the
 session still starts, without one, and its brief says so. The copy is dropped
-when the session is done, merged, dropped or deleted, and only one AgentOS made
+when the session is done, merged, dropped, moved away or deleted, and only one AgentOS made
 for that session (its comment names the session): `from` and any other
 database are never touched.
 

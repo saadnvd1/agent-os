@@ -58,7 +58,8 @@ async function stopAgent(s: Session): Promise<void> {
     `tmux kill-session -t ${shellQuote(`=${s.tmux_name}`)} 2>/dev/null || true`
   ).catch(() => {});
   releasePorts(s.id);
-  await dropSessionDatabase(s.id);
+  // Never waited on: the row is read now, and Postgres can't hold this up.
+  void dropSessionDatabase(s.id);
 }
 
 function worktreeLine(f: WorktreeFate): string {

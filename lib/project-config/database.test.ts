@@ -17,6 +17,7 @@ class FakePg {
   calls: string[][] = [];
   failRestore = false;
   holdConnection = new Set<string>();
+  rejectForce = false;
   envs: NodeJS.ProcessEnv[] = [];
 
   run: PgRun = async (cmd, args, env) => {
@@ -50,6 +51,8 @@ class FakePg {
     }
     if (cmd === "dropdb") {
       const name = args[args.length - 1];
+      if (this.rejectForce && args.includes("--force"))
+        return { code: 1, out: "dropdb: error: unrecognized option '--force'" };
       if (this.holdConnection.has(name) && !args.includes("--force"))
         return { code: 1, out: "database is being accessed by other users" };
       this.dbs.delete(name);
@@ -209,6 +212,12 @@ describe("ensureSessionDatabase", () => {
     [{ from: "-app" }, "isn't a local database name"],
     [{ from: "app_dev", host: "db.example.com" }, "isn't this machine"],
     [{ from: "app_dev", host: "10.0.0.5" }, "isn't this machine"],
+    [{ from: "app_dev", host: "/nope,db.example.com" }, "isn't this machine"],
+    [
+      { from: "app_dev", host: "localhost,db.example.com" },
+      "isn't this machine",
+    ],
+    [{ from: "app_dev", host: "" }, "isn't this machine"],
     [{ from: "app_dev", env: "PATH" }, "reserved"],
   ])("refuses %j without running anything", async (d, why) => {
     const made = await ensureSessionDatabase(session(), d, pg.run);
@@ -230,12 +239,67 @@ describe("ensureSessionDatabase", () => {
     } finally {
       process.env = saved;
     }
+    expect(pg.calls.map((c) => c[0])).toEqual([
+      "psql",
+      "createdb",
+      "pg_dump",
+      "psql",
+    ]);
     for (const env of pg.envs) {
       expect(env.PGHOST).toBe("localhost");
       expect(env.PGPORT).toBe("5433");
       expect(env.PGSERVICE).toBeUndefined();
       expect(env.PGDATABASE).toBeUndefined();
+      expect(env.PGCONNECT_TIMEOUT).toBe("10");
     }
+  });
+
+  it("records the copy before making it, so a cut-short one is dropped at the end", async () => {
+    const id = session();
+    const name = databaseName("app_dev", id);
+    // The server stops mid-restore: the row says pending, the database exists.
+    const run = pg.run;
+    pg.run = async (cmd, args, env) => {
+      if (cmd === "psql" && args.includes("-f")) {
+        expect(sessionDatabase(id)).toMatchObject({ name, pending: true });
+        throw new Error("AgentOS restarted");
+      }
+      return run(cmd, args, env);
+    };
+    await ensureSessionDatabase(id, decl, pg.run);
+    db.prepare(`UPDATE sessions SET database = ? WHERE id = ?`).run(
+      JSON.stringify({ name, from: "app_dev", env: "DB_NAME", pending: true }),
+      id
+    );
+    expect(sessionProjectEnv(id).DB_NAME).toBeUndefined();
+    expect(sessionRunningBrief(id)).toContain("cut short");
+    pg.run = run;
+    await dropSessionDatabase(id, pg.run);
+    expect(pg.dbs.has(name)).toBe(false);
+  });
+
+  it("drops the copy it made when the session was deleted meanwhile", async () => {
+    const id = session();
+    const run = pg.run;
+    pg.run = async (cmd, args, env) => {
+      if (cmd === "pg_dump")
+        db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+      return run(cmd, args, env);
+    };
+    expect(await ensureSessionDatabase(id, decl, pg.run)).toBeNull();
+    expect(pg.dbs.has(databaseName("app_dev", id))).toBe(false);
+  });
+
+  it("never inherits a PGHOST when the project names none", async () => {
+    const saved = { ...process.env };
+    process.env.PGHOST = "prod.example.com";
+    try {
+      await ensureSessionDatabase(session(), decl, pg.run);
+    } finally {
+      process.env = saved;
+    }
+    expect(pg.envs.length).toBe(4);
+    for (const env of pg.envs) expect(env.PGHOST).toBeUndefined();
   });
 
   it("is skipped for a session on another machine", async () => {
@@ -323,6 +387,21 @@ describe("dropSessionDatabase", () => {
     pg.holdConnection.add(databaseName("app_dev", id));
     await dropSessionDatabase(id, pg.run);
     expect(pg.dbs.has(databaseName("app_dev", id))).toBe(false);
+  });
+
+  it("drops with a plain dropdb on a Postgres before 13", async () => {
+    const id = session();
+    const name = databaseName("app_dev", id);
+    await ensureSessionDatabase(id, decl, pg.run);
+    pg.rejectForce = true;
+    pg.calls = [];
+    await dropSessionDatabase(id, pg.run);
+    expect(pg.calls.filter((c) => c[0] === "dropdb")).toEqual([
+      ["dropdb", "--if-exists", "--force", name],
+      ["dropdb", "--if-exists", name],
+    ]);
+    expect(pg.dbs.has(name)).toBe(false);
+    expect(sessionDatabase(id)).toBeNull();
   });
 
   it("never drops a database AgentOS didn't make, even under the recorded name", async () => {

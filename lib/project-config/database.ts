@@ -30,6 +30,8 @@ export interface SessionDatabase {
   port?: number;
   host?: string;
   reused?: boolean;
+  // Recorded before the copy is made, so a cleanup finds one cut short.
+  pending?: boolean;
   error?: string;
 }
 
@@ -44,7 +46,13 @@ const pgRun: PgRun = (cmd, args, env) =>
     execFile(
       cmd,
       args,
-      { env, timeout: 30 * 60_000, maxBuffer: 16 * 1024 * 1024 },
+      {
+        env,
+        // The copy can take a while; a listing or a drop never should.
+        timeout:
+          cmd === "pg_dump" || args.includes("-f") ? 30 * 60_000 : 60_000,
+        maxBuffer: 16 * 1024 * 1024,
+      },
       (error, stdout, stderr) => {
         const code = (error as NodeJS.ErrnoException | null)?.code;
         resolve({
@@ -59,15 +67,18 @@ const pgRun: PgRun = (cmd, args, env) =>
 // `postgres://…`) or an option, which pg_dump would take as one.
 const DB_NAME = /^[A-Za-z0-9_][A-Za-z0-9_$.-]{0,62}$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+// One socket folder: libpq reads a comma as a list of hosts to try in turn,
+// so `/nope,db.example.com` would reach the second.
+const SOCKET_DIR = /^\/[^,=\s'"\\]*$/;
 
 // Why `declared` can't be used, or null. A socket folder is local too.
 export function refusal(declared: DatabaseDecl): string | null {
   if (!DB_NAME.test(declared.from))
     return `"${declared.from}" isn't a local database name`;
   if (
-    declared.host &&
+    declared.host !== undefined &&
     !LOCAL_HOSTS.has(declared.host) &&
-    !declared.host.startsWith("/")
+    !SOCKET_DIR.test(declared.host)
   )
     return `${declared.host} isn't this machine: only a local Postgres is copied`;
   const env = declared.env ?? "DATABASE_NAME";
@@ -98,6 +109,8 @@ export function pgEnv(declared: Pick<DatabaseDecl, "port" | "host">) {
     "PGDATABASE",
   ])
     delete env[name];
+  // A server that accepts and never answers fails fast, not in minutes.
+  env.PGCONNECT_TIMEOUT = "10";
   if (declared.port) env.PGPORT = String(declared.port);
   if (declared.host) env.PGHOST = declared.host;
   return env;
@@ -195,7 +208,8 @@ async function copy(
 async function makeDatabase(
   sessionId: string,
   declared: DatabaseDecl,
-  run: PgRun
+  run: PgRun,
+  record: (state: SessionDatabase) => void
 ): Promise<SessionDatabase> {
   const state: SessionDatabase = {
     name: null,
@@ -227,6 +241,7 @@ async function makeDatabase(
         error: `${target} already exists and AgentOS didn't make it, so it was left alone`,
       };
     // An interrupted copy of ours: made again from the start.
+    record({ ...state, name: target, pending: true });
     const dropped = await run("dropdb", ["--if-exists", target], env);
     if (dropped.code !== 0)
       return {
@@ -234,6 +249,7 @@ async function makeDatabase(
         error: `could not remove the half-made ${target}: ${oneLine(dropped.out)}`,
       };
   }
+  record({ ...state, name: target, pending: true });
   const failed = await copy(run, env, declared.from, target, sessionId);
   return failed ? { ...state, error: failed } : { ...state, name: target };
 }
@@ -262,9 +278,13 @@ export async function ensureSessionDatabase(
     .prepare(`SELECT host_id FROM sessions WHERE id = ?`)
     .get(sessionId) as { host_id: string | null } | undefined;
   if (!row || !isLocal(row.host_id)) return null;
+  const save = (state: SessionDatabase) =>
+    db
+      .prepare(`UPDATE sessions SET database = ? WHERE id = ?`)
+      .run(JSON.stringify(state), sessionId).changes;
   let state: SessionDatabase;
   try {
-    state = await makeDatabase(sessionId, declared, run);
+    state = await makeDatabase(sessionId, declared, run, save);
   } catch (error) {
     state = {
       name: null,
@@ -273,10 +293,11 @@ export async function ensureSessionDatabase(
       error: oneLine((error as Error).message),
     };
   }
-  db.prepare(`UPDATE sessions SET database = ? WHERE id = ?`).run(
-    JSON.stringify(state),
-    sessionId
-  );
+  // The session was deleted while its copy was made: nothing would drop it.
+  if (!save(state) && state.name) {
+    await dropDatabase(sessionId, state, run).catch(() => {});
+    return null;
+  }
   return state;
 }
 
@@ -285,7 +306,7 @@ export async function ensureSessionDatabase(
 export function databaseEnv(
   state: SessionDatabase | null
 ): Record<string, string> {
-  if (!state?.name) return {};
+  if (!state?.name || state.pending) return {};
   const env: Record<string, string> = { [state.env]: state.name };
   if (state.port) env.DATABASE_PORT = env.PGPORT = String(state.port);
   if (state.host) env.DATABASE_HOST = env.PGHOST = state.host;
@@ -297,9 +318,13 @@ export function databaseBrief(
   state: SessionDatabase | null
 ): string | null {
   if (!declared) return null;
-  if (state?.name)
+  if (state?.name && !state.pending)
     return `- Your own database: \`${state.name}\`, a private copy of \`${state.from}\` made for this session, exported as \`${state.env}\`${state.port ? " with PGPORT/DATABASE_PORT" : ""}${state.host ? " and PGHOST/DATABASE_HOST" : ""}. Writes and migrations are safe there and reach no other session; it is dropped when this session ends.`;
-  const why = state?.error ? ` (${state.error})` : "";
+  const why = state?.error
+    ? ` (${state.error})`
+    : state?.pending
+      ? " (its copy was cut short)"
+      : "";
   return `- This project gives each session a private copy of \`${declared.from}\`, but this session has none${why}, so \`${declared.env ?? "DATABASE_NAME"}\` isn't set and the app uses the shared database. Don't run migrations or write data there; say so if the task needs it.`;
 }
 

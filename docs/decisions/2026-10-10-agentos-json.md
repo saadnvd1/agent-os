@@ -147,7 +147,8 @@ session <id> (copying)`, and the restore's own transaction sets it to
   a second start of the session keeps what it migrated.
 - **Local only.** `from` must be a plain name (never a connection string or
   URL, which `pg_dump` would take as one), `host` only `localhost`,
-  `127.0.0.1`, `::1` or a socket folder, and the inherited `PGHOST`,
+  `127.0.0.1`, `::1` or one socket folder (never a comma list, which libpq
+  would try host by host), and the inherited `PGHOST`,
   `PGHOSTADDR`, `PGSERVICE`, `PGSERVICEFILE` and `PGDATABASE` are cleared
   from every command's env. Sessions on another machine get none.
 - **Unlike dispatch, a failure doesn't refuse the session.** Postgres not
@@ -156,9 +157,16 @@ session <id> (copying)`, and the restore's own transaction sets it to
   note to the agent is about dependencies), `env` isn't set, and the brief
   says the app is on the shared database, not to migrate or write there.
 - **Dropped** when the session is done (with its agent), merged or dropped
-  as a task, or deleted, with `dropdb --force`: the session is over, and a
-  dev server left running in its worktree would hold the drop off. A drop
-  that fails is logged and the record kept.
+  as a task, moved to another machine, or deleted, with `dropdb --force`:
+  the session is over, and a dev server left running in its worktree would
+  hold the drop off. The drop is never waited on (it reads the row first),
+  and every command but the copy itself times out in a minute, so Postgres
+  can't hold up a merge. A drop that fails is logged and the record kept.
+- **Recorded before it's made.** The row names the copy as `pending` before
+  `createdb`, so a copy cut short by a restart, or a session ended during
+  its copy, is still found and dropped; a copy that finishes after its
+  session was deleted drops itself. A pending copy isn't exported or
+  briefed as the session's.
 
 ## Consequences
 

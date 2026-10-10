@@ -11,7 +11,10 @@ import { db, queries, type Session } from "../db";
 import { setupWorktree } from "../env-setup";
 import { allocatePorts } from "../ports";
 import { loadProjectConfig, portBases } from "../project-config";
-import { ensureSessionDatabase } from "../project-config/database";
+import {
+  dropSessionDatabase,
+  ensureSessionDatabase,
+} from "../project-config/database";
 import { runInBackground } from "../async-operations";
 import { launchClaude } from "../agents/launch";
 import { resolveModelForAgent } from "../model-catalog";
@@ -154,7 +157,9 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
       brief: buildTaskBrief({ branch: bundle.branch, baseBranch }),
     });
   } catch (err) {
-    // Nothing runs here, so the source may resume it: leave no row behind.
+    // Nothing runs here, so the source may resume it: leave no row behind,
+    // and no database (the drop reads the row before it goes).
+    void dropSessionDatabase(id);
     db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
     throw err;
   }
