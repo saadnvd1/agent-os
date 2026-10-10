@@ -109,6 +109,12 @@ export const SettingsDialog = memo(function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        // Focus the dialog, not the first section: that may not be the one
+        // shown, and its ring would say it was.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).focus();
+        }}
         className={cn(
           "flex flex-col gap-0 overflow-hidden p-0",
           "md:h-[min(85dvh,760px)] md:max-w-3xl",
