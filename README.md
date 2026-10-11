@@ -780,7 +780,7 @@ and every process its panes started, on the machine it runs on. At start,
 AgentOS also ends tmux sessions it created (its `<agent>-<uuid>` and
 `aos-chat-<uuid>` names, or the `AGENTOS_SESSION_ID` it sets at launch) whose
 session no longer exists, and logs each as `[tmux-sweep]`. Sessions it didn't
-create are never touched. `AGENTOS_TMUX_SWEEP=off` skips the sweep.
+create are never touched. The sweep runs only in production mode (a dev or test instance shares the tmux server but not the database); `AGENTOS_TMUX_SWEEP=off` skips it.
 
 ### Phone notifications
 

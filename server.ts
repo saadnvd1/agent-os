@@ -359,7 +359,10 @@ app.prepare().then(async () => {
   // New sessions whose worktree setup a restart cut off.
   failInterruptedSetups();
   // tmux sessions of sessions deleted before agents were ended with them.
-  if (process.env.AGENTOS_TMUX_SWEEP !== "off")
+  // Production only: a dev or test instance has its own database but shares
+  // the default tmux server, so it would see the real instance's sessions as
+  // orphans.
+  if (!dev && process.env.AGENTOS_TMUX_SWEEP !== "off")
     sweepOrphanTmux().catch((error) =>
       console.error("Sweeping orphaned tmux sessions failed:", error)
     );
