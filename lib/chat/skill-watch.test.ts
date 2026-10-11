@@ -7,17 +7,25 @@ import {
   skillFolders,
   type SkillWatcher,
 } from "./skill-watch";
-import { sleep, touchUntil } from "./test-touch";
+import { fakeFsWatch } from "./test-touch";
 
 const tmp = () =>
   fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "skw-")));
-// macOS's file events take a moment to start after a watch is opened.
-const WARM = 700;
-
-const watchReal = fs.watch.bind(fs);
-
 let watcher: SkillWatcher | undefined;
-afterEach(() => watcher?.close());
+let fake: ReturnType<typeof fakeFsWatch> | undefined;
+afterEach(() => {
+  watcher?.close();
+  fake?.restore();
+  fake = undefined;
+  vi.useRealTimers();
+});
+
+// File events fired by hand and the settle delay on a fake clock: real
+// events arrive when the OS likes, which under load is never in time.
+function useFake() {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  return (fake = fakeFsWatch());
+}
 
 function watched(folder: string, debounceMs = 100) {
   const calls: string[] = [];
@@ -38,7 +46,7 @@ describe("skillFolders", () => {
   });
 });
 
-describe("createSkillWatcher", { timeout: 45_000 }, () => {
+describe("createSkillWatcher", () => {
   it("reports a burst of changes once, after it settles", () => {
     // The events fired by hand: real ones arrive when the OS likes (macOS
     // even replays a new folder's own creation late).
@@ -72,87 +80,78 @@ describe("createSkillWatcher", { timeout: 45_000 }, () => {
     }
   });
 
-  it("sees an edit inside a skill linked in as a symlink", async () => {
+  it("sees an edit inside a skill linked in as a symlink", () => {
     const dir = tmp();
     const real = tmp();
     fs.writeFileSync(path.join(real, "SKILL.md"), "one");
     fs.symlinkSync(real, path.join(dir, "linked"));
+    const fake = useFake();
     const calls = watched(dir);
-    await sleep(WARM);
-    let n = 0;
-    await touchUntil(
-      () => fs.writeFileSync(path.join(real, "SKILL.md"), String(++n)),
-      () => calls.length > 0
-    );
+    expect(fake.at(dir, true)).toBeDefined();
+    const link = fake.at(real, false);
+    expect(link).toBeDefined();
+    link!.fire("SKILL.md");
+    vi.advanceTimersByTime(100);
+    expect(calls).toEqual(["claude:/p"]);
   });
 
-  it("sees a skill folder that didn't exist when watching started", async () => {
+  it("sees a skill folder that didn't exist when watching started", () => {
     const project = tmp();
     const skills = path.join(project, ".claude", "skills");
+    const fake = useFake();
     const calls = watched(skills);
-    await sleep(WARM);
-    await touchUntil(
-      () => {
-        fs.rmSync(path.join(project, ".claude"), {
-          recursive: true,
-          force: true,
-        });
-        fs.mkdirSync(skills, { recursive: true });
-      },
-      () => calls.length > 0
-    );
-    // And now watches the folder itself.
-    calls.length = 0;
-    await sleep(WARM);
-    let n = 0;
-    await touchUntil(
-      () => fs.mkdirSync(path.join(skills, `skill-${++n}`)),
-      () => calls.length > 0
-    );
+    // Only the nearest folder that exists is watched, for the next name down.
+    expect(fake.open().map((h) => h.path)).toEqual([project]);
+    fake.at(project, false)!.fire(".claude");
+    fs.mkdirSync(skills, { recursive: true });
+    vi.advanceTimersByTime(100);
+    expect(calls).toEqual(["claude:/p"]);
+    // And now watches the folder itself, not the parent.
+    expect(fake.at(project)).toBeUndefined();
+    const own = fake.at(skills, true);
+    expect(own).toBeDefined();
+    own!.fire("skill-1");
+    vi.advanceTimersByTime(100);
+    expect(calls).toEqual(["claude:/p", "claude:/p"]);
   });
 
-  it("ignores the rest of a parent folder it watches for one name", async () => {
+  it("ignores the rest of a parent folder it watches for one name", () => {
     const project = tmp();
+    const fake = useFake();
     const calls = watched(path.join(project, ".claude", "skills"));
-    await sleep(WARM);
-    fs.writeFileSync(path.join(project, "README.md"), "x");
-    await sleep(2000);
+    const parent = fake.at(project, false)!;
+    parent.fire("README.md");
+    vi.advanceTimersByTime(10_000);
     expect(calls).toEqual([]);
+    // An event with no name could be anything: it counts.
+    parent.fire(null);
+    vi.advanceTimersByTime(100);
+    expect(calls).toEqual(["claude:/p"]);
   });
 
-  it("closes its watchers once no key reads the folder", async () => {
+  it("closes its watchers once no key reads the folder", () => {
     const dir = tmp();
     const real = tmp();
     fs.symlinkSync(real, path.join(dir, "linked"));
-    // The module's own watchers: they always say whether they're
-    // recursive. Node's (Linux builds a recursive watch from more) don't.
-    const opened: [string, fs.FSWatcher][] = [];
-    const spy = vi.spyOn(fs, "watch").mockImplementation(((
-      ...args: Parameters<typeof fs.watch>
-    ) => {
-      const w = watchReal(...args);
-      const o = args[1];
-      if (typeof o === "object" && o !== null && "recursive" in o) {
-        opened.push([String(args[0]), w]);
-        vi.spyOn(w, "close");
-      }
-      return w;
-    }) as typeof fs.watch);
-    try {
-      const calls = watched(dir);
-      // The folder and the linked skill, once each.
-      expect(opened.map(([p]) => p).sort()).toEqual([dir, real].sort());
-      await sleep(WARM);
-      await touchUntil(
-        () => fs.writeFileSync(path.join(dir, "x.md"), String(Math.random())),
-        () => calls.length > 0
-      );
-      watcher!.release("claude:/p");
-      expect(watcher!.keys()).toEqual([]);
-      for (const [, w] of opened) expect(w.close).toHaveBeenCalled();
-    } finally {
-      spy.mockRestore();
-    }
+    const fake = useFake();
+    const calls = watched(dir);
+    // The folder and the linked skill, once each.
+    expect(
+      fake
+        .open()
+        .map((h) => h.path)
+        .sort()
+    ).toEqual([dir, real].sort());
+    fake.at(dir)!.fire("x.md");
+    vi.advanceTimersByTime(100);
+    expect(calls).toEqual(["claude:/p"]);
+    watcher!.release("claude:/p");
+    expect(watcher!.keys()).toEqual([]);
+    expect(fake.open()).toEqual([]);
+    // A change still pending when the last key lets go reports nothing.
+    calls.length = 0;
+    vi.advanceTimersByTime(1000);
+    expect(calls).toEqual([]);
   });
 
   it("re-arms on each watch, so a missed event doesn't leave it blind", () => {
