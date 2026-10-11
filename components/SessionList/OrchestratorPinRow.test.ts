@@ -75,6 +75,7 @@ describe("OrchestratorPinRow", () => {
     workspaceNames: new Map([["w1", "Poise"]]),
     orchestrators: [],
     runningByWorkspace: new Map(),
+    queuedByWorkspace: new Map(),
     orderedIds: () => [],
     cardUrl: () => null,
     onSelect,
