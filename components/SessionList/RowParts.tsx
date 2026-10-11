@@ -41,14 +41,17 @@ export function RowBadge({ row }: { row: SidebarRow }) {
       </span>
     );
   }
-  if (row.unread)
-    return (
-      <span
-        aria-label="Unread"
-        className="bg-primary h-[7px] w-[7px] shrink-0 rounded-full"
-      />
-    );
+  if (row.unread) return <UnreadDot />;
   return null;
+}
+
+export function UnreadDot() {
+  return (
+    <span
+      aria-label="Unread"
+      className="bg-primary h-[7px] w-[7px] shrink-0 rounded-full"
+    />
+  );
 }
 
 export function RowRename({

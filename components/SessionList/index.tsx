@@ -109,6 +109,7 @@ export function SessionList({
       workspaceNames,
       orchestrators,
       runningByWorkspace: data.runningByWorkspace,
+      queuedByWorkspace: data.queuedByWorkspace,
       cardUrl: data.taskCardUrl,
     }),
     [
@@ -120,6 +121,7 @@ export function SessionList({
       workspaceNames,
       orchestrators,
       data.runningByWorkspace,
+      data.queuedByWorkspace,
       data.taskCardUrl,
     ]
   );

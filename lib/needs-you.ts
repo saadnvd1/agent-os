@@ -1,5 +1,6 @@
 import { getDb, type Session } from "./db";
 import type { ChatItem, ChatState } from "./chat/events";
+import { originOf } from "./chat/origin";
 import { openAskCount } from "./orchestrator/asks";
 import { notifyStatusChanged } from "./status/hub";
 import type { SessionNeed } from "./sidebar/shelves";
@@ -82,14 +83,44 @@ export function chatNeed(
   return null;
 }
 
+// An orchestrator answers AgentOS events all day; only its reply to the
+// reader's own last message (typed, or a decision) is news. Old untagged
+// events are told apart by their text, hence the few checked in JS.
+function orchestratorReplied(sessionId: string, seen: number): boolean {
+  const db = getDb();
+  const mine = (
+    db
+      .prepare(
+        `SELECT seq, data FROM chat_items WHERE session_id = ? AND kind = 'user'
+           AND json_extract(data, '$.peer') IS NULL
+           AND COALESCE(json_extract(data, '$.origin.kind'), 'decision') = 'decision'
+         ORDER BY seq DESC LIMIT 20`
+      )
+      .all(sessionId) as { seq: number; data: string }[]
+  ).find((r) => {
+    const origin = originOf(JSON.parse(r.data));
+    return !origin || origin.kind === "decision";
+  });
+  if (!mine) return false;
+  const end = db
+    .prepare(
+      `SELECT data FROM chat_items WHERE session_id = ? AND kind = 'turn_end'
+         AND seq > ? ORDER BY seq LIMIT 1`
+    )
+    .get(sessionId, mine.seq) as { data: string } | undefined;
+  return !!end && (JSON.parse(end.data) as ChatItem).createdAt > seen;
+}
+
 // Finished or changed since the reader last opened it.
 export function isUnread(
-  session: SeenFields,
+  session: SeenFields & Partial<Pick<Session, "role">>,
   chatState: ChatState | null
 ): boolean {
   const seen = sqliteMs(session.last_seen_at);
   if (session.view === "chat") {
     if (chatState === "running" || chatState === "waiting") return false;
+    if (session.role === "orchestrator")
+      return orchestratorReplied(session.id, seen);
     const latest = latestChatItem(session.id);
     return latest?.kind === "turn_end" && latest.createdAt > seen;
   }

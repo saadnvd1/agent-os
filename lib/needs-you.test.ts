@@ -107,6 +107,77 @@ describe("isUnread", () => {
     ).toBe(false);
   });
 
+  it("counts an orchestrator's reply to the reader, never one to an event", () => {
+    const id = randomUUID();
+    const orchestrator = {
+      id,
+      view: "chat" as const,
+      updated_at: "2026-10-06 12:00:00",
+      last_seen_at: null,
+      role: "orchestrator" as const,
+    };
+    const now = Date.now();
+    const event = (n: number) =>
+      saveItem(id, {
+        id: `e${n}`,
+        kind: "user",
+        text: "PR #12 merged",
+        tagged: true,
+        origin: { kind: "event", label: "AgentOS" },
+        createdAt: now + n,
+      });
+    const end = (n: number) =>
+      saveItem(id, { id: `t${n}`, kind: "turn_end", createdAt: now + n });
+
+    // An event and the turn it started: routine, not news.
+    event(1);
+    end(2);
+    expect(isUnread(orchestrator, "idle")).toBe(false);
+
+    // The reader asks, it replies: unread until seen.
+    saveItem(id, {
+      id: "u3",
+      kind: "user",
+      text: "status?",
+      tagged: true,
+      createdAt: now + 3,
+    });
+    end(4);
+    expect(isUnread(orchestrator, "idle")).toBe(true);
+    expect(isUnread(orchestrator, "running")).toBe(false);
+
+    // An event after it doesn't hide the reply, and doesn't count once seen.
+    event(5);
+    end(6);
+    expect(isUnread(orchestrator, "idle")).toBe(true);
+    expect(
+      isUnread({ ...orchestrator, last_seen_at: "2999-01-01 00:00:00" }, "idle")
+    ).toBe(false);
+  });
+
+  it("ignores an orchestrator's old untagged event messages by their text", () => {
+    const id = randomUUID();
+    saveItem(id, {
+      id: "p1",
+      kind: "user",
+      text: '[AgentOS message from "poise-task" (abc-123)] done',
+      createdAt: Date.now(),
+    });
+    saveItem(id, { id: "t1", kind: "turn_end", createdAt: Date.now() });
+    expect(
+      isUnread(
+        {
+          id,
+          view: "chat",
+          updated_at: "2026-10-06 12:00:00",
+          last_seen_at: null,
+          role: "orchestrator",
+        },
+        "idle"
+      )
+    ).toBe(false);
+  });
+
   it("follows updated_at for a terminal", () => {
     const terminal = {
       id: randomUUID(),
