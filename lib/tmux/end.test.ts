@@ -35,13 +35,26 @@ const has = (name: string) => {
     return false;
   }
 };
+// A killed process nothing reaps stays a zombie; that is dead for our purpose.
 const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+  for (let i = 0; i < 20; i++) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return false;
+    }
+    let stat = "";
+    try {
+      stat = execFileSync("ps", ["-o", "stat=", "-p", String(pid)], {
+        encoding: "utf8",
+      }).trim();
+    } catch {
+      return false;
+    }
+    if (!stat || stat.startsWith("Z")) return false;
+    execFileSync("sleep", ["0.1"]);
   }
+  return true;
 };
 const start = (name: string, cmd: string, ...extra: string[]) =>
   tmux("new-session", "-d", "-s", name, ...extra, cmd);
@@ -53,7 +66,7 @@ function startWithChild(name: string, ...extra: string[]): number {
   for (let i = 0; i < 50 && !fs.existsSync(pidFile); i++)
     execFileSync("sleep", ["0.1"]);
   const pid = Number(fs.readFileSync(pidFile, "utf8"));
-  expect(alive(pid)).toBe(true);
+  process.kill(pid, 0);
   return pid;
 }
 
@@ -114,11 +127,15 @@ describe.skipIf(!hasTmux)("ending tmux sessions", () => {
       { id: withRow.slice(-36), tmux_name: withRow, host_id: null },
     ];
 
-    const dry = await sweepOrphanTmux({ rows, dryRun: true });
+    const dry = await sweepOrphanTmux({
+      rows,
+      dryRun: true,
+      createdBefore: Infinity,
+    });
     expect(dry.found.sort()).toEqual([orphan, renamed, worker].sort());
     expect(has(orphan)).toBe(true);
 
-    const out = await sweepOrphanTmux({ rows });
+    const out = await sweepOrphanTmux({ rows, createdBefore: Infinity });
     expect(out.killed.sort()).toEqual([orphan, renamed, worker].sort());
     expect(has(orphan) || has(worker) || has(renamed)).toBe(false);
     expect(alive(orphanChild)).toBe(false);
@@ -129,10 +146,37 @@ describe.skipIf(!hasTmux)("ending tmux sessions", () => {
     await endTmuxSession(null, external);
   });
 
+  it("leaves a session created after the cutoff alone", async () => {
+    const fresh = `claude-${randomUUID()}`;
+    start(fresh, "sleep 300");
+    const rows = [{ id: randomUUID(), tmux_name: "x", host_id: null }];
+    const out = await sweepOrphanTmux({ rows, createdBefore: 1 });
+    expect(out.found).toEqual([]);
+    expect(has(fresh)).toBe(true);
+    await endTmuxSession(null, fresh);
+  });
+
+  it("takes no session as tagged when the whole server carries the tag", async () => {
+    const mine = `my-own-terminal`;
+    start(mine, "sleep 300");
+    tmux("set-environment", "-g", "AGENTOS_SESSION_ID", randomUUID());
+    const rows = [{ id: randomUUID(), tmux_name: "x", host_id: null }];
+    try {
+      const out = await sweepOrphanTmux({ rows, createdBefore: Infinity });
+      expect(out.found).toEqual([]);
+      expect(has(mine)).toBe(true);
+    } finally {
+      tmux("set-environment", "-gu", "AGENTOS_SESSION_ID");
+      await endTmuxSession(null, mine);
+    }
+  });
+
   it("sweeps nothing when there are no rows at all", async () => {
     const orphan = `claude-${randomUUID()}`;
     start(orphan, "sleep 300");
-    expect(await sweepOrphanTmux({ rows: [] })).toEqual({
+    expect(
+      await sweepOrphanTmux({ rows: [], createdBefore: Infinity })
+    ).toEqual({
       found: [],
       killed: [],
     });

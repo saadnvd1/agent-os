@@ -53,7 +53,7 @@ vi.mock("child_process", async (original) => {
   // validated name. It is recorded as "tmux-end" with that name.
   const exec = (command: string, ...rest: unknown[]) => {
     const name = /^t='=([A-Za-z0-9._-]+)'$/m.exec(command)?.[1];
-    if (!name || !command.includes("kill-session"))
+    if (!name || command !== endTmuxScript(name))
       throw new Error(`a shell was asked to run: ${command}`);
     const cb = rest.at(-1) as (
       e: Error | null,
@@ -108,6 +108,7 @@ vi.mock("child_process", async (original) => {
 });
 
 const { db, queries } = await import("@/lib/db");
+const { endTmuxScript } = await import("@/lib/tmux/end");
 type DevServer = import("@/lib/db").DevServer;
 const { createHost } = await import("@/lib/hosts");
 const { loginShellCommand } = await import("@/lib/hosts/ssh");

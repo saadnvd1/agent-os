@@ -73,12 +73,19 @@ async function taggedId(
   return /^AGENTOS_SESSION_ID=(.+)$/m.exec(out)?.[1].trim() ?? null;
 }
 
-async function listLocal(): Promise<TmuxListing[]> {
+async function listLocal(createdBefore: number): Promise<TmuxListing[]> {
   const out = await tmux(
-    ["list-sessions", "-F", "#{session_name}"],
+    ["list-sessions", "-F", "#{session_created} #{session_name}"],
     5000
   ).catch(() => "");
-  const names = out.split("\n").filter((n) => n && isValidTmuxName(n));
+  // Sessions made after the cutoff belong to work this process started: their
+  // rows may not be committed yet, so they are never candidates.
+  const names = out
+    .split("\n")
+    .map((l) => /^(\d+) (.+)$/.exec(l))
+    .filter((m): m is RegExpExecArray => !!m && Number(m[1]) <= createdBefore)
+    .map((m) => m[2])
+    .filter(isValidTmuxName);
   // A server started from inside an agent's shell has the variable in its
   // own environment, which every session on it then shows.
   const global = await tmux(
@@ -98,8 +105,19 @@ async function listLocal(): Promise<TmuxListing[]> {
   return listing;
 }
 
+const hasRow = (id: string, tmuxName: string) =>
+  !!db
+    .prepare(`SELECT 1 FROM sessions WHERE id = ? OR tmux_name = ?`)
+    .get(id, tmuxName);
+
 export async function sweepOrphanTmux(
-  opts: { dryRun?: boolean; rows?: SessionRow[] } = {}
+  opts: {
+    dryRun?: boolean;
+    rows?: SessionRow[];
+    // Epoch seconds; only tmux sessions created at or before it are swept.
+    // Defaults to when this process started.
+    createdBefore?: number;
+  } = {}
 ): Promise<{ found: string[]; killed: string[] }> {
   const none = { found: [], killed: [] };
   const rows =
@@ -110,10 +128,14 @@ export async function sweepOrphanTmux(
   // An empty table is a fresh or wrong database, not proof that nothing is
   // alive: never sweep against it.
   if (!rows.length) return none;
-  const orphans = findOrphans(await listLocal(), rows);
+  const cutoff =
+    opts.createdBefore ?? Math.floor(Date.now() / 1000 - process.uptime());
+  const orphans = findOrphans(await listLocal(cutoff), rows);
   const killed: string[] = [];
   for (const o of orphans) {
     if (opts.dryRun) continue;
+    // The snapshot is old by now: a row inserted since keeps its session.
+    if (!opts.rows && hasRow(o.id, o.name)) continue;
     await endTmuxSession(null, o.name);
     killed.push(o.name);
     console.log(`[tmux-sweep] ended ${o.name}: session ${o.id} has no row`);
