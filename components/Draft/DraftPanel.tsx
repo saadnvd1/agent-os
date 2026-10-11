@@ -118,7 +118,7 @@ export function DraftPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col" data-composer-scope>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <DraftHeading draft={draft} projectName={project?.name ?? null} />
       </div>
@@ -150,7 +150,7 @@ export function DraftPanel({
           access={draft.openPr ? undefined : draft.access}
           onSetAccess={(access) => draftsActions.update(draft.id, { access })}
           prefill={prefill}
-          autoFocus={active}
+          focusKey={active ? draftId : null}
         />
       </div>
     </div>
