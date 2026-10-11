@@ -35,6 +35,9 @@ vi.mock("@/components/Devices", () => ({ DevicesPanel: stub("devices") }));
 vi.mock("@/components/Schedules", () => ({
   SchedulesPanel: stub("schedules"),
 }));
+vi.mock("@/components/Audits/AuditsPanel", () => ({
+  AuditsPanel: stub("audits"),
+}));
 vi.mock("./NotificationsSection", () => ({
   NotificationsSection: stub("notifications"),
 }));

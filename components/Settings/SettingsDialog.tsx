@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Bell,
   ChevronRight,
+  ClipboardList,
   Clock,
   GitMerge,
   LayoutGrid,
@@ -21,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { AuditsPanel } from "@/components/Audits/AuditsPanel";
 import { DevicesPanel } from "@/components/Devices";
 import { GlobalMergeSection } from "@/components/Merge/GlobalMergeSection";
 import { SchedulesPanel } from "@/components/Schedules";
@@ -64,6 +66,11 @@ export const SECTION_INFO: Record<
     hint: "Work that starts at set times",
     icon: Clock,
   },
+  audits: {
+    label: "Audits",
+    hint: "Where sessions spent tokens and repeated work",
+    icon: ClipboardList,
+  },
 };
 
 function SectionBody({
@@ -84,6 +91,8 @@ function SectionBody({
       return <NotificationsSection browser={browser} />;
     case "schedules":
       return <SchedulesPanel />;
+    case "audits":
+      return <AuditsPanel />;
   }
 }
 
