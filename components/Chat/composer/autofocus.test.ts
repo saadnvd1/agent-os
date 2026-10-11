@@ -53,10 +53,12 @@ describe("focusVerdict", () => {
   it("leaves someone typing in another field (search, rename) alone", () => {
     search.focus();
     expect(focusVerdict(editorDom, false)).toBe("leave");
+    search.blur();
     const rename = document.createElement("span");
-    rename.contentEditable = "true";
+    rename.setAttribute("contenteditable", "true");
     document.querySelector("nav")!.append(rename);
     rename.focus();
+    expect(document.activeElement).toBe(rename);
     expect(focusVerdict(editorDom, false)).toBe("leave");
   });
 
@@ -223,6 +225,26 @@ describe("useFocusOnShow", () => {
     document.getElementById("palette")!.remove();
     await act(() => vi.advanceTimersByTimeAsync(100));
     expect(focus).toHaveBeenCalledWith("end", { scrollIntoView: false });
+  });
+
+  it("lets a closing dialog hand focus back before deciding", async () => {
+    vi.useFakeTimers();
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<div id="palette" role="dialog" data-state="open"></div>'
+    );
+    await render({ editor, focusKey: "a" });
+    // The dialog goes just before the hook's next look (at 50ms), and hands
+    // focus back to the search box on a timer of its own that is still
+    // pending when the hook looks, as Radix's does.
+    setTimeout(() => {
+      document.getElementById("palette")!.remove();
+      setTimeout(() => search.focus(), 1);
+    }, 49);
+    await act(() => vi.advanceTimersByTimeAsync(49));
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(document.activeElement).toBe(search);
+    expect(focus).not.toHaveBeenCalled();
   });
 
   it("gives up on a dialog that stays open", async () => {
