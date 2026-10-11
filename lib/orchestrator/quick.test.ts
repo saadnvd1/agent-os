@@ -36,7 +36,6 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
             head,
             failing: null,
             checkCount: 0,
-            codeReview: null,
           };
           return `${pr.url}\n`;
         }
@@ -84,7 +83,6 @@ const { setMergeApprovals } = await import("./merge-approvals");
 const { judge } = await import("./signoff");
 const { orchestratorToolRefusal } = await import("./write-guard");
 const { pushRefusal, withQuickReview } = await import("./quick");
-const { parseCodeReview } = await import("@/lib/tasks/code-review");
 const { WORKTREES_DIR } = await import("@/lib/worktrees");
 const { buildShelves } = await import("@/lib/sidebar/shelves");
 
@@ -463,7 +461,7 @@ describe("the code-review gate", () => {
       head: sha,
       failing: null,
       checkCount: 1,
-      codeReview: opts.section ? { sha } : null,
+      attribution: null,
     };
     putCheck({
       workspaceId: s.w,
@@ -500,24 +498,15 @@ describe("the code-review gate", () => {
     expect(!v.ok && v.text).toMatch(/independent review/);
   });
 
-  it("for any other task, still needs the body's Code review section", async () => {
-    const without = gated({ quick: false, section: false, review: true });
+  it("for any other task, is the same passing review of its head", async () => {
+    const without = gated({ quick: false, section: false, review: false });
     const v = await judge(without.w, without.task as never);
     expect(v.ok).toBe(false);
-    expect(!v.ok && v.text).toMatch(
-      /code-review failed.*no Code review section/
-    );
-    const withIt = gated({ quick: false, section: true, review: true });
+    expect(!v.ok && v.text).toMatch(/no review of/);
+    const withIt = gated({ quick: false, section: false, review: true });
     expect(await judge(withIt.w, withIt.task as never)).toMatchObject({
       ok: true,
     });
-  });
-
-  it("reads the quick record from the row, not the body", async () => {
-    // A body claiming to be a quick change counts for nothing.
-    const g = gated({ quick: false, section: false, review: true });
-    pr = { ...pr!, codeReview: parseCodeReview("quick_pr: yes") };
-    expect((await judge(g.w, g.task as never)).ok).toBe(false);
   });
 });
 
@@ -525,7 +514,8 @@ describe("the Code review section AgentOS writes after a quick change's review",
   it("names the reviewed head, replacing its earlier one", () => {
     const once = withQuickReview("Fixes the greeting.", "a".repeat(40));
     const twice = withQuickReview(once, "b".repeat(40));
-    expect(parseCodeReview(twice)?.sha).toBe("b".repeat(40));
+    expect(twice).toContain(`Reviewed: ${"b".repeat(40)}`);
+    expect(twice).not.toContain("a".repeat(40));
     expect(twice.match(/## Code review/g)).toHaveLength(1);
     expect(twice.startsWith("Fixes the greeting.")).toBe(true);
   });
