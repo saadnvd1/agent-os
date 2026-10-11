@@ -16,6 +16,7 @@ export function heldVerdict(
   sha: string,
   pr: number
 ): Verdict {
+  // One the orchestrator raised was judged before this (signoff.ts).
   const approval = latestApproval(workspaceId, workSubject(task.id));
   if (approval?.sha === sha)
     return { ok: true, sha, pr, approval: approval.id };

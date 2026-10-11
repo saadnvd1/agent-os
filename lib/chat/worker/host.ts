@@ -11,7 +11,7 @@ import { sessionRunningBrief } from "../../project-config/session";
 import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
-import type { ChatConversation, ChatStartOptions } from "../driver";
+import type { ChatConversation } from "../driver";
 import type {
   ChatImage,
   ChatItem,
@@ -34,6 +34,7 @@ import {
   VISUALS_SERVER,
   visualsTools,
 } from "../../artifacts/tools";
+import type { RoleExtras } from "./extras";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
 // How soon after a stopped turn ends a turn the agent starts on its own
@@ -52,7 +53,7 @@ export const RETIRE_REST_WAIT_MS = 30 * 1000;
 // What the agent reads, ahead of its next message, in the worker after one
 // that retired cleanly (sessions.chat_restarted). Not shown in the chat.
 export const RESTARTED_NOTE =
-  "(AgentOS was updated and restarted you between turns; your tools are current.)";
+  "(AgentOS was updated and restarted you between turns; your tools changed and are current now.)";
 
 export class ChatHost {
   state: ChatState = "idle";
@@ -107,20 +108,14 @@ export class ChatHost {
   // Whether its driver says when that is (lib/chat/driver atRest).
   private atRest = true;
   private restartedNote = false;
+  private toolsDigest: string | null = null;
   readonly done: Promise<void>;
 
   constructor(
     private session: Session,
     private emit: (e: WorkerEvent) => void,
     // What a session's role adds: its brief and its own tools.
-    extras: Pick<
-      ChatStartOptions,
-      | "systemAppend"
-      | "mcpServers"
-      | "allowedTools"
-      | "disallowedTools"
-      | "permissionMode"
-    > = {}
+    extras: RoleExtras = {}
   ) {
     this.usage = startingTotals(session.id, !!session.claude_session_id);
     const driver = chatDriverFor(session.agent_type);
@@ -173,7 +168,17 @@ export class ChatHost {
       permissionMode: extras.permissionMode,
     });
     this.suggestion = session.chat_suggestion ?? null;
-    this.restartedNote = !!session.chat_restarted;
+    // Told only an orchestrator whose tools changed since its last worker:
+    // that's what the note is for. Anything else just clears the mark.
+    this.toolsDigest = extras.toolsDigest ?? null;
+    this.restartedNote =
+      !!session.chat_restarted &&
+      this.toolsDigest !== null &&
+      this.toolsDigest !== (session.chat_tools_digest ?? null);
+    if (!this.restartedNote)
+      db.prepare(
+        `UPDATE sessions SET chat_restarted = 0, chat_tools_digest = ? WHERE id = ?`
+      ).run(this.toolsDigest, session.id);
     // Sends that already made it in, from before a reconnect.
     for (const item of itemsOfKind(session.id, "user")) this.sent.add(item.id);
     // Nothing runs yet in a worker just started: a tool call still saved as
@@ -351,9 +356,9 @@ export class ChatHost {
     const text = this.restartedNote ? `${RESTARTED_NOTE}\n\n${m.text}` : m.text;
     if (this.restartedNote) {
       this.restartedNote = false;
-      db.prepare(`UPDATE sessions SET chat_restarted = 0 WHERE id = ?`).run(
-        this.session.id
-      );
+      db.prepare(
+        `UPDATE sessions SET chat_restarted = 0, chat_tools_digest = ? WHERE id = ?`
+      ).run(this.toolsDigest, this.session.id);
     }
     const checkpoint = now
       ? this.conversation.send(text, m.images, { now })
@@ -586,12 +591,7 @@ export class ChatHost {
   // queue for the next worker. While background work runs (it can run for
   // as long as a dev server does) the worker carries on as usual.
   private handingOver(): boolean {
-    return (
-      this.retiring &&
-      !itemsOfKind(this.session.id, "task").some(
-        (t) => t.kind === "task" && t.status === "running" && !t.ambient
-      )
-    );
+    return this.retiring && this.runningTasks.size === 0;
   }
 
   onClose: () => void = () => {};

@@ -898,7 +898,7 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Decision log:** `note` and the brakes and escalations write to
   `orchestrator_notes`, and each line shows in its chat.
 - **Events:** the server sends it one short line per event (a PR opened, CI
-  green or failed, a `BLOCKED:` line, a merge, a session needing input, a
+  failed, or green once it has settled so `sign_off`'s ci gate passes, a `BLOCKED:` line, a merge, a session needing input, a
   stack step, a task idle 30 minutes with no PR, a review's verdict). Events
   wait while its turn runs, duplicates fold, and at most one batched message
   goes out per 30 seconds. What it has been told is kept in

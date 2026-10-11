@@ -1274,8 +1274,44 @@ describe("ChatHost retiring after a deploy", () => {
     next.close();
   });
 
+  // Retires a worker cleanly, as after a deploy, with its tools at `digest`.
+  async function retired(digest: string | null) {
+    const { id, host, conversation } = await startHost("orchestrator");
+    getDb()
+      .prepare(`UPDATE sessions SET chat_tools_digest = ? WHERE id = ?`)
+      .run(digest, id);
+    await host.handle({ type: "send", id: "user-0", text: "work" });
+    await host.handle({ type: "retire" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push({ type: "suggestion", text: "next" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    return {
+      id,
+      row: () =>
+        getDb()
+          .prepare(`SELECT * FROM sessions WHERE id = ?`)
+          .get(id) as Session,
+    };
+  }
+
+  it("says nothing when the tools didn't change, or the role has none of AgentOS's", async () => {
+    const { ChatHost } = await import("./host");
+    for (const digest of ["v1", undefined]) {
+      const { row } = await retired("v1");
+      current = fakeConversation();
+      const next = new ChatHost(row(), () => {}, { toolsDigest: digest });
+      await next.handle({ type: "send", id: "user-1", text: "an event" });
+      expect(current.send).toHaveBeenLastCalledWith("an event", undefined);
+      expect(row().chat_restarted).toBe(0);
+      expect(row().chat_tools_digest).toBe(digest ?? null);
+      next.close();
+    }
+  });
+
   it("after a clean retire, the next worker tells the agent once, ahead of its next message", async () => {
     const { RESTARTED_NOTE, ChatHost } = await import("./host");
+    const tools = { toolsDigest: "v2" };
     const { id, host, conversation } = await startHost("orchestrator");
     await host.handle({ type: "send", id: "user-0", text: "work" });
     await host.handle({ type: "retire" });
@@ -1288,9 +1324,9 @@ describe("ChatHost retiring after a deploy", () => {
     // Kept in the database, so a server restart in between doesn't lose it,
     // nor a next worker that goes before sending anything.
     current = fakeConversation();
-    new ChatHost(row(), () => {}).close();
+    new ChatHost(row(), () => {}, tools).close();
     current = fakeConversation();
-    const next = new ChatHost(row(), () => {});
+    const next = new ChatHost(row(), () => {}, tools);
     await next.handle({ type: "send", id: "user-1", text: "an event" });
     expect(current.send).toHaveBeenLastCalledWith(
       `${RESTARTED_NOTE}\n\nan event`,
@@ -1304,9 +1340,11 @@ describe("ChatHost retiring after a deploy", () => {
     await tick();
     await next.handle({ type: "send", id: "user-2", text: "another" });
     expect(current.send).toHaveBeenLastCalledWith("another", undefined);
+    // The worker keeps the tools it told the agent about, for the next one.
+    expect(row().chat_tools_digest).toBe("v2");
     next.close();
     current = fakeConversation();
-    const later = new ChatHost(row(), () => {});
+    const later = new ChatHost(row(), () => {}, tools);
     await later.handle({ type: "send", id: "user-3", text: "later" });
     expect(current.send).toHaveBeenLastCalledWith("later", undefined);
     later.close();

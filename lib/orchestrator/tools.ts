@@ -5,12 +5,14 @@
  * and gates, and returns its text as is.
  */
 
+import { createHash } from "crypto";
+import { z } from "zod";
 import {
   createSdkMcpServer,
   tool,
   type McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
-import { ORCHESTRATOR_SERVER } from "./tool-names";
+import { ORCHESTRATOR_PERMISSIONS, ORCHESTRATOR_SERVER } from "./tool-names";
 import { TOOL_SHAPES, TOOLS, type ToolName } from "./tool-schemas";
 
 type CallToolResult = Awaited<ReturnType<Parameters<typeof tool>[3]>>;
@@ -90,4 +92,27 @@ export function orchestratorTools(
       )
     ),
   });
+}
+
+// What the orchestrator's agent sees of its tools: names, descriptions,
+// arguments and permissions. A worker after a deploy tells the agent its
+// tools changed only when this did.
+export function orchestratorToolsDigest(): string {
+  return toolsDigest(DESCRIPTIONS, TOOL_SHAPES, ORCHESTRATOR_PERMISSIONS);
+}
+
+export function toolsDigest(
+  descriptions: Record<string, string>,
+  shapes: Record<string, z.ZodRawShape>,
+  permissions: object
+): string {
+  const tools = Object.keys(shapes).map((name) => [
+    name,
+    descriptions[name],
+    z.toJSONSchema(z.object(shapes[name])),
+  ]);
+  return createHash("sha256")
+    .update(JSON.stringify([tools, permissions]))
+    .digest("hex")
+    .slice(0, 16);
 }
