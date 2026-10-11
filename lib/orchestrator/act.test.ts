@@ -322,6 +322,33 @@ describe("acting inside the workspace", () => {
     ]);
   });
 
+  it("drops a queued task by its id, and a running task as before", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    started.length = 0;
+    const text = await runTool(w, "start_task", {
+      plan: false,
+      plan_reason: "a clear edit",
+      project: mine.app.name,
+      prompt: "never runs",
+      name: "never runs",
+      after: "add-auth",
+    });
+    const id = text.match(/id (\w{8})\)/)![1];
+    expect(await runTool(w, "drop", { task: id, reason: "duplicate" })).toMatch(
+      /^Removed queued task "never runs"/
+    );
+    expect(
+      db.prepare(`SELECT status FROM task_queue WHERE id LIKE ?`).get(`${id}%`)
+    ).toEqual({ status: "removed" });
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      mine.task
+    );
+    const { tickQueue } = await import("@/lib/tasks/queue");
+    await tickQueue();
+    expect(started).not.toContain("never runs");
+  });
+
   it("queues a task with after, and tells the orchestrator when it starts", async () => {
     const { mine } = twoWorkspaces();
     const w = mine.workspace.id;

@@ -16,6 +16,7 @@ import { BRAKE_SUBJECT, openAsks } from "./asks";
 import { settleStaleAsks } from "./ask-settle";
 import { brakesOn, liftBrake } from "./brakes";
 import { anyArmed, mergeArmed } from "./armed";
+import { followAskHeads } from "./ask-heads";
 import { rebaseConflicting } from "./rebase";
 import { wakeTasks } from "./pr-wake";
 import { awayTick } from "../away/run";
@@ -74,6 +75,9 @@ function mergePipeline(workspaceId: string, facts: SessionFacts[]): void {
   void (async () => {
     await wakeTasks(workspaceId, facts).catch((error) =>
       console.error(`Waking tasks in ${workspaceId}:`, error)
+    );
+    await followAskHeads(workspaceId, facts).catch((error) =>
+      console.error(`Following ask heads in ${workspaceId}:`, error)
     );
     await rebaseConflicting(workspaceId, facts);
     await mergeArmed(workspaceId, facts);

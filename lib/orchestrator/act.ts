@@ -20,7 +20,12 @@ import {
   type StartView,
 } from "../sessions/launch";
 import { createTask, dropTask } from "../tasks";
-import { startOrQueue } from "../tasks/queue";
+import {
+  findQueued,
+  queuedLabel,
+  removeQueued,
+  startOrQueue,
+} from "../tasks/queue";
 import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
@@ -235,7 +240,27 @@ export async function drop(
   reason: string
 ): Promise<string> {
   if (!reason.trim()) throw new Error("Say why it's dropped");
-  const task = workspaceTask(workspaceId, ref);
+  // A task still in the queue has no session yet: its id removes it.
+  const removeQueuedTask = (
+    queued: NonNullable<ReturnType<typeof findQueued>>
+  ) => {
+    removeQueued(queued.id);
+    addNote(
+      workspaceId,
+      `Removed queued task ${queuedLabel(queued)} before it started: ${reason.trim()}`
+    );
+    return `Removed queued task "${queuedLabel(queued)}" (id ${queued.id.slice(0, 8)}) from the queue; it never started.`;
+  };
+  const byId = findQueued(workspaceId, ref);
+  if (byId) return removeQueuedTask(byId);
+  let task;
+  try {
+    task = workspaceTask(workspaceId, ref);
+  } catch (error) {
+    const byName = findQueued(workspaceId, ref, { byName: true });
+    if (byName) return removeQueuedTask(byName);
+    throw error;
+  }
   await dropTask(task.id);
   addNote(workspaceId, `Dropped task ${task.name}: ${reason.trim()}`);
   return `Dropped ${task.name}: its PR is closed and its worktree removed.`;

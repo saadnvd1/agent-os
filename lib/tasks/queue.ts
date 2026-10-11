@@ -161,11 +161,19 @@ export function hasFinished(taskId: string): boolean {
   return !q || (q.status !== "queued" && q.status !== "starting");
 }
 
+// Still something to wait for under "any": in flight, and not a task whose
+// PR was closed or merged and which nobody finished (that one never will).
+function stillWorking(taskId: string): boolean {
+  if (hasFinished(taskId)) return false;
+  const s = sessionOf(taskId);
+  return !s || (s.pr_status !== "closed" && s.pr_status !== "merged");
+}
+
 export function afterMet(r: QueueRow): boolean {
   if (r.after_task && !hasFinished(r.after_task)) return false;
   if (r.after_any) {
     const ids = JSON.parse(r.after_any) as string[];
-    if (ids.length && !ids.some(hasFinished)) return false;
+    if (ids.length && !ids.some((id) => !stillWorking(id))) return false;
   }
   return true;
 }
@@ -244,9 +252,17 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   let afterTask: string | null = null;
   let afterAny: string[] | null = null;
   const after = req.after?.trim();
-  if (after && after.toLowerCase() === "any")
-    afterAny = runningIn({ workspaceId, projectId: project.id });
-  else if (after)
+  // "any" with nothing working is nothing to wait for: it starts at once.
+  let waits = !!after;
+  if (after && after.toLowerCase() === "any") {
+    afterAny = runningIn({ workspaceId, projectId: project.id }).filter(
+      stillWorking
+    );
+    if (!afterAny.length) {
+      afterAny = null;
+      waits = false;
+    }
+  } else if (after)
     afterTask = resolveAfter(after, req.originWorkspaceId ?? workspaceId).id;
   const full =
     limit !== null &&
@@ -255,7 +271,7 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
       startingIn(workspaceId) >=
       limit ||
       waitingIn(workspaceId) > 0);
-  if (!after && !full) return null;
+  if (!waits && !full) return null;
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
   db.prepare(
@@ -587,6 +603,36 @@ export async function startQueuedNow(id: string): Promise<StartOutcome> {
     throw new Error("That task isn't waiting in the queue");
   return startRow(r, { force: true });
 }
+
+// A task still waiting in the line (or failed to start) by id, an id prefix
+// of 4+ characters or, when asked, its name; in one workspace.
+export function findQueued(
+  workspaceId: string,
+  ref: string,
+  opts: { byName?: boolean } = {}
+): QueueRow | null {
+  const want = ref.trim();
+  const rows = db
+    .prepare(
+      `SELECT q.* FROM task_queue q JOIN projects p ON p.id = q.project_id
+       WHERE p.workspace_id = ? AND q.status IN ('queued', 'failed')`
+    )
+    .all(workspaceId) as QueueRow[];
+  const lower = want.toLowerCase();
+  const hits = rows.filter(
+    (r) =>
+      r.id === want ||
+      (want.length >= 4 && r.id.startsWith(want)) ||
+      (opts.byName && label(r).toLowerCase() === lower)
+  );
+  if (hits.length > 1)
+    throw new Error(
+      `"${ref}" matches ${hits.length} queued tasks: ${hits.map((h) => `${label(h)} (${h.id.slice(0, 8)})`).join(", ")}`
+    );
+  return hits[0] ?? null;
+}
+
+export const queuedLabel = label;
 
 export function removeQueued(id: string): void {
   const changed = db

@@ -29,6 +29,7 @@ import { evaluateGates, holdingEscalations, type GateInput } from "./gates";
 import { addNote } from "./notes";
 import { latestApproval, refundApproval, spendApproval } from "./ask-approvals";
 import { workSubject } from "./asks";
+import { carryApproval } from "./approval-carry";
 import { heldVerdict } from "./held";
 import { mergeApprovalsOn } from "./merge-approvals";
 import { isPaused } from "./pause";
@@ -170,7 +171,20 @@ export async function gateVerdict(
   // its stack parent merged: the orchestrator wrote that ask, and no answer
   // to it stands in for those. An approval of the gates' own ask on a held
   // task merges as it always has (heldVerdict).
-  const approval = latestApproval(workspaceId, workSubject(work.id));
+  let approval = latestApproval(workspaceId, workSubject(work.id));
+  // The head moved since he approved: his approval follows it when the PR's
+  // own patch is unchanged (a rebase), else the re-ask says what changed.
+  let moved: string | undefined;
+  if (approval?.sha && approval.sha !== sha) {
+    const carried = await carryApproval(
+      workspaceId,
+      work,
+      { ...approval, sha: approval.sha },
+      sha
+    );
+    if (carried.approval) approval = carried.approval;
+    else moved = carried.note;
+  }
   if (
     approval?.sha === sha &&
     (approval.raised_by === "orchestrator" || !held.length)
@@ -187,7 +201,7 @@ export async function gateVerdict(
     return { ok: true, sha, pr: pr.number, approval: approval.id };
   }
   if (held.length)
-    return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number);
+    return heldVerdict(workspaceId, work, held, pr.url, sha, pr.number, moved);
 
   const base = await fetchRefs(repo, work.refs);
   const files = await changedFiles(repo, base, sha);

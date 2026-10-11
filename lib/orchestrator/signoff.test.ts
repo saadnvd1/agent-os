@@ -5,6 +5,7 @@ import { execFileSync } from "child_process";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskPR } from "@/lib/tasks/state";
 import type { ClaudeRun } from "./claude-cli";
+import type { SessionFacts } from "./facts";
 
 // A real repository with a local bare remote; gh is faked around it.
 let pr: TaskPR | null = null;
@@ -84,6 +85,7 @@ const { amendBrief } = await import("./amendments");
 const { fetchRefs } = await import("./repo");
 const { getTaskSession } = await import("@/lib/tasks/session");
 const { changedFiles } = await import("./diff");
+const { followAskHeads } = await import("./ask-heads");
 
 // The one ask a task's escalation leaves on Saad's list.
 function oneGateAsk(w: string, task: string, sha: string) {
@@ -724,6 +726,97 @@ describe("sign_off", () => {
     await expect(t.signOff()).rejects.toThrow(/Asked him again/);
     expect(oneGateAsk(t.w, t.task, next).id).not.toBe(first.id);
     expect(merges).toEqual([]);
+  });
+
+  // The base moves and the task rebases onto it, as #210 did to renumber a
+  // migration; `edit` also changes the PR's own patch.
+  function rebaseOnMain(
+    t: ReturnType<typeof setup>,
+    edit?: [string, string]
+  ): string {
+    git(t.repo, "checkout", "-q", "main");
+    commit(t.repo, "docs/moved.md", `moved ${Math.random()}\n`);
+    git(t.repo, "checkout", "-q", "feature/t");
+    git(t.repo, "rebase", "-q", "main");
+    if (edit) {
+      fs.mkdirSync(path.dirname(path.join(t.repo, edit[0])), {
+        recursive: true,
+      });
+      fs.writeFileSync(path.join(t.repo, edit[0]), edit[1]);
+      git(t.repo, "add", "-A");
+      git(t.repo, "commit", "-qm", `change ${edit[0]}`);
+    }
+    git(t.repo, "push", "-qf", "origin", "HEAD");
+    pr = { ...pr!, head: git(t.repo, "rev-parse", "HEAD") };
+    return pr.head!;
+  }
+
+  it("carries Saad's approval over a clean rebase with the same patch", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const ask = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, ask.id, { action: "approve" });
+    const next = rebaseOnMain(t);
+    expect(next).not.toBe(ask.sha);
+    await reviewNow(t.w);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", next],
+    ]);
+    expect(getAsk(t.w, ask.id)).toMatchObject({ sha: next });
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
+    expect(listNotes(t.w).some((n) => /carries to/.test(n.text))).toBe(true);
+    expect(openAsks(t.w)).toEqual([]);
+  });
+
+  it("doesn't carry the approval when the patch changed, and the re-ask says what", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const first = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, first.id, { action: "approve" });
+    const next = rebaseOnMain(t, ["src/b.ts", "export const b = 2;\n"]);
+    await expect(t.signOff()).rejects.toThrow(
+      new RegExp(
+        `Saad approved ${first.sha!.slice(0, 7)}, but PR #7's head is now ${next.slice(0, 7)} and its patch changed: now also touches src/b.ts`
+      )
+    );
+    const again = oneGateAsk(t.w, t.task, next);
+    expect(again.id).not.toBe(first.id);
+    expect(again.detail).toMatch(/now also touches src\/b\.ts/);
+    expect(getAsk(t.w, first.id)?.used_at).toBeNull();
+    expect(merges).toEqual([]);
+  });
+
+  it("moves an open ask to the head it would merge", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const ask = oneGateAsk(t.w, t.task, pr!.head!);
+    const facts = () =>
+      [{ id: t.task, task: { pr } }] as unknown as SessionFacts[];
+    const next = rebaseOnMain(t);
+    await followAskHeads(t.w, facts());
+    const moved = oneGateAsk(t.w, t.task, next);
+    expect(moved.id).toBe(ask.id);
+    expect(moved.detail).toMatch(/Head moved from .* same patch/);
+    // A screen that still shows the old commit can't approve it.
+    expect(() =>
+      answerAsk(t.w, ask.id, { action: "approve" }, ask.sha!)
+    ).toThrow(/changed since you saw it/);
+    // A real change replaces the line instead of stacking another.
+    const last = rebaseOnMain(t, ["src/c.ts", "export const c = 3;\n"]);
+    await followAskHeads(t.w, facts());
+    const again = oneGateAsk(t.w, t.task, last);
+    expect(again.detail).toMatch(/patch changed: now also touches src\/c\.ts/);
+    expect(again.detail.match(/Head moved from/g)).toHaveLength(1);
+    answerAsk(t.w, ask.id, { action: "approve" }, last);
+    await reviewNow(t.w);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
 
   // Approves the first commit, moves the head, and approves the new one too.

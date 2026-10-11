@@ -1,7 +1,7 @@
 // Spending Saad's approvals: each covers one item, once.
 
 import { db } from "../db";
-import type { AskRow } from "./asks";
+import { MAX_DETAIL, type AskRow } from "./asks";
 
 // An approval on the subject not spent yet, newer than maxAgeMs if given.
 export function unspentApproval(
@@ -103,4 +103,23 @@ export function voidApprovalsOn(subject: string): number {
        WHERE subject = ? AND status = 'approved' AND used_at IS NULL`
     )
     .run(subject).changes;
+}
+
+// Moves an approval Saad gave to the commit it was rebased into, when the
+// patch is the same: it stays one approval, spent once. Compare-and-swap on
+// the old commit, so two judgements racing move it once.
+export function rebindApproval(
+  id: number,
+  from: string,
+  to: string,
+  line: string
+): boolean {
+  return (
+    db
+      .prepare(
+        `UPDATE orchestrator_asks SET sha = ?, detail = substr(detail || char(10) || ?, 1, ?)
+         WHERE id = ? AND sha = ? AND status = 'approved' AND used_at IS NULL`
+      )
+      .run(to, line, MAX_DETAIL, id, from).changes === 1
+  );
 }

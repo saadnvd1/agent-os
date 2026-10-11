@@ -14,14 +14,15 @@ export function heldVerdict(
   held: FailureRow[],
   url: string,
   sha: string,
-  pr: number
+  pr: number,
+  moved?: string
 ): Verdict {
   // One the orchestrator raised was judged before this (signoff.ts).
   const approval = latestApproval(workspaceId, workSubject(task.id));
   if (approval?.sha === sha)
     return { ok: true, sha, pr, approval: approval.id };
   if (approval) {
-    const why = `Saad approved ${approval.sha ? short(approval.sha) : "an earlier commit"}, but PR #${pr}'s head is now ${short(sha)}`;
+    const why = `Saad approved ${approval.sha ? short(approval.sha) : "an earlier commit"}, but PR #${pr}'s head is now ${short(sha)}${moved ? ` and ${moved}` : ""}`;
     try {
       raiseAsk({
         workspaceId,

@@ -464,7 +464,9 @@ default; set it in **Settings → Workspaces**, or `PATCH /api/workspaces/<id>` 
 worktree or agent yet, and starts by itself in line order when one finishes
 (merged, dropped or done). `aos task --after <task|any>` (and the
 orchestrator's `start_task` with `after`) holds a task until a named task
-finishes, or until any task running now does. Pause stops automatic starts,
+finishes, or until any task still working now does (a running task whose PR
+was closed or merged doesn't count; with none, it starts at once). The
+orchestrator's `drop` removes a queued task by its id. Pause stops automatic starts,
 and the orchestrator's brakes still apply when its queued tasks start. The
 line is kept in the database across restarts (`GET /api/tasks/queue`; start
 now, move up or down, or remove with `/api/tasks/queue/<id>`). The sidebar
@@ -1129,7 +1131,11 @@ it may do on its own, and the lines that always come back to you as asks.
   nothing uncommitted, AgentOS rebases it in the task's worktree and pushes
   only its branch with `--force-with-lease`, and the orchestrator's review
   carries over when the PR's own patch is
-  unchanged (same `git patch-id`; a fresh review starts otherwise). Not
+  unchanged (same `git patch-id`; a fresh review starts otherwise). Your
+  merge approval carries over a rebase the same way (any rebase, the task's
+  own included): when the PR's patch is unchanged it follows the new head,
+  else you're asked again, naming the new head and what changed, and an open
+  merge ask follows its PR's head. Not
   clean: the task is asked once to rebase. Either way, one event. Main and
   other tasks' branches are never written.
 - **Tasks woken on CI failures and reviews:** a check failing on a task's
