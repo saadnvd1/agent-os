@@ -49,7 +49,9 @@ const { getCheck, putCheck } = await import("./checks");
 const { failureOf, recordFailure } = await import("./gates");
 const { seedSession } = await import("./testing");
 const { setMergeApprovals } = await import("./merge-approvals");
-const { mergeArmed } = await import("./armed");
+const { mergeArmed, armTask } = await import("./armed");
+const { setPaused } = await import("./pause");
+const { escalate } = await import("./escalate");
 const { judge, mergeJudged } = await import("./signoff");
 const { rebaseConflicting } = await import("./rebase");
 const { recordConditions } = await import("./events");
@@ -292,6 +294,98 @@ describe("arm", () => {
     );
     expect(armedAt(t.task)).toBeNull();
   });
+
+  it("refuses to arm a task that isn't running, is with Saad, or has no orchestrator to report to", async () => {
+    const t = setup();
+    const row = () =>
+      db
+        .prepare(`SELECT * FROM sessions WHERE id = ?`)
+        .get(t.task) as Parameters<typeof armTask>[0];
+    escalate(t.w, { id: t.task, name: "add-a" }, "ci", "why", "url", t.sha);
+    await expect(runTool(t.w, "arm", { task: "add-a" })).rejects.toThrow(
+      /is with Saad/
+    );
+    db.prepare(
+      `DELETE FROM orchestrator_gate_failures WHERE session_id = ?`
+    ).run(t.task);
+    db.prepare(`UPDATE sessions SET peer_mirror = 1 WHERE id = ?`).run(t.task);
+    expect(() => armTask(row())).toThrow(/linked machine/);
+    db.prepare(`UPDATE sessions SET peer_mirror = 0 WHERE id = ?`).run(t.task);
+    db.prepare(
+      `UPDATE projects SET workspace_id = NULL WHERE id = (SELECT project_id FROM sessions WHERE id = ?)`
+    ).run(t.task);
+    expect(() => armTask(row())).toThrow(
+      /isn't in a workspace with an orchestrator/
+    );
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      t.task
+    );
+    expect(() => armTask(row())).toThrow(/is already merged/);
+    expect(armedAt(t.task)).toBeNull();
+  });
+
+  it("disarms with one event when the PR is closed, or the task went to Saad", async () => {
+    const t = setup();
+    await runTool(t.w, "arm", { task: "add-a" });
+    pr = { ...pr!, state: "CLOSED" };
+    await mergeArmed(t.w, t.facts(), armedDeps().deps, 1);
+    expect(armedAt(t.task)).toBeNull();
+    expect(events(t.w)).toEqual(["task add-a: disarmed, its PR #7 was closed"]);
+
+    pr = { ...pr!, state: "OPEN" };
+    await runTool(t.w, "arm", { task: "add-a" });
+    escalate(t.w, { id: t.task, name: "add-a" }, "ci", "why", "url", t.sha);
+    await mergeArmed(t.w, t.facts(), armedDeps().deps, 2);
+    expect(armedAt(t.task)).toBeNull();
+    expect(events(t.w).at(-1)).toMatch(
+      /^task add-a: disarmed, it's with Saad \(ci\)/
+    );
+    expect(merges).toEqual([]);
+  });
+
+  it("reports a refused merge once and stays armed", async () => {
+    const t = setup();
+    await runTool(t.w, "arm", { task: "add-a" });
+    t.put("review", "pass");
+    const { deps } = armedDeps();
+    const refusing = {
+      ...deps,
+      merge: async () => {
+        throw new Error("Head branch was modified");
+      },
+    };
+    await mergeArmed(t.w, t.facts(), refusing, 1);
+    await mergeArmed(t.w, t.facts(), refusing, 10 * 60 * 1000);
+    expect(events(t.w)).toEqual([
+      `task add-a: armed, every gate passed at ${t.sha.slice(0, 7)} but the merge was refused: Head branch was modified. It stays armed.`,
+    ]);
+    expect(armedAt(t.task)).not.toBeNull();
+  });
+
+  it("doesn't merge once paused or disarmed while the gates were being judged", async () => {
+    const t = setup();
+    await runTool(t.w, "arm", { task: "add-a" });
+    t.put("review", "pass");
+    for (const stop of [
+      () => setPaused(t.w, true),
+      () => runTool(t.w, "disarm", { task: "add-a" }),
+    ]) {
+      const { deps } = armedDeps();
+      const slow = {
+        ...deps,
+        judge: async (...args: Parameters<typeof judge>) => {
+          const verdict = await judge(...args);
+          await stop();
+          return verdict;
+        },
+      };
+      await mergeArmed(t.w, t.facts(), slow, Date.now() + Math.random());
+      expect(merges).toEqual([]);
+      setPaused(t.w, false);
+      await runTool(t.w, "arm", { task: "add-a" });
+    }
+    expect(events(t.w)).toEqual([]);
+  });
 });
 
 function rebaseDeps() {
@@ -299,19 +393,23 @@ function rebaseDeps() {
   const reviews: string[] = [];
   const bodies: [string, string][] = [];
   let idle = true;
+  const hooks: { onRebase?: () => void } = {};
   return {
     sent,
     reviews,
     bodies,
+    hooks,
     busy: () => (idle = false),
     deps: {
-      runner: async (cmd: string, args: string[], cwd: string) =>
-        execFileSync(cmd, args, {
+      runner: async (cmd: string, args: string[], cwd: string) => {
+        if (args[0] === "rebase") hooks.onRebase?.();
+        return execFileSync(cmd, args, {
           cwd,
           encoding: "utf8",
           stdio: "pipe",
           env: { ...process.env, GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" },
-        }),
+        });
+      },
       send: async (_to: string, body: string) => {
         sent.push(body);
       },
@@ -425,6 +523,89 @@ describe("automatic rebase", () => {
     expect(git(t.repo, "rev-parse", "HEAD")).toBe(t.sha);
     expect(idle.sent).toHaveLength(1);
     expect(idle.sent[0]).toMatch(/its worktree has uncommitted changes/);
+  });
+
+  it("pushes only the rebased PR head, never a commit made in the worktree meanwhile", async () => {
+    const t = setup();
+    t.moveMain("src/c.ts", "export const c = 1;\n");
+    pr = { ...pr!, mergeable: "CONFLICTING" };
+    const r = rebaseDeps();
+    // A turn starts while the rebase runs and commits in the task's worktree.
+    r.hooks.onRebase = () => {
+      fs.writeFileSync(path.join(t.repo, "mid.ts"), "mid\n");
+      git(t.repo, "add", "-A");
+      git(t.repo, "commit", "-qm", "mid-turn");
+    };
+    await rebaseConflicting(t.w, t.facts(), r.deps);
+    git(t.repo, "fetch", "-q", "origin");
+    const head = originHead(t.repo);
+    expect(head).not.toBe(t.sha);
+    expect(git(t.repo, "ls-tree", "--name-only", head)).not.toContain("mid.ts");
+    // The worktree wasn't moved under it; it's told how to catch up.
+    expect(git(t.repo, "log", "-1", "--format=%s")).toBe("mid-turn");
+    expect(r.sent).toEqual([
+      expect.stringMatching(/git reset --keep origin\/feature\/t/),
+    ]);
+    const row = db
+      .prepare(`SELECT rebased_from, rebased_to FROM sessions WHERE id = ?`)
+      .get(t.task);
+    expect(row).toEqual({ rebased_from: t.sha, rebased_to: head });
+  });
+
+  it("moves an idle task's worktree to the rebased head", async () => {
+    const t = setup();
+    t.moveMain("src/c.ts", "export const c = 1;\n");
+    pr = { ...pr!, mergeable: "CONFLICTING" };
+    const r = rebaseDeps();
+    await rebaseConflicting(t.w, t.facts(), r.deps);
+    git(t.repo, "fetch", "-q", "origin");
+    expect(git(t.repo, "rev-parse", "HEAD")).toBe(originHead(t.repo));
+    expect(git(t.repo, "rev-parse", "--abbrev-ref", "HEAD")).toBe("feature/t");
+    expect(r.sent).toEqual([]);
+  });
+
+  it("asks the task when its worktree has commits the PR doesn't, or the push lease is refused", async () => {
+    const t = setup();
+    t.moveMain("src/c.ts", "export const c = 1;\n");
+    pr = { ...pr!, mergeable: "CONFLICTING" };
+    git(t.repo, "commit", "-q", "--allow-empty", "-m", "local only");
+    const r = rebaseDeps();
+    await rebaseConflicting(t.w, t.facts(), r.deps);
+    expect(originHead(t.repo)).toBe(t.sha);
+    expect(r.sent).toEqual([expect.stringMatching(/commits the PR doesn't/)]);
+
+    const u = setup();
+    u.moveMain("src/c.ts", "export const c = 1;\n");
+    pr = { ...pr!, mergeable: "CONFLICTING" };
+    const s2 = rebaseDeps();
+    // Someone pushes to the branch while the rebase runs.
+    s2.hooks.onRebase = () => {
+      git(u.other, "fetch", "-q", "origin");
+      git(u.other, "checkout", "-q", "-B", "theirs", "origin/feature/t");
+      commit(u.other, "src/d.ts", "d\n");
+      git(u.other, "push", "-q", "origin", "theirs:feature/t");
+    };
+    await rebaseConflicting(u.w, u.facts(), s2.deps);
+    expect(s2.sent).toEqual([
+      expect.stringMatching(/pushing the rebase was refused/),
+    ]);
+    git(u.repo, "fetch", "-q", "origin");
+    expect(git(u.repo, "log", "-1", "--format=%s", "origin/feature/t")).toBe(
+      "change src/d.ts"
+    );
+  });
+
+  it("starts a review of the rebased head when the old head had no passing review", async () => {
+    const t = setup();
+    t.moveMain("src/c.ts", "export const c = 1;\n");
+    pr = { ...pr!, mergeable: "CONFLICTING" };
+    const r = rebaseDeps();
+    await rebaseConflicting(t.w, t.facts(), r.deps);
+    git(t.repo, "fetch", "-q", "origin");
+    expect(r.reviews).toEqual([originHead(t.repo)]);
+    expect(events(t.w)[0]).toMatch(
+      /had no passing review, so a review of .* started/
+    );
   });
 
   it("leaves a PR GitHub calls mergeable alone", async () => {

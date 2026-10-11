@@ -136,6 +136,7 @@ export function TaskRow({ task }: { task: TaskView }) {
           {task.pr?.state === "OPEN" && !task.hostId && (
             <Button
               size="sm"
+              className="h-11 md:h-8"
               variant={task.armed ? "secondary" : "outline"}
               aria-pressed={!!task.armed}
               title={

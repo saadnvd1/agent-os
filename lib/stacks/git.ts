@@ -31,11 +31,7 @@ export interface RestackMove {
   // Told what it's about to push, BEFORE pushing (so a restart in between
   // can't lose it): origin's head before, the rebased head, and whether
   // the rebase moved anything but exactly origin's head.
-  beforePush?: (move: {
-    from: string;
-    to: string;
-    unpushed: boolean;
-  }) => void | Promise<void>;
+  beforePush?: (move: { from: string; to: string; unpushed: boolean }) => void;
 }
 
 export type RestackResult =
@@ -160,7 +156,7 @@ export async function restackBranch(
   if (remote.ok) {
     const head = await attempt(runner, "git", ["rev-parse", "HEAD"], wt);
     if (head.ok && head.out !== remote.out) {
-      await m.beforePush?.({
+      m.beforePush?.({
         from: remote.out,
         to: head.out,
         unpushed: !started?.ok || started.out !== remote.out,

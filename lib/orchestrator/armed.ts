@@ -59,6 +59,16 @@ function armedTasks(workspaceId: string): Session[] {
     .all(workspaceId) as Session[];
 }
 
+// Read again right before each judgement and merge: Saad can pause the
+// workspace or disarm the task while an earlier one waits on gh or git.
+function stillArmed(workspaceId: string, taskId: string): boolean {
+  if (isPaused(workspaceId)) return false;
+  const row = db
+    .prepare(`SELECT merge_armed_at FROM sessions WHERE id = ?`)
+    .get(taskId) as { merge_armed_at: string | null } | undefined;
+  return !!row?.merge_armed_at;
+}
+
 export const anyArmed = (workspaceId: string) =>
   armedTasks(workspaceId).length > 0;
 
@@ -199,6 +209,7 @@ async function mergeOne(
   if (last?.fp === fp && now - last.at < ARMED_RECHECK_MS) return;
   looked.set(task.id, { fp, at: now });
 
+  if (!stillArmed(workspaceId, task.id)) return;
   const verdict = await deps.judge(workspaceId, task, false, { count: false });
   if (verdict.ok) return merge(workspaceId, task, verdict, deps);
   if (verdict.wait) {
@@ -211,6 +222,7 @@ async function mergeOne(
   if (task.merge_armed_seen === seen) return;
   // Counted once, as sign_off would count it: a second failure of a gate
   // goes to Saad.
+  if (!stillArmed(workspaceId, task.id)) return;
   const counted = await deps.judge(workspaceId, task);
   if (counted.ok) return merge(workspaceId, task, counted, deps);
   const toSaad = holdingEscalations(task.id).length > 0;
@@ -235,6 +247,7 @@ async function merge(
   verdict: Extract<Awaited<ReturnType<typeof judge>>, { ok: true }>,
   deps: ArmedDeps
 ): Promise<void> {
+  if (!stillArmed(workspaceId, task.id)) return;
   let text: string;
   try {
     text = await deps.merge(workspaceId, task, verdict);

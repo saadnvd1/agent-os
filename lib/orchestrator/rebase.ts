@@ -29,7 +29,7 @@ import { hostLink } from "../hosts/remote-api";
 import type { TaskPR } from "../tasks/state";
 import { run } from "../tasks/gh";
 import { withRestackedLine } from "../tasks/code-review";
-import { restackBranch, type Runner } from "../stacks/git";
+import { outputOf, type Runner } from "../stacks/git";
 import { restackedHeads, stackNotice } from "../stacks/restack";
 import { getCheck, putCheck } from "./checks";
 import { queueEvent } from "./events";
@@ -114,6 +114,7 @@ export async function rebaseConflicting(
 ): Promise<void> {
   if (isPaused(workspaceId)) return;
   for (const f of facts) {
+    if (isPaused(workspaceId)) return;
     const pr = f.task?.pr;
     // A stack item moves with its stack (stacks/restack.ts).
     if (pr?.state !== "OPEN" || pr.mergeable !== "CONFLICTING" || f.stack)
@@ -183,73 +184,122 @@ async function rebaseOne(
   if (!wt || !fs.existsSync(wt)) return;
   if (f.status !== "idle" || !(await deps.idle(task))) return;
   tried.set(task.id, attempt);
-  const git = (...args: string[]) =>
-    deps.runner("git", args, wt).then((out) => out.trim());
+  const git = (cwd: string, ...args: string[]) =>
+    deps.runner("git", args, cwd).then((out) => out.trim());
   // Only the commit the PR is at, with nothing on top: work the task hasn't
   // committed or pushed is its own to rebase.
-  const [head, dirty] = await Promise.all([
-    git("rev-parse", "HEAD"),
-    git("status", "--porcelain"),
-  ]);
-  if (head !== pr.head || dirty)
+  const local = async () => {
+    const [head, dirty] = await Promise.all([
+      git(wt, "rev-parse", "HEAD"),
+      git(wt, "status", "--porcelain"),
+    ]);
+    return dirty
+      ? "its worktree has uncommitted changes"
+      : head !== pr.head
+        ? "its worktree has commits the PR doesn't"
+        : null;
+  };
+  const unsafe = await local();
+  if (unsafe) return askToRebase(workspaceId, task, pr, branch, unsafe, deps);
+
+  // Rebased in a throwaway checkout of the PR's head, never in the task's
+  // own: a turn that starts meanwhile can't get its work into the push.
+  const rebased = await rebaseAt(repo, pr.head, onto, deps).catch(
+    (error: unknown) => ({ error: outputOf(error).slice(0, 300) })
+  );
+  if ("error" in rebased)
+    return askToRebase(workspaceId, task, pr, branch, rebased.error, deps);
+  const to = rebased.sha;
+  // GitHub's word was stale: nothing to move.
+  if (to === pr.head || isPaused(workspaceId)) return;
+
+  // Recorded before the push, so a restart in between can't lose it.
+  const heads = restackedHeads(
+    {
+      restacked_from: task.rebased_from ?? null,
+      restacked_to: task.rebased_to ?? null,
+    },
+    { from: pr.head, to, unpushed: false }
+  );
+  db.prepare(
+    `UPDATE sessions SET rebased_from = ?, rebased_to = ? WHERE id = ?`
+  ).run(heads.restacked_from, heads.restacked_to, task.id);
+  // Only the task's own branch, and only if origin still has the head
+  // that was judged. --no-verify: CI runs on the PR.
+  const pushed = await git(
+    repo,
+    "push",
+    "--no-verify",
+    `--force-with-lease=refs/heads/${task.branch_name}:${pr.head}`,
+    "origin",
+    `${to}:refs/heads/${task.branch_name}`
+  ).then(
+    () => null,
+    (error: unknown) => outputOf(error).slice(0, 300)
+  );
+  if (pushed !== null)
     return askToRebase(
       workspaceId,
       task,
       pr,
       branch,
-      dirty
-        ? "its worktree has uncommitted changes"
-        : "its worktree has commits the PR doesn't",
+      `pushing the rebase was refused: ${pushed}`,
       deps
     );
+  if (heads.restacked_from && heads.restacked_to)
+    await deps
+      .editBody(repo, pr.number, heads.restacked_from, heads.restacked_to)
+      .catch(() => {});
 
-  const moved: { to?: string; unpushed?: boolean } = {};
-  const result = await restackBranch(
-    {
-      name: task.name,
-      repo,
-      worktree: wt,
-      branch: task.branch_name!,
-      oldTip: await git("merge-base", onto, "HEAD"),
-      onto: branch,
-      retargetPr: null,
-      beforePush: async (m) => {
-        Object.assign(moved, m);
-        const heads = restackedHeads(
-          {
-            restacked_from: task.rebased_from ?? null,
-            restacked_to: task.rebased_to ?? null,
-          },
-          m
-        );
-        db.prepare(
-          `UPDATE sessions SET rebased_from = ?, rebased_to = ? WHERE id = ?`
-        ).run(heads.restacked_from, heads.restacked_to, task.id);
-        if (heads.restacked_from && heads.restacked_to)
-          await deps
-            .editBody(repo, pr.number, heads.restacked_from, heads.restacked_to)
-            .catch(() => {});
-      },
-    },
-    deps.runner
-  ).catch((error: unknown) => ({
-    ok: false as const,
-    error: error instanceof Error ? error.message : String(error),
-  }));
-  if (!result.ok)
-    return askToRebase(workspaceId, task, pr, branch, result.error, deps);
-  // GitHub's word was stale: nothing moved.
-  const { to, unpushed } = moved;
-  if (!to) return;
-  const reviewed = unpushed
-    ? "it had commits the task never pushed, so nothing reviewed carries over"
-    : await carryReview(workspaceId, task, pr, onto, to, deps);
+  // The task's worktree follows while it's still idle and untouched;
+  // otherwise the task is told how to catch up.
+  const follows =
+    (await deps.idle(task)) &&
+    !(await local()) &&
+    (await git(wt, "reset", "--keep", to).then(
+      () => true,
+      () => false
+    ));
+  if (!follows)
+    await deps.send(
+      task.id,
+      `AgentOS rebased your branch ${task.branch_name} onto ${branch} on origin (now ${short(to)}), because PR #${pr.number} conflicted with it. Your worktree is still on the old head: before changing anything, run \`git fetch origin && git reset --keep origin/${task.branch_name}\` (commit your work first). Your Code review section still covers it.`
+    );
+  const reviewed = await carryReview(workspaceId, task, pr, onto, to, deps);
   queueEvent(
     workspaceId,
     `rebased:${task.id}:${to}`,
     task.id,
     `task ${task.name}: PR #${pr.number} conflicted with ${branch}; AgentOS rebased it cleanly (${short(pr.head)} -> ${short(to)}) and pushed it. CI runs again; ${reviewed}.`
   );
+}
+
+// `head` rebased onto `onto` in a detached throwaway worktree, which is
+// removed after. Rejects when the rebase stops on a conflict.
+async function rebaseAt(
+  repo: string,
+  head: string,
+  onto: string,
+  deps: RebaseDeps
+): Promise<{ sha: string }> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-rebase-"));
+  try {
+    await deps.runner("git", ["worktree", "add", "--detach", dir, head], repo);
+    try {
+      await deps.runner("git", ["rebase", onto], dir);
+    } catch (error) {
+      await deps.runner("git", ["rebase", "--abort"], dir).catch(() => "");
+      throw new Error(`rebasing onto ${onto} conflicts: ${outputOf(error)}`);
+    }
+    return {
+      sha: (await deps.runner("git", ["rev-parse", "HEAD"], dir)).trim(),
+    };
+  } finally {
+    await deps
+      .runner("git", ["worktree", "remove", "--force", dir], repo)
+      .catch(() => "");
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // The PR's own patch against the base, as `git patch-id` sees it.
@@ -263,7 +313,7 @@ async function patchId(repo: string, range: string): Promise<string | null> {
   return new Promise((resolve) => {
     const child = execFile(
       "git",
-      ["patch-id", "--stable"],
+      ["patch-id", "--verbatim"],
       { cwd: repo, timeout: 30000 },
       (error, out) => resolve(error ? null : out.split(" ")[0] || null)
     );
