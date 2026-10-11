@@ -117,6 +117,12 @@ export class ChatHost {
   private refreshAt = 0;
   // Read ahead of the first message: the last worker started it over.
   private refreshedNote: string | null = null;
+  // A conversation this worker starts new: its first reading is what the
+  // brief alone costs, and it starts over only once it has grown past that
+  // by a quarter of the threshold, so a threshold close to the brief's own
+  // size can't end every conversation after one turn.
+  private freshConversation: boolean;
+  private contextBase: number | null = null;
   readonly done: Promise<void>;
 
   constructor(
@@ -177,6 +183,7 @@ export class ChatHost {
     });
     this.suggestion = session.chat_suggestion ?? null;
     this.refresh = extras.refresh;
+    this.freshConversation = !session.claude_session_id;
     if (session.chat_refreshed)
       this.refreshedNote = refreshedNote(
         extras.refresh?.role ?? "task",
@@ -618,7 +625,9 @@ export class ChatHost {
   // (the new conversation never saw what it guessed from).
   private refreshIfFull(usedTokens: number): void {
     const at = this.refresh?.atTokens ?? 0;
+    if (this.freshConversation) this.contextBase ??= usedTokens;
     if (this.refreshAt || at <= 0 || usedTokens < at) return;
+    if (usedTokens - (this.contextBase ?? 0) < at / 4) return;
     this.refreshAt = usedTokens;
     this.retiring = true;
     this.retireWaited = true;

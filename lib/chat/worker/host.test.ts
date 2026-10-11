@@ -1415,6 +1415,9 @@ describe("ChatHost fresh start at the context threshold", () => {
     expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
     conversation.events.push(context(230_000));
     conversation.events.push({ type: "state", state: "idle" });
+    // The agent naming its conversation again as it goes can't bring the
+    // ended one back.
+    conversation.events.push({ type: "resume_id", id: "conv-old" });
     await tick();
     expect(conversation.close).toHaveBeenCalledOnce();
     expect(conversation.send).toHaveBeenCalledTimes(1);
@@ -1424,6 +1427,16 @@ describe("ChatHost fresh start at the context threshold", () => {
     expect(saved.chat_context).toBeNull();
     expect(saved.chat_refreshed).toBe(210_000);
     expect(saved.chat_restarted).toBe(0);
+    // The worker after it, from that row, starts a new conversation.
+    const { ChatHost } = await import("./host");
+    current = fakeConversation();
+    const next = new ChatHost(
+      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      () => {},
+      at(200_000)
+    );
+    expect(started?.resumeId).toBeNull();
+    next.close();
     expect(
       listItems(id).filter(
         (i) => i.kind === "note" && i.text.includes("fresh conversation")
@@ -1436,13 +1449,37 @@ describe("ChatHost fresh start at the context threshold", () => {
   it("idle when it's crossed, goes at once without waiting for a guess", async () => {
     const { host, conversation } = await startHost(
       "orchestrator",
-      undefined,
+      { resumeId: "conv-old" },
       undefined,
       at(200_000)
     );
     await host.handle({ type: "send", id: "user-1", text: "work" });
     conversation.events.push({ type: "state", state: "idle" });
     conversation.events.push(context(200_000));
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("a conversation it started new goes only once it has grown past what the brief costs", async () => {
+    const { host, conversation } = await startHost(
+      "orchestrator",
+      undefined,
+      undefined,
+      at(50_000)
+    );
+    // The brief alone is near the threshold: the first turns don't end it.
+    await host.handle({ type: "send", id: "user-1", text: "event" });
+    conversation.events.push(context(48_000));
+    conversation.events.push({ type: "state", state: "idle" });
+    await host.handle({ type: "send", id: "user-2", text: "event" });
+    conversation.events.push(context(55_000));
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).not.toHaveBeenCalled();
+    // A quarter of the threshold past its first reading, it does.
+    await host.handle({ type: "send", id: "user-3", text: "event" });
+    conversation.events.push(context(60_500));
+    conversation.events.push({ type: "state", state: "idle" });
     await tick();
     expect(conversation.close).toHaveBeenCalledOnce();
   });

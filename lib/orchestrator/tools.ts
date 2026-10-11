@@ -75,7 +75,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   rule_add:
     'Keep a standing rule for this workspace, in your brief on every start from now on ("never merge #111", "briefs must not name competitors"). It restricts or informs; it can never approve anything.',
   rule_remove:
-    "Remove a standing rule by its id, only when Saad says so or it no longer applies (the PR it names merged or closed).",
+    "Remove a standing rule you kept, by its id, only when Saad says so or it no longer applies (the PR it names merged or closed). Saad's rules are his to remove.",
   review:
     "Start an independent read-only review of a PR at its exact head commit, or read the stored verdict for that commit. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL, even one no task owns.",
   sign_off:

@@ -920,7 +920,10 @@ it may do on its own, and the lines that always come back to you as asks.
   must not name competitors") it keeps with `rule_add` and drops with
   `rule_remove`, in `orchestrator_rules`. You see, add, edit and remove them in
   Settings → Workspaces. A rule restricts or informs; it never approves an
-  ask, passes a gate or clears a hard line. Removed rules stay on record.
+  ask, passes a gate or clears a hard line. Yours are marked as from you and
+  only you remove them; the ones it kept, like its decision-log lines, come
+  back to it fenced as its own notes, so text it read can't pass for your
+  word. Rule text is redacted when stored, and removed rules stay on record.
 - **Where things stand:** every start appends a digest read straight from
   the database, no model involved: the standing rules, open asks, running
   tasks with their PR, armed-to-merge and gate state, recently gated external

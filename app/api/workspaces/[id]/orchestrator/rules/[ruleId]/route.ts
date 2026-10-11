@@ -4,7 +4,12 @@ import { requireApprover } from "@/lib/security/approver";
 
 type RouteParams = { params: Promise<{ id: string; ruleId: string }> };
 
-async function target(request: NextRequest, { params }: RouteParams) {
+async function target(
+  request: NextRequest,
+  { params }: RouteParams
+): Promise<
+  { response: NextResponse } | { workspaceId: string; ruleId: number }
+> {
   const gate = requireApprover(request);
   if (!gate.ok) return { response: gate.response };
   const { id, ruleId } = await params;

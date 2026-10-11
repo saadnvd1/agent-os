@@ -7,7 +7,7 @@ import { seedWorkspace } from "./testing";
 import { ensureOrchestrator } from "./home";
 import { runTool } from "./serve";
 import { orchestratorExtras } from "./worker";
-import { addRule, listRules, MAX_RULES, removeRule } from "./rules";
+import { addRule, listRules, MAX_RULES, removeRule, updateRule } from "./rules";
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-rules-"));
@@ -32,7 +32,9 @@ describe("standing rules", () => {
     // not from the conversation that wrote it.
     for (let start = 0; start < 2; start++) {
       const text = await prompt(w);
-      expect(text).toContain(`- [rule ${rule.id}] Never merge #111`);
+      expect(text).toContain(
+        `- [rule ${rule.id}, kept by you] <untrusted source="a rule you kept">Never merge #111</untrusted>`
+      );
       expect(text).toContain("## Where things stand");
       expect(text).toMatch(/treat it as authoritative/);
     }
@@ -45,20 +47,31 @@ describe("standing rules", () => {
     );
   });
 
-  it("removed with rule_remove, leave the prompt but stay on record", async () => {
+  it("removed, leave the prompt but stay on record; Saad's only by Saad", async () => {
     const { workspace } = seedWorkspace();
     const w = workspace.id;
     const rule = addRule(w, "Never merge #98", "saad");
-    expect(await prompt(w)).toContain("Never merge #98 (Saad)");
-    await runTool(w, "rule_remove", { id: rule.id });
-    expect(await prompt(w)).not.toContain(`[rule ${rule.id}]`);
+    expect(await prompt(w)).toContain(
+      `[rule ${rule.id}, from Saad] Never merge #98`
+    );
+    // Saad's rule is his to lift: the orchestrator can't, whatever it read.
+    await expect(runTool(w, "rule_remove", { id: rule.id })).rejects.toThrow(
+      /only he removes it/
+    );
+    expect(await prompt(w)).toContain(`[rule ${rule.id}, from Saad]`);
+    removeRule(w, rule.id, "saad");
+    expect(await prompt(w)).not.toContain(`[rule ${rule.id},`);
     const row = db
       .prepare(
         `SELECT removed_at, removed_by FROM orchestrator_rules WHERE id = ?`
       )
       .get(rule.id) as { removed_at: string | null; removed_by: string };
     expect(row.removed_at).not.toBeNull();
-    expect(row.removed_by).toBe("orchestrator");
+    expect(row.removed_by).toBe("saad");
+    // Its own, it may remove.
+    const mine = addRule(w, "Hold #5 until CI is fixed", "orchestrator");
+    await runTool(w, "rule_remove", { id: mine.id });
+    expect(listRules(w)).toHaveLength(0);
   });
 
   it("are the workspace's own: another workspace's rule can't be removed", async () => {
@@ -84,6 +97,30 @@ describe("standing rules", () => {
     expect(() => addRule(w, "One too many", "saad")).toThrow(/remove one/);
     removeRule(w, first.id, "saad");
     expect(addRule(w, "Room again", "saad").text).toBe("Room again");
+  });
+
+  it("reworded by Saad, show the new text; only in their own workspace, and not once removed", async () => {
+    const a = seedWorkspace().workspace.id;
+    const b = seedWorkspace().workspace.id;
+    const rule = addRule(a, "Never merge #1", "saad");
+    expect(updateRule(a, rule.id, "Never merge #2").text).toBe(
+      "Never merge #2"
+    );
+    expect(await prompt(a)).toContain("Never merge #2");
+    expect(() => updateRule(b, rule.id, "hijacked")).toThrow(/No rule/);
+    expect(listRules(a)[0].text).toBe("Never merge #2");
+    removeRule(a, rule.id, "saad");
+    expect(() => updateRule(a, rule.id, "back")).toThrow(/No rule/);
+  });
+
+  it("are stored with anything token-shaped redacted", () => {
+    const w = seedWorkspace().workspace.id;
+    const rule = addRule(
+      w,
+      "Deploy key is ghp_abcdefghijklmnopqrstuvwxyz0123",
+      "orchestrator"
+    );
+    expect(rule.text).toBe("Deploy key is [redacted]");
   });
 
   it("refuse an empty or overlong rule", async () => {

@@ -11,6 +11,7 @@ import { db } from "../db";
 import { openAsks } from "./asks";
 import { listRules } from "./rules";
 import { shortId } from "./describe";
+import { untrusted } from "./untrusted";
 
 // About four characters a token: close enough to cap a prompt.
 export const CHARS_PER_TOKEN = 4;
@@ -81,7 +82,8 @@ function checksBySession(workspaceId: string): Map<string, CheckRow[]> {
       `SELECT c.session_id, c.sha, c.kind, c.status FROM orchestrator_checks c
        WHERE c.workspace_id = ? AND c.id = (
          SELECT MAX(id) FROM orchestrator_checks
-         WHERE session_id = c.session_id AND kind = c.kind)
+         WHERE workspace_id = c.workspace_id AND session_id = c.session_id
+           AND kind = c.kind)
        ORDER BY c.session_id, c.kind`
     )
     .all(workspaceId) as CheckRow[];
@@ -124,9 +126,12 @@ function gateState(
 function rulesSection(workspaceId: string): Section {
   return {
     title: "Standing rules",
-    lines: listRules(workspaceId).map(
-      (r) =>
-        `- [rule ${r.id}] ${clip(r.text)}${r.added_by === "saad" ? " (Saad)" : ""}`
+    // Saad's in plain text; its own fenced, since it writes them from what
+    // it read: a line planted there can't pass for his word.
+    lines: listRules(workspaceId).map((r) =>
+      r.added_by === "saad"
+        ? `- [rule ${r.id}, from Saad] ${clip(r.text)}`
+        : `- [rule ${r.id}, kept by you] ${untrusted("a rule you kept", clip(r.text))}`
     ),
     empty: "- None. Keep one with rule_add.",
     more: "",
@@ -277,7 +282,7 @@ function notesSection(workspaceId: string): Section {
     title: "Decision log, newest first",
     lines: rows.map(
       (n) =>
-        `- ${n.created_at.slice(0, 16)} UTC${n.kind === "note" ? "" : ` ${n.kind}`}: ${clip(n.text)}`
+        `- ${n.created_at.slice(0, 16)} UTC${n.kind === "note" ? `: ${untrusted("your note", clip(n.text))}` : ` ${n.kind}: ${clip(n.text)}`}`
     ),
     more: "",
   };

@@ -8,6 +8,7 @@
  */
 
 import { db } from "../db";
+import { redact } from "./untrusted";
 
 export type RuleAuthor = "orchestrator" | "saad";
 
@@ -27,7 +28,7 @@ export const MAX_RULES = 25;
 export const MAX_RULE_CHARS = 300;
 
 function clean(text: string): string {
-  const body = text.replace(/\s+/g, " ").trim();
+  const body = redact(text).replace(/\s+/g, " ").trim();
   if (!body) throw new Error("The rule is empty");
   if (body.length > MAX_RULE_CHARS)
     throw new Error(`A rule is at most ${MAX_RULE_CHARS} characters`);
@@ -101,6 +102,12 @@ export function removeRule(
 ): RuleRow {
   const rule = getRule(workspaceId, id);
   if (!rule) throw new Error(`No rule ${id} in this workspace`);
+  // Saad's restrictions hold until he lifts them: text the orchestrator
+  // read can't talk it into removing one.
+  if (by === "orchestrator" && rule.added_by === "saad")
+    throw new Error(
+      `Rule ${id} is Saad's: only he removes it, in Settings → Workspaces`
+    );
   db.prepare(
     `UPDATE orchestrator_rules SET removed_at = datetime('now'), removed_by = ?
      WHERE id = ?`
