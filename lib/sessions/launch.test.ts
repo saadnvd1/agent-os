@@ -241,6 +241,8 @@ describe("launchSession (a draft's first send)", () => {
     const failed = row(session.id);
     expect(failed.setup_status).toBe("failed");
     expect(failed.setup_error).toMatch(/not a git repository/i);
+    // git's own line, without the runner's "git x failed:" or "fatal:".
+    expect(failed.setup_error).not.toMatch(/git [\w-]+ failed:|fatal:/);
     expect(failed.working_directory).toBe(notRepo);
     expect(listQueue(session.id)).toHaveLength(1);
     expect(sent).toHaveLength(0);
@@ -343,7 +345,9 @@ describe("launchSession (a draft's first send)", () => {
       setup_status: "failed",
       worktree_path: null,
     });
-    expect(row(session.id).setup_error).toMatch(/^Fetching main failed/);
+    expect(row(session.id).setup_error).toMatch(
+      /^Fetching main failed: (?!git |fatal:)\S/
+    );
     expect(sent).toHaveLength(0);
   });
 

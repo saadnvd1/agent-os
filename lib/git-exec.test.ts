@@ -257,6 +257,19 @@ describe("operations against a real repository", () => {
     expect(await currentBranch(repo)).toBe("feature");
   });
 
+  it("reads output past the old 1-4MB buffers, and fails past its own", async () => {
+    const big = "x".repeat(79) + "\n";
+    commit("big.txt", big.repeat(64 * 1024)); // 5MB
+    const out = await git(repo, ["show", "HEAD:big.txt"]);
+    expect(out.length).toBe(5 * 1024 * 1024);
+    const error = await git(repo, ["show", "HEAD:big.txt"], {
+      maxBuffer: 1024,
+    }).catch((e) => e);
+    expect(error).toBeInstanceOf(GitError);
+    expect(error.timedOut).toBe(false);
+    expect(error.code).toBe("ERR_CHILD_PROCESS_STDIO_MAXBUFFER");
+  });
+
   it("reports a merge-tree conflict as exit code 1", async () => {
     sh(repo, "checkout", "-qb", "feature");
     commit("a.txt", "feature\n");

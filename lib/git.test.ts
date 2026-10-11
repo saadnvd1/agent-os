@@ -69,8 +69,19 @@ describe("getDefaultBranch", () => {
     expect(await getDefaultBranch(dir)).toBe("develop");
   });
 
-  it("falls back to master when there is no remote default or main", async () => {
-    expect(await getDefaultBranch(repo("master"))).toBe("master");
+  it("falls back to main, then master, from another branch", async () => {
+    const onMain = repo("main");
+    git(onMain, "branch", "master");
+    git(onMain, "checkout", "-q", "-b", "feature/x");
+    expect(await getDefaultBranch(onMain)).toBe("main");
+
+    const onMaster = repo("master");
+    git(onMaster, "checkout", "-q", "-b", "feature/x");
+    expect(await getDefaultBranch(onMaster)).toBe("master");
+  });
+
+  it("falls back to the current branch with neither", async () => {
+    expect(await getDefaultBranch(repo("trunk"))).toBe("trunk");
   });
 });
 

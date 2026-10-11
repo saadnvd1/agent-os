@@ -10,11 +10,12 @@ import { currentBranch, git, gitOk, resolveRef } from "./git-exec";
 const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 
 /**
- * Check if a directory is a git repository
+ * Check if a directory is a git repository. A slow mount gets the git
+ * panel's 30s before it reads as "not a repository".
  */
 export async function isGitRepo(dirPath: string): Promise<boolean> {
   return gitOk(expandHome(dirPath), ["rev-parse", "--git-dir"], {
-    timeout: 5000,
+    timeout: 30_000,
   });
 }
 
