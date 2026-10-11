@@ -114,4 +114,17 @@ describe("sessions on several machines", () => {
     expect(await statusDetector.captureScreen("main", true, "box")).toBe("");
     expect(ssh).toEqual([]);
   });
+
+  // The discovered-sessions signature skips its work while this stays the
+  // same object (lib/hosts/discover-signature.ts).
+  it("gives a new listing stamp when a listing lands, the same one otherwise", async () => {
+    await listAll();
+    const before = statusDetector.listingStamp();
+    expect(statusDetector.listingStamp()).toBe(before);
+    // Within the cache's validity nothing is listed, and nothing changes.
+    await statusDetector.listSessions();
+    expect(statusDetector.listingStamp()).toBe(before);
+    await listAll();
+    expect(statusDetector.listingStamp()).not.toBe(before);
+  });
 });

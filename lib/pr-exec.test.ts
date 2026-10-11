@@ -46,29 +46,30 @@ describe("PR reads with names a repository chose", () => {
   );
   commit("feature work");
 
-  it("reads the remote default branch literally", () => {
+  it("reads the remote default branch literally", async () => {
     expect(remoteDefaultBranch(dir)).toBe(hostile);
-    expect(getBaseBranch(dir)).toBe(hostile);
+    expect(await getBaseBranch(dir)).toBe(hostile);
     expect(getDefaultBranch(dir)).toBe(hostile);
   });
 
-  it("lists commits since it without running anything", () => {
-    const commits = getCommitsSinceBase(dir, `origin/${hostile}`);
+  it("lists commits since it without running anything", async () => {
+    const commits = await getCommitsSinceBase(dir, `origin/${hostile}`);
     expect(commits.map((c) => c.subject)).toEqual(["feature work"]);
-    expect(getCommitsSinceBase(dir, hostile)).toEqual([]);
-    getPRForBranch(dir, hostile);
+    expect(await getCommitsSinceBase(dir, hostile)).toEqual([]);
+    await getPRForBranch(dir, hostile);
     expect(fs.existsSync(marker)).toBe(false);
   });
 
-  it("falls back to main with no remote default", () => {
+  it("falls back to main with no remote default", async () => {
     const plain = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-"));
     git(plain, "init", "-q", "-b", "main");
     expect(remoteDefaultBranch(plain)).toBe("main");
+    expect(await getBaseBranch(plain)).toBe("main");
   });
 });
 
 describe("createPR", () => {
-  it("passes the title, base and body to gh as single arguments", () => {
+  it("passes the title, base and body to gh as single arguments", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-create-"));
     const bin = path.join(dir, "bin");
     const record = path.join(dir, "gh-args.json");
@@ -88,7 +89,7 @@ console.log("https://github.com/o/r/pull/7");
     try {
       const title = `x"; touch ${marker}; "`;
       const body = `it's $(touch ${marker})`;
-      const pr = createPR(dir, "-x", "main", title, body);
+      const pr = await createPR(dir, "-x", "main", title, body);
       expect(pr).toMatchObject({
         number: 7,
         url: "https://github.com/o/r/pull/7",

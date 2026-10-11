@@ -25,9 +25,11 @@ export async function GET(request: NextRequest) {
 
     const expandedPath = path.replace(/^~/, process.env.HOME || "");
 
-    const rawMatches = searchCode(expandedPath, query, {
-      maxResults,
-      contextLines,
+    // A search the client gave up on (a newer keystroke) stops rg.
+    const rawMatches = await searchCode(expandedPath, query, {
+      maxResults: Number.isFinite(maxResults) ? maxResults : 100,
+      contextLines: Number.isFinite(contextLines) ? contextLines : 2,
+      signal: request.signal,
     });
 
     const results = formatSearchResults(rawMatches);

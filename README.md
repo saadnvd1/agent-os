@@ -1241,6 +1241,10 @@ scripts/redeploy     # pull, install, build; restarts via $AGENTOS_RESTART only 
 scripts/redeploy --rollback  # put the previous build back and restart
 ```
 
+One Node process serves every terminal, chat stream and request, so a route
+handler in `app/api/` may not call a `*Sync` child_process or fs function:
+ESLint refuses it. Use the async form with a timeout.
+
 `scripts/redeploy` (and `scripts/autodeploy`, which calls it) builds into
 `.next-build` while the live server keeps serving `.next`. The build is swapped
 in by rename only once it finished with a `BUILD_ID`, right before the restart.

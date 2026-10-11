@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     const scriptContent = generateInitScript(agentCommand);
     const scriptPath = path.join(os.tmpdir(), `agent-os-init-${Date.now()}.sh`);
 
-    fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
+    await fs.promises.writeFile(scriptPath, scriptContent, { mode: 0o755 });
 
     return NextResponse.json({ scriptPath, command: `bash ${scriptPath}` });
   } catch (error) {

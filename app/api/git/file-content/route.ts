@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { expandPath } from "@/lib/git-status";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * GET /api/git/file-content?path=...&file=...
@@ -30,12 +33,17 @@ export async function GET(request: NextRequest) {
 
     try {
       // Get file content from HEAD
-      const content = execFileSync("git", ["show", `HEAD:${file}`], {
-        cwd: expandedPath,
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "pipe"],
-        maxBuffer: 10 * 1024 * 1024, // 10MB
-      });
+      const { stdout: content } = await execFileAsync(
+        "git",
+        ["show", `HEAD:${file}`],
+        {
+          cwd: expandedPath,
+          encoding: "utf-8",
+          maxBuffer: 10 * 1024 * 1024, // 10MB
+          timeout: 30_000,
+          killSignal: "SIGKILL",
+        }
+      );
 
       return NextResponse.json({ content });
     } catch (gitError: unknown) {
