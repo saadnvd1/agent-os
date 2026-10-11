@@ -85,6 +85,25 @@ function bringIntoView(root: HTMLElement, rect: DOMRect) {
   root.scrollTop += rect.top - box.top - box.height / 3;
 }
 
+type Search = FindDeps["search"];
+
+// Pages on from `before` until one has a hit (a page that read only a slice
+// of a huge conversation may have none) or there are no more.
+async function nextHits(search: Search, query: string, before: number | null) {
+  let page = await search(query, before ?? undefined);
+  for (let i = 0; page && !page.hits.length && page.hasMore && i < 100; i++)
+    page = await search(query, page.cursor ?? undefined);
+  return page;
+}
+
+// Older hits joined on; the count and its cap stay the first page's.
+const joinPage = (r: Results, page: SearchResult): Results => ({
+  ...r,
+  hits: r.hits.concat(page.hits),
+  hasMore: page.hasMore,
+  cursor: page.cursor,
+});
+
 /**
  * Find in a conversation: searches the stored conversation on the server,
  * walks its results newest first, and brings each one on screen (loading
@@ -113,10 +132,16 @@ export function useFind(deps: FindDeps) {
     }
     setStatus("searching");
     const timer = setTimeout(async () => {
-      const r = await d.current.search(q);
+      const search = d.current.search;
+      const first = await search(q);
+      const more =
+        first && !first.hits.length && first.hasMore
+          ? await nextHits(search, q, first.cursor)
+          : null;
       if (id !== asked.current) return;
-      setStatus(r ? "done" : "unavailable");
-      setResults(r && { query: q, ...r });
+      setStatus(first ? "done" : "unavailable");
+      const r = first && { query: q, ...first };
+      setResults(r && more ? joinPage(r, more) : r);
       setIndex(0);
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
@@ -135,9 +160,9 @@ export function useFind(deps: FindDeps) {
       const next = stepIndex(index, dir, targets.length, r.hasMore);
       if (next !== "more") return setIndex(next);
       const id = asked.current;
-      const page = await d.current.search(r.query, r.cursor ?? undefined);
+      const page = await nextHits(d.current.search, r.query, r.cursor);
       if (id !== asked.current || !page) return;
-      setResults({ ...r, ...page, hits: r.hits.concat(page.hits) });
+      setResults(joinPage(r, page));
       setIndex(page.hits.length ? targets.length : 0);
     },
     [results, targets, index]
@@ -245,7 +270,8 @@ export function useFind(deps: FindDeps) {
     status,
     // 1-based, newest first; 0 with nothing found.
     position: target ? index + 1 : 0,
-    total: results?.total ?? 0,
+    // A capped count is a floor: never fewer than the matches walked so far.
+    total: Math.max(results?.total ?? 0, targets.length),
     capped: results?.capped ?? false,
     next: useCallback(() => go(1), [go]),
     previous: useCallback(() => go(-1), [go]),

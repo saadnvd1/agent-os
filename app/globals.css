@@ -254,11 +254,11 @@ body {
 }
 
 /* Find in a conversation (components/Chat/find-highlight): every match, and
-   the one it's on, in the browser's own find colours. */
+   the one it's on, in the browser's own find colours (styles/themes.css). */
 ::highlight(chat-find) {
-  background-color: rgb(250 204 21 / 0.35);
+  background-color: hsl(var(--find-match));
 }
 ::highlight(chat-find-current) {
-  background-color: rgb(249 115 22);
-  color: rgb(0 0 0);
+  background-color: hsl(var(--find-current));
+  color: hsl(var(--find-current-foreground));
 }

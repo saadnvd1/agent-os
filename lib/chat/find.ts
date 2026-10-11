@@ -13,13 +13,24 @@ import { eventParts, originOf } from "./origin";
 export const MIN_QUERY = 2;
 export const MAX_QUERY = 200;
 
-function toolText(tool: ToolItem): string {
+// Whether `query` could be in a diff at all, before paying for lineDiff.
+const inDiff = (diff: NonNullable<ToolItem["diff"]>, query: string) => {
+  const q = query.toLowerCase();
+  return (
+    diff.before.toLowerCase().includes(q) ||
+    diff.after.toLowerCase().includes(q)
+  );
+};
+
+function toolText(tool: ToolItem, query?: string): string {
   if (tool.name === "Skill") return tool.title;
   const input = (tool.input ?? {}) as Record<string, unknown>;
   if (STANDALONE_TOOLS.has(tool.name))
     return [tool.title, input.prompt, tool.output].filter(Boolean).join("\n");
   const parts = [tool.title];
-  if (tool.diff)
+  if (tool.diff && query !== undefined && !inDiff(tool.diff, query))
+    parts.push(tool.diff.path);
+  else if (tool.diff)
     parts.push(
       tool.diff.path,
       ...lineDiff(tool.diff.before, tool.diff.after).map((l) => l.text)
@@ -36,8 +47,9 @@ function toolText(tool: ToolItem): string {
 }
 
 // What a reader can find in an item: its row's text, opened. Nothing for
-// items the timeline doesn't show.
-export function findableText(item: ChatItem): string {
+// items the timeline doesn't show. With `query`, a diff it can't be in is
+// left out rather than laid out line by line.
+export function findableText(item: ChatItem, query?: string): string {
   switch (item.kind) {
     case "user": {
       const origin = originOf(item);
@@ -69,7 +81,7 @@ export function findableText(item: ChatItem): string {
         .filter(Boolean)
         .join("\n");
     case "tool":
-      return toolText(item);
+      return toolText(item, query);
     default:
       return "";
   }

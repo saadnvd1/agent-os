@@ -24,6 +24,10 @@
      Cool white with a violet accent
      =========================================================================== */
   :root {
+    /* Find in a conversation: every match, and the one it's on. */
+    --find-match: 48 96% 53% / 0.45;
+    --find-current: 25 95% 53%;
+    --find-current-foreground: 0 0% 0%;
     --background: 240 10% 95.5%;
     --foreground: 240 12% 14%;
     --card: 0 0% 100%;
@@ -287,6 +291,7 @@
      Blue-black with a violet accent
      =========================================================================== */
   .dark {
+    --find-match: 48 96% 53% / 0.35;
     --background: 240 18% 3.5%;
     --foreground: 240 10% 93%;
     --card: 240 14% 6%;

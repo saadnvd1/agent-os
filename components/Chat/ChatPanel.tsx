@@ -470,9 +470,10 @@ export function ChatPanel({
           <FindBar
             find={find}
             focusKey={findFocus}
-            onClose={() => {
+            onClose={(fromKey) => {
               closeFind();
-              focusComposer();
+              // A tap on a phone would bring up the keyboard over the match.
+              if (fromKey || !isMobile) focusComposer();
             }}
           />
         )}

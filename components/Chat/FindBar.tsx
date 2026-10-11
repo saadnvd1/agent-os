@@ -36,7 +36,8 @@ export function FindBar({
   find: Find;
   // Changes whenever ⌘F is pressed again: the field takes the caret back.
   focusKey: number;
-  onClose: () => void;
+  // `fromKey`: closed with Esc, so the caret goes back to the composer.
+  onClose: (fromKey: boolean) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -61,7 +62,7 @@ export function FindBar({
             else find.next();
           } else if (e.key === "Escape") {
             e.preventDefault();
-            onClose();
+            onClose(true);
           }
         }}
         placeholder="Find in conversation"
@@ -100,7 +101,7 @@ export function FindBar({
       </button>
       <button
         type="button"
-        onClick={onClose}
+        onClick={() => onClose(false)}
         aria-label="Close find"
         title="Close (Esc)"
         className={iconButton}

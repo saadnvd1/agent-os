@@ -4,7 +4,7 @@ import type { ChatItem } from "./events";
 import { readPage } from "./page";
 
 const { saveItem } = await import("./store");
-const { searchChat, MAX_MATCHES } = await import("./search");
+const { searchChat, MAX_MATCHES, SEARCH_PAGE } = await import("./search");
 
 const say = (id: string, text: string): ChatItem => ({
   id,
@@ -99,7 +99,7 @@ describe("searchChat", () => {
     expect(searchChat(id, "background").hits.map((h) => h.id)).toEqual(["a1"]);
   });
 
-  it("pages older results from a cursor and counts them all every time", () => {
+  it("pages older results from a cursor, counting them all on the first", () => {
     const id = chat(
       Array.from({ length: 7 }, (_, i) => say(`a${i}`, `match ${i}`))
     );
@@ -108,7 +108,6 @@ describe("searchChat", () => {
     expect(first.hits.map((h) => h.id)).toEqual(["a6", "a5", "a4"]);
     expect(first.hasMore).toBe(true);
     const second = searchChat(id, "match", first.cursor, 3);
-    expect(second.total).toBe(7);
     expect(second.hits.map((h) => h.id)).toEqual(["a3", "a2", "a1"]);
     const last = searchChat(id, "match", second.cursor, 3);
     expect(last.hits.map((h) => h.id)).toEqual(["a0"]);
@@ -140,10 +139,76 @@ describe("searchChat", () => {
     ]);
   });
 
-  it("stops counting at the cap and says so", () => {
-    const id = chat([say("a1", "ab ".repeat(MAX_MATCHES + 10))]);
-    const r = searchChat(id, "ab");
-    expect(r.capped).toBe(true);
-    expect(r.total).toBeGreaterThanOrEqual(MAX_MATCHES);
+  it("stops counting at the cap, and every match past it is still reachable", () => {
+    const per = 100;
+    const rows = MAX_MATCHES / per + 5;
+    const id = chat(
+      Array.from({ length: rows }, (_, i) => say(`a${i}`, "ab ".repeat(per)))
+    );
+    let page = searchChat(id, "ab", null, 10);
+    expect(page.capped).toBe(true);
+    expect(page.total).toBe(MAX_MATCHES);
+    const seen = page.hits.map((h) => h.id);
+    while (page.hasMore) {
+      page = searchChat(id, "ab", page.cursor, 10);
+      seen.push(...page.hits.map((h) => h.id));
+    }
+    expect(seen).toHaveLength(rows);
+    expect(new Set(seen).size).toBe(rows);
+  });
+
+  it("reads a huge conversation a slice at a time, missing nothing", () => {
+    const big = "x".repeat(1000);
+    const id = chat(
+      Array.from({ length: 40 }, (_, i) =>
+        say(`a${i}`, i % 10 === 0 ? `Néedle ${big}` : `filler ${big}`)
+      )
+    );
+    // Outside ASCII the SQL can't narrow the rows: the budget must.
+    const budget = 5_000;
+    let page = searchChat(id, "néedle", null, SEARCH_PAGE, budget);
+    expect(page.capped).toBe(true);
+    expect(page.hasMore).toBe(true);
+    const seen = page.hits.map((h) => h.id);
+    for (let i = 0; page.hasMore && i < 50; i++) {
+      page = searchChat(id, "néedle", page.cursor, SEARCH_PAGE, budget);
+      seen.push(...page.hits.map((h) => h.id));
+    }
+    expect(page.hasMore).toBe(false);
+    expect(seen).toEqual(["a30", "a20", "a10", "a0"]);
+  });
+
+  it("finds a tool's input as its row shows it, pretty-printed", () => {
+    const id = chat([
+      {
+        id: "t1",
+        kind: "tool",
+        name: "Read",
+        title: "Read x",
+        input: { file_path: "/x" },
+        status: "done",
+        createdAt: 1,
+      },
+    ]);
+    expect(searchChat(id, '"file_path": "/x"').hits.map((h) => h.id)).toEqual([
+      "t1",
+    ]);
+  });
+
+  it("finds a match in an edit's diff, and none in one it isn't in", () => {
+    const id = chat([
+      {
+        id: "e1",
+        kind: "tool",
+        name: "Edit",
+        title: "Edit a.ts",
+        input: {},
+        diff: { path: "a.ts", before: "const a = 1;", after: "const b = 2;" },
+        status: "done",
+        createdAt: 1,
+      },
+    ]);
+    expect(searchChat(id, "b = 2").total).toBe(1);
+    expect(searchChat(id, "zzz").total).toBe(0);
   });
 });
