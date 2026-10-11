@@ -1367,6 +1367,27 @@ describe("a merge decision from Saad", () => {
     expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
   });
 
+  it("keeps its ask the orchestrator's when the gates escalate onto it", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    await ask(t, { task: "add-a", sha: t.sha });
+    const [raised] = openAsks(t.w);
+    // The code-review gate then fails twice and escalates onto that ask.
+    pr = { ...pr!, codeReview: null };
+    await expect(t.signOff()).rejects.toThrow(/code-review failed \(first\)/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    expect(openAsks(t.w)).toMatchObject([
+      { id: raised.id, raised_by: "orchestrator", sha: t.sha },
+    ]);
+    answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
+    await expect(t.signOff()).rejects.toThrow(
+      /Saad approved this commit, but the PR body has no Code review section/
+    );
+    expect(merges).toEqual([]);
+    pr = { ...pr!, codeReview: { sha: t.sha } };
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+  });
+
   it("keeps a plain decision ask off the task, so its approval merges nothing", async () => {
     const t = setup();
     await reviewNow(t.w, "block");

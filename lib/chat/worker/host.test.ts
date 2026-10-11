@@ -1304,6 +1304,7 @@ describe("ChatHost retiring after a deploy", () => {
       await next.handle({ type: "send", id: "user-1", text: "an event" });
       expect(current.send).toHaveBeenLastCalledWith("an event", undefined);
       expect(row().chat_restarted).toBe(0);
+      expect(row().chat_tools_digest).toBe(digest ?? null);
       next.close();
     }
   });
@@ -1339,6 +1340,8 @@ describe("ChatHost retiring after a deploy", () => {
     await tick();
     await next.handle({ type: "send", id: "user-2", text: "another" });
     expect(current.send).toHaveBeenLastCalledWith("another", undefined);
+    // The worker keeps the tools it told the agent about, for the next one.
+    expect(row().chat_tools_digest).toBe("v2");
     next.close();
     current = fakeConversation();
     const later = new ChatHost(row(), () => {}, tools);

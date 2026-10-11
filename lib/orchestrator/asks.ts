@@ -179,7 +179,9 @@ export function raiseAsk(input: {
         link ?? open.link,
         sha ?? open.sha,
         brakeKey ?? open.brake_key,
-        raisedBy,
+        // A gate refreshing the orchestrator's merge ask keeps it the
+        // orchestrator's: its approval still needs a code review (signoff.ts).
+        raisedBy ?? open.raised_by,
         open.id
       );
       return { ask: getAsk(input.workspaceId, open.id)!, created: false };
