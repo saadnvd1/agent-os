@@ -27,7 +27,8 @@ export function useDoneAction() {
           id,
           duration: 8000,
           ...(!outcome.merged &&
-            outcome.worktree.action !== "removed" && {
+            outcome.worktree.action !== "removed" &&
+            outcome.worktree.action !== "gone" && {
               action: {
                 label: "Undo",
                 onClick: () => unarchive.mutate(session.id),

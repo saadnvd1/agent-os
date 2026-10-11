@@ -75,8 +75,14 @@ async function cleanup(
 export const signingOff = new Set<string>();
 
 // What happens after a merge: restack anything stacked on it, then remove the
-// session, worktree and branch. Kept per task so Land can wait for it.
-const afterMerge = new Map<string, Promise<void>>();
+// session, worktree and branch. Kept per task so Land and done can wait for
+// it; on globalThis because the watcher's merges run in server.ts and done in
+// a route bundle, which load this module separately.
+const g = globalThis as unknown as {
+  __agentosAfterMerge?: Map<string, Promise<void>>;
+};
+const afterMerge: Map<string, Promise<void>> = (g.__agentosAfterMerge ??=
+  new Map());
 
 async function finishMerge(
   session: Session,

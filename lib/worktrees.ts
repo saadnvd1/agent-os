@@ -14,6 +14,12 @@ import {
 } from "./git";
 import { installWorktreeHooks } from "./worktree-hooks";
 import { gitResult, isGitError, worktreeList } from "./git-exec";
+import {
+  markRemoving,
+  removalKey,
+  removals,
+  unmarkRemoving,
+} from "./worktree-removal";
 
 const git = (cwd: string, args: string[], timeout: number) =>
   gitResult(cwd, args, { timeout });
@@ -252,25 +258,6 @@ async function undoFailedAdd(
     await quiet(["branch", "-D", "--", branch]);
 }
 
-// Removals in progress, by path, with the branch each one's worktree was
-// on. `git worktree remove` takes seconds on a tree with cloned
-// dependencies, and a tree read halfway through looks like every file it
-// already deleted is an uncommitted change.
-const removing = new Map<
-  string,
-  { done: Promise<void>; branch: Promise<string | null> }
->();
-
-const removalKey = (p: string) => path.resolve(resolvePath(p));
-
-// Resolves once no removal of this worktree is running.
-export async function removalSettled(worktreePath: string): Promise<void> {
-  await removing.get(removalKey(worktreePath))?.done.catch(() => {});
-}
-
-export const removalRunning = (worktreePath: string) =>
-  removing.has(removalKey(worktreePath));
-
 /**
  * Delete a worktree and optionally its branch. A second call while one is
  * running joins it, and still deletes the branch when it asks to.
@@ -282,7 +269,7 @@ export function deleteWorktree(
 ): Promise<void> {
   const key = removalKey(worktreePath);
   const repo = resolvePath(projectPath);
-  const running = removing.get(key);
+  const running = removals.get(key);
   if (running)
     return deleteBranch
       ? running.done.then(async () => dropBranch(repo, await running.branch))
@@ -292,12 +279,17 @@ export function deleteWorktree(
     ({ stdout }) => stdout.trim() || null,
     () => null
   );
+  // Before anything is removed, so no reader catches it half-deleted.
+  markRemoving(key);
   const done = (async () => {
     await branch;
     await removeWorktree(key, repo);
     if (deleteBranch) await dropBranch(repo, await branch);
-  })().finally(() => removing.delete(key));
-  removing.set(key, { done, branch });
+  })().finally(() => {
+    removals.delete(key);
+    unmarkRemoving(key);
+  });
+  removals.set(key, { done, branch });
   return done;
 }
 

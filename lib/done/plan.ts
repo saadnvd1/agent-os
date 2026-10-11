@@ -78,6 +78,14 @@ async function taskPlan(s: Session): Promise<DonePlan> {
   return cleanup(s, "done", pr, null);
 }
 
+// A task merged before done looked (a sign-off, an armed merge): its PR's
+// head, so commits that went in with it aren't counted as unsaved once the
+// cleanup has deleted its branch on origin.
+async function mergedAs(s: Session): Promise<MergedAs> {
+  const pr = await prFor(s, true).catch(() => null);
+  return { prHead: pr?.state === "MERGED" ? (pr.head ?? null) : null };
+}
+
 export async function planDone(
   s: Session,
   callerId?: string | null
@@ -90,7 +98,8 @@ export async function planDone(
   if ((await statusOf(s)).status === "running")
     return refuse(`${s.name} is still working: wait for it, or stop it first`);
   if (s.task_status === "running") return taskPlan(s);
-  if (s.task_status === "merged") return cleanup(s, null, null, {});
+  if (s.task_status === "merged")
+    return cleanup(s, null, null, await mergedAs(s));
   return cleanup(s, null, null, null);
 }
 
@@ -105,6 +114,8 @@ export function planLine(p: DonePlan): string {
       ? `remove its worktree (${w.why})`
       : w.action === "kept"
         ? `keep its worktree: ${w.why}`
-        : "no worktree";
+        : w.action === "gone"
+          ? `its worktree is ${w.why}`
+          : "no worktree";
   return `stop it, ${tree}, archive it`;
 }

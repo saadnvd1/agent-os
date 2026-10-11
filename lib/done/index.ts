@@ -7,7 +7,6 @@
  * and archives the session. What it will do is decided first (plan.ts).
  */
 
-import fs from "fs";
 import { db, queries, type Session } from "../db";
 import { stopChat } from "../chat/runner";
 import { hostExec } from "../hosts";
@@ -69,6 +68,7 @@ async function stopAgent(s: Session): Promise<void> {
 
 function worktreeLine(f: WorktreeFate): string {
   if (f.action === "removed") return `worktree removed (${f.why})`;
+  if (f.action === "gone") return `worktree ${f.why}`;
   if (f.action === "kept") return `worktree kept at ${f.path}: ${f.why}`;
   return "no worktree";
 }
@@ -141,7 +141,6 @@ export async function doneSession(
       `${s.name} runs on ${peer.hostName}: only you can mark it done, from its row.`
     );
   if (peer) return doneOnPeer(peer, s);
-  const hadWorktree = !!s.worktree_path && fs.existsSync(s.worktree_path);
   // A sign-off just before this (the orchestrator's sign_off, then done)
   // is still cleaning up in the background: read what it leaves.
   await mergeSettled(s.id);
@@ -173,12 +172,6 @@ export async function doneSession(
     await stopAgent(s);
     worktree = await settleWorktree(s, plan.merged);
   }
-  if (
-    hadWorktree &&
-    worktree.action === "none" &&
-    !fs.existsSync(s.worktree_path!)
-  )
-    worktree = { action: "removed", why: "its branch is merged" };
   archiveSession(s.id);
   const head = merged ?? `Done: ${s.name}.`;
   const extra = notes.length ? `, ${notes.join(", ")}` : "";

@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -116,6 +117,8 @@ const { doneSession } = await import("./index");
 const { signOffTask } = await import("@/lib/tasks");
 const { deleteWorktree } = await import("@/lib/worktrees");
 const { worktreeFate } = await import("./worktree");
+const { removalKey, removalMarker, removalRunning, removalSettled } =
+  await import("@/lib/worktree-removal");
 const { setGlobalMergeSettings, setProjectMergeSettings } =
   await import("@/lib/tasks/merge-policy");
 
@@ -243,7 +246,11 @@ describe("done, by state", () => {
       ])
     );
     expect(out.merged).toMatch(/Merged ship/);
-    expect(out.worktree).toMatchObject({ action: "removed" });
+    // The sign-off's own cleanup removed it before done looked.
+    expect(out.worktree).toEqual({
+      action: "gone",
+      why: "already removed by the merge cleanup",
+    });
     expect(fs.existsSync(s.dir!)).toBe(false);
     expect(row(s.id)).toMatchObject({ task_status: "merged" });
     expect(row(s.id).archived_at).not.toBeNull();
@@ -550,10 +557,13 @@ describe("done right after a sign-off", () => {
       expect(fs.existsSync(s.dir!)).toBe(true);
       release();
       const out = await done;
-      expect(out.worktree).toMatchObject({
-        action: "removed",
-        why: "its branch is merged",
+      expect(out.worktree).toEqual({
+        action: "gone",
+        why: "already removed by the merge cleanup",
       });
+      expect(out.text).toContain(
+        "worktree already removed by the merge cleanup"
+      );
       expect(fs.existsSync(s.dir!)).toBe(false);
     } finally {
       cleanupGate = null;
@@ -593,7 +603,7 @@ describe("done right after a sign-off", () => {
       null
     );
     await removal;
-    expect(fate).toEqual({ action: "none" });
+    expect(fate).toEqual({ action: "gone", why: "already removed" });
   });
 
   it("judges again when a removal starts while it reads", async () => {
@@ -611,7 +621,90 @@ describe("done right after a sign-off", () => {
     );
     const fate = await reading;
     await removal;
-    expect(fate).toEqual({ action: "none" });
+    expect(fate).toEqual({ action: "gone", why: "already removed" });
+  });
+
+  it("waits for a removal another process is running, and says the cleanup removed it", async () => {
+    const t = setup();
+    const s = t.session("other-process", { task: true });
+    s.head = bulkCommit(s.dir!, s.branch);
+    t.openPR(s, { state: "MERGED" });
+    // Another process: its removal is in no map this one can see, only in
+    // the marker beside the worktree.
+    const marker = removalMarker(removalKey(s.dir!));
+    const other = spawn(
+      "sh",
+      [
+        "-c",
+        `printf '{"pid":%d,"at":%d}' $$ "$(($(date +%s) * 1000))" > "$1"; sleep 0.5; git -C "$2" worktree remove --force "$3"; rm -f "$1"`,
+        "sh",
+        marker,
+        t.repo,
+        s.dir!,
+      ],
+      { stdio: "ignore" }
+    );
+    const exited = new Promise((r) => other.on("exit", r));
+    while (!fs.existsSync(marker)) await new Promise((r) => setTimeout(r, 20));
+    const out = await doneSession(s.id, { by: "direct" });
+    await exited;
+    expect(out.worktree).toEqual({
+      action: "gone",
+      why: "already removed by the merge cleanup",
+    });
+    expect(fs.existsSync(s.dir!)).toBe(false);
+  });
+
+  it("says the cleanup removed it when done comes after the removal", async () => {
+    const t = setup();
+    const s = t.session("removed-before", { task: true });
+    s.head = bulkCommit(s.dir!, s.branch);
+    t.openPR(s, { state: "MERGED" });
+    await deleteWorktree(s.dir!, t.repo, true);
+    expect(fs.existsSync(removalMarker(removalKey(s.dir!)))).toBe(false);
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.worktree).toEqual({
+      action: "gone",
+      why: "already removed by the merge cleanup",
+    });
+  });
+
+  it("still keeps a real edit, naming commits no remote has too, past a stale marker", async () => {
+    const t = setup();
+    const s = t.session("real-edit", { task: true });
+    s.head = bulkCommit(s.dir!, s.branch);
+    t.openPR(s, { state: "MERGED" });
+    commitFile(s.dir!, "local-only.ts", "1\n");
+    fs.writeFileSync(path.join(s.dir!, "notes.md"), "keep me\n");
+    // Left by a removal cut short: its process is gone.
+    fs.writeFileSync(
+      removalMarker(removalKey(s.dir!)),
+      JSON.stringify({ pid: 2 ** 22 + 1, at: Date.now() })
+    );
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.worktree).toMatchObject({
+      action: "kept",
+      why: "it has uncommitted changes (1 file: notes.md), and 1 commit is on it that the merged PR didn't include and no remote has",
+    });
+    expect(fs.readFileSync(path.join(s.dir!, "notes.md"), "utf8")).toBe(
+      "keep me\n"
+    );
+  });
+
+  it("gives up waiting on a removal that doesn't end", async () => {
+    const t = setup();
+    const s = t.session("stuck-removal", { task: true });
+    const sleeper = spawn("sleep", ["30"], { stdio: "ignore" });
+    try {
+      fs.writeFileSync(
+        removalMarker(removalKey(s.dir!)),
+        JSON.stringify({ pid: sleeper.pid, at: Date.now() })
+      );
+      expect(removalRunning(s.dir!)).toBe(true);
+      expect(await removalSettled(s.dir!, 300)).toBe(false);
+    } finally {
+      sleeper.kill();
+    }
   });
 
   it("joins a running removal, and a join that asks still deletes the branch", async () => {
