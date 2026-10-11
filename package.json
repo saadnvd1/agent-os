@@ -18,7 +18,6 @@
     "mcp/",
     "public/",
     "scripts/",
-    "!scripts/competitor-audit/**",
     "stores/",
     "styles/",
     "next.config.ts",

@@ -21,7 +21,7 @@ const s = (id: string, extra: Partial<Session> = {}): Session =>
     ...extra,
   }) as Session;
 
-const linked = { box: "homelab" };
+const linked = { box: "devbox" };
 const input = (sessions: Session[]) => ({
   sessions,
   statuses: { mapped: { status: "running" } },
@@ -53,7 +53,7 @@ describe("a linked machine's sessions in the sidebar", () => {
     expect(groups).toEqual([
       {
         hostId: "box",
-        name: "homelab",
+        name: "devbox",
         rows: [expect.objectContaining({ session: sessions[2] })],
       },
     ]);
@@ -68,18 +68,18 @@ describe("remoteBlocks", () => {
   it("gives every action that can't reach the machine its reason", () => {
     const blocks = remoteBlocks(
       s("x", { host_id: "box", peer_mirror: 1 }),
-      (id) => (id === "box" ? "homelab" : undefined)
+      (id) => (id === "box" ? "devbox" : undefined)
     );
     expect(blocks).toEqual({
-      fork: "Runs on homelab: fork it there",
-      freshStart: "Runs on homelab: start fresh there",
-      moveToProject: "Its project follows its folder on homelab",
-      schedule: "Check-ins can't message homelab yet",
+      fork: "Runs on devbox: fork it there",
+      freshStart: "Runs on devbox: start fresh there",
+      moveToProject: "Its project follows its folder on devbox",
+      schedule: "Check-ins can't message devbox yet",
     });
   });
 
   it("blocks nothing on this machine, an unlinked one, a task mirror, or an ssh start", () => {
-    const name = (id: string) => (id === "box" ? "homelab" : undefined);
+    const name = (id: string) => (id === "box" ? "devbox" : undefined);
     expect(remoteBlocks(s("x"), name)).toBeNull();
     expect(
       remoteBlocks(s("x", { host_id: "ssh-only", peer_mirror: 1 }), name)

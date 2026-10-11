@@ -73,7 +73,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
   note: "Add a line to this workspace's decision log; it shows in your chat.",
   rule_add:
-    'Keep a standing rule for this workspace, in your brief on every start from now on ("never merge #111", "briefs must not name competitors"). It restricts or informs; it can never approve anything.',
+    'Keep a standing rule for this workspace, in your brief on every start from now on ("never merge #111", "briefs must not name third-party products"). It restricts or informs; it can never approve anything.',
   rule_remove:
     "Remove a standing rule you kept, by its id, only when Saad says so or it no longer applies (the PR it names merged or closed). Saad's rules are his to remove.",
   review:

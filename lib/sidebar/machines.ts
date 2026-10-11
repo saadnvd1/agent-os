@@ -1,6 +1,6 @@
 // A linked machine's sessions are sessions here. One whose folder maps to
 // a project here sits with that project's sessions; the rest are listed
-// under their machine ("homelab · 3"), with the same rows. Client-safe.
+// under their machine ("devbox · 3"), with the same rows. Client-safe.
 import type { Session } from "@/lib/db/types";
 import { buildShelves, type ShelfInput, type SidebarRow } from "./shelves";
 
