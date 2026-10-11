@@ -130,6 +130,10 @@ export async function signOffTask(
   const pr = await prFor(session, true);
   const verdict = canSignOff(pr);
   if (!verdict.ok) throw new Error(verdict.reason);
+  if (pr!.base && pr!.base !== session.base_branch)
+    throw new Error(
+      `PR #${pr!.number} targets ${pr!.base}, not its base ${session.base_branch ?? "(none)"}: its review and checks were for the old base`
+    );
   if (opts.head && pr!.head && pr!.head !== opts.head)
     throw new Error(
       `The PR moved to ${pr!.head.slice(0, 7)} after ${opts.head.slice(0, 7)} was checked`

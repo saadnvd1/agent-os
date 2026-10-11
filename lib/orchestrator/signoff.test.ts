@@ -1584,6 +1584,49 @@ describe("the PR's real base", () => {
     expect(merges).toEqual([]);
   });
 
+  it("follows a retarget onto the stack parent's own branch", async () => {
+    const t = setup();
+    const child = stackOn(t, "pr", "feature/parent-live");
+    pr = { ...pr!, base: "feature/parent-live" };
+    const { prFor } = await import("@/lib/tasks/session");
+    await prFor(getTaskSession(t.task), true);
+    expect(baseOf(t.task)).toBe("feature/parent-live");
+    expect(child().base_branch).toBe("feature/parent-live");
+  });
+
+  it("voids an unspent approval when the PR's base moves", async () => {
+    const t = setup();
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/parent-gone' WHERE id = ?`
+    ).run(t.task);
+    stackOn(t, "dropped", "feature/parent-gone");
+    await runTool(t.w, "ask_saad", {
+      title: "Merge add-a despite the review?",
+      detail: "The review blocks.",
+      kind: "decision",
+      task: "add-a",
+      sha: t.sha,
+    });
+    const [raised] = openAsks(t.w);
+    answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
+    pr = { ...pr!, base: "main" };
+    const { prFor } = await import("@/lib/tasks/session");
+    await prFor(getTaskSession(t.task), true);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
+    await expect(t.signOff()).rejects.toThrow();
+    expect(merges).toEqual([]);
+  });
+
+  it("refuses a sign-off whose PR was retargeted after it was judged", async () => {
+    const t = setup();
+    pr = { ...pr!, base: "feature/elsewhere" };
+    const { signOffTask } = await import("@/lib/tasks/finish");
+    await expect(signOffTask(t.task)).rejects.toThrow(
+      /targets feature\/elsewhere, not its base main/
+    );
+    expect(merges).toEqual([]);
+  });
+
   it("stops counting a review of the old base once the PR is retargeted", async () => {
     const t = setup();
     db.prepare(

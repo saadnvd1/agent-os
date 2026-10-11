@@ -3,6 +3,8 @@ import os from "os";
 import { db, queries, stackQueries, type Session } from "../db";
 import { getDefaultBranch, isBranchName } from "../git";
 import { parentBranchOf } from "../stacks/guard";
+import { voidApprovalsOn } from "../orchestrator/ask-approvals";
+import { taskSubject } from "../orchestrator/asks";
 import { getProject } from "../projects";
 import { findPRStrict } from "./gh";
 import { currentBranch, git } from "../git-exec";
@@ -211,6 +213,8 @@ async function recordBase(
     db.prepare(
       `DELETE FROM orchestrator_checks WHERE session_id = ? AND kind IN ('review', 'scope')`
     ).run(session.id);
+    // An approval was for the diff against the old base.
+    voidApprovalsOn(taskSubject(session.id));
     if (item && item.base_branch !== base && parent?.status !== "merged")
       stackQueries.updateItem(db, item.id, { base_branch: base });
   })();
