@@ -74,7 +74,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Run a LumifyHub board's open cards as stacked tasks (each start braked), or with plan_only just show the plan.",
   stack_status: "One stack's items, PRs and progress.",
   land: "Merge a whole stack bottom-up, each PR through the sign-off gates at its current head.",
-  drop: "Reject a task: close its PR and remove its worktree. Logged with the reason.",
+  drop: "Reject a task: close its PR and remove its worktree. A task still waiting in the queue is removed by its id. Logged with the reason.",
   stop: "Stop a session's agent mid-turn, even while it's thinking, keeping its conversation, worktree and branch; your next message runs as its next turn.",
   done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
   add_project:

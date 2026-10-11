@@ -29,6 +29,7 @@ import type { TaskPR } from "../tasks/state";
 import { run } from "../tasks/gh";
 import { isAllowedBase } from "../tasks/session";
 import { git as runGit, gitFetch, revParse } from "../git-exec";
+import { comparePatches } from "./patch";
 import { outputOf, type Runner } from "../stacks/git";
 import { restackedHeads, stackNotice } from "../stacks/restack";
 import { getCheck, putCheck } from "./checks";
@@ -306,25 +307,6 @@ async function rebaseAt(
   }
 }
 
-// The PR's own patch against the base, as `git patch-id` sees it.
-async function patchId(repo: string, range: string): Promise<string | null> {
-  const diff = await runGit(repo, [
-    "diff",
-    "--no-color",
-    "--no-ext-diff",
-    "--full-index",
-    range,
-  ]).catch(() => null);
-  if (!diff) return null;
-  return runGit(repo, ["patch-id", "--verbatim"], {
-    input: diff,
-    timeout: 30000,
-  }).then(
-    (out) => out.split(" ")[0] || null,
-    () => null
-  );
-}
-
 // The review of the head before the rebase, carried to the new head when
 // the PR's own patch is the same, else a fresh review of the new head.
 async function carryReview(
@@ -339,11 +321,7 @@ async function carryReview(
   const prior = getCheck(task.id, from, "review");
   const scope = getCheck(task.id, from, "scope");
   const repo = repoOf(task);
-  const [before, after] = await Promise.all([
-    patchId(repo, `${onto}...${from}`),
-    patchId(repo, `${onto}...${to}`),
-  ]);
-  const same = !!before && before === after;
+  const { same } = await comparePatches(repo, onto, from, to);
   if (
     same &&
     prior?.status === "pass" &&

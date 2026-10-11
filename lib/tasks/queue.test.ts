@@ -40,6 +40,7 @@ vi.mock("@/lib/orchestrator/usage", async (importOriginal) => ({
 }));
 
 const {
+  findQueued,
   listQueue,
   moveQueued,
   planQueue,
@@ -173,6 +174,55 @@ describe("the task queue", () => {
     finish(other);
     await tick();
     expect(started.map((s) => s.prompt)).toEqual(["x"]);
+  });
+
+  it("after any starts at once when nothing is running", async () => {
+    const t = setup(null);
+    finish(t.task);
+    expect(
+      queueIfNeeded({ projectId: t.app.id, prompt: "x", after: "any" })
+    ).toBeNull();
+    const out = await startOrQueue(
+      { projectId: t.app.id, prompt: "x", after: "any" },
+      async () => "go"
+    );
+    expect(out).toEqual({ started: "go" });
+  });
+
+  it("after any doesn't wait on a running task whose PR is already closed", async () => {
+    const t = setup(null);
+    db.prepare(`UPDATE sessions SET pr_status = 'closed' WHERE id = ?`).run(
+      t.task
+    );
+    expect(
+      queueIfNeeded({ projectId: t.app.id, prompt: "x", after: "any" })
+    ).toBeNull();
+    const live = seedSession({ projectId: t.app.id, name: "live", task: true });
+    const q = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "y",
+      after: "any",
+    })!;
+    await tick();
+    expect(started).toEqual([]);
+    // The other one's PR closing frees a waiting row too.
+    db.prepare(`UPDATE sessions SET pr_status = 'merged' WHERE id = ?`).run(
+      live
+    );
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["y"]);
+    expect(statusOf(q.id)).toBe("started");
+  });
+
+  it("removes a queued task by its id before it starts", async () => {
+    const t = setup(1);
+    const q = queueIfNeeded({ projectId: t.app.id, prompt: "p" })!;
+    expect(findQueued(t.workspace.id, q.id.slice(0, 8))?.id).toBe(q.id);
+    removeQueued(q.id);
+    expect(findQueued(t.workspace.id, q.id)).toBeNull();
+    finish(t.task);
+    await tick();
+    expect(started).toEqual([]);
   });
 
   it("refuses an after that names no running or queued task", () => {

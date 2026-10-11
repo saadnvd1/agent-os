@@ -330,3 +330,29 @@ export function resolveAsks(
     )
     .run(why, workspaceId, subject).changes;
 }
+
+// An open ask about a commit that has since been replaced (a rebase, a push)
+// now names the head, with a line saying what happened to it. Only while it
+// still names `from`, so a re-raise in between isn't overwritten.
+export function moveAskHead(
+  id: number,
+  from: string,
+  to: string,
+  line: string
+): boolean {
+  const ask = db
+    .prepare(`SELECT detail FROM orchestrator_asks WHERE id = ?`)
+    .get(id) as { detail: string } | undefined;
+  if (!ask) return false;
+  const rest = ask.detail.split(/\n?Head moved from /)[0];
+  const room = Math.max(0, MAX_DETAIL - line.length - 1);
+  const detail = `${rest.slice(0, room)}\n${line}`.trim();
+  return (
+    db
+      .prepare(
+        `UPDATE orchestrator_asks SET sha = ?, detail = ?
+         WHERE id = ? AND status = 'open' AND sha = ?`
+      )
+      .run(to, detail, id, from).changes === 1
+  );
+}
