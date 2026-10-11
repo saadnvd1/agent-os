@@ -25,6 +25,44 @@ const GIT_ALLOWED = new Set([
   "ls-files",
 ]);
 
+// Git config can run programs (core.fsmonitor, diff.external, filter and
+// textconv drivers), so git runs only at the worktree's own root, where it
+// finds the real git dir, never in a folder holding a repository the
+// orchestrator wrote (the write guard refuses HEAD, .git/ and .gitattributes
+// inside quick worktrees). A .gitattributes already committed can name a
+// driver, but a driver's command lives in config, which only a repository
+// the orchestrator can't write defines.
+export const GIT_LAYOUT_FILE =
+  /(^|\/)(HEAD|\.gitattributes)$|(^|\/)\.git(\/|$)/i;
+
+// `aos` commands carry free text (notify, send): only what a shell would
+// chain, redirect or substitute is refused, not ? ! # * or a plain $.
+export function aosRefusal(command: string): string | null {
+  const bad =
+    "use one plain aos command: no ;, &&, pipes, redirects, backticks or $( ) outside single quotes";
+  let q: string | null = null;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (q === "'") {
+      if (c === "'") q = null;
+      continue;
+    }
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (c === "`" || (c === "$" && command[i + 1] === "("))
+      return `Refused: ${bad}.`;
+    if (q === '"') {
+      if (c === '"') q = null;
+      continue;
+    }
+    if (c === "'" || c === '"') q = c;
+    else if (/[;&|<>()\n\r]/.test(c)) return `Refused: ${bad}.`;
+  }
+  return q ? "Refused: an unclosed quote." : null;
+}
+
 // Options that write a file somewhere else, read a command to run, or read
 // outside the repository. Git accepts any unique prefix of a long option
 // (--ext-di, --textc), so this refuses the prefixes, not the spellings.
@@ -96,6 +134,10 @@ export type GitCommand =
 export function readCommand(command: unknown): GitCommand {
   if (typeof command !== "string" || !command.trim())
     return { refusal: "No command to check." };
+  if (/^aos(\s|$)/.test(command.trim())) {
+    const refusal = aosRefusal(command.trim());
+    return refusal ? { refusal } : { refusal: null, dir: null, sub: null };
+  }
   const words = shellWords(command.trim());
   if (typeof words === "string") return { refusal: `Refused: ${words}.` };
   if (words[0] !== "git") {
@@ -105,7 +147,7 @@ export function readCommand(command: unknown): GitCommand {
     if (words[0].includes("="))
       return {
         refusal:
-          "Refused: set the environment in your shell first, not inline; GIT_DIR, GIT_INDEX_FILE and GIT_WORK_TREE can point git outside your worktree.",
+          "Refused: no inline VAR=value before a command; environment variables can point git outside your worktree.",
       };
     return { refusal: null, dir: null, sub: null };
   }

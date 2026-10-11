@@ -21,7 +21,7 @@ import { isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
 import { LIMITS_FILE } from "./usage";
-import { readCommand } from "./git-guard";
+import { GIT_LAYOUT_FILE, readCommand } from "./git-guard";
 import { quickWorktrees } from "./quick-store";
 
 // The tools that write a file, and the argument naming it.
@@ -171,6 +171,8 @@ export async function writeRefusal(
     const repo = repos.find((r) => within(target, r) && !holdsQuick(r));
     if (repo)
       return `${filePath} is inside ${repo}, a project repository, task worktree or AgentOS itself. Change code there through a task (start_task), or for a small edit, in a quick change's worktree (quick_change), so its PR goes through the merge gates.`;
+    if (ownQuick && GIT_LAYOUT_FILE.test(target))
+      return `${filePath} is part of a git repository's layout (HEAD, .git/, .gitattributes); git config can run programs, so orchestrators never write those.`;
     if (AGENTOS_TEMP.test(target))
       return `${filePath} is in a checkout AgentOS is reviewing or rebasing; orchestrators never write there.`;
     // Its folder, or a quick worktree (which sits in ~/.agent-os/worktrees):
@@ -323,9 +325,9 @@ async function commandRefusal(
   const dir = expandHome(read.dir);
   if (!dir.startsWith("/") || !quick.length)
     return `Refused: git runs only in one of your quick changes' worktrees, named by its full path (${quick.length ? quick.join(", ") : "you have none open; start one with quick_change"}).`;
-  return (await insideQuick(dir, quick))
+  return (await isQuickRoot(dir, quick))
     ? null
-    : `Refused: ${read.dir} isn't one of your quick changes' worktrees (${quick.join(", ")}). Project checkouts and other sessions' worktrees are never yours to run git in.`;
+    : `Refused: ${read.dir} isn't the root of one of your quick changes' worktrees (${quick.join(", ")}). Git runs at the root only, never in a subfolder, a project checkout or another session's worktree.`;
 }
 
 // Whether a folder is inside one of these worktrees by every way the
@@ -347,6 +349,23 @@ export async function insideQuick(
       )
     ).flat();
     return forms.every((f) => roots.some((r) => within(f, r)));
+  } catch {
+    return false;
+  }
+}
+
+// Whether a folder is exactly the root of one of these worktrees (as named,
+// and with links followed), where git finds the real git dir.
+async function isQuickRoot(dir: string, quick: string[]): Promise<boolean> {
+  if (!(await insideQuick(dir, quick))) return false;
+  try {
+    const forms = [path.resolve(dir), await physicalPath(dir)];
+    const roots = (
+      await Promise.all(
+        quick.map(async (q) => [path.resolve(q), await physicalPath(q)])
+      )
+    ).flat();
+    return forms.every((f) => roots.includes(f));
   } catch {
     return false;
   }

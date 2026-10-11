@@ -259,7 +259,7 @@ describe("the write guard with a quick change open", () => {
   });
 
   it("still refuses git, agent config and secrets inside it", async () => {
-    expect(await write(s, path.join(wt, ".git"))).toMatch(/configures/);
+    expect(await write(s, path.join(wt, ".git"))).toMatch(/layout/);
     expect(await write(s, path.join(wt, "CLAUDE.md"))).toMatch(/configures/);
     expect(await write(s, path.join(wt, ".env"))).toMatch(/secrets/);
   });
@@ -286,16 +286,16 @@ describe("the write guard with a quick change open", () => {
     expect(await bash(s, `git -C ${wt} add -A`)).toBeNull();
     expect(await bash(s, `git status`)).toMatch(/quick changes' worktrees/);
     expect(await bash(s, `git -C ${s.repo} status`)).toMatch(
-      /isn't one of your quick changes/
+      /isn't the root of one of your quick changes/
     );
     expect(await bash(s, `git -C ${s.other} add -A`)).toMatch(
-      /isn't one of your quick changes/
+      /isn't the root of one of your quick changes/
     );
     expect(
       await bash(s, `git -C ${wt}/../${path.basename(s.other)} add -A`)
-    ).toMatch(/isn't one of your quick changes/);
+    ).toMatch(/isn't the root of one of your quick changes/);
     expect(await bash(s, `git -C ${wt}/main-link status`)).toMatch(
-      /isn't one of your quick changes/
+      /isn't the root of one of your quick changes/
     );
   });
 
@@ -325,6 +325,47 @@ describe("the write guard with a quick change open", () => {
       `git -C ${wt} diff --ext-di`,
       `git -C ${wt} show --textc HEAD:README.md`,
       `git -C ${wt} diff --no-index -- /etc/hosts /dev/null`,
+    ])
+      expect(await bash(s, cmd), cmd).toMatch(/Refused/);
+  });
+
+  it("never runs git in a repository it wrote inside the worktree", async () => {
+    const sub = path.join(wt, "sub");
+    const mark = path.join(os.tmpdir(), `ran-${Date.now()}`);
+    // The files of a bare repository whose config runs a program: the
+    // write guard refuses HEAD, and git is refused anywhere but the root.
+    fs.mkdirSync(path.join(sub, "refs"), { recursive: true });
+    fs.mkdirSync(path.join(sub, "objects"));
+    fs.writeFileSync(path.join(sub, "HEAD"), "ref: refs/heads/main\n");
+    fs.writeFileSync(
+      path.join(sub, "config"),
+      `[core]\n\tbare = true\n\tfsmonitor = touch ${mark}\n`
+    );
+    for (const cmd of [`git -C ${sub} status`, `git -C ${wt}/sub/ status`])
+      expect(await bash(s, cmd), cmd).toMatch(/Refused/);
+    expect(fs.existsSync(mark)).toBe(false);
+    for (const f of [
+      "HEAD",
+      ".git/config",
+      "nested/.git/HEAD",
+      ".gitattributes",
+    ])
+      expect(await write(s, path.join(wt, f)), f).toMatch(/layout|configures/);
+    fs.rmSync(sub, { recursive: true });
+  });
+
+  it("keeps aos messages with ? ! # * and $ working", async () => {
+    for (const cmd of [
+      `aos notify "Done? Yes! PR #5 costs $3 *all* good"`,
+      `aos send peer 'merged: $HOME ?'`,
+      `aos notify Stack landed`,
+    ])
+      expect(await bash(s, cmd), cmd).toBeNull();
+    for (const cmd of [
+      `aos notify hi; rm -rf /`,
+      `aos notify "$(id)"`,
+      "aos notify `id`",
+      `aos notify hi | sh`,
     ])
       expect(await bash(s, cmd), cmd).toMatch(/Refused/);
   });
@@ -497,6 +538,16 @@ describe("the code-review gate", () => {
       ok: true,
       sha: g.sha,
     });
+  });
+
+  it("says a rebase left the quick change waiting for a fresh review", async () => {
+    const { quickCodeReview } = await import("./quick");
+    expect(quickCodeReview("a".repeat(40), null, true).wait).toMatch(
+      /rebase moved the branch.*fresh independent review/
+    );
+    expect(quickCodeReview("a".repeat(40), null).wait).toMatch(
+      /no independent/
+    );
   });
 
   it.each([

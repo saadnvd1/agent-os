@@ -78,7 +78,11 @@ export async function judge(
   // code review is the independent review of this head, and until that
   // passes it waits, before any gate is judged or counted.
   const quick = isQuick(task)
-    ? quickCodeReview(sha, getCheck(task.id, sha, "review"))
+    ? quickCodeReview(
+        sha,
+        getCheck(task.id, sha, "review"),
+        restackedOf(task)?.to === sha
+      )
     : null;
   if (quick?.wait)
     return {

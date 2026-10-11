@@ -248,13 +248,16 @@ const QUICK_FIX =
 // review gate's failure, when its verdict arrives.
 export function quickCodeReview(
   sha: string,
-  review: CheckRow | null
+  review: CheckRow | null,
+  rebased = false
 ): { refusal: null; wait: string | null } {
   if (review?.sha === sha && review.status === "pass")
     return { refusal: null, wait: null };
   const why =
     review?.sha !== sha
-      ? `no independent review of ${short(sha)} yet: call review`
+      ? rebased
+        ? `a rebase moved the branch to ${short(sha)}, so it needs a fresh independent review: call review`
+        : `no independent review of ${short(sha)} yet: call review`
       : review.status === "running"
         ? `the review of ${short(sha)} is still running`
         : review.status === "block"
