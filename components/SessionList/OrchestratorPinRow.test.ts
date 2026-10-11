@@ -68,7 +68,8 @@ describe("OrchestratorPinRow", () => {
     workspace_id: "w1",
     pinned: true,
   } as Session;
-  const ctx = {
+  // Typed in full, so a field the row starts reading fails tsc, not CI.
+  const ctx: RowContextValue = {
     summarizingSessionId: null,
     projects: [],
     projectNames: new Map(),
@@ -79,21 +80,25 @@ describe("OrchestratorPinRow", () => {
     orderedIds: () => [],
     cardUrl: () => null,
     onSelect,
-  } as unknown as RowContextValue;
-
-  beforeEach(async () => {
-    onSelect.mockClear();
-    await act(async () =>
+    onRename: vi.fn(),
+    onFork: vi.fn(),
+    onSummarize: vi.fn(),
+    onDelete: vi.fn(),
+    onMoveToProject: vi.fn(),
+    onPin: vi.fn(),
+  };
+  const render = (over: Partial<RowContextValue> = {}, unread = false) =>
+    act(async () =>
       root.render(
         createElement(
           RowProvider,
-          { value: ctx },
+          { value: { ...ctx, ...over } },
           createElement(OrchestratorPinRow, {
             row: {
               session,
               status: undefined,
               need: null,
-              unread: false,
+              unread,
               working: false,
               workers: [],
             },
@@ -101,6 +106,20 @@ describe("OrchestratorPinRow", () => {
         )
       )
     );
+
+  beforeEach(async () => {
+    onSelect.mockClear();
+    await render();
+  });
+
+  it("is Waiting while its workspace has tasks in line, Replied with an unseen reply", async () => {
+    expect(host.textContent).toContain("Idle");
+    await render({ queuedByWorkspace: new Map([["w1", 2]]) });
+    expect(host.textContent).toContain("Waiting");
+    expect(host.querySelector('[aria-label="Unread"]')).toBeNull();
+    await render({ queuedByWorkspace: new Map([["w1", 2]]) }, true);
+    expect(host.textContent).toContain("Replied");
+    expect(host.querySelector('[aria-label="Unread"]')).not.toBeNull();
   });
 
   it("still opens its chat by click and by Enter", () => {
