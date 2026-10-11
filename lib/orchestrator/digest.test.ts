@@ -172,12 +172,7 @@ describe("the startup digest", () => {
 });
 
 describe("the startup digest with arm-to-merge", () => {
-  it("marks a task armed to merge once the column exists", () => {
-    const cols = db.prepare(`PRAGMA table_info(sessions)`).all() as {
-      name: string;
-    }[];
-    if (!cols.some((c) => c.name === "merge_armed_at"))
-      db.exec(`ALTER TABLE sessions ADD COLUMN merge_armed_at TEXT`);
+  it("marks a task armed to merge", () => {
     const { workspace, task } = seedWorkspace();
     db.prepare(
       `UPDATE sessions SET pr_number = 7, pr_status = 'open', merge_armed_at = datetime('now') WHERE id = ?`

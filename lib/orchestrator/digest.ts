@@ -53,14 +53,6 @@ interface TaskRow {
   armed_at: string | null;
 }
 
-// Arm-to-merge (sessions.merge_armed_at) lands separately: read only once
-// the column is there.
-function hasArming(): boolean {
-  return (
-    db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
-  ).some((c) => c.name === "merge_armed_at");
-}
-
 interface CheckRow {
   session_id: string;
   sha: string;
@@ -160,11 +152,10 @@ function tasksSection(
   checks: Map<string, CheckRow[]>,
   failures: Map<string, FailureRow[]>
 ): Section {
-  const armed = hasArming() ? "s.merge_armed_at" : "NULL";
   const tasks = db
     .prepare(
       `SELECT s.id, s.name, p.name AS project, s.pr_number, s.pr_status, s.view,
-         ${armed} AS armed_at
+         s.merge_armed_at AS armed_at
        FROM sessions s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
