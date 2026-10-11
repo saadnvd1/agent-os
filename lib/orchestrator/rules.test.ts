@@ -120,11 +120,9 @@ describe("standing rules", () => {
 
   it("are stored with anything token-shaped redacted", () => {
     const w = seedWorkspace().workspace.id;
-    const rule = addRule(
-      w,
-      "Deploy key is ghp_abcdefghijklmnopqrstuvwxyz0123",
-      "orchestrator"
-    );
+    // Built here so nothing token-shaped is committed.
+    const fake = ["gh", "p_", "0".repeat(36)].join("");
+    const rule = addRule(w, `Deploy key is ${fake}`, "orchestrator");
     expect(rule.text).toBe("Deploy key is [redacted]");
   });
 
