@@ -12,6 +12,7 @@ import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowRename, UnreadDot } from "./RowParts";
+import { QuickChangeRow } from "./QuickChangeRow";
 
 // A workspace's orchestrator, pinned above its sessions and titled with the
 // workspace's name: what it's doing and how many asks wait on you, on a line
@@ -126,12 +127,17 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
   );
 
   return (
-    <CM.ContextMenu>
-      <CM.ContextMenuTrigger asChild>{content}</CM.ContextMenuTrigger>
-      <CM.ContextMenuContent className="w-56">
-        {menu("context")}
-      </CM.ContextMenuContent>
-    </CM.ContextMenu>
+    <>
+      <CM.ContextMenu>
+        <CM.ContextMenuTrigger asChild>{content}</CM.ContextMenuTrigger>
+        <CM.ContextMenuContent className="w-56">
+          {menu("context")}
+        </CM.ContextMenuContent>
+      </CM.ContextMenu>
+      {row.quick?.map((q) => (
+        <QuickChangeRow key={q.session.id} row={q} />
+      ))}
+    </>
   );
 }, sameProps);
 
