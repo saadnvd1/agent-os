@@ -11,7 +11,7 @@ beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "audits-route-"));
   process.env.AGENTOS_AUDITS_DIR = dir;
   fs.mkdirSync(path.join(dir, "sessions"));
-  fs.mkdirSync(path.join(dir, "t3code"));
+  fs.mkdirSync(path.join(dir, "gaps"));
 });
 afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -34,10 +34,10 @@ describe("GET /api/audits/<kind>/<id>", () => {
 
   it("returns another kind's report without its frontmatter", async () => {
     fs.writeFileSync(
-      path.join(dir, "t3code", "2026-10-10.md"),
-      "---\naudited: 2026-10-10T20:00:00Z\nkind: t3code\n---\n# Gap audit\nbody\n"
+      path.join(dir, "gaps", "2026-10-10.md"),
+      "---\naudited: 2026-10-10T20:00:00Z\nkind: gaps\n---\n# Gap audit\nbody\n"
     );
-    const res = await get("t3code", "2026-10-10");
+    const res = await get("gaps", "2026-10-10");
     expect((await res.json()).markdown).toBe("# Gap audit\nbody\n");
   });
 
@@ -45,7 +45,7 @@ describe("GET /api/audits/<kind>/<id>", () => {
     fs.writeFileSync(path.join(dir, "secret.md"), "no");
     expect((await get("sessions", "../secret")).status).toBe(400);
     expect((await get("..", "secret")).status).toBe(400);
-    expect((await get("t3code", "README")).status).toBe(400);
+    expect((await get("gaps", "README")).status).toBe(400);
     // A sessions report is named by its timestamp id only.
     expect((await get("sessions", "secret")).status).toBe(404);
     expect((await get("sessions", "2026-10-10-2001")).status).toBe(404);
@@ -71,15 +71,18 @@ describe("GET /api/audits", () => {
       ])
     );
     fs.writeFileSync(
-      path.join(dir, "t3code", "2026-10-10.md"),
+      path.join(dir, "gaps", "2026-10-10.md"),
       "---\naudited: 2026-10-10T20:00:00Z\n---\n# Gap audit\n"
     );
-    fs.writeFileSync(path.join(dir, "t3code", "README.md"), "# index\n");
+    fs.writeFileSync(path.join(dir, "gaps", "README.md"), "# index\n");
+    // A kind's index, by either spelling, isn't an audit.
+    fs.mkdirSync(path.join(dir, "other"));
+    fs.writeFileSync(path.join(dir, "other", "readme.md"), "# index\n");
     const { audits } = await (await list()).json();
     expect(
       audits.map((a: { kind: string; id: string }) => [a.kind, a.id])
     ).toEqual([
-      ["t3code", "2026-10-10"],
+      ["gaps", "2026-10-10"],
       ["sessions", "2026-10-09-2000"],
     ]);
     expect(audits[0].title).toBe("Gap audit");

@@ -35,10 +35,10 @@ import {
 } from "../../lib/session-audit/store";
 import {
   findExcerpts,
+  formatExcerpts,
   scanTranscript,
   type Range,
 } from "../../lib/session-audit/transcript";
-import { UNTRUSTED_RULE, untrusted } from "../../lib/orchestrator/untrusted";
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
@@ -179,15 +179,7 @@ async function excerpt(args: string[]) {
     if (out.length >= limit) break;
     out.push(...(await findExcerpts(file, r, match, limit - out.length)));
   }
-  if (out.length) console.log(UNTRUSTED_RULE);
-  for (const x of out)
-    console.log(
-      untrusted(
-        `transcript ${sessions[0].id.slice(0, 8)} ${x.at}`,
-        `${x.tool}${x.isError ? " (error)" : ""}\n  in:  ${x.input}\n  out: ${x.output.replace(/\n/g, "⏎ ")}`
-      )
-    );
-  if (!out.length) console.log("No matching calls.");
+  console.log(formatExcerpts(out, sessions[0].id));
 }
 
 async function main() {

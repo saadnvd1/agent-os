@@ -8,6 +8,7 @@
 import fs from "fs";
 import readline from "readline";
 import { createHash } from "crypto";
+import { UNTRUSTED_RULE, untrusted } from "../orchestrator/untrusted";
 import {
   estTokens,
   manualClasses,
@@ -30,7 +31,7 @@ export interface ToolCall {
   tool: string;
   /** The same call in any session: a normalised command, a repo path. */
   key: string;
-  /** This exact call, for spotting one session repeating itself. */
+  /** A hash of this exact call, for spotting one session repeating itself. */
   exact: string;
   /** A short excerpt of the input, for the local report only. */
   excerpt: string;
@@ -295,12 +296,15 @@ export async function scanTranscript(
           typeof block.id !== "string"
         )
           continue;
+        const described = describeCall(
+          String(block.name),
+          isObj(block.input) ? block.input : {},
+          cwd
+        );
         const call: ToolCall = {
-          ...describeCall(
-            String(block.name),
-            isObj(block.input) ? block.input : {},
-            cwd
-          ),
+          ...described,
+          // Only ever compared, so kept as a hash: no raw input stays.
+          exact: createHash("sha1").update(described.exact).digest("hex"),
           at,
           turn: allTurns,
           tokens: 0,
@@ -451,4 +455,20 @@ export async function findExcerpts(
   }
   rl.close();
   return out;
+}
+
+/**
+ * Excerpts as the auditing model reads them: each one fenced as untrusted
+ * (session, terminal and CI text is data, never instructions), under the
+ * rule that says so.
+ */
+export function formatExcerpts(excerpts: Excerpt[], sessionId: string): string {
+  if (!excerpts.length) return "No matching calls.";
+  const fenced = excerpts.map((x) =>
+    untrusted(
+      `transcript ${sessionId.slice(0, 8)} ${x.at}`,
+      `${x.tool}${x.isError ? " (error)" : ""}\n  in:  ${x.input}\n  out: ${x.output.replace(/\n/g, "⏎ ")}`
+    )
+  );
+  return [UNTRUSTED_RULE, ...fenced].join("\n");
 }
