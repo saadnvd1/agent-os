@@ -5,6 +5,7 @@ import { z } from "zod";
 import { BRANCH_NAME } from "../git";
 import { RAISED_KINDS } from "./asks";
 import { MAX_RULE_CHARS } from "./rules";
+import { PROJECT_NAME } from "../project-add/name";
 
 const ref = (what: string) => z.string().trim().min(1).max(300).describe(what);
 const session = ref("Session name, project/name, or id from sessions");
@@ -100,6 +101,20 @@ export const TOOL_SHAPES = {
   drop: { task, reason: z.string().trim().min(1).max(2000) },
   stop: { session },
   done: { session },
+  add_project: {
+    path: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1000)
+      .describe("The git repository's absolute path on this machine"),
+    name: z
+      .string()
+      .trim()
+      .regex(PROJECT_NAME, "use letters, numbers, dots, dashes or underscores")
+      .optional()
+      .describe("A new project's name (default: the folder's)"),
+  },
   note: { text: z.string().trim().min(1).max(2000) },
   rule_add: {
     text: z

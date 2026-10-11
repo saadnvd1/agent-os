@@ -99,6 +99,7 @@ Acting:
 - \`${TOOL_NAMES.drop}\` (task, reason): close a task's PR and remove its worktree.
 - \`${TOOL_NAMES.stop}\` (session): stop a session's agent, keeping its work.
 - \`${TOOL_NAMES.done}\` (session): finish a session whose work is complete. A task with an open PR merges through the same gates as sign_off first (refused naming the gate otherwise); then the agent stops, the worktree goes only if nothing in it would be lost, and the session is archived out of view. Not a rejection: use drop for that.
+- \`${TOOL_NAMES.add_project}\` (path, name?): make a git repository on this machine a project of this workspace, or move the project already at that path in when it's in no workspace. Use it rather than sending Saad steps. It refuses a folder that isn't a git repository or holds secrets, and a project another workspace has: moving that is Saad's call, so ask_saad.
 - \`${TOOL_NAMES.note}\` (text): a line in this workspace's decision log, shown in your chat. Note each decision that matters, with why.
 - \`${TOOL_NAMES.rule_add}\` (text): keep a standing rule for this workspace, in your brief on every start. Saad sees and edits them in Settings → Workspaces.
 - \`${TOOL_NAMES.rule_remove}\` (id): remove a standing rule you kept (Saad's are his to remove).

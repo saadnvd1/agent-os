@@ -7,6 +7,7 @@ import {
   ChevronDown,
   CircleCheck,
   Clock,
+  FolderPlus,
   Gauge,
   LayoutGrid,
   Pencil,
@@ -29,6 +30,7 @@ import { archivedUiActions, cleanupUiActions } from "@/stores/archivedUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { schedulesUiActions } from "@/stores/schedulesUi";
+import { useAddExistingProject } from "@/components/Projects/AddProject/useAddExistingProject";
 
 const icon = "mr-2 h-3.5 w-3.5";
 
@@ -44,6 +46,7 @@ export function WorkspaceSwitcher({
   const create = useCreateWorkspace();
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
+  const addExisting = useAddExistingProject();
   const [dialog, setDialog] = useState<"new" | "rename" | null>(null);
   const name = current?.name ?? "All workspaces";
 
@@ -94,6 +97,13 @@ export function WorkspaceSwitcher({
           {current && (
             <>
               <DM.DropdownMenuSeparator />
+              <DM.DropdownMenuItem
+                onClick={() => addExisting(current)}
+                className="min-h-11 md:min-h-0"
+              >
+                <FolderPlus className={icon} />
+                Add existing project…
+              </DM.DropdownMenuItem>
               <DM.DropdownMenuItem
                 onClick={() => orchestratorOpenActions.request(current.id)}
               >

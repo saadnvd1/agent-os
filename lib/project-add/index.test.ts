@@ -1,13 +1,17 @@
 import fs from "fs";
+import os, { tmpdir } from "os";
 import path from "path";
-import { tmpdir } from "os";
 import { execFileSync } from "child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getProject } from "../projects";
+import { createWorkspace } from "../workspaces";
 import {
+  addFolder,
   getCloneJob,
   initProject,
+  isSecretPath,
   listFolders,
+  ProjectExistsError,
   repoNameOf,
   startClone,
 } from "./index";
@@ -115,5 +119,85 @@ describe("adding a project", () => {
     expect(getCloneJob(job.id)?.error).toMatch(
       /unable to access|Failed to connect|Could not resolve|Connection refused/i
     );
+  });
+});
+
+describe("adding a project to a workspace", () => {
+  it("puts a new project from a name or a folder in the workspace given", async () => {
+    const ws = createWorkspace("Internal Tools");
+    const made = await initProject("local", temp(), "tool-a", ws.id);
+    expect(getProject(made.id)?.workspace_id).toBe(ws.id);
+
+    const { project, outcome } = await addFolder("local", temp(), {
+      workspaceId: ws.id,
+    });
+    expect(outcome).toBe("created");
+    expect(getProject(project.id)?.workspace_id).toBe(ws.id);
+
+    const loose = await addFolder("local", temp());
+    expect(getProject(loose.project.id)?.workspace_id).toBeNull();
+  });
+
+  it("refuses a workspace that doesn't exist before making anything", async () => {
+    const parent = temp();
+    await expect(
+      initProject("local", parent, "ghost", "no-such-workspace")
+    ).rejects.toThrow(/Unknown workspace/);
+    expect(fs.readdirSync(parent)).toEqual([]);
+    expect(() =>
+      startClone("local", parent, "https://h/o/r.git", "no-such-workspace")
+    ).toThrow(/Unknown workspace/);
+  });
+
+  it("never makes a second project of the same folder, and moves the first when asked", async () => {
+    const a = createWorkspace("A");
+    const b = createWorkspace("B");
+    const dir = temp();
+    const first = (await addFolder("local", dir, { workspaceId: a.id }))
+      .project;
+
+    const again = addFolder("local", `${dir}/`, { workspaceId: b.id });
+    await expect(again).rejects.toBeInstanceOf(ProjectExistsError);
+    await expect(again).rejects.toMatchObject({
+      project: { id: first.id, workspace_id: a.id },
+    });
+
+    const moved = await addFolder("local", dir, {
+      workspaceId: b.id,
+      moveExisting: true,
+    });
+    expect(moved).toMatchObject({ outcome: "moved", from: a.id });
+    expect(moved.project.id).toBe(first.id);
+    expect(getProject(first.id)?.workspace_id).toBe(b.id);
+
+    const same = await addFolder("local", dir, {
+      workspaceId: b.id,
+      moveExisting: true,
+    });
+    expect(same.outcome).toBe("unchanged");
+  });
+
+  it("refuses folders that hold secrets, and a non-repo when a repo is required", async () => {
+    for (const p of [
+      "~/.ssh",
+      `${os.homedir()}/.aws/x`,
+      "/srv/tokenvault",
+      "~/.config/gh",
+    ])
+      expect(isSecretPath(p)).toBe(true);
+    expect(isSecretPath("~/.CONFIG/gh")).toBe(true);
+    expect(isSecretPath("~/dev/config-tool")).toBe(false);
+    await expect(addFolder("local", "~/.ssh")).rejects.toThrow(/secrets/);
+    await expect(
+      addFolder("local", temp(), { requireGit: true })
+    ).rejects.toThrow(/isn't a git repository/);
+  });
+
+  it("judges a symlinked folder by where it points", async () => {
+    const keys = path.join(temp(), ".ssh");
+    fs.mkdirSync(keys);
+    const link = path.join(temp(), "notes");
+    fs.symlinkSync(keys, link);
+    await expect(addFolder("local", link)).rejects.toThrow(/secrets/);
   });
 });

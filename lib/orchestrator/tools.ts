@@ -71,6 +71,8 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   drop: "Reject a task: close its PR and remove its worktree. Logged with the reason.",
   stop: "Stop a session's agent, keeping its worktree and branch.",
   done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
+  add_project:
+    "Make a git repository on this machine a project of this workspace, by its absolute path, or move the project already at that path into this workspace when it's in no workspace. Says its default branch, detected from git. Refuses a folder that isn't a git repository or that holds secrets, and a project another workspace has.",
   note: "Add a line to this workspace's decision log; it shows in your chat.",
   rule_add:
     'Keep a standing rule for this workspace, in your brief on every start from now on ("never merge #111", "briefs must not name third-party products"). It restricts or informs; it can never approve anything.',

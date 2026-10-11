@@ -3,15 +3,25 @@
  * into it, or start a new one from a name (folder, git init, first commit).
  */
 
+import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
-import { createProject, type ProjectWithRepositories } from "../projects";
+import {
+  createProject,
+  getProject,
+  getProjectWithDevServers,
+  type ProjectWithRepositories,
+} from "../projects";
+import { db, queries, type Project } from "../db";
 import { getHost } from "../hosts";
+import { getWorkspace, setProjectWorkspace } from "../workspaces";
 import { shellQuote } from "../hosts/ssh";
 import { run, shellPath, spawnOn } from "./shell";
 import { onWindowsDrive, WINDOWS_DRIVE_WARNING } from "../wsl";
 
-export const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+import { PROJECT_NAME } from "./name";
+
+export { PROJECT_NAME };
 // https://host/owner/repo(.git), ssh://…, or git@host:owner/repo(.git).
 const REPO_URL =
   /^(?:https:\/\/[\w.-]+(?::\d+)?\/|ssh:\/\/[\w.@-]+(?::\d+)?\/|[\w.-]+@[\w.-]+:)[\w./~-]+$/;
@@ -25,6 +35,8 @@ export interface FolderListing {
   parent: string | null;
   folders: string[];
   isGitRepo: boolean;
+  // The folder with every symlink resolved, for the secrets check.
+  realPath: string;
   // Set when the folder is somewhere a project shouldn't live (a Windows
   // drive under WSL).
   warning: string | null;
@@ -38,28 +50,129 @@ export async function listFolders(
   checkHost(hostId);
   const out = await run(
     hostId,
-    `cd ${shellPath(dir || "~")} && pwd && { test -e .git && echo GIT || echo NOGIT; } && find . -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | sort | head -500`
+    `cd ${shellPath(dir || "~")} && pwd && pwd -P && { test -e .git && echo GIT || echo NOGIT; } && find . -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | sort | head -500`
   );
-  const [abs, git, ...rest] = out.split("\n");
+  const [abs, real, git, ...rest] = out.split("\n");
   return {
     path: abs,
     parent: abs === "/" ? null : path.posix.dirname(abs),
     folders: rest.filter(Boolean).map((f) => f.replace(/^\.\//, "")),
     isGitRepo: git === "GIT",
+    realPath: real,
     warning: onWindowsDrive(abs) ? WINDOWS_DRIVE_WARNING : null,
   };
 }
 
+function checkWorkspace(workspaceId: string | null | undefined) {
+  if (workspaceId && !getWorkspace(workspaceId))
+    throw new Error("Unknown workspace");
+}
+
+// Folders that hold keys and credentials are never a project's home.
+const SECRET_DIR =
+  /(^|\/)(\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.docker|\.password-store|\.agent-os|Keychains|tokenvault)(\/|$)/i;
+
+export function isSecretPath(dir: string): boolean {
+  const p = dir.replace(os.homedir(), "~");
+  return SECRET_DIR.test(p) || /^~\/\.config(\/|$)/i.test(p);
+}
+
+const folderKey = (hostId: string, dir: string) => {
+  const abs =
+    hostId === "local" ? dir.replace(/^~(?=$|\/)/, os.homedir()) : dir;
+  return `${hostId}\0${abs.replace(/\/+$/, "") || "/"}`;
+};
+
+// The project that already lives in this folder on this machine, if any.
+export function projectAt(hostId: string, dir: string): Project | null {
+  const key = folderKey(hostId, dir);
+  const row = (
+    queries.getProjectFolders(db).all() as {
+      id: string;
+      host_id: string;
+      working_directory: string;
+      is_uncategorized: number;
+    }[]
+  ).find(
+    (p) =>
+      !p.is_uncategorized &&
+      folderKey(p.host_id || "local", p.working_directory) === key
+  );
+  return (row && getProject(row.id)) || null;
+}
+
+// Adding a folder that's already a project: the caller is told which, and
+// can ask again with moveExisting to bring it into the workspace instead.
+export class ProjectExistsError extends Error {
+  constructor(readonly project: Project) {
+    super(`${project.name} is already a project`);
+  }
+}
+
+export interface AddFolderOptions {
+  workspaceId?: string | null;
+  name?: string;
+  // An existing project at the folder moves into workspaceId rather than
+  // failing.
+  moveExisting?: boolean;
+  // ...but only one in no workspace: taking a project from another
+  // workspace is refused (the orchestrator's limit).
+  moveOnlyUnassigned?: boolean;
+  requireGit?: boolean;
+}
+
+export interface AddedFolder {
+  project: ProjectWithRepositories;
+  // What happened: made, or an existing one moved (from its old
+  // workspace) or already there.
+  outcome: "created" | "moved" | "unchanged";
+  from: string | null;
+}
+
+// The one way a folder becomes a project in a workspace, for the add
+// dialog and the orchestrator's add_project alike.
 export async function addFolder(
   hostId: string,
-  dir: string
-): Promise<ProjectWithRepositories> {
-  const { path: abs } = await listFolders(hostId, dir);
-  return createProject({
-    name: path.posix.basename(abs) || "project",
-    workingDirectory: abs,
-    hostId,
-  });
+  dir: string,
+  opts: AddFolderOptions = {}
+): Promise<AddedFolder> {
+  checkHost(hostId);
+  checkWorkspace(opts.workspaceId);
+  if (isSecretPath(dir)) throw new Error("That folder holds secrets");
+  const { path: abs, realPath, isGitRepo } = await listFolders(hostId, dir);
+  if (isSecretPath(abs) || isSecretPath(realPath))
+    throw new Error("That folder holds secrets");
+  if (opts.requireGit && !isGitRepo)
+    throw new Error(`${abs} isn't a git repository`);
+  const workspaceId = opts.workspaceId ?? null;
+  const existing = projectAt(hostId, abs) ?? projectAt(hostId, realPath);
+  if (existing) {
+    if (!opts.moveExisting) throw new ProjectExistsError(existing);
+    const from = existing.workspace_id;
+    if (opts.moveOnlyUnassigned && from && from !== workspaceId)
+      throw new Error(
+        `${existing.name} belongs to the ${getWorkspace(from)?.name ?? "another"} workspace; only Saad moves a project between workspaces`
+      );
+    const outcome =
+      !workspaceId || from === workspaceId ? "unchanged" : "moved";
+    if (outcome === "moved") setProjectWorkspace(existing.id, workspaceId);
+    return {
+      project: getProjectWithDevServers(existing.id) as ProjectWithRepositories,
+      outcome,
+      from,
+    };
+  }
+  const name = opts.name?.trim() || path.posix.basename(abs) || "project";
+  return {
+    project: createProject({
+      name,
+      workingDirectory: abs,
+      hostId,
+      workspaceId,
+    }),
+    outcome: "created",
+    from: null,
+  };
 }
 
 // A machine with no git identity still gets its first commit, under a
@@ -71,9 +184,11 @@ const IDENTITY =
 export async function initProject(
   hostId: string,
   parent: string,
-  name: string
+  name: string,
+  workspaceId: string | null = null
 ): Promise<ProjectWithRepositories> {
   checkHost(hostId);
+  checkWorkspace(workspaceId);
   if (!PROJECT_NAME.test(name))
     throw new Error("Use letters, numbers, dots, dashes or underscores");
   const out = await run(
@@ -84,6 +199,7 @@ export async function initProject(
     name,
     workingDirectory: out.trim().split("\n").pop() || name,
     hostId,
+    workspaceId,
   });
 }
 
@@ -119,9 +235,11 @@ export const getCloneJob = (id: string) => jobs.get(id) ?? null;
 export function startClone(
   hostId: string,
   parent: string,
-  url: string
+  url: string,
+  workspaceId: string | null = null
 ): CloneJob {
   checkHost(hostId);
+  checkWorkspace(workspaceId);
   if (!REPO_URL.test(url)) throw new Error("That isn't a repository URL");
   const name = repoNameOf(url);
   if (!name) throw new Error("Couldn't tell the repository's name");
@@ -182,6 +300,7 @@ export function startClone(
         name,
         workingDirectory: stdout.trim().split("\n").pop() || name,
         hostId,
+        workspaceId,
       });
       job.projectId = project.id;
       job.status = "done";

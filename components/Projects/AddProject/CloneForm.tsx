@@ -9,9 +9,11 @@ import { ParentPicker } from "./ParentPicker";
 
 export function CloneForm({
   hostId,
+  workspaceId,
   onDone,
 }: {
   hostId: string;
+  workspaceId: string | null;
   onDone: (projectId: string) => void;
 }) {
   const [url, setUrl] = useState("");
@@ -29,7 +31,7 @@ export function CloneForm({
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        start.mutate({ hostId, parent, url: url.trim() });
+        start.mutate({ hostId, parent, url: url.trim(), workspaceId });
       }}
     >
       <Input
