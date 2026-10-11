@@ -10,17 +10,15 @@ import { getDefaultBranch } from "../git";
 import { git as runGit } from "../git-exec";
 import { mergePolicy } from "../tasks/merge-policy";
 import { getProject } from "../projects";
-import {
-  deleteWorktree,
-  isAgentOSWorktree,
-  removalRunning,
-  removalSettled,
-} from "../worktrees";
+import { deleteWorktree, isAgentOSWorktree } from "../worktrees";
+import { removalRunning, removalSettled } from "../worktree-removal";
 import { describeChanges, unsavedChanges } from "../worktree-placed";
 
 export type WorktreeFate =
   | { action: "none" }
   | { action: "removed"; why: string }
+  // Removed, or being removed, by something else (a merge's cleanup).
+  | { action: "gone"; why: string }
   | { action: "kept"; why: string; path: string };
 
 const git = (cwd: string, ...args: string[]) =>
@@ -104,30 +102,63 @@ export type FatePreview =
 type Judged = Pick<Session, "worktree_path" | "base_branch"> &
   Partial<Pick<Session, "project_id">>;
 
+// Gone, or still going: removed by whatever else got to it first.
+const gone = (merged: MergedAs | null, still = false) => ({
+  action: "gone" as const,
+  why: `${still ? "still being" : "already"} removed${merged ? " by the merge cleanup" : ""}`,
+});
+
 // Decides without touching anything, after any removal already running
-// (a sign-off's cleanup, just before a done) has finished: a tree read
-// while git deletes it lists every deleted file as a change.
+// (a merge's cleanup, from any process) has finished: a tree read while
+// git deletes it lists every deleted file as a change.
 export async function worktreeFate(
   session: Judged,
-  merged: MergedAs | null
+  merged: MergedAs | null,
+  waitMs = 60_000
 ): Promise<FatePreview> {
   const path = session.worktree_path;
+  if (!path) return { action: "none" };
   for (;;) {
-    if (path) await removalSettled(path);
+    if (!(await removalSettled(path, waitMs))) return gone(merged, true);
+    if (!fs.existsSync(path)) return gone(merged);
     const fate = await judge(session, merged);
-    if (!path || !removalRunning(path)) return fate;
+    // A removal that started while it read: read what it leaves.
+    if (!removalRunning(path) && fs.existsSync(path)) return fate;
   }
+}
+
+// What the branch's commits would lose: why they keep the worktree, or
+// null when every one is merged, pushed or not its own.
+async function commitsKeep(
+  path: string,
+  repo: string,
+  session: Judged,
+  merged: MergedAs | null
+): Promise<string | null> {
+  if (merged) {
+    const stray = await strayCommits(path, merged).catch(() => null);
+    if (stray === null) return "its commits can't be checked";
+    if (stray > 0)
+      return `${stray} commit${stray === 1 ? " is" : "s are"} on it that the merged PR didn't include and no remote has`;
+    return null;
+  }
+  const base = session.base_branch || (await getDefaultBranch(repo));
+  const own = await ownCommits(path, base).catch(() => null);
+  if (own === null) return `its base ${base} can't be found to compare`;
+  if (own > 0)
+    return `its branch has ${own} commit${own === 1 ? "" : "s"} not merged into ${base}`;
+  return null;
 }
 
 // Uncommitted work always keeps it; a merged branch goes only if the merge
 // settings delete worktrees and every commit on it was in the merge or is
-// on a remote; an unmerged one only if it has no commits of its own.
+// on a remote; an unmerged one only if it has no commits of its own. A
+// kept one names every reason, the commits as well as the changes.
 async function judge(
   session: Judged,
   merged: MergedAs | null
 ): Promise<FatePreview> {
-  const path = session.worktree_path;
-  if (!path || !fs.existsSync(path)) return { action: "none" };
+  const path = session.worktree_path!;
   const keep = (why: string) => ({ action: "kept" as const, why, path });
   if (!isAgentOSWorktree(path)) return keep("it isn't an AgentOS worktree");
   if (merged && session.project_id) {
@@ -141,27 +172,18 @@ async function judge(
   // nobody has touched since isn't work; anything else is.
   const unsaved = await unsavedChanges(path).catch(() => null);
   if (!unsaved) return keep("its uncommitted changes can't be checked");
-  if (unsaved.length)
-    return keep(`it has uncommitted changes (${describeChanges(unsaved)})`);
-  if (merged) {
-    const stray = await strayCommits(path, merged).catch(() => null);
-    if (stray === null) return keep("its commits can't be checked");
-    if (stray > 0)
-      return keep(
-        `${stray} commit${stray === 1 ? " is" : "s are"} on it that the merged PR didn't include and no remote has`
-      );
-    return { action: "remove", why: "its branch is merged", repo };
-  }
-  const base = session.base_branch || (await getDefaultBranch(repo));
-  const own = await ownCommits(path, base).catch(() => null);
-  if (own === null) return keep(`its base ${base} can't be found to compare`);
-  if (own > 0)
-    return keep(
-      `its branch has ${own} commit${own === 1 ? "" : "s"} not merged into ${base}`
-    );
+  const why = [
+    unsaved.length
+      ? `it has uncommitted changes (${describeChanges(unsaved)})`
+      : null,
+    await commitsKeep(path, repo, session, merged),
+  ].filter((w) => w !== null);
+  if (why.length) return keep(why.join(", and "));
   return {
     action: "remove",
-    why: "its branch has no commits of its own",
+    why: merged
+      ? "its branch is merged"
+      : "its branch has no commits of its own",
     repo,
   };
 }
