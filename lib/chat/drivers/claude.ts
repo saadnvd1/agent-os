@@ -10,6 +10,7 @@ import type { DriverEvent, FileSuggestion, McpServerView } from "../events";
 import { InputQueue } from "../queue";
 import {
   Approvals,
+  compactedHooks,
   isPlanFile,
   preToolUseHooks,
   sdkMode,
@@ -193,6 +194,9 @@ export const claudeDriver: ChatDriver = {
         disallowedTools: options.disallowedTools,
         hooks: {
           PreToolUse: preToolUseHooks(approvals, options.toolGuard),
+          ...(options.compactContext && {
+            SessionStart: compactedHooks(options.compactContext),
+          }),
         },
         settings: { attribution: NO_ATTRIBUTION },
         enableFileCheckpointing: true,

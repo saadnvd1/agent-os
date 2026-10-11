@@ -6,8 +6,9 @@
  * default: its state is in the database and its brief carries it
  * (lib/orchestrator/digest). A task keeps its progress only in its
  * conversation and its branch, so for tasks it's off unless switched on.
- * App-wide, in Settings → Workspaces, with the size at which chats and
- * tasks compact (lib/chat/stale).
+ * App-wide, in Settings → Workspaces, with the two sizes at which chats and
+ * tasks compact: mid-turn (Claude Code itself, high so a job keeps its
+ * files) and between turns (lib/chat/stale, earlier, nothing in flight).
  */
 
 import { db } from "../db";
@@ -20,16 +21,22 @@ export const TASK_KEY = "chat.task_refresh_tokens";
 export const COMPACT_KEY = "chat.stale_compact_tokens";
 export const DEFAULT_ORCHESTRATOR_TOKENS = 200_000;
 export const DEFAULT_COMPACT_TOKENS = 150_000;
+// Claude Code's own mid-turn auto-compact window: high, because a summary
+// mid-job costs the agent its files and its place.
+export const AUTO_COMPACT_KEY = "chat.auto_compact_tokens";
+export const DEFAULT_AUTO_COMPACT_TOKENS = 300_000;
 export { MIN_REFRESH_TOKENS, MAX_REFRESH_TOKENS } from "./refresh-limits";
 
 export interface RefreshSettings {
   // Context tokens at which a conversation starts over; 0 is off.
   orchestratorTokens: number;
   taskTokens: number;
-  // Context tokens at which a chat's or task's agent compacts: Claude
-  // Code's own auto-compact window, and between turns a chat over it (or
-  // idle past its cache) is compacted before the next message. 0 is off.
+  // Between turns: a chat over this size (or idle past its cache) is
+  // compacted before its next message. 0 is off.
   compactTokens: number;
+  // Mid-turn: Claude Code's own auto-compact window for a chat's or task's
+  // agent. 0 is off.
+  autoCompactTokens: number;
 }
 
 function read(key: string, fallback: number): number {
@@ -45,6 +52,7 @@ export function refreshSettings(): RefreshSettings {
     orchestratorTokens: read(ORCHESTRATOR_KEY, DEFAULT_ORCHESTRATOR_TOKENS),
     taskTokens: read(TASK_KEY, 0),
     compactTokens: read(COMPACT_KEY, DEFAULT_COMPACT_TOKENS),
+    autoCompactTokens: read(AUTO_COMPACT_KEY, DEFAULT_AUTO_COMPACT_TOKENS),
   };
 }
 
@@ -79,6 +87,11 @@ export function setRefreshSettings(input: Partial<RefreshSettings>): void {
     checked.push([TASK_KEY, checkRefreshTokens(input.taskTokens)]);
   if (input.compactTokens !== undefined)
     checked.push([COMPACT_KEY, checkRefreshTokens(input.compactTokens)]);
+  if (input.autoCompactTokens !== undefined)
+    checked.push([
+      AUTO_COMPACT_KEY,
+      checkRefreshTokens(input.autoCompactTokens),
+    ]);
   db.transaction(() => {
     for (const [key, n] of checked) put.run(key, String(n));
   })();
@@ -119,7 +132,7 @@ export function autoCompactEnv(sessionId: string): Record<string, string> {
     .get(sessionId) as
     | { role: string | null; model_provider: string | null }
     | undefined;
-  const tokens = refreshSettings().compactTokens;
+  const tokens = refreshSettings().autoCompactTokens;
   if (row?.role === "orchestrator" || tokens <= 0) return {};
   const window = compactThreshold(
     Math.max(AUTO_COMPACT_MIN, tokens),

@@ -91,10 +91,16 @@ export function recordTurn(
   return totals;
 }
 
+// When a compaction ran: "mid_turn" is the agent's own, at its auto-compact
+// window, while it worked; the rest happen between turns.
+export type CompactionPhase = "mid_turn" | "between_turns";
+export const compactionPhase = (trigger: string): CompactionPhase =>
+  trigger === "auto" ? "mid_turn" : "between_turns";
+
 // Records one compaction: who ran it ("auto" is the agent's own, at its
 // auto-compact window; "threshold" and "stale" are AgentOS's before a
-// message; "manual" is a /compact someone typed), and the context before
-// and after when the agent said.
+// message; "manual" is a /compact someone typed), which phase that was,
+// and the context before and after when the agent said.
 export function recordCompaction(
   session: Pick<Session, "id" | "name" | "workspace_id">,
   c: { trigger: string; before?: number; after?: number },
@@ -106,14 +112,15 @@ export function recordCompaction(
     | { name: string; workspace_id: string | null }
     | undefined;
   db.prepare(
-    `INSERT INTO chat_compactions (session_id, session_name, workspace_id, at, trigger, before_tokens, after_tokens)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO chat_compactions (session_id, session_name, workspace_id, at, trigger, phase, before_tokens, after_tokens)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     session.id,
     current?.name ?? session.name,
     current?.workspace_id ?? session.workspace_id,
     at,
     c.trigger,
+    compactionPhase(c.trigger),
     c.before ?? null,
     c.after ?? null
   );

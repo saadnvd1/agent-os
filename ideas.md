@@ -150,3 +150,8 @@
 - Folder browser in the project's settings for changing its folder.
 - The chat's access chip reads "Full access" until the worker's capabilities
   arrive (useChat's default), even when the session is "Accept edits".
+
+- Terminal agents get the post-compaction note too: a SessionStart (compact)
+  hook calling an authenticated route that returns `compactContext`. Chats
+  have it; the other chat drivers (codex, opencode, pi) only get the
+  summary instructions.

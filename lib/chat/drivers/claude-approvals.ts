@@ -275,3 +275,35 @@ export function preToolUseHooks(
     ...(guard ? [{ hooks: [guardHook(guard)] }] : []),
   ];
 }
+
+// After a compaction Claude Code starts the session again with source
+// "compact", and what a SessionStart hook returns as additionalContext is
+// added to the context: the one way to hand the agent something back that
+// doesn't depend on what its summary kept. A failure here never blocks it.
+export function compactedHooks(
+  context: () => Promise<string>
+): HookCallbackMatcher[] {
+  return [
+    {
+      matcher: "compact",
+      hooks: [
+        async () => {
+          try {
+            const additionalContext = await context();
+            return additionalContext
+              ? {
+                  hookSpecificOutput: {
+                    hookEventName: "SessionStart",
+                    additionalContext,
+                  },
+                }
+              : {};
+          } catch (e) {
+            console.error("building the compaction note:", e);
+            return {};
+          }
+        },
+      ],
+    },
+  ];
+}

@@ -8,6 +8,9 @@ import { listItems, saveItem } from "../store";
 import { enqueue, listQueue } from "../queued";
 import type { WorkerEvent } from "./protocol";
 import type { RoleExtras } from "./extras";
+import { COMPACT_INSTRUCTIONS } from "../working-state";
+
+const COMPACT_CMD = `/compact ${COMPACT_INSTRUCTIONS}`;
 
 // A conversation the test drives by hand.
 function fakeConversation() {
@@ -1578,7 +1581,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
   const compactions = (id: string) =>
     getDb()
       .prepare(
-        `SELECT trigger, before_tokens, after_tokens FROM chat_compactions WHERE session_id = ? ORDER BY id`
+        `SELECT trigger, phase, before_tokens, after_tokens FROM chat_compactions WHERE session_id = ? ORDER BY id`
       )
       .all(id);
   const sentTexts = (c: { send: { mock: { calls: unknown[][] } } }) =>
@@ -1597,7 +1600,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
       compact: "auto",
     });
     // Only the compaction went in; the message waits first in line.
-    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD]);
     expect(listQueue(id).map((m) => m.id)).toEqual(["m1"]);
     expect(host.state).toBe("running");
     expect(emitted.some((e) => e.type === "queue")).toBe(true);
@@ -1624,7 +1627,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
     // The compaction's end sends the message.
-    expect(sentTexts(conversation)).toEqual(["/compact", "continue"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD, "continue"]);
     expect(listQueue(id)).toEqual([]);
     // The measure after the compaction fills in the size after.
     conversation.events.push({
@@ -1652,7 +1655,12 @@ describe("ChatHost compacts a stale chat before a message", () => {
     expect(order.indexOf("c1")).toBeLessThan(order.indexOf("m1"));
     // Kept for the usage history, once, with the size after.
     expect(compactions(id)).toEqual([
-      { trigger: "stale", before_tokens: 412_000, after_tokens: 38_000 },
+      {
+        trigger: "stale",
+        phase: "between_turns",
+        before_tokens: 412_000,
+        after_tokens: 38_000,
+      },
     ]);
     // The agent compacting itself at its window is kept too.
     conversation.events.push({
@@ -1668,6 +1676,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
     await tick();
     expect(compactions(id).at(-1)).toEqual({
       trigger: "auto",
+      phase: "mid_turn",
       before_tokens: 151_000,
       after_tokens: null,
     });
@@ -1683,7 +1692,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
       ...bus,
       compact: "auto",
     });
-    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD]);
     conversation.events.push({
       type: "item",
       item: { id: "c1", kind: "compacted", trigger: "manual", createdAt: 1 },
@@ -1744,7 +1753,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
       compact: "yes",
       queue: true,
     });
-    expect(sentTexts(conversation)).not.toContain("/compact");
+    expect(sentTexts(conversation)).not.toContain(COMPACT_CMD);
     host.close();
   });
 
@@ -1777,7 +1786,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
       compact: "yes",
       queue: true,
     });
-    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD]);
     host.close();
   });
 
@@ -1797,11 +1806,11 @@ describe("ChatHost compacts a stale chat before a message", () => {
       ...bus,
       compact: "auto",
     });
-    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD]);
     expect(listQueue(id).map((m) => m.id)).toEqual(["m1", "m2"]);
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
-    expect(sentTexts(conversation)).toEqual(["/compact", "first"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD, "first"]);
     host.close();
   });
 
@@ -1825,7 +1834,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
     });
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
-    expect(sentTexts(conversation)).toEqual(["/compact", "continue"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD, "continue"]);
     expect(listQueue(id)).toEqual([]);
     expect(listItems(id).find((i) => i.id === "out-1")).toMatchObject({
       text: "Error during compaction: overloaded",
@@ -1834,7 +1843,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
     await host.handle({ type: "send", id: "m2", text: "next", ...bus });
-    expect(sentTexts(conversation)).toEqual(["/compact", "continue", "next"]);
+    expect(sentTexts(conversation)).toEqual([COMPACT_CMD, "continue", "next"]);
     host.close();
   });
 
@@ -1852,7 +1861,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
       ...bus,
       compact: "auto",
     });
-    expect(sentTexts(conversation)).not.toContain("/compact");
+    expect(sentTexts(conversation)).not.toContain(COMPACT_CMD);
     expect(conversation.close).toHaveBeenCalledOnce();
     // The message waits for the next worker, which starts over.
     expect(listQueue(id).map((m) => m.id)).toEqual(["m1"]);

@@ -323,11 +323,11 @@ The ring in the tab bar (in the composer on a phone) is how full the
 conversation's context is, measured against the room before auto-compact:
 amber past 60%, red past 85%. Tap it for the breakdown and **Compact now**.
 
-Chats and tasks compact at 150k tokens of context by default (Settings →
-Workspaces → Compact; off sets it to never), not near the model's window:
-AgentOS launches Claude Code with `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to
-that size (its floor is 100k), so the agent compacts itself mid-turn. Between
-turns AgentOS catches what it didn't: a chat over the threshold is compacted
+Two thresholds (Settings → Workspaces → Compact; 0 turns one off). Mid-turn,
+the agent compacts itself at 300k by default: AgentOS launches Claude Code
+with `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to that size (its floor is 100k),
+high enough that a long job isn't cut in half. Between
+turns AgentOS catches what it didn't: a chat over its 150k threshold is compacted
 before the next message, and so is one idle past its prompt cache (5 minutes
 or an hour, read from the agent's own usage), whose next message would
 re-read the whole conversation at the cache-write price. A chip above the
@@ -339,6 +339,13 @@ shows one quiet line with the context before and after. An orchestrator
 isn't compacted (a summary would lose the fence around what it read from
 tasks and CI): it starts a fresh conversation from its brief and the current
 state at its fresh-start threshold, or earlier once idle past its cache.
+What survives a compaction: the summary is asked to keep the task, scope
+changes, every edited file by path, what's done, in progress and next, and
+the decisions. Right after it, AgentOS hands back a note built from its own
+records (a task's brief and scope changes, the files it edited, its todos,
+the latest message and `git status`), which doesn't depend on what the
+summary kept, and tells the agent not to re-read or rewrite whole files.
+Terminal agents don't get the note yet.
 On a desktop browser the screen button attaches a screenshot of a screen or
 window you pick; on a phone, attach a screenshot as a photo.
 
@@ -349,8 +356,8 @@ turn ends. **Gate reviews** below it shows what the orchestrator's
 independent reviewer and scope check cost, by PR: they run as `claude -p`
 and leave no transcript, so each run's tokens, model and duration are read
 from its JSON result into `check_runs`, and the review's verdict says them
-too. Every compaction is kept in `chat_compactions` (who ran it, and the
-context before and after), so cost per task can be compared by date.
+too. Every compaction is kept in `chat_compactions` (who ran it, whether it
+fired `mid_turn` or `between_turns`, and the context before and after), so cost per task can be compared by date.
 
 **Esc** stops a running turn, as it does in Claude Code's terminal, unless a
 menu, dialog or the command list is open (those close first). On a phone the
