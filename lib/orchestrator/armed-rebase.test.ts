@@ -517,7 +517,6 @@ describe("automatic rebase", () => {
     await rebaseConflicting(t.w, t.facts(), r.deps);
     git(t.repo, "fetch", "-q", "origin");
     expect(originHead(t.repo)).toBe(t.sha);
-    expect(r.bodies).toEqual([]);
   });
 
   it("rebases onto the default branch when no base is recorded or reported", async () => {

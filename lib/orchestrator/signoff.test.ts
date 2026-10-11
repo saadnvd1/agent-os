@@ -1763,7 +1763,7 @@ describe("the PR's real base", () => {
       `UPDATE sessions SET branch_name = 'feature/child', base_branch = 'feature/parent' WHERE id = ?`
     ).run(t.task);
     const child = stackOn(t, "pr", "feature/parent");
-    pr = { ...pr!, head, codeReview: { sha: head }, base: "feature/parent" };
+    pr = { ...pr!, head, base: "feature/parent" };
 
     const { runs } = await reviewNow(t.w);
     expect(runs[0].prompt).toContain("A c.ts");
