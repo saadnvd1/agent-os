@@ -47,20 +47,23 @@ export function aosRefusal(command: string): string | null {
       continue;
     }
     if (c === "\\") {
-      // zsh's ${(e)...} evaluates what an escaped \$ or \` left behind.
-      if (q === '"' && /[$`]/.test(command[i + 1] ?? ""))
+      // zsh deletes a backslash-newline before it parses, joining $ to what
+      // follows; and its ${(e)...} evaluates what an escaped \$ or \` left.
+      const n = command[i + 1] ?? "";
+      if (/[\n\r]/.test(n) || (q === '"' && /[$`]/.test(n)))
         return `Refused: ${bad}.`;
       i++;
       continue;
     }
-    if (c === "`" || (c === "$" && command[i + 1] === "("))
-      return `Refused: ${bad}.`;
-    // ${...} and $[...] evaluate (zsh's ${(e)...} runs commands).
-    if (c === "$" && /[{[]/.test(command[i + 1] ?? ""))
-      return `Refused: ${bad}.`;
-    // $'...' and $"..." quote differently in the shell than here.
-    if (c === "$" && q !== '"' && /['"]/.test(command[i + 1] ?? ""))
-      return `Refused: ${bad}.`;
+    if (c === "`") return `Refused: ${bad}.`;
+    // After a $ only a plain variable name (or $?, $#, $@, $*, $-, a digit)
+    // or a literal $ may follow: ${..}, $[..], $'..' and the like evaluate
+    // or quote differently in the shell than here.
+    if (c === "$") {
+      const n = command[i + 1] ?? "";
+      if (!/^[\sA-Za-z0-9_?#@*-]?$/.test(n) && !(q === '"' && n === '"'))
+        return `Refused: ${bad}.`;
+    }
     if (q === '"') {
       if (c === '"') q = null;
       continue;
