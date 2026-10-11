@@ -2,10 +2,16 @@ import fs from "fs";
 import { randomUUID } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
+import { ensureOrchestrator } from "../orchestrator/home";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import { recordTurn } from "../usage/turns";
 import { setModelSettings } from "./config";
-import { routedRun, sessionProviderEnv, sessionShellEnv } from "./launch";
+import {
+  routedRun,
+  routeOrchestrator,
+  sessionProviderEnv,
+  sessionShellEnv,
+} from "./launch";
 import { PROVIDER_PRESETS } from "./providers";
 import { redact, resolveSecret, secretCommand } from "./secrets";
 import { testProvider } from "./test-provider";
@@ -61,6 +67,58 @@ describe("secret references", () => {
     await expect(
       resolveSecret({ kind: "keychain", service: "missing" }, exec)
     ).rejects.toThrow("Couldn't read the key (security failed)");
+  });
+
+  it("won't read an env reference that isn't an API key's", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", KEY);
+    expect(
+      await resolveSecret({ kind: "env", name: "DEEPSEEK_API_KEY" }, exec)
+    ).toBe(KEY);
+    for (const name of ["HOME", "ANTHROPIC_API_KEY", "AGENTOS_X_API_KEY"])
+      await expect(resolveSecret({ kind: "env", name }, exec)).rejects.toThrow(
+        /_API_KEY/
+      );
+    vi.unstubAllEnvs();
+  });
+
+  it("falls back to the default model when a provider can't be used", async () => {
+    // A helper run whose key can't be read still runs, on Claude.
+    const broken = async () => {
+      throw new Error("not found");
+    };
+    setModelSettings({
+      providers: [deepseek, zai],
+      roles: { helper: "deepseek/deepseek-flash", orchestrator: "zai/glm-5.3" },
+    });
+    expect(await routedRun("helper", {}, broken)).toEqual({
+      model: "claude-haiku-4-5-20251001",
+      provider: "anthropic",
+      env: {},
+    });
+
+    const { workspace } = seedWorkspace();
+    const row = ensureOrchestrator(workspace.id);
+    // Its key won't come: the orchestrator starts on its default.
+    expect(await routeOrchestrator(row, broken)).toMatchObject({
+      model: "claude-sonnet-5-5",
+      model_provider: null,
+    });
+    // Its key comes: it runs where it's routed.
+    expect(await routeOrchestrator(row, exec)).toMatchObject({
+      model: "glm-5.3",
+      model_provider: "zai",
+    });
+    // Its provider turned off: the default again, and the row says so.
+    setModelSettings({
+      providers: [deepseek, { ...zai, enabled: false }],
+      roles: { orchestrator: "zai/glm-5.3" },
+    });
+    await routeOrchestrator(row, exec);
+    expect(
+      db
+        .prepare(`SELECT model, model_provider FROM sessions WHERE id = ?`)
+        .get(row.id)
+    ).toEqual({ model: "claude-sonnet-5-5", model_provider: null });
   });
 
   it("puts the key in the agent's environment as its provider wants it", async () => {

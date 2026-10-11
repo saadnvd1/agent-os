@@ -1,7 +1,8 @@
 /**
  * Which model a piece of work runs on, and what its agent needs to reach
  * it. The most specific setting wins: the task's own override, then its
- * workspace's, then Settings, then the default (lib/models/roles).
+ * workspace's, then Settings, then AGENTOS_REVIEW_MODEL or
+ * AGENTOS_TITLE_MODEL, then the default (lib/models/roles).
  */
 
 import { db, type Session } from "../db";
@@ -9,6 +10,7 @@ import { getProject } from "../projects";
 import {
   effectiveModels,
   roleMapSchema,
+  savedModelSettings,
   workspaceModels,
   type EffectiveModels,
   type RoleMap,
@@ -30,7 +32,20 @@ import {
   type SecretCommand,
 } from "./secrets";
 
-export type RoleSource = "task" | "workspace" | "settings" | "default";
+export type RoleSource = "task" | "workspace" | "settings" | "env" | "default";
+
+// The server's own environment can still stand in for a role's default:
+// what AgentOS read before model routing existed.
+const ENV_ROLE_MODELS: Partial<Record<ModelRole, string>> = {
+  review: "AGENTOS_REVIEW_MODEL",
+  scope: "AGENTOS_REVIEW_MODEL",
+  helper: "AGENTOS_TITLE_MODEL",
+};
+
+const envModel = (role: ModelRole): string | undefined => {
+  const name = ENV_ROLE_MODELS[role];
+  return (name && process.env[name]?.trim()) || undefined;
+};
 
 export interface RoutedModel {
   role: ModelRole;
@@ -96,11 +111,20 @@ export function resolveRole(
     ? workspaceModels(opts.workspaceId).roles?.[role]
     : undefined;
   const saved = models.roles[role];
+  // The variable stands in only where Settings names nothing for the role.
+  const env =
+    saved === DEFAULT_ROLE_MODELS[role] && !savedModelSettings().roles?.[role]
+      ? envModel(role)
+      : undefined;
   const [ref, source]: [string, RoleSource] = task
     ? [task, "task"]
     : ws
       ? [ws, "workspace"]
-      : [saved, saved === DEFAULT_ROLE_MODELS[role] ? "default" : "settings"];
+      : saved !== DEFAULT_ROLE_MODELS[role]
+        ? [saved, "settings"]
+        : env
+          ? [env, "env"]
+          : [saved, "default"];
   const parsed = parseModelRef(ref);
   return {
     role,
@@ -109,6 +133,30 @@ export function resolveRole(
     model: parsed.model,
     source,
   };
+}
+
+// The role's built-in model on the Claude login: what work falls back to
+// when the provider it's routed to can't be used.
+export function defaultRoute(role: ModelRole): RoutedModel {
+  const parsed = parseModelRef(DEFAULT_ROLE_MODELS[role]);
+  return {
+    role,
+    ref: formatModelRef(parsed),
+    provider: ANTHROPIC_PROVIDER,
+    model: parsed.model,
+    source: "default",
+  };
+}
+
+export function resolveRoleOrDefault(
+  role: ModelRole,
+  opts: { workspaceId?: string | null } = {}
+): RoutedModel {
+  try {
+    return resolveRole(role, opts);
+  } catch {
+    return defaultRoute(role);
+  }
 }
 
 // A session's workspace: an orchestrator's own, or its project's.

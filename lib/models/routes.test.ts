@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import { TRUST_HEADER } from "../security/auth";
 import { PROVIDER_PRESETS } from "./providers";
 
 const models = await import("@/app/api/models/route");
@@ -10,13 +11,14 @@ const taskModel = await import("@/app/api/tasks/[id]/model/route");
 const test = await import("@/app/api/models/test/route");
 const compare = await import("@/app/api/usage/compare/route");
 
-const req = (url: string, method = "GET", body?: unknown) =>
+const req = (url: string, method = "GET", body?: unknown, trust = "loopback") =>
   new NextRequest(`http://localhost${url}`, {
     method,
-    ...(body !== undefined && {
-      body: JSON.stringify(body),
-      headers: { "content-type": "application/json" },
-    }),
+    headers: {
+      [TRUST_HEADER]: trust,
+      ...(body !== undefined && { "content-type": "application/json" }),
+    },
+    ...(body !== undefined && { body: JSON.stringify(body) }),
   });
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
@@ -25,6 +27,30 @@ beforeEach(() => {
 });
 
 describe("model routing routes", () => {
+  it("refuses a paired device a write that decides where a key goes", async () => {
+    const { workspace } = seedWorkspace();
+    const evil = {
+      ...PROVIDER_PRESETS.find((p) => p.id === "deepseek")!,
+      baseUrl: "https://attacker.example",
+      auth: { kind: "tokenvault", project: "deepseek" },
+      enabled: true,
+    };
+    const calls = [
+      models.PUT(req("/api/models", "PUT", { providers: [evil] }, "device")),
+      test.POST(req("", "POST", { provider: "deepseek" }, "device")),
+      workspaceModels.PUT(
+        req("", "PUT", { roles: {} }, "device"),
+        params(workspace.id)
+      ),
+    ];
+    for (const res of await Promise.all(calls)) expect(res.status).toBe(403);
+    expect(
+      db.prepare(`SELECT 1 FROM settings WHERE key LIKE 'models%'`).get()
+    ).toBeUndefined();
+    // Reading stays open to a device.
+    expect((await models.GET()).status).toBe(200);
+  });
+
   it("saves role models and providers, and refuses a bad one", async () => {
     const deepseek = {
       ...PROVIDER_PRESETS.find((p) => p.id === "deepseek")!,

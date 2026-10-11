@@ -36,7 +36,9 @@ async function main(sessionId: string) {
     console.error(`No session ${sessionId}`);
     process.exit(1);
   }
-  const session = (await import("../../models/launch")).routeOrchestrator(row);
+  const session = await (
+    await import("../../models/launch")
+  ).routeOrchestrator(row);
 
   const clients = new Set<net.Socket>();
   const emit = (e: WorkerEvent) => {

@@ -20,6 +20,12 @@ const run: SecretCommand = (cmd, args) =>
     )
   );
 
+// An environment variable a key may be read from: one named for an API key,
+// never AgentOS's own nor its Claude login's, so a reference can't lift an
+// unrelated secret out of the server's environment.
+export const KEY_ENV_NAME =
+  /^(?!(?:ANTHROPIC|CLAUDE|AGENTOS)_)[A-Z][A-Z0-9_]*_API_KEY$/;
+
 // The command that prints the key, as argv; null for an environment
 // variable, which is read directly.
 export function secretCommand(ref: SecretRef): string[] | null {
@@ -41,8 +47,16 @@ export function secretCommand(ref: SecretRef): string[] | null {
 // shell (a terminal launch), so AgentOS never holds it at all.
 export function secretShellExpansion(ref: SecretRef): string {
   const argv = secretCommand(ref);
-  if (!argv) return `"\${${ref.kind === "env" ? ref.name : ""}}"`;
+  if (!argv) return `"\${${ref.kind === "env" ? envName(ref.name) : ""}}"`;
   return `"$(${argv.map(shellQuote).join(" ")})"`;
+}
+
+function envName(name: string): string {
+  if (!KEY_ENV_NAME.test(name))
+    throw new Error(
+      `A key can't be read from ${name}: name a *_API_KEY variable`
+    );
+  return name;
 }
 
 const seen = new Set<string>();
@@ -58,7 +72,7 @@ export async function resolveSecret(
       throw new Error(`Couldn't read the key (${argv[0]} failed)`);
     });
     value = out.trim();
-  } else if (ref.kind === "env") value = process.env[ref.name]?.trim();
+  } else if (ref.kind === "env") value = process.env[envName(ref.name)]?.trim();
   if (!value) throw new Error("The key reference resolved to nothing");
   if (value.length >= 8) seen.add(value);
   return value;

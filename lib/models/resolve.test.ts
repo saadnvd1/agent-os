@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
 import { seedWorkspace } from "../orchestrator/testing";
 import { setModelSettings, setWorkspaceModels } from "./config";
@@ -15,6 +15,7 @@ const deepseek = {
 beforeEach(() => {
   db.prepare(`DELETE FROM settings WHERE key LIKE 'models%'`).run();
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("role resolution", () => {
   it("runs every role on Claude by default", () => {
@@ -95,6 +96,23 @@ describe("role resolution", () => {
     );
   });
 
+  it("still reads AGENTOS_REVIEW_MODEL and AGENTOS_TITLE_MODEL, under Settings", () => {
+    vi.stubEnv("AGENTOS_REVIEW_MODEL", "sonnet");
+    vi.stubEnv("AGENTOS_TITLE_MODEL", "claude-haiku-4-5");
+    expect(resolveRole("review")).toMatchObject({
+      model: "sonnet",
+      source: "env",
+    });
+    expect(resolveRole("scope").model).toBe("sonnet");
+    expect(resolveRole("helper")).toMatchObject({
+      model: "claude-haiku-4-5",
+      provider: { id: "anthropic" },
+    });
+    expect(resolveRole("implement").source).toBe("default");
+    setModelSettings({ roles: { review: "anthropic/claude-opus-5-5" } });
+    expect(resolveRole("review").model).toBe("claude-opus-5-5");
+  });
+
   it("reads a bare model as Anthropic's", () => {
     expect(parseModelRef("opus")).toEqual({
       provider: "anthropic",
@@ -149,6 +167,24 @@ describe("model settings", () => {
     expect(() =>
       setModelSettings({ roles: { implement: "not a ref" } })
     ).toThrow(/provider\/model/);
+    // An env reference names an API key, never the server's own secrets.
+    for (const name of [
+      "HOME",
+      "ANTHROPIC_API_KEY",
+      "CLAUDE_CODE_OAUTH_TOKEN",
+      "AGENTOS_DEVICE_API_KEY",
+      "GITHUB_TOKEN",
+    ])
+      expect(() =>
+        setModelSettings({
+          providers: [{ ...deepseek, auth: { kind: "env", name } }],
+        })
+      ).toThrow(/_API_KEY/);
+    setModelSettings({
+      providers: [
+        { ...deepseek, auth: { kind: "env", name: "DEEPSEEK_API_KEY" } },
+      ],
+    });
   });
 
   it("keeps the Claude login as anthropic", () => {

@@ -465,7 +465,10 @@ Each kind of work AgentOS launches an agent for runs on its own model, set in
 | Chat & summary helpers (titles, summaries, PR text) | `anthropic/claude-haiku-4-5-20251001` |
 
 The most specific setting wins: a task's own model, then its workspace's
-(**Settings → Workspaces → Models**), then Settings, then the default. A
+(**Settings → Workspaces → Models**), then Settings, then the default.
+`AGENTOS_REVIEW_MODEL` (gate review and scope check) and
+`AGENTOS_TITLE_MODEL` (helpers) in the server's environment still replace a
+role's default where Settings names none. A
 Claude session started without a model (the orchestrator's `start_session`,
 the API) runs on the interactive role's; one you pick a model for keeps it.
 
@@ -496,13 +499,17 @@ subagents and background calls stay on that provider. DeepSeek
 (`https://api.deepseek.com/anthropic`) and Z.ai GLM
 (`https://api.z.ai/api/anthropic`) ship as presets, off until given a key.
 Claude stays the default: another provider runs only where a role or a task
-picks it. **Test provider** sends one tiny request and says whether it
-answered.
+picks it. If a role's provider is turned off or its key can't be read,
+helper runs, reviews and the orchestrator fall back to the role's default
+rather than fail. **Test provider** sends one tiny request and says whether it
+answered. Changing models, providers or the test runs only from this machine
+or over Tailscale, never from a paired device: a provider's URL and key
+reference decide where a key is sent.
 
 The key is never stored by AgentOS. A provider names where to read it: a
 tokenvault entry (`tv get <project> <desc>`), a macOS Keychain item
 (`security find-generic-password -s <service> -w`) or an environment
-variable. It's read when an agent launches and goes only into that agent's
+variable named `*_API_KEY` (not `ANTHROPIC_`, `CLAUDE_` or `AGENTOS_`). It's read when an agent launches and goes only into that agent's
 environment (`ANTHROPIC_BASE_URL` with `ANTHROPIC_AUTH_TOKEN` or
 `ANTHROPIC_API_KEY`), never its command line, the database, a prompt or a
 log; a terminal task's shell reads it from the reference itself. Errors that

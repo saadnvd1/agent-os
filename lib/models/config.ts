@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { db } from "../db";
 import { ENV_NAME, RESERVED_ENV } from "../project-config/schema";
+import { KEY_ENV_NAME } from "./secrets";
 import {
   DEFAULT_PRICES,
   PROVIDER_PRESETS,
@@ -45,7 +46,12 @@ const secretRef = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("env"),
-    name: z.string().regex(ENV_NAME, "must be a variable name"),
+    name: z
+      .string()
+      .regex(
+        KEY_ENV_NAME,
+        "must be a *_API_KEY variable, not ANTHROPIC_, CLAUDE_ or AGENTOS_"
+      ),
   }),
 ]);
 

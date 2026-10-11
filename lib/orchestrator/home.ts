@@ -5,7 +5,7 @@
  * sessions.
  */
 
-import { resolveRole } from "../models/resolve";
+import { resolveRoleOrDefault } from "../models/resolve";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -62,7 +62,7 @@ export function ensureOrchestrator(workspaceId: string): Session {
     `${workspace.name} orchestrator`,
     `claude-${id}`,
     dir,
-    resolveRole("orchestrator", { workspaceId }).model,
+    resolveRoleOrDefault("orchestrator", { workspaceId }).model,
     workspaceId
   );
   return getOrchestrator(workspaceId)!;

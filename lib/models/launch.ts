@@ -5,6 +5,7 @@
 
 import type { Session } from "../db";
 import {
+  defaultRoute,
   providerEnv,
   providerFor,
   providerShellEnv,
@@ -13,7 +14,10 @@ import {
   type ModelOverride,
 } from "./resolve";
 import { ANTHROPIC, type ModelRole } from "./roles";
-import type { SecretCommand } from "./secrets";
+import { redact, type SecretCommand } from "./secrets";
+
+const why = (error: unknown) =>
+  redact(error instanceof Error ? error.message : String(error));
 
 // A chat session's provider environment, or null on Anthropic.
 export async function sessionProviderEnv(
@@ -39,27 +43,46 @@ export interface RoutedRun {
   env: Record<string, string>;
 }
 
-// A one-shot run (a review, a scope check, a title) on its role's model.
+// A one-shot run (a review, a scope check, a title) on its role's model,
+// or on the role's default when its provider is off or its key can't be
+// read: a title or a review still happens.
 export async function routedRun(
   role: ModelRole,
   opts: { workspaceId?: string | null; override?: ModelOverride | null } = {},
   exec?: SecretCommand
 ): Promise<RoutedRun> {
-  const routed = resolveRole(role, opts);
-  return {
-    model: routed.model,
-    provider: routed.provider.id,
-    env: await providerEnv(routed.provider, routed.model, exec),
-  };
+  try {
+    const routed = resolveRole(role, opts);
+    return {
+      model: routed.model,
+      provider: routed.provider.id,
+      env: await providerEnv(routed.provider, routed.model, exec),
+    };
+  } catch (error) {
+    const routed = defaultRoute(role);
+    console.warn(`[models] ${role}: ${why(error)}; on ${routed.ref} instead`);
+    return { model: routed.model, provider: ANTHROPIC, env: {} };
+  }
 }
 
 // An orchestrator runs on its role's model, as its workspace and Settings
-// say now: each worker start picks up a change.
-export function routeOrchestrator(session: Session): Session {
+// say now: each worker start picks up a change. When that provider is off
+// or its key can't be read, it starts on the default rather than not at all.
+export async function routeOrchestrator(
+  session: Session,
+  exec?: SecretCommand
+): Promise<Session> {
   if (session.role !== "orchestrator") return session;
-  const routed = resolveRole("orchestrator", {
-    workspaceId: session.workspace_id,
-  });
+  let routed;
+  try {
+    routed = resolveRole("orchestrator", { workspaceId: session.workspace_id });
+    await providerEnv(routed.provider, routed.model, exec);
+  } catch (error) {
+    routed = defaultRoute("orchestrator");
+    console.warn(
+      `[models] orchestrator: ${why(error)}; on ${routed.ref} instead`
+    );
+  }
   setSessionModel(session.id, routed);
   return {
     ...session,
