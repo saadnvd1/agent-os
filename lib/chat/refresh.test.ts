@@ -102,6 +102,10 @@ describe("the compact threshold at launch", () => {
     // Capped at the provider's window.
     expect(compactThreshold(990_000, "deepseek")).toBe(1_000_000);
     expect(compactThreshold(150_000, null)).toBe(150_000);
+    // A provider with no stated window is not capped.
+    expect(compactThreshold(150_000, "no-such-provider")).toBe(
+      150_000 + PROVIDER_BASE_TOKENS
+    );
     try {
       // Under Claude Code's 100k floor, it gets the floor; off sets nothing.
       setRefreshSettings({ compactTokens: 60_000 });
@@ -115,15 +119,10 @@ describe("the compact threshold at launch", () => {
 });
 
 describe("MCP servers for a routed terminal agent", () => {
-  it("are only the project's own, and nothing changes on Claude", async () => {
+  it("are none but AgentOS's, and nothing changes on Claude", async () => {
     const { routedMcpFlags } = await import("../agents/launch");
-    const fs = await import("fs");
-    const os = await import("os");
-    const path = await import("path");
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-"));
-    expect(routedMcpFlags(dir, null)).toBe("");
-    expect(routedMcpFlags(dir, "deepseek")).toBe("--strict-mcp-config ");
-    fs.writeFileSync(path.join(dir, ".mcp.json"), "{}");
-    expect(routedMcpFlags(dir, "deepseek")).toContain("--mcp-config ");
+    expect(routedMcpFlags(null)).toBe("");
+    expect(routedMcpFlags(undefined)).toBe("");
+    expect(routedMcpFlags("deepseek")).toBe("--strict-mcp-config ");
   });
 });

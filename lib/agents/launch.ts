@@ -52,13 +52,12 @@ export function envArgs(env: Record<string, string>): string[] {
   return Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 }
 
-// Tool search is off on a routed provider, so the user's own MCP servers
-// would put all their schemas in every prompt: only AgentOS's, if the
-// project has them. Shell text for the agent's command line; empty on Claude.
-export function routedMcpFlags(cwd: string, provider?: string | null): string {
-  if (!provider) return "";
-  const file = path.join(cwd, ".mcp.json");
-  return `--strict-mcp-config ${fs.existsSync(file) ? `--mcp-config ${shellQuote(file)} ` : ""}`;
+// Tool search is off on a routed provider, so every MCP server the user or
+// the project has would put all its schemas in every prompt. A terminal
+// agent reaches AgentOS through the aos CLI, so it needs none. Shell text
+// for the agent's command line; empty on Claude.
+export function routedMcpFlags(provider?: string | null): string {
+  return provider ? "--strict-mcp-config " : "";
 }
 
 // Written just before the agent's tmux session is created: a session with
@@ -106,7 +105,7 @@ export async function launchClaude(opts: {
     model: opts.model,
     model_provider: opts.provider ?? null,
   });
-  const mcpFlags = routedMcpFlags(opts.cwd, opts.provider);
+  const mcpFlags = routedMcpFlags(opts.provider);
   const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${routing.exportKey} ${provider.command} ${flags} ${mcpFlags}${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
   await execFileAsync(
     "tmux",
