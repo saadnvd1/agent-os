@@ -463,7 +463,7 @@ async function collect(): Promise<StatusSnapshot> {
       task: chatActivityLine(session.id) ?? lastUserTask(session.id),
       agentType: session.agent_type,
       need: chatNeed(session, state, asks),
-      unread: session.role !== "orchestrator" && isUnread(session, state),
+      unread: isUnread(session, state),
       ...(session.role === "orchestrator" && { asks }),
     };
   }

@@ -270,6 +270,23 @@ describe("the pinned orchestrator", () => {
     expect(out.needsYou).toEqual(["current"]);
   });
 
+  it("carries its unread reply, and redraws when it's seen", () => {
+    const current = new Set(["current"]);
+    const unread = shelves(
+      [orch("current")],
+      { current: { status: "idle", unread: true } },
+      { currentOrchestrators: current }
+    ).raw.orchestrators[0];
+    const read = shelves(
+      [orch("current")],
+      { current: { status: "idle", unread: false } },
+      { currentOrchestrators: current }
+    ).raw.orchestrators[0];
+    expect(unread.unread).toBe(true);
+    expect(read.unread).toBe(false);
+    expect(sameRow(unread, read)).toBe(false);
+  });
+
   it("is an ordinary row before the orchestrators have loaded", () => {
     expect(shelves([orch("current")]).orchestrators).toEqual([]);
   });

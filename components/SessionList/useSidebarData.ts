@@ -135,6 +135,20 @@ export function useSidebarData(
     [runningKey]
   );
 
+  // Per workspace, how many tasks wait in its line: they keep its
+  // orchestrator row Waiting. Keyed by its counts, like the running ones.
+  const queuedKey = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of queue)
+      if (item.status === "queued" && item.workspaceId)
+        counts.set(item.workspaceId, (counts.get(item.workspaceId) ?? 0) + 1);
+    return JSON.stringify([...counts].sort());
+  }, [queue]);
+  const queuedByWorkspace = useMemo(
+    () => new Map<string, number>(JSON.parse(queuedKey)),
+    [queuedKey]
+  );
+
   // Tasks waiting to start, in their line's order.
   const queued = useMemo(
     () =>
@@ -179,6 +193,7 @@ export function useSidebarData(
     projects,
     projectNames,
     runningByWorkspace,
+    queuedByWorkspace,
     workspaces,
     workspace,
     workspaceProjects,

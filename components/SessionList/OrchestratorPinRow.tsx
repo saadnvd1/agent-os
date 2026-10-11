@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
-import { RowRename } from "./RowParts";
+import { RowRename, UnreadDot } from "./RowParts";
 
 // A workspace's orchestrator, pinned above its sessions and titled with the
 // workspace's name: what it's doing and how many asks wait on you, on a line
@@ -28,11 +28,12 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
   const overview = ctx.orchestrators.find((o) => o.workspaceId === ws);
   const paused = !!overview?.paused;
   const active = session.id === ctx.activeSessionId;
-  const { status, asks } = orchestratorRowText(row, {
+  const { state, status, asks } = orchestratorRowText(row, {
     asks: overview?.asks.length ?? 0,
     paused,
     running: ctx.runningByWorkspace.get(ws) ?? 0,
     inReview: overview?.inReview ?? 0,
+    queued: ctx.queuedByWorkspace.get(ws) ?? 0,
   });
   const label = ctx.workspaceNames.get(ws) ?? "Orchestrator";
   const summary = asks ? `${status} · ${asks}` : status;
@@ -58,13 +59,14 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
         aria-hidden
         className={cn(
           "h-4 w-4 shrink-0",
-          row.need === "failed"
-            ? "text-red-500"
-            : paused
-              ? "text-amber-500"
-              : row.working
-                ? "text-green-600 dark:text-green-500"
-                : "text-muted-foreground"
+          {
+            Paused: "text-amber-500",
+            Failed: "text-red-500",
+            Working: "text-green-600 dark:text-green-500",
+            Replied: "text-primary",
+            Waiting: "text-muted-foreground",
+            Idle: "text-muted-foreground",
+          }[state]
         )}
       />
       <span className="flex min-w-0 flex-1 flex-col leading-tight">
@@ -100,6 +102,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
           </>
         )}
       </span>
+      {row.unread && <UnreadDot />}
       <DM.DropdownMenu>
         <DM.DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
           <Button
