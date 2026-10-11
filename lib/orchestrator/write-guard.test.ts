@@ -1,3 +1,4 @@
+import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -156,6 +157,12 @@ describe("writeRefusal", () => {
   it("refuses files that make something run", async () => {
     for (const p of [
       at(".zshenv"),
+      at(".zprofile"),
+      at(".bashrc"),
+      at(".bash_profile"),
+      at(".claude/settings.local.json"),
+      at(".claude/hooks/pre.sh"),
+      at(".serviceman/services/backup.json"),
       at(".zshrc"),
       at(".profile"),
       at(".gitconfig"),
@@ -294,6 +301,32 @@ describe("an orchestrator's writes", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("are refused in a project's core.hooksPath, even outside the repo", async () => {
+    const repo = at("dev/hooked");
+    fs.mkdirSync(repo, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "core.hooksPath", "../hooked-hooks"], {
+      cwd: repo,
+    });
+    const w = createWorkspace("Hooked");
+    createProject({
+      name: "hooked",
+      workingDirectory: repo,
+      workspaceId: w.id,
+    });
+    const o = ensureOrchestrator(w.id);
+    expect(
+      await orchestratorToolRefusal(o, "Write", {
+        file_path: at("dev/hooked-hooks/pre-commit"),
+      })
+    ).toMatch(/configures what runs/);
+    expect(
+      await orchestratorToolRefusal(o, "Write", {
+        file_path: at("dev/unhooked/notes.md"),
+      })
+    ).toBeNull();
   });
 
   it("runs as a PreToolUse hook on every tool call", async () => {

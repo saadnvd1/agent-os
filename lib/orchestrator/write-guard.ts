@@ -16,6 +16,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { db, type Session } from "../db";
+import { git } from "../git-exec";
 import { isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
@@ -187,7 +188,9 @@ export async function writeRefusal(
 // project added since counts: every local project's repositories (not just
 // its workspace's, since a write to another workspace's repo skips its gates
 // as much), every session's worktree, and AgentOS's install and database.
-export function orchestratorWriteBounds(session: Session): WriteBounds {
+export async function orchestratorWriteBounds(
+  session: Session
+): Promise<WriteBounds> {
   const projects = db
     .prepare(
       `SELECT working_directory AS dir FROM projects
@@ -202,24 +205,54 @@ export function orchestratorWriteBounds(session: Session): WriteBounds {
   const dbPath = path.resolve(
     process.env.DB_PATH || path.join(process.cwd(), "agent-os.db")
   );
+  const repos = projects.map((p) => expandHome(p.dir)).filter((d) => d !== "");
   return {
     cwd: expandHome(session.working_directory),
     home: os.homedir(),
     runs: [
       path.join(os.homedir(), "Library"),
+      "/Library/LaunchAgents",
+      "/Library/LaunchDaemons",
       path.dirname(LIMITS_FILE),
+      ...(await hooksPaths(repos)),
       ...(process.env.XDG_CONFIG_HOME ? [process.env.XDG_CONFIG_HOME] : []),
       ...(process.env.PATH ?? "").split(":").filter((d) => d.startsWith("/")),
     ],
     ownDir: orchestratorDir(session.workspace_id ?? ""),
     state: path.join(os.homedir(), ".agent-os"),
-    repos: [
-      ...projects.map((p) => expandHome(p.dir)).filter((d) => d !== ""),
-      WORKTREES_DIR,
-      process.cwd(),
-      path.dirname(dbPath),
-    ],
+    repos: [...repos, WORKTREES_DIR, process.cwd(), path.dirname(dbPath)],
   };
+}
+
+// Where git looks for hooks instead of .git/hooks (core.hooksPath), in the
+// user's config and each project's: a script there runs on the next commit.
+// Read at most once a minute, not on every write.
+const HOOKS_TTL_MS = 60_000;
+let hooksCache: { key: string; at: number; dirs: string[] } | null = null;
+
+export async function hooksPaths(repos: string[]): Promise<string[]> {
+  const key = repos.join("\0");
+  if (hooksCache?.key === key && Date.now() - hooksCache.at < HOOKS_TTL_MS)
+    return hooksCache.dirs;
+  const read = (cwd: string, args: string[]) =>
+    git(cwd, ["config", ...args, "--get", "core.hooksPath"], {
+      timeout: 5000,
+    })
+      .then((out) => out.trim())
+      .catch(() => "");
+  const found = await Promise.all([
+    read(os.homedir(), ["--global"]).then((v) => [os.homedir(), v] as const),
+    ...repos.map((r) => read(r, []).then((v) => [r, v] as const)),
+  ]);
+  const dirs = [
+    ...new Set(
+      found
+        .filter(([, v]) => v !== "")
+        .map(([base, v]) => path.resolve(base, expandHome(v)))
+    ),
+  ];
+  hooksCache = { key, at: Date.now(), dirs };
+  return dirs;
 }
 
 // The check a PreToolUse hook makes: why this tool call is refused, or null.
@@ -232,5 +265,5 @@ export async function orchestratorToolRefusal(
   if (!arg) return null;
   const filePath = input[arg];
   if (typeof filePath !== "string") return "No file path to check.";
-  return writeRefusal(filePath, orchestratorWriteBounds(session));
+  return writeRefusal(filePath, await orchestratorWriteBounds(session));
 }
