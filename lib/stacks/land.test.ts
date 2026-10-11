@@ -4,6 +4,7 @@ import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { db, stackQueries as q, type Session } from "../db";
 import type { TaskPR } from "../tasks/state";
+import type { ReviewState } from "../tasks/code-review";
 import { landStack, type LandDeps } from "./land";
 import { seedStack } from "./testing";
 
@@ -13,7 +14,7 @@ const pr = (n: number, checks: TaskPR["checks"] = "pass"): TaskPR => ({
   state: "OPEN",
   checks,
   head: `${n}abcdef0`,
-  codeReview: { sha: `${n}abcdef` },
+  attribution: null,
 });
 
 function setup(
@@ -31,6 +32,7 @@ function setup(
     },
   ]);
   const merged: string[] = [];
+  const reviews = new Map<string, ReviewState | null>();
   const keyOf = (session: Session) => session.name;
   const deps: LandDeps = {
     signOff: vi.fn(async (sessionId: string) => {
@@ -41,6 +43,9 @@ function setup(
       if (item.ticket === "P")
         q.updateItem(db, s.item("C").id, { base_tip: "main-tip" });
     }),
+    // Every head was reviewed and passed, unless a test says otherwise.
+    reviewOf: (_id: string, sha: string) =>
+      reviews.has(sha) ? reviews.get(sha)! : { sha, status: "pass" as const },
     prOf: async (session) =>
       pr(
         keyOf(session) === "P" ? 1 : 2,
@@ -53,7 +58,7 @@ function setup(
     stopChat: vi.fn(async () => ({ stopped: true as const })),
     releaseChat: vi.fn(async () => {}),
   };
-  return { s, deps, merged };
+  return { s, deps, merged, reviews };
 }
 
 describe("landStack", () => {
@@ -83,61 +88,57 @@ describe("landStack", () => {
     expect(error).toContain("C: CI checks are failing");
   });
 
-  it("refuses a PR whose body has no code review of its head", async () => {
-    const { s, deps, merged } = setup();
-    const prOf = deps.prOf;
-    deps.prOf = async (session) => {
-      const p = (await prOf(session))!;
-      return session.name === "P"
-        ? { ...p, codeReview: null }
-        : { ...p, codeReview: { sha: "0000000" } };
-    };
+  it("refuses a PR with no passing review of its head, or with AI attribution", async () => {
+    const { s, deps, merged, reviews } = setup();
+    reviews.set("1abcdef0", null);
+    reviews.set("2abcdef0", { sha: "2abcdef0", status: "block" });
     await landStack(s.stackId, deps);
     expect(merged).toEqual([]);
     const { error } = q.get(db, s.stackId)!;
-    expect(error).toContain("P: the PR body has no Code review section");
-    expect(error).toContain("C: the PR's code review covers 0000000");
+    expect(error).toContain(
+      "P: no passing independent review of 1abcdef: call review"
+    );
+    expect(error).toContain("C: no passing independent review of 2abcdef");
+    reviews.clear();
+    const prOf = deps.prOf;
+    deps.prOf = async (session) => ({
+      ...(await prOf(session))!,
+      attribution: "a Claude-Session link",
+    });
+    await landStack(s.stackId, deps);
+    expect(q.get(db, s.stackId)!.error).toContain(
+      "P: the PR body carries AI attribution (a Claude-Session link)"
+    );
   });
 
   it("accepts a review of the head AgentOS restacked, while the head is still the restack's", async () => {
-    const { s, deps, merged } = setup();
+    const { s, deps, merged, reviews } = setup();
     q.updateItem(db, s.item("C").id, {
       restacked_from: "cccccc11",
       restacked_to: "2abcdef0",
     });
-    const prOf = deps.prOf;
-    deps.prOf = async (session) => {
-      const p = (await prOf(session))!;
-      return session.name === "C"
-        ? { ...p, codeReview: { sha: "cccccc1" } }
-        : p;
-    };
+    reviews.set("2abcdef0", null);
     await landStack(s.stackId, deps);
     expect(merged).toEqual(["P", "C"]);
   });
 
   it("refuses that review once the task pushed after the restack", async () => {
-    const { s, deps, merged } = setup();
+    const { s, deps, merged, reviews } = setup();
     q.updateItem(db, s.item("C").id, {
       restacked_from: "cccccc11",
       restacked_to: "ddddddd0",
     });
-    const prOf = deps.prOf;
-    deps.prOf = async (session) => {
-      const p = (await prOf(session))!;
-      return session.name === "C"
-        ? { ...p, codeReview: { sha: "cccccc1" } }
-        : p;
-    };
+    reviews.set("2abcdef0", null);
     await landStack(s.stackId, deps);
     expect(merged).toEqual([]);
     expect(q.get(db, s.stackId)!.error).toContain(
-      "C: the PR's code review covers cccccc1, not its head 2abcdef"
+      "C: no passing independent review of 2abcdef"
     );
   });
 
   it("re-checks each item's review right before merging it, pinned to that head", async () => {
-    const { s, deps, merged } = setup();
+    const { s, deps, merged, reviews } = setup();
+    reviews.set("3333333aaaa", null);
     const prOf = deps.prOf;
     deps.prOf = async (session) => {
       const p = (await prOf(session))!;
@@ -153,7 +154,7 @@ describe("landStack", () => {
       "1abcdef0"
     );
     expect(q.get(db, s.stackId)!.error).toContain(
-      "stopped at C: the PR's code review covers 2abcdef, not its head 3333333"
+      "stopped at C: no passing independent review of 3333333: call review"
     );
   });
 

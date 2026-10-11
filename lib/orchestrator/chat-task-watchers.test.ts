@@ -165,7 +165,7 @@ const gate = (w: Awaited<ReturnType<typeof waitingState>>) =>
     fromCard: false,
     scope: null,
     stackRefusal: null,
-    codeReviewRefusal: null,
+    codeReview: { refusal: null, wait: null },
     ...w,
   }).find((g) => g.gate === "blocked")!;
 
@@ -392,7 +392,7 @@ describe("chat tasks, where they differ from terminal ones", () => {
     expect(moveRefusal(row(term.id))).toBeNull();
   });
 
-  it("get the task brief, with its code review steps, in the chat's system prompt", async () => {
+  it("get the task brief in the chat's system prompt", async () => {
     const brief = buildTaskBrief({ branch: "feature/x", baseBranch: "main" });
     const t = task("chat", { said: "x", state: "idle" });
     db.prepare(`UPDATE sessions SET task_brief = ? WHERE id = ?`).run(
@@ -401,8 +401,7 @@ describe("chat tasks, where they differ from terminal ones", () => {
     );
     const extras = await roleExtras(row(t.id));
     expect(extras.systemAppend).toBe(brief);
-    expect(extras.systemAppend).toContain("/do-code-review");
-    expect(extras.systemAppend).toContain("## Code review");
+    expect(extras.systemAppend).toContain("independent review");
     expect(extras.systemAppend).toContain('"BLOCKED:"');
     const ws = seedWorkspace();
     const plain = seedSession({

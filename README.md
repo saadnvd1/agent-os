@@ -17,8 +17,8 @@ and check on all of it from your phone.
 Every workspace has one orchestrator, a chat pinned at the top of its list.
 It starts tasks, answers agents that are blocked, and reviews and merges
 pull requests through gates: CI green and settled, an independent review of
-the exact commit (big diffs are reviewed in parts), the PR's Code review
-section, nothing blocked, and the diff in scope. Anything that is yours to
+the exact commit (big diffs are reviewed in parts), nothing blocked, and the
+diff in scope. Anything that is yours to
 decide (publishing, money, something irreversible, credentials) waits as an
 ask with Approve, Decline and Reply. Turn on **Require my approval** and
 sensitive or large PRs wait for you too. [More](#orchestrator)
@@ -465,17 +465,15 @@ Starting a task returns at once and shows **Setting up** until the agent
 launches; a restart in the middle resumes it. A failed setup shows on the task
 and is in the agent's first prompt (redacted, as data).
 
-Before opening its PR, every task runs `/do-code-review` (the project's
-`.claude/skills/do-code-review`, or Claude Code's `/code-review` where a
-project has none), fixes the Blocking and High findings, and ends the PR body
-with a **Code review** section: the commit it reviewed, the agents that ran,
-what it fixed and what it deferred and why. The orchestrator's `sign_off` and
-a stack's **Land** refuse a PR without that section for its head commit, and
-this repository's CI fails one too. A head AgentOS rebased itself is
-covered by the review of the head it rebased: its gates go by what they
-recorded, and CI by the section's `Restacked:` line. The review agents are in
-[.claude/agents](.claude/agents) and the skill in
-[.claude/skills](.claude/skills/README.md).
+Tasks don't review their own PRs. The orchestrator's independent review of
+the PR's exact head commit is the one review: `sign_off` and a stack's
+**Land** refuse a PR without a passing one, and a PR body with AI
+attribution. A head AgentOS rebased itself is covered by the review of the
+head it rebased while the PR's own patch is unchanged. A task may still run
+`/do-code-review` (the project's `.claude/skills/do-code-review`, or Claude
+Code's `/code-review`) on a risky change before its PR; it's no longer
+required. The review agents are in [.claude/agents](.claude/agents) and the
+skill in [.claude/skills](.claude/skills/README.md).
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
 
@@ -934,7 +932,7 @@ it may do on its own, and the lines that always come back to you as asks.
   it (2 minutes with no new check), its review passed, nothing is
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent
-  has merged, and the PR body's Code review section names that commit. `land` judges each item again at its own head right before
+  has merged, and the PR body carries no AI attribution. `land` judges each item again at its own head right before
   merging it. A gate failing again on a different commit, or a repo with no
   CI, goes to you as an ask, and the orchestrator stops merging that task.
   A failure counts once per task, gate and head commit, however many times
@@ -953,17 +951,15 @@ it may do on its own, and the lines that always come back to you as asks.
   conflicts (read in the PR poll AgentOS already makes), `git merge-tree`
   checks it against the base. Clean, and with the task's agent idle and
   nothing uncommitted, AgentOS rebases it in the task's worktree and pushes
-  only its branch with `--force-with-lease`; the Code review section gets a
-  `Restacked: <reviewed> -> <new>` line so the task needn't review again,
-  and the orchestrator's review carries over when the PR's own patch is
+  only its branch with `--force-with-lease`, and the orchestrator's review
+  carries over when the PR's own patch is
   unchanged (same `git patch-id`; a fresh review starts otherwise). Not
   clean: the task is asked once to rebase. Either way, one event. Main and
   other tasks' branches are never written.
 - **Tasks woken on CI failures and reviews:** a check failing on a task's
   PR head messages the task's own agent once per head, with the check, the
   failing step and about 60 lines of `gh run view --log-failed` around the
-  error, telling it to fix the root cause, push and update its Reviewed:
-  line. A review or comment from a collaborator (not the account gh runs
+  error, telling it to fix the root cause and push. A review or comment from a collaborator (not the account gh runs
   as, which is the task's own) wakes it once per review or comment; one
   GraphQL query per repository a minute fingerprints the open task PRs, and
   only a PR whose fingerprint moved has its reviews read. Comment-only wakes
@@ -976,8 +972,7 @@ it may do on its own, and the lines that always come back to you as asks.
   `owner/repo#N` or URL, as long as its repository is one of the workspace's
   projects; anything else is refused. The same gates apply, except that a
   draft waits and a "blocked", "do not merge" or "wip" label holds it (there's
-  no session to read), and a body with no Code review section is covered by
-  the orchestrator's own review of that head. `sessions` also lists tmux
+  no session to read). `sessions` also lists tmux
   sessions AgentOS didn't start that work in a workspace repository or a
   worktree of it, here or on another machine, with their branch's PR; `read`
   reads them, and nothing else acts on them.
@@ -1333,8 +1328,7 @@ until `npm install` runs in them. Typecheck, lint and tests are left to CI.
 In an emergency, `git commit --no-verify` skips it. CI runs `scripts/check --build` on every pull request and push to main,
 which also holds the app's first-load JavaScript to a budget
 (`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
-it), and fails a pull request whose body has no Code review section for its head
-commit (run `/do-code-review` first; see [Tasks](#tasks)).
+it).
 
 ### Session audits
 

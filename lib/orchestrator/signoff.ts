@@ -9,7 +9,7 @@
 
 import { MERGED_AS, type MergeMethod } from "../tasks/merge-policy";
 import { prFor } from "../tasks/session";
-import { codeReviewRefusal, signOffTask } from "../tasks";
+import { codeReviewGate, signOffTask } from "../tasks";
 import { signOffRefusal } from "../stacks/guard";
 import { getStack, landInBackground } from "../stacks";
 import { LAND_DEFAULTS } from "../stacks/land";
@@ -91,11 +91,12 @@ export async function judge(
       fromCard: !!task.lh_card_id,
       scope: getCheck(task.id, sha, "scope"),
       stackRefusal: landing ? null : signOffRefusal(task.id),
-      codeReviewRefusal: codeReviewRefusal(
-        pr.codeReview,
-        sha,
-        restackedOf(task)
-      ),
+      codeReview: codeReviewGate({
+        head: sha,
+        attribution: pr.attribution,
+        review: (at) => getCheck(task.id, at, "review"),
+        restacked: restackedOf(task),
+      }),
     }),
     opts
   );
@@ -129,7 +130,8 @@ export async function gateVerdict(
   const held = holdingEscalations(work.id);
   // Saad approved merging this exact commit. On an ask the orchestrator
   // raised (ask_saad with its task and sha), held or not, it merges once
-  // whatever the gates say, but only with a code review of that commit and
+  // whatever the gates say, but only once an independent review of that
+  // commit finished (its findings are his to override, not that it ran) and
   // its stack parent merged: the orchestrator wrote that ask, and no answer
   // to it stands in for those. An approval of the gates' own ask on a held
   // task merges as it always has (heldVerdict).
@@ -139,7 +141,10 @@ export async function gateVerdict(
     (approval.raised_by === "orchestrator" || !held.length)
   ) {
     const i = await inputs();
-    const refusal = i.codeReviewRefusal ?? i.stackRefusal;
+    const refusal =
+      i.codeReview.refusal ??
+      (i.codeReview.ran ? null : i.codeReview.wait) ??
+      i.stackRefusal;
     if (refusal)
       return no(
         `${work.name} (PR #${pr.number} at ${short(sha)}): Saad approved this commit, but ${refusal}`

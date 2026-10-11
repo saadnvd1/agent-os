@@ -8,11 +8,10 @@
  * only while its agent is idle with nothing uncommitted, and pushed to the
  * task's own branch with a lease on the commit fetched (the restack's code,
  * stacks/git.ts). The base itself and every other branch are never written.
- * The heads are recorded so the task's Code review section still covers
- * the new head (tasks/code-review.ts), and the section gets a "Restacked:"
- * line for CI. When the PR's own patch is unchanged (same `git patch-id`
- * against the base before and after), the orchestrator's review of the old
- * head carries over; otherwise a fresh one starts.
+ * The heads are recorded, and when the PR's own patch is unchanged (same
+ * `git patch-id` against the base before and after), the orchestrator's
+ * review of the old head carries over to the new one (tasks/code-review.ts);
+ * otherwise a fresh one starts.
  *
  * Not clean, or not rebasable (uncommitted work, commits only on origin):
  * the task is asked once, per head, to rebase by hand. The orchestrator
@@ -28,7 +27,6 @@ import { hostLink } from "../hosts/remote-api";
 import type { TaskPR } from "../tasks/state";
 import { run } from "../tasks/gh";
 import { git as runGit, gitFetch, revParse } from "../git-exec";
-import { withRestackedLine } from "../tasks/code-review";
 import { outputOf, type Runner } from "../stacks/git";
 import { restackedHeads, stackNotice } from "../stacks/restack";
 import { getCheck, putCheck } from "./checks";
@@ -53,37 +51,6 @@ export interface RebaseDeps {
     pr: TaskPR,
     sha: string
   ) => Promise<unknown>;
-  // Add the Restacked line to the PR body's Code review section.
-  editBody: (
-    repo: string,
-    pr: number,
-    from: string,
-    to: string
-  ) => Promise<void>;
-}
-
-async function editBody(repo: string, pr: number, from: string, to: string) {
-  const body = await run(
-    "gh",
-    ["pr", "view", String(pr), "--json", "body", "--jq", ".body"],
-    repo,
-    15000
-  );
-  const next = withRestackedLine(body.replace(/\n$/, ""), from, to);
-  if (!next) return;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-body-"));
-  const file = path.join(dir, "body.md");
-  try {
-    fs.writeFileSync(file, next);
-    await run(
-      "gh",
-      ["pr", "edit", String(pr), "--body-file", file],
-      repo,
-      30000
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
 }
 
 const defaults: RebaseDeps = {
@@ -94,7 +61,6 @@ const defaults: RebaseDeps = {
   idle: async (task) => (await statusOf(task)).status === "idle",
   review: (w, task, pr, sha) =>
     reviewAt(w, taskReviewTarget(task, { ...pr, head: sha }), sha),
-  editBody,
 };
 
 // The (head, base tip) pairs already rebased or found not to need it, so a
@@ -263,11 +229,6 @@ async function rebaseOne(
       deps
     );
   }
-  if (heads.restacked_from && heads.restacked_to)
-    await deps
-      .editBody(repo, pr.number, heads.restacked_from, heads.restacked_to)
-      .catch(() => {});
-
   // The task's worktree follows while it's still idle and untouched;
   // otherwise the task is told how to catch up.
   const follows =
@@ -277,7 +238,7 @@ async function rebaseOne(
   if (!follows)
     await deps.send(
       task.id,
-      `AgentOS rebased your branch ${task.branch_name} onto ${branch} on origin (now ${short(to)}), because PR #${pr.number} conflicted with it. Your worktree is still on the old head: before changing anything, run \`git fetch origin && git reset --keep origin/${task.branch_name}\` (commit your work first). Your Code review section still covers it.`
+      `AgentOS rebased your branch ${task.branch_name} onto ${branch} on origin (now ${short(to)}), because PR #${pr.number} conflicted with it. Your worktree is still on the old head: before changing anything, run \`git fetch origin && git reset --keep origin/${task.branch_name}\` (commit your work first). Its review carries over when its own patch didn't change.`
     );
   const reviewed = await carryReview(workspaceId, task, pr, onto, to, deps);
   queueEvent(
@@ -422,6 +383,6 @@ async function askToRebase(
   );
   await deps.send(
     task.id,
-    `Your PR #${pr.number} conflicts with ${base}, and AgentOS couldn't rebase it for you: ${why.slice(0, 300)}. At your next stopping point: commit your work, run \`git fetch origin && git rebase origin/${base}\`, resolve the conflicts, re-run your checks, push with \`git push --force-with-lease\`, then run /do-code-review again and update the Code review section for the new head.`
+    `Your PR #${pr.number} conflicts with ${base}, and AgentOS couldn't rebase it for you: ${why.slice(0, 300)}. At your next stopping point: commit your work, run \`git fetch origin && git rebase origin/${base}\`, resolve the conflicts, re-run your checks, push with \`git push --force-with-lease\`. The orchestrator reviews the new head.`
   );
 }
