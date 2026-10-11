@@ -5,12 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
 import { listQueue } from "../chat/queued";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import { pendingEvents } from "../orchestrator/events";
 import { recordTurn } from "../usage/turns";
 import { taskRouting } from "../tasks";
 import { setModelSettings } from "./config";
 import {
   PLAN_FILE,
   handoffAfterPlan,
+  planSummary,
   implementMessageId,
   planPrompt,
   preparePlanDir,
@@ -152,5 +154,89 @@ describe("plan then implement", () => {
     await handoffAfterPlan(id, async () => {});
     const queued = listQueue(id).find((m) => m.id === implementMessageId(id));
     expect(queued?.text).toContain("No plan was written");
+  });
+
+  describe("telling the orchestrator", () => {
+    const finishPlan = async (id: string, worktree: string, text?: string) => {
+      recordTurn(
+        { id, name: "planned", workspace_id: null },
+        null,
+        turn,
+        Date.now(),
+        null,
+        () => null
+      );
+      preparePlanDir(worktree);
+      if (text !== undefined)
+        fs.writeFileSync(path.join(worktree, PLAN_FILE), text);
+      await handoffAfterPlan(id, async () => {});
+    };
+    const startedBy = (id: string, by: string | null) =>
+      db.prepare(`UPDATE sessions SET started_by = ? WHERE id = ?`).run(by, id);
+    const eventsFor = (id: string) =>
+      pendingEvents(workspaceOf(id)).filter((e) => e.subject === id);
+    const workspaceOf = (id: string) =>
+      (
+        db
+          .prepare(
+            `SELECT p.workspace_id AS w FROM sessions s JOIN projects p ON p.id = s.project_id WHERE s.id = ?`
+          )
+          .get(id) as { w: string }
+      ).w;
+
+    it("sends one event with the plan's path and a short summary", async () => {
+      const { id, worktree } = planningTask();
+      startedBy(id, "orch-1");
+      await finishPlan(
+        id,
+        worktree,
+        "# Plan\n\n## Files\n- a.ts\n- b.ts\n\n## Tests\n- c.test.ts\n- d.test.ts\n- e.test.ts\n"
+      );
+      const events = eventsFor(id);
+      expect(events).toHaveLength(1);
+      expect(events[0].line).toContain(path.join(worktree, PLAN_FILE));
+      expect(events[0].line).toContain("- a.ts");
+      expect(events[0].line.split("\n").length).toBeLessThanOrEqual(7);
+      // A repeat idle doesn't add another.
+      await handoffAfterPlan(id, async () => {});
+      expect(eventsFor(id)).toHaveLength(1);
+    });
+
+    it("says so when the plan file is missing", async () => {
+      const { id, worktree } = planningTask();
+      startedBy(id, "orch-1");
+      await finishPlan(id, worktree);
+      expect(eventsFor(id)[0].line).toContain("no plan file was written");
+    });
+
+    it("stays quiet for a task Saad started", async () => {
+      const { id, worktree } = planningTask();
+      await finishPlan(id, worktree, "# Plan\n- a\n");
+      expect(eventsFor(id)).toEqual([]);
+    });
+  });
+
+  it("summarises a plan in at most five short lines", () => {
+    const text = [
+      "# Plan",
+      "",
+      "```",
+      "- inside a fence",
+      "```",
+      "| a | b |",
+      "- " + "x".repeat(300),
+      "- two",
+      "- three",
+      "- four",
+      "- five",
+      "- six",
+    ].join("\n");
+    const lines = planSummary(text);
+    expect(lines).toHaveLength(5);
+    expect(lines.every((l) => l.length <= 120)).toBe(true);
+    expect(lines.join("\n")).not.toContain("inside a fence");
+    expect(planSummary("Just one sentence of prose.")).toEqual([
+      "Just one sentence of prose.",
+    ]);
   });
 });

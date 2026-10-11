@@ -3,6 +3,8 @@ import os from "os";
 import { db, queries, type Session } from "../db";
 import { getProject, getAllProjects } from "../projects";
 import { resolveModelForAgent } from "../model-catalog";
+import { parseOverride, resolveRole, setSessionModel } from "../models/resolve";
+import { ANTHROPIC } from "../models/roles";
 import { launchClaude } from "./launch";
 import { nameFor } from "../session-titles";
 
@@ -29,7 +31,10 @@ export async function spawnSession(opts: {
   prompt: string;
   // Its name; generated from the prompt when absent.
   name?: string;
-  model?: string;
+  model?: string | null;
+  // The orchestrator session that starts it: the implementation role's
+  // model unless `model` is given.
+  startedBy?: string | null;
 }): Promise<Session> {
   const prompt = opts.prompt.trim();
   if (!prompt) throw new Error("Give the new session a prompt");
@@ -41,10 +46,17 @@ export async function spawnSession(opts: {
 
   const id = randomUUID();
   const tmuxName = `claude-${id}`;
-  const model = resolveModelForAgent(
-    "claude",
-    opts.model || project.default_model
-  );
+  const routed = opts.startedBy
+    ? resolveRole("implement", {
+        workspaceId: project.workspace_id,
+        override: parseOverride(opts.model),
+      })
+    : null;
+  if (routed && routed.provider.id !== ANTHROPIC)
+    throw new Error("Another provider's models run only as a chat");
+  const model = routed
+    ? routed.model
+    : resolveModelForAgent("claude", opts.model || project.default_model);
   const cwd = project.working_directory.replace(/^~/, os.homedir());
   const naming = await nameFor(prompt, cwd, opts.name);
 
@@ -64,10 +76,10 @@ export async function spawnSession(opts: {
       project.id,
       "local"
     );
-  db.prepare(`UPDATE sessions SET name_source = ? WHERE id = ?`).run(
-    naming.source,
-    id
-  );
+  db.prepare(
+    `UPDATE sessions SET name_source = ?, started_by = ? WHERE id = ?`
+  ).run(naming.source, opts.startedBy ?? null, id);
+  if (routed) setSessionModel(id, routed);
   void naming.refine?.(id);
   await launchClaude({ sessionId: id, tmuxName, cwd, model, prompt });
   return queries.getSession(db).get(id) as Session;

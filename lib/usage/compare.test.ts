@@ -36,6 +36,7 @@ function turn(o: Partial<CompareTurn>): CompareTurn {
 const outcome = (id: string, o: Partial<TaskOutcome> = {}): TaskOutcome => ({
   id,
   status: "merged",
+  planned: null,
   ciFirstGreen: null,
   reviewFirstPass: null,
   gateFailures: 0,
@@ -218,6 +219,7 @@ describe("the comparison", () => {
     expect(taskOutcomes([id, "not-a-task"]).get(id)).toEqual({
       id,
       status: "running",
+      planned: null,
       ciFirstGreen: true,
       reviewFirstPass: false,
       gateFailures: 2,
@@ -262,5 +264,41 @@ describe("the comparison", () => {
         window_pct: null,
       }),
     ]);
+  });
+});
+
+describe("planned against not", () => {
+  it("splits cost by the plan decision recorded on each task", () => {
+    const turns = [
+      turn({ session_id: "p", role: "plan" }),
+      turn({ session_id: "p" }),
+      turn({ session_id: "u" }),
+      turn({ session_id: "x" }),
+    ];
+    const outcomes = new Map([
+      ["p", outcome("p", { planned: true })],
+      ["u", outcome("u", { planned: false })],
+      ["x", outcome("x")],
+    ]);
+    const { plans } = compareRuns(turns, outcomes, DEFAULT_PRICES, {
+      from: 0,
+      to: Date.now(),
+    });
+    expect(plans.map((r) => [r.key, r.tasks])).toEqual([
+      ["planned", 1],
+      ["unplanned", 1],
+      ["unstated", 1],
+    ]);
+    expect(plans[0].spend.inputTokens).toBe(2_000_000);
+    expect(plans[1].spend.inputTokens).toBe(1_000_000);
+  });
+
+  it("reads the decision from the task row", () => {
+    const { app } = seedWorkspace();
+    const a = seedSession({ projectId: app.id, name: "a", task: true });
+    const b = seedSession({ projectId: app.id, name: "b", task: true });
+    db.prepare("UPDATE sessions SET plan_decided = 0 WHERE id = ?").run(a);
+    expect(taskOutcomes([a, b]).get(a)?.planned).toBe(false);
+    expect(taskOutcomes([a, b]).get(b)?.planned).toBeNull();
   });
 });

@@ -61,11 +61,11 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   message_orchestrator:
     "Message another workspace's orchestrator, by workspace name; never any other session there. It arrives as its next prompt, marked as from you and fenced as untrusted.",
   start_task:
-    "Start a task: an agent in its own worktree that ends in a PR. It runs as a chat unless view is terminal (only for a job that needs a TUI). With after (a task's id or name, or \"any\"), or over the workspace's running task limit, it's queued and starts by itself; the result says Queued (position N). Its models follow the role settings (planning, implementation, review, scope); give model only when Saad asks for one. Refused while a brake holds.",
+    "Start a task: an agent in its own worktree that ends in a PR. It runs as a chat unless view is terminal (only for a job that needs a TUI). With after (a task's id or name, or \"any\"), or over the workspace's running task limit, it's queued and starts by itself; the result says Queued (position N). Its models follow the role settings (planning, implementation, review, scope); give model only when Saad asks for one. Always state plan (true or false) and plan_reason: plan true for a big, unclear or cross-cutting job, false for a small, clear one whose steps you write into the prompt. Refused while a brake holds.",
   set_task_model:
     'Resume a paused task on another model ("provider/model", or a map of role to one), keeping its conversation and worktree; it\'s told to carry on (or message). Refused mid-turn.',
   start_session:
-    "Start an interactive agent session in a project with a prompt. It runs as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.",
+    'Start an agent session in a project with a prompt, for work that isn\'t a PR task. It runs on the implementation model unless you give model (one "provider/model"; Opus only when the work needs deep reasoning), as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.',
   quick_change:
     "Make a small, low-risk edit yourself (a typo, a config value, a one-file fix): cuts a worktree and branch from the project's default branch and returns its path. You may write there (Write, Edit) and run git there as `git -C <path> ...` (status, diff, add, rm, mv, restore, reset, log, show); nowhere else in a project. Anything needing real work, tests or an investigation is a task (start_task).",
   quick_pr:

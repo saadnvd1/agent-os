@@ -38,7 +38,8 @@ const { POST } = await import("@/app/api/bus/spawn/route");
 // Runs bin/aos against a server that records what it was sent.
 async function aos(
   args: string[],
-  reply: unknown = { session: { name: "x" } }
+  reply: unknown = { session: { name: "x" } },
+  sessionId = ""
 ): Promise<{ body: unknown; out: string }> {
   let body: unknown;
   const server = http.createServer((req, res) => {
@@ -57,7 +58,13 @@ async function aos(
       execFile(
         process.execPath,
         [path.join(process.cwd(), "bin/aos"), ...args],
-        { env: { ...process.env, AGENTOS_URL: `http://127.0.0.1:${port}` } },
+        {
+          env: {
+            ...process.env,
+            AGENTOS_URL: `http://127.0.0.1:${port}`,
+            AGENTOS_SESSION_ID: sessionId,
+          },
+        },
         (err, stdout) => (err ? reject(err) : resolve(stdout))
       )
     );
@@ -83,6 +90,15 @@ describe("naming a spawned session or task", () => {
       mode: "task",
       name: "Nightly audit",
     });
+  });
+
+  it("aos says who is asking, so the server can tell an orchestrator's spawn", async () => {
+    const { body } = await aos(
+      ["spawn", "agent-os", "fix", "it"],
+      { session: { name: "x" } },
+      "orch-1"
+    );
+    expect(body).toMatchObject({ from: "orch-1" });
   });
 
   it("aos sends no name when none is given", async () => {

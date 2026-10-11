@@ -86,6 +86,28 @@ describe("the task queue", () => {
     expect(queueIfNeeded({ projectId: t.app.id, prompt: "go" })).toBeNull();
   });
 
+  it("keeps the plan decision and who started it while a task waits", () => {
+    const t = setup(1);
+    const q = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "decided",
+      plan: false,
+      planReason: "one-line default change",
+      startedBy: "orch-1",
+    })!;
+    expect(
+      db
+        .prepare(
+          `SELECT plan, plan_reason, started_by FROM task_queue WHERE id = ?`
+        )
+        .get(q.id)
+    ).toEqual({
+      plan: 0,
+      plan_reason: "one-line default change",
+      started_by: "orch-1",
+    });
+  });
+
   it("queues over the limit and starts it once a slot frees", async () => {
     const t = setup(1); // seedWorkspace has one running task already
     const queued = queueIfNeeded({ projectId: t.app.id, prompt: "next" })!;

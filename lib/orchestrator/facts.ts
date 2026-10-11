@@ -38,6 +38,8 @@ export interface SessionFacts {
   branch: string | null;
   // A quick change the orchestrator makes itself (quick.ts): no agent.
   quick?: boolean;
+  // The orchestrator's call on a plan step, with its reason, when stated.
+  plan?: { planned: boolean; reason: string | null } | null;
   task: {
     state: TaskState;
     pr: TaskPR | null;
@@ -256,6 +258,10 @@ export async function sessionFacts(
         ),
         branch: s.branch_name,
         quick: !!s.quick_of,
+        plan:
+          s.plan_decided == null
+            ? null
+            : { planned: !!s.plan_decided, reason: s.plan_reason ?? null },
         task,
         stack: stackOf(s.id),
       };

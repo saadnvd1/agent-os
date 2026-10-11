@@ -44,6 +44,11 @@ export interface QueueRow {
   model: string | null;
   // A per-role model map (lib/models), when that's what it was given.
   model_overrides: string | null;
+  // The starter's plan decision (1/0, null: not stated), its reason, and the
+  // orchestrator session that started it.
+  plan: number | null;
+  plan_reason: string | null;
+  started_by: string | null;
   view: "chat" | "terminal" | null;
   base_branch: string | null;
   host_id: string | null;
@@ -205,6 +210,9 @@ export interface QueueRequest {
   prompt: string;
   name?: string;
   model?: ModelOverride;
+  plan?: boolean;
+  planReason?: string | null;
+  startedBy?: string | null;
   view?: "chat" | "terminal";
   baseBranch?: string;
   hostId?: string;
@@ -251,9 +259,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, view, base_branch,
+    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, started_by, view, base_branch,
        host_id, after_task, after_any, origin_workspace_id, position)
-     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @view, @base_branch,
+     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @started_by, @view, @base_branch,
        @host_id, @after_task, @after_any, @origin,
        (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
   ).run({
@@ -266,6 +274,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
       req.model && typeof req.model === "object"
         ? JSON.stringify(req.model)
         : null,
+    plan: req.plan === undefined ? null : req.plan ? 1 : 0,
+    plan_reason: req.planReason?.trim() || null,
+    started_by: req.startedBy ?? null,
     view: req.view ?? null,
     base_branch: req.baseBranch || null,
     host_id: req.hostId || null,
@@ -440,6 +451,9 @@ async function startRow(
     model: r.model_overrides
       ? (JSON.parse(r.model_overrides) as ModelOverride)
       : (r.model ?? undefined),
+    plan: r.plan == null ? undefined : !!r.plan,
+    planReason: r.plan_reason,
+    startedBy: r.started_by,
     view: r.view ?? undefined,
     baseBranch: r.base_branch ?? undefined,
     hostId: r.host_id ?? undefined,

@@ -105,9 +105,16 @@ export const TOOL_SHAPES = {
     model: modelOverride,
     plan: z
       .boolean()
-      .optional()
       .describe(
-        "Plan first on the planning model, then implement on the implementation model (default: Settings)"
+        "Your decision for this job: true to plan first on the planning model, then implement on the implementation model; false to skip the plan and put the steps in the prompt yourself"
+      ),
+    plan_reason: z
+      .string()
+      .trim()
+      .min(3)
+      .max(200)
+      .describe(
+        'Why, in a few words Saad reads on the task card: "touches 6 files across gates and UI", "one-line default change"'
       ),
   },
   set_task_model: {
@@ -134,6 +141,11 @@ export const TOOL_SHAPES = {
       .optional()
       .describe("A short name, 2-6 words (default: one made from the prompt)"),
     view,
+    model: modelRef
+      .optional()
+      .describe(
+        'One model for the session, "provider/model"; default: the implementation model. Opus only when the work needs deep reasoning'
+      ),
   },
   quick_change: {
     project,

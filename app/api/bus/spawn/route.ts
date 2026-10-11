@@ -4,6 +4,17 @@ import { createTask } from "@/lib/tasks";
 import { startOrQueue } from "@/lib/tasks/queue";
 import { hostIdNamed } from "@/lib/hosts";
 import { startView } from "@/lib/sessions/launch";
+import { db } from "@/lib/db";
+
+// The calling session, when it's an orchestrator: what it starts runs on the
+// implementation model. A made-up `from` can only pick that cheaper role.
+function orchestratorFrom(from: unknown): string | null {
+  if (typeof from !== "string" || !from) return null;
+  const row = db
+    .prepare(`SELECT 1 FROM sessions WHERE id = ? AND role = 'orchestrator'`)
+    .get(from);
+  return row ? from : null;
+}
 
 // mode "session" starts an interactive agent; "task" starts one that ends in
 // a PR, or queues it (over the workspace's limit, or with `after`).
@@ -18,7 +29,9 @@ export async function POST(request: NextRequest) {
       on,
       after,
       view,
+      from,
     } = await request.json();
+    const startedBy = orchestratorFrom(from);
     const given = typeof name === "string" ? name : undefined;
     if (after !== undefined && mode !== "task")
       throw new Error("--after works for tasks only");
@@ -30,6 +43,7 @@ export async function POST(request: NextRequest) {
         model,
         hostId: on ? hostIdNamed(String(on)) : undefined,
         view: startView(view),
+        startedBy,
       };
       const out = await startOrQueue(
         { ...task, after: typeof after === "string" ? after : undefined },
@@ -44,6 +58,7 @@ export async function POST(request: NextRequest) {
       prompt,
       name: given,
       model,
+      startedBy,
     });
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {

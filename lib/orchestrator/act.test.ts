@@ -10,6 +10,7 @@ const hostCalls: string[] = [];
 const started: string[] = [];
 // How each start asked to run.
 const views: { kind: string; view: string }[] = [];
+const launches: { model?: unknown; startedBy?: string }[] = [];
 // Chat sessions waiting on an approval, and how a chat send went.
 const waitingChats = new Set<string>();
 const failingChats = new Set<string>();
@@ -90,7 +91,10 @@ vi.mock("@/lib/sessions/launch", () => ({
     prompt: string;
     view?: string;
     access?: string;
+    model?: unknown;
+    startedBy?: string;
   }) => {
+    launches.push({ model: o.model, startedBy: o.startedBy });
     started.push(o.prompt);
     views.push({ kind: "session", view: `${o.view}/${o.access}` });
     const id = seedSession({
@@ -158,7 +162,15 @@ describe("workspace scoping", () => {
     const cases: [Parameters<typeof runTool>[1], object][] = [
       ["read", { session: theirs }],
       ["send", { session: theirs, message: "hi" }],
-      ["start_task", { project: other.api.name, prompt: "x" }],
+      [
+        "start_task",
+        {
+          plan: false,
+          plan_reason: "a clear edit",
+          project: other.api.name,
+          prompt: "x",
+        },
+      ],
       ["start_session", { project: other.app.name, prompt: "x" }],
       ["stack", { target: "Roadmap-of-another" }],
       ["stack", { target: other.app.name, plan_only: true }],
@@ -258,12 +270,42 @@ describe("acting inside the workspace", () => {
     }
   });
 
+  it("starts a session as the orchestrator, with a checked model", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    launches.length = 0;
+    await runTool(w, "start_session", {
+      project: mine.app.name,
+      prompt: "steps",
+      model: "anthropic/claude-opus-5-5",
+    });
+    expect(launches).toHaveLength(1);
+    expect(launches[0]).toMatchObject({ model: "anthropic/claude-opus-5-5" });
+    expect(launches[0].startedBy).toBeTruthy();
+    // One ref only: a role map, a gate role or a bad ref never starts.
+    for (const model of [
+      { implement: "anthropic/claude-opus-5-5" },
+      { review: "anthropic/claude-opus-5-5" },
+      "opus",
+    ])
+      await expect(
+        runTool(w, "start_session", {
+          project: mine.app.name,
+          prompt: "x",
+          model,
+        })
+      ).rejects.toThrow();
+    expect(launches).toHaveLength(1);
+  });
+
   it("starts a task and a session in its own projects, as chats", async () => {
     const { mine } = twoWorkspaces();
     const w = mine.workspace.id;
     views.length = 0;
     expect(
       await runTool(w, "start_task", {
+        plan: false,
+        plan_reason: "a clear edit",
         project: mine.api.name,
         prompt: "add rate limits",
       })
@@ -285,6 +327,8 @@ describe("acting inside the workspace", () => {
     const w = mine.workspace.id;
     started.length = 0;
     const text = await runTool(w, "start_task", {
+      plan: false,
+      plan_reason: "a clear edit",
       project: mine.app.name,
       prompt: "follow up on auth",
       name: "auth follow-up",
@@ -312,6 +356,8 @@ describe("acting inside the workspace", () => {
     ]);
     await expect(
       runTool(w, "start_task", {
+        plan: false,
+        plan_reason: "a clear edit",
         project: mine.app.name,
         prompt: "x",
         after: "nothing-like-this",
@@ -324,6 +370,8 @@ describe("acting inside the workspace", () => {
     for (const after of [other.task, other.task.slice(0, 8)])
       await expect(
         runTool(mine.workspace.id, "start_task", {
+          plan: false,
+          plan_reason: "a clear edit",
           project: mine.app.name,
           prompt: "x",
           after,
@@ -336,6 +384,8 @@ describe("acting inside the workspace", () => {
     const w = mine.workspace.id;
     started.length = 0;
     await runTool(w, "start_task", {
+      plan: false,
+      plan_reason: "a clear edit",
       project: mine.app.name,
       prompt: "braked follow-up",
       after: mine.task,
@@ -373,6 +423,8 @@ describe("acting inside the workspace", () => {
     const w = mine.workspace.id;
     started.length = 0;
     await runTool(w, "start_task", {
+      plan: false,
+      plan_reason: "a clear edit",
       project: mine.app.name,
       prompt: "moved away",
       after: mine.task,
@@ -401,6 +453,8 @@ describe("acting inside the workspace", () => {
     const { mine } = twoWorkspaces();
     const w = mine.workspace.id;
     await runTool(w, "start_task", {
+      plan: false,
+      plan_reason: "a clear edit",
       project: mine.app.name,
       prompt: "cut off",
       after: mine.task,
@@ -436,6 +490,8 @@ describe("acting inside the workspace", () => {
     views.length = 0;
     expect(
       await runTool(w, "start_task", {
+        plan: false,
+        plan_reason: "a clear edit",
         project: mine.api.name,
         prompt: "profile the tui",
         view: "terminal",
@@ -454,6 +510,8 @@ describe("acting inside the workspace", () => {
     ]);
     await expect(
       runTool(w, "start_task", {
+        plan: false,
+        plan_reason: "a clear edit",
         project: mine.api.name,
         prompt: "x",
         view: "tmux",
@@ -592,7 +650,13 @@ describe("the tool route and its arguments", () => {
     ).rejects.toThrow(/Bad arguments for note/);
     for (const base of ["-x", "--upload-pack=evil", "a..b", 'x";rm -rf ~;"'])
       await expect(
-        runTool(w, "start_task", { project: mine.api.name, prompt: "p", base })
+        runTool(w, "start_task", {
+          plan: false,
+          plan_reason: "a clear edit",
+          project: mine.api.name,
+          prompt: "p",
+          base,
+        })
       ).rejects.toThrow(/base not a branch name/);
     const { isBranchName } = await import("@/lib/git");
     expect(["main", "release/1.2", "feature/x_y-z"].every(isBranchName)).toBe(
