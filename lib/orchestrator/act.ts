@@ -7,8 +7,8 @@
 import { parseOverride, type ModelOverride } from "../models/resolve";
 import { sendMessage } from "../bus";
 import { chatState, interruptChat } from "../chat/runner";
-import { hostExec, isRemoteHost } from "../hosts";
-import { shellQuote } from "../hosts/ssh";
+import { isRemoteHost } from "../hosts";
+import { endTmuxSession } from "../tmux/end";
 import { spawnSession } from "../agents/spawn";
 import {
   DEFAULT_START_VIEW,
@@ -231,9 +231,6 @@ export async function stop(workspaceId: string, ref: string): Promise<string> {
     await interruptChat(s.id);
     return `Stopped ${s.name}'s turn.`;
   }
-  await hostExec(
-    s.host_id,
-    `tmux kill-session -t ${shellQuote(`=${s.tmux_name}`)} 2>/dev/null || true`
-  );
+  await endTmuxSession(s.host_id, s.tmux_name);
   return `Stopped ${s.name}: its agent is ended, its worktree and branch are kept.`;
 }

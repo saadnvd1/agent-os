@@ -49,9 +49,31 @@ vi.mock("child_process", async (original) => {
     if (!["load-buffer"].includes(args[0])) stdin.end();
     return { stdin };
   };
-  const exec = (command: string) => {
-    throw new Error(`a shell was asked to run: ${command}`);
+  // The one shell script allowed: the shared tmux end script, which takes a
+  // validated name. It is recorded as "tmux-end" with that name.
+  const exec = (command: string, ...rest: unknown[]) => {
+    const name = /^t='=([A-Za-z0-9._-]+)'$/m.exec(command)?.[1];
+    if (!name || command !== endTmuxScript(name))
+      throw new Error(`a shell was asked to run: ${command}`);
+    const cb = rest.at(-1) as (
+      e: Error | null,
+      out: string,
+      err: string
+    ) => void;
+    calls.push({ file: "tmux-end", args: [name] });
+    setImmediate(() => cb(null, "", ""));
+    return { stdin: null };
   };
+  Object.assign(exec, {
+    [promisify.custom]: (command: string, ...rest: unknown[]) =>
+      new Promise((resolve, reject) =>
+        exec(command, ...rest, ((
+          e: Error | null,
+          stdout: string,
+          stderr: string
+        ) => (e ? reject(e) : resolve({ stdout, stderr }))) as never)
+      ),
+  });
   // The summarizer's `claude -p`, which reads the conversation on stdin.
   const spawn = (file: string, args: string[]) => {
     const call: Call = { file, args };
@@ -86,6 +108,7 @@ vi.mock("child_process", async (original) => {
 });
 
 const { db, queries } = await import("@/lib/db");
+const { endTmuxScript } = await import("@/lib/tmux/end");
 type DevServer = import("@/lib/db").DevServer;
 const { createHost } = await import("@/lib/hosts");
 const { loginShellCommand } = await import("@/lib/hosts/ssh");
@@ -255,7 +278,11 @@ describe("POST /api/sessions/[id]/summarize", async () => {
       "-c",
       cwd,
     ]);
-    expect(created?.args).toHaveLength(7);
+    expect(created?.args.slice(6, 8)).toEqual([
+      "-e",
+      `AGENTOS_SESSION_ID=${created?.args[3].slice(-36)}`,
+    ]);
+    expect(created?.args).toHaveLength(9);
     expect(tmuxCalls().slice(0, 2)).toEqual([
       {
         file: "tmux",
@@ -302,12 +329,14 @@ describe("orchestration workers", async () => {
     ]);
   });
 
-  it("kills a worker by its stored name, as a name", async () => {
-    const id = addSession({ tmux_name: EVIL[1] });
-    await killWorker(id);
-    expect(calls).toEqual([
-      { file: "tmux", args: ["kill-session", "-t", `=${EVIL[1]}`] },
-    ]);
+  it("ends a worker by its stored name, and runs nothing for a name that is shell syntax", async () => {
+    const good = addSession({ tmux_name: "claude-worker.1_a" });
+    await killWorker(good);
+    expect(calls).toEqual([{ file: "tmux-end", args: ["claude-worker.1_a"] }]);
+    calls.length = 0;
+    const evil = addSession({ tmux_name: EVIL[1] });
+    await killWorker(evil);
+    expect(calls).toEqual([]);
   });
 });
 
@@ -355,7 +384,7 @@ describe("POST /api/tmux/kill-all", async () => {
     await POST();
     expect(calls).toEqual([
       { file: "tmux", args: ["list-sessions", "-F", "#{session_name}"] },
-      { file: "tmux", args: ["kill-session", "-t", `=${name}`] },
+      { file: "tmux-end", args: [name] },
     ]);
   });
 });
@@ -404,7 +433,11 @@ describe("spawnWorker", async () => {
         "-c",
         path.join(os.homedir(), EVIL[0]),
       ]);
-      expect(created()).toHaveLength(7);
+      expect(created()?.slice(6, 8)).toEqual([
+        "-e",
+        `AGENTOS_SESSION_ID=${worker.tmux_name.slice(-36)}`,
+      ]);
+      expect(created()).toHaveLength(9);
       expect(tmuxCalls().slice(-2)).toEqual([
         { file: "tmux", args: ["send-keys", "-t", target, "-l", "--", task] },
         { file: "tmux", args: ["send-keys", "-t", target, "Enter"] },

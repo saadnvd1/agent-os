@@ -17,6 +17,7 @@ import { statusDetector } from "./status-detector";
 import { wrapWithBanner } from "./banner";
 import { runInBackground } from "./async-operations";
 import { tmux } from "./tmux/exec";
+import { endTmuxSession } from "./tmux/end";
 
 export interface SpawnWorkerOptions {
   conductorSessionId: string;
@@ -178,6 +179,8 @@ export async function spawnWorker(
       tmuxSessionName,
       "-c",
       cwd,
+      "-e",
+      `AGENTOS_SESSION_ID=${sessionId}`,
       newSessionCmd,
     ]);
 
@@ -406,11 +409,7 @@ export async function killWorker(
   const tmuxSessionName = session.tmux_name || `${provider.id}-${workerId}`;
 
   // Kill tmux session
-  try {
-    await tmux(["kill-session", "-t", `=${tmuxSessionName}`]);
-  } catch {
-    // Ignore errors
-  }
+  await endTmuxSession(session.host_id, tmuxSessionName);
 
   // Clean up worktree if requested
   // Note: This requires knowing the original project path, which we derive from git

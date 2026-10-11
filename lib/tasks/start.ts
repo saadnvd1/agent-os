@@ -8,6 +8,7 @@
 
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { endTmuxSession } from "../tmux/end";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { setupWorktree } from "../env-setup";
@@ -195,10 +196,7 @@ function earlierSetup(row: SetupColumns): TaskSetup | undefined {
   return undefined;
 }
 
-export const killTmux = (name: string) =>
-  execFileAsync("tmux", ["kill-session", "-t", `=${name}`], {
-    timeout: 5000,
-  }).catch(() => undefined);
+export const killTmux = (name: string) => endTmuxSession(null, name);
 
 const tmuxAlive = (name: string) =>
   execFileAsync("tmux", ["has-session", "-t", `=${name}`], {

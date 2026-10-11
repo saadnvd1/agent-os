@@ -9,6 +9,13 @@ const prompts = fs.mkdtempSync(path.join(os.tmpdir(), "aos-prompts-"));
 const promptFile = (id: string) => path.join(prompts, `${id}.prompt.md`);
 // Every tmux call start.ts makes, in order.
 const tmuxCalls: string[][] = [];
+// Sessions ended through the shared helper.
+const ended: string[] = [];
+vi.mock("../tmux/end", () => ({
+  endTmuxSession: async (_host: unknown, name: string) => {
+    ended.push(name);
+  },
+}));
 vi.mock("child_process", async (importOriginal) => ({
   ...(await importOriginal<typeof import("child_process")>()),
   execFile: (
@@ -98,6 +105,7 @@ beforeEach(() => {
   setupWorktree.mockReset().mockResolvedValue(ok());
   launchClaude.mockReset().mockResolvedValue();
   tmuxCalls.length = 0;
+  ended.length = 0;
   ws = seedWorkspace();
 });
 
@@ -238,7 +246,7 @@ describe("finishTaskStart", () => {
     const id = seedTask(ws.app.id);
     expect(launchPending(id)).toBe(true);
     launchClaude.mockImplementation(async () => {
-      expect(tmuxCalls).toEqual([["kill-session", "-t", `=claude-${id}`]]);
+      expect(ended).toEqual([`claude-${id}`]);
     });
     await finishTaskStart(id);
     expect(setupOf(id)?.status).toBe("ok");

@@ -323,6 +323,8 @@ export async function POST(
         newTmuxSession,
         "-c",
         cwdExpanded,
+        "-e",
+        `AGENTOS_SESSION_ID=${newId}`,
         claudeCmd,
       ]);
       console.log(`[summarize] Tmux session created: ${newTmuxSession}`);

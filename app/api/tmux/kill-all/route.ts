@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb, queries, type Session } from "@/lib/db";
 import { getManagedSessionPattern } from "@/lib/providers/registry";
 import { tmux } from "@/lib/tmux/exec";
+import { endTmuxSession } from "@/lib/tmux/end";
 
 // POST /api/tmux/kill-all - Kill all AgentOS tmux sessions and remove from database
 export async function POST() {
@@ -25,7 +26,7 @@ export async function POST() {
     const killed: string[] = [];
     for (const session of tmuxSessions) {
       try {
-        await tmux(["kill-session", "-t", `=${session}`], 5000);
+        await endTmuxSession(null, session);
         killed.push(session);
       } catch {
         // Session might already be dead, continue

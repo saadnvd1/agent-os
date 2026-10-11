@@ -8,9 +8,7 @@
  */
 
 import { db, queries, type Session } from "../db";
-import { stopChat } from "../chat/runner";
-import { hostExec } from "../hosts";
-import { shellQuote } from "../hosts/ssh";
+import { endSessionAgent } from "../sessions/end";
 import { getProject } from "../projects";
 import { mergeSettled, type TaskPR } from "../tasks";
 import { syncTaskCardInBackground } from "../lumifyhub/task-cards";
@@ -56,11 +54,7 @@ export function getDoneTarget(id: string): Session {
 }
 
 async function stopAgent(s: Session): Promise<void> {
-  stopChat(s.id);
-  await hostExec(
-    s.host_id,
-    `tmux kill-session -t ${shellQuote(`=${s.tmux_name}`)} 2>/dev/null || true`
-  ).catch(() => {});
+  await endSessionAgent(s);
   releasePorts(s.id);
   // Never waited on: the row is read now, and Postgres can't hold this up.
   void dropSessionDatabase(s.id);

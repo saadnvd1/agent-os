@@ -16,6 +16,7 @@ const chats = new Map<string, ChatState>();
 const unreachable = new Set<string>();
 const stopped: string[] = [];
 const runs: string[][] = [];
+const ended = vi.hoisted(() => [] as string[]);
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: (pane: string) => pane.includes("Do you want"),
@@ -54,6 +55,11 @@ vi.mock("@/lib/tasks/session", async (importOriginal) => ({
 vi.mock("@/lib/tasks/gh", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tasks/gh")>()),
   run: async (cmd: string, args: string[]) => (runs.push([cmd, ...args]), ""),
+}));
+vi.mock("@/lib/tmux/end", () => ({
+  endTmuxSession: async (_host: unknown, name: string) => {
+    ended.push(name);
+  },
 }));
 vi.mock("@/lib/worktrees", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/worktrees")>()),
@@ -307,15 +313,11 @@ describe.each(VIEWS)("a %s task", (view) => {
     const t = task(view, { said: "Working", state: "running" });
     stopped.length = 0;
     runs.length = 0;
+    ended.length = 0;
     await dropTask(t.id);
     expect(row(t.id).task_status).toBe("dropped");
-    expect(runs).toContainEqual([
-      "tmux",
-      "kill-session",
-      "-t",
-      `=claude-${t.id}`,
-    ]);
-    expect(stopped).toEqual(view === "chat" ? [t.id] : []);
+    expect(ended).toContain(`claude-${t.id}`);
+    expect(stopped).toEqual([t.id]);
   });
 });
 
