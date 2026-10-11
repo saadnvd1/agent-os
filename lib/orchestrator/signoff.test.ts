@@ -1609,11 +1609,15 @@ describe("the PR's real base", () => {
     });
     const [raised] = openAsks(t.w);
     answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
     pr = { ...pr!, base: "main" };
     const { prFor } = await import("@/lib/tasks/session");
     await prFor(getTaskSession(t.task), true);
-    expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
-    await expect(t.signOff()).rejects.toThrow();
+    expect(getAsk(t.w, raised.id)).toMatchObject({
+      answer: "approve (void)",
+      used_at: expect.any(String),
+    });
+    await expect(t.signOff()).rejects.toThrow(/review/);
     expect(merges).toEqual([]);
   });
 
@@ -1627,7 +1631,7 @@ describe("the PR's real base", () => {
     pr = { ...pr!, base: "main" };
     const { signOffTask } = await import("@/lib/tasks/finish");
     await expect(signOffTask(t.task)).rejects.toThrow(
-      /targets main, not its base develop/
+      /targets main, not its base develop: its review and checks were for the old base/
     );
     expect(merges).toEqual([]);
   });
@@ -1685,7 +1689,7 @@ describe("the PR's real base", () => {
     ).rejects.toThrow(/Couldn't fetch from origin/);
   });
 
-  it("falls back to the default branch when GitHub can't be reached and the recorded base is gone", async () => {
+  it("falls back to the default branch when the recorded base is gone on origin", async () => {
     const t = setup();
     const base = await fetchRefs(t.repo, {
       base_branch: "feature/parent-gone",
