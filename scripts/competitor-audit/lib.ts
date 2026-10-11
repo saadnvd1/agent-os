@@ -200,6 +200,10 @@ export function pickBiggest(commits: Commit[], n: number): Commit[] {
 const NOISE =
   /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?|Cargo\.lock)$|\.snap$|\.gen\.\w+$|\.(test|spec)\.\w+$|(^|\/)(dist|_?generated|__tests__)\//;
 
+// Types are shown unfenced in counts, so only known ones pass; the rest are "other".
+const KNOWN_TYPES =
+  /^(feat|fix|perf|refactor|test|tests|chore|ci|build|docs|style|revert|lint|design)$/;
+
 export function parseConventional(subject: string): {
   type: string;
   scope: string;
@@ -208,7 +212,10 @@ export function parseConventional(subject: string): {
   const pr = /\(#(\d+)\)\s*$/.exec(subject);
   const cc = /^(\w+)(?:\(([^)]*)\))?!?:/.exec(subject);
   return {
-    type: cc ? cc[1].toLowerCase() : "other",
+    type:
+      cc && KNOWN_TYPES.test(cc[1].toLowerCase())
+        ? cc[1].toLowerCase()
+        : "other",
     scope: cc?.[2]?.toLowerCase() ?? "",
     pr: pr ? Number(pr[1]) : null,
   };
@@ -220,27 +227,31 @@ export const LOG_FORMAT = `${RS}%H${US}%cI${US}%an${US}%s`;
 
 /** Parses `git log --no-merges --numstat --format=LOG_FORMAT`. */
 export function parseGitLog(raw: string): Commit[] {
-  return raw
-    .split(RS)
-    .filter((c) => c.trim())
-    .map((chunk) => {
-      const [head, ...stat] = chunk.split("\n");
-      const [sha, date, author, subject] = head.split(US);
-      const files = stat
-        .map((l) => /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(l))
-        .filter((m): m is RegExpExecArray => !!m)
-        .map((m) => ({
-          path: m[3],
-          added: m[1] === "-" ? 0 : Number(m[1]),
-          deleted: m[2] === "-" ? 0 : Number(m[2]),
-        }));
-      const size = files
-        .filter((f) => !NOISE.test(f.path))
-        .reduce((n, f) => n + f.added + f.deleted, 0);
-      const cc = parseConventional(subject);
-      const partial = { sha, date, author, subject, ...cc, files, size };
-      return { ...partial, area: classify(partial) };
-    });
+  return (
+    raw
+      .split(RS)
+      .filter((c) => c.trim())
+      // A subject can carry the separators and forge a record: keep only real shas.
+      .filter((c) => /^[0-9a-f]{40}\x1f/.test(c))
+      .map((chunk) => {
+        const [head, ...stat] = chunk.split("\n");
+        const [sha, date, author, subject] = head.split(US);
+        const files = stat
+          .map((l) => /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(l))
+          .filter((m): m is RegExpExecArray => !!m)
+          .map((m) => ({
+            path: m[3],
+            added: m[1] === "-" ? 0 : Number(m[1]),
+            deleted: m[2] === "-" ? 0 : Number(m[2]),
+          }));
+        const size = files
+          .filter((f) => !NOISE.test(f.path))
+          .reduce((n, f) => n + f.added + f.deleted, 0);
+        const cc = parseConventional(subject);
+        const partial = { sha, date, author, subject, ...cc, files, size };
+        return { ...partial, area: classify(partial) };
+      })
+  );
 }
 
 const SCOPES: [Area, RegExp][] = [

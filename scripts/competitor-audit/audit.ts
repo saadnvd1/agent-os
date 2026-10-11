@@ -183,12 +183,21 @@ function docChanges(
   to: string
 ): DocChange[] {
   const stats = new Map<string, { added: number; deleted: number }>();
-  for (const l of git("diff", "--numstat", from, to).split("\n")) {
+  for (const l of git("diff", "--numstat", "--end-of-options", from, to).split(
+    "\n"
+  )) {
     const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(l);
     if (m)
       stats.set(m[3], { added: Number(m[1]) || 0, deleted: Number(m[2]) || 0 });
   }
-  const changes = git("diff", "--name-status", "--no-renames", from, to)
+  const changes = git(
+    "diff",
+    "--name-status",
+    "--no-renames",
+    "--end-of-options",
+    from,
+    to
+  )
     .split("\n")
     .map((l) => l.split("\t"))
     .filter(([s, p]) => s && p && DOC_PATH.test(p))
@@ -212,7 +221,7 @@ function docChanges(
         .slice(0, 8)
         .join("\n");
     } else if (d.status === "M" && modified++ < 3) {
-      d.excerpt = git("diff", "-U0", from, to, "--", d.path)
+      d.excerpt = git("diff", "-U0", "--end-of-options", from, to, "--", d.path)
         .split("\n")
         .filter(
           (l) => l.startsWith("+") && !l.startsWith("+++") && l.slice(1).trim()
@@ -267,7 +276,15 @@ function summarise(c: Competitor) {
   );
   let fromSha = range.fromSha;
   if (!fromSha && commits.length) {
-    fromSha = tryRun(() => git("rev-parse", `${commits.at(-1)!.sha}^`).trim());
+    fromSha = tryRun(() =>
+      git(
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        `${commits.at(-1)!.sha}^`
+      ).trim()
+    );
+    if (!isValidSha(fromSha)) fromSha = null;
   }
   const sinceDate =
     range.since ??
