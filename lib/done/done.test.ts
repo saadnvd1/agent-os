@@ -75,6 +75,7 @@ vi.mock("@/lib/hosts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hosts")>()),
   hostExec: async (_host: string, command: string) => {
     killed.push(command);
+    await cleanupGate;
     return { stdout: "", stderr: "" };
   },
 }));
