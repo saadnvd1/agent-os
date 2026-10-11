@@ -17,6 +17,7 @@ import {
   Plus,
   Sun,
   Workflow,
+  Scale,
 } from "lucide-react";
 import type { Session } from "@/lib/db";
 import type { PaletteCommand } from "@/lib/palette/registry";
@@ -147,7 +148,24 @@ export function useAppCommands({
       group: "Go to",
       keywords: ["cost", "tokens", "limits", "spend", "window"],
       icon: Gauge,
-      run: usageUiActions.open,
+      run: () => usageUiActions.open(),
+    },
+    {
+      id: "app.model-comparison",
+      title: "Model comparison",
+      group: "Go to",
+      keywords: [
+        "models",
+        "routing",
+        "providers",
+        "before after",
+        "quality",
+        "deepseek",
+        "glm",
+        "cost",
+      ],
+      icon: Scale,
+      run: () => usageUiActions.open("compare"),
     },
     {
       id: "app.tasks",

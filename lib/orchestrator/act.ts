@@ -4,6 +4,7 @@
  * the brakes.
  */
 
+import { parseOverride, type ModelOverride } from "../models/resolve";
 import { sendMessage } from "../bus";
 import { chatState, interruptChat } from "../chat/runner";
 import { hostExec, isRemoteHost } from "../hosts";
@@ -80,9 +81,17 @@ export async function startTask(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  opts: { base?: string; name?: string; view?: StartView; after?: string } = {}
+  opts: {
+    base?: string;
+    name?: string;
+    view?: StartView;
+    after?: string;
+    model?: ModelOverride;
+    plan?: boolean;
+  } = {}
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
+  const model = parseOverride(opts.model) ?? undefined;
   // Its brakes read this machine's usage, not the other machine's account.
   if (isRemoteHost(project.host_id))
     throw new Error(
@@ -97,6 +106,7 @@ export async function startTask(
       prompt,
       name: opts.name,
       view,
+      model,
       baseBranch: opts.base || undefined,
       after: opts.after,
       originWorkspaceId: workspaceId,
@@ -112,6 +122,8 @@ export async function startTask(
             name: opts.name,
             baseBranch: opts.base || undefined,
             view,
+            model,
+            plan: opts.plan,
           }),
         (s) => s.id
       )

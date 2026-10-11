@@ -1,3 +1,4 @@
+import { routedRun } from "@/lib/models/launch";
 import { NextRequest, NextResponse } from "next/server";
 import { isRemoteHost } from "@/lib/hosts";
 import { spawn } from "child_process";
@@ -130,8 +131,10 @@ async function getTmuxCwd(sessionName: string): Promise<string | null> {
 async function generateSummary(conversation: string): Promise<string> {
   const prompt = `Summarize this Claude Code conversation in under 300 words. Focus on: what was built, key files changed, current state, and any pending work. Be specific.`;
 
+  const routed = await routedRun("helper");
   return new Promise((resolve, reject) => {
-    const claude = spawn("claude", ["-p", prompt], {
+    const claude = spawn("claude", ["-p", prompt, "--model", routed.model], {
+      env: { ...process.env, ...routed.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
 

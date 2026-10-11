@@ -10,6 +10,8 @@ import { formatTokens } from "../chat/context";
 
 export interface RunUsage {
   model: string | null;
+  // Where the model ran (lib/models); Anthropic when absent.
+  provider?: string;
   inputTokens: number;
   cacheWriteTokens: number;
   cacheReadTokens: number;
@@ -92,9 +94,9 @@ export function recordCheckRun(
   at = Date.now()
 ): void {
   db.prepare(
-    `INSERT INTO check_runs (workspace_id, session_id, label, pr_number, sha, kind, model,
+    `INSERT INTO check_runs (workspace_id, session_id, label, pr_number, sha, kind, model, provider,
        input_tokens, cache_write_tokens, cache_read_tokens, output_tokens, cost_usd, duration_ms, at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     target.workspaceId,
     target.sessionId,
@@ -103,6 +105,7 @@ export function recordCheckRun(
     target.sha,
     target.kind,
     u.model,
+    u.provider ?? "anthropic",
     u.inputTokens,
     u.cacheWriteTokens,
     u.cacheReadTokens,

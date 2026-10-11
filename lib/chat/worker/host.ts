@@ -76,6 +76,8 @@ export class ChatHost {
   // resumed conversation's saved totals.
   private usage: UsageTotals | null;
   private turnsRecorded = 0;
+  // When the running turn started, for its wall time.
+  private turnStartedAt: number | null = null;
   // A permission mode change still on its way to the agent: a message sent
   // right after it (carrying out a plan) must not overtake it.
   private modeChange: Promise<void> = Promise.resolve();
@@ -161,7 +163,7 @@ export class ChatHost {
       throw new Error(`${session.agent_type} can't enforce this role's tools`);
     this.atRest = driver.atRest !== false;
     const cwd = session.working_directory.replace(/^~/, os.homedir());
-    const env = agentEnv(session.id);
+    const env = { ...agentEnv(session.id), ...extras.env };
     // Every chat can show visuals, asked for like any tool under its access
     // setting (they read files and reach the web). Not an orchestrator: it
     // reads other sessions' text, and a browser would be a way out for it.
@@ -290,7 +292,15 @@ export class ChatHost {
           this.setSuggestion(e.text);
           this.retireIfDone();
         } else if (e.type === "usage") {
-          this.usage = recordTurn(this.session, this.usage, e.totals);
+          const at = Date.now();
+          this.usage = recordTurn(
+            this.session,
+            this.usage,
+            e.totals,
+            at,
+            this.turnStartedAt === null ? null : at - this.turnStartedAt
+          );
+          this.turnStartedAt = null;
           this.turnsRecorded++;
         } else if (e.type === "usage_start") {
           // Too late once a turn was measured without it.
@@ -306,6 +316,7 @@ export class ChatHost {
           this.refreshIfFull(e.context.usedTokens);
         } else if (e.type === "turn_start") {
           this.turnsStarted++;
+          this.turnStartedAt ??= Date.now();
           if (this.behind) this.behind--;
           clearTimeout(this.restTimer);
           this.restTimer = undefined;

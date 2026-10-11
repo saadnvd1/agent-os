@@ -1,0 +1,156 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../db";
+import { listQueue } from "../chat/queued";
+import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import { recordTurn } from "../usage/turns";
+import { taskRouting } from "../tasks";
+import { setModelSettings } from "./config";
+import {
+  PLAN_FILE,
+  handoffAfterPlan,
+  implementMessageId,
+  planPrompt,
+  preparePlanDir,
+} from "./plan-step";
+
+const turn = {
+  costUsd: 0.5,
+  inputTokens: 100,
+  outputTokens: 50,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+};
+
+function planningTask() {
+  const { app } = seedWorkspace();
+  const id = seedSession({
+    projectId: app.id,
+    name: "planned",
+    view: "chat",
+    task: true,
+  });
+  const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "plan-step-"));
+  db.prepare(
+    `UPDATE sessions SET worktree_path = ?, model = 'claude-opus-5-5', plan_phase = 'planning' WHERE id = ?`
+  ).run(worktree, id);
+  return { id, worktree };
+}
+
+const row = (id: string) =>
+  db
+    .prepare(
+      `SELECT model, model_provider, plan_phase FROM sessions WHERE id = ?`
+    )
+    .get(id);
+
+beforeEach(() => {
+  db.prepare(`DELETE FROM settings WHERE key LIKE 'models%'`).run();
+});
+
+describe("plan then implement", () => {
+  it("plans first only as a chat, and only when the two roles differ", () => {
+    expect(taskRouting(null, "chat", undefined)).toMatchObject({
+      plan: true,
+      first: { model: "claude-opus-5-5", role: "plan" },
+    });
+    expect(taskRouting(null, "terminal", undefined)).toMatchObject({
+      plan: false,
+      first: { model: "claude-sonnet-5-5", role: "implement" },
+    });
+    // One model for every role: nothing to hand off to.
+    expect(taskRouting(null, "chat", "anthropic/claude-sonnet-5-5").plan).toBe(
+      false
+    );
+    expect(taskRouting(null, "chat", undefined, false).plan).toBe(false);
+    setModelSettings({ planStep: false });
+    expect(taskRouting(null, "chat", undefined).plan).toBe(false);
+  });
+
+  it("asks for the plan in a file the worktree's git ignores", () => {
+    const { worktree } = planningTask();
+    preparePlanDir(worktree);
+    expect(
+      fs.readFileSync(path.join(worktree, ".agentos", ".gitignore"), "utf8")
+    ).toBe("*\n");
+    expect(planPrompt("Build X")).toMatch(/^Build X\n/);
+    expect(planPrompt("Build X")).toContain(PLAN_FILE);
+  });
+
+  it("hands the conversation to the implementation model once the plan turn ends", async () => {
+    const { id, worktree } = planningTask();
+    const send = vi.fn(async () => {});
+    // Idle before any plan turn (the worker just started): nothing yet.
+    expect(await handoffAfterPlan(id, send)).toBe(false);
+
+    recordTurn(
+      { id, name: "planned", workspace_id: null },
+      null,
+      turn,
+      Date.now(),
+      2000,
+      () => null
+    );
+    const recorded = db
+      .prepare(
+        `SELECT role, model, provider, duration_ms FROM chat_turns WHERE session_id = ?`
+      )
+      .get(id);
+    expect(recorded).toEqual({
+      role: "plan",
+      model: "claude-opus-5-5",
+      provider: "anthropic",
+      duration_ms: 2000,
+    });
+    preparePlanDir(worktree);
+    fs.writeFileSync(path.join(worktree, PLAN_FILE), "1. do it\n");
+
+    expect(await handoffAfterPlan(id, send)).toBe(true);
+    expect(row(id)).toEqual({
+      model: "claude-sonnet-5-5",
+      model_provider: null,
+      plan_phase: "implementing",
+    });
+    const queued = listQueue(id).find((m) => m.id === implementMessageId(id));
+    expect(queued?.text).toContain(`The plan is in \`${PLAN_FILE}\``);
+    expect(send).toHaveBeenCalledWith(id, implementMessageId(id));
+
+    // Once: the next idle (the implementation's own turns) changes nothing.
+    expect(await handoffAfterPlan(id, send)).toBe(false);
+    expect(send).toHaveBeenCalledOnce();
+    recordTurn(
+      { id, name: "planned", workspace_id: null },
+      turn,
+      { ...turn, costUsd: 1, inputTokens: 300 },
+      Date.now(),
+      null,
+      () => null
+    );
+    const roles = db
+      .prepare(
+        `SELECT role, model FROM chat_turns WHERE session_id = ? ORDER BY id`
+      )
+      .all(id);
+    expect(roles).toEqual([
+      { role: "plan", model: "claude-opus-5-5" },
+      { role: "implement", model: "claude-sonnet-5-5" },
+    ]);
+  });
+
+  it("says so when no plan was written", async () => {
+    const { id } = planningTask();
+    recordTurn(
+      { id, name: "planned", workspace_id: null },
+      null,
+      turn,
+      Date.now(),
+      null,
+      () => null
+    );
+    await handoffAfterPlan(id, async () => {});
+    const queued = listQueue(id).find((m) => m.id === implementMessageId(id));
+    expect(queued?.text).toContain("No plan was written");
+  });
+});

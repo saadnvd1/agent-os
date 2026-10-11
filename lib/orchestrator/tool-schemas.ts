@@ -6,6 +6,7 @@ import { BRANCH_NAME } from "../git";
 import { RAISED_KINDS } from "./asks";
 import { MAX_RULE_CHARS } from "./rules";
 import { PROJECT_NAME } from "../project-add/name";
+import { TASK_ROLES, type ModelRole } from "../models/roles";
 
 const ref = (what: string) => z.string().trim().min(1).max(300).describe(what);
 const session = ref("Session name, project/name, or id from sessions");
@@ -17,6 +18,23 @@ const view = z
   .optional()
   .describe(
     "How its agent runs: chat (the default), or terminal only when the job needs a TUI (an interactive program, a full-screen tool)"
+  );
+
+const modelRef = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9][a-z0-9_-]*\/[\w.:@/-]+$/i, 'not "provider/model"');
+const modelOverride = z
+  .union([
+    modelRef,
+    z.partialRecord(
+      z.enum(TASK_ROLES as [ModelRole, ...ModelRole[]]),
+      modelRef
+    ),
+  ])
+  .optional()
+  .describe(
+    "Its own model, as \"provider/model\" (anthropic/claude-sonnet-5-5, deepseek/deepseek-v4-pro) for all its roles, or a map of role (plan, implement, review, scope) to one. Default: the workspace's and Settings' role models; another provider only when asked"
   );
 
 export const TOOL_SHAPES = {
@@ -78,6 +96,26 @@ export const TOOL_SHAPES = {
       .optional()
       .describe(
         'Queue it until this task finishes (id or name), or "any" for whichever running task finishes first'
+      ),
+    model: modelOverride,
+    plan: z
+      .boolean()
+      .optional()
+      .describe(
+        "Plan first on the planning model, then implement on the implementation model (default: Settings)"
+      ),
+  },
+  set_task_model: {
+    task,
+    model: modelOverride.unwrap(),
+    message: z
+      .string()
+      .trim()
+      .min(1)
+      .max(8000)
+      .optional()
+      .describe(
+        "What it's told on resuming (default: carry on where it left off)"
       ),
   },
   start_session: {

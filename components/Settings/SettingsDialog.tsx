@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Cpu,
   GitMerge,
   LayoutGrid,
   Smartphone,
@@ -25,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { AuditsPanel } from "@/components/Audits/AuditsPanel";
 import { DevicesPanel } from "@/components/Devices";
 import { GlobalMergeSection } from "@/components/Merge/GlobalMergeSection";
+import { ModelsSection } from "@/components/Models/ModelsSection";
 import { SchedulesPanel } from "@/components/Schedules";
 import { WorkspaceSettings } from "@/components/Workspaces";
 import { useSettingsUrl } from "@/hooks/useSettingsUrl";
@@ -56,6 +58,11 @@ export const SECTION_INFO: Record<
     hint: "Pairing, passkeys, network",
     icon: Smartphone,
   },
+  models: {
+    label: "Models",
+    hint: "Which model each kind of work runs on, and providers",
+    icon: Cpu,
+  },
   notifications: {
     label: "Notifications",
     hint: "Sound, browser alerts, your phone",
@@ -85,6 +92,8 @@ function SectionBody({
       return <GlobalMergeSection />;
     case "workspaces":
       return <WorkspaceSettings />;
+    case "models":
+      return <ModelsSection />;
     case "devices":
       return <DevicesPanel />;
     case "notifications":

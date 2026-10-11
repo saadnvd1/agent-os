@@ -11,6 +11,8 @@ import { db, queries, type Session } from "../db";
 import type { AgentType } from "../providers";
 import type { ChatAccess, ChatImage } from "../chat/events";
 import { resolveModelForAgent } from "../model-catalog";
+import { resolveRole, setSessionModel } from "../models/resolve";
+import { ANTHROPIC } from "../models/roles";
 import { getProject } from "../projects";
 import { getHost, isRemoteHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
@@ -214,14 +216,26 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
     await fs.promises.mkdir(SCRATCH_DIR, { recursive: true });
 
   const agentType = input.agentType;
-  const model = resolveModelForAgent(
-    agentType,
-    input.model?.trim() || project?.default_model
-  );
   const view =
     input.view === "terminal" || !supportsChat(agentType) || remote
       ? "terminal"
       : DEFAULT_START_VIEW;
+  // Claude with no model picked runs on the interactive role's, here; on
+  // another provider only as a chat, whose worker carries its endpoint.
+  const routed =
+    agentType === "claude" && !input.model?.trim() && !remote
+      ? resolveRole("interactive", { workspaceId: project?.workspace_id })
+      : null;
+  const interactive =
+    routed && (routed.provider.id === ANTHROPIC || view === "chat")
+      ? routed
+      : null;
+  const model = interactive
+    ? interactive.model
+    : resolveModelForAgent(
+        agentType,
+        input.model?.trim() || project?.default_model
+      );
   const text = input.prompt?.trim() ?? "";
   const naming: Naming = text
     ? await nameFor(text, projectPath, input.name)
@@ -252,6 +266,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
   db.prepare(
     `UPDATE sessions SET view = ?, name_source = ?, setup_status = ? WHERE id = ?`
   ).run(view, naming.source, useWorktree ? "running" : null, id);
+  if (interactive) setSessionModel(id, interactive);
   if (input.access)
     db.prepare(`UPDATE sessions SET chat_access = ? WHERE id = ?`).run(
       input.access,

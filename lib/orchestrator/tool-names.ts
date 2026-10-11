@@ -14,6 +14,7 @@ export const TOOL_NAMES = {
   orchestrators: name("orchestrators"),
   message_orchestrator: name("message_orchestrator"),
   start_task: name("start_task"),
+  set_task_model: name("set_task_model"),
   start_session: name("start_session"),
   stack: name("stack"),
   stack_status: name("stack_status"),

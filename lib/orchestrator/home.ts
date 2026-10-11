@@ -5,12 +5,12 @@
  * sessions.
  */
 
+import { resolveRoleOrDefault } from "../models/resolve";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import { randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import { db, type Session } from "../db";
-import { resolveModelForAgent } from "../model-catalog";
 import { getWorkspace } from "../workspaces";
 
 // It works through tools, not in a repo: a scratch folder of its own.
@@ -62,7 +62,7 @@ export function ensureOrchestrator(workspaceId: string): Session {
     `${workspace.name} orchestrator`,
     `claude-${id}`,
     dir,
-    resolveModelForAgent("claude", null),
+    resolveRoleOrDefault("orchestrator", { workspaceId }).model,
     workspaceId
   );
   return getOrchestrator(workspaceId)!;

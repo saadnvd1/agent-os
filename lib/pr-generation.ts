@@ -1,3 +1,4 @@
+import { routedRun } from "./models/launch";
 import { execFile } from "child_process";
 import { git as runGit } from "./git-exec";
 import { run } from "./tasks/gh";
@@ -154,13 +155,15 @@ async function generateWithClaude(
 
 // `claude --print` with the prompt on stdin, off the event loop and killed
 // at the ceiling.
-function claudePrint(cwd: string, prompt: string): Promise<string> {
+async function claudePrint(cwd: string, prompt: string): Promise<string> {
+  const routed = await routedRun("helper");
   return new Promise((resolve, reject) => {
     const child = execFile(
       "claude",
-      ["--print"],
+      ["--print", "--model", routed.model],
       {
         cwd,
+        env: { ...process.env, ...routed.env },
         encoding: "utf-8",
         timeout: 30_000,
         killSignal: "SIGKILL",

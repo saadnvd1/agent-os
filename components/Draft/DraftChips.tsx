@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import {
   Bot,
+  Cpu,
   FolderGit2,
   GitBranch,
   GitPullRequest,
@@ -17,6 +18,7 @@ import { resolveModelForAgent } from "@/lib/model-catalog";
 import type { GitCheck } from "@/data/git/queries";
 import { useAgentStatusQuery } from "@/data/agents";
 import { useProjectMachinesQuery } from "@/data/projects";
+import { modelChoices, useModelsQuery } from "@/data/models";
 import type { AgentProbe } from "@/lib/agents/probe";
 import { ChipHeading, ChipItem, ChipMenu, ChipToggle } from "./Chip";
 
@@ -64,6 +66,7 @@ export function DraftChips({
   const { data: localProbes } = useAgentStatusQuery();
   const probes = local ? localProbes : undefined;
   const base = draft.baseBranch ?? git?.defaultBranch ?? "main";
+  const { data: models } = useModelsQuery(draft.openPr);
   // A project elsewhere runs where it lives; a scratch chat, a task or a
   // project here can go to another machine.
   const canMove = !project || draft.openPr || projectHere;
@@ -231,6 +234,31 @@ export function DraftChips({
           title="Works alone in a worktree and opens a pull request"
           onChange={(openPr) => onChange({ openPr })}
         />
+      )}
+      {project && draft.openPr && local && (
+        <ChipMenu
+          icon={Cpu}
+          name="Model"
+          label={draft.taskModel ?? "Routed by role"}
+        >
+          <ChipItem
+            checked={!draft.taskModel}
+            onSelect={() => onChange({ taskModel: null })}
+            hint="Plans and implements on the role models in Settings"
+          >
+            Routed by role
+          </ChipItem>
+          {modelChoices(models?.effective).map((c) => (
+            <ChipItem
+              key={c.ref}
+              checked={c.ref === draft.taskModel}
+              onSelect={() => onChange({ taskModel: c.ref })}
+              hint={c.provider}
+            >
+              {c.label}
+            </ChipItem>
+          ))}
+        </ChipMenu>
       )}
       {project && draft.openPr && (
         <ChipToggle

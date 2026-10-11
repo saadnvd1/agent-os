@@ -10,6 +10,9 @@
 
 import { spawn } from "child_process";
 import { runUsageOf, type RunUsage } from "../usage/check-runs";
+import { routedRun } from "../models/launch";
+import type { ModelRole } from "../models/roles";
+import { redact } from "../models/secrets";
 
 export interface ClaudeRun {
   cwd: string;
@@ -21,15 +24,17 @@ export interface ClaudeRun {
   // Permission rules within those, e.g. "Bash(git diff:*)".
   allow?: string[];
   timeoutMs?: number;
-  // A model alias or id; the review model (or the CLI's default) otherwise.
+  // A model alias or id on Anthropic; the role's model otherwise.
   model?: string;
   // What the run cost, from its result, even when it failed.
   onUsage?: (usage: RunUsage) => void;
+  // The kind of work it is, which picks its model and provider
+  // (lib/models): Settings' and the workspace's role models.
+  role?: ModelRole;
+  workspaceId?: string | null;
 }
 
 export type ClaudeRunner = (run: ClaudeRun) => Promise<unknown>;
-
-const MODEL = process.env.AGENTOS_REVIEW_MODEL;
 
 // All a check's process gets from the server's environment: enough to run
 // and to sign in to Claude, nothing else.
@@ -57,7 +62,7 @@ export function checkEnv(
 }
 
 export function claudeArgs(run: ClaudeRun): string[] {
-  const model = run.model ?? MODEL;
+  const model = run.model;
   return [
     "-p",
     "--output-format",
@@ -87,12 +92,35 @@ export function claudeArgs(run: ClaudeRun): string[] {
   ];
 }
 
+interface ClaudeResult {
+  is_error?: boolean;
+  result?: string;
+  structured_output?: unknown;
+}
+
 // The structured answer, or throws with what went wrong.
-export const runClaude: ClaudeRunner = (run) =>
-  new Promise((resolve, reject) => {
+export const runClaude: ClaudeRunner = async (run) => {
+  const routed =
+    run.role && !run.model
+      ? await routedRun(run.role, { workspaceId: run.workspaceId })
+      : null;
+  const result = await execClaude(
+    { ...run, model: run.model ?? routed?.model },
+    { ...checkEnv(), ...routed?.env },
+    routed?.provider ?? "anthropic"
+  );
+  return result.structured_output;
+};
+
+function execClaude(
+  run: ClaudeRun,
+  env: NodeJS.ProcessEnv,
+  provider: string
+): Promise<ClaudeResult> {
+  return new Promise((resolve, reject) => {
     const child = spawn("claude", claudeArgs(run), {
       cwd: run.cwd,
-      env: checkEnv(),
+      env,
       stdio: ["pipe", "pipe", "pipe"],
     });
     let out = "";
@@ -113,20 +141,21 @@ export const runClaude: ClaudeRunner = (run) =>
     child.on("close", () => {
       clearTimeout(timer);
       try {
-        const result = JSON.parse(out) as {
-          is_error?: boolean;
-          result?: string;
-          structured_output?: unknown;
-        };
+        const result = JSON.parse(out) as ClaudeResult;
         const usage = runUsageOf(result);
-        if (usage) run.onUsage?.(usage);
+        if (usage) run.onUsage?.({ ...usage, provider });
         if (result.is_error || result.structured_output === undefined)
           throw new Error(result.result || "No answer");
-        resolve(result.structured_output);
+        resolve(result);
       } catch (e) {
         const why = e instanceof Error ? e.message : String(e);
-        reject(new Error(`claude -p failed: ${why} ${err.slice(-300)}`.trim()));
+        reject(
+          new Error(
+            redact(`claude -p failed: ${why} ${err.slice(-300)}`.trim())
+          )
+        );
       }
     });
     child.stdin.end(run.prompt);
   });
+}

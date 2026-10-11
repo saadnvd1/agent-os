@@ -14,6 +14,12 @@ export interface Session {
   parent_session_id: string | null;
   claude_session_id: string | null;
   model: string;
+  // The model's provider (lib/models), NULL for Anthropic.
+  model_provider?: string | null;
+  // A task's own models: "provider/model", or JSON of role to one.
+  model_overrides?: string | null;
+  // A task's plan step: planning on the planning model, then implementing.
+  plan_phase?: "planning" | "implementing" | null;
   system_prompt: string | null;
   group_path: string; // Deprecated - use project_id
   project_id: string | null;
