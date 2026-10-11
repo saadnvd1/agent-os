@@ -358,6 +358,9 @@ and leave no transcript, so each run's tokens, model and duration are read
 from its JSON result into `check_runs`, and the review's verdict says them
 too. Every compaction is kept in `chat_compactions` (who ran it, whether it
 fired `mid_turn` or `between_turns`, and the context before and after), so cost per task can be compared by date.
+Rows from before the column existed, and any written by a chat worker still
+running older code, have a NULL `phase`: read those as unknown
+(`COALESCE(phase, 'unknown')`), not as either kind.
 
 **Esc** stops a running turn, as it does in Claude Code's terminal, unless a
 menu, dialog or the command list is open (those close first). On a phone the
