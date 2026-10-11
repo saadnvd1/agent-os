@@ -171,6 +171,7 @@ export function ChatPanel({
   sessionName,
   accessLocked = false,
   orchestratorOf,
+  active,
 }: {
   sessionId: string;
   sessionName: string;
@@ -178,6 +179,8 @@ export function ChatPanel({
   accessLocked?: boolean;
   // The workspace it orchestrates: its header line, Pause and asks show on top.
   orchestratorOf?: string | null;
+  // The tab on show in the focused pane: opening it takes the caret.
+  active: boolean;
 }) {
   const [prefill, setPrefill] = useState<{ text: string; at: number }>();
   const {
@@ -335,6 +338,7 @@ export function ChatPanel({
     <div
       ref={rootRef}
       tabIndex={-1}
+      data-composer-scope
       className="flex h-full min-h-0 flex-col outline-none"
     >
       {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
@@ -460,6 +464,7 @@ export function ChatPanel({
             isMobile ? <ContextMeter sessionId={sessionId} compact /> : null
           }
           prefill={prefill}
+          focusKey={active ? sessionId : null}
         />
       </div>
       {undoPreview && (

@@ -291,6 +291,7 @@ export const Pane = memo(function Pane({
           orchestratorOf={
             chat.role === "orchestrator" ? chat.workspace_id : null
           }
+          active={isActive && isFocused}
         />
       );
     const own = sessions.find((s) => s.id === tab.sessionId);
