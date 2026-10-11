@@ -322,6 +322,8 @@ describe("the write guard with a quick change open", () => {
       `git -C ${wt} diff --ext-diff`,
       `git -C ${wt} show --textconv HEAD:README.md`,
       `git -C ${wt} rebase --exec true`,
+      `git -C ${wt} diff --ext-di`,
+      `git -C ${wt} show --textc HEAD:README.md`,
       `git -C ${wt} diff --no-index -- /etc/hosts /dev/null`,
     ])
       expect(await bash(s, cmd), cmd).toMatch(/Refused/);

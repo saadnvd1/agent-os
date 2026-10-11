@@ -25,9 +25,10 @@ const GIT_ALLOWED = new Set([
   "ls-files",
 ]);
 
-// Options that write a file somewhere else, or read a command to run.
-const GIT_REFUSED_ARG =
-  /^(--output(-directory)?(=|$)|--exec(=|$)|--ext-diff$|--textconv$|--no-index$)/;
+// Options that write a file somewhere else, read a command to run, or read
+// outside the repository. Git accepts any unique prefix of a long option
+// (--ext-di, --textc), so this refuses the prefixes, not the spellings.
+const GIT_REFUSED_ARG = /^--(ou|ex|te|no-i)/;
 
 // A shell word, with its quotes taken off, or why the command isn't one
 // plain command.
