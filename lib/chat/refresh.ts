@@ -6,7 +6,8 @@
  * default: its state is in the database and its brief carries it
  * (lib/orchestrator/digest). A task keeps its progress only in its
  * conversation and its branch, so for tasks it's off unless switched on.
- * App-wide, in Settings → Workspaces.
+ * App-wide, in Settings → Workspaces, with the size past which an idle
+ * chat is compacted before a message goes in (lib/chat/stale).
  */
 
 import { db } from "../db";
@@ -14,13 +15,18 @@ import { MAX_REFRESH_TOKENS, MIN_REFRESH_TOKENS } from "./refresh-limits";
 
 export const ORCHESTRATOR_KEY = "orchestrator.refresh_tokens";
 export const TASK_KEY = "chat.task_refresh_tokens";
+export const STALE_COMPACT_KEY = "chat.stale_compact_tokens";
 export const DEFAULT_ORCHESTRATOR_TOKENS = 200_000;
+export const DEFAULT_STALE_COMPACT_TOKENS = 150_000;
 export { MIN_REFRESH_TOKENS, MAX_REFRESH_TOKENS } from "./refresh-limits";
 
 export interface RefreshSettings {
   // Context tokens at which a conversation starts over; 0 is off.
   orchestratorTokens: number;
   taskTokens: number;
+  // Context tokens above which a chat whose prompt cache has expired is
+  // compacted before the next message; 0 is off.
+  staleCompactTokens: number;
 }
 
 function read(key: string, fallback: number): number {
@@ -35,6 +41,7 @@ export function refreshSettings(): RefreshSettings {
   return {
     orchestratorTokens: read(ORCHESTRATOR_KEY, DEFAULT_ORCHESTRATOR_TOKENS),
     taskTokens: read(TASK_KEY, 0),
+    staleCompactTokens: read(STALE_COMPACT_KEY, DEFAULT_STALE_COMPACT_TOKENS),
   };
 }
 
@@ -49,7 +56,7 @@ export function checkRefreshTokens(value: unknown): number {
     value > MAX_REFRESH_TOKENS
   )
     throw new Error(
-      `A fresh-start threshold is off or between ${MIN_REFRESH_TOKENS / 1000}k and ${MAX_REFRESH_TOKENS / 1000}k tokens`
+      `A context threshold is off or between ${MIN_REFRESH_TOKENS / 1000}k and ${MAX_REFRESH_TOKENS / 1000}k tokens`
     );
   return value;
 }
@@ -67,6 +74,11 @@ export function setRefreshSettings(input: Partial<RefreshSettings>): void {
     ]);
   if (input.taskTokens !== undefined)
     checked.push([TASK_KEY, checkRefreshTokens(input.taskTokens)]);
+  if (input.staleCompactTokens !== undefined)
+    checked.push([
+      STALE_COMPACT_KEY,
+      checkRefreshTokens(input.staleCompactTokens),
+    ]);
   db.transaction(() => {
     for (const [key, n] of checked) put.run(key, String(n));
   })();

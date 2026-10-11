@@ -139,6 +139,7 @@ async function postToOrchestrator(
       ? `${fromLabel(schedule)}, set up by "${creator.name}"`
       : fromLabel(schedule),
     origin: scheduleOrigin(schedule, creator),
+    compact: "auto",
   });
   onSession(orchestrator.id);
   return orchestrator.id;

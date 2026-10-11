@@ -31,6 +31,10 @@ export type ClaudeMessage = {
       input_tokens?: number;
       output_tokens?: number;
       cache_creation_input_tokens?: number;
+      cache_creation?: {
+        ephemeral_5m_input_tokens?: number;
+        ephemeral_1h_input_tokens?: number;
+      } | null;
     };
   };
   event?: {
@@ -49,7 +53,11 @@ export type ClaudeMessage = {
   content?: string;
   terminal_slash_commands?: string[];
   commands?: SdkCommand[];
-  compact_metadata?: { trigger?: "manual" | "auto" };
+  compact_metadata?: {
+    trigger?: "manual" | "auto";
+    pre_tokens?: number;
+    post_tokens?: number;
+  };
   // Background tasks (task_started, task_progress, task_notification).
   task_id?: string;
   tool_use_id?: string;
@@ -223,6 +231,8 @@ export class ClaudeMapper {
               id: randomUUID(),
               kind: "compacted",
               trigger: m.compact_metadata?.trigger,
+              before: m.compact_metadata?.pre_tokens,
+              after: m.compact_metadata?.post_tokens,
               createdAt: now(),
             },
           },

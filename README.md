@@ -311,6 +311,16 @@ mode and starts it, **Keep planning** goes back to the composer.
 The ring in the tab bar (in the composer on a phone) is how full the
 conversation's context is, measured against the room before auto-compact:
 amber past 60%, red past 85%. Tap it for the breakdown and **Compact now**.
+
+A message to a chat idle past its prompt cache (5 minutes or an hour, read
+from the agent's own usage) re-reads the whole conversation at the
+cache-write price. When the context is also above a threshold (150k tokens by
+default, Settings → Workspaces → Compact idle chats; off sets it to never), a
+chip above the composer says "Idle 47m · 412k context · Compact first?": Send
+compacts and then sends, **Send as-is** skips it for that one message.
+Messages nobody is typing (the orchestrator's `send`, AgentOS events and
+wakes, `aos send`, schedules) compact first on their own, only between turns,
+and the chat shows one quiet line with the context before and after.
 On a desktop browser the screen button attaches a screenshot of a screen or
 window you pick; on a phone, attach a screenshot as a photo.
 

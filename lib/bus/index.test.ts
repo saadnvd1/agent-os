@@ -195,6 +195,8 @@ describe("sendMessage to a chat session", () => {
       from: name,
       peer: { sessionId: sender, body: "rebased, tests green" },
       origin: { kind: "peer", label: name, sessionId: sender },
+      // Nobody is at the composer: a stale chat compacts first.
+      compact: "auto",
     });
   });
 
@@ -223,6 +225,7 @@ describe("sendMessage to a chat session", () => {
       from: "AgentOS load monitor",
       peer: undefined,
       origin,
+      compact: "auto",
     });
   });
 

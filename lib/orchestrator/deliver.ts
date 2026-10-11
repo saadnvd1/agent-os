@@ -1,4 +1,5 @@
 import type { ChatOrigin, ChatState } from "../chat/events";
+import type { CompactFirst } from "../chat/stale";
 import {
   isAnswer,
   deliveriesSince,
@@ -22,7 +23,12 @@ export const AGENTOS_SENDER = "agentos";
 
 export type ChatSender = (
   sessionId: string,
-  input: { text: string; from: string; origin: ChatOrigin }
+  input: {
+    text: string;
+    from: string;
+    origin: ChatOrigin;
+    compact: CompactFirst;
+  }
 ) => Promise<void>;
 
 // After a failed send, wait 5s, then 10s, 20s ... up to 5 minutes.
@@ -97,6 +103,8 @@ export async function deliverEvents(opts: {
       text,
       from: AGENTOS_SENDER,
       origin,
+      // An orchestrator idle past its cache is compacted first.
+      compact: "auto",
     });
     failing.delete(workspaceId);
     return text;

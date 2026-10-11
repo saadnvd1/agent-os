@@ -230,6 +230,18 @@ describe("ClaudeMapper", () => {
       })
     );
     expect(compacted).toMatchObject({ kind: "compacted", trigger: "manual" });
+    const [measured] = items(
+      m.map({
+        type: "system",
+        subtype: "compact_boundary",
+        compact_metadata: {
+          trigger: "manual",
+          pre_tokens: 412_000,
+          post_tokens: 38_000,
+        },
+      })
+    );
+    expect(measured).toMatchObject({ before: 412_000, after: 38_000 });
   });
 
   it("shows a synthetic reply to a local command as command output", () => {

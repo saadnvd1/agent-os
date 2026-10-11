@@ -106,7 +106,11 @@ export interface ChatContext {
   percentage: number;
   categories: { name: string; tokens: number }[];
   model?: string;
+  // When it was measured: the end of the last turn.
   at: number;
+  // The prompt-cache lifetime the conversation writes with (lib/chat/stale),
+  // once a turn has said.
+  cacheTtlMs?: number;
 }
 
 // Running totals the agent reports at the end of each turn.
@@ -174,7 +178,16 @@ export type ChatItem =
   | (Base & { kind: "command_output"; text: string })
   // The conversation's MCP servers, as /mcp reports them.
   | (Base & { kind: "mcp"; servers: McpServerView[] })
-  | (Base & { kind: "compacted"; trigger?: "manual" | "auto" })
+  | (Base & {
+      kind: "compacted";
+      trigger?: "manual" | "auto";
+      // Context tokens before and after, when the agent reports them.
+      before?: number;
+      after?: number;
+      // Compacted ahead of a message to a stale chat (lib/chat/stale): how
+      // long it had been idle.
+      idleMs?: number;
+    })
   // A plan the agent proposed from plan mode, and whether it was carried out.
   | (Base & { kind: "plan"; plan: string; carried?: boolean })
   | (Base & { kind: "error"; message: string })

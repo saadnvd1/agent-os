@@ -163,6 +163,9 @@ async function deliver(
         from: from.name,
         peer: from.peer,
         origin: from.origin,
+        // Nobody is at the composer to choose: a stale chat is compacted
+        // first (lib/chat/stale).
+        compact: "auto",
       });
       return { state };
     } catch (error) {

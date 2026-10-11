@@ -18,6 +18,7 @@ import type {
   PeerMessage,
 } from "../events";
 import type { UndoResult } from "../driver";
+import type { CompactFirst } from "../stale";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -35,6 +36,8 @@ export type WorkerCommand =
       // From the composer: waits its turn behind a running one, in the
       // queue, rather than joining it.
       queue?: boolean;
+      // Compact a stale conversation before this goes in (lib/chat/stale).
+      compact?: CompactFirst;
     }
   // A queued message goes next: the running turn stops for it.
   // `during`: the user message whose turn the reader saw running; only that

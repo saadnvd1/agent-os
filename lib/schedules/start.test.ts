@@ -24,6 +24,7 @@ const sends: {
   id: string;
   text: string;
   origin?: ChatOrigin;
+  compact?: string;
   settle: (ok: boolean) => void;
 }[] = [];
 vi.mock("../chat/runner", () => ({
@@ -31,13 +32,14 @@ vi.mock("../chat/runner", () => ({
   chatStateNow: async (id: string) => chatStates.get(id) ?? null,
   sendChatConfirmed: (
     id: string,
-    input: { text: string; origin?: ChatOrigin }
+    input: { text: string; origin?: ChatOrigin; compact?: string }
   ) =>
     new Promise((resolve, reject) =>
       sends.push({
         id,
         text: input.text,
         origin: input.origin,
+        compact: input.compact,
         settle: (ok) =>
           ok ? resolve("delivered") : reject(new Error("worker gone")),
       })
@@ -235,6 +237,8 @@ describe("start links the run only once the prompt is in", () => {
       label: "Triage",
       body: expect.not.stringContaining("[Scheduled message"),
     });
+    // Idle past its cache and long, it's compacted before this goes in.
+    expect(sends[0].compact).toBe("auto");
     sends[0].settle(true);
     await run;
   });
