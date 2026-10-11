@@ -13,6 +13,7 @@ import { resolveModelForAgent } from "../../model-catalog";
 import { chatDriverFor } from "../drivers";
 import type { ChatConversation } from "../driver";
 import type {
+  ChatContext,
   ChatImage,
   ChatItem,
   ChatState,
@@ -35,7 +36,8 @@ import {
   visualsTools,
 } from "../../artifacts/tools";
 import type { RoleExtras } from "./extras";
-import { refreshedNote } from "../refresh";
+import { refreshSettings, refreshedNote } from "../refresh";
+import { staleLabel, staleness, type Staleness } from "../stale";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
 // How soon after a stopped turn ends a turn the agent starts on its own
@@ -123,6 +125,19 @@ export class ChatHost {
   // size can't end every conversation after one turn.
   private freshConversation: boolean;
   private contextBase: number | null = null;
+  // How full the conversation was at its last turn's end (lib/chat/stale).
+  private context: ChatContext | null = null;
+  // A compaction run ahead of a message to a stale chat: the message waits
+  // at the front of the queue until it ends (compactFirst).
+  private compacting: {
+    idleMs: number;
+    before: number;
+    done?: boolean;
+  } | null = null;
+  // Its line, until the agent's next measure gives the size after.
+  private compactedLine: Extract<ChatItem, { kind: "compacted" }> | null = null;
+  // An orchestrator gone stale starts over rather than compacting.
+  private staleRefresh: Staleness | null = null;
   readonly done: Promise<void>;
 
   constructor(
@@ -182,11 +197,19 @@ export class ChatHost {
       permissionMode: extras.permissionMode,
     });
     this.suggestion = session.chat_suggestion ?? null;
+    try {
+      this.context = session.chat_context
+        ? (JSON.parse(session.chat_context) as ChatContext)
+        : null;
+    } catch {
+      this.context = null;
+    }
     this.refresh = extras.refresh;
     this.freshConversation = !session.claude_session_id;
     if (session.chat_refreshed)
       this.refreshedNote = refreshedNote(
-        extras.refresh?.role ?? "task",
+        extras.refresh?.role ??
+          (session.role === "orchestrator" ? "orchestrator" : "task"),
         session.chat_refreshed
       );
     // Told only an orchestrator whose tools changed since its last worker:
@@ -222,6 +245,12 @@ export class ChatHost {
     try {
       for await (const e of this.conversation.events) {
         if (e.type === "item") {
+          // A compaction run for a stale chat shows as its one line; what
+          // a failed one printed still shows.
+          if (this.compacting?.done && e.item.kind === "command_output")
+            continue;
+          if (this.compacting && e.item.kind === "compacted")
+            e.item = this.compactedItem(e.item);
           if ("streaming" in e.item && e.item.streaming)
             this.streaming.set(e.item.id, e.item);
           else this.streaming.delete(e.item.id);
@@ -259,7 +288,9 @@ export class ChatHost {
             JSON.stringify(e.context),
             this.session.id
           );
+          this.context = e.context;
           this.emit(e);
+          this.settleCompactedLine(e.context.usedTokens);
           this.refreshIfFull(e.context.usedTokens);
         } else if (e.type === "turn_start") {
           this.turnsStarted++;
@@ -303,6 +334,8 @@ export class ChatHost {
             // A send waiting on the same change may have started a turn
             // meanwhile: that turn is running, not idle.
             if (this.busy()) continue;
+            // The compaction ran (or failed): its message is first in line.
+            this.compacting = null;
             if (this.sendQueued()) continue;
           }
           // A stopped turn can still settle an approval after it ended.
@@ -503,7 +536,13 @@ export class ChatHost {
           this.sendUser(cmd, true);
           return;
         }
-        if (cmd.queue && (this.busy() || listQueue(this.session.id).length)) {
+        if (this.compactFirst(cmd)) return;
+        // A compaction run for an earlier message takes nothing in: what's
+        // sent meanwhile goes behind that message.
+        if (
+          (cmd.queue || this.compacting) &&
+          (this.busy() || listQueue(this.session.id).length)
+        ) {
           // Behind the running turn, and behind anything queued before it.
           enqueue(this.session.id, cmd);
           this.emit({ type: "queue" });
@@ -620,6 +659,88 @@ export class ChatHost {
     this.close();
   }
 
+  // A stale chat (lib/chat/stale) is compacted before the message goes in,
+  // only between turns: the message waits at the front of the queue, and
+  // the compaction's end sends it. "yes" is the reader's choice, made on
+  // what the composer showed; "auto" checks for itself.
+  private compactFirst(cmd: Extract<WorkerCommand, { type: "send" }>): boolean {
+    if (!cmd.compact || this.busy() || this.closed || this.handingOver())
+      return false;
+    const stale = this.staleNow(cmd.compact);
+    if (!stale) return false;
+    try {
+      enqueue(this.session.id, cmd);
+    } catch {
+      // A full queue: it goes in as it is.
+      return false;
+    }
+    moveToFront(this.session.id, cmd.id);
+    this.emit({ type: "queue" });
+    // An orchestrator isn't compacted: a summary would carry what it read
+    // from tasks and CI without its untrusted fence. It starts a fresh
+    // conversation from its brief and the database instead, as at its
+    // threshold, and the next worker sends the message.
+    if (this.session.role === "orchestrator") {
+      this.staleRefresh = stale;
+      this.refreshAt = stale.tokens;
+      this.retiring = true;
+      this.retireWaited = true;
+      this.retireIfDone();
+      return true;
+    }
+    this.compacting = { idleMs: stale.idleMs, before: stale.tokens };
+    this.currentTurn = null;
+    this.stopping = null;
+    this.conversation.send("/compact");
+    this.setState("running");
+    console.error(
+      `${new Date().toISOString()} compacting ${this.session.id} before a message: idle ${Math.round(stale.idleMs / 60_000)}m, ${stale.tokens} tokens`
+    );
+    return true;
+  }
+
+  private staleNow(compact: "auto" | "yes"): Staleness | null {
+    const context = this.context;
+    // Only an agent that says which cache it uses has one to lose.
+    if (!context?.cacheTtlMs) return null;
+    if (compact === "yes")
+      return { idleMs: Date.now() - context.at, tokens: context.usedTokens };
+    return staleness(context, {
+      state: this.state,
+      thresholdTokens: refreshSettings().staleCompactTokens,
+    });
+  }
+
+  private compactedItem(
+    item: Extract<ChatItem, { kind: "compacted" }>
+  ): ChatItem {
+    if (this.compacting) this.compacting.done = true;
+    const line = {
+      ...item,
+      idleMs: this.compacting?.idleMs,
+      before: item.before ?? this.compacting?.before,
+    };
+    this.compactedLine = line.after === undefined ? line : null;
+    if (line.after !== undefined) this.logCompacted(line);
+    return line;
+  }
+
+  // The size after, from the measure that follows the compaction's result.
+  private settleCompactedLine(usedTokens: number): void {
+    const line = this.compactedLine;
+    if (!line) return;
+    this.compactedLine = null;
+    const settled = { ...line, after: usedTokens };
+    this.record(settled);
+    this.logCompacted(settled);
+  }
+
+  private logCompacted(line: { before?: number; after?: number }): void {
+    console.error(
+      `${new Date().toISOString()} compacted ${this.session.id}: ${line.before ?? "?"} -> ${line.after ?? "?"} tokens`
+    );
+  }
+
   // Past its threshold, once: it retires at the next turn boundary, as for
   // a deploy, without waiting for the agent's guess at the next message
   // (the new conversation never saw what it guessed from).
@@ -643,13 +764,21 @@ export class ChatHost {
          chat_suggestion = NULL, chat_context = NULL, chat_restarted = 0,
          chat_refreshed = ? WHERE id = ?`
     ).run(this.refreshAt, this.session.id);
+    const brief = `its brief${this.session.role === "orchestrator" ? " and the current state from AgentOS" : ""}`;
+    const stale = this.staleRefresh;
     this.record({
       id: `note-refresh-${Date.now()}`,
       kind: "note",
       tone: "note",
-      text: `Context reached ${Math.round(this.refreshAt / 1000)}k tokens: the agent starts a fresh conversation with its brief${this.refresh?.role === "orchestrator" ? " and the current state from AgentOS" : ""} at its next message.`,
+      text: stale
+        ? `${staleLabel(stale)}, past its prompt cache: the agent starts a fresh conversation with ${brief} before the next message.`
+        : `Context reached ${Math.round(this.refreshAt / 1000)}k tokens: the agent starts a fresh conversation with ${brief} at its next message.`,
       createdAt: Date.now(),
     });
+    if (stale)
+      console.error(
+        `${new Date().toISOString()} fresh start for stale ${this.session.id}: ${stale.tokens} tokens, idle ${Math.round(stale.idleMs / 60_000)}m`
+      );
   }
 
   // Retiring, and nothing in the background keeps it: messages wait in the

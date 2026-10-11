@@ -17,6 +17,7 @@ describe("fresh-start settings", () => {
     expect(refreshSettings()).toEqual({
       orchestratorTokens: 200_000,
       taskTokens: 0,
+      staleCompactTokens: 150_000,
     });
     expect((await roleExtras(task())).refresh).toBeUndefined();
   });
@@ -48,6 +49,16 @@ describe("fresh-start settings", () => {
     setRefreshSettings({ orchestratorTokens: 0 });
     expect(refreshSettings().orchestratorTokens).toBe(0);
     setRefreshSettings({ orchestratorTokens: 200_000 });
+  });
+
+  it("save the stale-compact threshold, 0 for off, in the same range", () => {
+    setRefreshSettings({ staleCompactTokens: 0 });
+    expect(refreshSettings().staleCompactTokens).toBe(0);
+    expect(() => setRefreshSettings({ staleCompactTokens: 10_000 })).toThrow(
+      /off or between/
+    );
+    setRefreshSettings({ staleCompactTokens: 150_000 });
+    expect(refreshSettings().staleCompactTokens).toBe(150_000);
   });
 
   it("are typed in thousands in Settings", () => {

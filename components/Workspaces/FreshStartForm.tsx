@@ -18,7 +18,10 @@ export function FreshStartForm() {
   if (isError)
     return <p className="text-destructive text-sm">{error.message}</p>;
   return (
-    <Form key={`${data.orchestratorTokens}:${data.taskTokens}`} saved={data} />
+    <Form
+      key={`${data.orchestratorTokens}:${data.taskTokens}:${data.staleCompactTokens}`}
+      saved={data}
+    />
   );
 }
 
@@ -26,11 +29,13 @@ function Form({ saved }: { saved: RefreshSettings }) {
   const update = useUpdateFreshStart();
   const orchestrator = useThreshold(saved.orchestratorTokens, 200);
   const task = useThreshold(saved.taskTokens, 200);
-  const error = orchestrator.error ?? task.error;
+  const stale = useThreshold(saved.staleCompactTokens, 150);
+  const error = orchestrator.error ?? task.error ?? stale.error;
   const dirty =
     !error &&
     (orchestrator.tokens !== saved.orchestratorTokens ||
-      task.tokens !== saved.taskTokens);
+      task.tokens !== saved.taskTokens ||
+      stale.tokens !== saved.staleCompactTokens);
 
   return (
     <form
@@ -38,9 +43,13 @@ function Form({ saved }: { saved: RefreshSettings }) {
         e.preventDefault();
         if (error) return;
         update.mutate(
-          { orchestratorTokens: orchestrator.tokens, taskTokens: task.tokens },
           {
-            onSuccess: () => toast.success("Fresh starts saved"),
+            orchestratorTokens: orchestrator.tokens,
+            taskTokens: task.tokens,
+            staleCompactTokens: stale.tokens,
+          },
+          {
+            onSuccess: () => toast.success("Context settings saved"),
             onError: (err) => toast.error(err.message),
           }
         );
@@ -56,6 +65,18 @@ function Form({ saved }: { saved: RefreshSettings }) {
       </p>
       <ThresholdRow label="Orchestrators" field={orchestrator} />
       <ThresholdRow label="Tasks" field={task} />
+      <h3 className="pt-2 text-sm font-medium">Compact idle chats</h3>
+      <p className="text-muted-foreground text-sm">
+        A message to a chat idle past its prompt cache re-reads the whole
+        conversation at full price. Above this size, messages from the
+        orchestrator, events and schedules compact it first; the composer offers
+        to.
+      </p>
+      <ThresholdRow
+        label="Idle chats"
+        field={stale}
+        switchLabel="Compact idle chats before a message"
+      />
       {error && <p className="text-destructive text-xs">{error}</p>}
       <div className="flex justify-end">
         <Button
@@ -90,9 +111,11 @@ function useThreshold(tokens: number, fallbackK: number) {
 function ThresholdRow({
   label,
   field,
+  switchLabel,
 }: {
   label: string;
   field: ReturnType<typeof useThreshold>;
+  switchLabel?: string;
 }) {
   return (
     <div className="space-y-2">
@@ -101,7 +124,7 @@ function ThresholdRow({
         <Switch
           checked={field.on}
           onCheckedChange={field.setOn}
-          aria-label={`Fresh starts for ${label.toLowerCase()}`}
+          aria-label={switchLabel ?? `Fresh starts for ${label.toLowerCase()}`}
         />
       </label>
       {field.on && (

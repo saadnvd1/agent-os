@@ -1532,3 +1532,292 @@ describe("ChatHost fresh start at the context threshold", () => {
     host.close();
   });
 });
+
+describe("ChatHost compacts a stale chat before a message", () => {
+  const HOUR = 60 * 60_000;
+  const bus = {
+    from: "agentos",
+    origin: { kind: "event" as const, label: "AgentOS" },
+  };
+  // A conversation that last ended `idleMs` ago with `usedTokens` of
+  // context, written with a 1h cache (or none said).
+  const staleChat = (
+    idleMs: number,
+    usedTokens: number,
+    cacheTtlMs = HOUR,
+    role = "agent"
+  ) =>
+    startHost(role, { resumeId: "conv-1" }, (id) =>
+      getDb()
+        .prepare(`UPDATE sessions SET chat_context = ? WHERE id = ?`)
+        .run(
+          JSON.stringify({
+            usedTokens,
+            maxTokens: 1_000_000,
+            percentage: 40,
+            categories: [],
+            at: Date.now() - idleMs,
+            cacheTtlMs,
+          }),
+          id
+        )
+    );
+  const sentTexts = (c: { send: { mock: { calls: unknown[][] } } }) =>
+    c.send.mock.calls.map((call) => call[0]);
+
+  it("auto: compacts first, then sends the message, with one line saying before and after", async () => {
+    const { id, host, conversation, emitted } = await staleChat(
+      HOUR + 60_000,
+      412_000
+    );
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    // Only the compaction went in; the message waits first in line.
+    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["m1"]);
+    expect(host.state).toBe("running");
+    expect(emitted.some((e) => e.type === "queue")).toBe(true);
+    // What the CLI prints for /compact stays out of the chat.
+    conversation.events.push({
+      type: "item",
+      item: {
+        id: "c1",
+        kind: "compacted",
+        trigger: "manual",
+        before: 412_000,
+        createdAt: 2,
+      },
+    });
+    conversation.events.push({
+      type: "item",
+      item: {
+        id: "out-1",
+        kind: "command_output",
+        text: "Compacted",
+        createdAt: 1,
+      },
+    });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    // The compaction's end sends the message.
+    expect(sentTexts(conversation)).toEqual(["/compact", "continue"]);
+    expect(listQueue(id)).toEqual([]);
+    // The measure after the compaction fills in the size after.
+    conversation.events.push({
+      type: "context",
+      context: {
+        usedTokens: 38_000,
+        maxTokens: 1_000_000,
+        percentage: 4,
+        categories: [],
+        at: Date.now(),
+        cacheTtlMs: HOUR,
+      },
+    });
+    await tick();
+    const items = listItems(id);
+    expect(items.some((i) => i.kind === "command_output")).toBe(false);
+    expect(items.find((i) => i.id === "c1")).toMatchObject({
+      kind: "compacted",
+      before: 412_000,
+      after: 38_000,
+      idleMs: expect.any(Number),
+    });
+    // Its line comes before the message it went ahead of.
+    const order = items.map((i) => i.id);
+    expect(order.indexOf("c1")).toBeLessThan(order.indexOf("m1"));
+    host.close();
+  });
+
+  it("auto: a chat still inside its cache lifetime is sent to as is", async () => {
+    const { host, conversation } = await staleChat(HOUR - 60_000, 412_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).toEqual(["continue"]);
+    host.close();
+  });
+
+  it("auto: a short conversation is sent to as is, however long idle", async () => {
+    const { host, conversation } = await staleChat(5 * HOUR, 120_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).toEqual(["continue"]);
+    host.close();
+  });
+
+  it("never compacts mid-turn", async () => {
+    const { host, conversation } = await staleChat(2 * HOUR, 412_000);
+    await host.handle({ type: "send", id: "m0", text: "work" });
+    expect(host.state).toBe("running");
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "event",
+      ...bus,
+      compact: "auto",
+    });
+    await host.handle({
+      type: "send",
+      id: "m2",
+      text: "typed",
+      compact: "yes",
+      queue: true,
+    });
+    expect(sentTexts(conversation)).not.toContain("/compact");
+    host.close();
+  });
+
+  it("without a compact flag, a stale chat is sent to as is", async () => {
+    const { host, conversation } = await staleChat(2 * HOUR, 412_000);
+    await host.handle({ type: "send", id: "m1", text: "continue", ...bus });
+    expect(sentTexts(conversation)).toEqual(["continue"]);
+    host.close();
+  });
+
+  it("an agent that never said which cache it uses is never compacted", async () => {
+    const { host, conversation } = await staleChat(2 * HOUR, 412_000, 0);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).toEqual(["continue"]);
+    host.close();
+  });
+
+  it("yes (the composer's chip): compacts on the reader's word", async () => {
+    const { host, conversation } = await staleChat(2 * HOUR, 412_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "go on",
+      compact: "yes",
+      queue: true,
+    });
+    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    host.close();
+  });
+
+  it("what's sent during the compaction waits behind the message it's for", async () => {
+    const { id, host, conversation } = await staleChat(2 * HOUR, 412_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "first",
+      ...bus,
+      compact: "auto",
+    });
+    await host.handle({
+      type: "send",
+      id: "m2",
+      text: "second",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["m1", "m2"]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(sentTexts(conversation)).toEqual(["/compact", "first"]);
+    host.close();
+  });
+
+  it("a failed compaction still sends the message, and says why it failed", async () => {
+    const { id, host, conversation } = await staleChat(2 * HOUR, 412_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    conversation.events.push({
+      type: "item",
+      item: {
+        id: "out-1",
+        kind: "command_output",
+        text: "Error during compaction: overloaded",
+        createdAt: 1,
+      },
+    });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(sentTexts(conversation)).toEqual(["/compact", "continue"]);
+    expect(listQueue(id)).toEqual([]);
+    expect(listItems(id).find((i) => i.id === "out-1")).toMatchObject({
+      text: "Error during compaction: overloaded",
+    });
+    // Nothing is held behind it any more.
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({ type: "send", id: "m2", text: "next", ...bus });
+    expect(sentTexts(conversation)).toEqual(["/compact", "continue", "next"]);
+    host.close();
+  });
+
+  it("an orchestrator starts a fresh conversation instead, keeping its untrusted text out of a summary", async () => {
+    const { id, host, conversation } = await staleChat(
+      2 * HOUR,
+      412_000,
+      HOUR,
+      "orchestrator"
+    );
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "[AgentOS event] ci failed",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).not.toContain("/compact");
+    expect(conversation.close).toHaveBeenCalledOnce();
+    // The message waits for the next worker, which starts over.
+    expect(listQueue(id).map((m) => m.id)).toEqual(["m1"]);
+    const row = getDb()
+      .prepare(
+        `SELECT claude_session_id, chat_refreshed FROM sessions WHERE id = ?`
+      )
+      .get(id) as { claude_session_id: string | null; chat_refreshed: number };
+    expect(row).toEqual({ claude_session_id: null, chat_refreshed: 412_000 });
+    const note = listItems(id).find((i) => i.kind === "note");
+    expect(note).toMatchObject({
+      text: expect.stringMatching(
+        /^Idle 2h · 412k context, past its prompt cache: the agent starts a fresh conversation with its brief and the current state from AgentOS/
+      ),
+    });
+    // The next worker tells it why, as an orchestrator.
+    const { ChatHost } = await import("./host");
+    current = fakeConversation();
+    const next = new ChatHost(
+      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      () => {}
+    );
+    expect(started?.resumeId).toBeNull();
+    await next.handle({ type: "drain" });
+    expect(sentTexts(current)[0]).toMatch(
+      /^\(AgentOS started you on a fresh conversation[^)]*"Where things stand"/
+    );
+    // The message that woke it goes in, behind the note, and nothing waits.
+    expect(sentTexts(current)).toHaveLength(1);
+    expect(sentTexts(current)[0]).toMatch(/\n\n\[AgentOS event\] ci failed$/);
+    expect(listQueue(id)).toEqual([]);
+    next.close();
+  });
+});

@@ -6,7 +6,7 @@ import type { ChatItem, ChatState } from "./events";
 const { registry, emit } = await import("./registry");
 const { saveItem } = await import("./store");
 const { enqueue, listQueue } = await import("./queued");
-const { sendChatConfirmed } = await import("./runner");
+const { sendChat, sendChatConfirmed } = await import("./runner");
 const { seedSession } = await import("../orchestrator/testing");
 const { createProject } = await import("../projects");
 
@@ -62,6 +62,16 @@ describe("sendChatConfirmed", () => {
       from: "orch",
       peer: { sessionId: "o-1", body: "hi" },
     });
+  });
+
+  it("passes compact-first on to the worker, for it to judge between turns", async () => {
+    const { id, sent } = fakeWorker("idle", (sid, cmd) =>
+      emit(sid, { type: "item", item: userItem(cmd) })
+    );
+    await sendChatConfirmed(id, { text: "wake", compact: "auto" });
+    await sendChat(id, { text: "typed", queue: true, compact: "yes" });
+    await sendChat(id, { text: "plain" });
+    expect(sent.map((c) => c.compact)).toEqual(["auto", "yes", undefined]);
   });
 
   it("is queued when a turn was already running", async () => {

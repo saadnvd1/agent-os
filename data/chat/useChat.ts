@@ -298,10 +298,18 @@ export function useChat(
 
   const queryClient = useQueryClient();
   const send = useCallback(
-    (text: string, images?: ChatImage[]) => {
+    // `compact`: the reader let a stale chat compact first (lib/chat/stale).
+    (text: string, images?: ChatImage[], compact?: boolean) => {
       const ws = wsRef.current;
       if (!ws) return;
-      ws.send(JSON.stringify({ type: "send", text, images }));
+      ws.send(
+        JSON.stringify({
+          type: "send",
+          text,
+          images,
+          ...(compact && { compact: true }),
+        })
+      );
       if (ws.readyState === WebSocket.OPEN) markRunning(queryClient, sessionId);
     },
     [queryClient, sessionId]

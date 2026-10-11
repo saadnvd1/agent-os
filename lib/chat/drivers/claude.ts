@@ -10,6 +10,7 @@ import type { DriverEvent, FileSuggestion, McpServerView } from "../events";
 import { InputQueue } from "../queue";
 import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
 import { toChatContext, usageTotals } from "../context";
+import { cacheTtlMs } from "../stale";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
 import { SuggestionTrace } from "./suggestion-trace";
 import { redact } from "../../orchestrator/untrusted";
@@ -224,6 +225,8 @@ export const claudeDriver: ChatDriver = {
       () => plan
     );
     let sessionId = options.resumeId ?? null;
+    // The prompt-cache lifetime its turns write with (lib/chat/stale).
+    let cacheTtl: number | undefined;
 
     // What the agent restored on starting: a resumed conversation's totals
     // when its last process saved them, nothing otherwise. Each turn's cost
@@ -248,13 +251,18 @@ export const claudeDriver: ChatDriver = {
           planFile = writtenPlanFile(m) ?? planFile;
           trace.message(m);
           for (const e of mapper.map(m)) out.push(e);
+          if (m.type === "assistant" && !m.parent_tool_use_id)
+            cacheTtl = cacheTtlMs(m.message?.usage?.cache_creation) ?? cacheTtl;
           // How full the window is now, for the meter, without holding up
           // the conversation.
           if (m.type === "result")
             void q
               .getContextUsage({ detail: "summary" })
               .then((u) =>
-                out.push({ type: "context", context: toChatContext(u) })
+                out.push({
+                  type: "context",
+                  context: { ...toChatContext(u), cacheTtlMs: cacheTtl },
+                })
               )
               .catch(() => {});
         }

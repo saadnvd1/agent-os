@@ -21,6 +21,7 @@ const chatSends: {
   text: string;
   from?: string;
   origin?: { kind: string };
+  compact?: string;
 }[] = [];
 
 vi.mock("@/lib/status-detector", () => ({
@@ -105,7 +106,12 @@ vi.mock("@/lib/chat/runner", async (importOriginal) => ({
   chatState: (id: string) => (waitingChats.has(id) ? "waiting" : null),
   sendChatConfirmed: async (
     id: string,
-    m: { text: string; from?: string; origin?: { kind: string } }
+    m: {
+      text: string;
+      from?: string;
+      origin?: { kind: string };
+      compact?: string;
+    }
   ) => {
     chatSends.push({ id, ...m });
     if (failingChats.has(id)) throw new Error("its worker is gone");
@@ -506,6 +512,12 @@ describe("acting inside the workspace", () => {
           message: "status?",
         })
       ).toMatch(/^Delivered to chat-one/);
+      // A stale chat is compacted before the message goes in.
+      expect(chatSends.at(-1)).toMatchObject({
+        id: mine.chat,
+        text: expect.stringContaining("status?"),
+        compact: "auto",
+      });
     } finally {
       paneResult = { state: "delivered" };
       waitingChats.clear();

@@ -166,6 +166,8 @@ describe("deliverEvents", () => {
         now,
         send: async (_id, input) => {
           expect(input.from).toBe("agentos");
+          // A stale orchestrator is compacted before the batch goes in.
+          expect(input.compact).toBe("auto");
           if (fail) throw new Error("worker down");
           sent.push(input.text);
         },

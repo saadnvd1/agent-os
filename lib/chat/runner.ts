@@ -8,6 +8,7 @@
 import { randomUUID } from "crypto";
 import os from "os";
 import { db, type Session } from "../db";
+import type { CompactFirst } from "./stale";
 import type {
   ApprovalDecision,
   ChatContext,
@@ -329,6 +330,8 @@ export async function sendChat(
     images?: ChatImage[];
     // Typed in the composer: waits in the queue while a turn runs.
     queue?: boolean;
+    // Compact a stale chat first (lib/chat/stale).
+    compact?: CompactFirst;
   } & SentBy
 ): Promise<void> {
   const text = input.text.trim();
@@ -356,6 +359,7 @@ export async function sendChat(
     images: input.images,
     ...sentBy(input),
     queue: input.queue,
+    compact: input.compact,
   });
 }
 
@@ -486,6 +490,8 @@ async function resumeCutOff(sessionId: string): Promise<void> {
       text: RESUME_NOTE,
       from: "agentos",
       origin: { kind: "event", label: "AgentOS" },
+      // Down past its cache, a long chat is compacted before it carries on.
+      compact: "auto",
     });
     if (task)
       queueEvent(
@@ -552,7 +558,7 @@ export async function chatFileSuggestions(
 // only then has it accepted it. "queued" when a turn was already running.
 export async function sendChatConfirmed(
   sessionId: string,
-  input: { text: string; id?: string } & SentBy,
+  input: { text: string; id?: string; compact?: CompactFirst } & SentBy,
   timeoutMs = 10_000
 ): Promise<"delivered" | "queued"> {
   const text = input.text.trim();
@@ -607,6 +613,7 @@ export async function sendChatConfirmed(
       id,
       text,
       ...sentBy(input),
+      compact: input.compact,
     });
     await accepted;
   } finally {

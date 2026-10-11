@@ -4,6 +4,7 @@ import { Check, ChevronRight, Circle, CircleDot, Sparkles } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
+import { compactedLine } from "@/lib/chat/stale";
 import { CopyButton } from "./CopyButton";
 import { ImageThumb } from "./ImageThumb";
 import { Markdown } from "./Markdown";
@@ -184,9 +185,7 @@ export function Compacted({ item }: { item: Of<"compacted"> }) {
   return (
     <div className="text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
       <span className="bg-foreground/[0.06] h-px flex-1" />
-      {item.trigger === "auto"
-        ? "Context compacted automatically"
-        : "Context compacted"}
+      {compactedLine(item)}
       <span className="bg-foreground/[0.06] h-px flex-1" />
     </div>
   );

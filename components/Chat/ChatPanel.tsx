@@ -26,6 +26,9 @@ import { SubagentCard } from "./Subagent";
 import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
+import { StaleChip } from "./StaleChip";
+import { composerCompacts } from "@/lib/chat/stale";
+import { useFreshStartQuery } from "@/data/fresh-start";
 import { QuoteButton } from "./QuoteButton";
 import { ToolBodies, ToolGroup } from "./Tools";
 import { RowState, RowStore } from "./rowState";
@@ -282,6 +285,12 @@ export function ChatPanel({
     toEnd();
     send(text);
   };
+  // A stale chat compacts before the next message unless the reader picks
+  // "Send as-is", for that send only.
+  const staleCompactTokens = useFreshStartQuery().data?.staleCompactTokens ?? 0;
+  const [asIsFor, setAsIsFor] = useState<string | null>(null);
+  const asIs = asIsFor === sessionId;
+  const setAsIs = (on: boolean) => setAsIsFor(on ? sessionId : null);
 
   // Shift+Tab switches plan mode from the composer, as in the terminal.
   const shiftTab = useRef(togglePlan);
@@ -517,6 +526,13 @@ export function ChatPanel({
             )
           }
         />
+        <StaleChip
+          context={context}
+          state={state}
+          thresholdTokens={staleCompactTokens}
+          asIs={asIs}
+          onAsIs={setAsIs}
+        />
         <Composer
           draftKey={sessionId}
           suggestion={shownSuggestion}
@@ -529,7 +545,13 @@ export function ChatPanel({
           placeholder={connected ? `Message ${sessionName}` : "Reconnecting…"}
           onSend={(text, images) => {
             toEnd();
-            send(text, images.length ? images : undefined);
+            const compact = composerCompacts(text, context, {
+              state,
+              thresholdTokens: staleCompactTokens,
+              asIs,
+            });
+            setAsIs(false);
+            send(text, images.length ? images : undefined, compact);
           }}
           onStop={interrupt}
           commands={commands}
