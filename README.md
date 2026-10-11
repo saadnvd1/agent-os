@@ -35,7 +35,7 @@ wait under **Queued** with their place in line and start on their own, and
 
 ### Each kind of work on the right model
 
-Planning and gate reviews run on Opus, implementation, the orchestrator and
+Planning, gate reviews and the orchestrator run on Opus, implementation and
 scope checks on Sonnet, titles and summaries on Haiku, each editable in
 Settings → Models and per workspace. A task plans on one model and
 implements on another in the same conversation, can be resumed on any
@@ -459,7 +459,7 @@ Each kind of work AgentOS launches an agent for runs on its own model, set in
 | Task planning (a task's plan step)                  | `anthropic/claude-opus-5-5`           |
 | Gate review                                         | `anthropic/claude-opus-5-5`           |
 | Task implementation                                 | `anthropic/claude-sonnet-5-5`         |
-| Orchestrator                                        | `anthropic/claude-sonnet-5-5`         |
+| Orchestrator                                        | `anthropic/claude-opus-5-5`           |
 | Scope check                                         | `anthropic/claude-sonnet-5-5`         |
 | Interactive sessions                                | `anthropic/claude-opus-5-5`           |
 | Chat & summary helpers (titles, summaries, PR text) | `anthropic/claude-haiku-4-5-20251001` |

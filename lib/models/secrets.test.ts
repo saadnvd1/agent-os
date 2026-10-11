@@ -100,7 +100,7 @@ describe("secret references", () => {
     const row = ensureOrchestrator(workspace.id);
     // Its key won't come: the orchestrator starts on its default.
     expect(await routeOrchestrator(row, broken)).toMatchObject({
-      model: "claude-sonnet-5-5",
+      model: "claude-opus-5-5",
       model_provider: null,
     });
     // Its key comes: it runs where it's routed.
@@ -118,7 +118,7 @@ describe("secret references", () => {
       db
         .prepare(`SELECT model, model_provider FROM sessions WHERE id = ?`)
         .get(row.id)
-    ).toEqual({ model: "claude-sonnet-5-5", model_provider: null });
+    ).toEqual({ model: "claude-opus-5-5", model_provider: null });
   });
 
   it("puts the key in the agent's environment as its provider wants it", async () => {
