@@ -41,6 +41,8 @@ import {
 } from "../../artifacts/tools";
 import type { RoleExtras } from "./extras";
 import { compactThreshold, refreshSettings, refreshedNote } from "../refresh";
+import { compactContext } from "../compact-context";
+import { COMPACT_BRIEF, COMPACT_INSTRUCTIONS } from "../working-state";
 import { compactionDue, staleLabel, type Staleness } from "../stale";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
@@ -164,6 +166,7 @@ export class ChatHost {
     this.atRest = driver.atRest !== false;
     const cwd = session.working_directory.replace(/^~/, os.homedir());
     const env = { ...agentEnv(session.id), ...extras.env };
+    const orchestrator = session.role === "orchestrator";
     // Every chat can show visuals, asked for like any tool under its access
     // setting (they read files and reach the web). Not an orchestrator: it
     // reads other sessions' text, and a browser would be a way out for it.
@@ -196,6 +199,7 @@ export class ChatHost {
         sessionRunningBrief(session.id),
         BUS_BRIEF,
         visuals && VISUALS_BRIEF,
+        !orchestrator && COMPACT_BRIEF,
       ]
         .filter(Boolean)
         .join("\n\n"),
@@ -211,6 +215,10 @@ export class ChatHost {
       disallowedTools: extras.disallowedTools,
       permissionMode: extras.permissionMode,
       toolGuard: extras.toolGuard,
+      // Not an orchestrator: it starts a fresh conversation instead.
+      compactContext: orchestrator
+        ? undefined
+        : () => compactContext(session.id),
     });
     this.suggestion = session.chat_suggestion ?? null;
     try {
@@ -725,7 +733,7 @@ export class ChatHost {
     };
     this.currentTurn = null;
     this.stopping = null;
-    this.conversation.send("/compact");
+    this.conversation.send(`/compact ${COMPACT_INSTRUCTIONS}`);
     this.setState("running");
     console.error(
       `${new Date().toISOString()} compacting ${this.session.id} before a message: ${stale.stale ? `idle ${Math.round(stale.idleMs / 60_000)}m, ` : ""}${stale.tokens} tokens`

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import type { DriverEvent } from "../events";
-import { Approvals } from "./claude-approvals";
+import { Approvals, compactedHooks } from "./claude-approvals";
 
 function setup() {
   const events: DriverEvent[] = [];
@@ -117,5 +117,33 @@ describe("Approvals", () => {
       )
     ).toMatchObject({ behavior: "allow" });
     expect(items()).toHaveLength(2);
+  });
+});
+
+describe("compactedHooks", () => {
+  const run = async (context: () => Promise<string>) => {
+    const [matcher] = compactedHooks(context);
+    expect(matcher.matcher).toBe("compact");
+    return matcher.hooks[0]({} as never, undefined, {
+      signal: new AbortController().signal,
+    });
+  };
+
+  it("hands the note back as session-start context", async () => {
+    expect(await run(async () => "where you were")).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: "where you were",
+      },
+    });
+  });
+
+  it("says nothing when there is no note, or building it fails", async () => {
+    expect(await run(async () => "")).toEqual({});
+    expect(
+      await run(async () => {
+        throw new Error("boom");
+      })
+    ).toEqual({});
   });
 });

@@ -27,6 +27,7 @@ describe("fresh-start settings", () => {
       orchestratorTokens: 200_000,
       taskTokens: 0,
       compactTokens: 150_000,
+      autoCompactTokens: 300_000,
     });
     expect((await roleExtras(task())).refresh).toBeUndefined();
   });
@@ -87,8 +88,8 @@ describe("the compact threshold at launch", () => {
     db.prepare(`UPDATE sessions SET role = 'orchestrator' WHERE id = ?`).run(
       orch
     );
-    expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("150000");
-    expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe("150000");
+    expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("300000");
+    expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe("300000");
     expect(agentEnv(orch)[AUTO_COMPACT_ENV]).toBeUndefined();
     // A non-Anthropic provider's prompt carries every tool schema, so its
     // window sits that much higher.
@@ -96,7 +97,7 @@ describe("the compact threshold at launch", () => {
       `UPDATE sessions SET model_provider = 'deepseek' WHERE id = ?`
     ).run(task);
     expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe(
-      String(150_000 + PROVIDER_BASE_TOKENS)
+      String(300_000 + PROVIDER_BASE_TOKENS)
     );
     expect(compactThreshold(0, "deepseek")).toBe(0);
     // Capped at the provider's window.
@@ -108,12 +109,18 @@ describe("the compact threshold at launch", () => {
     );
     try {
       // Under Claude Code's 100k floor, it gets the floor; off sets nothing.
-      setRefreshSettings({ compactTokens: 60_000 });
+      setRefreshSettings({ autoCompactTokens: 60_000 });
       expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("100000");
-      setRefreshSettings({ compactTokens: 0 });
+      setRefreshSettings({ autoCompactTokens: 0 });
       expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBeUndefined();
+      // The between-turn threshold is a separate setting.
+      setRefreshSettings({ autoCompactTokens: 300_000, compactTokens: 0 });
+      expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("300000");
     } finally {
-      setRefreshSettings({ compactTokens: 150_000 });
+      setRefreshSettings({
+        autoCompactTokens: 300_000,
+        compactTokens: 150_000,
+      });
     }
   });
 });

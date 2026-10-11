@@ -1,8 +1,9 @@
 /**
- * Compacting between turns. A chat's agent compacts itself at the compact
- * threshold (Claude Code's auto-compact window, set at launch by
- * lib/agents/launch). Between turns AgentOS catches what it didn't: a chat
- * over the threshold is compacted before the next message, and so is one
+ * Compacting between turns. A chat's agent compacts itself mid-turn at its
+ * own, higher window (Claude Code's auto-compact, set at launch by
+ * lib/agents/launch). Between turns nothing is in flight, so AgentOS
+ * compacts earlier: a chat over the compact threshold is compacted before
+ * the next message, and so is one
  * whose prompt cache has expired, since that message would re-read the
  * whole history at the cache-write price (one summary turn, then a small
  * cache write instead of a huge one). The one check every send path uses:

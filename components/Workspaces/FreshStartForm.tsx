@@ -19,7 +19,7 @@ export function FreshStartForm() {
     return <p className="text-destructive text-sm">{error.message}</p>;
   return (
     <Form
-      key={`${data.orchestratorTokens}:${data.taskTokens}:${data.compactTokens}`}
+      key={`${data.orchestratorTokens}:${data.taskTokens}:${data.compactTokens}:${data.autoCompactTokens}`}
       saved={data}
     />
   );
@@ -30,12 +30,15 @@ function Form({ saved }: { saved: RefreshSettings }) {
   const orchestrator = useThreshold(saved.orchestratorTokens, 200);
   const task = useThreshold(saved.taskTokens, 200);
   const compact = useThreshold(saved.compactTokens, 150);
-  const error = orchestrator.error ?? task.error ?? compact.error;
+  const midTurn = useThreshold(saved.autoCompactTokens, 300);
+  const error =
+    orchestrator.error ?? task.error ?? compact.error ?? midTurn.error;
   const dirty =
     !error &&
     (orchestrator.tokens !== saved.orchestratorTokens ||
       task.tokens !== saved.taskTokens ||
-      compact.tokens !== saved.compactTokens);
+      compact.tokens !== saved.compactTokens ||
+      midTurn.tokens !== saved.autoCompactTokens);
 
   return (
     <form
@@ -47,6 +50,7 @@ function Form({ saved }: { saved: RefreshSettings }) {
             orchestratorTokens: orchestrator.tokens,
             taskTokens: task.tokens,
             compactTokens: compact.tokens,
+            autoCompactTokens: midTurn.tokens,
           },
           {
             onSuccess: () => toast.success("Context settings saved"),
@@ -67,15 +71,23 @@ function Form({ saved }: { saved: RefreshSettings }) {
       <ThresholdRow label="Tasks" field={task} />
       <h3 className="pt-2 text-sm font-medium">Compact</h3>
       <p className="text-muted-foreground text-sm">
-        Chats and tasks compact when their context passes this size: Claude Code
-        does it itself, and between turns AgentOS compacts a chat over it, or
-        idle past its prompt cache, before the next message. The composer offers
-        to first. Orchestrators start fresh instead.
+        Chats and tasks compact twice over. Mid-turn, Claude Code summarizes its
+        own context when a job runs long: set this high, since it happens while
+        the agent is holding its files. Between turns, nothing is in flight, so
+        AgentOS compacts a chat over the smaller size, or idle past its prompt
+        cache, before the next message; the composer offers to first. Either way
+        AgentOS hands the agent its task, scope changes, files and todos back.
+        Orchestrators start fresh instead.
       </p>
       <ThresholdRow
-        label="Chats and tasks"
+        label="Mid-turn"
+        field={midTurn}
+        switchLabel="Let the agent compact itself mid-turn"
+      />
+      <ThresholdRow
+        label="Between turns"
         field={compact}
-        switchLabel="Compact chats and tasks at this size"
+        switchLabel="Compact chats and tasks between turns"
       />
       {error && <p className="text-destructive text-xs">{error}</p>}
       <div className="flex justify-end">

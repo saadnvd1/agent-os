@@ -3,7 +3,8 @@ import { refreshSettings, setRefreshSettings } from "@/lib/chat/refresh";
 
 // When a chat's conversation starts over (lib/chat/refresh): context
 // tokens for orchestrators and for tasks, and at which chats and tasks
-// compact (lib/chat/stale); 0 for never.
+// compact: between turns (lib/chat/stale) and mid-turn, by the agent itself;
+// 0 for never.
 export async function GET() {
   return NextResponse.json(refreshSettings());
 }
@@ -16,6 +17,7 @@ export async function PUT(request: NextRequest) {
       taskTokens: body.taskTokens,
       // Its name before it also set the agents' own auto-compact.
       compactTokens: body.compactTokens ?? body.staleCompactTokens,
+      autoCompactTokens: body.autoCompactTokens,
     });
     return NextResponse.json(refreshSettings());
   } catch (error) {

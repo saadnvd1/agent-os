@@ -41,6 +41,10 @@ export interface ChatStartOptions {
   // Checked before every tool call, whatever the permissions say: why it's
   // refused, or null to let it go on to them.
   toolGuard?: ToolGuard;
+  // The note handed back to the agent right after its context is compacted
+  // (lib/chat/compact-context), empty for none. Only Claude Code has a hook
+  // for it; other drivers ignore it.
+  compactContext?: () => Promise<string>;
 }
 
 export type ToolGuard = (
