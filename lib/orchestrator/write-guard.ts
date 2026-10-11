@@ -16,7 +16,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { db, type Session } from "../db";
-import { git } from "../git-exec";
+import { git, GitError } from "../git-exec";
 import { isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
@@ -234,22 +234,37 @@ export async function hooksPaths(repos: string[]): Promise<string[]> {
   const key = repos.join("\0");
   if (hooksCache?.key === key && Date.now() - hooksCache.at < HOOKS_TTL_MS)
     return hooksCache.dirs;
-  const read = (cwd: string, args: string[]) =>
-    git(cwd, ["config", ...args, "--get", "core.hooksPath"], {
-      timeout: 5000,
-    })
+  // Only "not set" and "not a repository" mean there's nothing to protect;
+  // any other failure (a timeout under load) throws, so the write is
+  // refused and nothing is cached.
+  const run = (cwd: string, args: string[]) =>
+    git(cwd, args, { timeout: 5000 })
       .then((out) => out.trim())
-      .catch(() => "");
-  const found = await Promise.all([
-    read(os.homedir(), ["--global"]).then((v) => [os.homedir(), v] as const),
-    ...repos.map((r) => read(r, []).then((v) => [r, v] as const)),
-  ]);
+      .catch((e: unknown) => {
+        if (
+          e instanceof GitError &&
+          !e.timedOut &&
+          (e.exitCode === 1 || /not a git repository/i.test(e.stderr))
+        )
+          return "";
+        throw new Error(`couldn't read git's hooks folder in ${cwd}`);
+      });
+  // The user's, when it names one folder (a relative one is taken from each
+  // repo's top, so each project's answer below covers it); and each
+  // project's as git itself resolves it, from the top of its worktree.
+  const global = expandHome(
+    await run(os.homedir(), ["config", "--global", "--get", "core.hooksPath"])
+  );
+  const found = await Promise.all(
+    repos.map(async (r) =>
+      // A project whose folder is gone has no hooks to run.
+      fs.existsSync(r)
+        ? run(r, ["rev-parse", "--path-format=absolute", "--git-path", "hooks"])
+        : ""
+    )
+  );
   const dirs = [
-    ...new Set(
-      found
-        .filter(([, v]) => v !== "")
-        .map(([base, v]) => path.resolve(base, expandHome(v)))
-    ),
+    ...new Set([global, ...found].filter((d) => d.startsWith("/"))),
   ];
   hooksCache = { key, at: Date.now(), dirs };
   return dirs;

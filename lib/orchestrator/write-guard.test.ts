@@ -294,6 +294,8 @@ describe("an orchestrator's writes", () => {
         path.join(outside, "bin/aos"),
         path.join(outside, "xdg/git/config"),
         at("Library/LaunchAgents/x.plist"),
+        "/Library/LaunchAgents/x.plist",
+        "/Library/LaunchDaemons/x.plist",
         path.join(path.dirname(LIMITS_FILE), "limits.json"),
       ])
         expect(await write(p), p).toMatch(/configures what runs/);
@@ -304,11 +306,14 @@ describe("an orchestrator's writes", () => {
   });
 
   it("are refused in a project's core.hooksPath, even outside the repo", async () => {
-    const repo = at("dev/hooked");
+    // Registered at a folder below the repo's top, as in a monorepo: git
+    // takes a relative hooksPath from the top, not from the project.
+    const top = at("dev/hooked");
+    const repo = path.join(top, "web");
     fs.mkdirSync(repo, { recursive: true });
-    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["init", "-q"], { cwd: top });
     execFileSync("git", ["config", "core.hooksPath", "../hooked-hooks"], {
-      cwd: repo,
+      cwd: top,
     });
     const w = createWorkspace("Hooked");
     createProject({
@@ -321,12 +326,38 @@ describe("an orchestrator's writes", () => {
       await orchestratorToolRefusal(o, "Write", {
         file_path: at("dev/hooked-hooks/pre-commit"),
       })
-    ).toMatch(/configures what runs/);
+    ).toContain(`in ${at("dev/hooked-hooks")}`);
     expect(
       await orchestratorToolRefusal(o, "Write", {
-        file_path: at("dev/unhooked/notes.md"),
+        file_path: at("dev/hooked/hooked-hooks/notes.md"),
       })
     ).toBeNull();
+  });
+
+  it("refuses, and caches nothing, when git's hooks folder can't be read", async () => {
+    const { hooksPaths } = await import("./write-guard");
+    const notRepo = at("dev/plain");
+    fs.mkdirSync(notRepo, { recursive: true });
+    // Not a repository, or gone: nothing to protect.
+    expect(await hooksPaths([notRepo, at("dev/gone")])).toEqual(
+      expect.not.arrayContaining([expect.stringContaining("dev/plain")])
+    );
+    // The user's own, from their git config, wherever it points.
+    const config = at("notes/gitconfig");
+    fs.writeFileSync(config, "[core]\n\thooksPath = ~/global-hooks\n");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", config);
+    try {
+      expect(await hooksPaths([at("dev/plain"), "global"])).toContain(
+        at("global-hooks")
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    // A folder git can't run in at all (a file where a folder should be).
+    fs.writeFileSync(at("dev/not-a-dir"), "");
+    await expect(hooksPaths([at("dev/not-a-dir")])).rejects.toThrow(
+      /couldn't read git's hooks folder/
+    );
   });
 
   it("runs as a PreToolUse hook on every tool call", async () => {
