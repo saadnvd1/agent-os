@@ -1,6 +1,6 @@
 import fs from "fs";
 import os from "os";
-import { db, queries, type Session } from "../db";
+import { db, queries, stackQueries, type Session } from "../db";
 import { isBranchName } from "../git";
 import { getProject } from "../projects";
 import { findPRStrict } from "./gh";
@@ -134,7 +134,8 @@ export async function prFor(
   const repo = projectPathFor(session);
   if (!repo) return null;
   const cached = prCache.get(session.id);
-  if (!fresh && cached && Date.now() - cached.at < 20000) return cached.pr;
+  if (!fresh && cached && Date.now() - cached.at < 20000)
+    return recordBase(session, cached.pr);
   const renamed = await renamedBranch(session);
   const branch = renamed ?? session.branch_name;
   if (!branch) return null;
@@ -170,6 +171,29 @@ export async function prFor(
       `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`
     ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
   }
+  return recordBase(session, pr);
+}
+
+// An open PR's base as GitHub has it now becomes the task's, in the row and
+// in `session`, so every diff, the stack logic and the UI read the truth:
+// the base recorded at the start goes stale when the PR is retargeted (a
+// stacked parent's branch deleted, so GitHub moved it to main). A stack
+// item on a merged parent keeps its base until the restack moves it, which
+// is also what takes the parent's commits off it.
+function recordBase(session: Session, pr: TaskPR | null): TaskPR | null {
+  const base = pr?.state === "OPEN" ? pr.base : undefined;
+  if (!base || base === session.base_branch || !isBranchName(base)) return pr;
+  db.prepare(`UPDATE sessions SET base_branch = ? WHERE id = ?`).run(
+    base,
+    session.id
+  );
+  session.base_branch = base;
+  const item = stackQueries.itemForSession(db, session.id);
+  const parent = item?.parent_item_id
+    ? stackQueries.item(db, item.parent_item_id)
+    : null;
+  if (item && item.base_branch !== base && parent?.status !== "merged")
+    stackQueries.updateItem(db, item.id, { base_branch: base });
   return pr;
 }
 

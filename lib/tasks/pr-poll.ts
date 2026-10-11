@@ -9,7 +9,7 @@ import type { TaskPR } from "./state";
 export const OPEN_TTL_MS = 60_000;
 export const BRANCH_TTL_MS = 5 * 60_000;
 const OPEN_FIELDS =
-  "number,url,state,headRefOid,statusCheckRollup,body,headRefName,isCrossRepository,createdAt,mergeable";
+  "number,url,state,headRefOid,statusCheckRollup,body,headRefName,isCrossRepository,createdAt,mergeable,baseRefName";
 
 interface OpenList {
   at: number;

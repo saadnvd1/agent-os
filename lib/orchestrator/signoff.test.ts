@@ -63,6 +63,8 @@ const { setMergeApprovals } = await import("./merge-approvals");
 const { releaseInterruptedClaims, spendApproval } =
   await import("./ask-approvals");
 const { amendBrief } = await import("./amendments");
+const { fetchRefs } = await import("./repo");
+const { changedFiles } = await import("./diff");
 
 // The one ask a task's escalation leaves on Saad's list.
 function oneGateAsk(w: string, task: string, sha: string) {
@@ -1451,6 +1453,146 @@ describe("a merge decision from Saad", () => {
     expect(raised).toMatchObject({ kind: "decision", sha: null });
     answerAsk(t.w, raised.id, { action: "approve" });
     await expect(t.signOff()).rejects.toThrow(/review failed/);
+    expect(merges).toEqual([]);
+  });
+});
+
+describe("the PR's real base", () => {
+  const baseOf = (task: string) =>
+    (
+      db.prepare(`SELECT base_branch FROM sessions WHERE id = ?`).get(task) as {
+        base_branch: string | null;
+      }
+    ).base_branch;
+
+  // The task stacked on a parent item, whose session is on `parentBranch`.
+  function stackOn(
+    t: ReturnType<typeof setup>,
+    parentStatus: "dropped" | "pr",
+    parentBranch: string
+  ) {
+    const { project_id } = db
+      .prepare(`SELECT project_id FROM sessions WHERE id = ?`)
+      .get(t.task) as { project_id: string };
+    const parentSession = seedSession({
+      projectId: project_id,
+      name: "parent",
+      task: true,
+      branch: parentBranch,
+    });
+    const item = (
+      id: string,
+      position: number,
+      status: "dropped" | "pr",
+      session: string,
+      parent: string | null
+    ) => ({
+      id,
+      position,
+      lh_card_id: `card-${id}`,
+      ticket: id,
+      title: id,
+      parent_item_id: parent,
+      also_item_ids: "[]",
+      blocker_item_ids: JSON.stringify(parent ? [parent] : []),
+      status,
+      session_id: session,
+      base_branch: parent ? parentBranch : "main",
+      base_tip: null,
+      note: null,
+      held_outside: 0,
+    });
+    const parentId = `p-${t.task}`;
+    const childId = `c-${t.task}`;
+    stackQueries.create(
+      db,
+      {
+        id: `stack-${t.task}`,
+        project_id,
+        lh_board_id: `board-${t.task}`,
+        name: "s",
+        max_parallel: 3,
+      },
+      [
+        item(parentId, 0, parentStatus, parentSession, null),
+        item(childId, 1, "pr", t.task, parentId),
+      ]
+    );
+    return () => stackQueries.item(db, childId)!;
+  }
+
+  it("diffs a PR GitHub retargeted to main, off a dropped parent's deleted branch, against main", async () => {
+    const t = setup({ card: true });
+    // The parent's branch never reaches origin again: it was deleted when
+    // the parent was dropped, and GitHub moved the PR to main.
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/parent-gone' WHERE id = ?`
+    ).run(t.task);
+    const child = stackOn(t, "dropped", "feature/parent-gone");
+    pr = { ...pr!, base: "main" };
+
+    const { text, runs } = await reviewNow(t.w);
+    expect(text).toMatch(/: pass/);
+    // The review and the scope check both read the diff against main.
+    expect(runs[0].prompt).toContain("A src/a.ts");
+    expect(runs[1].prompt).toContain("A src/a.ts");
+    expect(getCheck(t.task, t.sha, "scope")?.status).toBe("pass");
+    // The task and its stack item now say what GitHub says.
+    expect(baseOf(t.task)).toBe("main");
+    expect(child().base_branch).toBe("main");
+
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", t.sha],
+    ]);
+  });
+
+  it("falls back to the default branch when GitHub can't be reached and the recorded base is gone", async () => {
+    const t = setup();
+    git(t.repo, "remote", "set-url", "origin", path.join(t.repo, "gone.git"));
+    const base = await fetchRefs(t.repo, {
+      base_branch: "feature/parent-gone",
+      branch_name: "feature/t",
+    });
+    expect(base).toBe("origin/main");
+    expect(
+      (await changedFiles(t.repo, base, t.sha)).map((f) => f.path)
+    ).toEqual(["src/a.ts"]);
+  });
+
+  it("skips a deleted base's leftover tracking ref for the default branch", async () => {
+    const t = setup();
+    // origin/feature/stale is still in the clone, but origin dropped it.
+    git(t.repo, "update-ref", "refs/remotes/origin/feature/stale", t.sha);
+    expect(
+      await fetchRefs(t.repo, {
+        base_branch: "feature/stale",
+        branch_name: "feature/t",
+      })
+    ).toBe("origin/main");
+  });
+
+  it("leaves a normal stacked PR on its parent's branch", async () => {
+    const t = setup();
+    git(t.repo, "checkout", "-qb", "feature/parent", "main");
+    commit(t.repo, "p.ts", "export const p = 1;\n");
+    git(t.repo, "checkout", "-qb", "feature/child");
+    const head = commit(t.repo, "c.ts", "export const c = 1;\n");
+    db.prepare(
+      `UPDATE sessions SET branch_name = 'feature/child', base_branch = 'feature/parent' WHERE id = ?`
+    ).run(t.task);
+    const child = stackOn(t, "pr", "feature/parent");
+    pr = { ...pr!, head, codeReview: { sha: head }, base: "feature/parent" };
+
+    const { runs } = await reviewNow(t.w);
+    expect(runs[0].prompt).toContain("A c.ts");
+    expect(runs[0].prompt).not.toContain("p.ts");
+    expect(baseOf(t.task)).toBe("feature/parent");
+    expect(child().base_branch).toBe("feature/parent");
+    // The stack gate still waits for the parent.
+    await expect(t.signOff()).rejects.toThrow(
+      /stacked on .*which has not merged/
+    );
     expect(merges).toEqual([]);
   });
 });
