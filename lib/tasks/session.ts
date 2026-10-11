@@ -189,6 +189,23 @@ export async function prFor(
 // against the old base no longer count. A stack item on a merged parent
 // keeps its base until the restack moves it, which is also what takes the
 // parent's commits off it.
+// The bases a task may be judged against: the default branch or its stack
+// parent's branch (and what it already has).
+export async function isAllowedBase(
+  session: Session,
+  repo: string,
+  base: string
+): Promise<boolean> {
+  if (base === session.base_branch) return true;
+  const item = stackQueries.itemForSession(db, session.id);
+  const parent = item?.parent_item_id
+    ? stackQueries.item(db, item.parent_item_id)
+    : null;
+  return (
+    base === parentBranchOf(parent) || base === (await getDefaultBranch(repo))
+  );
+}
+
 async function recordBase(
   session: Session,
   repo: string,
@@ -196,15 +213,11 @@ async function recordBase(
 ): Promise<void> {
   const base = pr?.state === "OPEN" ? pr.base : undefined;
   if (!base || base === session.base_branch || !isBranchName(base)) return;
+  if (!(await isAllowedBase(session, repo, base))) return;
   const item = stackQueries.itemForSession(db, session.id);
   const parent = item?.parent_item_id
     ? stackQueries.item(db, item.parent_item_id)
     : null;
-  if (
-    base !== parentBranchOf(parent) &&
-    base !== (await getDefaultBranch(repo))
-  )
-    return;
   db.transaction(() => {
     db.prepare(`UPDATE sessions SET base_branch = ? WHERE id = ?`).run(
       base,

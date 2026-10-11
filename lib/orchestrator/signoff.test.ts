@@ -1617,6 +1617,21 @@ describe("the PR's real base", () => {
     expect(merges).toEqual([]);
   });
 
+  it("refuses a sign-off when the retarget is only learned while it runs", async () => {
+    const t = setup();
+    db.prepare(`UPDATE sessions SET base_branch = 'develop' WHERE id = ?`).run(
+      t.task
+    );
+    await reviewNow(t.w);
+    // GitHub moved the PR to the default branch since the checks ran.
+    pr = { ...pr!, base: "main" };
+    const { signOffTask } = await import("@/lib/tasks/finish");
+    await expect(signOffTask(t.task)).rejects.toThrow(
+      /targets main, not its base develop/
+    );
+    expect(merges).toEqual([]);
+  });
+
   it("refuses a sign-off whose PR was retargeted after it was judged", async () => {
     const t = setup();
     pr = { ...pr!, base: "feature/elsewhere" };

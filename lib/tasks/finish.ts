@@ -127,12 +127,15 @@ export async function signOffTask(
   if (!repo) throw new Error("Task has no project");
   const refusal = signOffRefusal(id);
   if (refusal) throw new Error(refusal);
+  // prFor follows a retarget onto the record, so compare with what the
+  // checks above were judged against.
+  const judgedBase = session.base_branch;
   const pr = await prFor(session, true);
   const verdict = canSignOff(pr);
   if (!verdict.ok) throw new Error(verdict.reason);
-  if (pr!.base && pr!.base !== session.base_branch)
+  if (pr!.base && pr!.base !== judgedBase)
     throw new Error(
-      `PR #${pr!.number} targets ${pr!.base}, not its base ${session.base_branch ?? "(none)"}: its review and checks were for the old base`
+      `PR #${pr!.number} targets ${pr!.base}, not its base ${judgedBase ?? "(none)"}: its review and checks were for the old base`
     );
   if (opts.head && pr!.head && pr!.head !== opts.head)
     throw new Error(

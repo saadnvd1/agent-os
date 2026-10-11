@@ -513,6 +513,19 @@ describe("automatic rebase", () => {
     await rebasedOnto(t, "feature/parent-gone", "main");
   });
 
+  it("doesn't rebase onto a branch the task picked as its PR's base", async () => {
+    const t = setup();
+    t.put("review", "pass");
+    git(t.repo, "push", "-q", "origin", "feature/t:refs/heads/elsewhere");
+    t.moveMain("src/c.ts", "export const c = 1;\n");
+    pr = { ...pr!, mergeable: "CONFLICTING", base: "elsewhere" };
+    const r = rebaseDeps();
+    await rebaseConflicting(t.w, t.facts(), r.deps);
+    git(t.repo, "fetch", "-q", "origin");
+    expect(originHead(t.repo)).toBe(t.sha);
+    expect(r.bodies).toEqual([]);
+  });
+
   it("rebases onto the default branch when no base is recorded or reported", async () => {
     const t = setup();
     t.put("review", "pass");
