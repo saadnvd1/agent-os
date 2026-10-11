@@ -27,10 +27,15 @@ const modelRef = z
 const modelOverride = z
   .union([
     modelRef,
-    z.partialRecord(
-      z.enum(TASK_ROLES as [ModelRole, ...ModelRole[]]),
-      modelRef
-    ),
+    // Named optional keys, not z.partialRecord: its "propertyNames" makes
+    // Claude Code drop every tool on this server, not just this one.
+    z
+      .object(
+        Object.fromEntries(
+          TASK_ROLES.map((role) => [role, modelRef.optional()])
+        ) as Record<ModelRole, z.ZodOptional<typeof modelRef>>
+      )
+      .strict(),
   ])
   .optional()
   .describe(
