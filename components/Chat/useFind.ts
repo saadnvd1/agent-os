@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatItem } from "@/lib/chat/events";
 import {
   flattenHits,
+  joinPage,
   locate,
   MIN_QUERY,
   stepIndex,
+  nextHits,
+  type FindResults as Results,
   type FindTarget,
-  type SearchHit,
   type SearchResult,
 } from "@/lib/chat/find";
 import { findRanges, paint, unpaint } from "./find-highlight";
@@ -40,15 +42,6 @@ const SETTLE_MS = 2000;
 // (rows measured, older pages landing), unless the reader scrolls first.
 const HOLD_MS = 800;
 const DEBOUNCE_MS = 150;
-
-interface Results {
-  query: string;
-  hits: SearchHit[];
-  total: number;
-  capped: boolean;
-  hasMore: boolean;
-  cursor: number | null;
-}
 
 // A match being shown, and the block it was found in.
 type Pinned = FindTarget & { block: string };
@@ -84,25 +77,6 @@ function bringIntoView(root: HTMLElement, rect: DOMRect) {
   if (rect.top >= box.top + 8 && rect.bottom <= box.bottom - 8) return;
   root.scrollTop += rect.top - box.top - box.height / 3;
 }
-
-type Search = FindDeps["search"];
-
-// Pages on from `before` until one has a hit (a page that read only a slice
-// of a huge conversation may have none) or there are no more.
-async function nextHits(search: Search, query: string, before: number | null) {
-  let page = await search(query, before ?? undefined);
-  for (let i = 0; page && !page.hits.length && page.hasMore && i < 100; i++)
-    page = await search(query, page.cursor ?? undefined);
-  return page;
-}
-
-// Older hits joined on; the count and its cap stay the first page's.
-const joinPage = (r: Results, page: SearchResult): Results => ({
-  ...r,
-  hits: r.hits.concat(page.hits),
-  hasMore: page.hasMore,
-  cursor: page.cursor,
-});
 
 /**
  * Find in a conversation: searches the stored conversation on the server,

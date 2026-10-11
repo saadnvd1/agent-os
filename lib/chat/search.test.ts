@@ -208,7 +208,8 @@ describe("searchChat", () => {
         createdAt: 1,
       },
     ]);
-    expect(searchChat(id, "b = 2").total).toBe(1);
+    expect(searchChat(id, "B = 2").total).toBe(1);
+    expect(searchChat(id, "a.ts").total).toBeGreaterThanOrEqual(1);
     expect(searchChat(id, "zzz").total).toBe(0);
   });
 });

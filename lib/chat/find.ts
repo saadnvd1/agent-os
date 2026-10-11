@@ -245,3 +245,34 @@ export function stepIndex(
   if (next < 0) return hasMore ? 0 : loaded - 1;
   return next;
 }
+
+// Results walked so far: the first page's count, then every page's hits.
+export interface FindResults extends SearchResult {
+  query: string;
+}
+
+// Pages on from `before` until one has a hit (a page that read only a slice
+// of a huge conversation may have none) or there are no more.
+export async function nextHits(
+  search: (query: string, before?: number) => Promise<SearchResult | null>,
+  query: string,
+  before: number | null,
+  maxPages = 100
+): Promise<SearchResult | null> {
+  let page = await search(query, before ?? undefined);
+  for (
+    let i = 1;
+    page && !page.hits.length && page.hasMore && i < maxPages;
+    i++
+  )
+    page = await search(query, page.cursor ?? undefined);
+  return page;
+}
+
+// Older hits joined on; the count and its cap stay the first page's.
+export const joinPage = (r: FindResults, page: SearchResult): FindResults => ({
+  ...r,
+  hits: r.hits.concat(page.hits),
+  hasMore: page.hasMore,
+  cursor: page.cursor,
+});
