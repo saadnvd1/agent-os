@@ -4,6 +4,7 @@
 //
 //   npx tsx scripts/competitor-audit/audit.ts [slug]          # fetch + summarise, prints JSON
 //   npx tsx scripts/competitor-audit/audit.ts index [slug]    # rebuild the reports' README.md
+//   npx tsx scripts/competitor-audit/audit.ts excerpt pr <n> [slug] | excerpt doc <path> [slug]
 //
 // Competitors are configured locally, never in this repo:
 //   ~/.config/agent-os/competitors.json   {"<slug>": {"repo": "owner/name", "branch": "main"}}
@@ -18,20 +19,23 @@ import {
   SLUG_RE,
   daysBefore,
   fetchSince,
+  isValidSha,
   nextReportName,
   parseFrontmatter,
   parseGitLog,
-  parseTopTen,
+  previousFromReport,
   pickBiggest,
   renderIndex,
   renderSummary,
   repoUrl,
   resolveRange,
   sortReports,
+  SUMMARY_RULE,
   type DocChange,
   type PrInfo,
   type Release,
 } from "./lib";
+import { untrusted } from "../../lib/orchestrator/untrusted";
 
 const CONFIG =
   process.env.AGENTOS_COMPETITORS ||
@@ -123,16 +127,7 @@ function previousReport(c: Competitor) {
   const last = names.at(-1);
   if (!last) return { names, prev: null };
   const md = fs.readFileSync(path.join(c.reports, last), "utf8");
-  const fm = parseFrontmatter(md);
-  return {
-    names,
-    prev: {
-      file: last,
-      audited: fm.audited || last.slice(0, 10),
-      to: fm.to || "",
-      topTen: parseTopTen(md),
-    },
-  };
+  return { names, prev: previousFromReport(last, md) };
 }
 
 function fetchPrs(repo: string, numbers: number[]): Map<number, PrInfo> {
@@ -260,7 +255,7 @@ function summarise(c: Competitor) {
     prevDate: prev?.audited,
     today,
     isAncestor: (sha) =>
-      /^[0-9a-f]{7,40}$/.test(sha) &&
+      isValidSha(sha) &&
       tryRun(() => git("merge-base", "--is-ancestor", sha, toSha)) !== null,
   });
 
@@ -341,6 +336,48 @@ function writeIndex(c: Competitor) {
   console.log(index);
 }
 
-const [first, second] = process.argv.slice(2);
+/** A targeted excerpt of one PR body or doc, fenced as untrusted like the summary. */
+function excerpt(c: Competitor, kind: string, target: string) {
+  let text: string | null = null;
+  if (kind === "pr" && /^\d+$/.test(target)) {
+    text = tryRun(() =>
+      run("gh", [
+        "pr",
+        "view",
+        target,
+        "-R",
+        c.repo,
+        "--json",
+        "body",
+        "-q",
+        ".body",
+      ])
+    );
+  } else if (
+    kind === "doc" &&
+    DOC_PATH.test(target) &&
+    !target.includes("..")
+  ) {
+    text = tryRun(() =>
+      run("git", ["-C", c.clone, "show", `${TO_REF}:${target}`])
+    );
+  } else {
+    fail(
+      "Usage: audit.ts excerpt pr <number> [slug] | excerpt doc <docs path> [slug]"
+    );
+  }
+  if (text === null) fail(`Couldn't read ${kind} ${target}`);
+  const lines = text
+    .split("\n")
+    .filter((l) => l.trim())
+    .slice(0, 80);
+  console.log(SUMMARY_RULE);
+  console.log(
+    untrusted(`competitor ${kind} ${target}`, `\n${lines.join("\n")}\n`)
+  );
+}
+
+const [first, second, third, fourth] = process.argv.slice(2);
 if (first === "index") writeIndex(loadCompetitor(second));
+else if (first === "excerpt") excerpt(loadCompetitor(fourth), second, third);
 else summarise(loadCompetitor(first));
