@@ -187,9 +187,12 @@ export function ScheduleForm({
           ? "every"
           : "weekdays"
   );
-  const initialAt = wallParts(
-    existing?.run_at ?? Date.now() + 3_600_000,
-    existing?.timezone ?? DEFAULT_TIMEZONE
+  // A new one-off starts an hour out.
+  const [initialAt] = useState(() =>
+    wallParts(
+      existing?.run_at ?? Date.now() + 3_600_000,
+      existing?.timezone ?? DEFAULT_TIMEZONE
+    )
   );
   const [atDate, setAtDate] = useState(initialAt.date);
   const [atTime, setAtTime] = useState(initialAt.time);
