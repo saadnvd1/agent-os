@@ -98,9 +98,10 @@ describe("demo chat", () => {
     expect(connectWorker).not.toHaveBeenCalled();
   });
 
-  it("answers only history, tool bodies and task output from storage", () => {
+  it("answers only history, tool bodies, task output and search from storage", () => {
     expect([...DEMO_CHAT_READS].sort()).toEqual([
       "history",
+      "search",
       "task_output",
       "tool_body",
     ]);
