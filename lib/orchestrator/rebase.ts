@@ -35,7 +35,7 @@ import { getCheck, putCheck } from "./checks";
 import { queueEvent } from "./events";
 import { statusOf, type SessionFacts } from "./facts";
 import { isPaused } from "./pause";
-import { fetchRefs, repoOf } from "./repo";
+import { repoOf } from "./repo";
 import { reviewAt, taskReviewTarget } from "./review";
 
 const short = (sha: string) => sha.slice(0, 7);
@@ -162,8 +162,14 @@ async function rebaseOne(
 ): Promise<void> {
   const repo = repoOf(task);
   const branch = task.base_branch || "main";
-  const onto = await fetchRefs(repo, task);
-  if (onto !== `origin/${branch}`) return;
+  // A failed fetch throws: nothing is judged against a stale base.
+  await run(
+    "git",
+    ["fetch", "--quiet", "--", "origin", branch, task.branch_name!],
+    repo,
+    60000
+  );
+  const onto = `origin/${branch}`;
   const baseTip = (await run("git", ["rev-parse", onto], repo)).trim();
   const attempt = `${pr.head}:${baseTip}`;
   if (tried.get(task.id) === attempt) return;
@@ -204,8 +210,15 @@ async function rebaseOne(
 
   // Rebased in a throwaway checkout of the PR's head, never in the task's
   // own: a turn that starts meanwhile can't get its work into the push.
+  // Git's own words name the task's commits and files: they go to the
+  // log, and a fixed reason goes to the task and the orchestrator.
   const rebased = await rebaseAt(repo, pr.head, onto, deps).catch(
-    (error: unknown) => ({ error: outputOf(error).slice(0, 300) })
+    (error: unknown) => {
+      console.error(`Rebasing ${task.name}:`, outputOf(error));
+      return {
+        error: `replaying its commits one by one onto ${branch} conflicts`,
+      };
+    }
   );
   if ("error" in rebased)
     return askToRebase(workspaceId, task, pr, branch, rebased.error, deps);
@@ -213,7 +226,9 @@ async function rebaseOne(
   // GitHub's word was stale: nothing to move.
   if (to === pr.head || isPaused(workspaceId)) return;
 
-  // Recorded before the push, so a restart in between can't lose it.
+  // Recorded before the push, so a restart in between can't lose it, and
+  // put back if the push is refused.
+  const before = [task.rebased_from ?? null, task.rebased_to ?? null];
   const heads = restackedHeads(
     {
       restacked_from: task.rebased_from ?? null,
@@ -235,17 +250,22 @@ async function rebaseOne(
     `${to}:refs/heads/${task.branch_name}`
   ).then(
     () => null,
-    (error: unknown) => outputOf(error).slice(0, 300)
+    (error: unknown) => outputOf(error)
   );
-  if (pushed !== null)
+  if (pushed !== null) {
+    console.error(`Pushing ${task.name}'s rebase:`, pushed);
+    db.prepare(
+      `UPDATE sessions SET rebased_from = ?, rebased_to = ? WHERE id = ?`
+    ).run(...before, task.id);
     return askToRebase(
       workspaceId,
       task,
       pr,
       branch,
-      `pushing the rebase was refused: ${pushed}`,
+      "pushing the rebase was refused, so its branch may have moved on origin",
       deps
     );
+  }
   if (heads.restacked_from && heads.restacked_to)
     await deps
       .editBody(repo, pr.number, heads.restacked_from, heads.restacked_to)
@@ -256,10 +276,7 @@ async function rebaseOne(
   const follows =
     (await deps.idle(task)) &&
     !(await local()) &&
-    (await git(wt, "reset", "--keep", to).then(
-      () => true,
-      () => false
-    ));
+    (await catchUp(git, wt, task.branch_name!, pr.head, to));
   if (!follows)
     await deps.send(
       task.id,
@@ -272,6 +289,29 @@ async function rebaseOne(
     task.id,
     `task ${task.name}: PR #${pr.number} conflicted with ${branch}; AgentOS rebased it cleanly (${short(pr.head)} -> ${short(to)}) and pushed it. CI runs again; ${reviewed}.`
   );
+}
+
+// Moves the worktree's branch from `from` to `to` only if it's still at
+// `from` (update-ref compares and swaps, so a commit made since stops it),
+// then brings its index and files along (a two-tree read-tree, which
+// refuses to overwrite local edits). Put back if the files can't follow.
+async function catchUp(
+  git: (cwd: string, ...args: string[]) => Promise<string>,
+  wt: string,
+  branch: string,
+  from: string,
+  to: string
+): Promise<boolean> {
+  const ref = `refs/heads/${branch}`;
+  const ok = (p: Promise<unknown>) =>
+    p.then(
+      () => true,
+      () => false
+    );
+  if (!(await ok(git(wt, "update-ref", ref, to, from)))) return false;
+  if (await ok(git(wt, "read-tree", "-m", "-u", from, to))) return true;
+  await ok(git(wt, "update-ref", ref, from, to));
+  return false;
 }
 
 // `head` rebased onto `onto` in a detached throwaway worktree, which is
@@ -289,7 +329,7 @@ async function rebaseAt(
       await deps.runner("git", ["rebase", onto], dir);
     } catch (error) {
       await deps.runner("git", ["rebase", "--abort"], dir).catch(() => "");
-      throw new Error(`rebasing onto ${onto} conflicts: ${outputOf(error)}`);
+      throw error;
     }
     return {
       sha: (await deps.runner("git", ["rev-parse", "HEAD"], dir)).trim(),

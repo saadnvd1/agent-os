@@ -15,7 +15,7 @@
 import { db, type Session } from "../db";
 import type { TaskPR } from "../tasks/state";
 import { latestApproval } from "./ask-approvals";
-import { workSubject } from "./asks";
+import { openBySubject, workSubject } from "./asks";
 import { getCheck } from "./checks";
 import { markTold, queueEvent } from "./events";
 import type { SessionFacts } from "./facts";
@@ -88,6 +88,11 @@ export function armTask(task: Session): void {
   if (held.length)
     throw new Error(
       `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); only he merges it`
+    );
+  const w = armingWorkspace(task);
+  if (w && openBySubject(w, workSubject(task.id)))
+    throw new Error(
+      `${task.name} has an open ask with Saad; it merges on his answer`
     );
   if (task.peer_mirror)
     throw new Error(`${task.name} runs on a linked machine; arm it there`);
@@ -194,13 +199,17 @@ async function mergeOne(
       );
     return;
   }
-  const held = holdingEscalations(task.id);
+  // With Saad, on a gate or on a question about it: he decides, so it
+  // doesn't merge by itself meanwhile.
+  const held = holdingEscalations(task.id).map((h) => h.gate);
+  if (!held.length && openBySubject(workspaceId, workSubject(task.id)))
+    held.push("an open ask");
   if (held.length) {
     setArmed(task.id, false);
     event(
       workspaceId,
       task,
-      `task ${task.name}: disarmed, it's with Saad (${held.map((h) => h.gate).join(", ")})`
+      `task ${task.name}: disarmed, it's with Saad (${held.join(", ")})`
     );
     return;
   }
