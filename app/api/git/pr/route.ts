@@ -11,6 +11,20 @@ import {
   getBaseBranch,
 } from "@/lib/pr";
 import { generatePRContent } from "@/lib/pr-generation";
+import { GhBackoffError } from "@/lib/tasks/gh-limit";
+
+// gh's login, or why it can't be asked now: GitHub's rate limit backs every
+// gh call off, and that isn't a missing login.
+async function ghUnavailable(message: string): Promise<NextResponse | null> {
+  try {
+    if (await checkGhCli()) return null;
+  } catch (error) {
+    if (error instanceof GhBackoffError)
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    throw error;
+  }
+  return NextResponse.json({ error: message }, { status: 400 });
+}
 
 // GET /api/git/pr - Get PR status (fast - no AI generation)
 // Use ?generate=true to also generate suggested title/body (slow - uses Claude CLI)
@@ -30,15 +44,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!(await checkGhCli())) {
-    return NextResponse.json(
-      {
-        error:
-          "GitHub CLI not installed or not authenticated. Run 'gh auth login' first.",
-      },
-      { status: 400 }
-    );
-  }
+  const noGh = await ghUnavailable(
+    "GitHub CLI not installed or not authenticated. Run 'gh auth login' first."
+  );
+  if (noGh) return noGh;
 
   try {
     const [branch, baseBranch] = await Promise.all([
@@ -89,7 +98,7 @@ export async function GET(request: NextRequest) {
       {
         error: error instanceof Error ? error.message : "Failed to get PR info",
       },
-      { status: 500 }
+      { status: error instanceof GhBackoffError ? 503 : 500 }
     );
   }
 }
@@ -125,12 +134,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await checkGhCli())) {
-      return NextResponse.json(
-        { error: "GitHub CLI not installed or not authenticated" },
-        { status: 400 }
-      );
-    }
+    const noGh = await ghUnavailable(
+      "GitHub CLI not installed or not authenticated"
+    );
+    if (noGh) return noGh;
 
     const branch = await getCurrentBranch(path);
     const baseBranch = customBase || (await getBaseBranch(path));
@@ -166,7 +173,7 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       { error: `Failed to create PR: ${message}` },
-      { status: 500 }
+      { status: error instanceof GhBackoffError ? 503 : 500 }
     );
   }
 }

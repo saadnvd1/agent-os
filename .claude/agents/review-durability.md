@@ -47,7 +47,7 @@ In `lib/db/migrations.ts`: append a new `{ id, name, up }` with the next id (max
 - a new table or column the code reads without the migration that creates it
 
 **Never block the event loop**
-Flag in a route handler, a WebSocket handler, a watcher tick or anything the server runs: `execSync`/`spawnSync`, `fs.*Sync` on something that can be large or slow (a repo walk, a big file, a network mount), a `git`/`gh`/`tmux` call without a timeout, a loop over every session doing a subprocess call each without concurrency limits, `JSON.parse` of an unbounded payload, and a `better-sqlite3` query without an index on a table that grows (items, events). Use `execFile` (promisified) with a timeout.
+Flag in a route handler, a WebSocket handler, a watcher tick or anything the server runs: `execSync`/`spawnSync`, `fs.*Sync` on something that can be large or slow (a repo walk, a big file, a network mount), a `git`/`gh`/`tmux` call without a timeout, a loop over every session doing a subprocess call each without concurrency limits, `JSON.parse` of an unbounded payload, and a `better-sqlite3` query without an index on a table that grows (items, events). Use `execFile` (promisified) with a timeout. ESLint already refuses `*Sync` child_process and fs calls written in `app/api/**` (`eslint.config.mjs`); look hardest at the `lib/` code those routes and the server's ticks call, which the rule doesn't reach.
 
 ```ts
 // BAD - freezes every session while gh talks to GitHub

@@ -8,20 +8,13 @@ export const SEARCH_TIMEOUT_MS = 10_000;
 export const MAX_RESULTS_CAP = 500;
 const MAX_OUTPUT_BYTES = 5 * 1024 * 1024;
 
-let ripgrepFound = false;
-
 /**
- * Check if ripgrep is available on the system. A yes is remembered; a no is
- * asked again, so installing it counts without a restart.
+ * Check if ripgrep is available on the system
  */
-export async function isRipgrepAvailable(): Promise<boolean> {
-  if (ripgrepFound) return true;
-  ripgrepFound = await new Promise<boolean>((resolve) => {
-    execFile("rg", ["--version"], { timeout: 5000 }, (error) =>
-      resolve(!error)
-    );
+export function isRipgrepAvailable(): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile("which", ["rg"], { timeout: 5000 }, (error) => resolve(!error));
   });
-  return ripgrepFound;
 }
 
 export interface SearchOptions {
@@ -101,7 +94,8 @@ export async function searchCode(
     });
     const lines = createInterface({ input: rg.stdout, crlfDelay: Infinity });
     lines.on("line", (line) => {
-      if (stopped || !line) return;
+      // What rg printed before a stop still counts, up to the cap.
+      if (!line || matches.length >= maxResults) return;
       try {
         const parsed = JSON.parse(line);
         if (parsed.type !== "match") return;

@@ -26,7 +26,8 @@ describe.skipIf(!hasRg && !process.env.CI)("searchCode", () => {
   });
 });
 
-// A stand-in rg on PATH: prints `count` matches, then hangs for 30 s.
+// A stand-in rg on PATH: prints `count` matches, marks that it has (the
+// file "printed"), then hangs for 30 s.
 function stubRg(count: number) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "code-search-stub-"));
   const line = (i: number) =>
@@ -44,7 +45,9 @@ function stubRg(count: number) {
     path.join(dir, "rg"),
     `#!/usr/bin/env node
 const lines = ${JSON.stringify(Array.from({ length: count }, (_, i) => line(i)))};
-process.stdout.write(lines.join("\\n") + "\\n");
+process.stdout.write(lines.join("\\n") + "\\n", () =>
+  require("fs").writeFileSync(${JSON.stringify(path.join(dir, "printed"))}, "")
+);
 setTimeout(() => {}, 30000);
 `,
     { mode: 0o755 }
@@ -74,20 +77,27 @@ describe("searchCode off the event loop", () => {
     const dir = stubRg(2);
     let ticks = 0;
     const timer = setInterval(() => ticks++, 20);
-    const matches = await searchCode(dir, "hit", { timeoutMs: 400 });
+    const started = Date.now();
+    // Long enough for node to start the stub on a loaded machine; far
+    // below the 30 s it hangs.
+    const matches = await searchCode(dir, "hit", { timeoutMs: 3000 });
     clearInterval(timer);
     expect(matches.map((m) => m.data.path.text)).toEqual(["f0.ts", "f1.ts"]);
+    expect(Date.now() - started).toBeLessThan(10_000);
     expect(ticks).toBeGreaterThanOrEqual(5);
   });
 
   it("stops when the caller aborts", async () => {
     const dir = stubRg(1);
     const abort = new AbortController();
-    const search = searchCode(dir, "hit", { signal: abort.signal });
-    setTimeout(() => abort.abort(), 200);
     const started = Date.now();
+    const search = searchCode(dir, "hit", { signal: abort.signal });
+    // Abort once the stub has printed, so what it found is in hand.
+    while (!fs.existsSync(path.join(dir, "printed")))
+      await new Promise((r) => setTimeout(r, 20));
+    abort.abort();
     expect(await search).toHaveLength(1);
-    expect(Date.now() - started).toBeLessThan(5000);
+    expect(Date.now() - started).toBeLessThan(10_000);
   });
 
   it("says when rg isn't installed", async () => {

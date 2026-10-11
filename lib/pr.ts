@@ -1,5 +1,6 @@
 import { execFileSync } from "child_process";
 import { run } from "./tasks/gh";
+import { GhBackoffError } from "./tasks/gh-limit";
 
 /** The remote's default branch, or "main" when it has none. */
 export function remoteDefaultBranch(workingDir: string): string {
@@ -36,28 +37,18 @@ export interface CommitInfo {
 // Every call here waits on git, gh or the network: all of it runs off the
 // event loop, so a slow GitHub never stalls the server's other requests.
 
-const AUTH_OK_MS = 5 * 60_000;
-let ghAuthOkAt = 0;
-
 /**
- * Check if gh CLI is installed and authenticated. A yes is remembered for a
- * few minutes (every PR panel asks); a no is asked again, so a fresh
- * `gh auth login` counts at once.
+ * Check if gh CLI is installed and authenticated. Throws GhBackoffError while
+ * every gh call waits out GitHub's rate limit: that isn't a missing login.
  */
 export async function checkGhCli(): Promise<boolean> {
-  if (Date.now() - ghAuthOkAt < AUTH_OK_MS) return true;
   try {
     await run("gh", ["auth", "status"], process.cwd(), 5000);
-    ghAuthOkAt = Date.now();
     return true;
-  } catch {
+  } catch (error) {
+    if (error instanceof GhBackoffError) throw error;
     return false;
   }
-}
-
-/** Forget a remembered gh login (tests). */
-export function resetGhCliCheck(): void {
-  ghAuthOkAt = 0;
 }
 
 /**
@@ -202,7 +193,9 @@ export async function getPRForBranch(
     );
     const prs = JSON.parse(output);
     return prs.length > 0 ? prs[0] : null;
-  } catch {
+  } catch (error) {
+    // Backed off for the rate limit says nothing about whether a PR exists.
+    if (error instanceof GhBackoffError) throw error;
     return null;
   }
 }

@@ -2,10 +2,12 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkGhCli, getPRForBranch, resetGhCliCheck } from "./pr";
+import { checkGhCli, getPRForBranch } from "./pr";
+import { GhBackoffError, noteGhFailure, resetGhLimit } from "./tasks/gh-limit";
 
-// A stand-in gh on PATH that counts its runs and takes `delayMs` to answer.
-function stubGh(delayMs: number) {
+// A stand-in gh on PATH that counts its runs, takes `delayMs` to answer and
+// exits with `code`.
+function stubGh(delayMs: number, code = 0) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-async-"));
   const count = path.join(dir, "count");
   fs.writeFileSync(
@@ -13,7 +15,7 @@ function stubGh(delayMs: number) {
     `#!/usr/bin/env node
 const fs = require("fs");
 fs.appendFileSync(${JSON.stringify(count)}, "x");
-setTimeout(() => console.log("[]"), ${delayMs});
+setTimeout(() => { console.log("[]"); process.exit(${code}); }, ${delayMs});
 `,
     { mode: 0o755 }
   );
@@ -39,7 +41,7 @@ async function ticksDuring<T>(work: Promise<T>): Promise<[T, number]> {
 describe("PR reads off the event loop", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
-    resetGhCliCheck();
+    resetGhLimit();
   });
 
   it("keeps serving while gh is slow", async () => {
@@ -49,15 +51,24 @@ describe("PR reads off the event loop", () => {
     expect(ticks).toBeGreaterThanOrEqual(10);
   });
 
-  it("remembers a gh login, and asks again after a no", async () => {
-    const gh = stubGh(0);
+  it("asks gh every time, yes or no", async () => {
+    const yes = stubGh(0);
     expect(await checkGhCli()).toBe(true);
     expect(await checkGhCli()).toBe(true);
-    expect(gh.runs()).toBe(1);
+    expect(yes.runs()).toBe(2);
+    vi.unstubAllEnvs();
 
-    resetGhCliCheck();
-    fs.writeFileSync(path.join(gh.dir, "gh"), "#!/bin/sh\nexit 1\n");
+    const no = stubGh(0, 1);
     expect(await checkGhCli()).toBe(false);
     expect(await checkGhCli()).toBe(false);
+    expect(no.runs()).toBe(2);
+  });
+
+  it("says GitHub's rate limit, not a missing login, while backed off", async () => {
+    const gh = stubGh(0);
+    await noteGhFailure(["pr", "list"], { stderr: "API rate limit exceeded" });
+    await expect(checkGhCli()).rejects.toBeInstanceOf(GhBackoffError);
+    // Backed off before gh ran (the rate_limit lookup is the one run).
+    expect(gh.runs()).toBeLessThanOrEqual(1);
   });
 });
