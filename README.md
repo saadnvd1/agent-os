@@ -1173,6 +1173,23 @@ which also holds the app's first-load JavaScript to a budget
 it), and fails a pull request whose body has no Code review section for its head
 commit (run `/do-code-review` first; see [Tasks](#tasks)).
 
+### Session audits
+
+`/session-audit`, a Claude Code skill kept locally (gitignored, not in this
+repo), audits the sessions AgentOS started (tasks, chats, orchestrators and their review
+agents) for token waste and repeated manual work. Its extractor,
+`scripts/session-audit/audit.ts`, streams the sessions' Claude transcripts and
+AgentOS's own records (checks, notes, asks, messages) into a compact summary
+in a couple of seconds: context read per turn, peak context, the biggest tool
+outputs, repeated commands and errors, files re-read, polling loops, rebases,
+hand-stripped trailers and dev-instance clean-ups. The skill reads only that
+summary, ranks a plan by impact and effort, compares it with the last audit,
+and offers to start the fixes you pick as tasks.
+
+Audits quote session content, so they stay on your machine in
+`~/.agent-os/audits/` (`AGENTOS_AUDITS_DIR` to move them) and never in a repo.
+Settings → Audits (or ⌘K, "Session audits") lists and renders them.
+
 ## Mobile access
 
 **At home:** open **Settings → Devices & access** from the menu, turn on "Allow devices on this Wi-Fi",

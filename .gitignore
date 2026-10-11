@@ -72,3 +72,6 @@ progress.md
 # agentos.json dev instance
 .dev.db*
 .dev-tmux/
+
+# Local-only skills: they hold private prompts and plan templates
+.claude/skills/session-audit/

@@ -1,5 +1,6 @@
 import {
   Bell,
+  ClipboardList,
   Clock,
   GitMerge,
   LayoutGrid,
@@ -73,6 +74,14 @@ export function settingsCommands(workspaceId: string | null): PaletteCommand[] {
       keywords: ["cron", "timer", "recurring", "every day"],
       icon: Clock,
       run: () => schedulesUiActions.open(workspaceId),
+    },
+    {
+      id: "app.audits",
+      title: "Session audits",
+      group,
+      keywords: ["audit", "tokens", "waste", "report", "session-audit"],
+      icon: ClipboardList,
+      run: () => settingsUiActions.open("audits"),
     },
   ];
 }
