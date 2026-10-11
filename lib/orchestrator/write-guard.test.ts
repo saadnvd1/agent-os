@@ -346,6 +346,8 @@ describe("an orchestrator's writes", () => {
     const config = at("notes/gitconfig");
     fs.writeFileSync(config, "[core]\n\thooksPath = ~/global-hooks\n");
     vi.stubEnv("GIT_CONFIG_GLOBAL", config);
+    // git expands ~ from HOME.
+    vi.stubEnv("HOME", home);
     try {
       expect(await hooksPaths([at("dev/plain"), "global"])).toContain(
         at("global-hooks")

@@ -249,19 +249,30 @@ export async function hooksPaths(repos: string[]): Promise<string[]> {
           return "";
         throw new Error(`couldn't read git's hooks folder in ${cwd}`);
       });
-  // The user's, when it names one folder (a relative one is taken from each
-  // repo's top, so each project's answer below covers it); and each
-  // project's as git itself resolves it, from the top of its worktree.
-  const global = expandHome(
-    await run(os.homedir(), ["config", "--global", "--get", "core.hooksPath"])
-  );
+  // The user's, expanded by git (~ and ~user). A relative one is taken from
+  // each repo's top, so it names no one folder: each project's answer
+  // below covers it there. Each project's comes as git itself resolves it.
+  const global = await run(os.homedir(), [
+    "config",
+    "--global",
+    "--type=path",
+    "--get",
+    "core.hooksPath",
+  ]);
   const found = await Promise.all(
-    repos.map(async (r) =>
+    repos.map(async (r) => {
       // A project whose folder is gone has no hooks to run.
-      fs.existsSync(r)
-        ? run(r, ["rev-parse", "--path-format=absolute", "--git-path", "hooks"])
-        : ""
-    )
+      if (!fs.existsSync(r)) return "";
+      const dir = await run(r, [
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        "hooks",
+      ]);
+      if (dir !== "" && !dir.startsWith("/"))
+        throw new Error(`git named no folder for ${r}'s hooks`);
+      return dir;
+    })
   );
   const dirs = [
     ...new Set([global, ...found].filter((d) => d.startsWith("/"))),
