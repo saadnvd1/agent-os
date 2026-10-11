@@ -92,4 +92,44 @@ describe("GET /api/audits", () => {
       headline: "h",
     });
   });
+
+  it("shows another kind's headline and finding count from its index", async () => {
+    fs.writeFileSync(
+      path.join(dir, "gaps", "2026-10-10-2000.md"),
+      "---\naudited: 2026-10-10T20:00:00Z\n---\n# Gap audit\n"
+    );
+    fs.writeFileSync(
+      path.join(dir, "gaps", "index.json"),
+      JSON.stringify([
+        { id: "2026-10-10-2000", headline: "top gap", findings: 4 },
+      ])
+    );
+    const { audits } = await (await list()).json();
+    expect(audits).toEqual([
+      expect.objectContaining({
+        kind: "gaps",
+        id: "2026-10-10-2000",
+        headline: "top gap",
+        findings: 4,
+      }),
+    ]);
+  });
+  it("lists a kind's reports even when its index is broken or malformed", async () => {
+    fs.writeFileSync(
+      path.join(dir, "gaps", "2026-10-10-2000.md"),
+      "---\naudited: 2026-10-10T20:00:00Z\n---\n# Gap audit\n"
+    );
+    fs.writeFileSync(path.join(dir, "gaps", "index.json"), "not json");
+    let { audits } = await (await list()).json();
+    expect(audits).toHaveLength(1);
+    expect(audits[0].headline).toBe("");
+    expect(audits[0]).not.toHaveProperty("findings");
+
+    fs.writeFileSync(
+      path.join(dir, "gaps", "index.json"),
+      JSON.stringify([{ id: "2026-10-10-2000", findings: "4" }])
+    );
+    ({ audits } = await (await list()).json());
+    expect(audits[0]).not.toHaveProperty("findings");
+  });
 });

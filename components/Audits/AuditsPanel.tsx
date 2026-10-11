@@ -27,7 +27,10 @@ const day = (iso: string) =>
   });
 
 function stats(a: AuditListItem): string {
-  if (a.kind !== "sessions") return a.title;
+  if (a.kind !== "sessions")
+    return a.findings === undefined
+      ? a.title
+      : `${a.title} · ${a.findings} findings`;
   return `${a.sessions ?? 0} sessions · ${tokens(a.tokensRead ?? 0)} tokens · ${a.findings ?? 0} findings`;
 }
 

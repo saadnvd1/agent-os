@@ -75,3 +75,4 @@ progress.md
 
 # Local-only skills: they hold private prompts and plan templates
 .claude/skills/session-audit/
+.claude/skills/code-health-audit/
