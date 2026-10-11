@@ -72,6 +72,7 @@ export const DEMO_CHAT_READS = new Set<ChatClientMessage["type"]>([
   "history",
   "tool_body",
   "task_output",
+  "search",
 ]);
 
 /**

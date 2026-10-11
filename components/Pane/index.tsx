@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { ConductorPanel } from "@/components/ConductorPanel";
 import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
+import { openFind } from "@/components/Chat/useFind";
 import { DesktopTabBar } from "./DesktopTabBar";
 import {
   TerminalSkeleton,
@@ -402,6 +403,11 @@ export const Pane = memo(function Pane({
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
           onSelectSession={onSelectSession}
+          onFind={
+            activeTab && viewMode === "terminal" && chatSessionFor(activeTab)
+              ? () => openFind(activeTab.sessionId as string)
+              : undefined
+          }
         />
       ) : (
         <DesktopTabBar

@@ -78,8 +78,10 @@ conversation in **Messages** and can join in. [More](#agent-network)
 
 - **Chat or terminal, same conversation.** Streaming replies, steps and
   diffs, plan mode, a queue you can steer, slash commands and skills,
-  `@file`, undo, and inline charts and pages. One click hands the
-  conversation to the agent's own terminal. [More](#chat)
+  `@file`, undo, and inline charts and pages. ⌘F (Ctrl+F) finds text
+  anywhere in the conversation, tool output and older pages included, and
+  opens the step it's in. One click hands the conversation to the agent's
+  own terminal. [More](#chat)
 - **Project config.** `agentos.json` (or an existing `.dispatch.json`) gives
   each session its own ports, environment, copied files, cloned
   dependencies, a private Postgres copy, and a "Running this project"

@@ -28,7 +28,9 @@ import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { QuoteButton } from "./QuoteButton";
 import { ToolBodies, ToolGroup } from "./Tools";
-import { RowState } from "./rowState";
+import { RowState, RowStore } from "./rowState";
+import { FindBar } from "./FindBar";
+import { FIND_EVENT, isFindKey, useFind } from "./useFind";
 import { McpServers } from "./McpServers";
 import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
@@ -159,7 +161,9 @@ const Block = memo(
         <Timeline blocks={groupTimeline(b.items)} actions={undoneActions} />
       </UndoneBlock>
     ) : (
-      <Item item={b.item} actions={actions} />
+      <div data-item={b.item.id}>
+        <Item item={b.item} actions={actions} />
+      </div>
     );
   },
   (prev, next) =>
@@ -221,6 +225,7 @@ export function ChatPanel({
     queueSendNow,
     suggestion,
     requestFiles,
+    search,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -231,6 +236,7 @@ export function ChatPanel({
     stuck,
     unread,
     toBottom: toEnd,
+    release,
   } = useStickToBottom(listRef, sessionId, arrivalKey(items.at(-1)));
 
   const running = state === "running" || state === "waiting";
@@ -253,6 +259,8 @@ export function ChatPanel({
     const onKey = (e: KeyboardEvent) => {
       const root = rootRef.current;
       if (!root?.contains(e.target as Node)) return;
+      // The find bar takes its own Esc.
+      if ((e.target as Element).closest?.("[data-find-bar]")) return;
       const overlay = !!document.querySelector(OVERLAY_SELECTOR);
       const ghost = !!root.querySelector(GHOST_SELECTOR);
       const action = escapeAction(e, escape.current.running, overlay, ghost);
@@ -317,11 +325,72 @@ export function ChatPanel({
   }, [earlierTasks, items]);
   // A new conversation starts with every row closed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const rowState = useMemo(() => new Map<string, unknown>(), [sessionId]);
+  const rowState = useMemo(() => new RowStore(), [sessionId]);
   const bodies = useMemo(
     () => ({ bodies: toolBodies, request: requestToolBody, connected }),
     [toolBodies, requestToolBody, connected]
   );
+  const blocksRef = useRef(blocks);
+  useEffect(() => {
+    blocksRef.current = blocks;
+  });
+  const find = useFind({
+    search,
+    items,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    rows: rowState,
+    release,
+    scrollToBlock: useCallback(async (key: string) => {
+      const index = blocksRef.current.findIndex((b) => blockKey(b) === key);
+      if (index !== -1)
+        await listRef.current?.scrollToIndex({
+          index,
+          viewPosition: 0.3,
+          animated: false,
+        });
+    }, []),
+    scroller: useCallback(() => {
+      const el = listRef.current?.getScrollableNode();
+      return el instanceof HTMLElement ? el : null;
+    }, []),
+  });
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  });
+  // ⌘F (Ctrl+F off a Mac) in this chat, or the phone header's search
+  // button, opens the find bar; pressed again, the field takes the caret.
+  const [findFocus, setFindFocus] = useState(0);
+  const showFind = find.show;
+  const closeFind = find.close;
+  useEffect(() => {
+    const open = () => {
+      showFind();
+      setFindFocus((n) => n + 1);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const root = rootRef.current;
+      const here =
+        root?.contains(e.target as Node) ||
+        (activeRef.current && e.target === document.body);
+      if (!here || !isFindKey(e)) return;
+      e.preventDefault();
+      open();
+    };
+    const onFind = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === sessionId) open();
+    };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener(FIND_EVENT, onFind);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener(FIND_EVENT, onFind);
+    };
+  }, [sessionId, showFind]);
+  // Another conversation starts without the last one's find.
+  useEffect(() => closeFind, [sessionId, closeFind]);
   const idle = !running && connected;
   const actions: ItemActions = useMemo(
     () => ({
@@ -354,7 +423,10 @@ export function ChatPanel({
               keyExtractor={blockKey}
               getItemType={blockType}
               renderItem={({ item }) => (
-                <div className="mx-auto w-full max-w-3xl px-4 pb-4">
+                <div
+                  data-block={blockKey(item)}
+                  className="mx-auto w-full max-w-3xl px-4 pb-4"
+                >
                   <Block block={item} actions={actions} />
                 </div>
               )}
@@ -394,6 +466,17 @@ export function ChatPanel({
             />
           </ToolBodies.Provider>
         </RowState.Provider>
+        {find.open && (
+          <FindBar
+            find={find}
+            focusKey={findFocus}
+            onClose={(fromKey) => {
+              closeFind();
+              // A tap on a phone would bring up the keyboard over the match.
+              if (fromKey || !isMobile) focusComposer();
+            }}
+          />
+        )}
         {unread && !stuck && (
           <button
             type="button"

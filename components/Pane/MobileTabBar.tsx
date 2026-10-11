@@ -23,6 +23,7 @@ import {
   Plus,
   Search,
   Terminal as TerminalIcon,
+  TextSearch,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,8 @@ interface MobileTabBarProps {
   onMenuClick?: () => void;
   onViewModeChange: (mode: ViewMode) => void;
   onSelectSession?: (sessionId: string) => void;
+  // Opens find in the chat on show (there's no ⌘F on a phone).
+  onFind?: () => void;
 }
 
 export function MobileTabBar({
@@ -93,6 +96,7 @@ export function MobileTabBar({
   onMenuClick,
   onViewModeChange,
   onSelectSession,
+  onFind,
 }: MobileTabBarProps) {
   // Find current session index and calculate prev/next
   const currentIndex = session
@@ -261,6 +265,20 @@ export function MobileTabBar({
         </button>
       </div>
 
+      {onFind && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Find in conversation"
+          onClick={(e) => {
+            e.stopPropagation();
+            onFind();
+          }}
+          className="-my-1.5 h-11 w-11 shrink-0"
+        >
+          <TextSearch className="h-4 w-4" />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon-sm"

@@ -1,3 +1,5 @@
+import type { SearchResult } from "./find";
+
 /**
  * The provider-neutral shape of a chat conversation. Every driver (Claude
  * today, others later) turns its own protocol into these items; storage,
@@ -300,6 +302,8 @@ export type ChatServerMessage =
       hasMore: boolean;
     }
   | { type: "tool_body"; id: string; body: ToolBody | null }
+  // Find in the conversation: one page of results for the request `reqId`.
+  | ({ type: "search"; reqId: string; query: string } & SearchResult)
   | { type: "queue"; queue: QueuedMessage[] }
   | { type: "suggestion"; text: string | null }
   | {
@@ -348,4 +352,6 @@ export type ChatClientMessage =
   | { type: "task_output"; taskId: string }
   // Older items, from before a page's cursor.
   | { type: "history"; before: number }
-  | { type: "tool_body"; id: string };
+  | { type: "tool_body"; id: string }
+  // Older results from before `before`, a cursor from an earlier page.
+  | { type: "search"; reqId: string; query: string; before?: number };
