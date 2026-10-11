@@ -18,7 +18,6 @@ const GIT_ALLOWED = new Set([
   "show",
   "add",
   "rm",
-  "mv",
   "restore",
   "reset",
   "rev-parse",
@@ -52,6 +51,9 @@ export function aosRefusal(command: string): string | null {
       continue;
     }
     if (c === "`" || (c === "$" && command[i + 1] === "("))
+      return `Refused: ${bad}.`;
+    // $'...' and $"..." quote differently in the shell than here.
+    if (c === "$" && q !== '"' && /['"]/.test(command[i + 1] ?? ""))
       return `Refused: ${bad}.`;
     if (q === '"') {
       if (c === '"') q = null;

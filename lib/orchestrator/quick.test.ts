@@ -331,32 +331,59 @@ describe("the write guard with a quick change open", () => {
 
   it("never runs git in a repository it wrote inside the worktree", async () => {
     const sub = path.join(wt, "sub");
-    const mark = path.join(os.tmpdir(), `ran-${Date.now()}`);
-    // The files of a bare repository whose config runs a program: the
-    // write guard refuses HEAD, and git is refused anywhere but the root.
+    // The files of a bare repository whose config would run a program.
     fs.mkdirSync(path.join(sub, "refs"), { recursive: true });
     fs.mkdirSync(path.join(sub, "objects"));
     fs.writeFileSync(path.join(sub, "HEAD"), "ref: refs/heads/main\n");
     fs.writeFileSync(
       path.join(sub, "config"),
-      `[core]\n\tbare = true\n\tfsmonitor = touch ${mark}\n`
+      "[core]\n\tbare = true\n\tfsmonitor = true\n"
     );
-    for (const cmd of [`git -C ${sub} status`, `git -C ${wt}/sub/ status`])
-      expect(await bash(s, cmd), cmd).toMatch(/Refused/);
-    expect(fs.existsSync(mark)).toBe(false);
+    fs.symlinkSync(sub, path.join(wt, "sub-link"));
+    try {
+      for (const cmd of [
+        `git -C ${sub} status`,
+        `git -C ${wt}/sub/ status`,
+        `git -C ${wt}/sub-link status`,
+      ])
+        expect(await bash(s, cmd), cmd).toMatch(
+          /isn't the root of one of your quick changes/
+        );
+      // A quoted ~ is a literal folder to the shell; it must be a full path.
+      expect(
+        await bash(s, `git -C '~/${path.relative(os.homedir(), wt)}' status`)
+      ).toMatch(/full path/);
+      expect(await bash(s, `git -C ${wt} mv a b`)).toMatch(/isn't allowed/);
+      // The root itself, however it is spelled, still works.
+      for (const cmd of [
+        `git -C ${wt}/ status`,
+        `git -C ${wt}/. status`,
+        `git -C ${wt}/sub/.. status`,
+      ])
+        expect(await bash(s, cmd), cmd).toBeNull();
+    } finally {
+      fs.rmSync(sub, { recursive: true });
+      fs.rmSync(path.join(wt, "sub-link"));
+    }
     for (const f of [
       "HEAD",
+      "head",
       ".git/config",
+      ".GIT/config",
       "nested/.git/HEAD",
       ".gitattributes",
+      ".Gitattributes",
     ])
-      expect(await write(s, path.join(wt, f)), f).toMatch(/layout|configures/);
-    fs.rmSync(sub, { recursive: true });
+      expect(await write(s, path.join(wt, f)), f).toMatch(/layout/);
+    for (const f of ["src/HEADER.md", "heads.txt", "docs/.github/x.md"])
+      expect(await write(s, path.join(wt, f)), f).toBeNull();
   });
 
   it("keeps aos messages with ? ! # * and $ working", async () => {
     for (const cmd of [
       `aos notify "Done? Yes! PR #5 costs $3 *all* good"`,
+      `aos notify 'a\\' b`,
+      `aos notify 'it'"'"'s $HOME'`,
       `aos send peer 'merged: $HOME ?'`,
       `aos notify Stack landed`,
     ])
@@ -366,6 +393,14 @@ describe("the write guard with a quick change open", () => {
       `aos notify "$(id)"`,
       "aos notify `id`",
       `aos notify hi | sh`,
+      `aos notify hi > /etc/x`,
+      `aos notify hi && x`,
+      "aos notify hi\nrm -rf /",
+      "aos notify 'unclosed",
+      'aos notify "unclosed',
+      'aos notify "x`id`"',
+      "aos notify x $'\\'' ; touch /tmp/pwned ; echo \\'",
+      `aos notify 'a\\'; rm -rf /`,
     ])
       expect(await bash(s, cmd), cmd).toMatch(/Refused/);
   });

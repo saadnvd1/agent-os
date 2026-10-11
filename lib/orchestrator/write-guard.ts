@@ -322,7 +322,7 @@ async function commandRefusal(
   const read = readCommand(command);
   if (read.refusal !== null || read.dir === null) return read.refusal;
   const quick = quickWorktrees(session.id);
-  const dir = expandHome(read.dir);
+  const dir = read.dir;
   if (!dir.startsWith("/") || !quick.length)
     return `Refused: git runs only in one of your quick changes' worktrees, named by its full path (${quick.length ? quick.join(", ") : "you have none open; start one with quick_change"}).`;
   return (await isQuickRoot(dir, quick))
