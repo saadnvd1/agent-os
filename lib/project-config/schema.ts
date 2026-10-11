@@ -46,7 +46,12 @@ const deploy = z.strictObject({
   deployed: z.string().min(1),
   failed: z.string().min(1).optional(),
   health: z.string().min(1).optional(),
-  within_minutes: z.number().int().min(1).max(24 * 60).optional(),
+  within_minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .optional(),
 });
 
 const browse = z.strictObject({
