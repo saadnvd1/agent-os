@@ -32,6 +32,7 @@ if (typeof window !== "undefined") {
 }
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { Pane } from "@/components/Pane";
+import { AwayReport } from "@/components/Away/AwayReport";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewport } from "@/hooks/useViewport";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
@@ -128,6 +129,7 @@ const AppDialogs = memo(function AppDialogs() {
       <LumifyHubDialogs />
       <UsageDialog />
       <MoveDialog />
+      <AwayReport />
       <CommandPalette />
     </>
   );

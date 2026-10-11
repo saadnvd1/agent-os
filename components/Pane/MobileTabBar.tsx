@@ -27,6 +27,8 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAwayQuery } from "@/data/away";
+import { awayUntil } from "@/components/Away/time";
 import type { Session, Project } from "@/lib/db";
 import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
@@ -98,6 +100,7 @@ export function MobileTabBar({
   onSelectSession,
   onFind,
 }: MobileTabBarProps) {
+  const away = useAwayQuery().data?.away ?? null;
   // Find current session index and calculate prev/next
   const currentIndex = session
     ? sessions.findIndex((s) => s.id === session.id)
@@ -164,9 +167,19 @@ export function MobileTabBar({
             e.stopPropagation();
             onMenuClick();
           }}
-          className="h-8 w-8 shrink-0"
+          aria-label={
+            away ? `Menu (Away ${awayUntil(away.expiresAt)})` : "Menu"
+          }
+          className="relative h-8 w-8 shrink-0 after:absolute after:-inset-1.5 after:content-['']"
         >
           <Menu className="h-4 w-4" />
+          {/* The sidebar's amber cup is out of sight here: Away still shows. */}
+          {away && (
+            <span
+              aria-hidden
+              className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500"
+            />
+          )}
         </Button>
       )}
 

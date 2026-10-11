@@ -12,6 +12,7 @@ import { openAsks } from "./asks";
 import { listRules } from "./rules";
 import { shortId } from "./describe";
 import { untrusted } from "./untrusted";
+import { awayDigestLine } from "../away/brief";
 
 // About four characters a token: close enough to cap a prompt.
 export const CHARS_PER_TOKEN = 4;
@@ -23,7 +24,7 @@ const EXTERNAL_DAYS = 2;
 
 // One line, cut to length. A cut that leaves a fence around another
 // session's text open closes it, so what follows isn't read as inside it.
-const clip = (text: string, cap = LINE_CAP) => {
+export const clip = (text: string, cap = LINE_CAP) => {
   const one = text.replace(/\s+/g, " ").trim();
   if (one.length <= cap) return one;
   const cut = `${one.slice(0, cap - 3)}...`;
@@ -53,21 +54,21 @@ interface TaskRow {
   armed_at: string | null;
 }
 
-interface CheckRow {
+export interface CheckRow {
   session_id: string;
   sha: string;
   kind: string;
   status: string;
 }
 
-interface FailureRow {
+export interface FailureRow {
   session_id: string;
   gate: string;
   count: number;
   escalated_at: string | null;
 }
 
-function checksBySession(workspaceId: string): Map<string, CheckRow[]> {
+export function checksBySession(workspaceId: string): Map<string, CheckRow[]> {
   // The newest verdict of each kind per session or PR.
   const rows = db
     .prepare(
@@ -85,7 +86,9 @@ function checksBySession(workspaceId: string): Map<string, CheckRow[]> {
   return by;
 }
 
-function failuresBySession(workspaceId: string): Map<string, FailureRow[]> {
+export function failuresBySession(
+  workspaceId: string
+): Map<string, FailureRow[]> {
   const rows = db
     .prepare(
       `SELECT session_id, gate, count, escalated_at FROM orchestrator_gate_failures
@@ -98,7 +101,7 @@ function failuresBySession(workspaceId: string): Map<string, FailureRow[]> {
   return by;
 }
 
-function gateState(
+export function gateState(
   checks: CheckRow[] = [],
   failures: FailureRow[] = []
 ): string {
@@ -321,8 +324,8 @@ export function buildDigest(
 ): string {
   const checks = checksBySession(workspaceId);
   const failures = failuresBySession(workspaceId);
-  const head =
-    "## Where things stand (read from AgentOS's database as you started)";
+  const away = awayDigestLine();
+  const head = `## Where things stand (read from AgentOS's database as you started)${away ? `\n\n${away}` : ""}`;
   const body = renderDigest(
     [
       rulesSection(workspaceId),

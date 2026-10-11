@@ -73,6 +73,30 @@
       },
       "additionalProperties": false
     },
+    "deploy": {
+      "type": "object",
+      "properties": {
+        "deployed": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failed": {
+          "type": "string",
+          "minLength": 1
+        },
+        "health": {
+          "type": "string",
+          "minLength": 1
+        },
+        "within_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        }
+      },
+      "required": ["deployed"],
+      "additionalProperties": false
+    },
     "test": {
       "type": "string",
       "minLength": 1
