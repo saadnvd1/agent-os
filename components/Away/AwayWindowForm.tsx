@@ -63,7 +63,7 @@ function Form({ saved }: { saved: AwaySettings }) {
             inputMode="numeric"
             min={MIN_WINDOW_MINUTES}
             max={MAX_WINDOW_MINUTES}
-            step={5}
+            step={1}
             value={text}
             onChange={(e) => setText(e.target.value)}
             aria-label="Away window, minutes"

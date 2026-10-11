@@ -92,25 +92,29 @@ function tellAway(
   // keep an orchestrator going that nothing else has.
   if (!orchestratorActive(orchestratorId, now)) return false;
   const told = reachedWorkspaces(away.id).has(workspaceId);
-  if (!told) {
-    db.prepare(
-      `INSERT OR IGNORE INTO away_actions (away_id, workspace_id, subject, kind, key)
-       VALUES (?, ?, ?, 'told', ?)`
-    ).run(away.id, workspaceId, orchestratorId, toldKey(workspaceId));
-    addNote(
-      workspaceId,
-      `Saad turned Away on, ${untilText(away, now)}.`,
-      "away"
-    );
-  }
-  if (!told || resend)
-    queueEvent(
-      workspaceId,
-      `away:${away.id}`,
-      null,
-      awayOnLine(away, now),
-      now
-    );
+  // One transaction: a crash can't leave the marker set with the event
+  // never queued.
+  db.transaction(() => {
+    if (!told) {
+      db.prepare(
+        `INSERT OR IGNORE INTO away_actions (away_id, workspace_id, subject, kind, key)
+         VALUES (?, ?, ?, 'told', ?)`
+      ).run(away.id, workspaceId, orchestratorId, toldKey(workspaceId));
+      addNote(
+        workspaceId,
+        `Saad turned Away on, ${untilText(away, now)}.`,
+        "away"
+      );
+    }
+    if (!told || resend)
+      queueEvent(
+        workspaceId,
+        `away:${away.id}`,
+        null,
+        awayOnLine(away, now),
+        now
+      );
+  })();
   return true;
 }
 
@@ -283,12 +287,24 @@ async function mergeCommit(repo: string, pr: number): Promise<string | null> {
 
 // Each task merged while away, until its deploy is decided. Returns the
 // digest's line for each one decided now.
+// Claimed with the digest that reports it, so a crash in between can't
+// leave a deploy marked as reported that never was.
+class EmptyDigest extends Error {}
+
+interface DeployFinding {
+  subject: string;
+  kind: string;
+  key: string;
+  detail: string;
+  line: string;
+}
+
 async function checkDeploys(
   away: AwayRow,
   workspaceId: string,
   now: number
-): Promise<string[]> {
-  const lines: string[] = [];
+): Promise<DeployFinding[]> {
+  const found: DeployFinding[] = [];
   const merged = db
     .prepare(
       `SELECT s.* FROM sessions s JOIN projects p ON p.id = s.project_id
@@ -320,14 +336,20 @@ async function checkDeploys(
         : verdict.state === "failed"
           ? "deploy_failed"
           : "deploy_unchecked";
-    if (!claim(away, workspaceId, s.id, kind, `deploy:${s.id}`, verdict.detail))
+    const key = `deploy:${s.id}`;
+    if (verdict.state === "unchecked") {
+      claim(away, workspaceId, s.id, kind, key, verdict.detail);
       continue;
-    if (verdict.state === "unchecked") continue;
-    lines.push(
-      `task ${s.name}: PR #${s.pr_number ?? "?"} merged; ${verdict.state === "ok" ? verdict.detail : `deploy failed: ${verdict.detail}`}`
-    );
+    }
+    found.push({
+      subject: s.id,
+      kind,
+      key,
+      detail: verdict.detail,
+      line: `task ${s.name}: PR #${s.pr_number ?? "?"} merged; ${verdict.state === "ok" ? verdict.detail : `deploy failed: ${verdict.detail}`}`,
+    });
   }
-  return lines;
+  return found;
 }
 
 const DIGEST_HEAD =
@@ -402,32 +424,45 @@ export async function sweepWorkspace(
     const line = await rerunReview(away, workspaceId, c);
     if (line) lines.push(`- review: ${line}`);
   }
-  for (const c of flags)
-    if (claim(away, workspaceId, c.sessionId, c.kind, c.key))
-      lines.push(`- ${candidateLabel[c.kind]}: ${c.line}`);
-  for (const line of await checkDeploys(away, workspaceId, now))
-    lines.push(`- deploy: ${line}`);
-  if (!lines.length) return null;
+  const deploys = await checkDeploys(away, workspaceId, now);
+  if (!flags.length && !deploys.length && !lines.length) return null;
   // Claimed like the rest, so a period's digests are counted and a sweep
-  // that ended meanwhile sends none.
-  if (
-    !claim(
-      away,
-      workspaceId,
-      orchestratorId,
-      "digest",
-      `digest:${workspaceId}:${now}`
+  // that ended meanwhile sends none. The digest, its event and the
+  // candidates it reports commit together.
+  const send = db.transaction((): string => {
+    if (
+      !claim(
+        away,
+        workspaceId,
+        orchestratorId,
+        "digest",
+        `digest:${workspaceId}:${now}`
+      )
     )
-  )
-    return null;
-  const digest = [DIGEST_HEAD, ...lines].join("\n");
-  queueEvent(workspaceId, `away-digest:${away.id}:${now}`, null, digest, now);
-  addNote(
-    workspaceId,
-    `Away sweep: sent the orchestrator a digest of ${lines.length} ${lines.length === 1 ? "item" : "items"}.`,
-    "away"
-  );
-  return digest;
+      throw new EmptyDigest();
+    const items = [...lines];
+    for (const c of flags)
+      if (claim(away, workspaceId, c.sessionId, c.kind, c.key))
+        items.push(`- ${candidateLabel[c.kind]}: ${c.line}`);
+    for (const d of deploys)
+      if (claim(away, workspaceId, d.subject, d.kind, d.key, d.detail))
+        items.push(`- deploy: ${d.line}`);
+    if (!items.length) throw new EmptyDigest();
+    const text = [DIGEST_HEAD, ...items].join("\n");
+    queueEvent(workspaceId, `away-digest:${away.id}:${now}`, null, text, now);
+    addNote(
+      workspaceId,
+      `Away sweep: sent the orchestrator a digest of ${items.length} ${items.length === 1 ? "item" : "items"}.`,
+      "away"
+    );
+    return text;
+  });
+  try {
+    return send();
+  } catch (e) {
+    if (e instanceof EmptyDigest) return null;
+    throw e;
+  }
 }
 
 // One phone message for what came up since the last: new asks across

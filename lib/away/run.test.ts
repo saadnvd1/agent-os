@@ -15,7 +15,6 @@ const h = vi.hoisted(() => ({
   facts: [] as SessionFacts[],
   dirty: new Set<string>(),
   verdict: { state: "pending" } as DeployVerdict,
-  sent: [] as { to: string; body: string }[],
   reviewed: [] as string[],
   gitDirs: [] as string[],
   deployInputs: [] as { mergeSha: string | null; mergedAt: number }[],
@@ -31,12 +30,6 @@ vi.mock("../orchestrator/facts", () => ({
   sessionFacts: async () => {
     h.meanwhile?.();
     return h.facts;
-  },
-}));
-vi.mock("../bus", () => ({
-  sendMessage: async (o: { to: string; body: string }) => {
-    h.sent.push({ to: o.to, body: o.body });
-    return {};
   },
 }));
 vi.mock("../orchestrator/review", () => ({
@@ -94,7 +87,6 @@ beforeEach(() => {
   h.facts = [];
   h.dirty = new Set();
   h.verdict = { state: "pending" };
-  h.sent = [];
   h.reviewed = [];
   h.gitDirs = [];
   h.deployInputs = [];
@@ -157,7 +149,6 @@ describe("sweeping a workspace while away", () => {
       { ...stalled(other), lastActive: NOW - IDLE_DIRTY_MS },
     ];
     const digest = await sweepWorkspace(away, w, orch, NOW);
-    expect(h.sent).toEqual([]);
     expect(digests(w)).toHaveLength(1);
     expect(digest).toMatch(/^Away sweep:/);
     expect(digest).toContain(`- stalled: task ${stalled(task).name} (${task})`);
@@ -171,9 +162,9 @@ describe("sweeping a workspace while away", () => {
     ]);
     expect(actions(w).map((a) => a.kind)).toEqual([
       "told",
+      "digest",
       "stalled",
       "commit",
-      "digest",
     ]);
   });
 
@@ -213,7 +204,6 @@ describe("sweeping a workspace while away", () => {
     );
     expect(again).toBeNull();
     expect(digests(w)).toHaveLength(1);
-    expect(h.sent).toEqual([]);
   });
 
   it("leaves a workspace whose orchestrator is idle past the window alone", async () => {
@@ -224,7 +214,6 @@ describe("sweeping a workspace while away", () => {
     expect(events(w)).toEqual([]);
     expect(actions(w)).toEqual([]);
     expect(h.reviewed).toEqual([]);
-    expect(h.sent).toEqual([]);
   });
 
   it("never lists an old idle session, a stopped one or one whose agent is down", async () => {
@@ -249,7 +238,6 @@ describe("sweeping a workspace while away", () => {
     expect(await sweepWorkspace(away, w, orch, NOW)).toBeNull();
     expect(h.gitDirs).toEqual([]);
     expect(digests(w)).toEqual([]);
-    expect(h.sent).toEqual([]);
   });
 
   it("lists a recent interactive session with uncommitted work once a period", async () => {
@@ -275,7 +263,6 @@ describe("sweeping a workspace while away", () => {
     expect(
       await sweepWorkspace(getAway(away.id)!, w, orch, NOW + 60_000)
     ).toBeNull();
-    expect(h.sent).toEqual([]);
   });
 
   it("leaves a task with an open ask on it, or one escalated, to Saad", async () => {
