@@ -35,6 +35,8 @@ export interface FolderListing {
   parent: string | null;
   folders: string[];
   isGitRepo: boolean;
+  // The folder with every symlink resolved, for the secrets check.
+  realPath: string;
   // Set when the folder is somewhere a project shouldn't live (a Windows
   // drive under WSL).
   warning: string | null;
@@ -48,14 +50,15 @@ export async function listFolders(
   checkHost(hostId);
   const out = await run(
     hostId,
-    `cd ${shellPath(dir || "~")} && pwd && { test -e .git && echo GIT || echo NOGIT; } && find . -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | sort | head -500`
+    `cd ${shellPath(dir || "~")} && pwd && pwd -P && { test -e .git && echo GIT || echo NOGIT; } && find . -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | sort | head -500`
   );
-  const [abs, git, ...rest] = out.split("\n");
+  const [abs, real, git, ...rest] = out.split("\n");
   return {
     path: abs,
     parent: abs === "/" ? null : path.posix.dirname(abs),
     folders: rest.filter(Boolean).map((f) => f.replace(/^\.\//, "")),
     isGitRepo: git === "GIT",
+    realPath: real,
     warning: onWindowsDrive(abs) ? WINDOWS_DRIVE_WARNING : null,
   };
 }
@@ -71,7 +74,7 @@ const SECRET_DIR =
 
 export function isSecretPath(dir: string): boolean {
   const p = dir.replace(os.homedir(), "~");
-  return SECRET_DIR.test(p) || /^~\/\.config(\/|$)/.test(p);
+  return SECRET_DIR.test(p) || /^~\/\.config(\/|$)/i.test(p);
 }
 
 const folderKey = (hostId: string, dir: string) => {
@@ -112,6 +115,9 @@ export interface AddFolderOptions {
   // An existing project at the folder moves into workspaceId rather than
   // failing.
   moveExisting?: boolean;
+  // ...but only one in no workspace: taking a project from another
+  // workspace is refused (the orchestrator's limit).
+  moveOnlyUnassigned?: boolean;
   requireGit?: boolean;
 }
 
@@ -133,15 +139,20 @@ export async function addFolder(
   checkHost(hostId);
   checkWorkspace(opts.workspaceId);
   if (isSecretPath(dir)) throw new Error("That folder holds secrets");
-  const { path: abs, isGitRepo } = await listFolders(hostId, dir);
-  if (isSecretPath(abs)) throw new Error("That folder holds secrets");
+  const { path: abs, realPath, isGitRepo } = await listFolders(hostId, dir);
+  if (isSecretPath(abs) || isSecretPath(realPath))
+    throw new Error("That folder holds secrets");
   if (opts.requireGit && !isGitRepo)
     throw new Error(`${abs} isn't a git repository`);
   const workspaceId = opts.workspaceId ?? null;
-  const existing = projectAt(hostId, abs);
+  const existing = projectAt(hostId, abs) ?? projectAt(hostId, realPath);
   if (existing) {
     if (!opts.moveExisting) throw new ProjectExistsError(existing);
     const from = existing.workspace_id;
+    if (opts.moveOnlyUnassigned && from && from !== workspaceId)
+      throw new Error(
+        `${existing.name} belongs to the ${getWorkspace(from)?.name ?? "another"} workspace; only Saad moves a project between workspaces`
+      );
     const outcome =
       !workspaceId || from === workspaceId ? "unchanged" : "moved";
     if (outcome === "moved") setProjectWorkspace(existing.id, workspaceId);

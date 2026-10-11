@@ -185,10 +185,19 @@ describe("adding a project to a workspace", () => {
       "~/.config/gh",
     ])
       expect(isSecretPath(p)).toBe(true);
+    expect(isSecretPath("~/.CONFIG/gh")).toBe(true);
     expect(isSecretPath("~/dev/config-tool")).toBe(false);
     await expect(addFolder("local", "~/.ssh")).rejects.toThrow(/secrets/);
     await expect(
       addFolder("local", temp(), { requireGit: true })
     ).rejects.toThrow(/isn't a git repository/);
+  });
+
+  it("judges a symlinked folder by where it points", async () => {
+    const keys = path.join(temp(), ".ssh");
+    fs.mkdirSync(keys);
+    const link = path.join(temp(), "notes");
+    fs.symlinkSync(keys, link);
+    await expect(addFolder("local", link)).rejects.toThrow(/secrets/);
   });
 });

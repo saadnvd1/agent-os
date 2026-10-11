@@ -1,10 +1,9 @@
 import { getDefaultBranch } from "../git";
 import { addFolder } from "../project-add";
-import { getWorkspace } from "../workspaces";
 import { addNote } from "./notes";
 
 // add_project: a git repository on this machine becomes a project of this
-// workspace, or the project already there moves into it. Same path as the
+// workspace, or the project already there, in no workspace, moves into it. Same path as the
 // add dialog's, so the secrets refusal and the one-project-per-folder rule
 // hold for both.
 export async function addProject(
@@ -14,10 +13,11 @@ export async function addProject(
 ): Promise<string> {
   if (!/^(~|\/)/.test(target))
     throw new Error("Give the folder's absolute path (or one from ~)");
-  const { project, outcome, from } = await addFolder("local", target, {
+  const { project, outcome } = await addFolder("local", target, {
     workspaceId: w,
     name,
     moveExisting: true,
+    moveOnlyUnassigned: true,
     requireGit: true,
   });
   const branch = await getDefaultBranch(project.working_directory).catch(
@@ -29,7 +29,7 @@ export async function addProject(
   const what =
     outcome === "created"
       ? `Added project ${project.name}`
-      : `Moved project ${project.name} in from ${from ? (getWorkspace(from)?.name ?? "another workspace") : "no workspace"}`;
+      : `Moved project ${project.name} in from no workspace`;
   addNote(w, `${what} (${project.working_directory}).`);
   return `${what} (${at}).`;
 }

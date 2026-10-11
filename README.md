@@ -874,8 +874,9 @@ it may do on its own, and the lines that always come back to you as asks.
   linked boards' cards), plus acting tools: `send`, `start_task`,
   `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`,
   `add_project` (a git repository on the machine becomes a project of the
-  workspace, or the project already at that path moves in; folders that hold
-  secrets are refused), `note`,
+  workspace, or the project already at that path moves in from no workspace;
+  folders that hold secrets and projects of another workspace are refused),
+  `note`,
   `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm` and `ask_saad`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and

@@ -35,19 +35,29 @@ describe("add_project", () => {
     ).toBe(true);
   });
 
-  it("moves the project already at that path in, rather than making another", async () => {
-    const other = createWorkspace("Elsewhere");
+  it("moves a project in no workspace in, rather than making another", async () => {
     const mine = createWorkspace("Mine");
     const dir = repo();
-    const first = (await addFolder("local", dir, { workspaceId: other.id }))
-      .project;
+    const first = (await addFolder("local", dir)).project;
     expect(await runTool(mine.id, "add_project", { path: dir })).toMatch(
-      /^Moved project .* in from Elsewhere/
+      /^Moved project .* in from no workspace/
     );
     expect(getProject(first.id)?.workspace_id).toBe(mine.id);
     expect(await runTool(mine.id, "add_project", { path: dir })).toMatch(
       /already in this workspace/
     );
+  });
+
+  it("never takes a project from another workspace", async () => {
+    const other = createWorkspace("Elsewhere");
+    const mine = createWorkspace("Mine too");
+    const dir = repo();
+    const first = (await addFolder("local", dir, { workspaceId: other.id }))
+      .project;
+    await expect(
+      runTool(mine.id, "add_project", { path: dir })
+    ).rejects.toThrow(/belongs to the Elsewhere workspace/);
+    expect(getProject(first.id)?.workspace_id).toBe(other.id);
   });
 
   it("refuses a folder that isn't a repository, holds secrets, or is relative", async () => {
@@ -59,6 +69,21 @@ describe("add_project", () => {
     await expect(
       runTool(ws.id, "add_project", { path: "~/.ssh" })
     ).rejects.toThrow(/secrets/);
+    // A repository behind a symlink is judged by where it points.
+    const vault = path.join(
+      fs.mkdtempSync(path.join(tmpdir(), "aos-")),
+      "tokenvault"
+    );
+    fs.mkdirSync(vault);
+    execFileSync("git", ["init", "-q"], { cwd: vault });
+    const link = path.join(
+      fs.mkdtempSync(path.join(tmpdir(), "aos-")),
+      "notes"
+    );
+    fs.symlinkSync(vault, link);
+    await expect(runTool(ws.id, "add_project", { path: link })).rejects.toThrow(
+      /secrets/
+    );
     await expect(
       runTool(ws.id, "add_project", { path: "dev/thing" })
     ).rejects.toThrow(/absolute path/);
