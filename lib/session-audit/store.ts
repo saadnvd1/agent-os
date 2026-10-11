@@ -71,7 +71,7 @@ export function auditId(now = new Date()): string {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}`;
 }
 
-function writeAtomic(target: string, text: string) {
+export function writeAtomic(target: string, text: string) {
   fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   const tmp = `${target}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, text, { mode: 0o600 });
@@ -231,6 +231,22 @@ export function listAudits(): AuditListItem[] {
     } catch {
       continue;
     }
+    // A kind may keep an index.json like sessions/ does: its headline and
+    // finding count show in the list.
+    const indexed = new Map<
+      string,
+      { headline?: unknown; findings?: unknown }
+    >();
+    try {
+      const list = JSON.parse(
+        fs.readFileSync(path.join(auditsRoot(), kind, "index.json"), "utf8")
+      );
+      if (Array.isArray(list))
+        for (const e of list)
+          if (e && typeof e.id === "string") indexed.set(e.id, e);
+    } catch {
+      // No index: the reports alone.
+    }
     for (const name of names) {
       const id = name.replace(/\.md$/, "");
       if (!name.endsWith(".md") || !AUDIT_NAME.test(id) || id === "readme")
@@ -252,7 +268,10 @@ export function listAudits(): AuditListItem[] {
               .match(/^#\s+(.+)$/m)?.[1]
               .trim()
               .slice(0, 160) ?? `${kind} audit`,
-          headline: "",
+          headline: String(indexed.get(id)?.headline ?? "").slice(0, 300),
+          ...(typeof indexed.get(id)?.findings === "number"
+            ? { findings: indexed.get(id)!.findings as number }
+            : {}),
         });
       } catch {
         // Unreadable: left out rather than failing the list.

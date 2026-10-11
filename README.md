@@ -1186,8 +1186,23 @@ hand-stripped trailers and dev-instance clean-ups. The skill reads only that
 summary, ranks a plan by impact and effort, compares it with the last audit,
 and offers to start the fixes you pick as tasks.
 
-Audits quote session content, so they stay on your machine in
-`~/.agent-os/audits/<kind>/` (session audits in `sessions/`;
+### Code health audits
+
+`/code-health-audit`, also a local skill, audits this codebase for
+performance, security and duplication. A script does the measuring first:
+`scripts/code-health/prepass.ts` collects `npm audit` and outdated
+packages, first-load bundle sizes from the last build, the largest files and
+functions, copied blocks, ESLint by rule, API routes that are public or
+change state without a `lib/security` guard, commands a shell parses and SQL
+built from strings, secret shapes and machine details (redacted), and slow
+tests from a vitest JSON, into one compact summary, and compares its numbers
+with the last audit's. The skill reads that summary and the lines it points
+at, writes a ranked plan (calling out work a script could do instead of a
+model), and starts the fixes you pick as tasks.
+
+Audits quote session content and name weak spots, so they stay on your
+machine in `~/.agent-os/audits/<kind>/` (session audits in `sessions/`,
+code health in `code-health/`;
 `AGENTOS_AUDITS_DIR` moves the root) and never in a repo. Settings → Audits
 (or ⌘K, "Session audits") lists every kind's markdown reports, newest first,
 and renders them.
