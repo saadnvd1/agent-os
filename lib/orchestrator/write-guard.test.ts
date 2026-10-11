@@ -4,7 +4,11 @@ import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createWorkspace } from "@/lib/workspaces";
 import { addProjectRepository, createProject } from "@/lib/projects";
-import { guardHook } from "@/lib/chat/drivers/claude-approvals";
+import {
+  Approvals,
+  guardHook,
+  preToolUseHooks,
+} from "@/lib/chat/drivers/claude-approvals";
 import { ensureOrchestrator, orchestratorDir } from "./home";
 import {
   orchestratorToolRefusal,
@@ -28,8 +32,10 @@ beforeAll(() => {
     "dev/app/src",
     ".agent-os/worktrees/app-fix/src",
     ".agent-os/orchestrators/w1",
-    "notes",
+    "notes/repo/.git/hooks",
     ".ssh",
+    "Library/LaunchAgents",
+    "bin",
   ])
     fs.mkdirSync(at(d), { recursive: true });
   // Ways back into the repo from places that look writable.
@@ -37,11 +43,15 @@ beforeAll(() => {
   fs.symlinkSync(at("dev/app/src/new.ts"), at("notes/dangling"));
   fs.symlinkSync(at("dev/app/src"), at("notes/deep"));
   fs.symlinkSync(at(".ssh"), at("notes/keys"));
+  // A way out of the repo, so `..` by name lands back in it.
+  fs.symlinkSync(at("notes"), at("dev/app/out"));
   bounds = {
     cwd: at(".agent-os/orchestrators/w1"),
     ownDir: at(".agent-os/orchestrators/w1"),
     state: at(".agent-os"),
     repos: [at("dev/app"), at(".agent-os/worktrees")],
+    home,
+    runs: [at("Library"), at("bin")],
   };
 });
 
@@ -95,6 +105,10 @@ describe("writeRefusal", () => {
       /project repository/
     );
     expect(await refused(raw("dev/./app/x.ts"))).toMatch(/project repository/);
+    // Out through a link, but a tool taking `..` by name writes into the repo.
+    expect(await refused(raw("dev/app/out/../x.ts"))).toMatch(
+      /project repository/
+    );
   });
 
   it("refuses its own folder's way out through ..", async () => {
@@ -122,9 +136,40 @@ describe("writeRefusal", () => {
       at("notes/.env.local"),
       at("notes/server.pem"),
       at("notes/keys/id_ed25519"),
+      // Only the link's target makes these secret.
+      at("notes/keys/authorized_keys"),
+      at("notes/keys/config"),
+      at(".config/gh/hosts.yml"),
+      at(".docker/config.json"),
     ])
       expect(await refused(p), p).toMatch(/secrets/);
     expect(await refused(at("notes/environment.md"))).toBeNull();
+  });
+
+  it("refuses files that make something run", async () => {
+    for (const p of [
+      at(".zshenv"),
+      at(".zshrc"),
+      at(".profile"),
+      at(".gitconfig"),
+      at(".config/git/config"),
+      at(".claude/settings.json"),
+      at(".claude/.context-cost/limits.json"),
+      at(".local/bin/aos"),
+      at(".agent-os/orchestrators/w1/.claude/settings.local.json"),
+      at(".agent-os/orchestrators/w1/.mcp.json"),
+      at(".agent-os/orchestrators/w1/CLAUDE.md"),
+      at("notes/repo/.git/hooks/pre-commit"),
+      at("notes/repo/.git/config"),
+      at("notes/.envrc"),
+      at("notes/site.pth"),
+      at("Library/LaunchAgents/x.plist"),
+      at("bin/aos"),
+    ])
+      expect(await refused(p), p).toMatch(/configures what runs/);
+    // A dotfile below the top of home is ordinary.
+    expect(await refused(at("notes/.gitignore"))).toBeNull();
+    expect(await refused(at("notes/repo/README.md"))).toBeNull();
   });
 
   it("refuses a path with no file", async () => {
@@ -182,6 +227,45 @@ describe("an orchestrator's writes", () => {
     expect(await orchestratorToolRefusal(o, "Write", {})).toMatch(
       /No file path/
     );
+  });
+
+  it("is the guard its chat worker starts with", async () => {
+    const { orchestratorExtras } = await import("./worker");
+    const w = createWorkspace("Wired");
+    const o = ensureOrchestrator(w.id);
+    const extras = await orchestratorExtras(o);
+    expect(extras.allowedTools).toContain("Write");
+    expect(
+      await extras.toolGuard!("Write", { file_path: at("dev/guarded/a.ts") })
+    ).toMatch(/project repository/);
+    expect(
+      await extras.toolGuard!("Edit", { file_path: at("notes/ok.md") })
+    ).toBeNull();
+  });
+
+  it("runs as a PreToolUse hook on every tool call", async () => {
+    const guard = vi.fn(async () => "no");
+    const approvals = () =>
+      new Approvals(
+        () => {},
+        () => undefined
+      );
+    const hooks = preToolUseHooks(approvals(), guard);
+    const last = hooks[hooks.length - 1];
+    expect(last.matcher).toBeUndefined();
+    expect(
+      await last.hooks[0](
+        {
+          hook_event_name: "PreToolUse",
+          tool_name: "Write",
+          tool_input: { file_path: "/x" },
+        } as never,
+        "t",
+        { signal: new AbortController().signal }
+      )
+    ).toMatchObject({ hookSpecificOutput: { permissionDecision: "deny" } });
+    expect(guard).toHaveBeenCalledWith("Write", { file_path: "/x" });
+    expect(preToolUseHooks(approvals())).toHaveLength(2);
   });
 
   it("refuses through the PreToolUse hook, and when the guard fails", async () => {

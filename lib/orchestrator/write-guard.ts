@@ -2,8 +2,12 @@
  * Where an orchestrator may write. Anywhere on the machine except the
  * workspace's project repositories and their task worktrees (code changes go
  * through tasks, so the merge gates keep meaning something), AgentOS's own
- * install and state (all of ~/.agent-os but its own folder), and secret
- * files. Its chat worker checks every Write, Edit and NotebookEdit here
+ * install and state (all of ~/.agent-os but its own folder), secret files,
+ * and files that make something run: the dotfiles and dot-folders in its
+ * home (shell, git, Claude and tool config), ~/Library, the folders on PATH,
+ * and any .git, .claude, .mcp.json, CLAUDE.md or the like. A write to one of
+ * those would hand it a shell, or run code in AgentOS's own git, without
+ * touching a protected path itself. Its chat worker checks every Write, Edit and NotebookEdit here
  * before it runs (a PreToolUse hook), on the path with every symlink and
  * `..` resolved the way the system will resolve it.
  */
@@ -15,6 +19,7 @@ import { db, type Session } from "../db";
 import { isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
+import { LIMITS_FILE } from "./usage";
 
 // The tools that write a file, and the argument naming it.
 export const WRITE_TOOLS: Record<string, string> = {
@@ -33,7 +38,16 @@ export interface WriteBounds {
   state: string;
   // Project repositories, task worktrees and AgentOS's install.
   repos: string[];
+  // Its home: no dotfile or dot-folder in it may be written.
+  home: string;
+  // Folders whose files run (~/Library, PATH, the usage brake's input...).
+  runs: string[];
 }
+
+// Wherever they are, files that configure what an agent, git or a
+// language runtime runs.
+const RUNS_CODE =
+  /(^|\/)(\.git|\.claude|\.codex|\.cursor|\.vscode|\.husky|\.githooks)(\/|$)|(^|\/)(\.mcp\.json|\.claude\.json|CLAUDE(\.local)?\.md|AGENTS\.md|\.envrc|\.gitconfig|\.gitattributes|\.gitmodules|sitecustomize\.py|usercustomize\.py)$|\.pth$/i;
 
 const MAX_LINKS = 40;
 
@@ -107,6 +121,8 @@ export async function writeRefusal(
   let repos: string[];
   let state: string;
   let ownDir: string;
+  let home: string;
+  let runs: string[];
   try {
     // As written, and with `..` taken by name first, as a tool that
     // normalises the path before opening it would: both must be allowed.
@@ -118,6 +134,8 @@ export async function writeRefusal(
     repos = await Promise.all(bounds.repos.map((r) => physicalPath(r)));
     state = await physicalPath(bounds.state);
     ownDir = await physicalPath(bounds.ownDir);
+    home = await physicalPath(bounds.home);
+    runs = await Promise.all(bounds.runs.map((r) => physicalPath(r)));
   } catch (e) {
     return `Couldn't resolve ${filePath}: ${(e as Error).message}.`;
   }
@@ -129,6 +147,18 @@ export async function writeRefusal(
       return `${filePath} is in AgentOS's own state (${state}); you may write only in your folder, ${ownDir}.`;
     if (isSecretPath(target) || isSecretPath(filePath))
       return `${filePath} holds or guards secrets; orchestrators never write those.`;
+    const runsIn = runs.find((r) => within(target, r));
+    if (
+      RUNS_CODE.test(target) ||
+      RUNS_CODE.test(filePath) ||
+      runsIn ||
+      (within(target, home) &&
+        !within(target, ownDir) &&
+        key(target)
+          .slice(key(home).length + 1)
+          .startsWith("."))
+    )
+      return `${filePath} configures what runs (shell, git, agent or tool config${runsIn ? `, in ${runsIn}` : ""}); orchestrators never write those.`;
   }
   return null;
 }
@@ -154,6 +184,13 @@ export function orchestratorWriteBounds(session: Session): WriteBounds {
   );
   return {
     cwd: expandHome(session.working_directory),
+    home: os.homedir(),
+    runs: [
+      path.join(os.homedir(), "Library"),
+      path.dirname(LIMITS_FILE),
+      ...(process.env.XDG_CONFIG_HOME ? [process.env.XDG_CONFIG_HOME] : []),
+      ...(process.env.PATH ?? "").split(":").filter((d) => d.startsWith("/")),
+    ],
     ownDir: orchestratorDir(session.workspace_id ?? ""),
     state: path.join(os.homedir(), ".agent-os"),
     repos: [

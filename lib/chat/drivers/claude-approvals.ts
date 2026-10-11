@@ -2,6 +2,7 @@ import fs from "fs";
 import type {
   CanUseTool,
   HookCallback,
+  HookCallbackMatcher,
   PermissionMode,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -255,4 +256,22 @@ export function guardHook(guard: ToolGuard): HookCallback {
       },
     };
   };
+}
+
+// What runs before each tool call: questions and plans become cards, and a
+// role's guard (an orchestrator's, on where it writes) sees every call.
+export function preToolUseHooks(
+  approvals: Approvals,
+  guard?: ToolGuard
+): HookCallbackMatcher[] {
+  return [
+    {
+      matcher: "AskUserQuestion",
+      hooks: [approvals.askQuestions],
+      // The reader may take a while to answer.
+      timeout: 24 * 60 * 60,
+    },
+    { matcher: "ExitPlanMode", hooks: [approvals.proposePlan] },
+    ...(guard ? [{ hooks: [guardHook(guard)] }] : []),
+  ];
 }

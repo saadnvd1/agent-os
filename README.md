@@ -885,10 +885,15 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Files:** it reads anywhere and writes (Write, Edit, NotebookEdit)
   anywhere except a project repository, a task worktree
   (`~/.agent-os/worktrees`), AgentOS's own install and state (all of
-  `~/.agent-os` but its own folder), and secret files (`.env`, keys,
-  `~/.ssh`, `~/.aws`, tokenvault and the like; the list the merge gates use
-  for secrets handling, `lib/secret-paths.ts`). Code changes to a project go
-  through a task, so its PR still passes CI, review and scope. Its chat
+  `~/.agent-os` but its own folder), secret files (`.env`, keys, `~/.ssh`,
+  `~/.aws`, `gh`'s token, tokenvault and the like; the list the merge gates
+  use for secrets handling, `lib/secret-paths.ts`), and files that make
+  something run: dotfiles and dot-folders at the top of its home (shell, git,
+  Claude and tool config, the usage brake's `limits.json`), `~/Library`, the
+  folders on `PATH`, and any `.git`, `.claude`, `.mcp.json`, `CLAUDE.md` or
+  `AGENTS.md`, since writing one would give it a shell or run code in
+  AgentOS's own git. Code changes to a project go through a task, so its PR
+  still passes CI, review and scope. Its chat
   worker checks every write in a PreToolUse hook before it runs, on the path
   with symlinks and `..` resolved as the system will, and refuses with the
   reason; the repositories are read from the database on each write, so a
