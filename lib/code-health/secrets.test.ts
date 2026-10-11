@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redact, secretScan } from "./secrets";
+import { redact, redactSecrets, secretScan } from "./secrets";
 
 // Built at runtime so no credential-shaped literal is committed.
 const fake = (prefix: string, n: number) =>
@@ -52,6 +52,15 @@ describe("secretScan", () => {
         { path: "public/icon.png", text: key },
       ]).secrets
     ).toEqual([]);
+  });
+});
+
+describe("redactSecrets", () => {
+  it("cuts a bearer token in a header to its stub", () => {
+    const token = fake("", 40);
+    const out = redactSecrets(`curl -H "Authorization: Bearer ${token}" $URL`);
+    expect(out).not.toContain(token);
+    expect(out).toContain("Authorization: Bear…");
   });
 });
 

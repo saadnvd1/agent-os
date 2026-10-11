@@ -29,6 +29,7 @@ const PATTERNS: { kind: string; re: RegExp }[] = [
     kind: "jwt",
     re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
   },
+  { kind: "bearer-token", re: /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/g },
   {
     kind: "assigned-secret",
     re: /\b(?:api[_-]?key|secret|token|password|passwd)\b["']?\s*[:=]\s*["'][A-Za-z0-9+/_.=-]{24,}["']/gi,
