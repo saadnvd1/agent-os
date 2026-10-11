@@ -236,6 +236,51 @@ const reviewNow = (
 };
 
 describe("review", () => {
+  it("records what each reviewer and scope run cost, and says it with the verdict", async () => {
+    const t = setup({ card: true });
+    const r = reviewer("pass");
+    const metered = async (run: ClaudeRun) => {
+      run.onUsage?.({
+        model: "claude-opus-5-5",
+        inputTokens: 10,
+        cacheWriteTokens: 20_000,
+        cacheReadTokens: 180_000,
+        outputTokens: 3_000,
+        costUsd: 0.42,
+        durationMs: 65_000,
+      });
+      return r.claude(run);
+    };
+    const text = await review(t.w, "add-a", { wait: true, claude: metered });
+    expect(text).toMatch(
+      /: pass\. \(2 runs · 406k tokens · \$0\.84 · 2m 10s · claude-opus-5-5\)/
+    );
+    expect(
+      db
+        .prepare(
+          `SELECT kind, label, pr_number, sha, cache_read_tokens, duration_ms FROM check_runs WHERE session_id = ? ORDER BY id`
+        )
+        .all(t.task)
+    ).toEqual([
+      {
+        kind: "review",
+        label: "task add-a",
+        pr_number: 7,
+        sha: t.sha,
+        cache_read_tokens: 180_000,
+        duration_ms: 65_000,
+      },
+      {
+        kind: "scope",
+        label: "task add-a",
+        pr_number: 7,
+        sha: t.sha,
+        cache_read_tokens: 180_000,
+        duration_ms: 65_000,
+      },
+    ]);
+  });
+
   it("runs read-only in a checkout of the exact head commit and stores it per sha", async () => {
     const t = setup();
     const { text, runs } = await reviewNow(t.w);

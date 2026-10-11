@@ -9,6 +9,7 @@
  */
 
 import { spawn } from "child_process";
+import { runUsageOf, type RunUsage } from "../usage/check-runs";
 
 export interface ClaudeRun {
   cwd: string;
@@ -22,6 +23,8 @@ export interface ClaudeRun {
   timeoutMs?: number;
   // A model alias or id; the review model (or the CLI's default) otherwise.
   model?: string;
+  // What the run cost, from its result, even when it failed.
+  onUsage?: (usage: RunUsage) => void;
 }
 
 export type ClaudeRunner = (run: ClaudeRun) => Promise<unknown>;
@@ -115,6 +118,8 @@ export const runClaude: ClaudeRunner = (run) =>
           result?: string;
           structured_output?: unknown;
         };
+        const usage = runUsageOf(result);
+        if (usage) run.onUsage?.(usage);
         if (result.is_error || result.structured_output === undefined)
           throw new Error(result.result || "No answer");
         resolve(result.structured_output);

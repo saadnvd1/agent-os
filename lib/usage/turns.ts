@@ -68,3 +68,31 @@ export function recordTurn(
   })();
   return totals;
 }
+
+// Records one compaction: who ran it ("auto" is the agent's own, at its
+// auto-compact window; "threshold" and "stale" are AgentOS's before a
+// message; "manual" is a /compact someone typed), and the context before
+// and after when the agent said.
+export function recordCompaction(
+  session: Pick<Session, "id" | "name" | "workspace_id">,
+  c: { trigger: string; before?: number; after?: number },
+  at = Date.now()
+): void {
+  const current = db
+    .prepare(`SELECT name, workspace_id FROM sessions WHERE id = ?`)
+    .get(session.id) as
+    | { name: string; workspace_id: string | null }
+    | undefined;
+  db.prepare(
+    `INSERT INTO chat_compactions (session_id, session_name, workspace_id, at, trigger, before_tokens, after_tokens)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    session.id,
+    current?.name ?? session.name,
+    current?.workspace_id ?? session.workspace_id,
+    at,
+    c.trigger,
+    c.before ?? null,
+    c.after ?? null
+  );
+}

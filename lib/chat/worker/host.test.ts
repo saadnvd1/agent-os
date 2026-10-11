@@ -1562,6 +1562,12 @@ describe("ChatHost compacts a stale chat before a message", () => {
           id
         )
     );
+  const compactions = (id: string) =>
+    getDb()
+      .prepare(
+        `SELECT trigger, before_tokens, after_tokens FROM chat_compactions WHERE session_id = ? ORDER BY id`
+      )
+      .all(id);
   const sentTexts = (c: { send: { mock: { calls: unknown[][] } } }) =>
     c.send.mock.calls.map((call) => call[0]);
 
@@ -1631,6 +1637,27 @@ describe("ChatHost compacts a stale chat before a message", () => {
     // Its line comes before the message it went ahead of.
     const order = items.map((i) => i.id);
     expect(order.indexOf("c1")).toBeLessThan(order.indexOf("m1"));
+    // Kept for the usage history, once, with the size after.
+    expect(compactions(id)).toEqual([
+      { trigger: "stale", before_tokens: 412_000, after_tokens: 38_000 },
+    ]);
+    // The agent compacting itself at its window is kept too.
+    conversation.events.push({
+      type: "item",
+      item: {
+        id: "c2",
+        kind: "compacted",
+        trigger: "auto",
+        before: 151_000,
+        createdAt: 3,
+      },
+    });
+    await tick();
+    expect(compactions(id).at(-1)).toEqual({
+      trigger: "auto",
+      before_tokens: 151_000,
+      after_tokens: null,
+    });
     host.close();
   });
 

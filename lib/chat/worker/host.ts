@@ -29,7 +29,11 @@ import {
 } from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
 import { isHeld } from "../hold";
-import { recordTurn, startingTotals } from "../../usage/turns";
+import {
+  recordCompaction,
+  recordTurn,
+  startingTotals,
+} from "../../usage/turns";
 import {
   VISUALS_BRIEF,
   VISUALS_SERVER,
@@ -137,6 +141,7 @@ export class ChatHost {
   } | null = null;
   // Its line, until the agent's next measure gives the size after.
   private compactedLine: Extract<ChatItem, { kind: "compacted" }> | null = null;
+  private compactedBy = "threshold";
   // An orchestrator gone stale starts over rather than compacting.
   private staleRefresh: Staleness | null = null;
   readonly done: Promise<void>;
@@ -254,8 +259,10 @@ export class ChatHost {
           // a failed one printed still shows.
           if (this.compacting?.done && e.item.kind === "command_output")
             continue;
-          if (this.compacting && e.item.kind === "compacted")
-            e.item = this.compactedItem(e.item);
+          if (e.item.kind === "compacted") {
+            if (this.compacting) e.item = this.compactedItem(e.item);
+            else this.logCompacted(e.item, e.item.trigger ?? "manual");
+          }
           if ("streaming" in e.item && e.item.streaming)
             this.streaming.set(e.item.id, e.item);
           else this.streaming.delete(e.item.id);
@@ -738,8 +745,9 @@ export class ChatHost {
       idleMs: this.compacting?.idleMs,
       before: item.before ?? this.compacting?.before,
     };
+    this.compactedBy = line.idleMs !== undefined ? "stale" : "threshold";
     this.compactedLine = line.after === undefined ? line : null;
-    if (line.after !== undefined) this.logCompacted(line);
+    if (line.after !== undefined) this.logCompacted(line, this.compactedBy);
     return line;
   }
 
@@ -750,13 +758,26 @@ export class ChatHost {
     this.compactedLine = null;
     const settled = { ...line, after: usedTokens };
     this.record(settled);
-    this.logCompacted(settled);
+    this.logCompacted(settled, this.compactedBy);
   }
 
-  private logCompacted(line: { before?: number; after?: number }): void {
+  // Logged, and kept for the usage history (lib/usage/turns).
+  private logCompacted(
+    line: { before?: number; after?: number },
+    trigger: string
+  ): void {
     console.error(
-      `${new Date().toISOString()} compacted ${this.session.id}: ${line.before ?? "?"} -> ${line.after ?? "?"} tokens`
+      `${new Date().toISOString()} compacted ${this.session.id} (${trigger}): ${line.before ?? "?"} -> ${line.after ?? "?"} tokens`
     );
+    try {
+      recordCompaction(this.session, {
+        trigger,
+        before: line.before,
+        after: line.after,
+      });
+    } catch (e) {
+      console.error(`recording ${this.session.id}'s compaction:`, e);
+    }
   }
 
   // Past its threshold, once: it retires at the next turn boundary, as for

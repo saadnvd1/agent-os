@@ -334,7 +334,12 @@ window you pick; on a phone, attach a screenshot as a photo.
 **Usage** (the sidebar's ⋯ menu, or the palette) shows the account's 5-hour
 and weekly windows, and what chats cost today, over 7 or 30 days, by day,
 workspace and session. Costs are the agent's own estimates, recorded as each
-turn ends.
+turn ends. **Gate reviews** below it shows what the orchestrator's
+independent reviewer and scope check cost, by PR: they run as `claude -p`
+and leave no transcript, so each run's tokens, model and duration are read
+from its JSON result into `check_runs`, and the review's verdict says them
+too. Every compaction is kept in `chat_compactions` (who ran it, and the
+context before and after), so cost per task can be compared by date.
 
 **Esc** stops a running turn, as it does in Claude Code's terminal, unless a
 menu, dialog or the command list is open (those close first). On a phone the

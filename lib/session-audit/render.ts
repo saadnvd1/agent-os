@@ -427,7 +427,7 @@ export function renderSummary(
     )
   );
   out.push(
-    "\nThe reviewer the orchestrator runs (`review`) uses `claude -p --no-session-persistence` and leaves no transcript; reviews are counted from the checks above and from do-code-review subagents."
+    "\nThe reviewer the orchestrator runs (`review`) uses `claude -p --no-session-persistence` and leaves no transcript; each run's tokens are recorded in `check_runs` and shown in Usage."
   );
   return out.join("\n") + "\n";
 }
