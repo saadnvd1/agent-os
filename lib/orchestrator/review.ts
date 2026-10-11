@@ -272,21 +272,20 @@ export async function review(
     return `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
   const pr = await prFor(task, true);
   if (!pr?.head) throw new Error(`${task.name} has no PR to review yet`);
-  return reviewAt(
-    workspaceId,
-    {
-      id: task.id,
-      name: task.name,
-      label: `task ${task.name}`,
-      goal: task.task_prompt ?? task.name,
-      repo: repoOf(task),
-      refs: task,
-      pr,
-      task,
-    },
-    pr.head,
-    opts
-  );
+  return reviewAt(workspaceId, taskReviewTarget(task, pr), pr.head, opts);
+}
+
+export function taskReviewTarget(task: Session, pr: TaskPR): ReviewTarget {
+  return {
+    id: task.id,
+    name: task.name,
+    label: `task ${task.name}`,
+    goal: task.task_prompt ?? task.name,
+    repo: repoOf(task),
+    refs: task,
+    pr,
+    task,
+  };
 }
 
 const INTERRUPTED = "Interrupted by a restart";

@@ -21,6 +21,7 @@ import { PAUSED_REFUSAL } from "./pause";
 import { readSession } from "./read";
 import { reviewTarget, signOffTarget } from "./external-gates";
 import { land } from "./signoff";
+import { arm, disarm } from "./armed";
 import { parseArgs as p, type ToolName } from "./tool-schemas";
 
 export { isToolName, TOOLS, type ToolName } from "./tool-schemas";
@@ -38,6 +39,7 @@ const ACTING = new Set<ToolName>([
   "done",
   "review",
   "sign_off",
+  "arm",
 ]);
 
 // The orchestrator's tools, each scoped to its workspace and its arguments
@@ -126,6 +128,10 @@ export async function runTool(
     }
     case "sign_off":
       return signOffTarget(w, p(tool, raw).task);
+    case "arm":
+      return arm(w, p(tool, raw).task);
+    case "disarm":
+      return disarm(w, p(tool, raw).task);
     case "ask_saad":
       return askSaad(w, p(tool, raw));
   }

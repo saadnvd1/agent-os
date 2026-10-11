@@ -24,6 +24,8 @@ export const TOOL_NAMES = {
   note: name("note"),
   review: name("review"),
   sign_off: name("sign_off"),
+  arm: name("arm"),
+  disarm: name("disarm"),
   ask_saad: name("ask_saad"),
 } as const;
 

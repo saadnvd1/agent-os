@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, KanbanSquare, SquareTerminal } from "lucide-react";
+import {
+  ExternalLink,
+  GitMerge,
+  KanbanSquare,
+  SquareTerminal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TaskState, TaskView } from "@/lib/tasks";
 import { isFinished } from "@/lib/tasks/state";
-import { useDropTask, useSignOffTask } from "@/data/tasks";
+import { useArmTask, useDropTask, useSignOffTask } from "@/data/tasks";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { cn } from "@/lib/utils";
@@ -30,12 +35,14 @@ const STATE: Record<TaskState, { label: string; tone: string }> = {
 export function TaskRow({ task }: { task: TaskView }) {
   const signOff = useSignOffTask();
   const drop = useDropTask();
+  const arm = useArmTask();
   const [confirmDrop, setConfirmDrop] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const live = !isFinished(task.state);
   const error =
     signOff.error?.message ||
     drop.error?.message ||
+    arm.error?.message ||
     moveError ||
     task.hostError;
   const settingUp = live && task.setup?.status === "running";
@@ -124,6 +131,23 @@ export function TaskRow({ task }: { task: TaskView }) {
               onClick={() => setConfirmDrop(true)}
             >
               Drop
+            </Button>
+          )}
+          {task.pr?.state === "OPEN" && !task.hostId && (
+            <Button
+              size="sm"
+              variant={task.armed ? "secondary" : "outline"}
+              aria-pressed={!!task.armed}
+              title={
+                task.armed
+                  ? "Merges by itself once every gate passes. Click to disarm."
+                  : "Merge by itself once every gate passes"
+              }
+              disabled={arm.isPending}
+              onClick={() => arm.mutate({ id: task.id, armed: !task.armed })}
+            >
+              <GitMerge className="h-3.5 w-3.5" />
+              {task.armed ? "Armed" : "Arm merge"}
             </Button>
           )}
           {task.state === "review" && (

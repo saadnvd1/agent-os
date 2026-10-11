@@ -83,6 +83,8 @@ export interface TaskView {
   hostName: string | null;
   // Why that machine couldn't say how it's doing.
   hostError: string | null;
+  // Merges by itself once every gate passes (orchestrator/armed.ts).
+  armed?: boolean;
 }
 
 export async function createTask(opts: {
@@ -337,6 +339,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     hostId: null,
     hostName: null,
     hostError: null,
+    armed: !!session.merge_armed_at,
   };
 }
 

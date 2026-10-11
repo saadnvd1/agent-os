@@ -23,9 +23,10 @@ import { outputOf, restackBranch, type Runner } from "./git";
 // head it pushed still covers the head AgentOS rebased it to. Not when the
 // worktree had commits the task never pushed (the restack pushes them, so
 // no review covers them). Restacked again without the task pushing, it
-// keeps pointing at the task's own head.
-function restackedHeads(
-  item: StackItemRow,
+// keeps pointing at the task's own head. A task's automatic rebase onto
+// its base (orchestrator/rebase.ts) records the same way.
+export function restackedHeads(
+  item: Pick<StackItemRow, "restacked_from" | "restacked_to">,
   move: { from: string; to: string; unpushed: boolean }
 ): Pick<StackItemRow, "restacked_from" | "restacked_to"> {
   // A retry pushing the commit an interrupted restack already recorded.
@@ -52,11 +53,15 @@ export interface RestackDeps {
 
 // From the user as far as the agent reads it, as before; chat shows it as
 // AgentOS's.
-export const stackNotice = (to: string, body: string) => ({
+export const stackNotice = (
+  to: string,
+  body: string,
+  label = "AgentOS stacks"
+) => ({
   fromId: null,
   to,
   body,
-  origin: { kind: "system", label: "AgentOS stacks", body } as const,
+  origin: { kind: "system", label, body } as const,
 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

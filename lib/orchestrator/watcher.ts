@@ -15,6 +15,8 @@ import { listOrchestrators } from "./home";
 import { BRAKE_SUBJECT, openAsks } from "./asks";
 import { settleStaleAsks } from "./ask-settle";
 import { brakesOn, liftBrake } from "./brakes";
+import { anyArmed, mergeArmed } from "./armed";
+import { rebaseConflicting } from "./rebase";
 
 // Asks that stopped needing Saad: their task or PR finished some other
 // way, or brakes lifted with nothing trying to start.
@@ -51,10 +53,30 @@ export async function diffWorkspace(
     subjects,
     now
   );
+  mergePipeline(workspaceId, facts);
   const working =
     facts.some((f) => f.status === "running") ||
-    stacks.some((s) => s.status === "running" || s.status === "landing");
+    stacks.some((s) => s.status === "running" || s.status === "landing") ||
+    anyArmed(workspaceId);
   return nextDiffAt(now, facts, working);
+}
+
+// Rebases what conflicts with its base, then merges what's armed and
+// passes. In the background, one run per workspace at a time, so a git
+// fetch or a merge never holds up event delivery.
+const piping = new Set<string>();
+
+function mergePipeline(workspaceId: string, facts: SessionFacts[]): void {
+  if (piping.has(workspaceId)) return;
+  piping.add(workspaceId);
+  void (async () => {
+    await rebaseConflicting(workspaceId, facts);
+    await mergeArmed(workspaceId, facts);
+  })()
+    .catch((error) =>
+      console.error(`Merge pipeline for ${workspaceId}:`, error)
+    )
+    .finally(() => piping.delete(workspaceId));
 }
 
 // Soon while anything works, and right as a PR's CI settles, so its

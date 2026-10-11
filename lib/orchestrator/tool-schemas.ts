@@ -108,6 +108,8 @@ export const TOOL_SHAPES = {
       .describe("Run it again even if this commit has a verdict"),
   },
   sign_off: { task },
+  arm: { task },
+  disarm: { task },
   ask_saad: {
     title: z
       .string()
