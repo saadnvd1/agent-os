@@ -85,10 +85,19 @@ async function ownHooks(worktree: string): Promise<string> {
   return sh(path.join(common, "hooks"));
 }
 
+// Husky writes `.husky/_` on `npm install`, and it's gitignored, so a new
+// worktree has none and its hooks would silently not run: run the hook
+// script from `.husky/` the way husky's own runner does.
 const delegate = (own: string, hook: string) =>
   `root="$(git rev-parse --show-toplevel)"
 own=${own}/${hook}
 [ -x "$own" ] && exec "$own" "$@"
+case "$own" in
+*/.husky/_/${hook})
+  script="\${own%/_/${hook}}/${hook}"
+  [ -f "$script" ] && [ "\${HUSKY-}" != 0 ] && PATH="node_modules/.bin:$PATH" exec sh -e "$script" "$@"
+  ;;
+esac
 exit 0
 `;
 

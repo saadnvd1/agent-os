@@ -1262,8 +1262,16 @@ descriptors, child processes and spawns per minute; `scripts/perf/execs.mjs
 spawns with eslogger (macOS) or strace (Linux) and need passwordless sudo for
 that one number. Run them on a machine with room to spare.
 
-A pre-commit hook formats and lints staged files, then typechecks and runs the
-tests. CI runs `scripts/check --build` on every pull request and push to main,
+A pre-commit hook (`.husky/pre-commit`, installed by `npm install`) checks
+only what is staged, in well under two seconds: `prettier --check`, failing
+with the `npx prettier --write …` command that fixes it, and a scan of the
+added lines for token-shaped secrets with the merge gate's own rule
+(`scripts/hooks/staged-secrets.ts` reads `secretsIn` from
+`lib/orchestrator/diff.ts`), naming the file and line. Build a test's fake
+token at runtime (`"gh" + "p_" + "a".repeat(36)`) rather than writing it
+whole. It runs in the worktrees AgentOS makes too, which have no `.husky/_`
+until `npm install` runs in them. Typecheck, lint and tests are left to CI.
+In an emergency, `git commit --no-verify` skips it. CI runs `scripts/check --build` on every pull request and push to main,
 which also holds the app's first-load JavaScript to a budget
 (`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
 it), and fails a pull request whose body has no Code review section for its head
