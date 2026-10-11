@@ -9,6 +9,7 @@
 import path from "path";
 import { git } from "../git-exec";
 import { SECRET_ASSIGNMENT, SECRET_TOKENS } from "./untrusted";
+import { SECRET_PATH } from "../secret-paths";
 
 export interface ChangedFile {
   path: string;
@@ -96,7 +97,10 @@ const SENSITIVE: { why: string; test: RegExp }[] = [
   },
   {
     why: "secrets handling",
-    test: /(^|\/)\.env(\.[^/]*)?$|(^|\/)[^/]*(secret|credential|tokenvault|keychain)[^/]*$|\.(pem|key|p12|pfx)$|(^|\/)(id_rsa|id_ed25519|\.npmrc|\.netrc)$|(^|\/)\.ssh\/|^lib\/security\/|^app\/api\/pair\//i,
+    test: new RegExp(
+      `${SECRET_PATH.source}|^lib\\/security\\/|^app\\/api\\/pair\\/`,
+      "i"
+    ),
   },
 ];
 

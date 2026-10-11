@@ -1821,3 +1821,25 @@ describe("ChatHost compacts a stale chat before a message", () => {
     next.close();
   });
 });
+
+describe("a role's tool guard", () => {
+  it("reaches the driver, and refuses to start an agent that can't run it", async () => {
+    const toolGuard = vi.fn(async () => "no");
+    const { host } = await startHost("orchestrator", undefined, undefined, {
+      toolGuard,
+    });
+    expect(started?.toolGuard).toBe(toolGuard);
+    host.close();
+    await expect(
+      startHost(
+        "orchestrator",
+        undefined,
+        (id) =>
+          getDb()
+            .prepare(`UPDATE sessions SET agent_type = 'codex' WHERE id = ?`)
+            .run(id),
+        { toolGuard }
+      )
+    ).rejects.toThrow(/can't enforce this role's tools/);
+  });
+});

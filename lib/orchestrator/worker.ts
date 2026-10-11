@@ -10,9 +10,11 @@ import {
 } from "./tools";
 import type { RoleExtras } from "../chat/worker/extras";
 import { refreshSettings } from "../chat/refresh";
+import { orchestratorToolRefusal } from "./write-guard";
 
 // What an orchestrator's chat worker starts with on top of any chat: its
-// brief, its tools, and permissions fixed by its role.
+// brief, its tools, permissions fixed by its role, and the guard on where
+// it may write.
 export async function orchestratorExtras(
   session: Session
 ): Promise<RoleExtras> {
@@ -29,6 +31,7 @@ export async function orchestratorExtras(
       ),
     },
     ...ORCHESTRATOR_PERMISSIONS,
+    toolGuard: (tool, input) => orchestratorToolRefusal(session, tool, input),
     toolsDigest: orchestratorToolsDigest(),
     refresh: {
       atTokens: refreshSettings().orchestratorTokens,

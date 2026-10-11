@@ -102,9 +102,10 @@ describe("what the orchestrator may do", () => {
       "Bash(aos done:*)",
     ])
       expect(p.allowedTools).not.toContain(t);
+    // Writes are its worker's to check (write-guard.ts), not refused here.
     for (const t of ["Edit", "Write", "NotebookEdit"]) {
-      expect(p.allowedTools).not.toContain(t);
-      expect(p.disallowedTools).toContain(t);
+      expect(p.allowedTools).toContain(t);
+      expect(p.disallowedTools).not.toContain(t);
     }
   });
 

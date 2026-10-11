@@ -2,6 +2,7 @@ import fs from "fs";
 import type {
   CanUseTool,
   HookCallback,
+  HookCallbackMatcher,
   PermissionMode,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -13,6 +14,7 @@ import type {
   DriverEvent,
 } from "../events";
 import { toolDiff, toolTitle } from "../tools";
+import type { ToolGuard } from "../driver";
 
 type Approval = Extract<ChatItem, { kind: "approval" }>;
 
@@ -234,4 +236,42 @@ export class Approvals {
     if (!this.pending.size) this.emit({ type: "state", state: "running" });
     p.resolve(result);
   }
+}
+
+// A role's guard as a PreToolUse hook: a refusal denies the call before any
+// permission rule could allow it, and a guard that fails refuses too.
+export function guardHook(guard: ToolGuard): HookCallback {
+  return async (input) => {
+    if (input.hook_event_name !== "PreToolUse") return {};
+    const reason = await guard(
+      input.tool_name,
+      (input.tool_input ?? {}) as Record<string, unknown>
+    ).catch((e: Error) => `Couldn't check this call: ${e.message}`);
+    if (reason === null) return {};
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: reason,
+      },
+    };
+  };
+}
+
+// What runs before each tool call: questions and plans become cards, and a
+// role's guard (an orchestrator's, on where it writes) sees every call.
+export function preToolUseHooks(
+  approvals: Approvals,
+  guard?: ToolGuard
+): HookCallbackMatcher[] {
+  return [
+    {
+      matcher: "AskUserQuestion",
+      hooks: [approvals.askQuestions],
+      // The reader may take a while to answer.
+      timeout: 24 * 60 * 60,
+    },
+    { matcher: "ExitPlanMode", hooks: [approvals.proposePlan] },
+    ...(guard ? [{ hooks: [guardHook(guard)] }] : []),
+  ];
 }

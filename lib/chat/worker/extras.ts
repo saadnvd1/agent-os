@@ -9,6 +9,7 @@ export type RoleExtras = Pick<
   | "allowedTools"
   | "disallowedTools"
   | "permissionMode"
+  | "toolGuard"
 > & {
   // A digest of the tools AgentOS gives this role (an orchestrator's): the
   // worker after a deploy tells the agent only when it changed.

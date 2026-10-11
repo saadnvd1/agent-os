@@ -35,7 +35,15 @@ export interface ChatStartOptions {
   // A fixed permission mode in place of the access setting, which then
   // can't be changed for this conversation.
   permissionMode?: PermissionMode;
+  // Checked before every tool call, whatever the permissions say: why it's
+  // refused, or null to let it go on to them.
+  toolGuard?: ToolGuard;
 }
+
+export type ToolGuard = (
+  tool: string,
+  input: Record<string, unknown>
+) => Promise<string | null>;
 
 // One live conversation with an agent. Messages sent while a turn runs are
 // queued by the provider and folded into the conversation.

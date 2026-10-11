@@ -32,11 +32,13 @@ export const TOOL_NAMES = {
 } as const;
 
 // What it may do, fixed by its role: it reads other sessions' text, so it
-// never gets a general shell or file edits. Anything not listed is refused
-// without asking. It acts through its own tools, which are scoped to its
-// workspace and braked; the shell keeps only `aos` commands that read, and
-// notify, which reaches only Saad, so `aos send`, `task`, `spawn` and
-// `stack` can't go around them.
+// never gets a general shell. Anything not listed is refused without asking.
+// It acts through its own tools, which are scoped to its workspace and
+// braked; the shell keeps only `aos` commands that read, and notify, which
+// reaches only Saad, so `aos send`, `task`, `spawn` and `stack` can't go
+// around them. It writes files, but never in a project repository, a task
+// worktree, AgentOS's own state or a secret file: its worker checks each
+// write first (write-guard.ts).
 export const ORCHESTRATOR_PERMISSIONS: {
   permissionMode: PermissionMode;
   allowedTools: string[];
@@ -48,6 +50,10 @@ export const ORCHESTRATOR_PERMISSIONS: {
     "Read",
     "Grep",
     "Glob",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "NotebookEdit",
     "ToolSearch",
     "TodoWrite",
     "Bash(aos peers:*)",
@@ -60,5 +66,5 @@ export const ORCHESTRATOR_PERMISSIONS: {
     "Bash(aos docs:*)",
     "Bash(aos doc:*)",
   ],
-  disallowedTools: ["Edit", "Write", "MultiEdit", "NotebookEdit"],
+  disallowedTools: [],
 };

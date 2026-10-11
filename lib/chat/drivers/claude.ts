@@ -8,7 +8,12 @@ import {
 import type { ChatDriver, ChatConversation } from "../driver";
 import type { DriverEvent, FileSuggestion, McpServerView } from "../events";
 import { InputQueue } from "../queue";
-import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
+import {
+  Approvals,
+  isPlanFile,
+  preToolUseHooks,
+  sdkMode,
+} from "./claude-approvals";
 import { toChatContext, usageTotals } from "../context";
 import { cacheTtlMs } from "../stale";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
@@ -186,15 +191,7 @@ export const claudeDriver: ChatDriver = {
         allowedTools: options.allowedTools,
         disallowedTools: options.disallowedTools,
         hooks: {
-          PreToolUse: [
-            {
-              matcher: "AskUserQuestion",
-              hooks: [approvals.askQuestions],
-              // The reader may take a while to answer.
-              timeout: 24 * 60 * 60,
-            },
-            { matcher: "ExitPlanMode", hooks: [approvals.proposePlan] },
-          ],
+          PreToolUse: preToolUseHooks(approvals, options.toolGuard),
         },
         settings: { attribution: NO_ATTRIBUTION },
         enableFileCheckpointing: true,
