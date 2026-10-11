@@ -93,7 +93,9 @@ export function readIndex(): AuditIndexEntry[] {
 
 /** The last audit before this one: re-running an audit doesn't compare it with itself. */
 export function latestAudit(except?: string): AuditIndexEntry | null {
-  const list = readIndex().filter((e) => e.id !== except && (!except || e.id < except));
+  const list = readIndex().filter(
+    (e) => e.id !== except && (!except || e.id < except)
+  );
   return list.length ? list[list.length - 1] : null;
 }
 
