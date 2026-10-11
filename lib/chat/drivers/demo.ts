@@ -64,7 +64,8 @@ export function demoConversation(stepMs = 40): ChatConversation {
     const words = DEMO_REPLY.split(/(?<= )/);
     let i = 0;
     for (; i < words.length && !stopped && !closed; i++) {
-      await sleep(stepMs);
+      // A step of 0 (tests) streams with no timer per word.
+      if (stepMs) await sleep(stepMs);
       out.push({ type: "delta", id, text: words[i] });
     }
     out.push({

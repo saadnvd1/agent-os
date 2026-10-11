@@ -2,16 +2,22 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "@/lib/db";
 import type { ChatServerMessage } from "./events";
 import { registry } from "./registry";
-import { sleep, touchUntil } from "./test-touch";
+import { fakeFsWatch, sleep, until } from "./test-touch";
 
 const tmp = (prefix: string) =>
   fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 // The user's skills, not the real ~/.claude's.
 process.env.CLAUDE_CONFIG_DIR = tmp("skr-home-");
+
+// No real file watching: its events arrive when the OS likes, and a late one
+// from an earlier test's folder would start a reload this one didn't ask for.
+// The tests fire the events they mean.
+const fake = fakeFsWatch();
+afterAll(() => fake.restore());
 
 // Each discovery reads the project's skill folder, as Claude Code does. A
 // test can hold one open, after it has read, with `gate`.
@@ -72,23 +78,19 @@ afterEach(() => {
   gate = null;
 });
 
-describe("chat commands", { timeout: 45_000 }, () => {
+describe("chat commands", () => {
   it("reloads and tells the chat when a skill is added", async () => {
     const { cwd, got } = await openChat();
     expect(got).toEqual([[]]);
     expect(discover).toHaveBeenCalledTimes(1);
-    // Past the watcher's start-up, then a skill in a folder that wasn't there
-    // (made anew each time, should the first go unseen).
-    await sleep(700);
-    await touchUntil(
-      () => {
-        fs.rmSync(path.join(cwd, ".claude"), { recursive: true, force: true });
-        fs.mkdirSync(path.join(cwd, ".claude", "skills", "new-skill"), {
-          recursive: true,
-        });
-      },
-      () => got.some((names) => names.includes("new-skill"))
-    );
+    // The folder isn't there yet: the project is watched for its ".claude".
+    const parent = fake.at(cwd, false);
+    expect(parent).toBeDefined();
+    fs.mkdirSync(path.join(cwd, ".claude", "skills", "new-skill"), {
+      recursive: true,
+    });
+    parent!.fire(".claude");
+    await until(() => got.some((names) => names.includes("new-skill")));
   });
 
   it("refresh loads again past the cache", async () => {
@@ -197,8 +199,7 @@ describe("chat commands", { timeout: 45_000 }, () => {
     const b = await openChat();
     registry.listeners.delete(a.id);
     releaseUnwatchedSoon(0);
-    await sleep(20);
-    expect(watchedKeys()).not.toContain(a.key);
+    await until(() => !watchedKeys().includes(a.key));
     expect(watchedKeys()).toContain(b.key);
   });
 });

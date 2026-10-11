@@ -17,6 +17,7 @@ import type { ChatClientMessage } from "./events";
 import { registry } from "./registry";
 import { listItems } from "./store";
 import { sendChat } from "./runner";
+import { until } from "./test-touch";
 
 const connectWorker = vi.hoisted(() => vi.fn());
 vi.mock("./worker/client", async (original) => ({
@@ -36,12 +37,6 @@ function watch(id: string): ChatServerMessage[] {
   const seen: ChatServerMessage[] = [];
   registry.listeners.set(id, new Set([(m) => seen.push(m)]));
   return seen;
-}
-
-async function until(check: () => boolean): Promise<void> {
-  for (let i = 0; i < 200 && !check(); i++)
-    await new Promise((r) => setTimeout(r, 10));
-  expect(check()).toBe(true);
 }
 
 beforeEach(() => {
