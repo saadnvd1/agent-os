@@ -44,7 +44,8 @@ Merge only through the gates: \`arm\` or \`sign_off\`. \`sign_off\` merges a tas
 - code-review: a passing review (the gate above) covers that exact commit, or the commit AgentOS restacked or rebased into it while the head is still the one AgentOS left, and the PR body carries no AI attribution. Tasks don't review themselves or write a "Code review" section any more: your review is the one review, so don't ask a task for one.
 - blocked: no BLOCKED: line and no approval or question waiting in the task's chat or terminal.
 - scope: the diff stays in the task's repository, adds no secrets, isn't only lockfiles, and, for a task from a card, a check against the card (run with the review) says it's within what the card asks.
-- stack: a stacked task's parent has merged.
+- stack: a stacked task's parent has merged, or was dropped and the PR no longer targets its branch.
+- base: the PR targets the task's base. AgentOS follows GitHub when a PR is retargeted to the default branch or its stack parent's branch (reviews of the old base stop counting); any other base is refused.
 
 PRs AgentOS didn't open (dispatch on another machine, a person, dependabot) go through the same \`sign_off\` and \`review\`: name one by #N, owner/repo#N or its URL. It must be open, in the repository of one of this workspace's projects (anything else is refused), and not from a fork. It's an external PR: there's no task or session behind it, so the gates read it differently. blocked: a draft isn't ready yet, and a label like "blocked", "do not merge" or "wip" holds it. code-review: your \`review\` of that exact head is what counts, as for a task; a "Code review" section in its body is ignored. ci, review, scope, Saad's approvals and his hold are the same as for a task, and a stack never applies. A PR that turns out to be a task's is gated as that task.
 

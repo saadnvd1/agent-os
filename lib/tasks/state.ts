@@ -30,6 +30,9 @@ export interface TaskPR {
   // GitHub's word on merging it into its base: CONFLICTING once the base
   // moved under it (UNKNOWN while GitHub works it out).
   mergeable?: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
+  // The branch it merges into, as GitHub has it now: it moves when the
+  // PR is retargeted (a stacked parent's branch deleted, say).
+  base?: string;
 }
 
 export type TaskState =

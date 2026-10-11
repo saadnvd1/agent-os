@@ -1,7 +1,10 @@
 import fs from "fs";
 import os from "os";
-import { db, queries, type Session } from "../db";
-import { isBranchName } from "../git";
+import { db, queries, stackQueries, type Session } from "../db";
+import { getDefaultBranch, isBranchName } from "../git";
+import { parentBranchOf } from "../stacks/guard";
+import { voidApprovalsOn } from "../orchestrator/ask-approvals";
+import { taskSubject } from "../orchestrator/asks";
 import { getProject } from "../projects";
 import { findPRStrict } from "./gh";
 import { currentBranch, git } from "../git-exec";
@@ -170,7 +173,65 @@ export async function prFor(
       `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`
     ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
   }
+  // Only an answer just read from GitHub: a cached one may predate a
+  // retarget AgentOS made itself (a restack).
+  if (fresh) await recordBase(session, repo, pr);
   return pr;
+}
+
+// An open PR's base as GitHub has it now becomes the task's, in the row and
+// in `session`, so every diff, the stack logic and the UI read the truth:
+// the base recorded at the start goes stale when the PR is retargeted (a
+// stacked parent's branch deleted, so GitHub moved it to main). Only the
+// default branch or the stack parent's branch is taken: a base the task
+// picked itself would choose what its diff is judged against, so it stays
+// unrecorded and sign_off refuses it. Reviews and scope checks judged
+// against the old base no longer count. A stack item on a merged parent
+// keeps its base until the restack moves it, which is also what takes the
+// parent's commits off it.
+// The bases a task may be judged against: the default branch or its stack
+// parent's branch (and what it already has).
+export async function isAllowedBase(
+  session: Session,
+  repo: string,
+  base: string
+): Promise<boolean> {
+  if (base === session.base_branch) return true;
+  const item = stackQueries.itemForSession(db, session.id);
+  const parent = item?.parent_item_id
+    ? stackQueries.item(db, item.parent_item_id)
+    : null;
+  return (
+    base === parentBranchOf(parent) || base === (await getDefaultBranch(repo))
+  );
+}
+
+async function recordBase(
+  session: Session,
+  repo: string,
+  pr: TaskPR | null
+): Promise<void> {
+  const base = pr?.state === "OPEN" ? pr.base : undefined;
+  if (!base || base === session.base_branch || !isBranchName(base)) return;
+  if (!(await isAllowedBase(session, repo, base))) return;
+  const item = stackQueries.itemForSession(db, session.id);
+  const parent = item?.parent_item_id
+    ? stackQueries.item(db, item.parent_item_id)
+    : null;
+  db.transaction(() => {
+    db.prepare(`UPDATE sessions SET base_branch = ? WHERE id = ?`).run(
+      base,
+      session.id
+    );
+    db.prepare(
+      `DELETE FROM orchestrator_checks WHERE session_id = ? AND kind IN ('review', 'scope')`
+    ).run(session.id);
+    // An approval was for the diff against the old base.
+    voidApprovalsOn(taskSubject(session.id));
+    if (item && item.base_branch !== base && parent?.status !== "merged")
+      stackQueries.updateItem(db, item.id, { base_branch: base });
+  })();
+  session.base_branch = base;
 }
 
 // A finished task's PR as the database last saw it: no gh call.

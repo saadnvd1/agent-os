@@ -485,6 +485,46 @@ describe("automatic rebase", () => {
     );
   });
 
+  async function rebasedOnto(
+    t: ReturnType<typeof setup>,
+    recorded: string | null,
+    base?: string
+  ) {
+    const main = t.moveMain("src/c.ts", "export const c = 1;\n");
+    db.prepare(`UPDATE sessions SET base_branch = ? WHERE id = ?`).run(
+      recorded,
+      t.task
+    );
+    pr = { ...pr!, mergeable: "CONFLICTING", base };
+    await rebaseConflicting(t.w, t.facts(), rebaseDeps().deps);
+    git(t.repo, "fetch", "-q", "origin");
+    expect(git(t.repo, "rev-parse", `${originHead(t.repo)}^`)).toBe(main);
+  }
+
+  it("rebases onto the PR's base on GitHub when the recorded base is a deleted branch", async () => {
+    const t = setup();
+    t.put("review", "pass");
+    await rebasedOnto(t, "feature/parent-gone", "main");
+  });
+
+  it("doesn't rebase onto a branch the task picked as its PR's base", async () => {
+    const t = setup();
+    t.put("review", "pass");
+    git(t.repo, "push", "-q", "origin", "feature/t:refs/heads/elsewhere");
+    t.moveMain("src/c.ts", "export const c = 1;\n");
+    pr = { ...pr!, mergeable: "CONFLICTING", base: "elsewhere" };
+    const r = rebaseDeps();
+    await rebaseConflicting(t.w, t.facts(), r.deps);
+    git(t.repo, "fetch", "-q", "origin");
+    expect(originHead(t.repo)).toBe(t.sha);
+  });
+
+  it("rebases onto the default branch when no base is recorded or reported", async () => {
+    const t = setup();
+    t.put("review", "pass");
+    await rebasedOnto(t, null);
+  });
+
   it("starts a fresh review when the rebase changed the PR's own patch", async () => {
     const t = setup();
     t.put("review", "pass");

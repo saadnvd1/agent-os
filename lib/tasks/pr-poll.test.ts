@@ -99,6 +99,13 @@ describe("lookupPR", () => {
     expect(lists()).toBe(1);
   });
 
+  it("asks for each PR's base branch and returns it", async () => {
+    prs = [pr(1, "a", "OPEN", { baseRefName: "release" })];
+    expect((await poll.lookupPR("/repo", "a"))?.base).toBe("release");
+    const asked = calls.find((args) => args.includes("--json"));
+    expect(asked?.[asked.indexOf("--json") + 1]).toContain("baseRefName");
+  });
+
   it("shares one request between callers at the same time", async () => {
     prs = [pr(1, "a")];
     let release!: () => void;

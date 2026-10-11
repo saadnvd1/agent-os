@@ -23,9 +23,11 @@ import os from "os";
 import path from "path";
 import { db, type Session } from "../db";
 import { sendMessage } from "../bus";
+import { getDefaultBranch } from "../git";
 import { hostLink } from "../hosts/remote-api";
 import type { TaskPR } from "../tasks/state";
 import { run } from "../tasks/gh";
+import { isAllowedBase } from "../tasks/session";
 import { git as runGit, gitFetch, revParse } from "../git-exec";
 import { outputOf, type Runner } from "../stacks/git";
 import { restackedHeads, stackNotice } from "../stacks/restack";
@@ -127,7 +129,11 @@ async function rebaseOne(
   deps: RebaseDeps
 ): Promise<void> {
   const repo = repoOf(task);
-  const branch = task.base_branch || "main";
+  // The PR's base as GitHub has it now, not the one the task started on.
+  // Only a base AgentOS would judge the task against: a branch the task
+  // picked itself could carry commits nobody reviewed.
+  if (pr.base && !(await isAllowedBase(task, repo, pr.base))) return;
+  const branch = pr.base || task.base_branch || (await getDefaultBranch(repo));
   // A failed fetch throws: nothing is judged against a stale base.
   await gitFetch(repo, ["--quiet", "--", "origin", branch, task.branch_name!], {
     timeout: 60000,

@@ -93,3 +93,14 @@ export function voidApprovals(workspaceId: string, subject: string): number {
     )
     .run(workspaceId, subject).changes;
 }
+
+// The same, for a subject whose workspace the caller doesn't have at hand
+// (a task's base moved under its approval: what was approved no longer is).
+export function voidApprovalsOn(subject: string): number {
+  return db
+    .prepare(
+      `UPDATE orchestrator_asks SET used_at = datetime('now'), answer = 'approve (void)'
+       WHERE subject = ? AND status = 'approved' AND used_at IS NULL`
+    )
+    .run(subject).changes;
+}

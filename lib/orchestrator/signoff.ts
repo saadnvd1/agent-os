@@ -71,6 +71,15 @@ export async function judge(
   const pr = await prFor(task, true);
   if (!pr || pr.state !== "OPEN" || !pr.head)
     return { ok: false, wait: false, text: `${task.name} has no open PR` };
+  // prFor records a retarget to the default branch or the stack parent's
+  // branch; any other base would merge somewhere nobody chose, judged
+  // against a branch the task picked.
+  if (pr.base && pr.base !== task.base_branch)
+    return {
+      ok: false,
+      wait: false,
+      text: `${task.name}'s PR #${pr.number} targets ${pr.base}, not its base ${task.base_branch ?? "(none)"}: retarget it to ${task.base_branch ?? "the default branch"}`,
+    };
   const sha = pr.head;
   const repo = repoOf(task);
   return gateVerdict(

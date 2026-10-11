@@ -142,8 +142,15 @@ async function commitsKeep(
       return `${stray} commit${stray === 1 ? " is" : "s are"} on it that the merged PR didn't include and no remote has`;
     return null;
   }
-  const base = session.base_branch || (await getDefaultBranch(repo));
-  const own = await ownCommits(path, base).catch(() => null);
+  // A base gone everywhere (a stacked parent's branch, deleted) is judged
+  // against the default branch instead.
+  const fallback = await getDefaultBranch(repo);
+  let base = session.base_branch || fallback;
+  let own = await ownCommits(path, base).catch(() => null);
+  if (own === null && base !== fallback) {
+    base = fallback;
+    own = await ownCommits(path, base).catch(() => null);
+  }
   if (own === null) return `its base ${base} can't be found to compare`;
   if (own > 0)
     return `its branch has ${own} commit${own === 1 ? "" : "s"} not merged into ${base}`;

@@ -250,6 +250,11 @@ describe("findPRStrict's match", () => {
     isCrossRepository,
   });
 
+  it("carries the PR's base branch from GitHub", async () => {
+    prList = [{ ...listed(9, false), baseRefName: "release" }];
+    expect((await findPRStrict("/repo", "feature/x"))?.base).toBe("release");
+  });
+
   it("never links a fork's PR whose branch has the same name", async () => {
     prList = [listed(9, true)];
     expect(await findPRStrict("/repo", "feature/x")).toBeNull();

@@ -598,6 +598,27 @@ describe("done right after a sign-off", () => {
     );
   });
 
+  it("judges commits against the default branch when the recorded base is gone", async () => {
+    const t = setup();
+    const s = t.session("orphan");
+    expect(
+      await worktreeFate(
+        { worktree_path: s.dir, base_branch: "feature/parent-gone" },
+        null
+      )
+    ).toMatchObject({ action: "remove" });
+    const w = t.session("orphan-wip", { commits: { "x.ts": "1\n" } });
+    expect(
+      await worktreeFate(
+        { worktree_path: w.dir, base_branch: "feature/parent-gone" },
+        null
+      )
+    ).toMatchObject({
+      action: "kept",
+      why: "its branch has 1 commit not merged into main",
+    });
+  });
+
   it("judges a worktree only after a removal already running ends", async () => {
     const t = setup();
     const s = t.session("removing", { task: true });

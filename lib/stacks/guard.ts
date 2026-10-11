@@ -12,6 +12,17 @@ export function refusalFor(
 ): string | null {
   if (!parent) return null;
   const who = itemName(parent);
+  // A dropped parent never merges: once the PR moved off its branch
+  // (GitHub retargets it when the branch is deleted), there is nothing to
+  // wait for, and the review of the new base reads the parent's commits.
+  // A failed one can be retried, so it still blocks.
+  if (
+    parent.status === "dropped" &&
+    parentBranch &&
+    item.base_branch &&
+    item.base_branch !== parentBranch
+  )
+    return null;
   if (parent.status !== "merged") {
     const state =
       parent.status === "pr" ? "has not merged" : `is ${parent.status}`;

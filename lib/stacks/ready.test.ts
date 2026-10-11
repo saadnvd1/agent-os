@@ -108,6 +108,25 @@ describe("sign-off refusal", () => {
     ).toMatch(/never moved off its branch\. Resolve it with `git rebase/);
   });
 
+  it("lets a child go once its PR moved off a dropped parent's branch", () => {
+    const retargeted = { ...child, base_branch: "main" };
+    expect(
+      refusalFor(retargeted, { ...parent, status: "dropped" }, "feature/p")
+    ).toBeNull();
+    // A failed parent can be retried, so it still blocks.
+    expect(
+      refusalFor(retargeted, { ...parent, status: "failed" }, "feature/p")
+    ).toContain("which is failed");
+    // Still on the dropped parent's branch: it waits, as before.
+    expect(
+      refusalFor(child, { ...parent, status: "dropped" }, "feature/p")
+    ).toContain("which is dropped");
+    // A parent still open blocks whatever the child's base says.
+    expect(refusalFor(retargeted, parent, "feature/p")).toContain(
+      "has not merged"
+    );
+  });
+
   it("allows a restacked child, and anything not stacked", () => {
     const moved = { ...child, base_branch: "main" };
     expect(

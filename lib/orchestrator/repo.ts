@@ -7,8 +7,16 @@ import os from "os";
 import path from "path";
 import type { Session } from "../db";
 import { SKILL_DIRS } from "../agents/skill-dirs";
+import { getDefaultBranch } from "../git";
 import { getProject } from "../projects";
-import { git, gitFetch, gitOk, worktreeAdd, worktreeRemove } from "../git-exec";
+import {
+  git,
+  gitFetch,
+  gitOk,
+  isGitError,
+  worktreeAdd,
+  worktreeRemove,
+} from "../git-exec";
 import { expandHome } from "../tasks/session";
 
 export function repoOf(task: Session): string {
@@ -17,22 +25,79 @@ export function repoOf(task: Session): string {
   return expandHome(project.working_directory);
 }
 
-// The task's base on origin, fetched along with its head.
+// The task's base on origin, fetched along with its head. The base is the
+// PR's own (prFor records GitHub's baseRefName on the task). A base gone
+// from origin (a stacked parent's branch, deleted) falls back to the
+// project's default branch, and so does one that can't be found at all, so
+// a diff never names a missing revision.
 export async function fetchRefs(
   repo: string,
   task: Pick<Session, "base_branch" | "branch_name">
 ): Promise<string> {
-  const base = task.base_branch || "main";
-  await gitFetch(repo, [
-    "--quiet",
-    "--",
-    "origin",
-    base,
-    task.branch_name ?? base,
-  ]).catch(() => {});
-  const remote = `origin/${base}`;
-  const has = await gitOk(repo, ["rev-parse", "--verify", "--quiet", remote]);
-  return has ? remote : base;
+  const head = task.branch_name ? [task.branch_name] : [];
+  const recorded = task.base_branch || null;
+  if (recorded) {
+    const fetched = await fetchBranches(repo, [recorded, ...head]);
+    // A base gone on origin fails the fetch, so the head goes on its own.
+    if (fetched === "gone" && head.length)
+      requireFetched(await fetchBranches(repo, head));
+    requireFetched(fetched);
+    if (fetched !== "gone") {
+      const found = await existingRef(repo, recorded);
+      if (found) return found;
+    }
+  }
+  const fallback = await getDefaultBranch(repo);
+  if (fallback !== recorded) {
+    requireFetched(
+      await fetchBranches(repo, recorded ? [fallback] : [fallback, ...head])
+    );
+    const found = await existingRef(repo, fallback);
+    if (found) return found;
+  }
+  throw new Error(
+    `Neither the base ${recorded ?? "(none recorded)"} nor the default branch ${fallback} can be found`
+  );
+}
+
+// An unreachable origin leaves the tracking refs as they were, and a diff
+// against a stale base can hide or invent changes, so the gates stop.
+function requireFetched(result: "ok" | "gone" | "failed"): void {
+  if (result === "failed")
+    throw new Error("Couldn't fetch from origin, so the base can't be trusted");
+}
+
+// "gone" when origin answered that the first branch isn't there; any other
+// failure is "failed" (origin unreachable).
+async function fetchBranches(
+  repo: string,
+  branches: string[]
+): Promise<"ok" | "gone" | "failed"> {
+  try {
+    // In English whatever the locale: the message is read below.
+    await gitFetch(repo, ["--quiet", "--", "origin", ...branches], {
+      env: { LC_ALL: "C" },
+    });
+    return "ok";
+  } catch (error) {
+    const stderr = isGitError(error) ? error.stderr : "";
+    return stderr.includes(`couldn't find remote ref ${branches[0]}`)
+      ? "gone"
+      : "failed";
+  }
+}
+
+// origin/<branch> when it's there, else a local <branch>.
+async function existingRef(
+  repo: string,
+  branch: string
+): Promise<string | null> {
+  for (const ref of [`origin/${branch}`, branch])
+    if (
+      await gitOk(repo, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])
+    )
+      return ref;
+  return null;
 }
 
 // When the commit was made, in seconds.
