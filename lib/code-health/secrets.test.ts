@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { duplicateBlocks, sqlConcat } from "./code";
 import { redact, redactSecrets, secretScan } from "./secrets";
+import { snippet } from "./source";
 
 // Built at runtime so no credential-shaped literal is committed.
 const fake = (prefix: string, n: number) =>
@@ -56,6 +58,46 @@ describe("secretScan", () => {
 });
 
 describe("redactSecrets", () => {
+  it("cuts machine details to their stubs", () => {
+    const home = ["", "Users", "someone", "dev"].join("/");
+    const tailnet = ["100", "101", "2", "3"].join(".");
+    const magic = ["box", "tail1a2b3c", "ts", "net"].join(".");
+    const out = redactSecrets(`cd ${home}/x; ssh ${tailnet}; open ${magic}`);
+    for (const raw of ["someone", tailnet, magic])
+      expect(out).not.toContain(raw);
+  });
+
+  it("redacts before a snippet is cut, so a key at the edge leaves no prefix", () => {
+    const key = fake("sk-ant-", 40);
+    const out = snippet(`${"x".repeat(105)} ${key}`);
+    expect(out).not.toContain(key.slice(0, 12));
+  });
+
+  it("reaches duplicate samples and SQL text", () => {
+    const key = fake("sk-ant-", 40);
+    const block = Array.from(
+      { length: 6 },
+      (_, i) => `send("${key}", ${i});`
+    ).join("\n");
+    const dups = duplicateBlocks(
+      [
+        { path: "lib/a.ts", text: block },
+        { path: "lib/b.ts", text: block },
+      ],
+      { window: 3 }
+    );
+    expect(dups.blocks.length).toBeGreaterThan(0);
+    expect(JSON.stringify(dups)).not.toContain(key);
+    const sql = sqlConcat([
+      {
+        path: "lib/q.ts",
+        text: `db.prepare(\`SELECT * FROM t WHERE k = '${key}' AND id = \${id}\`).get();`,
+      },
+    ]);
+    expect(sql).toHaveLength(1);
+    expect(sql[0].text).not.toContain(key);
+  });
+
   it("cuts a bearer token in a header to its stub", () => {
     const token = fake("", 40);
     const out = redactSecrets(`curl -H "Authorization: Bearer ${token}" $URL`);
