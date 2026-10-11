@@ -19,7 +19,7 @@ export function FreshStartForm() {
     return <p className="text-destructive text-sm">{error.message}</p>;
   return (
     <Form
-      key={`${data.orchestratorTokens}:${data.taskTokens}:${data.staleCompactTokens}`}
+      key={`${data.orchestratorTokens}:${data.taskTokens}:${data.compactTokens}`}
       saved={data}
     />
   );
@@ -29,13 +29,13 @@ function Form({ saved }: { saved: RefreshSettings }) {
   const update = useUpdateFreshStart();
   const orchestrator = useThreshold(saved.orchestratorTokens, 200);
   const task = useThreshold(saved.taskTokens, 200);
-  const stale = useThreshold(saved.staleCompactTokens, 150);
-  const error = orchestrator.error ?? task.error ?? stale.error;
+  const compact = useThreshold(saved.compactTokens, 150);
+  const error = orchestrator.error ?? task.error ?? compact.error;
   const dirty =
     !error &&
     (orchestrator.tokens !== saved.orchestratorTokens ||
       task.tokens !== saved.taskTokens ||
-      stale.tokens !== saved.staleCompactTokens);
+      compact.tokens !== saved.compactTokens);
 
   return (
     <form
@@ -46,7 +46,7 @@ function Form({ saved }: { saved: RefreshSettings }) {
           {
             orchestratorTokens: orchestrator.tokens,
             taskTokens: task.tokens,
-            staleCompactTokens: stale.tokens,
+            compactTokens: compact.tokens,
           },
           {
             onSuccess: () => toast.success("Context settings saved"),
@@ -65,17 +65,17 @@ function Form({ saved }: { saved: RefreshSettings }) {
       </p>
       <ThresholdRow label="Orchestrators" field={orchestrator} />
       <ThresholdRow label="Tasks" field={task} />
-      <h3 className="pt-2 text-sm font-medium">Compact idle chats</h3>
+      <h3 className="pt-2 text-sm font-medium">Compact</h3>
       <p className="text-muted-foreground text-sm">
-        A message to a chat idle past its prompt cache re-reads the whole
-        conversation at full price. Above this size, messages from the
-        orchestrator, events and schedules compact it first; the composer offers
-        to.
+        Chats and tasks compact when their context passes this size: Claude Code
+        does it itself, and between turns AgentOS compacts a chat over it, or
+        idle past its prompt cache, before the next message. The composer offers
+        to first. Orchestrators start fresh instead.
       </p>
       <ThresholdRow
-        label="Idle chats"
-        field={stale}
-        switchLabel="Compact idle chats before a message"
+        label="Chats and tasks"
+        field={compact}
+        switchLabel="Compact chats and tasks at this size"
       />
       {error && <p className="text-destructive text-xs">{error}</p>}
       <div className="flex justify-end">

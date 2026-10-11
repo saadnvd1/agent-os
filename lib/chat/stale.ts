@@ -1,10 +1,13 @@
 /**
- * Stale chats: a message sent to a conversation whose prompt cache has
- * expired re-reads the whole history at the cache-write price. When it is
- * also long, compacting first is far cheaper than carrying it (one summary
- * turn, then a small cache write instead of a huge one). The one check every
- * send path uses: the composer to offer it (components/Chat/StaleChip), the
- * chat worker to do it for automated sends (lib/chat/worker/host).
+ * Compacting between turns. A chat's agent compacts itself at the compact
+ * threshold (Claude Code's auto-compact window, set at launch by
+ * lib/agents/launch). Between turns AgentOS catches what it didn't: a chat
+ * over the threshold is compacted before the next message, and so is one
+ * whose prompt cache has expired, since that message would re-read the
+ * whole history at the cache-write price (one summary turn, then a small
+ * cache write instead of a huge one). The one check every send path uses:
+ * the composer to offer it (components/Chat/StaleChip), the chat worker to
+ * do it for automated sends (lib/chat/worker/host).
  *
  * Pure, so the browser and the worker read the same rule.
  */
@@ -38,21 +41,26 @@ export function cacheTtlMs(
 export interface Staleness {
   idleMs: number;
   tokens: number;
+  // Idle past the cache its last turn wrote, not only over the threshold.
+  stale: boolean;
 }
 
-// Stale: no turn running, the last one ended longer ago than the cache it
-// wrote lives, and the context is above the threshold (0 is off). Null when
-// it isn't, or when the chat never said which cache it uses.
-export function staleness(
+// Due a compaction before the next message: no turn running and the
+// context above the threshold (0 is off). Null when it isn't, or when the
+// chat never said which cache it uses (only Claude's chats do).
+export function compactionDue(
   context: ChatContext | null | undefined,
   opts: { state: ChatState; thresholdTokens: number; now?: number }
 ): Staleness | null {
   if (opts.state === "running" || opts.state === "waiting") return null;
   if (!context?.cacheTtlMs || opts.thresholdTokens <= 0) return null;
-  const idleMs = (opts.now ?? Date.now()) - context.at;
-  if (idleMs <= context.cacheTtlMs) return null;
   if (context.usedTokens <= opts.thresholdTokens) return null;
-  return { idleMs, tokens: context.usedTokens };
+  const idleMs = (opts.now ?? Date.now()) - context.at;
+  return {
+    idleMs,
+    tokens: context.usedTokens,
+    stale: idleMs > context.cacheTtlMs,
+  };
 }
 
 export function formatIdle(ms: number): string {
@@ -62,9 +70,10 @@ export function formatIdle(ms: number): string {
   return h < 48 ? `${h}h` : `${Math.floor(h / 24)}d`;
 }
 
-// "Idle 47m · 412k context"
+// "Idle 47m · 412k context", or "412k context" while its cache is warm.
 export function staleLabel(s: Staleness): string {
-  return `Idle ${formatIdle(s.idleMs)} · ${formatTokens(s.tokens)} context`;
+  const size = `${formatTokens(s.tokens)} context`;
+  return s.stale ? `Idle ${formatIdle(s.idleMs)} · ${size}` : size;
 }
 
 // Whether the composer's send compacts first: the chip was showing and the
@@ -75,7 +84,7 @@ export function composerCompacts(
   opts: { state: ChatState; thresholdTokens: number; asIs: boolean }
 ): boolean {
   if (opts.asIs || text.trimStart().startsWith("/")) return false;
-  return !!staleness(context, opts);
+  return !!compactionDue(context, opts);
 }
 
 // The chat's line for a compaction: "Compacted before sending · idle 47m ·

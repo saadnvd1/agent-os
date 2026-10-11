@@ -2,14 +2,15 @@
 
 import { Minimize2 } from "lucide-react";
 import type { ChatContext, ChatState } from "@/lib/chat/events";
-import { staleLabel, staleness } from "@/lib/chat/stale";
+import { compactionDue, staleLabel } from "@/lib/chat/stale";
 import { cn } from "@/lib/utils";
 import { useNow } from "./useNow";
 
-// Above the composer while the chat is stale (lib/chat/stale): its prompt
-// cache has expired and its context is long, so the next message would
-// re-read all of it at full price. Send compacts first unless the reader
-// picks "Send as-is", for that one send only.
+// Above the composer while the chat is due a compaction (lib/chat/stale):
+// its context is past the compact threshold, and maybe its prompt cache has
+// expired too, so the next message would re-read all of it at full price.
+// Send compacts first unless the reader picks "Send as-is", for that one
+// send only.
 export function StaleChip({
   context,
   state,
@@ -25,7 +26,7 @@ export function StaleChip({
 }) {
   const watching = !!context?.cacheTtlMs && thresholdTokens > 0;
   const now = useNow(watching);
-  const stale = staleness(context, { state, thresholdTokens, now });
+  const stale = compactionDue(context, { state, thresholdTokens, now });
   if (!stale) return null;
   return (
     <div

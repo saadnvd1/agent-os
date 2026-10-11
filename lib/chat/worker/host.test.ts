@@ -1634,8 +1634,34 @@ describe("ChatHost compacts a stale chat before a message", () => {
     host.close();
   });
 
-  it("auto: a chat still inside its cache lifetime is sent to as is", async () => {
-    const { host, conversation } = await staleChat(HOUR - 60_000, 412_000);
+  it("auto: a chat over the threshold inside its cache lifetime is compacted too, with no idle on its line", async () => {
+    const { id, host, conversation } = await staleChat(HOUR - 60_000, 412_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    conversation.events.push({
+      type: "item",
+      item: { id: "c1", kind: "compacted", trigger: "manual", createdAt: 1 },
+    });
+    await tick();
+    const line = listItems(id).find((i) => i.id === "c1");
+    expect(line).toMatchObject({ before: 412_000 });
+    expect(line && "idleMs" in line && line.idleMs).toBeFalsy();
+    host.close();
+  });
+
+  it("auto: an orchestrator over the threshold with a warm cache is sent to as is", async () => {
+    const { host, conversation } = await staleChat(
+      HOUR - 60_000,
+      412_000,
+      HOUR,
+      "orchestrator"
+    );
     await host.handle({
       type: "send",
       id: "m1",

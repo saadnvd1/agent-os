@@ -6,8 +6,8 @@
  * default: its state is in the database and its brief carries it
  * (lib/orchestrator/digest). A task keeps its progress only in its
  * conversation and its branch, so for tasks it's off unless switched on.
- * App-wide, in Settings → Workspaces, with the size past which an idle
- * chat is compacted before a message goes in (lib/chat/stale).
+ * App-wide, in Settings → Workspaces, with the size at which chats and
+ * tasks compact (lib/chat/stale).
  */
 
 import { db } from "../db";
@@ -15,18 +15,20 @@ import { MAX_REFRESH_TOKENS, MIN_REFRESH_TOKENS } from "./refresh-limits";
 
 export const ORCHESTRATOR_KEY = "orchestrator.refresh_tokens";
 export const TASK_KEY = "chat.task_refresh_tokens";
-export const STALE_COMPACT_KEY = "chat.stale_compact_tokens";
+// Named for what it first did: compact chats idle past their cache.
+export const COMPACT_KEY = "chat.stale_compact_tokens";
 export const DEFAULT_ORCHESTRATOR_TOKENS = 200_000;
-export const DEFAULT_STALE_COMPACT_TOKENS = 150_000;
+export const DEFAULT_COMPACT_TOKENS = 150_000;
 export { MIN_REFRESH_TOKENS, MAX_REFRESH_TOKENS } from "./refresh-limits";
 
 export interface RefreshSettings {
   // Context tokens at which a conversation starts over; 0 is off.
   orchestratorTokens: number;
   taskTokens: number;
-  // Context tokens above which a chat whose prompt cache has expired is
-  // compacted before the next message; 0 is off.
-  staleCompactTokens: number;
+  // Context tokens at which a chat's or task's agent compacts: Claude
+  // Code's own auto-compact window, and between turns a chat over it (or
+  // idle past its cache) is compacted before the next message. 0 is off.
+  compactTokens: number;
 }
 
 function read(key: string, fallback: number): number {
@@ -41,7 +43,7 @@ export function refreshSettings(): RefreshSettings {
   return {
     orchestratorTokens: read(ORCHESTRATOR_KEY, DEFAULT_ORCHESTRATOR_TOKENS),
     taskTokens: read(TASK_KEY, 0),
-    staleCompactTokens: read(STALE_COMPACT_KEY, DEFAULT_STALE_COMPACT_TOKENS),
+    compactTokens: read(COMPACT_KEY, DEFAULT_COMPACT_TOKENS),
   };
 }
 
@@ -74,14 +76,30 @@ export function setRefreshSettings(input: Partial<RefreshSettings>): void {
     ]);
   if (input.taskTokens !== undefined)
     checked.push([TASK_KEY, checkRefreshTokens(input.taskTokens)]);
-  if (input.staleCompactTokens !== undefined)
-    checked.push([
-      STALE_COMPACT_KEY,
-      checkRefreshTokens(input.staleCompactTokens),
-    ]);
+  if (input.compactTokens !== undefined)
+    checked.push([COMPACT_KEY, checkRefreshTokens(input.compactTokens)]);
   db.transaction(() => {
     for (const [key, n] of checked) put.run(key, String(n));
   })();
+}
+
+// Claude Code's own auto-compact window, in plain tokens (it reads "150k"
+// as 150 and clamps anything under 100k up to it).
+export const AUTO_COMPACT_ENV = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
+const AUTO_COMPACT_MIN = 100_000;
+
+// What an agent is launched with so it compacts itself at the threshold.
+// Not an orchestrator: it starts over from its brief at its own threshold
+// instead, since a summary would carry what it read from tasks and CI
+// without its untrusted fence. Nothing when it's off, so a window set in
+// the user's own environment still applies.
+export function autoCompactEnv(sessionId: string): Record<string, string> {
+  const row = db
+    .prepare(`SELECT role FROM sessions WHERE id = ?`)
+    .get(sessionId) as { role: string | null } | undefined;
+  const tokens = refreshSettings().compactTokens;
+  if (row?.role === "orchestrator" || tokens <= 0) return {};
+  return { [AUTO_COMPACT_ENV]: String(Math.max(AUTO_COMPACT_MIN, tokens)) };
 }
 
 const k = (tokens: number) => `${Math.round(tokens / 1000)}k`;

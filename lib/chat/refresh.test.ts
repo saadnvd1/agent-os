@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "../db";
-import { refreshSettings, setRefreshSettings } from "./refresh";
+import { db } from "../db";
+import { agentEnv } from "../agents/launch";
+import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import {
+  AUTO_COMPACT_ENV,
+  refreshSettings,
+  setRefreshSettings,
+} from "./refresh";
 import { roleExtras } from "./worker/extras";
 import { parseFreshStart } from "@/components/Workspaces/fresh-start";
 
@@ -17,7 +24,7 @@ describe("fresh-start settings", () => {
     expect(refreshSettings()).toEqual({
       orchestratorTokens: 200_000,
       taskTokens: 0,
-      staleCompactTokens: 150_000,
+      compactTokens: 150_000,
     });
     expect((await roleExtras(task())).refresh).toBeUndefined();
   });
@@ -52,13 +59,13 @@ describe("fresh-start settings", () => {
   });
 
   it("save the stale-compact threshold, 0 for off, in the same range", () => {
-    setRefreshSettings({ staleCompactTokens: 0 });
-    expect(refreshSettings().staleCompactTokens).toBe(0);
-    expect(() => setRefreshSettings({ staleCompactTokens: 10_000 })).toThrow(
+    setRefreshSettings({ compactTokens: 0 });
+    expect(refreshSettings().compactTokens).toBe(0);
+    expect(() => setRefreshSettings({ compactTokens: 10_000 })).toThrow(
       /off or between/
     );
-    setRefreshSettings({ staleCompactTokens: 150_000 });
-    expect(refreshSettings().staleCompactTokens).toBe(150_000);
+    setRefreshSettings({ compactTokens: 150_000 });
+    expect(refreshSettings().compactTokens).toBe(150_000);
   });
 
   it("are typed in thousands in Settings", () => {
@@ -66,5 +73,29 @@ describe("fresh-start settings", () => {
     expect(parseFreshStart(false, "nope")).toEqual({ tokens: 0 });
     expect(parseFreshStart(true, "20")).toHaveProperty("error");
     expect(parseFreshStart(true, "")).toHaveProperty("error");
+  });
+});
+
+describe("the compact threshold at launch", () => {
+  it("sets Claude Code's own auto-compact window for chats and tasks, never an orchestrator", () => {
+    const ws = seedWorkspace();
+    const chat = seedSession({ projectId: ws.app.id, name: "c", view: "chat" });
+    const task = seedSession({ projectId: ws.app.id, name: "t", task: true });
+    const orch = seedSession({ projectId: ws.app.id, name: "o", view: "chat" });
+    db.prepare(`UPDATE sessions SET role = 'orchestrator' WHERE id = ?`).run(
+      orch
+    );
+    expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("150000");
+    expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe("150000");
+    expect(agentEnv(orch)[AUTO_COMPACT_ENV]).toBeUndefined();
+    try {
+      // Under Claude Code's 100k floor, it gets the floor; off sets nothing.
+      setRefreshSettings({ compactTokens: 60_000 });
+      expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("100000");
+      setRefreshSettings({ compactTokens: 0 });
+      expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBeUndefined();
+    } finally {
+      setRefreshSettings({ compactTokens: 150_000 });
+    }
   });
 });
