@@ -71,3 +71,39 @@ export function awayEnds(d: AwayDuration, now = new Date()): Date | null {
   if (now.getHours() >= 5) morning.setDate(morning.getDate() + 1);
   return morning;
 }
+
+// How recent a session's last real turn must be for Away mode to touch it.
+export interface AwaySettings {
+  windowMinutes: number;
+}
+
+const settingsKey = [...awayKeys.all, "settings"] as const;
+
+async function json<T>(res: Response): Promise<T> {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+export function useAwaySettingsQuery() {
+  return useQuery({
+    queryKey: settingsKey,
+    queryFn: async () => json<AwaySettings>(await fetch("/api/away/settings")),
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateAwaySettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: AwaySettings) =>
+      json<AwaySettings>(
+        await fetch("/api/away/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(settings),
+        })
+      ),
+    onSuccess: (data) => queryClient.setQueryData(settingsKey, data),
+  });
+}

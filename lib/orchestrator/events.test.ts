@@ -5,6 +5,7 @@ import { conditionsFor, type Condition } from "./conditions";
 import {
   markDelivered,
   pendingEvents,
+  queueEvent,
   recordConditions,
   REFIRE_MS,
 } from "./events";
@@ -231,5 +232,29 @@ describe("deliverEvents", () => {
     await deliver(NOW + backoffMs(1));
     expect(sent).toHaveLength(1);
     expect([1, 2, 3, 10].map(backoffMs)).toEqual([5000, 10000, 20000, 300000]);
+  });
+});
+
+describe("Away mode's own events", () => {
+  it("are marked as Away's when they're all a batch holds, so its turn isn't activity", async () => {
+    const w = createWorkspace(`ws-away-${sid().slice(0, 4)}`).id;
+    const origins: (true | undefined)[] = [];
+    const deliver = (now: number) =>
+      deliverEvents({
+        workspaceId: w,
+        orchestratorId: "o",
+        turn: null,
+        now,
+        send: async (_id, input) => {
+          origins.push(input.origin.away);
+        },
+      });
+    queueEvent(w, "away-digest:1:1", null, "Away sweep: digest", NOW);
+    await deliver(NOW);
+    // Batched with anything else, the turn is real work.
+    queueEvent(w, "away-digest:1:2", null, "Away sweep: digest 2", NOW);
+    queueEvent(w, "review:x", "s", "review finished", NOW);
+    await deliver(NOW + BATCH_WINDOW_MS);
+    expect(origins).toEqual([true, undefined]);
   });
 });

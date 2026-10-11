@@ -80,7 +80,8 @@ describe("the While you were away report", () => {
       `UPDATE sessions SET task_status = 'merged', merged_at = ? WHERE id = ?`
     ).run(toSql(now - 2 * HOUR), before);
 
-    // In flight: a PR the review blocked, and one with no PR, nudged twice.
+    // In flight: a PR the review blocked (the sweep ran its review again),
+    // one with no PR flagged twice, and one the sweep never touched.
     const blocked = seedSession({
       projectId: s.api.id,
       name: "add-billing",
@@ -90,13 +91,15 @@ describe("the While you were away report", () => {
     db.prepare(
       `INSERT INTO orchestrator_checks (workspace_id, session_id, sha, kind, status) VALUES (?, ?, 'bbbbbbb222', 'review', 'block')`
     ).run(w, blocked);
+    action(id, w, blocked, "review", `review:${blocked}:bbbbbbb222`);
+    seedSession({ projectId: s.api.id, name: "left-alone", task: true });
     const stalled = seedSession({
       projectId: s.app.id,
       name: "docs-pass",
       task: true,
     });
-    action(id, w, stalled, "nudge", `nudge:${stalled}:1`);
-    action(id, w, stalled, "nudge", `nudge:${stalled}:2`);
+    action(id, w, stalled, "stalled", `stalled:${stalled}:1`);
+    action(id, w, stalled, "commit", `commit:${stalled}:2`);
 
     // Failed: a deploy, and an escalation in the window.
     action(
@@ -117,8 +120,14 @@ describe("the While you were away report", () => {
     ).run(w);
 
     const empty = createWorkspace("quiet").id;
-    const r = buildAwayReport(getAway(id)!, () => true);
+    // Away never reached this one (its orchestrator was idle): not reported.
+    const unreached = seedWorkspace();
+    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
+      unreached.task
+    );
+    const r = buildAwayReport(getAway(id)!, () => true, new Set([w, empty]));
     expect(mine(r, empty)).toBeUndefined();
+    expect(mine(r, unreached.workspace.id)).toBeUndefined();
     const ws = mine(r, w)!;
     expect(ws.merged).toEqual([
       {
@@ -133,7 +142,7 @@ describe("the While you were away report", () => {
     // Same-second seeds: the order between them is the id's.
     expect(ws.inFlight.map((t) => `${t.task}: ${t.why}`).sort()).toEqual([
       "add-billing: review found blocking issues at bbbbbbb",
-      "docs-pass: no PR yet; nudged 2x while you were away",
+      "docs-pass: no PR yet; flagged to the orchestrator 2x while you were away",
     ]);
     expect(ws.failed.map((f) => f.what)).toEqual([
       "Deploy failed after add-billing (PR #43) merged: not deployed",
@@ -162,7 +171,12 @@ describe("the While you were away report", () => {
     const s = seedWorkspace();
     const now = Date.now();
     const id = awayRow(now - HOUR, now);
-    const r = buildAwayReport(getAway(id)!, () => false);
+    action(id, s.workspace.id, s.task, "review", `review:${s.task}:x`);
+    const r = buildAwayReport(
+      getAway(id)!,
+      () => false,
+      new Set([s.workspace.id])
+    );
     expect(mine(r, s.workspace.id)!.inFlight[0].why).toBe("no PR yet");
     expect(r.totals.waiting).toBe(0);
     expect(reportMarkdown(r)).toContain("## Waiting on you\n\n- None.");
@@ -203,7 +217,11 @@ describe("the While you were away report", () => {
     db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
       dropped
     );
-    const r = buildAwayReport(getAway(id)!, (p) => p === s.api.id);
+    const r = buildAwayReport(
+      getAway(id)!,
+      (p) => p === s.api.id,
+      new Set([w])
+    );
     const ws = mine(r, w)!;
     expect(
       Object.fromEntries(ws.merged.map((m) => [m.task, m.deploy]))
@@ -219,7 +237,7 @@ describe("why a task is still in flight", () => {
     checks: [],
     failures: [],
     askKinds: [],
-    nudges: 0,
+    flagged: 0,
   };
   const check = (kind: string, status: string) => ({
     session_id: "t",
