@@ -399,6 +399,9 @@ describe("the write guard with a quick change open", () => {
       "aos notify 'unclosed",
       'aos notify "unclosed',
       'aos notify "x`id`"',
+      'aos notify "${(e):-\\$(touch /tmp/pwn)}"',
+      'aos notify "${(e):-\\`touch /tmp/pwn\\`}"',
+      "aos notify ${(e):-x}",
       "aos notify x $'\\'' ; touch /tmp/pwned ; echo \\'",
       `aos notify 'a\\'; rm -rf /`,
     ])

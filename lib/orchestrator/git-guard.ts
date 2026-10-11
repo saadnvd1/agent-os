@@ -47,10 +47,16 @@ export function aosRefusal(command: string): string | null {
       continue;
     }
     if (c === "\\") {
+      // zsh's ${(e)...} evaluates what an escaped \$ or \` left behind.
+      if (q === '"' && /[$`]/.test(command[i + 1] ?? ""))
+        return `Refused: ${bad}.`;
       i++;
       continue;
     }
     if (c === "`" || (c === "$" && command[i + 1] === "("))
+      return `Refused: ${bad}.`;
+    // ${...} and $[...] evaluate (zsh's ${(e)...} runs commands).
+    if (c === "$" && /[{[]/.test(command[i + 1] ?? ""))
       return `Refused: ${bad}.`;
     // $'...' and $"..." quote differently in the shell than here.
     if (c === "$" && q !== '"' && /['"]/.test(command[i + 1] ?? ""))
