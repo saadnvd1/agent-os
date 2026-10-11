@@ -29,6 +29,7 @@ import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { newDraft } from "@/stores/drafts";
 import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
+import { useAddExistingProject } from "@/components/Projects/AddProject/useAddExistingProject";
 import { usageUiActions } from "@/stores/usageUi";
 import { settingsCommands } from "@/components/Settings/commands";
 import { DRAFT_KEYS } from "@/lib/drafts";
@@ -66,6 +67,7 @@ export function useAppCommands({
   const current = workspaces.find((w) => w.id === workspaceId) ?? null;
   const dark = resolvedTheme?.startsWith("dark") ?? false;
   const addProject = useAddProject();
+  const addExisting = useAddExistingProject();
 
   const app: PaletteCommand[] = [
     {
@@ -113,6 +115,14 @@ export function useAppCommands({
     },
     ...(current
       ? [
+          {
+            id: "app.add-project-to-workspace",
+            title: `Add project to ${current.name}`,
+            group: "Actions",
+            keywords: ["existing", "move", "workspace", "project"],
+            icon: FolderPlus,
+            run: () => addExisting(current),
+          },
           {
             id: "app.orchestrator",
             title: `Open ${current.name}'s orchestrator`,

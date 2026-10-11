@@ -872,7 +872,10 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Tools:** `sessions` (every session's status, activity, task, PR, CI and
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
-  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `note`,
+  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`,
+  `add_project` (a git repository on the machine becomes a project of the
+  workspace, or the project already at that path moves in; folders that hold
+  secrets are refused), `note`,
   `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm` and `ask_saad`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and

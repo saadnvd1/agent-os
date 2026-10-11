@@ -21,6 +21,7 @@ export const TOOL_NAMES = {
   drop: name("drop"),
   stop: name("stop"),
   done: name("done"),
+  add_project: name("add_project"),
   note: name("note"),
   rule_add: name("rule_add"),
   rule_remove: name("rule_remove"),

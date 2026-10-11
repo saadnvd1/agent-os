@@ -15,6 +15,7 @@ import { sessionFacts } from "./facts";
 import { describeExternal, externalSessions } from "./external-sessions";
 import { resolveStaleAsks } from "./ask-settle";
 import { addNote } from "./notes";
+import { addProject } from "./add-project";
 import { addRule, removeRule } from "./rules";
 import { askSaad } from "./ask-tool";
 import { listOrchestratorPeers, messageOrchestrator } from "./cross";
@@ -41,6 +42,7 @@ const ACTING = new Set<ToolName>([
   "review",
   "sign_off",
   "arm",
+  "add_project",
 ]);
 
 // The orchestrator's tools, each scoped to its workspace and its arguments
@@ -120,6 +122,10 @@ export async function runTool(
       return stop(w, p(tool, raw).session);
     case "done":
       return done(w, p(tool, raw).session);
+    case "add_project": {
+      const a = p(tool, raw);
+      return addProject(w, a.path, a.name);
+    }
     case "note":
       addNote(w, p(tool, raw).text);
       return "Noted.";

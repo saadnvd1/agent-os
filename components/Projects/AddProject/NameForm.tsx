@@ -10,9 +10,11 @@ import { ParentPicker } from "./ParentPicker";
 // a separate, explicit click.
 export function NameForm({
   hostId,
+  workspaceId,
   onDone,
 }: {
   hostId: string;
+  workspaceId: string | null;
   onDone: (projectId: string) => void;
 }) {
   const [name, setName] = useState("");
@@ -67,7 +69,7 @@ export function NameForm({
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        init.mutate({ hostId, parent, name: name.trim() });
+        init.mutate({ hostId, parent, name: name.trim(), workspaceId });
       }}
     >
       <Input

@@ -51,6 +51,8 @@ function PaletteBody() {
 
   const results = useMemo(() => {
     if (query.trim()) return matchCommands(all, query);
+    // A picker shows every choice; it's the whole list.
+    if (picker) return all;
     // With no query, long groups are cut short so every group shows.
     const seen = new Map<string, number>();
     return all.filter((c) => {
@@ -58,7 +60,7 @@ function PaletteBody() {
       seen.set(c.group, n);
       return n <= GROUP_PREVIEW;
     });
-  }, [all, query]);
+  }, [all, query, picker]);
   const highlighted = Math.min(active, Math.max(results.length - 1, 0));
 
   useEffect(() => {
