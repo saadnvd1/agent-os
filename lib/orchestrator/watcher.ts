@@ -17,6 +17,7 @@ import { settleStaleAsks } from "./ask-settle";
 import { brakesOn, liftBrake } from "./brakes";
 import { anyArmed, mergeArmed } from "./armed";
 import { rebaseConflicting } from "./rebase";
+import { wakeTasks } from "./pr-wake";
 
 // Asks that stopped needing Saad: their task or PR finished some other
 // way, or brakes lifted with nothing trying to start.
@@ -61,8 +62,8 @@ export async function diffWorkspace(
   return nextDiffAt(now, facts, working);
 }
 
-// Rebases what conflicts with its base, then merges what's armed and
-// passes. In the background, one run per workspace at a time, so a git
+// Wakes tasks whose PRs failed CI or got reviews, rebases what conflicts
+// with its base, then merges what's armed and passes. In the background, one run per workspace at a time, so a git
 // fetch or a merge never holds up event delivery.
 const piping = new Set<string>();
 
@@ -70,6 +71,9 @@ function mergePipeline(workspaceId: string, facts: SessionFacts[]): void {
   if (piping.has(workspaceId)) return;
   piping.add(workspaceId);
   void (async () => {
+    await wakeTasks(workspaceId, facts).catch((error) =>
+      console.error(`Waking tasks in ${workspaceId}:`, error)
+    );
     await rebaseConflicting(workspaceId, facts);
     await mergeArmed(workspaceId, facts);
   })()

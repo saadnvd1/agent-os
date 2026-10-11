@@ -5,7 +5,13 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
-  const { name, collapsed, sortOrder, maxRunningTasks } = await request.json();
+  const { name, collapsed, sortOrder, maxRunningTasks, wakeTasksOnPR } =
+    await request.json();
+  if (wakeTasksOnPR !== undefined && typeof wakeTasksOnPR !== "boolean")
+    return NextResponse.json(
+      { error: "wakeTasksOnPR is true or false" },
+      { status: 400 }
+    );
   let workspace;
   try {
     workspace = updateWorkspace(id, {
@@ -13,6 +19,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       collapsed,
       sortOrder,
       maxRunningTasks,
+      wakeTasksOnPR,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

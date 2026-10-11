@@ -8,7 +8,7 @@
  */
 
 import { db, type StackItemStatus, type StackStatus } from "../db";
-import { isFinished } from "../tasks/state";
+import { isFinished, type TaskPR } from "../tasks/state";
 import { ciWord } from "./describe";
 import type { SessionFacts } from "./facts";
 import { untrusted } from "./untrusted";
@@ -46,6 +46,13 @@ function hash(text: string): string {
   return (h >>> 0).toString(36);
 }
 
+// A session's condition is keyed by what it is and the session.
+export const conditionKey = (key: string, sessionId: string) =>
+  `${key}:${sessionId}`;
+// A PR's CI verdict on a head.
+export const ciKey = (pr: Pick<TaskPR, "number" | "head" | "checks">) =>
+  `ci:${pr.number}:${pr.head ?? ""}:${pr.checks}`;
+
 function sessionConditions(
   f: SessionFacts,
   now: number,
@@ -60,7 +67,7 @@ function sessionConditions(
     waiting = false
   ) =>
     out.push({
-      key: `${key}:${f.id}`,
+      key: conditionKey(key, f.id),
       subject: f.id,
       line,
       sticky,
@@ -79,7 +86,7 @@ function sessionConditions(
     const settling = pr.checks === "pass" && (f.task?.ciSettleIn ?? 0) > 0;
     if ((pr.checks === "pass" && !settling) || pr.checks === "fail")
       add(
-        `ci:${pr.number}:${pr.head ?? ""}:${pr.checks}`,
+        ciKey(pr),
         `${who}: ${ciWord(pr)}${pr.checks === "pass" ? " and settled" : ""}`
       );
   }

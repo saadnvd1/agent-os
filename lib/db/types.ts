@@ -97,6 +97,8 @@ export interface Session {
   rebased_to?: string | null;
   // The PR head the task was last asked to rebase by hand.
   rebase_asked_head?: string | null;
+  // When its PR's reviews and comments started being watched (pr-wake.ts).
+  pr_wake_since?: string | null;
   // Orchestration fields
   conductor_session_id: string | null;
   worker_task: string | null;
@@ -204,6 +206,9 @@ export interface Workspace {
   orch_paused_at: string | null;
   // Tasks running at once before new ones queue (lib/tasks/queue.ts); null: no limit.
   max_running_tasks: number | null;
+  // Tasks are messaged about failing checks and reviews on their PRs
+  // (orchestrator/pr-wake.ts).
+  wake_tasks_on_pr: boolean;
   created_at: string;
 }
 

@@ -18,6 +18,8 @@ export interface TaskPR {
   // The head commit the checks ran on, and the first failing check's name.
   head?: string;
   failing?: string | null;
+  // Where that check's run is (an Actions job URL for a workflow check).
+  failingUrl?: string | null;
   // How many checks are registered on the head.
   checkCount?: number;
   // The body's Code review section: null when it has none, undefined
@@ -340,10 +342,16 @@ export function blockedReason(paneTail: string): string | null {
 }
 
 // The first failing check in gh's statusCheckRollup, by name.
+const firstFailing = (rollup: RollupEntry[]) =>
+  liveChecks(rollup).find((r) => FAILED.includes(outcome(r)));
+
 export function failingCheck(rollup: RollupEntry[]): string | null {
-  const c = liveChecks(rollup).find((r) => FAILED.includes(outcome(r)));
+  const c = firstFailing(rollup);
   return c ? (c.name ?? c.context ?? null) : null;
 }
+
+export const failingUrl = (rollup: RollupEntry[]): string | null =>
+  firstFailing(rollup)?.detailsUrl ?? null;
 
 // Keys that answer Claude's folder-trust prompt with "trust", or null when the
 // pane isn't showing it. The selection marker starts on "No, exit".

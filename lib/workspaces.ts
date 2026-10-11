@@ -6,11 +6,15 @@
 import { randomUUID } from "crypto";
 import { db, type Workspace } from "./db";
 
-type WorkspaceRow = Omit<Workspace, "collapsed"> & { collapsed: number };
+type WorkspaceRow = Omit<Workspace, "collapsed" | "wake_tasks_on_pr"> & {
+  collapsed: number;
+  wake_tasks_on_pr: number;
+};
 
 const toWorkspace = (row: WorkspaceRow): Workspace => ({
   ...row,
   collapsed: !!row.collapsed,
+  wake_tasks_on_pr: !!row.wake_tasks_on_pr,
 });
 
 export function listWorkspaces(): Workspace[] {
@@ -57,18 +61,20 @@ export function updateWorkspace(
     collapsed?: boolean;
     sortOrder?: number;
     maxRunningTasks?: number | null;
+    wakeTasksOnPR?: boolean;
   }
 ): Workspace | null {
   const existing = getWorkspace(id);
   if (!existing) return null;
   const name = updates.name?.trim() || existing.name;
   db.prepare(
-    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ?, max_running_tasks = ? WHERE id = ?`
+    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ?, max_running_tasks = ?, wake_tasks_on_pr = ? WHERE id = ?`
   ).run(
     name,
     (updates.collapsed ?? existing.collapsed) ? 1 : 0,
     updates.sortOrder ?? existing.sort_order,
     taskLimit(updates.maxRunningTasks, existing.max_running_tasks),
+    (updates.wakeTasksOnPR ?? existing.wake_tasks_on_pr) ? 1 : 0,
     id
   );
   return getWorkspace(id);

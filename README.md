@@ -900,6 +900,18 @@ it may do on its own, and the lines that always come back to you as asks.
   unchanged (same `git patch-id`; a fresh review starts otherwise). Not
   clean: the task is asked once to rebase. Either way, one event. Main and
   other tasks' branches are never written.
+- **Tasks woken on CI failures and reviews:** a check failing on a task's
+  PR head messages the task's own agent once per head, with the check, the
+  failing step and about 60 lines of `gh run view --log-failed` around the
+  error, telling it to fix the root cause, push and update its Reviewed:
+  line. A review or comment from a collaborator (not the account gh runs
+  as, which is the task's own) wakes it once per review or comment; one
+  GraphQL query per repository a minute fingerprints the open task PRs, and
+  only a PR whose fingerprint moved has its reviews read. Comment-only wakes
+  stop at 10 a task; changes requested always wake. A task mid-turn gets it
+  queued, the orchestrator hears one line per wake, and merged, closed,
+  dropped or done tasks aren't watched. On by default; **Settings →
+  Workspaces** turns it off per workspace.
 - **External PRs and sessions:** `review` and `sign_off` also take an open
   PR no AgentOS task owns (dispatch, a person, dependabot) by `#N`,
   `owner/repo#N` or URL, as long as its repository is one of the workspace's

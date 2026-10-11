@@ -1,6 +1,7 @@
 "use client";
 
-import { useWorkspacesQuery } from "@/data/workspaces";
+import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { useUpdateWorkspace, useWorkspacesQuery } from "@/data/workspaces";
 import { TaskLimitForm } from "./TaskLimitForm";
 import { RulesForm } from "./RulesForm";
 import { FreshStartForm } from "./FreshStartForm";
@@ -8,6 +9,7 @@ import { FreshStartForm } from "./FreshStartForm";
 // Settings > Workspaces: each workspace's own settings.
 export function WorkspaceSettings() {
   const { data: workspaces, isPending, isError, error } = useWorkspacesQuery();
+  const update = useUpdateWorkspace();
 
   if (isPending)
     return <div className="bg-muted/40 h-32 animate-pulse rounded-lg" />;
@@ -39,6 +41,12 @@ export function WorkspaceSettings() {
             workspace={w}
           />
           <RulesForm workspaceId={w.id} />
+          <SettingToggle
+            title="Wake tasks on CI failures and reviews"
+            detail="A task's agent is messaged once when a check fails on its PR's head, with the log's tail, and when someone reviews or comments on it."
+            checked={w.wake_tasks_on_pr}
+            onChange={(on) => update.mutate({ id: w.id, wakeTasksOnPR: on })}
+          />
         </section>
       ))}
       <FreshStartForm />
