@@ -235,6 +235,89 @@ function hasShellTrue(node: ts.Expression | undefined): boolean {
   );
 }
 
+const isChildProcess = (spec: string) => /^(node:)?child_process$/.test(spec);
+
+/**
+ * The names a file calls child_process through: `exec` (or its alias) from
+ * a named import or a destructured require, a namespace (`cp.exec`), and a
+ * promisified copy (`execAsync = promisify(exec)`). RegExp's .exec is none
+ * of these.
+ */
+function childProcessNames(sf: ts.SourceFile) {
+  const named = new Map<string, string>();
+  const spaces = new Set<string>();
+  const requireOf = (e?: ts.Expression) =>
+    !!e &&
+    ts.isCallExpression(e) &&
+    ts.isIdentifier(e.expression) &&
+    e.expression.text === "require" &&
+    !!e.arguments[0] &&
+    ts.isStringLiteralLike(e.arguments[0]) &&
+    isChildProcess(e.arguments[0].text);
+  walk(sf, (node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      isChildProcess(node.moduleSpecifier.text)
+    ) {
+      const clause = node.importClause;
+      if (clause?.name) spaces.add(clause.name.text);
+      const bindings = clause?.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings))
+        spaces.add(bindings.name.text);
+      if (bindings && ts.isNamedImports(bindings))
+        for (const el of bindings.elements)
+          named.set(el.name.text, (el.propertyName ?? el.name).text);
+    }
+    if (!ts.isVariableDeclaration(node) || !node.initializer) return;
+    const init = node.initializer;
+    if (requireOf(init)) {
+      if (ts.isIdentifier(node.name)) spaces.add(node.name.text);
+      else if (ts.isObjectBindingPattern(node.name))
+        for (const el of node.name.elements)
+          if (ts.isIdentifier(el.name))
+            named.set(
+              el.name.text,
+              el.propertyName && ts.isIdentifier(el.propertyName)
+                ? el.propertyName.text
+                : el.name.text
+            );
+    }
+  });
+  // promisify(exec) keeps exec's meaning; a second pass sees the imports.
+  walk(sf, (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      calleeName(node.initializer) === "promisify"
+    ) {
+      const arg = node.initializer.arguments[0];
+      const target =
+        arg && ts.isIdentifier(arg) ? named.get(arg.text) : undefined;
+      if (target) named.set(node.name.text, target);
+    }
+  });
+  return { named, spaces };
+}
+
+/** The child_process function a call reaches, or null. */
+function childProcessCall(
+  call: ts.CallExpression,
+  names: ReturnType<typeof childProcessNames>
+): string | null {
+  const c = call.expression;
+  if (ts.isIdentifier(c)) return names.named.get(c.text) ?? null;
+  if (
+    ts.isPropertyAccessExpression(c) &&
+    ts.isIdentifier(c.expression) &&
+    names.spaces.has(c.expression.text)
+  )
+    return c.name.text;
+  return null;
+}
+
 /**
  * Commands a shell parses: exec/execSync with a non-literal string, any
  * spawn with `shell: true`, and `sh -c` / `bash -c` given a built string.
@@ -249,9 +332,10 @@ export function shellCalls(files: SourceFile[]): {
   for (const file of files) {
     if (!isSource(file.path) || !CHILD_PROCESS.test(file.text)) continue;
     const sf = parse(file);
+    const names = childProcessNames(sf);
     walk(sf, (node) => {
       if (!ts.isCallExpression(node)) return;
-      const name = calleeName(node);
+      const name = childProcessCall(node, names);
       if (!name) return;
       const where = `${file.path}:${lineOf(sf, node.getStart(sf))}`;
       const [first, second] = node.arguments;

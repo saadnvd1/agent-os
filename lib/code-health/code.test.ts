@@ -151,6 +151,31 @@ describe("shellCalls", () => {
     expect(risky[0].text).toContain("ghp_…");
   });
 
+  it("follows aliases, namespaces, require and promisify, and skips RegExp.exec", () => {
+    const { risky } = shellCalls([
+      f(
+        "lib/a.ts",
+        [
+          'import * as cp from "node:child_process";',
+          'import { exec as run } from "child_process";',
+          'const { execSync } = require("child_process");',
+          "const execAsync = promisify(run);",
+          "const m = /x(\\d+)/.exec(`${line}`);",
+          "cp.exec(`a ${x}`);",
+          "run(`b ${x}`);",
+          "execSync(`c ${x}`);",
+          "await execAsync(`d ${x}`);",
+        ].join("\n")
+      ),
+    ]);
+    expect(risky.map((r) => [r.where, r.call])).toEqual([
+      ["lib/a.ts:6", "exec"],
+      ["lib/a.ts:7", "exec"],
+      ["lib/a.ts:8", "execSync"],
+      ["lib/a.ts:9", "exec"],
+    ]);
+  });
+
   it("only reads files that use child_process", () => {
     expect(shellCalls([f("lib/db.ts", "db.exec(`x ${y}`);")]).risky).toEqual(
       []
