@@ -19,7 +19,6 @@
  * hears one event either way.
  */
 
-import { execFile } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -28,6 +27,7 @@ import { sendMessage } from "../bus";
 import { hostLink } from "../hosts/remote-api";
 import type { TaskPR } from "../tasks/state";
 import { run } from "../tasks/gh";
+import { git as runGit, gitFetch, revParse } from "../git-exec";
 import { withRestackedLine } from "../tasks/code-review";
 import { outputOf, type Runner } from "../stacks/git";
 import { restackedHeads, stackNotice } from "../stacks/restack";
@@ -145,7 +145,7 @@ export async function mergesCleanly(
   head: string
 ): Promise<boolean> {
   try {
-    await run("git", ["merge-tree", "--write-tree", base, head], repo);
+    await runGit(repo, ["merge-tree", "--write-tree", base, head]);
     return true;
   } catch (error) {
     if ((error as { code?: unknown }).code === 1) return false;
@@ -163,14 +163,11 @@ async function rebaseOne(
   const repo = repoOf(task);
   const branch = task.base_branch || "main";
   // A failed fetch throws: nothing is judged against a stale base.
-  await run(
-    "git",
-    ["fetch", "--quiet", "--", "origin", branch, task.branch_name!],
-    repo,
-    60000
-  );
+  await gitFetch(repo, ["--quiet", "--", "origin", branch, task.branch_name!], {
+    timeout: 60000,
+  });
   const onto = `origin/${branch}`;
-  const baseTip = (await run("git", ["rev-parse", onto], repo)).trim();
+  const baseTip = await revParse(repo, onto);
   const attempt = `${pr.head}:${baseTip}`;
   if (tried.get(task.id) === attempt) return;
 
@@ -344,22 +341,21 @@ async function rebaseAt(
 
 // The PR's own patch against the base, as `git patch-id` sees it.
 async function patchId(repo: string, range: string): Promise<string | null> {
-  const diff = await run(
-    "git",
-    ["diff", "--no-color", "--no-ext-diff", "--full-index", range],
-    repo
-  ).catch(() => null);
+  const diff = await runGit(repo, [
+    "diff",
+    "--no-color",
+    "--no-ext-diff",
+    "--full-index",
+    range,
+  ]).catch(() => null);
   if (!diff) return null;
-  return new Promise((resolve) => {
-    const child = execFile(
-      "git",
-      ["patch-id", "--verbatim"],
-      { cwd: repo, timeout: 30000 },
-      (error, out) => resolve(error ? null : out.split(" ")[0] || null)
-    );
-    child.stdin?.on("error", () => {});
-    child.stdin?.end(diff);
-  });
+  return runGit(repo, ["patch-id", "--verbatim"], {
+    input: diff,
+    timeout: 30000,
+  }).then(
+    (out) => out.split(" ")[0] || null,
+    () => null
+  );
 }
 
 // The review of the head before the rebase, carried to the new head when

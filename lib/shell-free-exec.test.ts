@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
+import { promisify } from "util";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
@@ -15,10 +16,9 @@ const answer = vi.hoisted(() => ({
 }));
 vi.mock("child_process", async (original) => {
   const real = await original<typeof import("child_process")>();
-  type Callback = (
-    e: Error | null,
-    out: { stdout: string; stderr: string }
-  ) => void;
+  // Node's callback shape; promisify gets {stdout, stderr} through
+  // promisify.custom below, as it does from the real execFile.
+  type Callback = (e: Error | null, stdout: string, stderr: string) => void;
   const execFile = (file: string, args: string[], ...rest: unknown[]) => {
     const cb = rest.at(-1) as Callback;
     const call: Call = { file, args };
@@ -37,14 +37,12 @@ vi.mock("child_process", async (original) => {
               "error",
               Object.assign(new Error("EPIPE"), { code: "EPIPE" })
             );
-            cb(new Error("killed"), { stdout: "", stderr: "" });
+            cb(new Error("killed"), "", "");
           });
           return;
         }
         setImmediate(() =>
-          out === null
-            ? cb(new Error("failed"), { stdout: "", stderr: "" })
-            : cb(null, { stdout: out, stderr: "" })
+          out === null ? cb(new Error("failed"), "", "") : cb(null, out, "")
         );
       },
     });
@@ -74,6 +72,15 @@ vi.mock("child_process", async (original) => {
     };
     return child;
   };
+  Object.assign(execFile, {
+    [promisify.custom]: (file: string, args: string[], ...rest: unknown[]) =>
+      new Promise((resolve, reject) =>
+        execFile(file, args, ...rest, ((e, stdout, stderr) =>
+          e
+            ? reject(Object.assign(e, { stdout, stderr }))
+            : resolve({ stdout, stderr })) as Callback)
+      ),
+  });
   const mocked = { ...real, execFile, exec, spawn };
   return { ...mocked, default: mocked };
 });
@@ -542,17 +549,36 @@ describe("summarize reads Claude's session id as an id", async () => {
 describe("POST /api/git/commit", async () => {
   const { POST } = await import("@/app/api/git/commit/route");
 
+  // git's own verdict on a branch name, now that it's asked off the event
+  // loop through the mocked execFile.
+  const real =
+    await vi.importActual<typeof import("child_process")>("child_process");
+  const gitTakes = (name: string) => {
+    try {
+      real.execFileSync("git", ["check-ref-format", "--branch", name], {
+        stdio: "pipe",
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // A repository on main with one file staged, as far as the reads go; a
   // checkout or commit that ran would be recorded.
   beforeEach(() => {
     answer.fn = (_file, args) =>
-      args.includes("rev-parse")
-        ? ".git\n"
-        : args.includes("status")
-          ? "A  staged.txt\n"
-          : args.includes("--show-current")
-            ? "main\n"
-            : "";
+      args.includes("check-ref-format")
+        ? gitTakes(args.at(-1)!)
+          ? ""
+          : null
+        : args.includes("rev-parse")
+          ? ".git\n"
+          : args.includes("status")
+            ? "A  staged.txt\n"
+            : args.includes("--show-current")
+              ? "main\n"
+              : "";
   });
 
   it.each(["-f", "--orphan=x", "x; touch /tmp/pwned", ["a"]])(

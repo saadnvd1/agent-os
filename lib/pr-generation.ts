@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import { git as runGit } from "./git-exec";
 import { run } from "./tasks/gh";
 import { UNTRUSTED_RULE, untrusted } from "./orchestrator/untrusted";
 
@@ -56,7 +57,7 @@ async function getGitContext(
 
   // Names and text here come from the repository; every one is an
   // argument to git, never shell text or an option.
-  const git = (args: string[]) => run("git", args, workingDir, 10_000);
+  const git = (args: string[]) => runGit(workingDir, args, { timeout: 10_000 });
   const lines = (out: string) =>
     out
       .split("\n")

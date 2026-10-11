@@ -2,8 +2,6 @@
  * Git Worktree management for isolated feature development
  */
 
-import { execFile } from "child_process";
-import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -15,11 +13,10 @@ import {
   generateBranchName,
 } from "./git";
 import { installWorktreeHooks } from "./worktree-hooks";
-
-const execFileAsync = promisify(execFile);
+import { gitResult, isGitError, worktreeList } from "./git-exec";
 
 const git = (cwd: string, args: string[], timeout: number) =>
-  execFileAsync("git", ["-C", cwd, ...args], { timeout });
+  gitResult(cwd, args, { timeout });
 
 /**
  * The main checkout a worktree belongs to, or "" when it can't be read.
@@ -200,10 +197,7 @@ export function worktreeAddTimeout(
   return Math.min(MAX_ADD_TIMEOUT_MS, Math.round(ADD_TIMEOUT_MS * scale));
 }
 
-const isTimeout = (error: unknown) =>
-  !!error &&
-  typeof error === "object" &&
-  (error as { killed?: boolean }).killed === true;
+const isTimeout = (error: unknown) => isGitError(error) && error.timedOut;
 
 function describeAddError(error: unknown, timeout: number): Error {
   if (isTimeout(error))
@@ -406,40 +400,8 @@ export async function listWorktrees(projectPath: string): Promise<
     head: string;
   }>
 > {
-  const resolvedProjectPath = resolvePath(projectPath);
-
   try {
-    const { stdout } = await git(
-      resolvedProjectPath,
-      ["worktree", "list", "--porcelain"],
-      10000
-    );
-
-    const worktrees: Array<{ path: string; branch: string; head: string }> = [];
-    const entries = stdout.split("\n\n").filter(Boolean);
-
-    for (const entry of entries) {
-      const lines = entry.split("\n");
-      let worktreePath = "";
-      let branch = "";
-      let head = "";
-
-      for (const line of lines) {
-        if (line.startsWith("worktree ")) {
-          worktreePath = line.slice(9);
-        } else if (line.startsWith("branch ")) {
-          branch = line.slice(7).replace("refs/heads/", "");
-        } else if (line.startsWith("HEAD ")) {
-          head = line.slice(5);
-        }
-      }
-
-      if (worktreePath) {
-        worktrees.push({ path: worktreePath, branch, head });
-      }
-    }
-
-    return worktrees;
+    return await worktreeList(resolvePath(projectPath), { timeout: 10000 });
   } catch {
     return [];
   }

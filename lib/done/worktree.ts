@@ -7,7 +7,7 @@
 import fs from "fs";
 import type { Session } from "../db";
 import { getDefaultBranch } from "../git";
-import { run } from "../tasks/gh";
+import { git as runGit } from "../git-exec";
 import { mergePolicy } from "../tasks/merge-policy";
 import { getProject } from "../projects";
 import {
@@ -24,7 +24,7 @@ export type WorktreeFate =
   | { action: "kept"; why: string; path: string };
 
 const git = (cwd: string, ...args: string[]) =>
-  run("git", args, cwd, 30000).then((out) => out.trim());
+  runGit(cwd, args, { timeout: 30000 }).then((out) => out.trim());
 
 // The main checkout a worktree belongs to.
 async function repoOf(worktree: string): Promise<string> {

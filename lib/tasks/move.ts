@@ -13,7 +13,7 @@ import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { launchClaude } from "../agents/launch";
 import { buildTaskBrief } from "./brief";
-import { run } from "./gh";
+import { git as runGit } from "../git-exec";
 import { getTaskSession } from "./session";
 import { projectRef } from "./project-ref";
 import { moveRefusal } from "./move-guard";
@@ -32,7 +32,8 @@ import {
 export * from "./move-bundle";
 
 const execFileAsync = promisify(execFile);
-const git = (cwd: string, ...args: string[]) => run("git", args, cwd, 120000);
+const git = (cwd: string, ...args: string[]) =>
+  runGit(cwd, args, { timeout: 120000 });
 
 // Moves in flight in this process; the row's 'moving' outlives a restart.
 const g = globalThis as unknown as { __agentosExporting?: Set<string> };

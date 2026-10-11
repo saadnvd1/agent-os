@@ -13,10 +13,10 @@ import { getProject } from "../projects";
 import { requireClient } from "../lumifyhub/connection";
 import { promptFromCard } from "../lumifyhub/task-cards";
 import { createTask } from "../tasks";
-import { run } from "../tasks/gh";
 import { expandHome } from "../tasks/session";
 import { itemName } from "./guard";
 import { outputOf } from "./git";
+import { gitFetch, revParse } from "../git-exec";
 
 async function stackedBase(
   parent: StackItemRow,
@@ -31,16 +31,12 @@ async function stackedBase(
   if (!branch) throw new Error(`${itemName(parent)} has no branch to stack on`);
   // The branch must be on ORIGIN: the PR's base is the remote branch, and a
   // child cut from unpushed commits opens a PR whose diff includes them.
-  await run("git", ["fetch", "origin", branch], repo).catch(
-    (error: unknown) => {
-      throw new Error(
-        `${branch} is not on origin: ${outputOf(error).slice(0, 200)}`
-      );
-    }
-  );
-  const tip = (
-    await run("git", ["rev-parse", `origin/${branch}`], repo)
-  ).trim();
+  await gitFetch(repo, ["origin", branch]).catch((error: unknown) => {
+    throw new Error(
+      `${branch} is not on origin: ${outputOf(error).slice(0, 200)}`
+    );
+  });
+  const tip = await revParse(repo, `origin/${branch}`);
   const also = itemIds(item.also_item_ids)
     .map((id) => items.find((i) => i.id === id))
     .filter((i): i is StackItemRow => !!i && i.status !== "merged")

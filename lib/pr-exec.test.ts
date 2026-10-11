@@ -8,9 +8,7 @@ import {
   getBaseBranch,
   getCommitsSinceBase,
   getPRForBranch,
-  remoteDefaultBranch,
 } from "./pr";
-import { getDefaultBranch } from "./git-status";
 import { generatePRContent } from "./pr-generation";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -46,10 +44,9 @@ describe("PR reads with names a repository chose", () => {
   );
   commit("feature work");
 
-  it("reads the remote default branch literally", async () => {
-    expect(remoteDefaultBranch(dir)).toBe(hostile);
-    expect(await getBaseBranch(dir)).toBe(hostile);
-    expect(getDefaultBranch(dir)).toBe(hostile);
+  it("ignores a remote default branch that isn't a plain name", async () => {
+    expect(await getBaseBranch(dir)).toBe("main");
+    expect(fs.existsSync(marker)).toBe(false);
   });
 
   it("lists commits since it without running anything", async () => {
@@ -63,7 +60,6 @@ describe("PR reads with names a repository chose", () => {
   it("falls back to main with no remote default", async () => {
     const plain = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-"));
     git(plain, "init", "-q", "-b", "main");
-    expect(remoteDefaultBranch(plain)).toBe("main");
     expect(await getBaseBranch(plain)).toBe("main");
   });
 });

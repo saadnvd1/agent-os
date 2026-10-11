@@ -1,4 +1,4 @@
-import { execFileSync } from "child_process";
+import { git } from "./git-exec";
 import { expandPath } from "./git-status";
 
 export interface CommitSummary {
@@ -51,27 +51,23 @@ function getRelativeTime(timestamp: number): string {
 /**
  * Get commit history
  */
-export function getCommitHistory(
+export async function getCommitHistory(
   workingDir: string,
   limit: number = 30
-): CommitSummary[] {
+): Promise<CommitSummary[]> {
   const cwd = expandPath(workingDir);
 
   try {
     // Format: hash|shortHash|subject|body|author|email|timestamp
     // Using %x00 as separator to handle commit messages with |
     const format = "%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%at";
-    const output = execFileSync(
-      "git",
-      [
-        "log",
-        `--format=${format}`,
-        "-n",
-        String(Math.trunc(limit) || 30),
-        "--shortstat",
-      ],
-      { cwd, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
-    );
+    const output = await git(cwd, [
+      "log",
+      `--format=${format}`,
+      "-n",
+      String(Math.trunc(limit) || 30),
+      "--shortstat",
+    ]);
 
     const commits: CommitSummary[] = [];
     const lines = output.split("\n");
@@ -160,20 +156,18 @@ export function getCommitHistory(
 // A commit as git names it: 7 to 40 hex digits, nothing an option could be.
 export const isCommitHash = (hash: string) => /^[0-9a-f]{7,40}$/.test(hash);
 
-export function getCommitDetail(
+export async function getCommitDetail(
   workingDir: string,
   commitHash: string
-): CommitDetail | null {
+): Promise<CommitDetail | null> {
   if (!isCommitHash(commitHash)) return null;
   const cwd = expandPath(workingDir);
 
   try {
     // Get commit info
     const format = "%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%at";
-    const infoOutput = execFileSync(
-      "git",
-      ["show", `--format=${format}`, "-s", commitHash, "--"],
-      { cwd, encoding: "utf-8" }
+    const infoOutput = (
+      await git(cwd, ["show", `--format=${format}`, "-s", commitHash, "--"])
     ).trim();
 
     const parts = infoOutput.split("\x00");
@@ -183,19 +177,11 @@ export function getCommitDetail(
       parts;
     const timestamp = parseInt(timestampStr, 10);
 
-    // Get file stats using numstat
-    const statOutput = execFileSync(
-      "git",
-      ["show", "--numstat", "--format=", commitHash, "--"],
-      { cwd, encoding: "utf-8" }
-    );
-
-    // Get name-status for detecting renames
-    const nameStatusOutput = execFileSync(
-      "git",
-      ["show", "--name-status", "--format=", commitHash, "--"],
-      { cwd, encoding: "utf-8" }
-    );
+    // File stats from numstat; name-status for detecting renames
+    const [statOutput, nameStatusOutput] = await Promise.all([
+      git(cwd, ["show", "--numstat", "--format=", commitHash, "--"]),
+      git(cwd, ["show", "--name-status", "--format=", commitHash, "--"]),
+    ]);
 
     const files: CommitFile[] = [];
     const statLines = statOutput.trim().split("\n").filter(Boolean);
@@ -283,23 +269,25 @@ export function getCommitDetail(
 /**
  * Get diff for a specific file in a commit
  */
-export function getCommitFileDiff(
+export async function getCommitFileDiff(
   workingDir: string,
   commitHash: string,
   filePath: string
-): string {
+): Promise<string> {
   if (!isCommitHash(commitHash)) return "";
   const cwd = expandPath(workingDir);
 
   try {
     // Get diff for the specific file in this commit
     // Use -m to handle merge commits (shows diff against first parent)
-    const diff = execFileSync(
-      "git",
-      ["show", "-m", "--first-parent", commitHash, "--", filePath],
-      { cwd, encoding: "utf-8", maxBuffer: 5 * 1024 * 1024 }
-    );
-    return diff;
+    return await git(cwd, [
+      "show",
+      "-m",
+      "--first-parent",
+      commitHash,
+      "--",
+      filePath,
+    ]);
   } catch (error) {
     console.error("Failed to get commit file diff:", error);
     return "";

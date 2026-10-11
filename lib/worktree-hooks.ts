@@ -16,17 +16,13 @@
  * own git directory, so it goes when the worktree does.
  */
 
-import { execFile } from "child_process";
-import { promisify } from "util";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { git as runGit } from "./git-exec";
 
-const execFileAsync = promisify(execFile);
-
-const git = async (cwd: string, args: string[]) =>
-  (await execFileAsync("git", ["-C", cwd, ...args], { timeout: 10_000 }))
-    .stdout;
+const git = (cwd: string, args: string[]) =>
+  runGit(cwd, args, { timeout: 10_000 });
 
 // The lines that are attribution, as an extended regex for `grep -iE`. The
 // same rule as lib/tasks/code-review.ts's ATTRIBUTION for PR bodies; a test

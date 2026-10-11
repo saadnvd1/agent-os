@@ -4,18 +4,13 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { execFileSync } from "child_process";
+import { gitSync } from "../git-exec";
 
 // Old enough that CI counts as settled on every commit.
 const env = { ...process.env, GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" };
 
 export const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    stdio: "pipe",
-    env,
-  }).trim();
+  gitSync(cwd, args, { env }).trim();
 
 export function commitFile(cwd: string, file: string, text: string): string {
   fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });

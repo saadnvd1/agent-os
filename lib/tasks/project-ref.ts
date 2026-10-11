@@ -7,12 +7,10 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import { createProject, getAllProjects } from "../projects";
 import { isRemoteHost } from "../hosts";
 import type { Project } from "../db";
-import { run } from "./gh";
+import { git, gitOk } from "../git-exec";
 import { expandHome } from "./session";
 
 export interface ProjectRef {
@@ -22,8 +20,6 @@ export interface ProjectRef {
   // The origin remote's URL; null when the repo has none.
   remote: string | null;
 }
-
-const execFileAsync = promisify(execFile);
 
 /** A ref as another machine sent it: its shape, before anything reads it. */
 export function isProjectRef(v: unknown): v is ProjectRef {
@@ -65,9 +61,7 @@ export function repoIdentity(remote: string | null): string | null {
 }
 
 export async function originOf(dir: string): Promise<string | null> {
-  const url = await run("git", ["remote", "get-url", "origin"], dir).catch(
-    () => ""
-  );
+  const url = await git(dir, ["remote", "get-url", "origin"]).catch(() => "");
   return url.trim() || null;
 }
 
@@ -122,7 +116,9 @@ export async function ensureProject(ref: ProjectRef): Promise<Project> {
     if (!ref.remote || !REMOTE_URL.test(ref.remote))
       throw new Error(`${ref.name} isn't here and has no remote to clone`);
     fs.mkdirSync(path.dirname(dir), { recursive: true });
-    await run("git", ["clone", "--", ref.remote, dir], os.homedir(), 600000);
+    await git(os.homedir(), ["clone", "--", ref.remote, dir], {
+      timeout: 600000,
+    });
   }
   return createProject({
     name: ref.name || path.basename(dir),
@@ -148,18 +144,15 @@ export async function whyNotHere(ref: ProjectRef): Promise<string | null> {
   const remote = withoutCredentials(ref.remote);
   if (!remote || !REMOTE_URL.test(remote))
     return "Not there, and no remote to clone";
-  try {
-    await execFileAsync("git", ["ls-remote", "--heads", "--", remote], {
-      cwd: os.homedir(),
+  const reachable = await gitOk(
+    os.homedir(),
+    ["ls-remote", "--heads", "--", remote],
+    {
       timeout: 15000,
       env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
         GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes",
       },
-    });
-    return null;
-  } catch {
-    return "Can't clone it there";
-  }
+    }
+  );
+  return reachable ? null : "Can't clone it there";
 }

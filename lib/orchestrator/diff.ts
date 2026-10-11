@@ -7,7 +7,7 @@
  */
 
 import path from "path";
-import { run } from "../tasks/gh";
+import { git } from "../git-exec";
 import { SECRET_ASSIGNMENT, SECRET_TOKENS } from "./untrusted";
 
 export interface ChangedFile {
@@ -38,30 +38,32 @@ export async function changedFiles(
   base: string,
   sha: string
 ): Promise<ChangedFile[]> {
-  const raw = await run(
-    "git",
-    ["diff", "--raw", "--no-renames", `${base}...${sha}`],
-    repo
-  );
+  const raw = await git(repo, [
+    "diff",
+    "--raw",
+    "--no-renames",
+    `${base}...${sha}`,
+  ]);
   const files = parseRaw(raw);
   for (const f of files)
     if (f.link !== undefined && f.status !== "D")
-      f.link = (await run("git", ["show", `${sha}:${f.path}`], repo)).trim();
+      f.link = (await git(repo, ["show", `${sha}:${f.path}`])).trim();
   return files;
 }
 
 // The whole change, as a reviewer reads it.
 export function fullDiff(repo: string, base: string, sha: string) {
-  return run("git", ["diff", "--no-color", `${base}...${sha}`], repo);
+  return git(repo, ["diff", "--no-color", `${base}...${sha}`]);
 }
 
 // The lines the change adds, for the secrets check.
 export async function addedLines(repo: string, base: string, sha: string) {
-  const diff = await run(
-    "git",
-    ["diff", "-U0", "--no-color", `${base}...${sha}`],
-    repo
-  );
+  const diff = await git(repo, [
+    "diff",
+    "-U0",
+    "--no-color",
+    `${base}...${sha}`,
+  ]);
   return diff
     .split("\n")
     .filter((l) => l.startsWith("+") && !l.startsWith("+++"))

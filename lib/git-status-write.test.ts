@@ -99,23 +99,25 @@ describe("createBranch", () => {
     "a b",
     "a~1",
     "x.lock",
-  ])("refuses %j and leaves the branch alone", (name) => {
-    expect(isValidBranchName(repo, name)).toBe(false);
-    expect(() => createBranch(repo, name)).toThrow(/Invalid branch name/);
+  ])("refuses %j and leaves the branch alone", async (name) => {
+    expect(await isValidBranchName(repo, name)).toBe(false);
+    await expect(createBranch(repo, name)).rejects.toThrow(
+      /Invalid branch name/
+    );
     expect(git("branch", "--show-current").trim()).toBe("main");
     expect(git("branch", "--format=%(refname:short)").trim()).toBe("main");
   });
 
-  it("creates and switches to a name with shell syntax in it, as a name", () => {
+  it("creates and switches to a name with shell syntax in it, as a name", async () => {
     const name = "x;touch${IFS}pwned$(id)";
-    expect(isValidBranchName(repo, name)).toBe(true);
-    createBranch(repo, name);
+    expect(await isValidBranchName(repo, name)).toBe(true);
+    await createBranch(repo, name);
     expect(git("branch", "--show-current").trim()).toBe(name);
     expect(pwned()).toBe(false);
   });
 
-  it("names a branch that shares a file's name as the branch", () => {
-    createBranch(repo, "a.txt");
+  it("names a branch that shares a file's name as the branch", async () => {
+    await createBranch(repo, "a.txt");
     expect(git("branch", "--show-current").trim()).toBe("a.txt");
   });
 });
@@ -123,12 +125,12 @@ describe("createBranch", () => {
 describe("push", () => {
   it("sets the upstream for a branch whose name is shell syntax, running nothing", async () => {
     const name = "x;touch${IFS}pwned`id`";
-    createBranch(repo, name);
+    await createBranch(repo, name);
     stage();
     await commit(repo, "work");
-    expect(hasUpstream(repo)).toBe(false);
+    expect(await hasUpstream(repo)).toBe(false);
     await push(repo, true);
-    expect(hasUpstream(repo)).toBe(true);
+    expect(await hasUpstream(repo)).toBe(true);
     expect(
       execFileSync("git", ["ls-remote", "--heads", origin], {
         encoding: "utf-8",

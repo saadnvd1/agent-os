@@ -3,20 +3,26 @@ import path from "path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const clones = vi.hoisted(() => [] as string[][]);
-vi.mock("./gh", async (orig) => {
-  const real = await orig<typeof import("./gh")>();
+vi.mock("../git-exec", async (orig) => {
+  const real = await orig<typeof import("../git-exec")>();
   return {
     ...real,
     // A clone is recorded and faked (no network); everything else is real git.
-    run: vi.fn(async (cmd: string, args: string[], cwd: string, t?: number) => {
-      if (cmd === "git" && args[0] === "clone") {
-        clones.push(args);
-        const dir = args.at(-1)!;
-        (await import("fs")).mkdirSync(`${dir}/.git`, { recursive: true });
-        return "";
+    git: vi.fn(
+      async (
+        cwd: string,
+        args: string[],
+        opts?: import("../git-exec").GitOptions
+      ) => {
+        if (args[0] === "clone") {
+          clones.push(args);
+          const dir = args.at(-1)!;
+          (await import("fs")).mkdirSync(`${dir}/.git`, { recursive: true });
+          return "";
+        }
+        return real.git(cwd, args, opts);
       }
-      return real.run(cmd, args, cwd, t);
-    }),
+    ),
   };
 });
 

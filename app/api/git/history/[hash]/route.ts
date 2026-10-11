@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const commit = getCommitDetail(path, hash);
+    const commit = await getCommitDetail(path, hash);
     if (!commit) {
       return NextResponse.json({ error: "Commit not found" }, { status: 404 });
     }

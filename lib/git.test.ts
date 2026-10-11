@@ -7,7 +7,6 @@ import {
   branchExists,
   getBranches,
   getDefaultBranch,
-  getGitStatus,
   remoteBranchExists,
 } from "./git";
 
@@ -70,8 +69,19 @@ describe("getDefaultBranch", () => {
     expect(await getDefaultBranch(dir)).toBe("develop");
   });
 
-  it("falls back to master when there is no remote default or main", async () => {
-    expect(await getDefaultBranch(repo("master"))).toBe("master");
+  it("falls back to main, then master, from another branch", async () => {
+    const onMain = repo("main");
+    git(onMain, "branch", "master");
+    git(onMain, "checkout", "-q", "-b", "feature/x");
+    expect(await getDefaultBranch(onMain)).toBe("main");
+
+    const onMaster = repo("master");
+    git(onMaster, "checkout", "-q", "-b", "feature/x");
+    expect(await getDefaultBranch(onMaster)).toBe("master");
+  });
+
+  it("falls back to the current branch with neither", async () => {
+    expect(await getDefaultBranch(repo("trunk"))).toBe("trunk");
   });
 });
 
@@ -119,17 +129,5 @@ describe("git reads run without a shell", () => {
     expect(await remoteBranchExists(dir, "main")).toBe(true);
     expect(await remoteBranchExists(dir, "other")).toBe(false);
     expect(await remoteBranchExists(dir, "--upload-pack=x")).toBe(false);
-  });
-
-  it("counts changes, with no upstream as level", async () => {
-    const dir = repo();
-    fs.writeFileSync(path.join(dir, "new.txt"), "x");
-    expect(await getGitStatus(dir)).toEqual({
-      staged: 0,
-      unstaged: 0,
-      untracked: 1,
-      ahead: 0,
-      behind: 0,
-    });
   });
 });

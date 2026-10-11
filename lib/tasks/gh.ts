@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { git } from "../git-exec";
 import { parseCodeReview } from "./code-review";
 import { parseScopeChange } from "./scope-change";
 import { assertGhAllowed, noteGhFailure, noteGhSuccess } from "./gh-limit";
@@ -16,12 +17,16 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+// Runs gh (or another CLI) and resolves stdout. git goes through
+// lib/git-exec, so an injected runner (stacks, the orchestrator's rebase)
+// gets the same git as everything else.
 export async function run(
   cmd: string,
   args: string[],
   cwd: string,
   timeout = 60000
 ): Promise<string> {
+  if (cmd === "git") return git(cwd, args, { timeout });
   if (cmd === "gh") assertGhAllowed(args);
   try {
     const { stdout } = await execFileAsync(cmd, args, {

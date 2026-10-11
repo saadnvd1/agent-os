@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const diff = getCommitFileDiff(path, hash, file);
+    const diff = await getCommitFileDiff(path, hash, file);
     return NextResponse.json({ diff });
   } catch (error) {
     console.error("Error getting commit file diff:", error);

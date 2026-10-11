@@ -5,16 +5,16 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { execFileSync } from "child_process";
 import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import { createProject } from "../projects";
 import { writeTranscript } from "./transcript";
+import { gitSync } from "../git-exec";
 
 export const CLAUDE_ID = "11111111-2222-3333-4444-555555555555";
 
 export const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  gitSync(cwd, args).trim();
 
 export const row = (id: string) =>
   db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;

@@ -1258,6 +1258,13 @@ One Node process serves every terminal, chat stream and request, so a route
 handler in `app/api/` may not call a `*Sync` child_process or fs function:
 ESLint refuses it. Use the async form with a timeout.
 
+Every git process starts in `lib/git-exec.ts`: `git()`, `gitResult()`,
+`gitOk()` and named operations (`revParse`, `worktreeAdd`, `gitPush`, …). It
+sets one timeout, kills a hung git, never lets git prompt, keeps the server's
+tmux out of hooks and rejects with a `GitError` carrying the exit code and
+stderr. ESLint refuses git spawned anywhere else in `lib/`, `app/` or
+`server.ts`.
+
 `scripts/redeploy` (and `scripts/autodeploy`, which calls it) builds into
 `.next-build` while the live server keeps serving `.next`. The build is swapped
 in by rename only once it finished with a `BUILD_ID`, right before the restart.

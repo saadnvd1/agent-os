@@ -13,7 +13,7 @@ import {
   type Session,
 } from "../db";
 import { getProject } from "../projects";
-import { run } from "../tasks/gh";
+import { git as runGit } from "../git-exec";
 import { LumifyHubError } from "./client";
 import { requireClient } from "./connection";
 import { linkedWorkspaceFor } from "./links";
@@ -33,7 +33,7 @@ function localProject(projectId: string): Project {
 }
 
 const git = (dir: string, ...args: string[]) =>
-  run("git", args, dir).then((out) => out.trim());
+  runGit(dir, args).then((out) => out.trim());
 
 async function commonDir(dir: string): Promise<string | null> {
   return git(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")

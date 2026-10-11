@@ -1,4 +1,3 @@
-import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -10,16 +9,12 @@ import {
   getCommitHistory,
   isCommitHash,
 } from "./git-history";
+import { gitSync } from "./git-exec";
 import { GET as detailRoute } from "@/app/api/git/history/[hash]/route";
 import { GET as diffRoute } from "@/app/api/git/history/[hash]/diff/route";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "git-history-"));
-const git = (...args: string[]) =>
-  execFileSync("git", args, {
-    cwd: dir,
-    encoding: "utf8",
-    stdio: "pipe",
-  }).trim();
+const git = (...args: string[]) => gitSync(dir, args).trim();
 git("init", "-q", "-b", "main");
 fs.writeFileSync(path.join(dir, "a.txt"), "hello\n");
 git("add", ".");
@@ -46,27 +41,27 @@ describe("isCommitHash", () => {
 });
 
 describe("commit history reads", () => {
-  it("still read a real commit", () => {
-    expect(getCommitHistory(dir, 5).map((c) => c.hash)).toEqual([head]);
-    expect(getCommitDetail(dir, head)?.files.map((f) => f.path)).toEqual([
-      "a.txt",
-    ]);
-    expect(getCommitFileDiff(dir, head, "a.txt")).toContain("+hello");
+  it("still read a real commit", async () => {
+    expect((await getCommitHistory(dir, 5)).map((c) => c.hash)).toEqual([head]);
+    expect(
+      (await getCommitDetail(dir, head))?.files.map((f) => f.path)
+    ).toEqual(["a.txt"]);
+    expect(await getCommitFileDiff(dir, head, "a.txt")).toContain("+hello");
   });
 
-  it("never run what they're given as a command or an option", () => {
-    expect(getCommitDetail(dir, `--output=${marker}`)).toBeNull();
-    expect(getCommitDetail(dir, `$(touch ${marker})`)).toBeNull();
+  it("never run what they're given as a command or an option", async () => {
+    expect(await getCommitDetail(dir, `--output=${marker}`)).toBeNull();
+    expect(await getCommitDetail(dir, `$(touch ${marker})`)).toBeNull();
     // A path that matches nothing: no diff (some git versions still
     // print the commit header), and nothing run.
-    expect(getCommitFileDiff(dir, head, `"; touch ${marker}; "`)).not.toContain(
-      "diff --git"
-    );
+    expect(
+      await getCommitFileDiff(dir, head, `"; touch ${marker}; "`)
+    ).not.toContain("diff --git");
     // A path that matches nothing: no diff (some git versions still
     // print the commit header), and nothing run.
-    expect(getCommitFileDiff(dir, head, `$(touch ${marker})`)).not.toContain(
-      "diff --git"
-    );
+    expect(
+      await getCommitFileDiff(dir, head, `$(touch ${marker})`)
+    ).not.toContain("diff --git");
     expect(fs.existsSync(marker)).toBe(false);
   });
 

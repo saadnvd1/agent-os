@@ -41,16 +41,19 @@ vi.mock("../orchestrator/review", () => ({
     return "started";
   },
 }));
-vi.mock("../tasks/gh", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../tasks/gh")>()),
-  run: async (cmd: string, args: string[], cwd: string) => {
-    if (cmd === "git" && args[0] === "status") {
+vi.mock("../git-exec", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../git-exec")>()),
+  git: async (cwd: string, args: string[]) => {
+    if (args[0] === "status") {
       h.gitDirs.push(cwd);
       return [...h.dirty].some((id) => cwd.includes(id)) ? " M a.ts\n" : "";
     }
-    if (cmd === "gh") return `${"a".repeat(40)}\n`;
     return "";
   },
+}));
+vi.mock("../tasks/gh", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../tasks/gh")>()),
+  run: async (cmd: string) => (cmd === "gh" ? `${"a".repeat(40)}\n` : ""),
 }));
 vi.mock("./deploy", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./deploy")>()),
