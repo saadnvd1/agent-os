@@ -89,7 +89,11 @@ export function largestFunctions(
     min,
     count: out.length,
     top: out
-      .sort((a, b) => b.lines - a.lines || a.where.localeCompare(b.where))
+      .sort(
+        (a, b) =>
+          b.lines - a.lines ||
+          a.where.localeCompare(b.where, undefined, { numeric: true })
+      )
       .slice(0, limit),
   };
 }
@@ -237,6 +241,16 @@ function hasShellTrue(node: ts.Expression | undefined): boolean {
 
 const isChildProcess = (spec: string) => /^(node:)?child_process$/.test(spec);
 
+/** require("child_process") or require("node:child_process"). */
+const requireOf = (e?: ts.Expression): boolean =>
+  !!e &&
+  ts.isCallExpression(e) &&
+  ts.isIdentifier(e.expression) &&
+  e.expression.text === "require" &&
+  !!e.arguments[0] &&
+  ts.isStringLiteralLike(e.arguments[0]) &&
+  isChildProcess(e.arguments[0].text);
+
 /**
  * The names a file calls child_process through: `exec` (or its alias) from
  * a named import or a destructured require, a namespace (`cp.exec`), and a
@@ -246,14 +260,6 @@ const isChildProcess = (spec: string) => /^(node:)?child_process$/.test(spec);
 function childProcessNames(sf: ts.SourceFile) {
   const named = new Map<string, string>();
   const spaces = new Set<string>();
-  const requireOf = (e?: ts.Expression) =>
-    !!e &&
-    ts.isCallExpression(e) &&
-    ts.isIdentifier(e.expression) &&
-    e.expression.text === "require" &&
-    !!e.arguments[0] &&
-    ts.isStringLiteralLike(e.arguments[0]) &&
-    isChildProcess(e.arguments[0].text);
   walk(sf, (node) => {
     if (
       ts.isImportDeclaration(node) &&
@@ -271,7 +277,9 @@ function childProcessNames(sf: ts.SourceFile) {
     }
     if (!ts.isVariableDeclaration(node) || !node.initializer) return;
     const init = node.initializer;
-    if (requireOf(init)) {
+    const fromModule =
+      requireOf(init) || (ts.isIdentifier(init) && spaces.has(init.text));
+    if (fromModule) {
       if (ts.isIdentifier(node.name)) spaces.add(node.name.text);
       else if (ts.isObjectBindingPattern(node.name))
         for (const el of node.name.elements)
@@ -311,8 +319,8 @@ function childProcessCall(
   if (ts.isIdentifier(c)) return names.named.get(c.text) ?? null;
   if (
     ts.isPropertyAccessExpression(c) &&
-    ts.isIdentifier(c.expression) &&
-    names.spaces.has(c.expression.text)
+    ((ts.isIdentifier(c.expression) && names.spaces.has(c.expression.text)) ||
+      requireOf(c.expression))
   )
     return c.name.text;
   return null;
@@ -389,7 +397,9 @@ export function shellCalls(files: SourceFile[]): {
       }
     });
   }
-  risky.sort((a, b) => a.where.localeCompare(b.where));
+  risky.sort((a, b) =>
+    a.where.localeCompare(b.where, undefined, { numeric: true })
+  );
   return { risky, literal };
 }
 
@@ -455,7 +465,9 @@ export function sqlConcat(files: SourceFile[]): SqlBuild[] {
       });
     });
   }
-  return out.sort((a, b) => a.where.localeCompare(b.where));
+  return out.sort((a, b) =>
+    a.where.localeCompare(b.where, undefined, { numeric: true })
+  );
 }
 
 export interface RouteInfo {

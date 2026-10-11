@@ -165,6 +165,9 @@ describe("shellCalls", () => {
           "run(`b ${x}`);",
           "execSync(`c ${x}`);",
           "await execAsync(`d ${x}`);",
+          "const { exec: viaVar } = cp;",
+          "viaVar(`e ${x}`);",
+          'require("child_process").execSync(`f ${x}`);',
         ].join("\n")
       ),
     ]);
@@ -173,6 +176,8 @@ describe("shellCalls", () => {
       ["lib/a.ts:7", "exec"],
       ["lib/a.ts:8", "execSync"],
       ["lib/a.ts:9", "exec"],
+      ["lib/a.ts:11", "exec"],
+      ["lib/a.ts:12", "execSync"],
     ]);
   });
 
