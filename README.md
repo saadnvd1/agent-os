@@ -17,8 +17,8 @@ and check on all of it from your phone.
 Every workspace has one orchestrator, a chat pinned at the top of its list.
 It starts tasks, answers agents that are blocked, and reviews and merges
 pull requests through gates: CI green and settled, an independent review of
-the exact commit (big diffs are reviewed in parts), the PR's Code review
-section, nothing blocked, and the diff in scope. Anything that is yours to
+the exact commit (big diffs are reviewed in parts), nothing blocked, and the
+diff in scope. Anything that is yours to
 decide (publishing, money, something irreversible, credentials) waits as an
 ask with Approve, Decline and Reply. Turn on **Require my approval** and
 sensitive or large PRs wait for you too. [More](#orchestrator)
@@ -32,6 +32,17 @@ the project's code review before it opens its PR, and waits for your
 sign-off. A workspace's running task limit (Settings → Workspaces) caps how many run at once; the rest
 wait under **Queued** with their place in line and start on their own, and
 `aos task --after` holds one until another finishes. [More](#tasks)
+
+### Each kind of work on the right model
+
+Planning, gate reviews and the orchestrator run on Opus, implementation and
+scope checks on Sonnet, titles and summaries on Haiku, each editable in
+Settings → Models and per workspace. A task plans on one model and
+implements on another in the same conversation, can be resumed on any
+model, and can run on another provider (DeepSeek, GLM, any
+Anthropic-compatible endpoint) whose key stays a reference.
+**Usage → Compare** shows Claude-only and routed tasks side by side.
+[More](#model-routing)
 
 ![A task's chat: the edit, the tests, the code review and the PR it opened](screenshots/task-chat.png)
 
@@ -312,25 +323,34 @@ The ring in the tab bar (in the composer on a phone) is how full the
 conversation's context is, measured against the room before auto-compact:
 amber past 60%, red past 85%. Tap it for the breakdown and **Compact now**.
 
-A message to a chat idle past its prompt cache (5 minutes or an hour, read
-from the agent's own usage) re-reads the whole conversation at the
-cache-write price. When the context is also above a threshold (150k tokens by
-default, Settings → Workspaces → Compact idle chats; off sets it to never), a
-chip above the composer says "Idle 47m · 412k context · Compact first?": Send
-compacts and then sends, **Send as-is** skips it for that one message.
-Messages nobody is typing (the orchestrator's `send`, AgentOS events and
-wakes, `aos send`, schedules) compact first on their own, only between turns,
-and the chat shows one quiet line with the context before and after. An
-orchestrator isn't compacted (a summary would lose the fence around what it
-read from tasks and CI): it starts a fresh conversation from its brief and
-the current state instead, as at its fresh-start threshold.
+Chats and tasks compact at 150k tokens of context by default (Settings →
+Workspaces → Compact; off sets it to never), not near the model's window:
+AgentOS launches Claude Code with `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to
+that size (its floor is 100k), so the agent compacts itself mid-turn. Between
+turns AgentOS catches what it didn't: a chat over the threshold is compacted
+before the next message, and so is one idle past its prompt cache (5 minutes
+or an hour, read from the agent's own usage), whose next message would
+re-read the whole conversation at the cache-write price. A chip above the
+composer says "Idle 47m · 412k context · Compact first?": Send compacts and
+then sends, **Send as-is** skips it for that one message. Messages nobody is
+typing (the orchestrator's `send`, AgentOS events and wakes, `aos send`,
+schedules) compact first on their own, only between turns, and the chat
+shows one quiet line with the context before and after. An orchestrator
+isn't compacted (a summary would lose the fence around what it read from
+tasks and CI): it starts a fresh conversation from its brief and the current
+state at its fresh-start threshold, or earlier once idle past its cache.
 On a desktop browser the screen button attaches a screenshot of a screen or
 window you pick; on a phone, attach a screenshot as a photo.
 
 **Usage** (the sidebar's ⋯ menu, or the palette) shows the account's 5-hour
 and weekly windows, and what chats cost today, over 7 or 30 days, by day,
 workspace and session. Costs are the agent's own estimates, recorded as each
-turn ends.
+turn ends. **Gate reviews** below it shows what the orchestrator's
+independent reviewer and scope check cost, by PR: they run as `claude -p`
+and leave no transcript, so each run's tokens, model and duration are read
+from its JSON result into `check_runs`, and the review's verdict says them
+too. Every compaction is kept in `chat_compactions` (who ran it, and the
+context before and after), so cost per task can be compared by date.
 
 **Esc** stops a running turn, as it does in Claude Code's terminal, unless a
 menu, dialog or the command list is open (those close first). On a phone the
@@ -428,6 +448,95 @@ and the same actions in each row's menu; a row becomes the task's own row
 when it starts. Why it works
 this way: [docs/decisions/2026-10-10-queued-tasks.md](docs/decisions/2026-10-10-queued-tasks.md).
 
+## Model routing
+
+Each kind of work AgentOS launches an agent for runs on its own model, set in
+**Settings → Models** (⌘K → Model settings). A model is named
+`provider/model`:
+
+| Role                                                | Default                               |
+| --------------------------------------------------- | ------------------------------------- |
+| Task planning (a task's plan step)                  | `anthropic/claude-opus-5-5`           |
+| Gate review                                         | `anthropic/claude-opus-5-5`           |
+| Task implementation                                 | `anthropic/claude-sonnet-5-5`         |
+| Orchestrator                                        | `anthropic/claude-opus-5-5`           |
+| Scope check                                         | `anthropic/claude-sonnet-5-5`         |
+| Interactive sessions                                | `anthropic/claude-opus-5-5`           |
+| Chat & summary helpers (titles, summaries, PR text) | `anthropic/claude-haiku-4-5-20251001` |
+
+The most specific setting wins: a task's own model, then its workspace's
+(**Settings → Workspaces → Models**), then Settings, then the default.
+`AGENTOS_REVIEW_MODEL` (gate review and scope check) and
+`AGENTOS_TITLE_MODEL` (helpers) in the server's environment still replace a
+role's default where Settings names none. A
+Claude session started without a model (the orchestrator's `start_session`,
+the API) runs on the interactive role's; one you pick a model for keeps it.
+
+**Plan, then implement.** A chat task whose planning and implementation
+models differ starts with a plan step: its first turn runs on the planning
+model and writes the plan to `.agentos/plan.md` in its worktree (ignored by
+git), changing nothing else. When that turn ends, the same conversation
+switches to the implementation model (a live model switch, or a resume with
+`--model` when the provider changes) and is told to follow the plan. Turn it
+off in Settings, or per task with `plan: false`. Terminal tasks skip it.
+
+**Per task.** The task draft has a **Model** chip ("Routed by role", or one
+model); `POST /api/tasks` and the orchestrator's `start_task` take `model`, as
+`"provider/model"` for the task's own roles or a map such as
+`{"implement": "zai/glm-5.3"}`, and `plan`. Its gate review and scope check
+never follow a task's model, only Settings and its workspace, so work can't
+pick its own reviewer. **Resume on model…** on a task's row
+(or `POST /api/tasks/<id>/model`, or the orchestrator's `set_task_model`)
+moves a paused task to another model: same conversation, same worktree, and
+it keeps that model from then on. Each turn records the model, provider and
+role it ran as.
+
+**Providers.** `anthropic` is your Claude login and needs no key. Others are
+Anthropic-compatible endpoints (OpenAI-compatible ones can be defined and
+tested, but Claude Code can't run on them): a base URL, where the key lives,
+the models, and Claude Code's opus/sonnet/haiku tiers mapped to them so
+subagents and background calls stay on that provider. DeepSeek
+(`https://api.deepseek.com/anthropic`) and Z.ai GLM
+(`https://api.z.ai/api/anthropic`) ship as presets, off until given a key.
+Claude stays the default: another provider runs only where a role or a task
+picks it. If a role's provider is turned off or its key can't be read,
+helper runs, reviews and the orchestrator fall back to the role's default
+rather than fail. **Test provider** sends one tiny request and says whether it
+answered. Changing models, providers or the test runs only from this machine
+or over Tailscale, never from a paired device: a provider's URL and key
+reference decide where a key is sent.
+
+The key is never stored by AgentOS. A provider names where to read it: a
+tokenvault entry (`tv get <project> <desc>`), a macOS Keychain item
+(`security find-generic-password -s <service> -w`) or an environment
+variable named `*_API_KEY` (not `ANTHROPIC_`, `CLAUDE_` or `AGENTOS_`). It's read when an agent launches and goes only into that agent's
+environment (`ANTHROPIC_BASE_URL` with `ANTHROPIC_AUTH_TOKEN` or
+`ANTHROPIC_API_KEY`), never its command line, the database, a prompt or a
+log; a terminal task's shell reads it from the reference itself. Errors that
+might echo a key are scrubbed of it.
+
+**Usage by model.** **Usage → By model** shows tokens and estimated cost per
+role and per model in the plan's 5-hour window and the last 24 hours, from
+the price table in Settings → Models (dollars per million input, cache
+write, cache read and output tokens, editable).
+
+**How to read the comparison.** **Usage → Compare** (or ⌘K → Model
+comparison, or the sidebar menu) puts Claude-only tasks (the baseline,
+including everything from before routing) beside routed ones, per provider,
+over 7, 30 or 90 days, with a total column. A task counts under the provider
+its own planning and implementation turns ran on; its reviews and checks add
+to its cost wherever they ran. For each column: tasks, turns, tokens,
+estimated dollars (list prices; for Claude, what the API would charge),
+Claude window points per task (how far each turn moved the plan's 5-hour
+window, an estimate), agent time, CI green on the first push, review passed
+on the first try, gate failures and rework commits per task (heads checked
+after the first review), and merged or dropped. Outcomes come from the
+orchestrator's checks, so tasks it didn't run have cost but no outcome. A
+column with fewer than 10 tasks is marked a small sample: a hint, not a
+result. Parity means the routed column's outcome rows match the baseline's
+while its window points per task drop. Why it works this way:
+[docs/decisions/2026-10-11-model-routing.md](docs/decisions/2026-10-11-model-routing.md).
+
 ## New sessions
 
 ⌥N (the **+** on a phone) opens a draft: a composer in the current project, or
@@ -465,17 +574,15 @@ Starting a task returns at once and shows **Setting up** until the agent
 launches; a restart in the middle resumes it. A failed setup shows on the task
 and is in the agent's first prompt (redacted, as data).
 
-Before opening its PR, every task runs `/do-code-review` (the project's
-`.claude/skills/do-code-review`, or Claude Code's `/code-review` where a
-project has none), fixes the Blocking and High findings, and ends the PR body
-with a **Code review** section: the commit it reviewed, the agents that ran,
-what it fixed and what it deferred and why. The orchestrator's `sign_off` and
-a stack's **Land** refuse a PR without that section for its head commit, and
-this repository's CI fails one too. A head AgentOS rebased itself is
-covered by the review of the head it rebased: its gates go by what they
-recorded, and CI by the section's `Restacked:` line. The review agents are in
-[.claude/agents](.claude/agents) and the skill in
-[.claude/skills](.claude/skills/README.md).
+Tasks don't review their own PRs. The orchestrator's independent review of
+the PR's exact head commit is the one review: `sign_off` and a stack's
+**Land** refuse a PR without a passing one, and a PR body with AI
+attribution. A head AgentOS rebased itself is covered by the review of the
+head it rebased while the PR's own patch is unchanged. A task may still run
+`/do-code-review` (the project's `.claude/skills/do-code-review`, or Claude
+Code's `/code-review`) on a risky change before its PR; it's no longer
+required. The review agents are in [.claude/agents](.claude/agents) and the
+skill in [.claude/skills](.claude/skills/README.md).
 
 Requires the GitHub CLI (`gh`) signed in, and a project with a GitHub remote.
 
@@ -934,7 +1041,7 @@ it may do on its own, and the lines that always come back to you as asks.
   it (2 minutes with no new check), its review passed, nothing is
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent
-  has merged, and the PR body's Code review section names that commit. `land` judges each item again at its own head right before
+  has merged, and the PR body carries no AI attribution. `land` judges each item again at its own head right before
   merging it. A gate failing again on a different commit, or a repo with no
   CI, goes to you as an ask, and the orchestrator stops merging that task.
   A failure counts once per task, gate and head commit, however many times
@@ -953,17 +1060,15 @@ it may do on its own, and the lines that always come back to you as asks.
   conflicts (read in the PR poll AgentOS already makes), `git merge-tree`
   checks it against the base. Clean, and with the task's agent idle and
   nothing uncommitted, AgentOS rebases it in the task's worktree and pushes
-  only its branch with `--force-with-lease`; the Code review section gets a
-  `Restacked: <reviewed> -> <new>` line so the task needn't review again,
-  and the orchestrator's review carries over when the PR's own patch is
+  only its branch with `--force-with-lease`, and the orchestrator's review
+  carries over when the PR's own patch is
   unchanged (same `git patch-id`; a fresh review starts otherwise). Not
   clean: the task is asked once to rebase. Either way, one event. Main and
   other tasks' branches are never written.
 - **Tasks woken on CI failures and reviews:** a check failing on a task's
   PR head messages the task's own agent once per head, with the check, the
   failing step and about 60 lines of `gh run view --log-failed` around the
-  error, telling it to fix the root cause, push and update its Reviewed:
-  line. A review or comment from a collaborator (not the account gh runs
+  error, telling it to fix the root cause and push. A review or comment from a collaborator (not the account gh runs
   as, which is the task's own) wakes it once per review or comment; one
   GraphQL query per repository a minute fingerprints the open task PRs, and
   only a PR whose fingerprint moved has its reviews read. Comment-only wakes
@@ -976,8 +1081,7 @@ it may do on its own, and the lines that always come back to you as asks.
   `owner/repo#N` or URL, as long as its repository is one of the workspace's
   projects; anything else is refused. The same gates apply, except that a
   draft waits and a "blocked", "do not merge" or "wip" label holds it (there's
-  no session to read), and a body with no Code review section is covered by
-  the orchestrator's own review of that head. `sessions` also lists tmux
+  no session to read). `sessions` also lists tmux
   sessions AgentOS didn't start that work in a workspace repository or a
   worktree of it, here or on another machine, with their branch's PR; `read`
   reads them, and nothing else acts on them.
@@ -1070,23 +1174,29 @@ reset` yourself in a terminal on the machine: it refuses inside an
   sidebar header or ⌘K ("Away for 4 hours"), for 1 hour, 4 hours, until
   morning (8 AM) or until you're back. It's kept in `away_periods` (who set
   it, when, when it ends), the cup turns amber while it's on (with an amber dot on the phone's menu button), and it
-  ends on its own at its time. Every orchestrator gets an event, and a line
+  ends on its own at its time. It works only through orchestrators that
+  had a real turn (yours or theirs, not an AgentOS event or a status poll)
+  in the last hour, set in Settings → Workspaces → Away mode; the rest
+  aren't told or woken. Each active orchestrator gets an event, and a line
   leading its digest, saying you're away and to follow work through rather
   than only react. Every 10 minutes a sweep, written as code with no model
-  scanning, acts on what it finds and logs each step in the orchestrator's
-  chat: a task quiet 30 minutes with no PR (or failing CI) is nudged, at most
-  twice; an idle task with uncommitted work and no PR is asked to commit and
-  open one or say why not; a PR green and settled whose review never started
-  or was lost has it run again (once seen on two sweeps, so the orchestrator
-  had its turn); and after each merge, the project's `deploy` check says
-  whether it went live and the server came back, with a failure sent to the
-  orchestrator as an event. Interactive sessions are yours: one with
-  uncommitted work is asked once to wrap up, and nothing more. Paused
+  scanning, runs a review again when a PR is green and settled but its
+  review never started or was lost (once seen on two sweeps, so the
+  orchestrator had its turn), checks after each merge whether the project's
+  `deploy` went live and the server came back, and sends the orchestrator
+  one digest of what's new: tasks quiet 30 minutes with no PR (or failing
+  CI), idle tasks with uncommitted work and no PR, and your own sessions
+  idle with uncommitted work. Only sessions with a real turn inside the
+  window are listed, never stopped, finished or archived ones, and nothing
+  goes out when nothing changed. The sweep messages no session itself: the
+  orchestrator decides what needs work, and asks one of your sessions at
+  most once to wrap up. Away's own messages don't count as activity. Paused
   workspaces aren't swept. Hard lines still become asks, and while you're
   away the asks raised, failed deploys and any `aos notify` an orchestrator
   sends reach your phone as one message per sweep. Turning it off (or its running out) builds "While you were
-  away" from the database: what merged and deployed with PR links, what's
-  still in flight and which gate or blocker holds it, what failed, was dropped
+  away" from the database, for the workspaces Away reached: what merged and
+  deployed with PR links, what the sweep flagged that's still in flight and
+  which gate or blocker holds it, what failed, was dropped
   or was escalated, and what waits on you (an explicit "none"). It opens on
   whichever device is open until you dismiss it, a short summary goes to
   your phone, and the report stays in Settings → Audits (`away/`).
@@ -1333,8 +1443,7 @@ until `npm install` runs in them. Typecheck, lint and tests are left to CI.
 In an emergency, `git commit --no-verify` skips it. CI runs `scripts/check --build` on every pull request and push to main,
 which also holds the app's first-load JavaScript to a budget
 (`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
-it), and fails a pull request whose body has no Code review section for its head
-commit (run `/do-code-review` first; see [Tasks](#tasks)).
+it).
 
 ### Session audits
 

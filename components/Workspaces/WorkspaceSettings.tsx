@@ -5,6 +5,8 @@ import { useUpdateWorkspace, useWorkspacesQuery } from "@/data/workspaces";
 import { TaskLimitForm } from "./TaskLimitForm";
 import { RulesForm } from "./RulesForm";
 import { FreshStartForm } from "./FreshStartForm";
+import { WorkspaceModelsForm } from "./WorkspaceModelsForm";
+import { AwayWindowForm } from "@/components/Away/AwayWindowForm";
 
 // Settings > Workspaces: each workspace's own settings.
 export function WorkspaceSettings() {
@@ -41,6 +43,7 @@ export function WorkspaceSettings() {
             workspace={w}
           />
           <RulesForm workspaceId={w.id} />
+          <WorkspaceModelsForm workspaceId={w.id} />
           <SettingToggle
             title="Wake tasks on CI failures and reviews"
             detail="A task's agent is messaged once when a check fails on its PR's head, with the log's tail, and when someone reviews or comments on it."
@@ -50,6 +53,7 @@ export function WorkspaceSettings() {
         </section>
       ))}
       <FreshStartForm />
+      <AwayWindowForm />
     </div>
   );
 }

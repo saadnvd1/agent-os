@@ -105,6 +105,19 @@ describe("ChatHost", () => {
     host.close();
   });
 
+  it("loads only AgentOS's MCP servers for an agent on a routed provider", async () => {
+    const plain = await startHost();
+    expect(started?.strictMcpConfig).toBe(false);
+    plain.host.close();
+    const routed = await startHost("agent", undefined, (id) =>
+      getDb()
+        .prepare(`UPDATE sessions SET model_provider = 'deepseek' WHERE id = ?`)
+        .run(id)
+    );
+    expect(started?.strictMcpConfig).toBe(true);
+    routed.host.close();
+  });
+
   it("keeps a browser away from an orchestrator", async () => {
     const { host } = await startHost("orchestrator");
     expect(started?.mcpServers?.visuals).toBeUndefined();
@@ -1562,6 +1575,12 @@ describe("ChatHost compacts a stale chat before a message", () => {
           id
         )
     );
+  const compactions = (id: string) =>
+    getDb()
+      .prepare(
+        `SELECT trigger, before_tokens, after_tokens FROM chat_compactions WHERE session_id = ? ORDER BY id`
+      )
+      .all(id);
   const sentTexts = (c: { send: { mock: { calls: unknown[][] } } }) =>
     c.send.mock.calls.map((call) => call[0]);
 
@@ -1631,11 +1650,58 @@ describe("ChatHost compacts a stale chat before a message", () => {
     // Its line comes before the message it went ahead of.
     const order = items.map((i) => i.id);
     expect(order.indexOf("c1")).toBeLessThan(order.indexOf("m1"));
+    // Kept for the usage history, once, with the size after.
+    expect(compactions(id)).toEqual([
+      { trigger: "stale", before_tokens: 412_000, after_tokens: 38_000 },
+    ]);
+    // The agent compacting itself at its window is kept too.
+    conversation.events.push({
+      type: "item",
+      item: {
+        id: "c2",
+        kind: "compacted",
+        trigger: "auto",
+        before: 151_000,
+        createdAt: 3,
+      },
+    });
+    await tick();
+    expect(compactions(id).at(-1)).toEqual({
+      trigger: "auto",
+      before_tokens: 151_000,
+      after_tokens: null,
+    });
     host.close();
   });
 
-  it("auto: a chat still inside its cache lifetime is sent to as is", async () => {
-    const { host, conversation } = await staleChat(HOUR - 60_000, 412_000);
+  it("auto: a chat over the threshold inside its cache lifetime is compacted too, with no idle on its line", async () => {
+    const { id, host, conversation } = await staleChat(HOUR - 60_000, 412_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).toEqual(["/compact"]);
+    conversation.events.push({
+      type: "item",
+      item: { id: "c1", kind: "compacted", trigger: "manual", createdAt: 1 },
+    });
+    await tick();
+    const line = listItems(id).find((i) => i.id === "c1");
+    expect(line).toMatchObject({ before: 412_000 });
+    expect(line && "idleMs" in line && line.idleMs).toBeFalsy();
+    host.close();
+  });
+
+  it("auto: an orchestrator over the threshold with a warm cache is sent to as is", async () => {
+    const { host, conversation } = await staleChat(
+      HOUR - 60_000,
+      412_000,
+      HOUR,
+      "orchestrator"
+    );
     await host.handle({
       type: "send",
       id: "m1",

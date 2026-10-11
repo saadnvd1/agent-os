@@ -150,7 +150,12 @@ console.log(JSON.stringify({ title: "T", description: "D" }));
       const out = await generatePRContent(dir, hostile);
       expect(out).toEqual({ title: "T", description: "D" });
       const seen = JSON.parse(fs.readFileSync(record, "utf8"));
-      expect(seen.args).toEqual(["--print"]);
+      // The helper role's model, and nothing from the repository.
+      expect(seen.args).toEqual([
+        "--print",
+        "--model",
+        "claude-haiku-4-5-20251001",
+      ]);
       expect(seen.input).toContain(`<untrusted source="commit subjects">`);
       expect(seen.input).toContain(`add $(touch ${marker})`);
       expect(fs.existsSync(marker)).toBe(false);

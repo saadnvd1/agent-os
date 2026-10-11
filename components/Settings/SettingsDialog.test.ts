@@ -31,6 +31,9 @@ vi.mock("@/components/Merge/GlobalMergeSection", () => ({
 vi.mock("@/components/Workspaces", () => ({
   WorkspaceSettings: stub("workspaces"),
 }));
+vi.mock("@/components/Models/ModelsSection", () => ({
+  ModelsSection: stub("models"),
+}));
 vi.mock("@/components/Devices", () => ({ DevicesPanel: stub("devices") }));
 vi.mock("@/components/Schedules", () => ({
   SchedulesPanel: stub("schedules"),

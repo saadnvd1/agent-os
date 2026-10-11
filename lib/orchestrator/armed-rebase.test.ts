@@ -133,7 +133,7 @@ function setup() {
     head: sha,
     failing: null,
     checkCount: 1,
-    codeReview: { sha },
+    attribution: null,
   };
   const w = workspace.id;
   const put = (
@@ -417,13 +417,11 @@ describe("arm", () => {
 function rebaseDeps() {
   const sent: string[] = [];
   const reviews: string[] = [];
-  const bodies: [string, string][] = [];
   let idle = true;
   const hooks: { onRebase?: () => void; onUpdateRef?: () => void } = {};
   return {
     sent,
     reviews,
-    bodies,
     hooks,
     busy: () => (idle = false),
     deps: {
@@ -443,9 +441,6 @@ function rebaseDeps() {
       idle: async () => idle,
       review: async (_w: string, _t: unknown, _pr: unknown, sha: string) => {
         reviews.push(sha);
-      },
-      editBody: async (_r: string, _n: number, from: string, to: string) => {
-        bodies.push([from, to]);
       },
     },
   };
@@ -468,7 +463,6 @@ describe("automatic rebase", () => {
     expect(git(t.repo, "rev-parse", `${head}^`)).toBe(main);
     expect(git(t.repo, "rev-parse", "origin/main")).toBe(main);
     expect(r.sent).toEqual([]);
-    expect(r.bodies).toEqual([[t.sha, head]]);
     // Same patch: the review carries over, no fresh one.
     expect(r.reviews).toEqual([]);
     expect(getCheck(t.task, head, "review")).toMatchObject({
@@ -483,8 +477,8 @@ describe("automatic rebase", () => {
       ),
     ]);
 
-    // The Code review section still names the old head: the gates take it.
-    pr = { ...pr!, head, mergeable: "MERGEABLE", codeReview: { sha: t.sha } };
+    // The review carried over to the new head: the gates take it.
+    pr = { ...pr!, head, mergeable: "MERGEABLE" };
     t.put("ci", "pass", head);
     await expect(runTool(t.w, "sign_off", { task: "add-a" })).resolves.toMatch(
       /Merged add-a/

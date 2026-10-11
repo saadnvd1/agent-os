@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { git } from "../git-exec";
-import { parseCodeReview } from "./code-review";
+import { attributionIn } from "./code-review";
 import { parseScopeChange } from "./scope-change";
 import { assertGhAllowed, noteGhFailure, noteGhSuccess } from "./gh-limit";
 import {
@@ -115,7 +115,8 @@ export async function toTaskPR(repoDir: string, pr: ListedPR): Promise<TaskPR> {
     failing: failingCheck(rollup),
     failingUrl: failingUrl(rollup),
     checkCount: (pr.statusCheckRollup ?? []).length,
-    codeReview: pr.body === undefined ? undefined : parseCodeReview(pr.body),
+    attribution:
+      pr.body === undefined ? undefined : (attributionIn(pr.body) ?? null),
     scopeChange: parseScopeChange(pr.body),
     ...(pr.mergeable && { mergeable: pr.mergeable }),
     ...(pr.baseRefName && { base: pr.baseRefName }),

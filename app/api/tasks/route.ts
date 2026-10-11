@@ -1,3 +1,4 @@
+import { parseOverride } from "@/lib/models/resolve";
 import { NextRequest, NextResponse } from "next/server";
 import { createTask, listTasks, movedTasks } from "@/lib/tasks";
 import { startOrQueue } from "@/lib/tasks/queue";
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       baseBranch,
       after,
       view,
+      plan,
     } = await request.json();
     if (id !== undefined && !isSessionId(id)) throw new Error("Bad task id");
     const pid =
@@ -42,7 +44,9 @@ export async function POST(request: NextRequest) {
     const opts = {
       projectId: pid,
       prompt: String(prompt ?? ""),
-      model,
+      // Checked now, so a queued task can't fail on it later.
+      model: parseOverride(model) ?? undefined,
+      plan: typeof plan === "boolean" ? plan : undefined,
       name: typeof name === "string" ? name : undefined,
       hostId: typeof hostId === "string" && hostId ? hostId : undefined,
       baseBranch: typeof baseBranch === "string" ? baseBranch : undefined,

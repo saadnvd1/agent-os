@@ -30,6 +30,9 @@ export interface ChatStartOptions {
   // Tools served in-process for this conversation, and tools it may use
   // without asking.
   mcpServers?: Record<string, McpServerConfig>;
+  // Load no MCP servers but those above: the user's own would otherwise
+  // put every tool schema in each prompt.
+  strictMcpConfig?: boolean;
   allowedTools?: string[];
   disallowedTools?: string[];
   // A fixed permission mode in place of the access setting, which then

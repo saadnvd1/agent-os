@@ -18,6 +18,7 @@ import {
   Settings,
   SquareTerminal,
   Trash2,
+  Scale,
 } from "lucide-react";
 import {
   ADropdownMenu,
@@ -112,7 +113,10 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             menuItem("Archived", () => archivedUiActions.open(), {
               icon: Archive,
             }),
-            menuItem("Usage", usageUiActions.open, { icon: Gauge }),
+            menuItem("Usage", () => usageUiActions.open(), { icon: Gauge }),
+            menuItem("Model comparison", () => usageUiActions.open("compare"), {
+              icon: Scale,
+            }),
             separator(),
             menuItem("Machines", props.onManageHosts, { icon: Server }),
             menuItem("Settings", () => settingsUiActions.open(), {

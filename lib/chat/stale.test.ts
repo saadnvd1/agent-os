@@ -4,8 +4,8 @@ import {
   cacheTtlMs,
   compactedLine,
   composerCompacts,
+  compactionDue,
   staleLabel,
-  staleness,
 } from "./stale";
 
 const MIN = 60_000;
@@ -46,46 +46,57 @@ describe("cacheTtlMs", () => {
   });
 });
 
-describe("staleness", () => {
-  it("is stale only once the cache it used has expired, for either lifetime", () => {
+describe("compactionDue", () => {
+  it("is due over the threshold, and stale once the cache it used has expired, for either lifetime", () => {
     for (const ttl of [5 * MIN, 60 * MIN]) {
       const at = (idleMs: number) => ctx({ at: NOW - idleMs, cacheTtlMs: ttl });
-      expect(staleness(at(ttl - 1), idle)).toBeNull();
-      expect(staleness(at(ttl), idle)).toBeNull();
-      expect(staleness(at(ttl + 1), idle)).toEqual({
+      expect(compactionDue(at(ttl - 1), idle)).toEqual({
+        idleMs: ttl - 1,
+        tokens: 412_000,
+        stale: false,
+      });
+      expect(compactionDue(at(ttl), idle)?.stale).toBe(false);
+      expect(compactionDue(at(ttl + 1), idle)).toEqual({
         idleMs: ttl + 1,
         tokens: 412_000,
+        stale: true,
       });
     }
   });
 
   it("needs the context above the threshold, and 0 is off", () => {
-    expect(staleness(ctx({ usedTokens: 150_000 }), idle)).toBeNull();
-    expect(staleness(ctx({ usedTokens: 150_001 }), idle)).not.toBeNull();
-    expect(staleness(ctx(), { ...idle, thresholdTokens: 0 })).toBeNull();
+    expect(compactionDue(ctx({ usedTokens: 150_000 }), idle)).toBeNull();
+    expect(compactionDue(ctx({ usedTokens: 150_001 }), idle)).not.toBeNull();
+    expect(compactionDue(ctx(), { ...idle, thresholdTokens: 0 })).toBeNull();
   });
 
   it("refuses mid-turn: running or waiting on an approval", () => {
-    expect(staleness(ctx(), { ...idle, state: "running" })).toBeNull();
-    expect(staleness(ctx(), { ...idle, state: "waiting" })).toBeNull();
-    expect(staleness(ctx(), { ...idle, state: "error" })).not.toBeNull();
+    expect(compactionDue(ctx(), { ...idle, state: "running" })).toBeNull();
+    expect(compactionDue(ctx(), { ...idle, state: "waiting" })).toBeNull();
+    expect(compactionDue(ctx(), { ...idle, state: "error" })).not.toBeNull();
   });
 
-  it("is never stale without a measure, or a cache lifetime the agent said", () => {
-    expect(staleness(null, idle)).toBeNull();
-    expect(staleness(ctx({ cacheTtlMs: undefined }), idle)).toBeNull();
+  it("is never due without a measure, or a cache lifetime the agent said", () => {
+    expect(compactionDue(null, idle)).toBeNull();
+    expect(compactionDue(ctx({ cacheTtlMs: undefined }), idle)).toBeNull();
   });
 
   it("reads as the composer's chip", () => {
-    expect(staleLabel(staleness(ctx(), idle)!)).toBe("Idle 47m · 412k context");
-    expect(staleLabel({ idleMs: 5 * 60 * MIN, tokens: 1_200_000 })).toBe(
-      "Idle 5h · 1.2M context"
+    expect(staleLabel(compactionDue(ctx(), idle)!)).toBe(
+      "Idle 47m · 412k context"
+    );
+    expect(
+      staleLabel({ idleMs: 5 * 60 * MIN, tokens: 1_200_000, stale: true })
+    ).toBe("Idle 5h · 1.2M context");
+    // Over the threshold with its cache still warm.
+    expect(staleLabel({ idleMs: MIN, tokens: 160_000, stale: false })).toBe(
+      "160k context"
     );
   });
 });
 
 describe("composerCompacts", () => {
-  it("compacts a stale chat unless the reader chose to send as is", () => {
+  it("compacts a chat over the threshold unless the reader chose to send as is", () => {
     const opts = {
       state: "idle" as const,
       thresholdTokens: 150_000,
@@ -96,9 +107,13 @@ describe("composerCompacts", () => {
     expect(composerCompacts("continue", stale, { ...opts, asIs: true })).toBe(
       false
     );
+    // Over it with a warm cache too; under it, never.
     expect(composerCompacts("continue", ctx({ at: Date.now() }), opts)).toBe(
-      false
+      true
     );
+    expect(
+      composerCompacts("continue", ctx({ usedTokens: 90_000 }), opts)
+    ).toBe(false);
   });
 
   it("leaves a slash command as typed", () => {

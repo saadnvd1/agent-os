@@ -12,11 +12,11 @@
 
 import { MERGED_AS, mergePolicy } from "../tasks/merge-policy";
 import { mergePR } from "../tasks/merge-pr";
-import { attributionIn, codeReviewRefusal } from "../tasks/code-review";
+import { attributionIn, codeReviewGate } from "../tasks/code-review";
 import { run } from "../tasks/gh";
 import { refundApproval, spendApproval } from "./ask-approvals";
 import { resolveAsks } from "./asks";
-import { clearStaleRunning, getCheck, type CheckRow } from "./checks";
+import { clearStaleRunning, getCheck } from "./checks";
 import { gateTarget, type ExternalPR } from "./external-pr";
 import { holdingEscalations } from "./gates";
 import { addNote } from "./notes";
@@ -38,44 +38,6 @@ const refsOf = (ext: ExternalPR) => ({
   base_branch: ext.base,
   branch_name: ext.branch,
 });
-
-// The code-review gate: a section in the body must cover the head like a
-// task's; with none, the independent review of the head stands in.
-export function externalCodeReview(
-  ext: Pick<ExternalPR, "name" | "body" | "pr">,
-  sha: string,
-  review: CheckRow | null
-): { refusal: string | null; wait: string | null } {
-  const attribution = attributionIn(ext.body);
-  if (attribution)
-    return {
-      refusal: `the PR body carries AI attribution (${attribution}): remove it with \`gh pr edit --body-file\``,
-      wait: null,
-    };
-  const section = ext.pr.codeReview;
-  if (section !== null)
-    return {
-      refusal: codeReviewRefusal(
-        section,
-        sha,
-        null,
-        `${ext.name}'s "Code review" section has to name ${short(sha)} on a "Reviewed:" line, or come out of the body`
-      ),
-      wait: null,
-    };
-  const none = `${ext.name}'s body has no "Code review" section; for a PR AgentOS didn't open, the orchestrator's own review of ${short(sha)} stands in for it`;
-  if (review?.sha === sha && review.status === "pass")
-    return { refusal: null, wait: null };
-  return {
-    refusal: null,
-    wait:
-      review?.sha === sha && review.status === "running"
-        ? `${none}, and it's still running`
-        : review?.sha === sha && review.status === "block"
-          ? `${none}, and it has blocking findings`
-          : `${none}: call review`,
-  };
-}
 
 export async function judgeExternal(
   workspaceId: string,
@@ -102,7 +64,6 @@ export async function judgeExternal(
     },
     async () => {
       const review = getCheck(ext.id, sha, "review");
-      const code = externalCodeReview(ext, sha, review);
       const label = ext.labels.find((l) => BLOCKED_LABEL.test(l));
       return {
         checks: pr.checks,
@@ -124,8 +85,12 @@ export async function judgeExternal(
         fromCard: false,
         scope: null,
         stackRefusal: null,
-        codeReviewRefusal: code.refusal,
-        codeReviewWait: code.wait,
+        // The same gate as a task's: the review of this exact head.
+        codeReview: codeReviewGate({
+          head: sha,
+          attribution: attributionIn(ext.body) ?? null,
+          review: (at) => getCheck(ext.id, at, "review"),
+        }),
       };
     },
     opts

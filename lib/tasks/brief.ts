@@ -16,17 +16,8 @@ function stackedLines(baseBranch: string, stack: StackedOn): string {
   return `
 - This task is STACKED on ${stack.name} (${on}), which has not merged. Its commits are already in your branch and are not yours: don't change or revert them.
 - Open your pull request against ${baseBranch} (\`gh pr create --base ${baseBranch}\`) so its diff is only your commits, and start the body with the line "Stacked on ${on} (${stack.name})".
-- Never merge or rebase onto the default branch yourself. When the parent merges, AgentOS rebases your branch and retargets your PR, then tells you; re-run your checks when it does. Your code review still counts for the head AgentOS's restack left; if you push after that, review again and update the section.${also}`;
+- Never merge or rebase onto the default branch yourself. When the parent merges, AgentOS rebases your branch and retargets your PR, then tells you; re-run your checks when it does. AgentOS reviews your PR itself; a review of your head still counts for the head its restack left, and a push after that gets a new one.${also}`;
 }
-
-// What the PR body's review section looks like. lib/tasks/code-review.ts
-// parses it, and merges refuse a PR without one for its head commit.
-export const CODE_REVIEW_SECTION = `
-  ## Code review
-  Reviewed: <the full sha of the commit you reviewed, which is the PR's head>
-  Agents: <the review agents that ran>
-  Fixed: <each finding fixed, one line each, or "none">
-  Deferred: <each finding not fixed and why, or "none">`;
 
 // The system brief every task agent runs under. It finishes by opening a PR
 // and stopping: merging is the human's sign-off, never the agent's.
@@ -39,10 +30,8 @@ export function buildTaskBrief(opts: {
 
 - Branch: ${opts.branch} (based on ${opts.baseBranch}). Stay in this directory and on this branch.
 - Do the task fully. Run the project's own checks (typecheck, tests, lint) when they exist and keep them passing.
-- When the work is done, commit with a conventional commit message, then review it before any pull request: run \`/do-code-review\` (the project's skill in .claude/skills/do-code-review; if the project has none, \`/code-review\`). Fix every Blocking and High finding, commit, and review again until none are left (two rounds at most; past that, list what's still open in the PR body).
-- Then run \`git push -u origin ${opts.branch}\` and open a pull request against ${opts.baseBranch} with \`gh pr create\`, using a clear title and a short body that says what changed and how you verified it, and ends with this section:
-${CODE_REVIEW_SECTION}
-  Merges are refused without it, and when its "Reviewed:" commit is not the PR's head: if you push again, review again and update the body (\`gh pr edit --body-file\`). Then stop and wait.
+- When the work is done, commit with a conventional commit message, run \`git push -u origin ${opts.branch}\` and open a pull request against ${opts.baseBranch} with \`gh pr create\`, using a clear title and a short body that says what changed and how you verified it. Then stop and wait.
+- You don't need to review it yourself: AgentOS runs an independent review of the PR's exact head commit before it can merge, and the orchestrator sends you any blocking findings to fix. For a risky change you may still run \`/do-code-review\` (or \`/code-review\`) before the PR.
 - Never merge the pull request, never push to ${opts.baseBranch}, and never delete branches or worktrees. A human reviews and merges.${opts.stack ? stackedLines(opts.baseBranch, opts.stack) : ""}
 - Write scratch files (PR bodies, review notes, logs, test output) outside the worktree, in your scratchpad or \$TMPDIR. Anything uncommitted left in the worktree keeps it from being removed when the task is done.
 - Do not add any AI or assistant attribution to commits or the pull request.

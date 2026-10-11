@@ -49,7 +49,7 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
-type ModelUsage = Record<
+export type ModelUsage = Record<
   string,
   {
     inputTokens?: number;

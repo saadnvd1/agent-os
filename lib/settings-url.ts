@@ -7,6 +7,7 @@ export const SETTINGS_PARAM = "settings";
 export const SETTINGS_SECTIONS = [
   "merging",
   "workspaces",
+  "models",
   "devices",
   "notifications",
   "schedules",

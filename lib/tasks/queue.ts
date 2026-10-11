@@ -11,6 +11,7 @@
  * is deleted: a started or removed row stays as history.
  */
 
+import type { ModelOverride } from "../models/resolve";
 import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
@@ -41,6 +42,8 @@ export interface QueueRow {
   prompt: string;
   name: string | null;
   model: string | null;
+  // A per-role model map (lib/models), when that's what it was given.
+  model_overrides: string | null;
   view: "chat" | "terminal" | null;
   base_branch: string | null;
   host_id: string | null;
@@ -200,7 +203,7 @@ export interface QueueRequest {
   projectId: string;
   prompt: string;
   name?: string;
-  model?: string;
+  model?: ModelOverride;
   view?: "chat" | "terminal";
   baseBranch?: string;
   hostId?: string;
@@ -247,9 +250,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO task_queue (id, project_id, prompt, name, model, view, base_branch,
+    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, view, base_branch,
        host_id, after_task, after_any, origin_workspace_id, position)
-     VALUES (@id, @project_id, @prompt, @name, @model, @view, @base_branch,
+     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @view, @base_branch,
        @host_id, @after_task, @after_any, @origin,
        (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
   ).run({
@@ -257,7 +260,11 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
     project_id: project.id,
     prompt: req.prompt.trim(),
     name: req.name?.trim() || null,
-    model: req.model || null,
+    model: typeof req.model === "string" ? req.model || null : null,
+    model_overrides:
+      req.model && typeof req.model === "object"
+        ? JSON.stringify(req.model)
+        : null,
     view: req.view ?? null,
     base_branch: req.baseBranch || null,
     host_id: req.hostId || null,
@@ -429,7 +436,9 @@ async function startRow(
     projectId: r.project_id,
     prompt: r.prompt,
     name: r.name ?? undefined,
-    model: r.model ?? undefined,
+    model: r.model_overrides
+      ? (JSON.parse(r.model_overrides) as ModelOverride)
+      : (r.model ?? undefined),
     view: r.view ?? undefined,
     baseBranch: r.base_branch ?? undefined,
     hostId: r.host_id ?? undefined,

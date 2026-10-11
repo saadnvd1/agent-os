@@ -38,6 +38,11 @@ import {
   toVerdict,
 } from "./review-prompt";
 import { checkScope } from "./scope";
+import {
+  checkRunRecorder,
+  checkRunTotals,
+  describeCheckRuns,
+} from "../usage/check-runs";
 import { workspaceTask } from "./targets";
 import { untrusted } from "./untrusted";
 
@@ -52,10 +57,8 @@ export function describeReview(row: CheckRow): string {
   if (row.status === "running") return `The review of ${at} is still running.`;
   if (row.status === "error")
     return `The review of ${at} couldn't run: ${row.detail}`;
-  const head =
-    row.status === "pass"
-      ? `Review of ${at}: pass.`
-      : `Review of ${at}: blocking findings.`;
+  const cost = checkRunTotals(row.session_id, row.sha);
+  const head = `${row.status === "pass" ? `Review of ${at}: pass.` : `Review of ${at}: blocking findings.`}${cost ? ` (${describeCheckRuns(cost)})` : ""}`;
   return row.detail ? `${head}\n${untrusted("reviewer", row.detail)}` : head;
 }
 
@@ -123,6 +126,14 @@ async function reviewJob(
   const amendments = task ? amendmentsOf(task.id).map((a) => a.text) : [];
   const scope = task ? { amendments, scopeClaim: pr.scopeChange ?? null } : {};
   const dir = await checkout(repo, sha);
+  const onUsage = checkRunRecorder({
+    workspaceId,
+    sessionId: target.id,
+    label: target.label,
+    prNumber: pr.number,
+    sha,
+    kind: "review",
+  });
   try {
     const verdicts = [];
     for (const [i, part] of parts.entries()) {
@@ -151,6 +162,9 @@ async function reviewJob(
         schema: REVIEW_SCHEMA,
         tools: ["Read", "Grep", "Glob"],
         allow: [`Read(/${dir}/**)`, `Grep(/${dir}/**)`, `Glob(/${dir}/**)`],
+        onUsage,
+        role: "review",
+        workspaceId,
       });
       verdicts.push(toVerdict(answer));
     }
@@ -264,11 +278,12 @@ export async function reviewAt(
           : done.status === "block"
             ? "found blocking issues"
             : "couldn't run";
+      const cost = checkRunTotals(target.id, sha);
       queueEvent(
         workspaceId,
         `review:${target.id}:${sha}`,
         target.id,
-        `${target.label}: review of ${short(sha)} ${said}${countVerdicts(workspaceId, target, sha)}`
+        `${target.label}: review of ${short(sha)} ${said}${cost ? ` (${describeCheckRuns(cost)})` : ""}${countVerdicts(workspaceId, target, sha)}`
       );
       return done;
     });

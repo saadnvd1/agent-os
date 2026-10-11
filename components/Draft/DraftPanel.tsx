@@ -65,7 +65,7 @@ export function DraftPanel({
         const { session, queued } = await createTask.mutateAsync({
           projectId: project.id,
           prompt: text,
-          model: draft.model,
+          model: draft.taskModel ?? undefined,
           baseBranch: draft.baseBranch ?? undefined,
           hostId: draft.hostId !== project.host_id ? draft.hostId : undefined,
           view: draft.terminal ? "terminal" : undefined,

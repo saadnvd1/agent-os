@@ -1,17 +1,22 @@
 /**
  * The away sweep's choices, made by code from what the server already knows
- * (session facts, git status, stored review verdicts), never by a model
- * reading the workspace. Pure: ./run gathers the inputs and acts.
+ * (session facts, real activity, git status, stored review verdicts), never
+ * by a model reading the workspace. Pure: ./run gathers the inputs and acts.
  *
- * - A task with no activity for STALL_MS and nothing to wait on is nudged,
- *   at most MAX_NUDGES times a period, and again only after it moved.
- * - A task idle with uncommitted work and no PR is asked to commit and open
- *   one, or say why not.
- * - A PR whose CI settled green with no review of its head, or one that was
- *   lost (errored, or cut off and stale), has its review run again, once
- *   the sweep has seen it that way twice, so the orchestrator had its turn.
- * - An interactive session is Saad's: one with uncommitted work is asked to
- *   wrap up, once a period, and nothing more.
+ * The sweep messages no session. What it finds goes to the workspace's
+ * orchestrator as one digest, which decides what needs doing:
+ * - a task with no real activity for STALL_MS and nothing to wait on;
+ * - a task idle with uncommitted work and no PR;
+ * - an interactive session (Saad's) idle with uncommitted work, whose
+ *   agent is still up: the orchestrator may ask it once to wrap up.
+ * Only sessions with a real turn inside the window are listed; older ones
+ * are left alone. Each is listed once per state (per period, for an
+ * interactive one).
+ *
+ * A PR whose CI settled green with no review of its head, or one that was
+ * lost (errored, or cut off and stale), has its review run again, once the
+ * sweep has seen it that way twice, so the orchestrator had its turn. That
+ * runs a reviewer, not the session, so it isn't held to the window.
  */
 
 import { isFinished } from "../tasks/state";
@@ -20,21 +25,18 @@ import type { SessionFacts } from "../orchestrator/facts";
 export const SWEEP_EVERY_MS = 10 * 60 * 1000;
 export const STALL_MS = 30 * 60 * 1000;
 export const IDLE_DIRTY_MS = 15 * 60 * 1000;
-export const MAX_NUDGES = 2;
 // A review "running" this long was cut off (as clearStaleRunning has it).
 export const STALE_REVIEW_MS = 30 * 60 * 1000;
 
-export type CandidateKind = "nudge" | "commit" | "review" | "wrapup";
+export type CandidateKind = "stalled" | "commit" | "review" | "wrapup";
 
 export interface Candidate {
   kind: CandidateKind;
   sessionId: string;
-  // Acted on once per Away period.
+  // Listed (or run, for a review) once per Away period.
   key: string;
-  // What the session is told (none for a review).
-  message?: string;
-  // One line for the decision log.
-  log: string;
+  // Its line in the orchestrator's digest and the decision log.
+  line: string;
 }
 
 export interface ReviewSeen {
@@ -45,6 +47,12 @@ export interface ReviewSeen {
 export interface SweepView {
   now: number;
   facts: SessionFacts[];
+  // Each session's last real turn, in ms (./activity).
+  turns: ReadonlyMap<string, number>;
+  // Older than this is left alone.
+  windowMs: number;
+  // Interactive sessions whose agent is up.
+  live: ReadonlySet<string>;
   // Sessions with uncommitted changes in their worktree.
   dirty: ReadonlySet<string>;
   // The stored review verdict of a session's commit, if any.
@@ -53,17 +61,24 @@ export interface SweepView {
   held: ReadonlySet<string>;
   // Keys acted on (or seen, for reviews) this period.
   acted: ReadonlySet<string>;
-  // Nudges sent to each session this period.
-  nudges: ReadonlyMap<string, number>;
 }
 
 const minutes = (ms: number) => Math.floor(ms / 60000);
 
-const BLOCKED_HINT =
-  "If only Saad can unblock it, end with a line starting BLOCKED: that says what you need.";
+const turnOf = (f: SessionFacts, v: Pick<SweepView, "turns">) =>
+  v.turns.get(f.id) ?? 0;
 
-// Live work with an agent to answer: not finished, not a linked machine's
-// copy, not setting up, not waiting on someone already.
+// Real activity inside the window: anything older is never listed.
+export const recent = (
+  f: SessionFacts,
+  v: Pick<SweepView, "now" | "turns" | "windowMs">
+) => {
+  const turn = turnOf(f, v);
+  return turn > 0 && v.now - turn <= v.windowMs;
+};
+
+// Live work with an agent to answer: not stopped, not finished, not a
+// linked machine's copy, not setting up, not waiting on someone already.
 function workable(f: SessionFacts): boolean {
   if (f.status === "dead" || f.status === "waiting" || f.needsInput)
     return false;
@@ -79,62 +94,63 @@ function workable(f: SessionFacts): boolean {
   return true;
 }
 
-// Sessions worth a `git status`: quiet long enough that uncommitted work
-// would matter, and not already asked about it this period. Keeps the
+const commitKey = (f: SessionFacts, turn: number) => `commit:${f.id}:${turn}`;
+const wrapupKey = (f: SessionFacts) => `wrapup:${f.id}`;
+export const seenKey = (id: string, sha: string) => `review-seen:${id}:${sha}`;
+
+// Who could be listed at all.
+function eligible(f: SessionFacts, v: GitView): boolean {
+  if (!workable(f) || !recent(f, v)) return false;
+  return f.task ? !v.held.has(f.id) : v.live.has(f.id);
+}
+
+type GitView = Pick<
+  SweepView,
+  "facts" | "now" | "turns" | "windowMs" | "live" | "held" | "acted"
+>;
+
+// Sessions worth a `git status`: recent, quiet long enough that
+// uncommitted work would matter, and not already listed for it. Keeps the
 // sweep from reading every worktree.
-export function needsGitCheck(
-  facts: SessionFacts[],
-  now: number,
-  acted: ReadonlySet<string>
-): string[] {
-  return facts
+export function needsGitCheck(v: GitView): string[] {
+  return v.facts
     .filter(
       (f) =>
-        workable(f) &&
+        eligible(f, v) &&
         f.status === "idle" &&
         !f.task?.pr &&
-        now - f.lastActive >= IDLE_DIRTY_MS &&
-        !acted.has(f.task ? commitKey(f) : wrapupKey(f))
+        v.now - turnOf(f, v) >= IDLE_DIRTY_MS &&
+        !v.acted.has(f.task ? commitKey(f, turnOf(f, v)) : wrapupKey(f))
     )
     .map((f) => f.id);
 }
 
-const commitKey = (f: SessionFacts) => `commit:${f.id}:${f.lastActive}`;
-const wrapupKey = (f: SessionFacts) => `wrapup:${f.id}`;
-export const seenKey = (id: string, sha: string) => `review-seen:${id}:${sha}`;
-
 function taskCandidate(f: SessionFacts, v: SweepView): Candidate | null {
-  const task = f.task!;
-  const pr = task.pr;
-  const quiet = v.now - f.lastActive;
+  const pr = f.task!.pr;
+  const turn = turnOf(f, v);
+  const quiet = v.now - turn;
   const who = `task ${f.name}`;
 
   if (!pr && f.status === "idle" && v.dirty.has(f.id)) {
-    const key = commitKey(f);
+    const key = commitKey(f, turn);
     if (v.acted.has(key)) return null;
     return {
       kind: "commit",
       sessionId: f.id,
       key,
-      message: `Saad is away. You've been idle ${minutes(quiet)} minutes with uncommitted work and no pull request. Commit it and open a pull request, as your task says. If it shouldn't be one, end with a line starting BLOCKED: that says why not.`,
-      log: `${who}: idle ${minutes(quiet)}m with uncommitted work and no PR; asked it to commit and open one, or say why not.`,
+      line: `${who} (${f.id}): idle ${minutes(quiet)}m with uncommitted work and no PR.`,
     };
   }
 
   const ciFailing = pr?.state === "OPEN" && pr.checks === "fail";
   if ((!pr || ciFailing) && quiet >= STALL_MS) {
-    if ((v.nudges.get(f.id) ?? 0) >= MAX_NUDGES) return null;
-    const key = `nudge:${f.id}:${f.lastActive}`;
+    const key = `stalled:${f.id}:${turn}`;
     if (v.acted.has(key)) return null;
-    const what = ciFailing
-      ? `CI is failing on PR #${pr!.number}. Fix it and push.`
-      : "Carry the task on to a pull request.";
     return {
-      kind: "nudge",
+      kind: "stalled",
       sessionId: f.id,
       key,
-      message: `Saad is away, and AgentOS hasn't seen activity from you in ${minutes(quiet)} minutes. ${what} ${BLOCKED_HINT}`,
-      log: `${who}: no activity for ${minutes(quiet)}m${ciFailing ? ` with CI failing on PR #${pr!.number}` : ", no PR"}; nudged it.`,
+      line: `${who} (${f.id}): no activity for ${minutes(quiet)}m${ciFailing ? `, CI failing on PR #${pr!.number}` : ", no PR yet"}.`,
     };
   }
   return null;
@@ -169,7 +185,7 @@ function reviewCandidate(f: SessionFacts, v: SweepView): Candidate | null {
     kind: "review",
     sessionId: f.id,
     key,
-    log: `task ${f.name}: the review of PR #${pr.number} at ${pr.head.slice(0, 7)} was ${why}; ran it again.`,
+    line: `task ${f.name}: the review of PR #${pr.number} at ${pr.head.slice(0, 7)} was ${why}; AgentOS ran it again.`,
   };
 }
 
@@ -181,36 +197,34 @@ function wrapupCandidate(f: SessionFacts, v: SweepView): Candidate | null {
     kind: "wrapup",
     sessionId: f.id,
     key,
-    message:
-      "Saad is away. This session has uncommitted work. Wrap up: on a feature branch, commit what you have with a clear message; on the default branch, leave it uncommitted. Then stop and don't start anything new; Saad picks this up when he's back.",
-    log: `${f.name}: Saad's own session, idle with uncommitted work; asked it to wrap up.`,
+    line: `${f.name} (${f.id}): Saad's own session, idle ${minutes(v.now - turnOf(f, v))}m with uncommitted work.`,
   };
 }
 
-// What to act on now. A review candidate seen for the first time is
-// returned with kind "review" only once its seen-key is in `acted`; the
-// caller records the seen-key otherwise (see `firstSeen`).
+// What's new this sweep: lines for the orchestrator's digest, and the
+// reviews to run again. A review candidate seen for the first time is
+// returned only once its seen-key is in `acted`; the caller records the
+// seen-key otherwise (`firstSeen`).
 export function pickCandidates(v: SweepView): {
-  act: Candidate[];
+  flags: Candidate[];
+  reviews: Candidate[];
   firstSeen: string[];
 } {
-  const act: Candidate[] = [];
+  const flags: Candidate[] = [];
+  const reviews: Candidate[] = [];
   const firstSeen: string[] = [];
   for (const f of v.facts) {
     if (f.task) {
       const review = reviewCandidate(f, v);
       if (review) {
         const seen = seenKey(f.id, f.task.pr!.head!);
-        if (v.acted.has(seen)) act.push(review);
+        if (v.acted.has(seen)) reviews.push(review);
         else firstSeen.push(seen);
       }
-      if (!workable(f) || v.held.has(f.id)) continue;
-      const c = taskCandidate(f, v);
-      if (c) act.push(c);
-    } else if (workable(f)) {
-      const c = wrapupCandidate(f, v);
-      if (c) act.push(c);
     }
+    if (!eligible(f, v)) continue;
+    const c = f.task ? taskCandidate(f, v) : wrapupCandidate(f, v);
+    if (c) flags.push(c);
   }
-  return { act, firstSeen };
+  return { flags, reviews, firstSeen };
 }

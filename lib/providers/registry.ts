@@ -73,7 +73,7 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsFork: true,
     resumeArgs: (id) => ["--resume", id],
     forkArgs: (id) => ["--resume", id, "--fork-session"],
-    modelFlag: undefined, // Claude doesn't expose model flag
+    modelFlag: "--model",
     initialPromptFlag: "", // Positional argument
   },
   {

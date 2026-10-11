@@ -5,6 +5,7 @@
  * events to whoever is watching. Restarting the server leaves turns running.
  */
 
+import { handoffAfterPlan } from "../models/plan-step";
 import { randomUUID } from "crypto";
 import os from "os";
 import { db, type Session } from "../db";
@@ -163,6 +164,10 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     clearTimeout(live.retiring);
     live.retiring = undefined;
     retireIfStale(sessionId, live);
+    if (e.state === "idle")
+      void handoffAfterPlan(sessionId, (id, m) => sendQueuedNow(id, m)).catch(
+        (err) => console.error(`Plan handoff for ${sessionId} failed:`, err)
+      );
   } else if (e.type === "suggestion") {
     emit(sessionId, e);
     if (live.retiring && e.text) retire(sessionId, live);

@@ -1,6 +1,7 @@
 import type { Session } from "../../db";
 import type { ChatStartOptions } from "../driver";
 import { refreshSettings } from "../refresh";
+import { sessionProviderEnv } from "../../models/launch";
 
 export type RoleExtras = Pick<
   ChatStartOptions,
@@ -17,11 +18,22 @@ export type RoleExtras = Pick<
   // Start over on a new conversation once its context passes this many
   // tokens (lib/chat/refresh); absent or 0, never.
   refresh?: { atTokens: number; role: "orchestrator" | "task" };
+  // What the session's model provider needs in the agent's environment
+  // (lib/models), its key fetched just now. Held by this process only.
+  env?: Record<string, string>;
 };
 
 // What a session's role adds to its chat. An orchestrator's module loads
 // only for one; a task's chat gets its brief, as its terminal agent would.
 export async function roleExtras(session: Session): Promise<RoleExtras> {
+  const [extras, env] = await Promise.all([
+    ownExtras(session),
+    sessionProviderEnv(session),
+  ]);
+  return env ? { ...extras, env } : extras;
+}
+
+async function ownExtras(session: Session): Promise<RoleExtras> {
   if (session.role === "orchestrator")
     return (await import("../../orchestrator/worker")).orchestratorExtras(
       session

@@ -21,6 +21,7 @@ describe("⌘K entry points", () => {
     ["app.settings", null],
     ["app.merging", "merging"],
     ["app.workspace-settings", "workspaces"],
+    ["app.models", "models"],
     ["app.devices", "devices"],
     ["app.notifications", "notifications"],
     ["app.phone-notifications", "notifications"],

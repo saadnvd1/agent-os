@@ -1358,6 +1358,76 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: 60,
+    name: "check_runs_and_compactions",
+    up: (db) => {
+      // What each run of the independent reviewer and the scope check cost,
+      // from its claude -p result: it leaves no transcript, so this is the
+      // only record. And each compaction a chat's agent made, so tokens per
+      // task can be compared before and after the threshold moved.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS check_runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          workspace_id TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          label TEXT NOT NULL,
+          pr_number INTEGER,
+          sha TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          model TEXT,
+          input_tokens INTEGER NOT NULL,
+          cache_write_tokens INTEGER NOT NULL,
+          cache_read_tokens INTEGER NOT NULL,
+          output_tokens INTEGER NOT NULL,
+          cost_usd REAL NOT NULL,
+          duration_ms INTEGER,
+          at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_check_runs_at ON check_runs(at);
+        CREATE INDEX IF NOT EXISTS idx_check_runs_sha ON check_runs(session_id, sha, kind);
+        CREATE TABLE IF NOT EXISTS chat_compactions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          session_name TEXT NOT NULL,
+          workspace_id TEXT,
+          at INTEGER NOT NULL,
+          trigger TEXT NOT NULL,
+          before_tokens INTEGER,
+          after_tokens INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_compactions_at ON chat_compactions(at);
+      `);
+    },
+  },
+  {
+    id: 61,
+    name: "model_routing",
+    // One transaction, so a crash part-way leaves nothing to skip as
+    // "duplicate column" on the next start.
+    up: (db) =>
+      db.transaction(() => {
+        // What a session runs on beyond the model name: its provider (NULL is
+        // Anthropic), a task's own models by role (JSON), and a task's plan
+        // step (planning, then implementing). Each turn keeps the model,
+        // provider and role it ran as, how long it took, and the plan's 5-hour
+        // window when it ended, so spend compares by model. A check run keeps the
+        // provider its model came from.
+        for (const col of [
+          `ALTER TABLE sessions ADD COLUMN model_provider TEXT`,
+          `ALTER TABLE sessions ADD COLUMN model_overrides TEXT`,
+          `ALTER TABLE sessions ADD COLUMN plan_phase TEXT`,
+          `ALTER TABLE task_queue ADD COLUMN model_overrides TEXT`,
+          `ALTER TABLE chat_turns ADD COLUMN model TEXT`,
+          `ALTER TABLE chat_turns ADD COLUMN provider TEXT`,
+          `ALTER TABLE chat_turns ADD COLUMN role TEXT`,
+          `ALTER TABLE chat_turns ADD COLUMN duration_ms INTEGER`,
+          `ALTER TABLE chat_turns ADD COLUMN window_pct REAL`,
+          `ALTER TABLE check_runs ADD COLUMN provider TEXT`,
+        ])
+          db.exec(col);
+      })(),
+  },
 ];
 
 // `upTo`: stop after this id (tests that start from an older database).

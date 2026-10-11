@@ -4,11 +4,13 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { getProvider } from "../providers";
+import { sessionShellEnv } from "../models/launch";
 import { shellQuote } from "../hosts/ssh";
 import { runInBackground } from "../async-operations";
 import { trustPromptKeys } from "../tasks/state";
 import { BUS_BRIEF } from "./brief";
 import { selfUrl } from "./self-env";
+import { autoCompactEnv } from "../chat/refresh";
 import { CLAUDE_STATUS_SETTINGS_FLAG } from "../program-status/claude-flag";
 import {
   sessionProjectEnv,
@@ -35,6 +37,7 @@ export function ensureBusBrief(): void {
 export function agentEnv(sessionId: string): Record<string, string> {
   return {
     ...sessionProjectEnv(sessionId),
+    ...autoCompactEnv(sessionId),
     AGENTOS_SESSION_ID: sessionId,
     AGENTOS_URL: selfUrl(),
     PATH: `${AOS_BIN_DIR}:${process.env.PATH ?? ""}`,
@@ -47,6 +50,14 @@ export const AOS_BIN_DIR = path.join(process.cwd(), "bin");
 
 export function envArgs(env: Record<string, string>): string[] {
   return Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
+}
+
+// Tool search is off on a routed provider, so every MCP server the user or
+// the project has would put all its schemas in every prompt. A terminal
+// agent reaches AgentOS through the aos CLI, so it needs none. Shell text
+// for the agent's command line; empty on Claude.
+export function routedMcpFlags(provider?: string | null): string {
+  return provider ? "--strict-mcp-config " : "";
 }
 
 // Written just before the agent's tmux session is created: a session with
@@ -62,6 +73,8 @@ export async function launchClaude(opts: {
   tmuxName: string;
   cwd: string;
   model: string;
+  // The model's provider (lib/models); Anthropic when absent.
+  provider?: string | null;
   prompt: string;
   brief?: string;
   // Continue this Claude conversation; the prompt is its next message.
@@ -86,7 +99,14 @@ export async function launchClaude(opts: {
       sessionId: opts.resume,
     })
     .join(" ");
-  const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${provider.command} ${flags} ${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
+  // The provider's key is fetched by the pane's own shell from its
+  // reference: only the reference is in this command line.
+  const routing = sessionShellEnv({
+    model: opts.model,
+    model_provider: opts.provider ?? null,
+  });
+  const mcpFlags = routedMcpFlags(opts.provider);
+  const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${routing.exportKey} ${provider.command} ${flags} ${mcpFlags}${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
   await execFileAsync(
     "tmux",
     [
@@ -96,7 +116,7 @@ export async function launchClaude(opts: {
       opts.tmuxName,
       "-c",
       opts.cwd,
-      ...envArgs(agentEnv(opts.sessionId)),
+      ...envArgs({ ...agentEnv(opts.sessionId), ...routing.env }),
       agent,
     ],
     { cwd: opts.cwd }

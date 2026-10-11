@@ -272,7 +272,7 @@ export function checkMessage(
     : pr.failingUrl
       ? `\n\nIts details: ${untrusted("CI", pr.failingUrl)}`
       : "";
-  return `CI check ${untrusted("CI", pr.failing ?? "")} failed on your PR #${pr.number} at ${short(pr.head)}${step}.${tail}\n\n${UNTRUSTED_RULE}\n\nFix the root cause (not the check), re-run your checks, push, then run /do-code-review again and update the Reviewed: line in the PR body for the new head.`;
+  return `CI check ${untrusted("CI", pr.failing ?? "")} failed on your PR #${pr.number} at ${short(pr.head)}${step}.${tail}\n\n${UNTRUSTED_RULE}\n\nFix the root cause (not the check), re-run your checks, then push.`;
 }
 
 // True once the PR's activity at this fingerprint has been handled.
@@ -374,7 +374,7 @@ export function reviewMessage(pr: TaskPR, events: PREvent[]): string {
         : "";
     return `- ${e.author} ${what}${body}${notes}${more}`;
   });
-  return `New review activity on your PR #${pr.number}:\n${items.join("\n")}\n\n${UNTRUSTED_RULE} Address each point: fix what's right, re-run your checks, push, then run /do-code-review again and update the Reviewed: line for the new head. Where you disagree, reply on the PR (\`gh pr comment ${pr.number}\`) saying why.`;
+  return `New review activity on your PR #${pr.number}:\n${items.join("\n")}\n\n${UNTRUSTED_RULE} Address each point: fix what's right, re-run your checks, then push. Where you disagree, reply on the PR (\`gh pr comment ${pr.number}\`) saying why.`;
 }
 
 // Tests only.
