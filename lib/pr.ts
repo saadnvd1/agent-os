@@ -1,6 +1,6 @@
 import { execFileSync } from "child_process";
 import { run } from "./tasks/gh";
-import { GhBackoffError } from "./tasks/gh-limit";
+import { GhBackoffError, isRateLimit } from "./tasks/gh-limit";
 
 /** The remote's default branch, or "main" when it has none. */
 export function remoteDefaultBranch(workingDir: string): string {
@@ -194,8 +194,10 @@ export async function getPRForBranch(
     const prs = JSON.parse(output);
     return prs.length > 0 ? prs[0] : null;
   } catch (error) {
-    // Backed off for the rate limit says nothing about whether a PR exists.
+    // GitHub's rate limit says nothing about whether a PR exists.
     if (error instanceof GhBackoffError) throw error;
+    if (isRateLimit(error))
+      throw new GhBackoffError("GitHub's rate limit is spent; try again later");
     return null;
   }
 }
