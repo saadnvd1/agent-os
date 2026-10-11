@@ -122,6 +122,10 @@ export function turnAwayOff(
       by === "expired" ? "Away ran out." : "Saad turned Away off.",
       "away"
     );
+  // What came up since the last sweep's batch (a held `aos notify` is in
+  // no report), then the summary. A second later, so the window takes
+  // everything up to now.
+  notifyBatch(ended, now + 1000);
   notifyPhone(PHONE_SOURCE, phoneSummary(report));
   return { ...ended, report: JSON.stringify(report) };
 }
@@ -345,7 +349,10 @@ export async function sweepWorkspace(
 // One phone message for what came up since the last: new asks across
 // every workspace, and deploys that failed.
 export function notifyBatch(away: AwayRow, now = Date.now()): string | null {
+  // [since, until): a row made in the second of this batch goes in the
+  // next one, never in none.
   const since = away.asks_notified_at ?? away.started_at;
+  const until = toSql(now);
   const claimed = db
     .prepare(
       `UPDATE away_periods SET asks_notified_at = ? WHERE id = ? AND asks_notified_at IS ?`
@@ -356,19 +363,20 @@ export function notifyBatch(away: AwayRow, now = Date.now()): string | null {
     .prepare(
       `SELECT a.kind, a.title, w.name AS workspace FROM orchestrator_asks a
        JOIN workspaces w ON w.id = a.workspace_id
-       WHERE a.status = 'open' AND a.created_at > ? ORDER BY a.id`
+       WHERE a.status = 'open' AND a.created_at >= ? AND a.created_at < ? ORDER BY a.id`
     )
-    .all(since) as { kind: string; title: string; workspace: string }[];
+    .all(since, until) as { kind: string; title: string; workspace: string }[];
   // Failed deploys, and what orchestrators sent with `aos notify` while
   // he was away (held for this batch).
   const held = db
     .prepare(
       `SELECT a.kind, a.detail, w.name AS workspace FROM away_actions a
        JOIN workspaces w ON w.id = a.workspace_id
-       WHERE a.away_id = ? AND a.kind IN ('deploy_failed', 'notify') AND a.created_at > ?
+       WHERE a.away_id = ? AND a.kind IN ('deploy_failed', 'notify')
+         AND a.created_at >= ? AND a.created_at < ?
        ORDER BY a.id`
     )
-    .all(away.id, since) as {
+    .all(away.id, since, until) as {
     kind: string;
     detail: string | null;
     workspace: string;

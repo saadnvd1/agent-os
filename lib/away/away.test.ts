@@ -183,6 +183,21 @@ describe("the batched phone notification", () => {
     expect(text).toMatch(/^While you're away: 1 note from an orchestrator/);
     expect(text).toContain("PR #9 needs your call");
   });
+
+  it("sends what's held since the last batch when Away ends, before the summary", async () => {
+    const w = seedWorkspace().workspace.id;
+    const orch = ensureOrchestrator(w);
+    const now = Date.now();
+    const { row } = startAway({ setBy: "x", expiresAt: null }, now - 20 * MIN);
+    notifyBatch(getAway(row.id)!, now - 10 * MIN);
+    // Held in the very second of that batch: still goes out.
+    holdForBatch(w, orch.id, "check PR #212 before morning", now - 10 * MIN);
+    phone.length = 0;
+    turnAwayOff("saad", now);
+    expect(phone).toHaveLength(2);
+    expect(phone[0]).toContain("check PR #212 before morning");
+    expect(phone[1]).toMatch(/^While you were away: /);
+  });
 });
 
 describe("the Away routes", () => {
