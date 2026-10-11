@@ -10,6 +10,7 @@ import {
   preToolUseHooks,
 } from "@/lib/chat/drivers/claude-approvals";
 import { ensureOrchestrator, orchestratorDir } from "./home";
+import { LIMITS_FILE } from "./usage";
 import {
   orchestratorToolRefusal,
   physicalPath,
@@ -45,6 +46,12 @@ beforeAll(() => {
   fs.symlinkSync(at(".ssh"), at("notes/keys"));
   // A way out of the repo, so `..` by name lands back in it.
   fs.symlinkSync(at("notes"), at("dev/app/out"));
+  // Links kept in protected places, pointing somewhere ordinary.
+  fs.mkdirSync(at("dotfiles"));
+  fs.writeFileSync(at("dotfiles/zshrc"), "");
+  fs.symlinkSync(at("dotfiles/zshrc"), at(".zshrc"));
+  fs.writeFileSync(at("dotfiles/git"), "");
+  fs.symlinkSync(at("dotfiles/git"), at("bin/git"));
   bounds = {
     cwd: at(".agent-os/orchestrators/w1"),
     ownDir: at(".agent-os/orchestrators/w1"),
@@ -165,11 +172,27 @@ describe("writeRefusal", () => {
       at("notes/site.pth"),
       at("Library/LaunchAgents/x.plist"),
       at("bin/aos"),
+      // The link is the protected file, wherever it points.
+      at("bin/git"),
     ])
       expect(await refused(p), p).toMatch(/configures what runs/);
+    expect(await refused(at(".zshrc"))).toMatch(/configures what runs/);
+    expect(await refused(at("dotfiles/zshrc"))).toBeNull();
     // A dotfile below the top of home is ordinary.
     expect(await refused(at("notes/.gitignore"))).toBeNull();
     expect(await refused(at("notes/repo/README.md"))).toBeNull();
+  });
+
+  it("refuses AgentOS's review and rebase checkouts", async () => {
+    for (const d of [
+      "aos-review-x1/src/a.ts",
+      "aos-rebase-y2/a.ts",
+      "aos-body-z3/body.md",
+    ])
+      expect(await refused(path.join(os.tmpdir(), d)), d).toMatch(
+        /reviewing or rebasing/
+      );
+    expect(await refused(path.join(os.tmpdir(), "aos-notes.md"))).toBeNull();
   });
 
   it("refuses a path with no file", async () => {
@@ -233,14 +256,44 @@ describe("an orchestrator's writes", () => {
     const { orchestratorExtras } = await import("./worker");
     const w = createWorkspace("Wired");
     const o = ensureOrchestrator(w.id);
+    fs.mkdirSync(at("dev/wired"), { recursive: true });
+    createProject({
+      name: "wired",
+      workingDirectory: at("dev/wired"),
+      workspaceId: w.id,
+    });
     const extras = await orchestratorExtras(o);
     expect(extras.allowedTools).toContain("Write");
     expect(
-      await extras.toolGuard!("Write", { file_path: at("dev/guarded/a.ts") })
+      await extras.toolGuard!("Write", { file_path: at("dev/wired/a.ts") })
     ).toMatch(/project repository/);
     expect(
       await extras.toolGuard!("Edit", { file_path: at("notes/ok.md") })
     ).toBeNull();
+  });
+
+  it("are refused in PATH, XDG config, ~/Library and the usage brake's folder", async () => {
+    const outside = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "aos-wg-path-"))
+    );
+    for (const d of ["bin", "xdg"]) fs.mkdirSync(path.join(outside, d));
+    vi.stubEnv("PATH", `${path.join(outside, "bin")}:relative/bin`);
+    vi.stubEnv("XDG_CONFIG_HOME", path.join(outside, "xdg"));
+    try {
+      const o = ensureOrchestrator(createWorkspace("Runs").id);
+      const write = (file_path: string) =>
+        orchestratorToolRefusal(o, "Write", { file_path });
+      for (const p of [
+        path.join(outside, "bin/aos"),
+        path.join(outside, "xdg/git/config"),
+        at("Library/LaunchAgents/x.plist"),
+        path.join(path.dirname(LIMITS_FILE), "limits.json"),
+      ])
+        expect(await write(p), p).toMatch(/configures what runs/);
+      expect(await write(path.join(outside, "notes.md"))).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("runs as a PreToolUse hook on every tool call", async () => {

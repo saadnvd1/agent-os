@@ -892,8 +892,11 @@ it may do on its own, and the lines that always come back to you as asks.
   Claude and tool config, the usage brake's `limits.json`), `~/Library`, the
   folders on `PATH`, and any `.git`, `.claude`, `.mcp.json`, `CLAUDE.md` or
   `AGENTS.md`, since writing one would give it a shell or run code in
-  AgentOS's own git. Code changes to a project go through a task, so its PR
-  still passes CI, review and scope. Its chat
+  AgentOS's own git; and the temporary checkouts a review or rebase runs in.
+  Code changes to a project go through a task, so its PR still passes CI,
+  review and scope. It is a list of exceptions, not of allowed places: a
+  script a hook or scheduled job runs from an ordinary folder can still be
+  written, so an orchestrator misled by text it read could run code that way. Its chat
   worker checks every write in a PreToolUse hook before it runs, on the path
   with symlinks and `..` resolved as the system will, and refuses with the
   reason; the repositories are read from the database on each write, so a

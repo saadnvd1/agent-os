@@ -49,6 +49,11 @@ export interface WriteBounds {
 const RUNS_CODE =
   /(^|\/)(\.git|\.claude|\.codex|\.cursor|\.vscode|\.husky|\.githooks)(\/|$)|(^|\/)(\.mcp\.json|\.claude\.json|CLAUDE(\.local)?\.md|AGENTS\.md|\.envrc|\.gitconfig|\.gitattributes|\.gitmodules|sitecustomize\.py|usercustomize\.py)$|\.pth$/i;
 
+// The temporary checkouts AgentOS reviews, rebases and writes PR bodies in
+// (repo.ts, rebase.ts): an edit while a review runs would change what it
+// judges.
+const AGENTOS_TEMP = /(^|\/)aos-(review|rebase|body)-[^/]+(\/|$)/;
+
 const MAX_LINKS = 40;
 
 // The path as the system resolves it: component by component from the root,
@@ -119,23 +124,32 @@ export async function writeRefusal(
   const abs = given.startsWith("/") ? given : `${bounds.cwd}/${given}`;
   let targets: string[];
   let repos: string[];
-  let state: string;
-  let ownDir: string;
-  let home: string;
+  let state: string[];
+  let ownDir: string[];
+  let home: string[];
   let runs: string[];
   try {
-    // As written, and with `..` taken by name first, as a tool that
-    // normalises the path before opening it would: both must be allowed.
+    // Where it lands as written, and with `..` taken by name first, as a
+    // tool that normalises the path before opening it would; and where it
+    // was asked for, before any link: all must be allowed. A link sitting in
+    // a protected place (a dotfile kept in a dotfiles repo, Homebrew's
+    // bin/git) is refused there, wherever it points.
     targets = [
-      ...new Set(
-        await Promise.all([physicalPath(abs), physicalPath(path.resolve(abs))])
-      ),
+      ...new Set([
+        ...(await Promise.all([
+          physicalPath(abs),
+          physicalPath(path.resolve(abs)),
+        ])),
+        path.resolve(abs),
+      ]),
     ];
-    repos = await Promise.all(bounds.repos.map((r) => physicalPath(r)));
-    state = await physicalPath(bounds.state);
-    ownDir = await physicalPath(bounds.ownDir);
-    home = await physicalPath(bounds.home);
-    runs = await Promise.all(bounds.runs.map((r) => physicalPath(r)));
+    // Each folder by its own name too, for a path that reaches it by name.
+    const both = async (p: string) => [path.resolve(p), await physicalPath(p)];
+    repos = (await Promise.all(bounds.repos.map(both))).flat();
+    runs = (await Promise.all(bounds.runs.map(both))).flat();
+    state = await both(bounds.state);
+    ownDir = await both(bounds.ownDir);
+    home = await both(bounds.home);
   } catch (e) {
     return `Couldn't resolve ${filePath}: ${(e as Error).message}.`;
   }
@@ -143,8 +157,11 @@ export async function writeRefusal(
     const repo = repos.find((r) => within(target, r));
     if (repo)
       return `${filePath} is inside ${repo}, a project repository, task worktree or AgentOS itself. Change code there through a task (start_task), so its PR goes through the merge gates.`;
-    if (within(target, state) && !within(target, ownDir))
-      return `${filePath} is in AgentOS's own state (${state}); you may write only in your folder, ${ownDir}.`;
+    if (AGENTOS_TEMP.test(target))
+      return `${filePath} is in a checkout AgentOS is reviewing or rebasing; orchestrators never write there.`;
+    const own = ownDir.some((d) => within(target, d));
+    if (state.some((d) => within(target, d)) && !own)
+      return `${filePath} is in AgentOS's own state (${bounds.state}); you may write only in your folder, ${bounds.ownDir}.`;
     if (isSecretPath(target) || isSecretPath(filePath))
       return `${filePath} holds or guards secrets; orchestrators never write those.`;
     const runsIn = runs.find((r) => within(target, r));
@@ -152,11 +169,14 @@ export async function writeRefusal(
       RUNS_CODE.test(target) ||
       RUNS_CODE.test(filePath) ||
       runsIn ||
-      (within(target, home) &&
-        !within(target, ownDir) &&
-        key(target)
-          .slice(key(home).length + 1)
-          .startsWith("."))
+      (!own &&
+        home.some(
+          (h) =>
+            within(target, h) &&
+            key(target)
+              .slice(key(h).length + 1)
+              .startsWith(".")
+        ))
     )
       return `${filePath} configures what runs (shell, git, agent or tool config${runsIn ? `, in ${runsIn}` : ""}); orchestrators never write those.`;
   }
