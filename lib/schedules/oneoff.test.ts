@@ -3,10 +3,12 @@ import { randomUUID } from "crypto";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { createProject } from "../projects";
 import { setPaused } from "../orchestrator/pause";
-import { Braked, runSlot, type RunDeps } from "./run";
+import { Braked, runSlot, slotKey, type RunDeps } from "./run";
 import { dueSlot, nextRunAt, tick } from "./scheduler";
 import {
+  claimSlot,
   createSchedule,
+  failAbandonedClaims,
   findSchedule,
   listRuns,
   updateSchedule,
@@ -120,7 +122,33 @@ describe("creating a one-off", () => {
         },
         CREATED
       );
+    const agent = (mins: number) => () =>
+      createSchedule(
+        {
+          workspaceId: ws.id,
+          name: `a${mins}`,
+          at: CREATED + mins * 60_000,
+          prompt: "x",
+          kind: "orchestrator",
+          createdBySessionId: "some-agent-session",
+        },
+        CREATED
+      );
     expect(orch(2).run_at).toBe(CREATED + 120_000);
+    expect(agent(3)).toThrow(/at least 10 minutes/);
+    expect(agent(10)().run_at).toBe(CREATED + 600_000);
+  });
+
+  it("a restart mid-claim finishes the one-off", () => {
+    const { schedule } = seed();
+    expect(
+      claimSlot(schedule.id, slotKey(RUN_AT), RUN_AT, "schedule")
+    ).not.toBeNull();
+    failAbandonedClaims(0, Date.now() + 5000);
+    const after = findSchedule(schedule.id);
+    expect(after.done_at).not.toBeNull();
+    expect(after.enabled).toBe(false);
+    expect(upcomingOneOffs(schedule.workspace_id)).toHaveLength(0);
   });
 });
 

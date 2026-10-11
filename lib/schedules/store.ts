@@ -119,6 +119,9 @@ export function upcomingOneOffs(workspaceId?: string | null): Schedule[] {
 }
 
 // Turns a one-off off once its run settled. True only for the call that did.
+const byOrchestrator = (sessionId: string | null | undefined) =>
+  !!sessionId && getSessionRow(sessionId)?.role === "orchestrator";
+
 export function finishOneOff(id: string, now = Date.now()): boolean {
   return (
     db
@@ -250,11 +253,14 @@ function validate(
       throw new Error(
         `A reminder must be at least ${MESSAGE_MIN_GAP_MINUTES} minutes ahead`
       );
+    // The cap is on the orchestrator's remind_me reminders; a session's own
+    // `aos schedule add --at` isn't counted.
     if (
-      input.createdBySessionId &&
       !selfId &&
-      upcomingOneOffs(input.workspaceId).filter((s) => s.created_by_session_id)
-        .length >= MAX_AGENT_REMINDERS
+      byOrchestrator(input.createdBySessionId) &&
+      upcomingOneOffs(input.workspaceId).filter((s) =>
+        byOrchestrator(s.created_by_session_id)
+      ).length >= MAX_AGENT_REMINDERS
     )
       throw new Error(
         `At most ${MAX_AGENT_REMINDERS} reminders can wait at once: cancel one first`
@@ -649,6 +655,14 @@ export function failAbandonedClaims(
   now = Date.now()
 ): number {
   const before = Math.floor((now - olderThanMs) / 1000);
+  // A one-off whose only run was cut off won't come round again: finish it
+  // here so it leaves Upcoming and stops counting toward the reminder cap.
+  db.prepare(
+    `UPDATE schedules SET enabled = 0, done_at = ?, updated_at = datetime('now')
+     WHERE run_at IS NOT NULL AND done_at IS NULL AND id IN (
+       SELECT schedule_id FROM schedule_runs
+       WHERE outcome = 'claimed' AND created_at < datetime(?, 'unixepoch'))`
+  ).run(now, before);
   const started = db
     .prepare(
       `UPDATE schedule_runs SET outcome = 'started', detail = 'AgentOS restarted while it was starting'

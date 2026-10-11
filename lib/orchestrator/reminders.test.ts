@@ -71,6 +71,22 @@ describe("remind_me", () => {
     ).rejects.toThrow(/at most/i);
   });
 
+  it("doesn't count a session's own one-offs toward the cap", async () => {
+    const w = ws();
+    for (let i = 0; i < MAX_AGENT_REMINDERS; i++)
+      createSchedule({
+        workspaceId: w,
+        name: `s${i}`,
+        at: Date.now() + (i + 1) * 86_400_000,
+        prompt: "x",
+        kind: "orchestrator",
+        createdBySessionId: "some-agent-session",
+      });
+    await expect(
+      runTool(w, "remind_me", { at: "in 2h", prompt: "still fine" })
+    ).resolves.toMatch(/set for/);
+  });
+
   it("names two at the same minute apart", async () => {
     const w = ws();
     await runTool(w, "remind_me", { at: soon(60), prompt: "a" });
