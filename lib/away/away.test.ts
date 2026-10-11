@@ -15,6 +15,8 @@ import {
   claimSweep,
   endAway,
   getAway,
+  holdForBatch,
+  isExpired,
   MAX_AWAY_MS,
   startAway,
   toSql,
@@ -128,8 +130,8 @@ describe("turning Away on and off", () => {
   it("ends on its own when its time runs out, as of its expiry", () => {
     const now = Date.now();
     const row = turnAwayOn({ setBy: "x", expiresAt: now + 60 * MIN }, now);
-    awayTick(now + 30 * MIN);
-    expect(activeAway()?.id).toBe(row.id);
+    // Not run with a time before its expiry: that would start a sweep.
+    expect(isExpired(getAway(row.id)!, now + 59 * MIN)).toBe(false);
     awayTick(now + 61 * MIN);
     const ended = getAway(row.id)!;
     expect(ended.ended_by).toBe("expired");
@@ -164,6 +166,22 @@ describe("the batched phone notification", () => {
     expect(text).toContain("deploy failed: not deployed");
     expect(notifyBatch(getAway(row.id)!, now + MIN)).toBeNull();
     expect(phone).toHaveLength(1);
+  });
+
+  it("holds an orchestrator's aos notify for the batch while away, and only then", async () => {
+    const w = seedWorkspace().workspace.id;
+    const orch = ensureOrchestrator(w);
+    expect(holdForBatch(w, orch.id, "PR #9 needs your call")).toBe(false);
+    const now = Date.now();
+    const { row } = startAway({ setBy: "x", expiresAt: null }, now - MIN);
+    const { notifyFrom } =
+      await vi.importActual<typeof import("../notify")>("../notify");
+    expect(await notifyFrom(orch.id, "PR #9 needs your call")).toMatchObject({
+      state: "held",
+    });
+    const text = notifyBatch(getAway(row.id)!, now + MIN);
+    expect(text).toMatch(/^While you're away: 1 note from an orchestrator/);
+    expect(text).toContain("PR #9 needs your call");
   });
 });
 

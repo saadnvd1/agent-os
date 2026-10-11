@@ -28,9 +28,14 @@ export const HEALTH_GRACE_MS = 3 * 60 * 1000;
 export interface DeployDeps {
   // The commit a state file names, or null when there's no such file.
   readSha: (file: string) => { sha: string; at: number } | null;
-  // Whether `sha` is in the history of `tip` (fetching it if need be).
+  // Whether `sha` is in the history of `tip` (fetching it if need be);
+  // throws when that can't be told.
   contains: (repo: string, tip: string, sha: string) => Promise<boolean>;
-  health: (url: string) => Promise<{ ok: boolean; why?: string }>;
+  // startedAt, when the server says when it started (AgentOS's
+  // /api/health does), so a deploy that never restarted it is caught.
+  health: (
+    url: string
+  ) => Promise<{ ok: boolean; why?: string; startedAt?: number }>;
 }
 
 const SHA = /^[0-9a-f]{40}$/;
@@ -57,15 +62,24 @@ async function contains(
       () => false
     );
   if (await ancestor()) return true;
-  // The deployed commit may be newer than this checkout knows.
-  await run("git", ["fetch", "--quiet", "origin"], repo).catch(() => {});
+  // The deployed commit may be newer than this checkout knows. A fetch that
+  // fails throws, so stale refs never read as "not deployed".
+  await run("git", ["fetch", "--quiet", "origin"], repo);
   return ancestor();
 }
 
-async function health(url: string): Promise<{ ok: boolean; why?: string }> {
+async function health(
+  url: string
+): Promise<{ ok: boolean; why?: string; startedAt?: number }> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    return res.ok ? { ok: true } : { ok: false, why: `HTTP ${res.status}` };
+    if (!res.ok) return { ok: false, why: `HTTP ${res.status}` };
+    const body = (await res.json().catch(() => null)) as {
+      startedAt?: unknown;
+    } | null;
+    const startedAt =
+      typeof body?.startedAt === "string" ? Date.parse(body.startedAt) : NaN;
+    return Number.isFinite(startedAt) ? { ok: true, startedAt } : { ok: true };
   } catch (error) {
     return {
       ok: false,
@@ -80,7 +94,20 @@ export const DEFAULT_DEPS: DeployDeps = { readSha, contains, health };
 export const healthUrl = (health: string) =>
   health.startsWith("/") ? `${selfUrl()}${health}` : health;
 
+// Pending when it can't be told yet (git couldn't fetch): the next sweep
+// asks again, rather than a blip reading as a failed deploy.
 export async function checkDeploy(
+  input: Parameters<typeof judge>[0],
+  deps: DeployDeps = DEFAULT_DEPS
+): Promise<DeployVerdict> {
+  try {
+    return await judge(input, deps);
+  } catch {
+    return { state: "pending" };
+  }
+}
+
+async function judge(
   input: {
     repo: string;
     config: DeployConfig | undefined;
@@ -103,12 +130,18 @@ export async function checkDeploy(
     if (!config.health) return { state: "ok", detail: `${short} deployed` };
     const url = healthUrl(config.health);
     const answer = await deps.health(url);
-    if (answer.ok)
+    const stale =
+      answer.ok &&
+      answer.startedAt !== undefined &&
+      answer.startedAt < input.mergedAt;
+    if (answer.ok && !stale)
       return { state: "ok", detail: `${short} deployed, server healthy` };
     if (input.now - deployed.at < HEALTH_GRACE_MS) return { state: "pending" };
     return {
       state: "failed",
-      detail: `${short} deployed, but ${config.health} didn't answer healthy: ${answer.why ?? "no answer"}`,
+      detail: stale
+        ? `${short} deployed, but the server answering ${config.health} hasn't restarted since the merge`
+        : `${short} deployed, but ${config.health} didn't answer healthy: ${answer.why ?? "no answer"}`,
     };
   }
 

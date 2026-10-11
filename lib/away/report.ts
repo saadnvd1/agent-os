@@ -224,7 +224,25 @@ function failed(workspaceId: string, away: AwayRow, end: string) {
     pr_number: number | null;
     pr_url: string | null;
   }[];
+  const ended = db
+    .prepare(
+      `SELECT s.name, s.task_status, s.pr_number, s.pr_url FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+       WHERE p.workspace_id = ? AND s.task_status IN ('dropped', 'done')
+         AND s.task_ended_at >= ? AND s.task_ended_at <= ?
+       ORDER BY s.task_ended_at, s.id`
+    )
+    .all(workspaceId, away.started_at, end) as {
+    name: string;
+    task_status: string;
+    pr_number: number | null;
+    pr_url: string | null;
+  }[];
   return [
+    ...ended.map((t) => ({
+      what: `${t.name} ${t.task_status === "dropped" ? "was dropped" : "ended without a merge"}${t.pr_number ? ` (PR #${t.pr_number})` : ""}`,
+      url: t.pr_url,
+    })),
     ...deploys.map((d) => ({
       what: `Deploy failed after ${d.name ?? "a task"}${d.pr_number ? ` (PR #${d.pr_number})` : ""} merged: ${d.detail ?? "no detail"}`,
       url: d.pr_url,

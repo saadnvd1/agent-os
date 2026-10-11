@@ -157,18 +157,58 @@ describe("the While you were away report", () => {
   });
 
   it("says explicitly that nothing waits on Saad", () => {
+    // The whole database's asks count: none open, so the report says so.
+    db.exec(`UPDATE orchestrator_asks SET status = 'resolved'`);
     const s = seedWorkspace();
     const now = Date.now();
     const id = awayRow(now - HOUR, now);
     const r = buildAwayReport(getAway(id)!, () => false);
-    const ws = mine(r, s.workspace.id)!;
-    expect(ws.waiting).toEqual([]);
-    expect(ws.inFlight[0].why).toBe("no PR yet");
-    const md = reportMarkdown({ ...r, workspaces: [ws] });
-    expect(md).toContain("## Waiting on you\n\n- None.");
+    expect(mine(r, s.workspace.id)!.inFlight[0].why).toBe("no PR yet");
+    expect(r.totals.waiting).toBe(0);
+    expect(reportMarkdown(r)).toContain("## Waiting on you\n\n- None.");
+    expect(phoneSummary(r)).toContain("Nothing waiting on you.");
+  });
+
+  it("keeps to its own window and period, and tells pending from unchecked deploys", () => {
+    const s = seedWorkspace();
+    const w = s.workspace.id;
+    const now = Date.now();
+    const earlier = awayRow(now - 5 * HOUR, now - 4 * HOUR);
+    const id = awayRow(now - HOUR, now + 60_000);
+    // Before this period: an escalation, and the last period's failed deploy.
+    db.prepare(
+      `INSERT INTO orchestrator_notes (workspace_id, kind, text, created_at) VALUES (?, 'escalation', 'old escalation', ?)`
+    ).run(w, toSql(now - 3 * HOUR));
+    action(earlier, w, s.task, "deploy_failed", `deploy:${s.task}`, "old");
+    // Merged in it, on projects with and without a deploy check.
+    const checked = seedSession({
+      projectId: s.api.id,
+      name: "on-api",
+      task: true,
+    });
+    const plain = seedSession({
+      projectId: s.app.id,
+      name: "on-app",
+      task: true,
+    });
+    db.prepare(
+      `UPDATE sessions SET task_status = 'merged' WHERE id IN (?, ?)`
+    ).run(checked, plain);
+    // Ended without a merge in it.
+    const dropped = seedSession({
+      projectId: s.api.id,
+      name: "gave-up",
+      task: true,
+    });
+    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
+      dropped
+    );
+    const r = buildAwayReport(getAway(id)!, (p) => p === s.api.id);
+    const ws = mine(r, w)!;
     expect(
-      phoneSummary({ ...r, totals: { ...r.totals, waiting: 0, hardLines: 0 } })
-    ).toContain("Nothing waiting on you.");
+      Object.fromEntries(ws.merged.map((m) => [m.task, m.deploy]))
+    ).toEqual({ "on-api": "pending", "on-app": "unchecked" });
+    expect(ws.failed.map((f) => f.what)).toEqual(["gave-up was dropped"]);
   });
 });
 

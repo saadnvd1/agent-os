@@ -512,7 +512,8 @@ answers 2xx once the server is back (a path alone is this AgentOS server's own,
 as this repository's `agentos.json` uses with `scripts/autodeploy`'s state
 files). A merge counts as deployed once the `deployed` commit contains it and
 `health` answers; as failed when the `failed` commit contains it, the server
-doesn't come back within 3 minutes, or it isn't deployed `within_minutes`
+doesn't come back within 3 minutes (or, when its health answer has a
+`startedAt`, hasn't restarted since the merge), or it isn't deployed `within_minutes`
 (30) after the merge. No `deployed` file on the machine means nothing deploys
 there, and nothing is checked.
 
@@ -1025,7 +1026,7 @@ reset` yourself in a terminal on the machine: it refuses inside an
 - **Away mode:** turn it on when you step away, from the coffee cup in the
   sidebar header or ⌘K ("Away for 4 hours"), for 1 hour, 4 hours, until
   morning (8 AM) or until you're back. It's kept in `away_periods` (who set
-  it, when, when it ends), the cup turns amber while it's on, and it
+  it, when, when it ends), the cup turns amber while it's on (with an amber dot on the phone's menu button), and it
   ends on its own at its time. Every orchestrator gets an event, and a line
   leading its digest, saying you're away and to follow work through rather
   than only react. Every 10 minutes a sweep, written as code with no model
@@ -1039,11 +1040,11 @@ reset` yourself in a terminal on the machine: it refuses inside an
   orchestrator as an event. Interactive sessions are yours: one with
   uncommitted work is asked once to wrap up, and nothing more. Paused
   workspaces aren't swept. Hard lines still become asks, and while you're
-  away the asks raised (and failed deploys) reach your phone as one message
-  per sweep. Turning it off (or its running out) builds "While you were
+  away the asks raised, failed deploys and any `aos notify` an orchestrator
+  sends reach your phone as one message per sweep. Turning it off (or its running out) builds "While you were
   away" from the database: what merged and deployed with PR links, what's
-  still in flight and which gate or blocker holds it, what failed or was
-  escalated, and what waits on you (an explicit "none"). It opens on
+  still in flight and which gate or blocker holds it, what failed, was dropped
+  or was escalated, and what waits on you (an explicit "none"). It opens on
   whichever device is open until you dismiss it, a short summary goes to
   your phone, and the report stays in Settings → Audits (`away/`).
 

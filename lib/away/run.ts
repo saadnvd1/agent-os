@@ -49,6 +49,7 @@ import { awayOnLine } from "./brief";
 
 const PHONE_SOURCE = "away";
 const PHONE_LINES = 8;
+const GIT_AT_ONCE = 4;
 
 // Every workspace with an orchestrator, by id.
 function orchestrated(): { workspaceId: string; orchestratorId: string }[] {
@@ -94,10 +95,17 @@ export function turnAwayOff(
   by: "saad" | "expired",
   now = Date.now()
 ): AwayRow | null {
-  const ended = endAway(by, now);
-  if (!ended) return null;
-  const report = buildAwayReport(ended, deployConfigured);
-  saveReport(ended.id, report);
+  // Ended and its report kept together: a throw or a crash between them
+  // can't leave a period over with no report. A throw keeps Away on.
+  const done = db.transaction(() => {
+    const row = endAway(by, now);
+    if (!row) return null;
+    const report = buildAwayReport(row, deployConfigured);
+    saveReport(row.id, report);
+    return { ended: row, report };
+  })();
+  if (!done) return null;
+  const { ended, report } = done;
   try {
     writeAtomic(reportFile(ended), reportMarkdown(report));
   } catch (error) {
@@ -127,7 +135,8 @@ function deployConfigured(projectId: string): boolean {
 }
 
 // Claimed before it's acted on: a crash loses one nudge rather than
-// sending it twice.
+// sending it twice. Refused once Away is off or the workspace is paused,
+// so a sweep under way stops acting the moment either changes.
 function claim(
   away: AwayRow,
   workspaceId: string,
@@ -136,13 +145,16 @@ function claim(
   key: string,
   detail: string | null = null
 ): boolean {
+  if (isPaused(workspaceId)) return false;
   return (
     db
       .prepare(
         `INSERT OR IGNORE INTO away_actions (away_id, workspace_id, subject, kind, key, detail)
-         VALUES (?, ?, ?, ?, ?, ?)`
+         SELECT ?, ?, ?, ?, ?, ?
+         WHERE EXISTS (SELECT 1 FROM away_periods WHERE id = ? AND ended_at IS NULL)`
       )
-      .run(away.id, workspaceId, subject, kind, key, detail).changes === 1
+      .run(away.id, workspaceId, subject, kind, key, detail, away.id)
+      .changes === 1
   );
 }
 
@@ -175,20 +187,22 @@ const sessionRow = (id: string) =>
 
 async function dirtySessions(ids: string[]): Promise<Set<string>> {
   const dirty = new Set<string>();
-  await Promise.all(
-    ids.map(async (id) => {
-      const s = sessionRow(id);
-      // A linked machine's worktree isn't on this disk.
-      if (!s || (s.host_id && s.host_id !== "local")) return;
-      const dir = expandHome(s.worktree_path || s.working_directory);
-      const out = await run(
-        "git",
-        ["status", "--porcelain", "--untracked-files=normal"],
-        dir
-      ).catch(() => "");
-      if (out.trim()) dirty.add(id);
-    })
-  );
+  // A few at a time: a burst of spawns is what loads the machine.
+  for (let i = 0; i < ids.length; i += GIT_AT_ONCE)
+    await Promise.all(
+      ids.slice(i, i + GIT_AT_ONCE).map(async (id) => {
+        const s = sessionRow(id);
+        // A linked machine's worktree isn't on this disk.
+        if (!s || (s.host_id && s.host_id !== "local")) return;
+        const dir = expandHome(s.worktree_path || s.working_directory);
+        const out = await run(
+          "git",
+          ["status", "--porcelain", "--untracked-files=normal"],
+          dir
+        ).catch(() => "");
+        if (out.trim()) dirty.add(id);
+      })
+    );
   return dirty;
 }
 
@@ -345,27 +359,42 @@ export function notifyBatch(away: AwayRow, now = Date.now()): string | null {
        WHERE a.status = 'open' AND a.created_at > ? ORDER BY a.id`
     )
     .all(since) as { kind: string; title: string; workspace: string }[];
-  const deploys = db
+  // Failed deploys, and what orchestrators sent with `aos notify` while
+  // he was away (held for this batch).
+  const held = db
     .prepare(
-      `SELECT a.detail, w.name AS workspace FROM away_actions a
+      `SELECT a.kind, a.detail, w.name AS workspace FROM away_actions a
        JOIN workspaces w ON w.id = a.workspace_id
-       WHERE a.away_id = ? AND a.kind = 'deploy_failed' AND a.created_at > ?
+       WHERE a.away_id = ? AND a.kind IN ('deploy_failed', 'notify') AND a.created_at > ?
        ORDER BY a.id`
     )
-    .all(away.id, since) as { detail: string | null; workspace: string }[];
-  if (!asks.length && !deploys.length) return null;
+    .all(away.id, since) as {
+    kind: string;
+    detail: string | null;
+    workspace: string;
+  }[];
+  const deploys = held.filter((h) => h.kind === "deploy_failed");
+  const notes = held.filter((h) => h.kind === "notify");
+  if (!asks.length && !held.length) return null;
   const lines = [
     ...deploys.map(
       (d) => `- ${d.workspace}: deploy failed: ${clip(d.detail ?? "", 120)}`
     ),
     ...asks.map((a) => `- ${a.workspace}: ${a.kind}: ${clip(a.title, 100)}`),
+    ...notes.map((n) => `- ${n.workspace}: ${clip(n.detail ?? "", 160)}`),
   ];
-  const head =
-    asks.length && deploys.length
-      ? `While you're away: ${asks.length} new ask${asks.length === 1 ? "" : "s"} and ${deploys.length} failed deploy${deploys.length === 1 ? "" : "s"}`
-      : asks.length
-        ? `While you're away: ${asks.length} new ask${asks.length === 1 ? "" : "s"} waiting on you`
-        : `While you're away: ${deploys.length} deploy${deploys.length === 1 ? "" : "s"} failed`;
+  const count = (n: number, one: string, many: string) =>
+    n ? [`${n} ${n === 1 ? one : many}`] : [];
+  const parts = [
+    ...count(asks.length, "new ask", "new asks"),
+    ...count(deploys.length, "failed deploy", "failed deploys"),
+    ...count(
+      notes.length,
+      "note from an orchestrator",
+      "notes from orchestrators"
+    ),
+  ];
+  const head = `While you're away: ${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]}`;
   const shown = lines.slice(0, PHONE_LINES);
   const more = lines.length - shown.length;
   const text = [head, ...shown, ...(more ? [`- and ${more} more`] : [])].join(

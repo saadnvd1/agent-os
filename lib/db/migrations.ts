@@ -1300,6 +1300,20 @@ const migrations: Migration[] = [
       }[];
       if (!columns.some((c) => c.name === "merged_at"))
         db.exec(`ALTER TABLE sessions ADD COLUMN merged_at TEXT`);
+      // When a task ended without a merge (dropped, or done with no PR or
+      // its PR closed).
+      if (!columns.some((c) => c.name === "task_ended_at"))
+        db.exec(`ALTER TABLE sessions ADD COLUMN task_ended_at TEXT`);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS sessions_task_ended_at
+          AFTER UPDATE OF task_status ON sessions
+          WHEN NEW.task_status IN ('dropped', 'done')
+            AND OLD.task_status IS NOT NEW.task_status
+            AND NEW.task_ended_at IS OLD.task_ended_at
+        BEGIN
+          UPDATE sessions SET task_ended_at = datetime('now') WHERE id = NEW.id;
+        END
+      `);
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS sessions_merged_at
           AFTER UPDATE OF task_status ON sessions

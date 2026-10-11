@@ -6,6 +6,7 @@
  */
 
 import { db } from "../db";
+import { SWEEP_EVERY_MS } from "./sweep";
 
 export interface AwayRow {
   id: number;
@@ -164,4 +165,37 @@ export function untilText(row: AwayRow, now = Date.now()): string {
   return row.expires_at
     ? `until ${clockTime(fromSql(row.expires_at), now)}`
     : "until he's back";
+}
+
+// While Away is on, an orchestrator's `aos notify` waits for the sweep's
+// one batched message rather than buzzing per item. True when held.
+export function holdForBatch(
+  workspaceId: string,
+  sessionId: string,
+  text: string,
+  now = Date.now()
+): boolean {
+  const open = activeAway();
+  if (!open) return false;
+  return (
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO away_actions (away_id, workspace_id, subject, kind, key, detail, created_at)
+         VALUES (?, ?, ?, 'notify', ?, ?, ?)`
+      )
+      .run(
+        open.id,
+        workspaceId,
+        sessionId,
+        `notify:${sessionId}:${now}:${text.length}`,
+        text,
+        toSql(now)
+      ).changes === 1
+  );
+}
+
+// Until the next sweep sends the batch, as near as can be told.
+export function msToNextSweep(now = Date.now()): number {
+  const last = activeAway()?.last_sweep_at;
+  return last ? Math.max(0, fromSql(last) + SWEEP_EVERY_MS - now) : 0;
 }

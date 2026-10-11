@@ -118,4 +118,36 @@ describe("checking a merge's deploy", () => {
       )
     ).toEqual({ state: "pending" });
   });
+
+  it("waits rather than fails when git can't tell (a fetch that failed)", async () => {
+    const d = deps({ files: { [config.deployed]: { sha: OTHER } } });
+    d.contains = async () => {
+      throw new Error("fetch failed");
+    };
+    expect(
+      await checkDeploy(input({ mergedAt: NOW - 60 * 60 * 1000 }), d)
+    ).toEqual({ state: "pending" });
+  });
+
+  it("catches a server that answers but hasn't restarted since the merge", async () => {
+    const mergedAt = NOW - 10 * 60 * 1000;
+    const files = (at: number) => ({ [config.deployed]: { sha: MERGE, at } });
+    const old = (at: number) => {
+      const d = deps({ files: files(at) });
+      d.health = async () => ({ ok: true, startedAt: mergedAt - 1000 });
+      return d;
+    };
+    expect(await checkDeploy(input({ mergedAt }), old(NOW - 1000))).toEqual({
+      state: "pending",
+    });
+    expect(
+      await checkDeploy(input({ mergedAt }), old(NOW - HEALTH_GRACE_MS))
+    ).toMatchObject({
+      state: "failed",
+      detail: expect.stringContaining("hasn't restarted since the merge"),
+    });
+    const fresh = deps({ files: files(NOW - HEALTH_GRACE_MS) });
+    fresh.health = async () => ({ ok: true, startedAt: mergedAt + 1000 });
+    expect((await checkDeploy(input({ mergedAt }), fresh)).state).toBe("ok");
+  });
 });

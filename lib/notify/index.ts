@@ -7,6 +7,7 @@
 
 import { db, type Session } from "../db";
 import { Limiter, type Outcome } from "./limiter";
+import { holdForBatch, msToNextSweep } from "../away/state";
 import { selectNotifier, type TelegramConfig } from "./notifiers";
 
 export type { Outcome } from "./limiter";
@@ -135,6 +136,12 @@ export async function notifyFrom(
   if (from && !session) throw new Error("Unknown sender session");
   const body = text.trim();
   if (!body) throw new Error("Nothing to send");
+  if (
+    session?.role === "orchestrator" &&
+    session.workspace_id &&
+    holdForBatch(session.workspace_id, session.id, body)
+  )
+    return { state: "held", inMs: msToNextSweep() };
   return sendPhone(
     session ? `session:${session.id}` : "cli",
     session ? `${session.name}: ${body}` : body
