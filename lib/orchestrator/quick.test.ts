@@ -320,6 +320,9 @@ describe("the write guard with a quick change open", () => {
       `git -C ${wt} -C ${s.repo} status`,
       `git -C ${wt} log --output=/tmp/x`,
       `git -C ${wt} diff --ext-diff`,
+      `git -C ${wt} show --textconv HEAD:README.md`,
+      `git -C ${wt} rebase --exec true`,
+      `git -C ${wt} diff --no-index -- /etc/hosts /dev/null`,
     ])
       expect(await bash(s, cmd), cmd).toMatch(/Refused/);
   });
@@ -438,9 +441,12 @@ describe("quick_pr", () => {
 
 describe("the code-review gate", () => {
   // A PR open at an old head with green, settled CI and a passing review,
-  // on a quick change or on an ordinary task, with or without a Code
-  // review section in its body.
-  function gated(opts: { quick: boolean; section: boolean; review: boolean }) {
+  // on a quick change or on an ordinary task.
+  function gated(opts: {
+    quick: boolean;
+    review: boolean | "block" | "stale";
+    attribution?: "a Claude-Session link" | null;
+  }) {
     const s = setup();
     git(s.repo, "checkout", "-qb", `feature/g-${Date.now()}`);
     const sha = commit(s.repo, "README.md", "changed\n");
@@ -461,7 +467,7 @@ describe("the code-review gate", () => {
       head: sha,
       failing: null,
       checkCount: 1,
-      attribution: null,
+      attribution: opts.attribution ?? null,
     };
     putCheck({
       workspaceId: s.w,
@@ -475,35 +481,57 @@ describe("the code-review gate", () => {
       putCheck({
         workspaceId: s.w,
         sessionId: task,
-        sha,
+        sha: opts.review === "stale" ? "0".repeat(40) : sha,
         kind: "review",
-        status: "pass",
+        status: opts.review === "block" ? "block" : "pass",
         detail: "Looks right.",
       });
     return { w: s.w, task: row(task), sha };
   }
 
   it("for a quick_pr PR, is the passing independent review of its head", async () => {
-    const g = gated({ quick: true, section: false, review: true });
+    const g = gated({ quick: true, review: true });
     expect(await judge(g.w, g.task as never)).toMatchObject({
       ok: true,
       sha: g.sha,
     });
   });
 
-  it("for a quick_pr PR, waits on that review whatever the body says", async () => {
-    const g = gated({ quick: true, section: true, review: false });
+  it.each([
+    ["a review of an older head", "stale", /no independent review/],
+    ["a blocking review", "block", /blocking findings/],
+    ["no review", false, /no independent review/],
+  ] as const)("for a quick_pr PR, waits on %s", async (_n, review, text) => {
+    const g = gated({ quick: true, review });
+    const v = await judge(g.w, g.task as never);
+    expect(v).toMatchObject({ ok: false, wait: true });
+    expect(!v.ok && v.text).toMatch(text);
+  });
+
+  it("for a quick_pr PR, still refuses AI attribution in the body", async () => {
+    const g = gated({
+      quick: true,
+      review: true,
+      attribution: "a Claude-Session link",
+    });
+    const v = await judge(g.w, g.task as never);
+    expect(v.ok).toBe(false);
+    expect(!v.ok && v.text).toMatch(/AI attribution/);
+  });
+
+  it("for a quick_pr PR, waits on that review", async () => {
+    const g = gated({ quick: true, review: false });
     const v = await judge(g.w, g.task as never);
     expect(v).toMatchObject({ ok: false, wait: true });
     expect(!v.ok && v.text).toMatch(/independent review/);
   });
 
   it("for any other task, is the same passing review of its head", async () => {
-    const without = gated({ quick: false, section: false, review: false });
+    const without = gated({ quick: false, review: false });
     const v = await judge(without.w, without.task as never);
     expect(v.ok).toBe(false);
     expect(!v.ok && v.text).toMatch(/no review of/);
-    const withIt = gated({ quick: false, section: false, review: true });
+    const withIt = gated({ quick: false, review: true });
     expect(await judge(withIt.w, withIt.task as never)).toMatchObject({
       ok: true,
     });

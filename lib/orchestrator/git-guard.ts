@@ -27,7 +27,7 @@ const GIT_ALLOWED = new Set([
 
 // Options that write a file somewhere else, or read a command to run.
 const GIT_REFUSED_ARG =
-  /^(--output(-directory)?(=|$)|--exec(=|$)|--ext-diff$|--textconv$)/;
+  /^(--output(-directory)?(=|$)|--exec(=|$)|--ext-diff$|--textconv$|--no-index$)/;
 
 // A shell word, with its quotes taken off, or why the command isn't one
 // plain command.

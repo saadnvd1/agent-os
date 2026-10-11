@@ -104,14 +104,17 @@ export async function judge(
       fromCard: !!task.lh_card_id,
       scope: getCheck(task.id, sha, "scope"),
       stackRefusal: landing ? null : signOffRefusal(task.id),
-      codeReview: quick
-        ? { refusal: null, wait: null }
-        : codeReviewGate({
-            head: sha,
-            attribution: pr.attribution,
-            review: (at) => getCheck(task.id, at, "review"),
-            restacked: restackedOf(task),
-          }),
+      codeReview: (() => {
+        const gate = codeReviewGate({
+          head: sha,
+          attribution: pr.attribution,
+          review: (at) => getCheck(task.id, at, "review"),
+          restacked: restackedOf(task),
+        });
+        // A quick change keeps the body checks (attribution, unreadable);
+        // its wait on the review was judged above.
+        return quick ? { refusal: gate.refusal, wait: null } : gate;
+      })(),
     }),
     opts
   );
