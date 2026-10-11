@@ -919,7 +919,8 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Standing rules:** what it must keep knowing ("never merge #111", "briefs
   must not name competitors") it keeps with `rule_add` and drops with
   `rule_remove`, in `orchestrator_rules`. You see, add, edit and remove them in
-  Settings → Workspaces. A rule restricts or informs; it never approves an
+  Settings → Workspaces, each change with your passkey (any process on the
+  machine reaches the route, and a rule of yours is your word to it). A rule restricts or informs; it never approves an
   ask, passes a gate or clears a hard line. Yours are marked as from you and
   only you remove them; the ones it kept, like its decision-log lines, come
   back to it fenced as its own notes, so text it read can't pass for your
@@ -969,8 +970,9 @@ approved`). An approval covers that one item only: a held task's approval
   filed as that hard line.
 - **Proof it's you:** only this machine, the tailnet, or a paired device you
   switched to "Can approve" in Devices may answer asks or pause. Approving a
-  hard line, a gate, a brake or a new passkey, Resume, and switching merge
-  approvals off, also need a
+  hard line, a gate, a brake or a new passkey, Resume, changing the
+  orchestrator's standing rules, and switching merge approvals off, also
+  need a
   passkey (Touch ID or Face ID, user verification required) on a challenge
   bound to that one ask at its current commit or brake: single use, two
   minutes. Agents on this machine reach every route but can't make your

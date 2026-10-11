@@ -10,6 +10,8 @@ export const askPresence = (askId: number, binding: string) =>
 export const resumePresence = (workspaceId: string) => `resume:${workspaceId}`;
 export const revokePresence = (passkeyId: string) => `revoke:${passkeyId}`;
 export const APPROVALS_OFF_PRESENCE = "approvals-off";
+// Writing a workspace's standing rules as Saad.
+export const rulesPresence = (workspaceId: string) => `rules:${workspaceId}`;
 
 export function presenceBinding(b: {
   purpose?: PresencePurpose;
@@ -36,6 +38,9 @@ export function presenceBinding(b: {
       return "enroll";
     case "approvals-off":
       return APPROVALS_OFF_PRESENCE;
+    case "rules":
+      if (!b.workspaceId) throw new PresenceError("Which workspace?");
+      return rulesPresence(b.workspaceId);
     case "revoke":
       if (!b.passkeyId) throw new PresenceError("Which passkey?");
       return revokePresence(b.passkeyId);

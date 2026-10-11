@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RuleRow } from "@/lib/orchestrator/rules";
+import { provePresence } from "../presence";
 
 // A workspace orchestrator's standing rules (lib/orchestrator/rules).
 // Pushed when the table changes (data/push/topics).
@@ -44,20 +45,36 @@ function useRuleMutation<V>(
   });
 }
 
-export const useAddRule = (workspaceId: string) =>
-  useRuleMutation(workspaceId, (text: string) =>
-    call(url(workspaceId), { method: "POST", body: JSON.stringify({ text }) })
-  );
+// A rule written here is Saad's word to the orchestrator: each change
+// takes his passkey.
+const proven = async (workspaceId: string, body: object = {}) =>
+  JSON.stringify({
+    ...body,
+    assertion: await provePresence({ purpose: "rules", workspaceId }),
+  });
 
-export const useUpdateRule = (workspaceId: string) =>
-  useRuleMutation(workspaceId, ({ id, text }: { id: number; text: string }) =>
-    call(url(workspaceId, id), {
-      method: "PATCH",
-      body: JSON.stringify({ text }),
+export const useAddRule = (workspaceId: string) =>
+  useRuleMutation(workspaceId, async (text: string) =>
+    call(url(workspaceId), {
+      method: "POST",
+      body: await proven(workspaceId, { text }),
     })
   );
 
+export const useUpdateRule = (workspaceId: string) =>
+  useRuleMutation(
+    workspaceId,
+    async ({ id, text }: { id: number; text: string }) =>
+      call(url(workspaceId, id), {
+        method: "PATCH",
+        body: await proven(workspaceId, { text }),
+      })
+  );
+
 export const useRemoveRule = (workspaceId: string) =>
-  useRuleMutation(workspaceId, (id: number) =>
-    call(url(workspaceId, id), { method: "DELETE" })
+  useRuleMutation(workspaceId, async (id: number) =>
+    call(url(workspaceId, id), {
+      method: "DELETE",
+      body: await proven(workspaceId),
+    })
   );

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { getWorkspace } from "@/lib/workspaces";
 import { addRule, listRules } from "@/lib/orchestrator/rules";
-import { requireApprover } from "@/lib/security/approver";
+import { provenAsSaad } from "./presence";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -13,18 +14,19 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   return NextResponse.json({ rules: listRules(id) });
 }
 
-// { text }: a rule from Saad. Only from where he can answer asks.
+// { text, assertion }: a rule from Saad, with his passkey.
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const gate = requireApprover(request);
-  if (!gate.ok) return gate.response;
   const { id } = await params;
   if (!getWorkspace(id))
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  const { text } = (await request.json().catch(() => ({}))) as {
+  const { text, assertion } = (await request.json().catch(() => ({}))) as {
     text?: unknown;
+    assertion?: AuthenticationResponseJSON;
   };
   if (typeof text !== "string")
     return NextResponse.json({ error: "text is required" }, { status: 400 });
+  const refused = await provenAsSaad(request, id, assertion);
+  if (refused) return refused;
   try {
     return NextResponse.json({ rule: addRule(id, text, "saad") });
   } catch (error) {
