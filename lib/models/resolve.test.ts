@@ -3,7 +3,7 @@ import { db } from "../db";
 import { seedWorkspace } from "../orchestrator/testing";
 import { setModelSettings, setWorkspaceModels } from "./config";
 import { PROVIDER_PRESETS } from "./providers";
-import { parseOverride, resolveRole } from "./resolve";
+import { parseOverride, providerShellEnv, resolveRole } from "./resolve";
 import { DEFAULT_ROLE_MODELS, parseModelRef, sessionRole } from "./roles";
 
 const deepseek = {
@@ -136,6 +136,25 @@ describe("role resolution", () => {
 });
 
 describe("model settings", () => {
+  it("tells Claude Code a provider's context window", () => {
+    const env = (window?: number) =>
+      providerShellEnv(
+        { ...deepseek, contextWindow: window } as typeof deepseek,
+        "deepseek-v4-pro"
+      ).env;
+    expect(env(1_000_000).CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe("1000000");
+    expect(env()).not.toHaveProperty("CLAUDE_CODE_MAX_CONTEXT_TOKENS");
+    for (const bad of [50_000, 1.5, "1000000"])
+      expect(() =>
+        setModelSettings({ providers: [{ ...deepseek, contextWindow: bad }] })
+      ).toThrow(/contextWindow/);
+    expect(() =>
+      setModelSettings({
+        providers: [{ ...deepseek, contextWindow: 1_000_000 }],
+      })
+    ).not.toThrow();
+  });
+
   it("rejects what could carry a key or reach a shell", () => {
     expect(() =>
       setModelSettings({

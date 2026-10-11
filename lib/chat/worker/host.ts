@@ -40,7 +40,7 @@ import {
   visualsTools,
 } from "../../artifacts/tools";
 import type { RoleExtras } from "./extras";
-import { refreshSettings, refreshedNote } from "../refresh";
+import { compactThreshold, refreshSettings, refreshedNote } from "../refresh";
 import { compactionDue, staleLabel, type Staleness } from "../stale";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
@@ -203,6 +203,10 @@ export class ChatHost {
       mcpServers: visuals
         ? { ...extras.mcpServers, [VISUALS_SERVER]: visuals }
         : extras.mcpServers,
+      // Claude Code turns tool search off on a non-Anthropic host, so each
+      // MCP server the user has adds all its schemas to every prompt
+      // (~45k tokens): a routed agent gets only the servers AgentOS gives it.
+      strictMcpConfig: !!session.model_provider,
       allowedTools: extras.allowedTools,
       disallowedTools: extras.disallowedTools,
       permissionMode: extras.permissionMode,
@@ -743,7 +747,10 @@ export class ChatHost {
     }
     return compactionDue(context, {
       state: this.state,
-      thresholdTokens: refreshSettings().compactTokens,
+      thresholdTokens: compactThreshold(
+        refreshSettings().compactTokens,
+        this.session.model_provider
+      ),
     });
   }
 

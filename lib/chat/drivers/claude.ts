@@ -188,6 +188,7 @@ export const claudeDriver: ChatDriver = {
         allowDangerouslySkipPermissions: true,
         canUseTool: approvals.canUseTool,
         mcpServers: options.mcpServers,
+        strictMcpConfig: options.strictMcpConfig,
         allowedTools: options.allowedTools,
         disallowedTools: options.disallowedTools,
         hooks: {

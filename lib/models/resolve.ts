@@ -218,6 +218,9 @@ function routingEnv(p: ModelProvider, model: string): Record<string, string> {
       : "ANTHROPIC_API_KEY";
   return {
     ...p.env,
+    ...(p.contextWindow
+      ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(p.contextWindow) }
+      : {}),
     ANTHROPIC_BASE_URL: p.baseUrl!,
     [other]: "",
     ANTHROPIC_DEFAULT_OPUS_MODEL: p.tiers?.opus ?? model,
