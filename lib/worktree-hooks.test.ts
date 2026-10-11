@@ -132,6 +132,36 @@ describe("installWorktreeHooks", () => {
     expect(fs.readFileSync(marks, "utf-8")).toBe("default\n");
   });
 
+  it("runs a husky project's .husky hook when the worktree has no .husky/_ yet", async () => {
+    // Husky writes the gitignored .husky/_ on npm install, which a new
+    // worktree hasn't had; its hook scripts live in .husky/ unexecutable.
+    const marks = path.join(root, "marks");
+    fs.mkdirSync(path.join(repo, ".husky"));
+    fs.writeFileSync(
+      path.join(repo, ".husky", "pre-commit"),
+      `echo husky "$(pwd)" >> '${marks}'; exit 3\n`
+    );
+    run(repo, "add", ".husky");
+    run(repo, "commit", "-q", "--no-verify", "-m", "hooks");
+    run(repo, "config", "core.hooksPath", ".husky/_");
+    run(repo, "worktree", "add", "-q", "-b", "feature", tree);
+
+    await installWorktreeHooks(tree);
+
+    expect(() => commitWith(tree, "feat: x\n")).toThrow();
+    expect(fs.readFileSync(marks, "utf-8")).toBe(`husky ${tree}\n`);
+    // HUSKY=0 turns it off, as husky's own runner does.
+    fs.rmSync(marks);
+    fs.writeFileSync(path.join(tree, "g"), "x");
+    run(tree, "add", "g");
+    execFileSync("git", ["commit", "-q", "-m", "feat: y"], {
+      cwd: tree,
+      env: { ...process.env, HUSKY: "0" },
+      stdio: "pipe",
+    });
+    expect(fs.existsSync(marks)).toBe(false);
+  });
+
   it("a failing project hook still fails the commit", async () => {
     const marks = path.join(root, "marks");
     projectHook(

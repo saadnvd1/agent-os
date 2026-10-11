@@ -1,6 +1,7 @@
-# Format and lint what is staged, then typecheck and run the tests.
-# Formatting and lint fixes REWRITE the staged files and re-add them; the rest
-# only reports. Skip with `git commit --no-verify` for a work-in-progress.
+# Fast checks on what is staged, so a commit doesn't fail CI for something
+# avoidable: formatting, and a token-shaped string the merge gate refuses.
+# Typecheck, lint and tests are CI's (scripts/check); too slow for here.
+# Skip in an emergency with `git commit --no-verify`.
 set -e
 
 # Git hooks don't load the shell profile, so they get whatever node is first
@@ -12,38 +13,28 @@ for nvm_sh in "${NVM_DIR:-$HOME/.nvm}/nvm.sh" /opt/homebrew/opt/nvm/nvm.sh; do
     break
   fi
 done
-echo "▸ node $(node -v)"
+bin="$(git rev-parse --show-toplevel)/node_modules/.bin"
+[ -x "$bin/prettier" ] || { echo "✗ no node_modules; run npm install" >&2; exit 1; }
 
-STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
-FORMAT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx|json|css|md)$' | grep -v '^package-lock.json$' || true)
-LINT=$(echo "$STAGED" | grep -E '\.(js|jsx|mjs|ts|tsx)$' || true)
+# Prettier skips what it can't parse and what .prettierignore lists.
+STAGED=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR)
+if [ -n "$STAGED" ]; then
+  if ! echo "$STAGED" | tr '\n' '\0' | xargs -0 "$bin/prettier" --check --ignore-unknown --log-level warn; then
+    UNFORMATTED=$(echo "$STAGED" | tr '\n' '\0' | xargs -0 "$bin/prettier" --list-different --ignore-unknown 2>/dev/null | sed "s/'/'\\\\''/g; s/.*/'&'/" | paste -sd ' ' -)
+    echo "✗ not formatted; fix with:" >&2
+    echo "  npx prettier --write $UNFORMATTED && git add $UNFORMATTED" >&2
+    exit 1
+  fi
+fi
 
-# ESLint first: its fixes (e.g. dropping an unused directive) can leave
-# whitespace that only Prettier, run after, puts right.
-if [ -n "$LINT" ]; then
-  echo "▸ eslint"
-  echo "$LINT" | xargs npx eslint --fix --no-warn-ignored
-fi
-if [ -n "$FORMAT" ]; then
-  echo "▸ prettier"
-  echo "$FORMAT" | xargs npx prettier --write --log-level warn
-fi
-[ -n "$FORMAT$LINT" ] && echo "$FORMAT
-$LINT" | grep . | sort -u | xargs git add
+"$bin/tsx" scripts/hooks/staged-secrets.ts
 
 # Names that must never land in the repo, one regex per line, kept outside it
 # (the list itself would be a mention).
 BANNED="${AGENTOS_BANNED_NAMES:-$HOME/.config/agent-os/banned-names}"
 if [ -s "$BANNED" ]; then
-  echo "▸ banned names"
   if git diff --cached -U0 --no-color | grep '^+' | grep -v '^+++' | grep -i -E -f "$BANNED"; then
     echo "✗ a staged line names something on $BANNED; reword it" >&2
     exit 1
   fi
 fi
-
-echo "▸ typecheck"
-npm run typecheck --silent
-echo "▸ tests"
-npx vitest run --silent
-echo "✓ pre-commit passed"
