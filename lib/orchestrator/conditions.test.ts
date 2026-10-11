@@ -111,4 +111,27 @@ describe("conditionsFor", () => {
       'stack Auth: c failed: <untrusted source="stack Auth">conflict</untrusted>',
     ]);
   });
+
+  it("reports a stalled turn once per stall, keyed on when it last did anything", () => {
+    const stalled = (since: number) =>
+      conditionsFor(
+        [
+          facts("s", {
+            status: "running",
+            stalled: { silentMs: 9 * 60_000, last: "Run tests", since },
+          }),
+        ],
+        [],
+        NOW,
+        new Set()
+      );
+    const a = stalled(1000);
+    expect(a.map((c) => c.line)).toEqual([
+      expect.stringContaining("stalled: no output for 9m mid-turn"),
+    ]);
+    expect(a[0].line).toContain("<untrusted");
+    expect(stalled(1000)[0].key).toBe(a[0].key);
+    expect(stalled(2000)[0].key).not.toBe(a[0].key);
+    expect(lines([facts("s", { status: "running" })])).toEqual([]);
+  });
 });

@@ -11,7 +11,7 @@
 import { db, stackQueries as q, type Session, type StackItemRow } from "../db";
 import { getDefaultBranch } from "../git";
 import { sendMessage } from "../bus";
-import { chatStateNow, interruptChat } from "../chat/runner";
+import { stopChatTurn } from "../chat/stop";
 import { findPRStrict, run } from "../tasks/gh";
 import type { TaskPR } from "../tasks/state";
 import { expandHome } from "../tasks/session";
@@ -64,7 +64,7 @@ export const stackNotice = (
   origin: { kind: "system", label, body } as const,
 });
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // The note on an item left alone because its agent was still working.
 export const AGENT_BUSY = "Waiting for its agent to stop";
 // How long a chat's turn may take to stop after it's interrupted.
@@ -79,17 +79,11 @@ export async function interruptAgent(
   wait = sleep
 ): Promise<boolean> {
   if (session.view === "chat") {
-    const now = () =>
-      chatStateNow(session.id).catch(() => "unreachable" as const);
-    const busy = (s: Awaited<ReturnType<typeof now>>) =>
-      s === "running" || s === "waiting" || s === "unreachable";
-    if (!busy(await now())) return true;
-    await interruptChat(session.id);
-    for (let waited = 0; waited < CHAT_STOP_WAIT_MS; waited += 500) {
-      await wait(500);
-      if (!busy(await now())) return true;
-    }
-    return false;
+    const out = await stopChatTurn(session.id, {
+      graceMs: CHAT_STOP_WAIT_MS,
+      sleep: wait,
+    });
+    return out.stopped;
   }
   const sent = await run(
     "tmux",

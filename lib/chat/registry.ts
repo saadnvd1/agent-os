@@ -34,6 +34,10 @@ export interface Live {
 
 export interface ChatActivity {
   turnStartedAt?: number;
+  // When the turn last produced anything (a token, an item, a tool result)
+  // and what that was; unset between turns. Silence from here is a stall.
+  lastAt?: number;
+  lastWhat?: string;
   // Running tool calls by id: their label and when they started.
   tools: Map<string, { label: string; since: number }>;
   // Running background tasks (not housekeeping ones).

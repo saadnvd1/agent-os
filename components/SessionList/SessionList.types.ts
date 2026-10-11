@@ -9,6 +9,7 @@ export interface SessionStatus {
   asks?: number;
   need?: SessionNeed | null;
   unread?: boolean;
+  stalled?: boolean;
 }
 
 export interface SessionListProps {

@@ -41,6 +41,12 @@ export function RowBadge({ row }: { row: SidebarRow }) {
       </span>
     );
   }
+  if (row.status?.stalled)
+    return (
+      <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+        Stalled
+      </span>
+    );
   if (row.unread) return <UnreadDot />;
   return null;
 }

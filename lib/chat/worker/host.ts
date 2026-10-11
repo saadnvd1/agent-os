@@ -50,6 +50,10 @@ import type { WorkerCommand, WorkerEvent } from "./protocol";
 // still counts as part of the stop: the agent starts what it queued the
 // moment a turn ends.
 const AFTER_STOP_MS = 2000;
+// After a hard stop (Stop, the orchestrator's stop, aos stop), how long the
+// agent's own wind-down turn is cut short and any sender's message reads as
+// the next turn.
+const HARD_STOP_MS = 30_000;
 
 // How long a retiring worker waits, once at rest with nothing queued, for
 // the agent's guess at the next message before it goes.
@@ -104,6 +108,7 @@ export class ChatHost {
   // should read next.
   private stopping: "turn" | "after" | null = null;
   private stoppedAt = 0;
+  private hardStopAt = 0;
   // On an older build than the server's (a "retire"): it closes at the next
   // turn boundary, once the agent holds no message it hasn't run and runs
   // no background work, so a current worker resumes the conversation.
@@ -327,6 +332,10 @@ export class ChatHost {
           this.settleCompactedLine(e.context.usedTokens);
           this.refreshIfFull(e.context.usedTokens);
         } else if (e.type === "turn_start") {
+          // The agent starting a turn of its own right after a hard stop
+          // (the CLI winds down with a reply to the interruption) is cut
+          // short, so what's sent next isn't queued behind it.
+          if (this.hardStopped()) void this.conversation.interrupt();
           this.turnsStarted++;
           this.turnStartedAt ??= Date.now();
           if (this.behind) this.behind--;
@@ -437,6 +446,7 @@ export class ChatHost {
   ): void {
     this.sent.add(m.id);
     this.currentTurn = m.id;
+    this.hardStopAt = 0;
     if (this.busy()) this.behind++;
     // Sent now, it stops the running turn, which still ends after this.
     if (!this.busy()) now = false;
@@ -562,9 +572,7 @@ export class ChatHost {
         // Another agent's message doesn't speak for the reader.
         if (
           this.stopping &&
-          !cmd.from &&
-          !cmd.peer &&
-          !cmd.origin &&
+          (this.hardStopped() || (!cmd.from && !cmd.peer && !cmd.origin)) &&
           this.busy() &&
           !listQueue(this.session.id).length
         ) {
@@ -624,6 +632,12 @@ export class ChatHost {
         return;
       case "interrupt":
         await this.modeChange.catch(() => {});
+        if (cmd.hard) {
+          this.hardStopAt = Date.now();
+          this.behind = 0;
+          this.stopping = "turn";
+          return this.conversation.interrupt();
+        }
         if (!this.busy()) return this.conversation.interrupt();
         // What's queued goes on once the turn stops: it goes with the stop,
         // so it's what the agent reads next.
@@ -661,6 +675,10 @@ export class ChatHost {
       case "close":
         return this.close();
     }
+  }
+
+  private hardStopped(): boolean {
+    return this.hardStopAt > 0 && Date.now() - this.hardStopAt < HARD_STOP_MS;
   }
 
   // A retiring worker goes once it's at a turn boundary: no turn running,

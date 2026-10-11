@@ -28,6 +28,7 @@ export interface RowStatus {
   status?: string;
   need?: SessionNeed | null;
   unread?: boolean;
+  stalled?: boolean;
   asks?: number;
   // A program's own message (OSC 7501): untrusted, plain text only.
   detail?: string | null;
@@ -230,6 +231,7 @@ function sameStatus(a: RowStatus | undefined, b: RowStatus | undefined) {
     a.status === b.status &&
     (a.need ?? null) === (b.need ?? null) &&
     !!a.unread === !!b.unread &&
+    !!a.stalled === !!b.stalled &&
     a.asks === b.asks &&
     (a.detail ?? null) === (b.detail ?? null)
   );

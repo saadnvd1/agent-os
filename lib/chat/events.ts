@@ -354,7 +354,7 @@ export type ChatClientMessage =
   // `during`: the user message whose turn was running when it was tapped.
   | { type: "queue_send_now"; id: string; during?: string }
   | { type: "files"; reqId: string; query: string }
-  | { type: "interrupt" }
+  | { type: "interrupt"; hard?: boolean }
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }
   | { type: "set_plan"; plan: boolean }

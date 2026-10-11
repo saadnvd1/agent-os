@@ -68,3 +68,59 @@ export async function stopChatAtTurnEnd(
     await sleep(POLL_MS);
   }
 }
+
+export type TurnStop =
+  | { stopped: true; killed: boolean }
+  | { stopped: false; reason: string };
+
+export interface TurnStopOptions {
+  // How long the turn gets to end after the interrupt before its agent is
+  // killed.
+  graceMs?: number;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const TURN_POLL_MS = 250;
+// Idle has to hold this long: the CLI answers an interruption with a short
+// turn of its own, which the host cuts short, and that must be over too.
+const SETTLE_MS = 2500;
+
+// The one way every caller (the stop button, the orchestrator's stop, aos
+// stop, a restack) ends the turn in progress. The turn is interrupted, even
+// while the model is thinking before any tool call; if it hasn't ended within
+// the grace period the agent is killed. The conversation and worktree are
+// kept, and the next message runs as the next turn.
+export async function stopChatTurn(
+  sessionId: string,
+  { graceMs = 8000, sleep = defaultSleep }: TurnStopOptions = {}
+): Promise<TurnStop> {
+  let state;
+  try {
+    await registry.connecting.get(sessionId);
+    state = await chatStateNow(sessionId);
+  } catch {
+    return {
+      stopped: false,
+      reason: "its chat worker is running but isn't answering",
+    };
+  }
+  if (!state || state === "idle") return { stopped: true, killed: false };
+  registry.live
+    .get(sessionId)
+    ?.worker.command({ type: "interrupt", hard: true });
+  let idleFor = 0;
+  for (let waited = 0; waited < graceMs + SETTLE_MS; waited += TURN_POLL_MS) {
+    await sleep(TURN_POLL_MS);
+    const now = await chatStateNow(sessionId).catch(
+      () => "unreachable" as const
+    );
+    if (now === null || now === "idle") {
+      idleFor += TURN_POLL_MS;
+      if (idleFor >= SETTLE_MS) return { stopped: true, killed: false };
+    } else idleFor = 0;
+    if (waited >= graceMs && idleFor === 0) break;
+  }
+  stopChat(sessionId);
+  await waitForExit(sessionId);
+  return { stopped: true, killed: true };
+}

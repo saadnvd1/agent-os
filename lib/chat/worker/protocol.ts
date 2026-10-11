@@ -46,7 +46,8 @@ export type WorkerCommand =
   // Send the queue if no turn is running; a running one sends it as it ends.
   | { type: "drain" }
   | { type: "files"; reqId: string; query: string }
-  | { type: "interrupt" }
+  // hard: a stop that must end the turn (and the agent's wind-down after it).
+  | { type: "interrupt"; hard?: boolean }
   | { type: "set_model"; model: string }
   | { type: "set_access"; access: ChatAccess }
   | { type: "set_plan"; plan: boolean }

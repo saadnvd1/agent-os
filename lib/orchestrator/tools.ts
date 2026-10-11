@@ -75,7 +75,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   stack_status: "One stack's items, PRs and progress.",
   land: "Merge a whole stack bottom-up, each PR through the sign-off gates at its current head.",
   drop: "Reject a task: close its PR and remove its worktree. Logged with the reason.",
-  stop: "Stop a session's agent, keeping its worktree and branch.",
+  stop: "Stop a session's agent mid-turn, even while it's thinking, keeping its conversation, worktree and branch; your next message runs as its next turn.",
   done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
   add_project:
     "Make a git repository on this machine a project of this workspace, by its absolute path, or move the project already at that path into this workspace when it's in no workspace. Says its default branch, detected from git. Refuses a folder that isn't a git repository or that holds secrets, and a project another workspace has.",
