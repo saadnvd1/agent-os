@@ -132,6 +132,8 @@ describe("a turn a restart cut off", () => {
         expect.objectContaining({
           id: "user-resume-tool-1",
           text: RESUME_NOTE,
+          // Down past its cache, a long chat compacts before carrying on.
+          compact: "auto",
         }),
       ]);
       expect(events(w, id)).toEqual([

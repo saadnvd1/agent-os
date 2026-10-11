@@ -37,7 +37,7 @@ import {
 } from "../../artifacts/tools";
 import type { RoleExtras } from "./extras";
 import { refreshSettings, refreshedNote } from "../refresh";
-import { staleness, type Staleness } from "../stale";
+import { staleLabel, staleness, type Staleness } from "../stale";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
 // How soon after a stopped turn ends a turn the agent starts on its own
@@ -129,9 +129,15 @@ export class ChatHost {
   private context: ChatContext | null = null;
   // A compaction run ahead of a message to a stale chat: the message waits
   // at the front of the queue until it ends (compactFirst).
-  private compacting: { idleMs: number; before: number } | null = null;
+  private compacting: {
+    idleMs: number;
+    before: number;
+    done?: boolean;
+  } | null = null;
   // Its line, until the agent's next measure gives the size after.
   private compactedLine: Extract<ChatItem, { kind: "compacted" }> | null = null;
+  // An orchestrator gone stale starts over rather than compacting.
+  private staleRefresh: Staleness | null = null;
   readonly done: Promise<void>;
 
   constructor(
@@ -202,7 +208,8 @@ export class ChatHost {
     this.freshConversation = !session.claude_session_id;
     if (session.chat_refreshed)
       this.refreshedNote = refreshedNote(
-        extras.refresh?.role ?? "task",
+        extras.refresh?.role ??
+          (session.role === "orchestrator" ? "orchestrator" : "task"),
         session.chat_refreshed
       );
     // Told only an orchestrator whose tools changed since its last worker:
@@ -238,8 +245,10 @@ export class ChatHost {
     try {
       for await (const e of this.conversation.events) {
         if (e.type === "item") {
-          // A compaction run for a stale chat shows as its one line.
-          if (this.compacting && e.item.kind === "command_output") continue;
+          // A compaction run for a stale chat shows as its one line; what
+          // a failed one printed still shows.
+          if (this.compacting?.done && e.item.kind === "command_output")
+            continue;
           if (this.compacting && e.item.kind === "compacted")
             e.item = this.compactedItem(e.item);
           if ("streaming" in e.item && e.item.streaming)
@@ -667,6 +676,18 @@ export class ChatHost {
     }
     moveToFront(this.session.id, cmd.id);
     this.emit({ type: "queue" });
+    // An orchestrator isn't compacted: a summary would carry what it read
+    // from tasks and CI without its untrusted fence. It starts a fresh
+    // conversation from its brief and the database instead, as at its
+    // threshold, and the next worker sends the message.
+    if (this.session.role === "orchestrator") {
+      this.staleRefresh = stale;
+      this.refreshAt = stale.tokens;
+      this.retiring = true;
+      this.retireWaited = true;
+      this.retireIfDone();
+      return true;
+    }
     this.compacting = { idleMs: stale.idleMs, before: stale.tokens };
     this.currentTurn = null;
     this.stopping = null;
@@ -693,6 +714,7 @@ export class ChatHost {
   private compactedItem(
     item: Extract<ChatItem, { kind: "compacted" }>
   ): ChatItem {
+    if (this.compacting) this.compacting.done = true;
     const line = {
       ...item,
       idleMs: this.compacting?.idleMs,
@@ -742,13 +764,21 @@ export class ChatHost {
          chat_suggestion = NULL, chat_context = NULL, chat_restarted = 0,
          chat_refreshed = ? WHERE id = ?`
     ).run(this.refreshAt, this.session.id);
+    const brief = `its brief${this.session.role === "orchestrator" ? " and the current state from AgentOS" : ""}`;
+    const stale = this.staleRefresh;
     this.record({
       id: `note-refresh-${Date.now()}`,
       kind: "note",
       tone: "note",
-      text: `Context reached ${Math.round(this.refreshAt / 1000)}k tokens: the agent starts a fresh conversation with its brief${this.refresh?.role === "orchestrator" ? " and the current state from AgentOS" : ""} at its next message.`,
+      text: stale
+        ? `${staleLabel(stale)}, past its prompt cache: the agent starts a fresh conversation with ${brief} before the next message.`
+        : `Context reached ${Math.round(this.refreshAt / 1000)}k tokens: the agent starts a fresh conversation with ${brief} at its next message.`,
       createdAt: Date.now(),
     });
+    if (stale)
+      console.error(
+        `${new Date().toISOString()} fresh start for stale ${this.session.id}: ${stale.tokens} tokens, idle ${Math.round(stale.idleMs / 60_000)}m`
+      );
   }
 
   // Retiring, and nothing in the background keeps it: messages wait in the

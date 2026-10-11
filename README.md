@@ -320,7 +320,10 @@ chip above the composer says "Idle 47m · 412k context · Compact first?": Send
 compacts and then sends, **Send as-is** skips it for that one message.
 Messages nobody is typing (the orchestrator's `send`, AgentOS events and
 wakes, `aos send`, schedules) compact first on their own, only between turns,
-and the chat shows one quiet line with the context before and after.
+and the chat shows one quiet line with the context before and after. An
+orchestrator isn't compacted (a summary would lose the fence around what it
+read from tasks and CI): it starts a fresh conversation from its brief and
+the current state instead, as at its fresh-start threshold.
 On a desktop browser the screen button attaches a screenshot of a screen or
 window you pick; on a phone, attach a screenshot as a photo.
 

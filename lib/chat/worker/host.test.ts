@@ -1541,8 +1541,13 @@ describe("ChatHost compacts a stale chat before a message", () => {
   };
   // A conversation that last ended `idleMs` ago with `usedTokens` of
   // context, written with a 1h cache (or none said).
-  const staleChat = (idleMs: number, usedTokens: number, cacheTtlMs = HOUR) =>
-    startHost("agent", { resumeId: "conv-1" }, (id) =>
+  const staleChat = (
+    idleMs: number,
+    usedTokens: number,
+    cacheTtlMs = HOUR,
+    role = "agent"
+  ) =>
+    startHost(role, { resumeId: "conv-1" }, (id) =>
       getDb()
         .prepare(`UPDATE sessions SET chat_context = ? WHERE id = ?`)
         .run(
@@ -1581,20 +1586,20 @@ describe("ChatHost compacts a stale chat before a message", () => {
     conversation.events.push({
       type: "item",
       item: {
-        id: "out-1",
-        kind: "command_output",
-        text: "Compacted",
-        createdAt: 1,
-      },
-    });
-    conversation.events.push({
-      type: "item",
-      item: {
         id: "c1",
         kind: "compacted",
         trigger: "manual",
         before: 412_000,
         createdAt: 2,
+      },
+    });
+    conversation.events.push({
+      type: "item",
+      item: {
+        id: "out-1",
+        kind: "command_output",
+        text: "Compacted",
+        createdAt: 1,
       },
     });
     conversation.events.push({ type: "state", state: "idle" });
@@ -1732,5 +1737,83 @@ describe("ChatHost compacts a stale chat before a message", () => {
     await tick();
     expect(sentTexts(conversation)).toEqual(["/compact", "first"]);
     host.close();
+  });
+
+  it("a failed compaction still sends the message, and says why it failed", async () => {
+    const { id, host, conversation } = await staleChat(2 * HOUR, 412_000);
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "continue",
+      ...bus,
+      compact: "auto",
+    });
+    conversation.events.push({
+      type: "item",
+      item: {
+        id: "out-1",
+        kind: "command_output",
+        text: "Error during compaction: overloaded",
+        createdAt: 1,
+      },
+    });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(sentTexts(conversation)).toEqual(["/compact", "continue"]);
+    expect(listQueue(id)).toEqual([]);
+    expect(listItems(id).find((i) => i.id === "out-1")).toMatchObject({
+      text: "Error during compaction: overloaded",
+    });
+    // Nothing is held behind it any more.
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({ type: "send", id: "m2", text: "next", ...bus });
+    expect(sentTexts(conversation)).toEqual(["/compact", "continue", "next"]);
+    host.close();
+  });
+
+  it("an orchestrator starts a fresh conversation instead, keeping its untrusted text out of a summary", async () => {
+    const { id, host, conversation } = await staleChat(
+      2 * HOUR,
+      412_000,
+      HOUR,
+      "orchestrator"
+    );
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "[AgentOS event] ci failed",
+      ...bus,
+      compact: "auto",
+    });
+    expect(sentTexts(conversation)).not.toContain("/compact");
+    expect(conversation.close).toHaveBeenCalledOnce();
+    // The message waits for the next worker, which starts over.
+    expect(listQueue(id).map((m) => m.id)).toEqual(["m1"]);
+    const row = getDb()
+      .prepare(
+        `SELECT claude_session_id, chat_refreshed FROM sessions WHERE id = ?`
+      )
+      .get(id) as { claude_session_id: string | null; chat_refreshed: number };
+    expect(row).toEqual({ claude_session_id: null, chat_refreshed: 412_000 });
+    const note = listItems(id).find((i) => i.kind === "note");
+    expect(note).toMatchObject({
+      text: expect.stringMatching(
+        /^Idle 2h · 412k context, past its prompt cache: the agent starts a fresh conversation with its brief and the current state from AgentOS/
+      ),
+    });
+    // The next worker tells it why, as an orchestrator.
+    const { ChatHost } = await import("./host");
+    current = fakeConversation();
+    const next = new ChatHost(
+      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      () => {}
+    );
+    expect(started?.resumeId).toBeNull();
+    await next.handle({ type: "drain" });
+    expect(sentTexts(current)[0]).toMatch(
+      /^\(AgentOS started you on a fresh conversation[^)]*"Where things stand"/
+    );
+    next.close();
   });
 });

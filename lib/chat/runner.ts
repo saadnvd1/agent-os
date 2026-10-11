@@ -490,6 +490,8 @@ async function resumeCutOff(sessionId: string): Promise<void> {
       text: RESUME_NOTE,
       from: "agentos",
       origin: { kind: "event", label: "AgentOS" },
+      // Down past its cache, a long chat is compacted before it carries on.
+      compact: "auto",
     });
     if (task)
       queueEvent(
