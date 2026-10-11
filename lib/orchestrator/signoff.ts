@@ -3,8 +3,9 @@
  * commit that was judged. With merge approvals on (merge-approvals.ts),
  * anything touching CI config, build and hook scripts, agent config, deploys
  * or secrets handling goes to Saad whatever the gates say. A repository with
- * no CI and a gate failing on two different commits go to him either way. Once a task
- * is with Saad the orchestrator doesn't merge it; he signs it off or drops it.
+ * no CI (decided from the repository, never from one head with no checks)
+ * and a gate failing on two different commits go to him either way. Once a
+ * task is with Saad the orchestrator doesn't merge it; he signs it off or drops it.
  */
 
 import { MERGED_AS, type MergeMethod } from "../tasks/merge-policy";
@@ -32,6 +33,7 @@ import { heldVerdict } from "./held";
 import { mergeApprovalsOn } from "./merge-approvals";
 import { isPaused } from "./pause";
 import { commitTime, fetchRefs, repoOf } from "./repo";
+import { repoHasCI } from "./repo-ci";
 import { DIFF_CAP, review } from "./review";
 import { workspaceStack, workspaceTask } from "./targets";
 import { ciSettleIn, waitingState } from "./task-state";
@@ -112,6 +114,8 @@ export async function judge(
         checkCount: pr.checkCount ?? 0,
         committedAt: await commitTime(repo, sha),
       }),
+      mergeable: pr.mergeable,
+      baseName: pr.base ?? task.base_branch,
       review: getCheck(task.id, sha, "review"),
       ...(await waitingState(task)),
       fromCard: !!task.lh_card_id,
@@ -203,11 +207,17 @@ export async function gateVerdict(
     }
   }
 
-  const outcomes = evaluateGates({
-    sha,
-    ruleBreaks: ruleBreaks(files, await addedLines(repo, base, sha)),
-    ...(await inputs()),
-  });
+  const ruled = ruleBreaks(files, await addedLines(repo, base, sha));
+  const live = await inputs();
+  // Asked only when it can change the answer: a head with no checks that
+  // isn't settling or conflicting.
+  const repoCI =
+    live.checks === "none" &&
+    live.settleIn === 0 &&
+    live.mergeable !== "CONFLICTING"
+      ? await repoHasCI(repo, base)
+      : undefined;
+  const outcomes = evaluateGates({ sha, ruleBreaks: ruled, ...live, repoCI });
   const head = `${work.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
   const toSaad = outcomes.find((o) => o.state === "escalate");
   if (toSaad)

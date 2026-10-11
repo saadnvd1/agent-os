@@ -18,7 +18,8 @@ import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
 import { storedPR } from "../tasks/session";
 import { commitTime, repoOf } from "./repo";
-import { ciSettleIn } from "./task-state";
+import { CHECKLESS_MS, checklessFor, ciSettleIn } from "./task-state";
+import { repoHasCI } from "./repo-ci";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -47,6 +48,9 @@ export interface SessionFacts {
     // With CI green on the PR's head: seconds until it counts as settled
     // (task-state.ts), when the CI-green event goes out.
     ciSettleIn?: number;
+    // Set once a mergeable head in a repository with CI has had no checks
+    // for CHECKLESS_MS (task-state.ts): ms it has been without.
+    ciSilentMs?: number;
   } | null;
   stack: {
     id: string;
@@ -213,6 +217,20 @@ export async function settleIn(
   });
 }
 
+async function silentFor(
+  s: Session,
+  pr: TaskPR | null
+): Promise<number | undefined> {
+  if (!pr) return;
+  const silent = checklessFor(s.id, pr);
+  if (silent === undefined || silent < CHECKLESS_MS) return;
+  const ci = await repoHasCI(
+    repoOf(s),
+    `origin/${pr.base ?? s.base_branch ?? "main"}`
+  ).catch(() => "unknown");
+  return ci === "yes" ? silent : undefined;
+}
+
 // A finished task's state is in the database: no gh call for it.
 async function taskFacts(
   workspaceId: string,
@@ -230,6 +248,7 @@ async function taskFacts(
     pr: view.pr,
     blocked: view.blocked,
     ciSettleIn: await settleIn(workspaceId, s, view.pr),
+    ciSilentMs: await silentFor(s, view.pr),
   };
 }
 

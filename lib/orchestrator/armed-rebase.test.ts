@@ -9,12 +9,18 @@ import type { SessionFacts } from "./facts";
 // A real repository with a local bare remote; gh is faked around it.
 let pr: TaskPR | null = null;
 const merges: string[][] = [];
+const isProbe = (args: string[]) =>
+  args[0] === "api" ||
+  (args[0] === "pr" &&
+    args[1] === "list" &&
+    args.includes("statusCheckRollup"));
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
   return {
     ...real,
     run: async (cmd: string, args: string[], cwd: string, t?: number) => {
+      if (cmd === "gh" && isProbe(args)) return "0";
       if (cmd === "gh") {
         merges.push(args);
         if (pr) pr = { ...pr, state: "MERGED" };
@@ -52,7 +58,7 @@ const { setMergeApprovals } = await import("./merge-approvals");
 const { mergeArmed, armTask } = await import("./armed");
 const { setPaused } = await import("./pause");
 const { escalate } = await import("./escalate");
-const { raiseAsk } = await import("./asks");
+const { openAsks, raiseAsk } = await import("./asks");
 const { judge, mergeJudged } = await import("./signoff");
 const { rebaseConflicting } = await import("./rebase");
 const { recordConditions } = await import("./events");
@@ -483,6 +489,42 @@ describe("automatic rebase", () => {
     await expect(runTool(t.w, "sign_off", { task: "add-a" })).resolves.toMatch(
       /Merged add-a/
     );
+  });
+
+  it("an armed task with a conflict stays armed through the rebase and merges once CI and review pass", async () => {
+    const t = setup();
+    t.put("review", "pass");
+    await runTool(t.w, "arm", { task: "add-a" });
+    t.moveMain("src/c.ts", "export const c = 1;\n");
+    // A conflicting head gets no checks at all.
+    pr = { ...pr!, checks: "none", checkCount: 0, mergeable: "CONFLICTING" };
+    const { deps } = armedDeps();
+    await mergeArmed(t.w, t.facts(), deps, 1);
+    expect(merges).toEqual([]);
+    expect(armedAt(t.task)).not.toBeNull();
+    expect(openAsks(t.w)).toHaveLength(0);
+    expect(failureOf(t.task, "ci")).toBeNull();
+    expect(events(t.w).join("\n")).not.toMatch(/Saad|disarmed/);
+
+    await rebaseConflicting(t.w, t.facts(), rebaseDeps().deps);
+    git(t.repo, "fetch", "-q", "origin");
+    const head = originHead(t.repo);
+    expect(head).not.toBe(t.sha);
+    expect(armedAt(t.task)).not.toBeNull();
+
+    pr = {
+      ...pr!,
+      head,
+      checks: "pass",
+      checkCount: 1,
+      mergeable: "MERGEABLE",
+    };
+    t.put("ci", "pass", head);
+    await mergeArmed(t.w, t.facts(), deps, 2);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", head],
+    ]);
+    expect(armedAt(t.task)).toBeNull();
   });
 
   async function rebasedOnto(

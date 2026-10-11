@@ -30,6 +30,11 @@ let pane = "";
 let alsoOpenIn: string | null = null;
 // What GitHub says when it refuses a merge, or null to merge.
 let refuseMerge: string | null = null;
+const isProbe = (args: string[]) =>
+  args[0] === "api" ||
+  (args[0] === "pr" &&
+    args[1] === "list" &&
+    args.includes("statusCheckRollup"));
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
@@ -37,6 +42,7 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
     ...real,
     run: async (cmd: string, args: string[], cwd: string, t?: number) => {
       if (cmd !== "gh") return real.run(cmd, args, cwd, t);
+      if (isProbe(args)) return "0";
       const repo = args[args.indexOf("--repo") + 1];
       if (args[0] === "pr" && args[1] === "merge") {
         if (refuseMerge) throw new Error(refuseMerge);

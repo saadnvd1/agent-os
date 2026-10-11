@@ -89,6 +89,13 @@ function sessionConditions(
         ciKey(pr),
         `${who}: ${ciWord(pr)}${pr.checks === "pass" ? " and settled" : ""}`
       );
+    // Mergeable for a long while with no check in a repository that has CI:
+    // CI probably wasn't triggered. News once per head, never an escalation.
+    if (pr.checks === "none" && f.task?.ciSilentMs !== undefined)
+      add(
+        `ci-silent:${pr.number}:${pr.head ?? ""}`,
+        `${who}: PR #${pr.number} at ${(pr.head ?? "").slice(0, 7)} has been mergeable for ${Math.floor(f.task.ciSilentMs / 60000)}m with no CI check registered; CI may not have been triggered on this head`
+      );
   }
 
   const blocked = f.task?.blocked ?? null;
