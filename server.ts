@@ -61,6 +61,7 @@ import { installClaudeStatusHooks } from "./lib/program-status/claude-hooks";
 import os from "os";
 import { resumeHeldStarts, resumeTaskStarts } from "./lib/tasks/start";
 import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
+import { sweepOrphanTmux } from "./lib/tmux/orphans";
 import { releaseInterruptedClaims } from "./lib/orchestrator/ask-approvals";
 import { resumeReviews } from "./lib/orchestrator/review";
 import { claimAgentosEnv } from "./lib/agents/self-env";
@@ -357,6 +358,11 @@ app.prepare().then(async () => {
   }
   // New sessions whose worktree setup a restart cut off.
   failInterruptedSetups();
+  // tmux sessions of sessions deleted before agents were ended with them.
+  if (process.env.AGENTOS_TMUX_SWEEP !== "off")
+    sweepOrphanTmux().catch((error) =>
+      console.error("Sweeping orphaned tmux sessions failed:", error)
+    );
   // Chat turns that kept running through a restart.
   void reattachChats();
   // Reviews this restart cut off run again and deliver their verdicts.

@@ -7,10 +7,9 @@
  */
 
 import os from "os";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
+import { endTmuxSession } from "../tmux/end";
 import { launchClaude } from "../agents/launch";
 import { buildTaskBrief } from "./brief";
 import { git as runGit } from "../git-exec";
@@ -31,7 +30,6 @@ import {
 
 export * from "./move-bundle";
 
-const execFileAsync = promisify(execFile);
 const git = (cwd: string, ...args: string[]) =>
   runGit(cwd, args, { timeout: 120000 });
 
@@ -40,9 +38,7 @@ const g = globalThis as unknown as { __agentosExporting?: Set<string> };
 const exporting = (g.__agentosExporting ??= new Set());
 
 async function stopAgent(tmuxName: string): Promise<void> {
-  await execFileAsync("tmux", ["kill-session", "-t", `=${tmuxName}`]).catch(
-    () => undefined
-  );
+  await endTmuxSession(null, tmuxName);
 }
 
 export async function claudeIdFor(session: Session): Promise<string | null> {

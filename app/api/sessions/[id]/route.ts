@@ -9,8 +9,9 @@ import {
 import { releasePort } from "@/lib/ports";
 import { dropSessionDatabase } from "@/lib/project-config/database";
 import { killWorker } from "@/lib/orchestration";
-import { hostExec, hostExecFile } from "@/lib/hosts";
-import { shellQuote } from "@/lib/hosts/ssh";
+import { endSessionAgent } from "@/lib/sessions/end";
+import { endTmuxSession } from "@/lib/tmux/end";
+import { hostExecFile } from "@/lib/hosts";
 import { supportsChat } from "@/lib/chat/capabilities";
 import { stopChat } from "@/lib/chat/runner";
 import { statusDetector } from "@/lib/status-detector";
@@ -124,10 +125,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
       if (body.view === "terminal") stopChat(id);
       if (body.view === "chat" && existing.tmux_name) {
-        await hostExec(
-          existing.host_id,
-          `tmux kill-session -t ${shellQuote(`=${existing.tmux_name}`)} 2>/dev/null || true`
-        ).catch(() => {});
+        await endTmuxSession(existing.host_id, existing.tmux_name);
       }
       updates.push("view = ?");
       values.push(body.view);
@@ -276,7 +274,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     void dropSessionDatabase(id);
 
     // Delete from database immediately for instant UI feedback
-    stopChat(id);
+    // The agent's tmux and processes go on in the background; the worktree
+    // waits for them so nothing is still writing in it.
+    const agentEnded = endSessionAgent(existing).catch((error) =>
+      console.error(`Ending ${id}'s agent failed:`, error)
+    );
     deleteItems(id);
     clearQueue(id);
     queries.deleteSession(db).run(id);
@@ -285,6 +287,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (existing.worktree_path && isAgentOSWorktree(existing.worktree_path)) {
       const worktreePath = existing.worktree_path; // Capture for closure
       runInBackground(async () => {
+        await agentEnded;
         const gitCommonDir = await mainCheckoutOf(worktreePath);
 
         if (gitCommonDir) {

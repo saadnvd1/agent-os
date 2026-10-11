@@ -9,6 +9,7 @@ import fs from "fs";
 import net from "net";
 import path from "path";
 import { promisify } from "util";
+import { endTmuxSession } from "../../tmux/end";
 import type { UndoResult } from "../driver";
 import type { FileSuggestion } from "../events";
 import {
@@ -176,9 +177,7 @@ export async function waitForExit(sessionId: string): Promise<void> {
   const deadline = Date.now() + 5000;
   while (await tmuxHas(name)) {
     if (Date.now() > deadline) {
-      await execFileAsync("tmux", ["kill-session", "-t", `=${name}`]).catch(
-        () => {}
-      );
+      await endTmuxSession(null, name);
       return;
     }
     await new Promise((r) => setTimeout(r, 150));

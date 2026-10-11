@@ -773,6 +773,15 @@ minutes, one message goes to your phone and to each workspace orchestrator,
 naming the top sessions and their heavy commands; the next one waits until
 it has been green for ten minutes. `AGENTOS_LOAD=off` turns it all off.
 
+### Tmux cleanup
+
+Deleting, finishing, dropping or marking a session done ends its tmux session
+and every process its panes started, on the machine it runs on. At start,
+AgentOS also ends tmux sessions it created (its `<agent>-<uuid>` and
+`aos-chat-<uuid>` names, or the `AGENTOS_SESSION_ID` it sets at launch) whose
+session no longer exists, and logs each as `[tmux-sweep]`. Sessions it didn't
+create are never touched. `AGENTOS_TMUX_SWEEP=off` skips the sweep.
+
 ### Phone notifications
 
 Two things reach your phone: a schedule run that failed, and whatever an

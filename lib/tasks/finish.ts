@@ -10,7 +10,7 @@ import { republishAfterMerge } from "../lumifyhub/publish";
 import { restackAfterMerge } from "../stacks/restack";
 import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
 import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
-import { stopChat } from "../chat/runner";
+import { endSessionAgent } from "../sessions/end";
 import { run } from "./gh";
 import { gitFetch, gitPush } from "../git-exec";
 import {
@@ -39,13 +39,7 @@ async function cleanup(
   opts: { keepRemoteBranch?: boolean; merged?: MergedAs } = {}
 ): Promise<void> {
   const keepRemoteBranch = opts.keepRemoteBranch ?? false;
-  // A chat task's agent runs in its chat worker, not the task's tmux.
-  if (session.view === "chat") stopChat(session.id);
-  await run(
-    "tmux",
-    ["kill-session", "-t", `=${session.tmux_name}`],
-    repo
-  ).catch(() => {});
+  await endSessionAgent(session);
   // Never waited on: the row is read now, and Postgres can't hold this up.
   void dropSessionDatabase(session.id);
   if (session.worktree_path && opts.merged) {

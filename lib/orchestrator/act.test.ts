@@ -529,7 +529,7 @@ describe("acting inside the workspace", () => {
     hostCalls.length = 0;
     await runTool(mine.workspace.id, "stop", { session: "add-auth" });
     expect(hostCalls).toEqual([
-      expect.stringContaining(`kill-session -t '=claude-${mine.task}'`),
+      expect.stringContaining(`t='=claude-${mine.task}'`),
     ]);
   });
 
