@@ -226,8 +226,10 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
           registry.live.delete(sessionId);
           emit(sessionId, { type: "state", state: "idle" });
         }
-        // It retired itself for a current worker: what it queued goes now.
-        if (live?.retireSent) resumed.delete(sessionId);
+        // It retired itself for a current worker, or ended its agent's
+        // conversation at the context threshold: what it queued goes now.
+        if (live?.retireSent || refreshedAway(sessionId))
+          resumed.delete(sessionId);
         // Its agent died mid-turn, with messages still queued, or with a
         // turn cut off. (One this server let go, it stopped on purpose.)
         if (live && !detached)
@@ -374,6 +376,13 @@ export function deleteQueuedChat(sessionId: string, id: string) {
   deleteQueued(sessionId, id);
   emitQueue(sessionId);
 }
+
+const refreshedAway = (sessionId: string) =>
+  !!(
+    db
+      .prepare(`SELECT chat_refreshed FROM sessions WHERE id = ?`)
+      .get(sessionId) as { chat_refreshed: number } | undefined
+  )?.chat_refreshed;
 
 // A queue no worker is left to send (it was retired, or its agent died):
 // a fresh worker sends it in order. Never interrupts: a worker that's busy

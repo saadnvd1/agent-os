@@ -129,3 +129,28 @@ describe("a worker from before a deploy", () => {
     expect(workers.connects).toHaveLength(2);
   });
 });
+
+describe("a worker that ended its conversation at the context threshold", () => {
+  it("has what queued sent by a new worker at once, inside the resume window", async () => {
+    const { db } = await import("../db");
+    const id = chat();
+    workers.running = [];
+    enqueue(id, { id: "user-q1", text: "an event before the fresh start" });
+    workers.hellos = [{ build: buildId(), state: "running", caps: ALL }];
+    // The reattach starts a worker to send the queue: the once-a-minute
+    // resume is armed.
+    await reattachChats();
+    expect(workers.connects).toHaveLength(1);
+    enqueue(id, { id: "user-q2", text: "an event while it went" });
+    db.prepare(`UPDATE sessions SET chat_refreshed = 210000 WHERE id = ?`).run(
+      id
+    );
+    workers.handlers[0].onClose(false);
+    await vi.waitFor(() =>
+      expect(workers.connects[1]?.commands).toContainEqual({ type: "drain" })
+    );
+    expect(workers.connects[1].spawn).toBe(true);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(workers.connects).toHaveLength(2);
+  });
+});

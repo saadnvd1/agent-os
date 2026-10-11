@@ -1,5 +1,6 @@
 import type { Session } from "../../db";
 import type { ChatStartOptions } from "../driver";
+import { refreshSettings } from "../refresh";
 
 export type RoleExtras = Pick<
   ChatStartOptions,
@@ -12,6 +13,9 @@ export type RoleExtras = Pick<
   // A digest of the tools AgentOS gives this role (an orchestrator's): the
   // worker after a deploy tells the agent only when it changed.
   toolsDigest?: string;
+  // Start over on a new conversation once its context passes this many
+  // tokens (lib/chat/refresh); absent or 0, never.
+  refresh?: { atTokens: number; role: "orchestrator" | "task" };
 };
 
 // What a session's role adds to its chat. An orchestrator's module loads
@@ -21,5 +25,11 @@ export async function roleExtras(session: Session): Promise<RoleExtras> {
     return (await import("../../orchestrator/worker")).orchestratorExtras(
       session
     );
-  return session.task_brief ? { systemAppend: session.task_brief } : {};
+  if (!session.task_brief) return {};
+  const atTokens =
+    session.task_status === "running" ? refreshSettings().taskTokens : 0;
+  return {
+    systemAppend: session.task_brief,
+    ...(atTokens > 0 && { refresh: { atTokens, role: "task" as const } }),
+  };
 }

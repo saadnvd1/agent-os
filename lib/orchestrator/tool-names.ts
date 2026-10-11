@@ -22,6 +22,8 @@ export const TOOL_NAMES = {
   stop: name("stop"),
   done: name("done"),
   note: name("note"),
+  rule_add: name("rule_add"),
+  rule_remove: name("rule_remove"),
   review: name("review"),
   sign_off: name("sign_off"),
   arm: name("arm"),

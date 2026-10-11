@@ -1,0 +1,36 @@
+import { NextRequest, NextResponse } from "next/server";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import { getWorkspace } from "@/lib/workspaces";
+import { addRule, listRules } from "@/lib/orchestrator/rules";
+import { provenAsSaad } from "./presence";
+
+type RouteParams = { params: Promise<{ id: string }> };
+
+// The workspace orchestrator's standing rules, in its brief on every start.
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+  if (!getWorkspace(id))
+    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  return NextResponse.json({ rules: listRules(id) });
+}
+
+// { text, assertion }: a rule from Saad, with his passkey.
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+  if (!getWorkspace(id))
+    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  const { text, assertion } = (await request.json().catch(() => ({}))) as {
+    text?: unknown;
+    assertion?: AuthenticationResponseJSON;
+  };
+  if (typeof text !== "string")
+    return NextResponse.json({ error: "text is required" }, { status: 400 });
+  const refused = await provenAsSaad(request, id, assertion);
+  if (refused) return refused;
+  try {
+    return NextResponse.json({ rule: addRule(id, text, "saad") });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

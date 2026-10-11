@@ -15,6 +15,7 @@ import { sessionFacts } from "./facts";
 import { describeExternal, externalSessions } from "./external-sessions";
 import { resolveStaleAsks } from "./ask-settle";
 import { addNote } from "./notes";
+import { addRule, removeRule } from "./rules";
 import { askSaad } from "./ask-tool";
 import { listOrchestratorPeers, messageOrchestrator } from "./cross";
 import { PAUSED_REFUSAL } from "./pause";
@@ -122,6 +123,16 @@ export async function runTool(
     case "note":
       addNote(w, p(tool, raw).text);
       return "Noted.";
+    case "rule_add": {
+      const rule = addRule(w, p(tool, raw).text, "orchestrator");
+      addNote(w, `Standing rule ${rule.id}: ${rule.text}`);
+      return `Rule ${rule.id} kept: it's in your brief on every start.`;
+    }
+    case "rule_remove": {
+      const rule = removeRule(w, p(tool, raw).id, "orchestrator");
+      addNote(w, `Removed standing rule ${rule.id}: ${rule.text}`);
+      return `Rule ${rule.id} removed.`;
+    }
     case "review": {
       const a = p(tool, raw);
       return reviewTarget(w, a.target, { fresh: a.fresh });

@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { BRANCH_NAME } from "../git";
 import { RAISED_KINDS } from "./asks";
+import { MAX_RULE_CHARS } from "./rules";
 
 const ref = (what: string) => z.string().trim().min(1).max(300).describe(what);
 const session = ref("Session name, project/name, or id from sessions");
@@ -100,6 +101,15 @@ export const TOOL_SHAPES = {
   stop: { session },
   done: { session },
   note: { text: z.string().trim().min(1).max(2000) },
+  rule_add: {
+    text: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_RULE_CHARS)
+      .describe("The rule, one sentence"),
+  },
+  rule_remove: { id: z.number().int().positive().describe("The rule's id") },
   review: {
     target: ref("The task, or its PR (#12 or URL)"),
     fresh: z

@@ -2,6 +2,8 @@
 
 import { useWorkspacesQuery } from "@/data/workspaces";
 import { TaskLimitForm } from "./TaskLimitForm";
+import { RulesForm } from "./RulesForm";
+import { FreshStartForm } from "./FreshStartForm";
 
 // Settings > Workspaces: each workspace's own settings.
 export function WorkspaceSettings() {
@@ -36,8 +38,10 @@ export function WorkspaceSettings() {
             key={`${w.id}:${w.max_running_tasks ?? "off"}`}
             workspace={w}
           />
+          <RulesForm workspaceId={w.id} />
         </section>
       ))}
+      <FreshStartForm />
     </div>
   );
 }

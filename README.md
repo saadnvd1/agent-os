@@ -844,7 +844,7 @@ it may do on its own, and the lines that always come back to you as asks.
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
   `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `note`,
-  `review`, `sign_off`, `arm`, `disarm` and `ask_saad`. All are served in-process to its chat, refuse
+  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm` and `ask_saad`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and
   whether it has one, and `message_orchestrator` messages another workspace's
@@ -918,6 +918,28 @@ it may do on its own, and the lines that always come back to you as asks.
   again needs your passkey.
 - **Decision log:** `note` and the brakes and escalations write to
   `orchestrator_notes`, and each line shows in its chat.
+- **Standing rules:** what it must keep knowing ("never merge #111", "briefs
+  must not name competitors") it keeps with `rule_add` and drops with
+  `rule_remove`, in `orchestrator_rules`. You see, add, edit and remove them in
+  Settings → Workspaces, each change with your passkey (any process on the
+  machine reaches the route, and a rule of yours is your word to it). A rule restricts or informs; it never approves an
+  ask, passes a gate or clears a hard line. Yours are marked as from you and
+  only you remove them; the ones it kept, like its decision-log lines, come
+  back to it fenced as its own notes, so text it read can't pass for your
+  word. Rule text is redacted when stored, and removed rules stay on record.
+- **Where things stand:** every start appends a digest read straight from
+  the database, no model involved: the standing rules, open asks, running
+  tasks with their PR, armed-to-merge and gate state, recently gated external
+  PRs, the queue, schedules and the newest decision-log lines, capped at about
+  4k tokens. The brief tells it this is authoritative over what it remembers.
+- **Fresh starts:** fed events nonstop, an orchestrator never idles and can't
+  compact itself. Once its context passes a threshold (200k tokens by
+  default, Settings → Workspaces → Fresh starts), its worker ends the
+  conversation at the next turn boundary and the next one starts a new
+  conversation with the brief and digest, telling the agent in one line why.
+  Nothing is lost, because its state lives in the database; its chat goes on,
+  with a line where it started over. The same can be switched on for chat
+  tasks (off by default: a task keeps only its brief and its branch).
 - **Events:** the server sends it one short line per event (a PR opened, CI
   failed, or green once it has settled so `sign_off`'s ci gate passes, a `BLOCKED:` line, a merge, a session needing input, a
   stack step, a task idle 30 minutes with no PR, a review's verdict). Events
@@ -950,8 +972,9 @@ approved`). An approval covers that one item only: a held task's approval
   filed as that hard line.
 - **Proof it's you:** only this machine, the tailnet, or a paired device you
   switched to "Can approve" in Devices may answer asks or pause. Approving a
-  hard line, a gate, a brake or a new passkey, Resume, and switching merge
-  approvals off, also need a
+  hard line, a gate, a brake or a new passkey, Resume, changing the
+  orchestrator's standing rules, and switching merge approvals off, also
+  need a
   passkey (Touch ID or Face ID, user verification required) on a challenge
   bound to that one ask at its current commit or brake: single use, two
   minutes. Agents on this machine reach every route but can't make your
