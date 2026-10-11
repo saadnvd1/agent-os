@@ -90,6 +90,14 @@ describe("focusVerdict", () => {
     expect(focusVerdict(editorDom, false)).toBe("leave");
   });
 
+  it("a selection inside the composer itself doesn't hold it back", () => {
+    editorDom.textContent = "draft";
+    const range = document.createRange();
+    range.selectNodeContents(editorDom.firstChild!);
+    document.getSelection()!.addRange(range);
+    expect(focusVerdict(editorDom, false)).toBe("take");
+  });
+
   it("leaves focus the user put inside the panel itself", () => {
     messageButton.focus();
     expect(focusVerdict(editorDom, false)).toBe("leave");
@@ -189,6 +197,16 @@ describe("useFocusOnShow", () => {
   it("does not take it back once the user has moved on", async () => {
     await render({ editor, focusKey: "a" });
     search.focus();
+    await render({ editor, focusKey: "a", disabled: true });
+    await render({ editor, focusKey: "a" });
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the caret out once the user clicked out of the composer", async () => {
+    await render({ editor, focusKey: "a" });
+    // Clicked on something that takes no focus: the editor blurs while
+    // editable, and focus falls to the body.
+    editorDom.blur();
     await render({ editor, focusKey: "a", disabled: true });
     await render({ editor, focusKey: "a" });
     expect(focus).toHaveBeenCalledTimes(1);
