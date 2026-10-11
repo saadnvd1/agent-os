@@ -23,14 +23,24 @@ export const LATE_MS = 90 * 1000;
 
 // The slot a schedule is due to run now, if any.
 export function dueSlot(schedule: Schedule, now: number): number | null {
-  if (!schedule.enabled || schedule.archived_at) return null;
+  if (!schedule.enabled || schedule.archived_at || schedule.done_at)
+    return null;
+  // A one-off is due from its run time on, whenever AgentOS notices: no
+  // armed_at cut-off, so a run missed while it was off still happens.
+  if (schedule.run_at != null) {
+    if (schedule.run_at > now) return null;
+    return slotTaken(schedule.id, slotKey(schedule.run_at))
+      ? null
+      : schedule.run_at;
+  }
   const slot = prevRun(schedule.cron, now, schedule.timezone);
   if (slot === null || slot <= schedule.armed_at) return null;
   return slotTaken(schedule.id, slotKey(slot)) ? null : slot;
 }
 
 export function nextRunAt(schedule: Schedule, now = Date.now()): number | null {
-  if (!schedule.enabled) return null;
+  if (!schedule.enabled || schedule.done_at) return null;
+  if (schedule.run_at != null) return schedule.run_at;
   return nextRun(
     schedule.cron,
     Math.max(now, schedule.armed_at),

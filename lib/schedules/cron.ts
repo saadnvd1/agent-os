@@ -100,7 +100,7 @@ export function isTimezone(tz: string): boolean {
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
-function wall(ms: number, tz: string) {
+export function wall(ms: number, tz: string) {
   let f = formatters.get(tz);
   if (!f) {
     f = new Intl.DateTimeFormat("en-US", {

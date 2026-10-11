@@ -7,7 +7,13 @@
 
 import { getProject } from "../projects";
 import { resolveSession } from "../bus";
-import { describeCron, everyCron } from "./cron";
+import {
+  DEFAULT_TIMEZONE,
+  describeCron,
+  everyCron,
+  formatRunTime,
+} from "./cron";
+import { parseWhen } from "./when";
 import { runSlot, type RunDeps, type RunResult } from "./run";
 import { nextRunAt } from "./scheduler";
 import { realDeps } from "./start";
@@ -37,12 +43,28 @@ export interface ScheduleView extends Schedule {
   lastRun: ScheduleRun | null;
   // Its workspace's orchestrator is paused, so it skips its slots.
   paused: boolean;
+  oneOff: boolean;
+  // Who made it: Saad, or the agent session (the orchestrator, or another).
+  createdBy: { kind: "saad" | "orchestrator" | "session"; name: string };
+}
+
+function creatorOf(s: Schedule): ScheduleView["createdBy"] {
+  const creator = s.created_by_session_id
+    ? getSessionRow(s.created_by_session_id)
+    : null;
+  if (!creator) return { kind: "saad", name: "Saad" };
+  return creator.role === "orchestrator"
+    ? { kind: "orchestrator", name: "Orchestrator" }
+    : { kind: "session", name: creator.name };
 }
 
 export function scheduleView(s: Schedule, now = Date.now()): ScheduleView {
   return {
     ...s,
-    description: describeCron(s.cron),
+    description:
+      s.run_at != null
+        ? `Once, ${formatRunTime(s.run_at, s.timezone)}`
+        : describeCron(s.cron),
     projectName: s.project_id ? (getProject(s.project_id)?.name ?? null) : null,
     targetName: s.target_session_id
       ? (getSessionRow(s.target_session_id)?.name ?? null)
@@ -50,6 +72,8 @@ export function scheduleView(s: Schedule, now = Date.now()): ScheduleView {
     nextRunAt: nextRunAt(s, now),
     lastRun: lastRun(s.id),
     paused: isPaused(s.workspace_id),
+    oneOff: s.run_at != null,
+    createdBy: creatorOf(s),
   };
 }
 
@@ -65,6 +89,8 @@ export function checkInInput(opts: {
   from?: string | null;
   every?: string;
   cron?: string;
+  // A one-off instead of a cron: "tomorrow 10am", "in 2h", an ISO time.
+  at?: string;
   prompt: string;
   name?: string;
   timezone?: string;
@@ -79,14 +105,26 @@ export function checkInInput(opts: {
     if (sessionWorkspace(creator) !== workspaceId)
       throw new Error(`${session.name} isn't in your workspace`);
   }
-  const cron = opts.cron?.trim() || everyCron(opts.every ?? "30m");
+  if (opts.at && (opts.cron || opts.every))
+    throw new Error("Give a run time (at) or a repeat (every, cron), not both");
+  const tz = opts.timezone?.trim() || DEFAULT_TIMEZONE;
+  const runAt = opts.at ? parseWhen(opts.at, tz) : null;
+  const cron =
+    runAt === null
+      ? opts.cron?.trim() || everyCron(opts.every ?? "30m")
+      : undefined;
   // The workspace's orchestrator is kept as "its orchestrator", not this
   // session's id: each run goes to whichever session is orchestrator then.
   const orchestrator = session.role === "orchestrator";
   return {
     workspaceId,
-    name: opts.name?.trim() || `Check-in: ${session.name}`.slice(0, 80),
+    name:
+      opts.name?.trim() ||
+      (runAt === null
+        ? `Check-in: ${session.name}`.slice(0, 80)
+        : reminderName(workspaceId, runAt, tz)),
     cron,
+    at: runAt,
     timezone: opts.timezone,
     prompt: opts.prompt,
     kind: orchestrator ? "orchestrator" : "message",
@@ -95,12 +133,30 @@ export function checkInInput(opts: {
   };
 }
 
+// "Reminder Tue, Oct 7, 9:00 AM", with a number after it when that's taken.
+export function reminderName(
+  workspaceId: string,
+  runAt: number,
+  tz = DEFAULT_TIMEZONE
+): string {
+  const taken = new Set(
+    listSchedules(workspaceId)
+      .filter((s) => !s.done_at)
+      .map((s) => s.name.toLowerCase())
+  );
+  const base = `Reminder ${formatRunTime(runAt, tz)}`;
+  let name = base;
+  for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})`;
+  return name;
+}
+
 export function scheduleHistory(id: string, limit = 50): ScheduleRun[] {
   return listRuns(id, limit);
 }
 
 // Run now: its own slot, whatever the time and while the last run is still
-// working. Pause holds it like any run.
+// working. Pause holds it like any run. A one-off has one slot, so Run now
+// uses up its only run.
 export async function runNow(
   id: string,
   deps: RunDeps = realDeps
@@ -108,6 +164,11 @@ export async function runNow(
   const schedule = getSchedule(id);
   if (!schedule || schedule.archived_at) throw new Error("Schedule not found");
   const result = await runSlot(schedule, Date.now(), "manual", deps);
-  if (!result) throw new Error("Couldn't claim a run");
+  if (!result)
+    throw new Error(
+      schedule.run_at != null
+        ? "It already ran: edit it to a new time to run it again"
+        : "Couldn't claim a run"
+    );
   return result;
 }

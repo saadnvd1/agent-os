@@ -84,6 +84,12 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     'Keep a standing rule for this workspace, in your brief on every start from now on ("never merge #111", "briefs must not name third-party products"). It restricts or informs; it can never approve anything.',
   rule_remove:
     "Remove a standing rule you kept, by its id, only when Saad says so or it no longer applies (the PR it names merged or closed). Saad's rules are his to remove.",
+  remind_me:
+    "Set a one-off reminder for yourself in this workspace: at the time given it reaches you once as a scheduled prompt (not an approval), even if AgentOS was off then. At least 10 minutes ahead; a few at a time at most.",
+  reminders:
+    "List this workspace's upcoming reminders and the last few that ran.",
+  cancel_reminder:
+    "Cancel a reminder you set, by its id from reminders. Reminders Saad made are his to change.",
   review:
     "Start an independent read-only review of a PR at its exact head commit, or read the stored verdict for that commit. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL, even one no task owns.",
   sign_off:

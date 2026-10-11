@@ -28,6 +28,7 @@ import { land } from "./signoff";
 import { arm, disarm } from "./armed";
 import { quickChange, quickPR } from "./quick";
 import { review } from "./review";
+import { cancelReminder, listReminders, remindMe } from "./reminders";
 import { parseArgs as p, type ToolName } from "./tool-schemas";
 
 export { isToolName, TOOLS, type ToolName } from "./tool-schemas";
@@ -169,6 +170,14 @@ export async function runTool(
       addNote(w, `Removed standing rule ${rule.id}: ${rule.text}`);
       return `Rule ${rule.id} removed.`;
     }
+    case "remind_me": {
+      const a = p(tool, raw);
+      return remindMe(w, a.at, a.prompt, a.name);
+    }
+    case "reminders":
+      return listReminders(w);
+    case "cancel_reminder":
+      return cancelReminder(w, p(tool, raw).id);
     case "review": {
       const a = p(tool, raw);
       return reviewTarget(w, a.target, { fresh: a.fresh });

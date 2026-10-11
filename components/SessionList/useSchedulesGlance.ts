@@ -3,12 +3,13 @@
 import { useSchedulesQuery } from "@/data/schedules";
 import { schedulesBadge } from "@/lib/schedules/badge";
 import { formatRunTime } from "@/lib/schedules/cron";
+import { relativeTime } from "@/lib/schedules/when";
 
 // Schedules at a glance for the header's menu: how many failed their last
 // run (a red badge) and when the next one runs (a line under the item).
 export function useSchedulesGlance(workspaceId: string | null) {
   const { data: schedules = [] } = useSchedulesQuery(workspaceId);
-  const { next, failed } = schedulesBadge(schedules);
+  const { next, failed, upcoming, nextUpcoming } = schedulesBadge(schedules);
   const failedText = failed
     ? `${failed} schedule${failed === 1 ? "" : "s"} failed last run`
     : null;
@@ -17,5 +18,8 @@ export function useSchedulesGlance(workspaceId: string | null) {
     : schedules.length
       ? "Nothing scheduled to run"
       : "No schedules yet";
-  return { failed, failedText, nextText };
+  const upcomingText = upcoming
+    ? `${upcoming} upcoming${nextUpcoming ? ` · next ${relativeTime(nextUpcoming.at)}` : ""}`
+    : null;
+  return { failed, failedText, nextText, upcoming, upcomingText };
 }

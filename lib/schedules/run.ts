@@ -3,6 +3,7 @@ import {
   attachSession,
   brakeRun,
   claimSlot,
+  finishOneOff,
   finishRun,
   lastSettledBefore,
   lastStarted,
@@ -60,8 +61,15 @@ export async function runSlot(
   trigger: RunTrigger,
   deps: RunDeps
 ): Promise<RunResult | null> {
+  // A one-off has one slot, Run now included: the claim is what stops it
+  // running twice.
+  const oneOff = schedule.run_at != null;
+  if (oneOff) slotAt = schedule.run_at!;
   const slot =
-    trigger === "manual" ? `manual:${randomUUID()}` : slotKey(slotAt);
+    trigger === "manual" && !oneOff
+      ? `manual:${randomUUID()}`
+      : slotKey(slotAt);
+  if (oneOff && schedule.done_at) return null;
   const runId = claimSlot(schedule.id, slot, slotAt, trigger);
   if (runId === null) return null;
   const caughtUp = trigger === "catch-up" ? "caught up" : null;
@@ -71,6 +79,7 @@ export async function runSlot(
     sessionId: string | null = null
   ): RunResult => {
     finishRun(runId, outcome, detail, sessionId);
+    if (oneOff) finishOneOff(schedule.id);
     return { runId, outcome, detail, sessionId };
   };
   const joined = (...parts: (string | null)[]) =>
@@ -90,6 +99,16 @@ export async function runSlot(
     return done("failed", why);
   };
 
+  // A recurring run skips while paused; a one-off has only this run, so it's
+  // held like a brake and runs once the workspace resumes.
+  const paused = (): RunResult => {
+    if (!oneOff)
+      return done("skipped", joined(caughtUp, "paused with the orchestrator"));
+    const detail = "held: paused with the orchestrator";
+    brakeRun(runId, detail);
+    return { runId, outcome: "skipped", detail, sessionId: null };
+  };
+
   // Its session is gone and won't come back: the schedule turns itself off
   // and says so once, instead of failing every slot.
   const gone = targetGone(schedule);
@@ -100,9 +119,8 @@ export async function runSlot(
   }
   const target = targetProblem(schedule);
   if (target) return fail(target);
-  if (pausedFor(schedule))
-    return done("skipped", joined(caughtUp, "paused with the orchestrator"));
-  if (trigger !== "manual") {
+  if (pausedFor(schedule)) return paused();
+  if (trigger !== "manual" && !oneOff) {
     const previous = lastStarted(schedule.id, runId);
     if (previous) {
       let busy: boolean;
@@ -128,8 +146,7 @@ export async function runSlot(
   }
 
   // Again: Saad may have paused while the overlap check waited.
-  if (pausedFor(schedule))
-    return done("skipped", joined(caughtUp, "paused with the orchestrator"));
+  if (pausedFor(schedule)) return paused();
   try {
     const started = await deps.start(schedule, (id) =>
       attachSession(runId, id)

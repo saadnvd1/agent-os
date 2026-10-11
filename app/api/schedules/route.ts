@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
             from: body.from ? String(body.from) : null,
             every: body.every,
             cron: body.cron,
+            at: body.at,
             prompt: String(body.prompt ?? ""),
             name: body.name,
             timezone: body.timezone,

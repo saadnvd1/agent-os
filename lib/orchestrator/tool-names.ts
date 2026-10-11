@@ -32,6 +32,9 @@ export const TOOL_NAMES = {
   sign_off: name("sign_off"),
   arm: name("arm"),
   disarm: name("disarm"),
+  remind_me: name("remind_me"),
+  reminders: name("reminders"),
+  cancel_reminder: name("cancel_reminder"),
   ask_saad: name("ask_saad"),
 } as const;
 

@@ -97,7 +97,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             // Opens Settings > Schedules.
             menuItem("Schedules", () => schedulesUiActions.open(workspaceId), {
               icon: Clock,
-              description: schedules.nextText,
+              description: schedules.upcomingText ?? schedules.nextText,
               badge: schedules.failed > 0 && (
                 <span className="text-destructive flex items-center gap-1.5 text-xs font-medium tabular-nums">
                   <span aria-hidden className={failedDot} />

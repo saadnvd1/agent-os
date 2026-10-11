@@ -32,6 +32,8 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos schedule add --session <session> --every 30m [--name N] <prompt...>
                                      message a session on a timer (at most every
                                      10 minutes); skips while it's still working
+  aos schedule add --session <session> --at "tomorrow 10am" <prompt...>
+                                     message it once (ISO, "in 2h"; Central by default)
   aos heavy -- <command...>          run a test suite, type check or build now; says
                                      first if other heavy commands are running or
                                      the machine is loaded (never waits or blocks)
@@ -194,7 +196,7 @@ async function scheduleAdd(words) {
   const flags = {};
   const rest = [];
   for (let i = 0; i < words.length; i++) {
-    const m = /^--(session|every|name|cron|tz)$/.exec(words[i]);
+    const m = /^--(session|every|at|name|cron|tz)$/.exec(words[i]);
     if (m) {
       if (words[i + 1] === undefined) fail(`--${m[1]} needs a value`);
       flags[m[1]] = words[++i];
@@ -203,12 +205,15 @@ async function scheduleAdd(words) {
   const prompt = rest.join(" ").trim();
   if (!flags.session || !prompt)
     fail(
-      'usage: aos schedule add --session <id|name> --every 30m [--name N] "<prompt>"'
+      'usage: aos schedule add --session <id|name> (--every 30m | --at "tomorrow 10am") [--name N] "<prompt>"'
     );
+  if (flags.at && (flags.every || flags.cron))
+    fail("--at is a one-off: drop --every/--cron");
   const { schedule } = await post("/api/schedules", {
     from: me,
     session: flags.session,
     every: flags.every,
+    at: flags.at,
     cron: flags.cron,
     name: flags.name,
     timezone: flags.tz,
@@ -414,8 +419,37 @@ async function main() {
           hour: "numeric",
           minute: "2-digit",
         });
+      const rel = (ms) => {
+        const mins = Math.floor(Math.abs(ms - Date.now()) / 60000);
+        const span =
+          mins < 60
+            ? `${mins}m`
+            : mins < 1440
+              ? `${Math.floor(mins / 60)}h`
+              : `${Math.floor(mins / 1440)}d`;
+        return ms >= Date.now() ? `in ${span}` : `${span} ago`;
+      };
+      // Upcoming one-offs first, soonest first.
+      const upcoming = (s) => s.oneOff && s.enabled && !s.done_at;
+      schedules.sort(
+        (a, b) =>
+          (upcoming(b) ? 1 : 0) - (upcoming(a) ? 1 : 0) ||
+          (upcoming(a) ? a.run_at - b.run_at : 0)
+      );
       for (const s of schedules) {
-        const state = !s.enabled ? "off" : s.paused ? "paused" : "on";
+        const state = s.done_at
+          ? "done"
+          : !s.enabled
+            ? "off"
+            : s.paused
+              ? "paused"
+              : "on";
+        if (s.oneOff && !s.done_at && s.enabled) {
+          console.log(
+            `${s.id.slice(0, 8)}  ${s.name} · ${s.kind} · ${state}\n  once ${when(s.run_at, s.timezone)} (${rel(s.run_at)}) · by ${s.createdBy.name}`
+          );
+          continue;
+        }
         const next =
           s.enabled && s.nextRunAt ? when(s.nextRunAt, s.timezone) : "-";
         const last = s.lastRun

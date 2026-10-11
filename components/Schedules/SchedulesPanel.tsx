@@ -25,6 +25,7 @@ import {
 } from "@/data/schedules";
 import type { ScheduleView } from "@/lib/schedules";
 import { formatRunTime } from "@/lib/schedules/cron";
+import { relativeTime } from "@/lib/schedules/when";
 import { schedulesUi, schedulesUiActions } from "@/stores/schedulesUi";
 import { ScheduleForm } from "./ScheduleForm";
 import { OutcomeChip, RunHistory } from "./RunHistory";
@@ -50,10 +51,14 @@ const where = (s: ScheduleView) =>
       : "";
 
 function NextRun({ s }: { s: ScheduleView }) {
+  if (s.done_at) return <>Done {formatRunTime(s.done_at, s.timezone)}</>;
   if (!s.enabled) return <>Off</>;
   if (s.paused) return <>Paused with the orchestrator</>;
   return s.nextRunAt ? (
-    <>Next {formatRunTime(s.nextRunAt, s.timezone)}</>
+    <>
+      {s.oneOff ? "Runs" : "Next"} {formatRunTime(s.nextRunAt, s.timezone)}
+      {s.oneOff && ` (${relativeTime(s.nextRunAt)})`}
+    </>
   ) : (
     <>No upcoming run</>
   );
@@ -98,12 +103,41 @@ function ScheduleRow({ s, onOpen }: { s: ScheduleView; onOpen: () => void }) {
           </span>
         </div>
         <p className="text-muted-foreground truncate text-xs">
-          {s.description} · <NextRun s={s} />
+          {s.oneOff ? (
+            <NextRun s={s} />
+          ) : (
+            <>
+              {s.description} · <NextRun s={s} />
+            </>
+          )}
+          {s.oneOff && ` · by ${s.createdBy.name}`}
         </p>
       </div>
       {s.lastRun && <OutcomeChip run={s.lastRun} />}
-      <EnableSwitch s={s} />
+      {!s.done_at && <EnableSwitch s={s} />}
     </div>
+  );
+}
+
+function Group({
+  title,
+  rows,
+  onOpen,
+}: {
+  title: string;
+  rows: ScheduleView[];
+  onOpen: (id: string) => void;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <h4 className="text-muted-foreground px-1 text-xs font-medium">
+        {title} · {rows.length}
+      </h4>
+      {rows.map((s) => (
+        <ScheduleRow key={s.id} s={s} onOpen={() => onOpen(s.id)} />
+      ))}
+    </section>
   );
 }
 
@@ -134,11 +168,12 @@ function Detail({
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <h3 className="min-w-0 flex-1 truncate font-semibold">{s.name}</h3>
-          <EnableSwitch s={s} />
+          {!s.done_at && <EnableSwitch s={s} />}
         </div>
         <p className="text-muted-foreground text-sm">
           {KIND_LABEL[s.kind]}
           {where(s)} · {s.description}
+          {s.oneOff && ` · by ${s.createdBy.name}`}
         </p>
         <p className="text-muted-foreground text-xs">
           <NextRun s={s} /> · {s.timezone}
@@ -151,7 +186,7 @@ function Detail({
         <Button
           size="sm"
           className="h-11 md:h-8"
-          disabled={run.isPending}
+          disabled={run.isPending || !!s.done_at}
           onClick={() => run.mutate(s.id)}
         >
           <Play className="h-3.5 w-3.5" />
@@ -174,7 +209,7 @@ function Detail({
             disabled={archive.isPending}
             onClick={() => archive.mutate(s.id, { onSuccess: onGone })}
           >
-            Remove (keeps history)
+            {s.oneOff && !s.done_at ? "Cancel it" : "Remove (keeps history)"}
           </Button>
         ) : (
           <Button
@@ -184,7 +219,7 @@ function Detail({
             onClick={() => setConfirm(true)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            Remove
+            {s.oneOff && !s.done_at ? "Cancel" : "Remove"}
           </Button>
         )}
       </div>
@@ -300,13 +335,24 @@ export function SchedulesPanel() {
               </p>
             </div>
           )}
-          {schedules.map((s) => (
-            <ScheduleRow
-              key={s.id}
-              s={s}
-              onOpen={() => setView({ mode: "detail", id: s.id })}
-            />
-          ))}
+          {(() => {
+            const open = (id: string) => setView({ mode: "detail", id });
+            const upcoming = schedules
+              .filter((s) => s.oneOff && !s.done_at)
+              .sort((a, b) => (a.run_at ?? 0) - (b.run_at ?? 0));
+            const done = schedules.filter((s) => s.done_at);
+            return (
+              <>
+                <Group title="Upcoming" rows={upcoming} onOpen={open} />
+                <Group
+                  title="Recurring"
+                  rows={schedules.filter((s) => !s.oneOff)}
+                  onOpen={open}
+                />
+                <Group title="Done" rows={done} onOpen={open} />
+              </>
+            );
+          })()}
           {!isPending && <PhoneLine />}
         </div>
       )}
