@@ -489,13 +489,16 @@ describe("trimLog", () => {
   });
 
   it("keeps the end when nothing reads as an error, and redacts tokens", () => {
+    // Built here so no token-shaped literal is committed.
+    const token = "ghp" + "_" + "x".repeat(36);
     const raw = Array.from({ length: 80 }, (_, i) =>
       i === 79
-        ? "j\ts\t2026-01-01T00:00:00Z token ghp_abcdefghijklmnopqrstuvwxyz0123"
+        ? `j\ts\t2026-01-01T00:00:00Z token ${token}`
         : `j\ts\t2026-01-01T00:00:00Z ${i}`
     ).join("\n");
     const { tail } = trimLog(raw);
     expect(tail.split("\n")[0]).toBe("20");
-    expect(tail).not.toContain("ghp_");
+    expect(tail).not.toContain(token);
+    expect(tail).toContain("token [redacted]");
   });
 });
