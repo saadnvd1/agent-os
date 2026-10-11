@@ -119,7 +119,10 @@ export function CodeBlock({
   if (language === "mermaid") return <Mermaid code={code} />;
   return (
     <div className="bg-foreground/[0.04] not-prose my-3 overflow-hidden rounded-xl">
-      <div className="text-muted-foreground flex items-center justify-between pr-1 pl-3 font-mono text-[11px]">
+      <div
+        data-copy-skip
+        className="text-muted-foreground flex items-center justify-between pr-1 pl-3 font-mono text-[11px]"
+      >
         <span>{language || "text"}</span>
         <CopyButton text={code} label="Copy code" />
       </div>

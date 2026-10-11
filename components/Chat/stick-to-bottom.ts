@@ -8,9 +8,14 @@
  * Content growing, rows expanding and images loading never let go, since only
  * the reader's own scrolling does. While they're away from the end, the text
  * under their eyes is held in place the way CSS scroll anchoring would (the
- * virtualized list turns that off, and Safari lacks it): the element at the
- * top of the view is remembered, and when a layout change moves it, the
- * scroll moves by the same amount.
+ * list turns that off, and Safari lacks it): the element at the top of the
+ * view is remembered, and when a layout change moves it, the scroll moves by
+ * the same amount.
+ *
+ * Nothing is pinned while the reader is selecting text in the conversation
+ * (a drag in progress, or a selection left standing): moving the view under a
+ * selection drags its end along or loses it. The catch-up happens once the
+ * selection is gone.
  */
 
 import {
@@ -81,6 +86,9 @@ export function stickToBottom(
   let touching = false;
   let touchY = 0;
   let dragging = false;
+  // A press inside the content: a text selection drag, or a tap.
+  let pressing = false;
+  let wasSelecting = false;
   let anchors: { node: Element; top: number }[] = [];
   const doc = el.ownerDocument;
   const win = doc.defaultView;
@@ -120,8 +128,18 @@ export function stickToBottom(
     }
     pickAnchors();
   };
+  const selecting = () => {
+    if (pressing) return true;
+    const sel = doc.getSelection?.();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
+    return el.contains(sel.anchorNode) || el.contains(sel.focusNode);
+  };
   const pin = () => {
     if (!stuck) return holdAnchor();
+    if (selecting()) {
+      wasSelecting = true;
+      return;
+    }
     const end = el.scrollHeight - el.clientHeight;
     if (el.scrollTop < end) el.scrollTop = end;
     prevTop = el.scrollTop;
@@ -134,7 +152,7 @@ export function stickToBottom(
   };
 
   const onScroll = () => {
-    const byUser = touching || dragging || now() < intentUntil;
+    const byUser = touching || dragging || pressing || now() < intentUntil;
     set(nextStuck(stuck, { prevTop, metrics: el, byUser }));
     prevTop = el.scrollTop;
     pickAnchors();
@@ -165,11 +183,21 @@ export function stickToBottom(
   // Only a press on the container itself is its scrollbar.
   const onPointerDown = (e: PointerEvent) => {
     if (e.target === el) dragging = true;
+    else pressing = true;
   };
   const onPointerUp = () => {
-    if (!dragging) return;
+    const was = dragging || pressing;
     dragging = false;
+    pressing = false;
+    if (!was) return;
     intentUntil = now() + INTENT_MS;
+    catchUp();
+  };
+  // Following resumes the moment the selection that held it back is gone.
+  const catchUp = () => {
+    const live = selecting();
+    if (wasSelecting && !live && stuck) pin();
+    wasSelecting = live;
   };
 
   const passive = { passive: true } as const;
@@ -182,11 +210,12 @@ export function stickToBottom(
   el.addEventListener("keydown", onKeyDown);
   el.addEventListener("pointerdown", onPointerDown, passive);
   win?.addEventListener("pointerup", onPointerUp, passive);
+  win?.addEventListener("pointercancel", onPointerUp, passive);
+  doc.addEventListener("selectionchange", catchUp);
 
   // Content or the container changing size keeps a stuck reader at the end.
-  // The rows are watched too (the list's are three levels down, and come and
-  // go as it virtualizes), so a row growing is corrected before it's painted
-  // rather than a frame later, when the list catches up.
+  // The rows are watched too, so a row growing is corrected before it's
+  // painted rather than a frame later.
   const resize =
     typeof ResizeObserver === "undefined"
       ? null
@@ -196,7 +225,7 @@ export function stickToBottom(
         });
   function observeRows() {
     for (const row of el.querySelectorAll(
-      ":scope > *, :scope > * > *, :scope > * > * > *, :scope > * > * > * > *"
+      ":scope > *, :scope > * > *, :scope > * > * > *"
     ))
       resize?.observe(row);
   }
@@ -227,18 +256,20 @@ export function stickToBottom(
       el.removeEventListener("keydown", onKeyDown);
       el.removeEventListener("pointerdown", onPointerDown);
       win?.removeEventListener("pointerup", onPointerUp);
+      win?.removeEventListener("pointercancel", onPointerUp);
+      doc.removeEventListener("selectionchange", catchUp);
     },
   };
 }
 
 /**
- * The hook over `stickToBottom`, for a list that exposes its scroll
- * container (`key` re-binds when it's replaced); `latest` changes whenever
+ * The hook over `stickToBottom`, for a scroll container in a ref (`key`
+ * re-binds when it's replaced); `latest` changes whenever
  * something new arrives, which pins a stuck reader and marks it unread for
  * one who has scrolled away.
  */
 export function useStickToBottom(
-  list: RefObject<{ getScrollableNode(): unknown } | null>,
+  scroller: RefObject<HTMLElement | null>,
   key: unknown,
   latest: unknown
 ) {
@@ -249,10 +280,9 @@ export function useStickToBottom(
 
   useEffect(() => {
     let frame = 0;
-    // The list mounts its scroller a frame after it renders.
     const bind = () => {
-      const el = list.current?.getScrollableNode();
-      if (!(el instanceof HTMLElement)) {
+      const el = scroller.current;
+      if (!el) {
         frame = requestAnimationFrame(bind);
         return;
       }
@@ -267,7 +297,7 @@ export function useStickToBottom(
       ctl.current = null;
       setAway(null);
     };
-  }, [list, key]);
+  }, [scroller, key]);
 
   useEffect(() => {
     latestRef.current = latest;

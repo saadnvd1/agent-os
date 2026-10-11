@@ -219,13 +219,73 @@ describe("stickToBottom", () => {
     expect(box.top).toBe(top);
   });
 
-  it("doesn't count a press inside the content as a scrollbar drag", () => {
+  it("doesn't count a click inside the content as a scrollbar drag", () => {
     const row = document.createElement("p");
     el.append(row);
     row.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+    window.dispatchEvent(new window.Event("pointerup"));
+    clock += 300;
     box.height -= 300;
     el.scrollTop = box.top - 50; // moved by the page, not the reader
     expect(ctl.isStuck()).toBe(true);
+  });
+
+  describe("while text is being selected", () => {
+    const text = () => {
+      const p = document.createElement("p");
+      p.textContent = "some words to select";
+      el.append(p);
+      return p;
+    };
+    const select = (node: Node) => {
+      const sel = document.getSelection()!;
+      sel.removeAllRanges();
+      const r = document.createRange();
+      r.selectNodeContents(node);
+      sel.addRange(r);
+    };
+    afterEach(() => document.getSelection()?.removeAllRanges());
+
+    it("doesn't pin under a drag in progress, and catches up when it ends", () => {
+      const p = text();
+      p.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+      const top = box.top;
+      grow(300);
+      expect(box.top).toBe(top);
+      window.dispatchEvent(new window.Event("pointerup"));
+      expect(box.top).toBe(box.height - box.view);
+    });
+
+    it("doesn't pin under a standing selection, and catches up when it clears", () => {
+      select(text());
+      const top = box.top;
+      grow(300);
+      expect(box.top).toBe(top);
+      expect(ctl.isStuck()).toBe(true);
+      document.getSelection()!.removeAllRanges();
+      document.dispatchEvent(new window.Event("selectionchange"));
+      expect(box.top).toBe(box.height - box.view);
+    });
+
+    it("pins as usual for a selection elsewhere on the page", () => {
+      const outside = document.createElement("p");
+      outside.textContent = "composer text";
+      document.body.append(outside);
+      select(outside);
+      grow(300);
+      expect(box.top).toBe(box.height - box.view);
+      outside.remove();
+    });
+
+    it("lets go when the drag autoscrolls up", () => {
+      text().dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+      el.scrollTop -= 200;
+      expect(ctl.isStuck()).toBe(false);
+      window.dispatchEvent(new window.Event("pointerup"));
+      const top = box.top;
+      grow(300);
+      expect(box.top).toBe(top);
+    });
   });
 
   it("stops counting scrolls as the reader's once the drag ends", () => {
@@ -309,7 +369,7 @@ describe("useStickToBottom", () => {
   let hook: Hook;
   let el: HTMLElement;
   let box: { top: number; height: number; view: number };
-  let list: RefObject<{ getScrollableNode(): unknown } | null>;
+  let list: RefObject<HTMLElement | null>;
 
   function Probe(props: {
     id: string;
@@ -329,7 +389,7 @@ describe("useStickToBottom", () => {
   beforeEach(async () => {
     ({ el, box } = scroller());
     list = createRef();
-    (list as { current: unknown }).current = { getScrollableNode: () => el };
+    (list as { current: unknown }).current = el;
     root = createRoot(document.createElement("div"));
     await render("s1", "a:0");
   });
@@ -371,12 +431,12 @@ describe("useStickToBottom", () => {
     expect(box.top).toBe(box.height - box.view);
   });
 
-  it("binds once the list has mounted its scroller", async () => {
+  it("binds once the scroller has mounted", async () => {
     act(() => root.unmount());
     (list as { current: unknown }).current = null;
     root = createRoot(document.createElement("div"));
     await render("s1", "a:0");
-    (list as { current: unknown }).current = { getScrollableNode: () => el };
+    (list as { current: unknown }).current = el;
     await frame();
     scrollUp();
     expect(hook.stuck).toBe(false);

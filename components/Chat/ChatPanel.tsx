@@ -1,8 +1,16 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ArrowDown, Loader2 } from "lucide-react";
+import type { ClipboardEvent } from "react";
 import { useChat } from "@/data/chat/useChat";
 import {
   groupTimeline,
@@ -42,6 +50,7 @@ import { SetupCard } from "./SetupCard";
 import { UserTurn } from "./EventRow";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
+import { copySelection } from "./copy-selection";
 import { arrivalKey, useStickToBottom } from "./stick-to-bottom";
 import {
   AssistantMessage,
@@ -139,8 +148,6 @@ function Timeline({
 }
 
 const blockKey = (b: TimelineBlock) => (b.type === "item" ? b.item.id : b.id);
-const blockType = (b: TimelineBlock) =>
-  b.type === "item" ? b.item.kind : b.type;
 
 // One block, re-rendered only when its items or the actions change: a long
 // conversation doesn't redraw every message for each streamed word.
@@ -172,6 +179,27 @@ const Block = memo(
   (prev, next) =>
     prev.actions === next.actions && sameBlock(prev.block, next.block)
 );
+
+// The conversation's rows in the page's flow, not a virtualized list: a
+// selection follows the DOM, and a list that recycles and re-orders its rows
+// breaks it (docs/decisions/2026-10-11-chat-timeline-in-flow.md).
+export function TimelineRows({
+  blocks,
+  actions,
+}: {
+  blocks: TimelineBlock[];
+  actions: ItemActions;
+}) {
+  return blocks.map((b) => (
+    <div
+      key={blockKey(b)}
+      data-block={blockKey(b)}
+      className="chat-row mx-auto w-full max-w-3xl px-4 pb-4"
+    >
+      <Block block={b} actions={actions} />
+    </div>
+  ));
+}
 
 export function ChatPanel({
   sessionId,
@@ -232,7 +260,7 @@ export function ChatPanel({
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<LegendListRef>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   // Follows new output only while the reader is at the end; sending brings
   // them back there, wherever they'd scrolled.
   const {
@@ -339,10 +367,34 @@ export function ChatPanel({
     () => ({ bodies: toolBodies, request: requestToolBody, connected }),
     [toolBodies, requestToolBody, connected]
   );
-  const blocksRef = useRef(blocks);
+  const itemsById = useMemo(
+    () => new Map(items.map((i) => [i.id, i])),
+    [items]
+  );
+  const itemsByIdRef = useRef(itemsById);
   useEffect(() => {
-    blocksRef.current = blocks;
+    itemsByIdRef.current = itemsById;
   });
+  const onCopy = useCallback(
+    (e: ClipboardEvent<HTMLDivElement>) =>
+      copySelection(e, itemsByIdRef.current),
+    []
+  );
+  // Starts at the end; older pages load as the reader nears the top.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [sessionId]);
+  const olderRef = useRef({ hasMore, loadingOlder, loadOlder });
+  useEffect(() => {
+    olderRef.current = { hasMore, loadingOlder, loadOlder };
+  });
+  const onListScroll = useCallback(() => {
+    const el = listRef.current;
+    const o = olderRef.current;
+    if (el && o.hasMore && !o.loadingOlder && el.scrollTop < el.clientHeight)
+      o.loadOlder();
+  }, []);
   const find = useFind({
     search,
     items,
@@ -352,18 +404,13 @@ export function ChatPanel({
     rows: rowState,
     release,
     scrollToBlock: useCallback(async (key: string) => {
-      const index = blocksRef.current.findIndex((b) => blockKey(b) === key);
-      if (index !== -1)
-        await listRef.current?.scrollToIndex({
-          index,
-          viewPosition: 0.3,
-          animated: false,
-        });
+      // The row may only just have been added.
+      await new Promise((r) => requestAnimationFrame(r));
+      listRef.current
+        ?.querySelector(`[data-block="${CSS.escape(key)}"]`)
+        ?.scrollIntoView({ block: "center" });
     }, []),
-    scroller: useCallback(() => {
-      const el = listRef.current?.getScrollableNode();
-      return el instanceof HTMLElement ? el : null;
-    }, []),
+    scroller: useCallback(() => listRef.current, []),
   });
   const activeRef = useRef(active);
   useEffect(() => {
@@ -423,56 +470,39 @@ export function ChatPanel({
       <div ref={scrollRef} className="relative min-h-0 flex-1">
         <RowState.Provider value={rowState}>
           <ToolBodies.Provider value={bodies}>
-            <LegendList<TimelineBlock>
-              // A new conversation starts its list over, scrolled to the end.
+            <div
+              // A new conversation starts over, scrolled to the end.
               key={sessionId}
               ref={listRef}
-              data={blocks}
-              extraData={actions}
-              keyExtractor={blockKey}
-              getItemType={blockType}
-              renderItem={({ item }) => (
-                <div
-                  data-block={blockKey(item)}
-                  className="mx-auto w-full max-w-3xl px-4 pb-4"
-                >
-                  <Block block={item} actions={actions} />
-                </div>
-              )}
-              estimatedItemSize={90}
-              initialScrollAtEnd
-              // Older pages land above without moving what the reader sees.
-              maintainVisibleContentPosition
-              onStartReached={hasMore ? loadOlder : undefined}
-              onStartReachedThreshold={1}
-              style={{ height: "100%" }}
-              className="overscroll-y-contain"
-              ListHeaderComponent={
-                <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
-                  {hasMore && (
-                    <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
-                      {loadingOlder ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={loadOlder}
-                          className="hover:text-foreground min-h-11 px-3"
-                        >
-                          Show earlier messages
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <SetupCard sessionId={sessionId} />
-                  {blocks.length === 0 && !queue.length && (
-                    <p className="text-muted-foreground py-16 text-center text-sm">
-                      Ask anything to start.
-                    </p>
-                  )}
-                </div>
-              }
-            />
+              onScroll={onListScroll}
+              onCopy={onCopy}
+              className="h-full overflow-y-auto overscroll-y-contain"
+            >
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
+                {hasMore && (
+                  <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
+                    {loadingOlder ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={loadOlder}
+                        className="hover:text-foreground min-h-11 px-3"
+                      >
+                        Show earlier messages
+                      </button>
+                    )}
+                  </div>
+                )}
+                <SetupCard sessionId={sessionId} />
+                {blocks.length === 0 && !queue.length && (
+                  <p className="text-muted-foreground py-16 text-center text-sm">
+                    Ask anything to start.
+                  </p>
+                )}
+              </div>
+              <TimelineRows blocks={blocks} actions={actions} />
+            </div>
           </ToolBodies.Provider>
         </RowState.Provider>
         {find.open && (

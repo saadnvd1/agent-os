@@ -34,12 +34,12 @@ export function UserMessage({
   return (
     <div className="group flex flex-col items-end gap-1">
       {item.from && (
-        <span className="label-mono text-muted-foreground">
+        <span data-copy-skip className="label-mono text-muted-foreground">
           from {item.from}
         </span>
       )}
       {item.images?.length ? (
-        <div className="flex flex-wrap justify-end gap-1.5">
+        <div data-copy-skip className="flex flex-wrap justify-end gap-1.5">
           {item.images.map((img, i) => (
             <ImageThumb
               key={i}
