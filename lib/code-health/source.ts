@@ -4,6 +4,7 @@
  */
 
 import ts from "typescript";
+import { redactSecrets } from "./secrets";
 
 export interface SourceFile {
   /** Repo-relative, forward slashes. */
@@ -45,9 +46,12 @@ export function walk(node: ts.Node, visit: (n: ts.Node) => void) {
   node.forEachChild((child) => walk(child, visit));
 }
 
-/** Source text, cut to one short line for a summary. */
+/**
+ * Source text, cut to one short line for a summary, with secrets redacted
+ * before the cut so one split at the edge still matches.
+ */
 export function snippet(text: string, max = 120): string {
-  const flat = text.replace(/\s+/g, " ").trim();
+  const flat = redactSecrets(text.replace(/\s+/g, " ").trim());
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 

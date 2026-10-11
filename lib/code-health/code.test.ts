@@ -141,6 +141,16 @@ describe("shellCalls", () => {
     expect(literal).toBe(2);
   });
 
+  it("redacts a secret inside a command's text", () => {
+    const token = "gh" + "p_" + "a1B2c3D4e5".repeat(4);
+    const { risky } = shellCalls([
+      f("lib/run.ts", `${cp}exec(\`curl -H "token ${token}" \${url}\`);`),
+    ]);
+    expect(risky).toHaveLength(1);
+    expect(risky[0].text).not.toContain(token);
+    expect(risky[0].text).toContain("ghp_…");
+  });
+
   it("only reads files that use child_process", () => {
     expect(shellCalls([f("lib/db.ts", "db.exec(`x ${y}`);")]).risky).toEqual(
       []

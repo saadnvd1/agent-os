@@ -57,6 +57,13 @@ export function redact(value: string): string {
   return `${value.slice(0, 4)}…${value.slice(-2)}`;
 }
 
+/** The same text with every secret shape and machine detail cut to its stub. */
+export function redactSecrets(text: string): string {
+  let out = text;
+  for (const { re } of [...PATTERNS, ...MACHINE]) out = out.replace(re, redact);
+  return out;
+}
+
 function scan(
   files: SourceFile[],
   patterns: { kind: string; re: RegExp }[]
