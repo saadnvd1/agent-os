@@ -12,6 +12,7 @@ import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
 import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
 import { stopChat } from "../chat/runner";
 import { run } from "./gh";
+import { gitFetch, gitPush } from "../git-exec";
 import {
   mergePolicy,
   type MergeMethod,
@@ -61,13 +62,11 @@ async function cleanup(
     !keepRemoteBranch &&
     !PROTECTED_BRANCHES.has(session.branch_name)
   ) {
-    await run(
-      "git",
-      ["push", "origin", "--delete", session.branch_name],
-      repo
-    ).catch(() => {});
+    await gitPush(repo, ["origin", "--delete", session.branch_name]).catch(
+      () => {}
+    );
   }
-  await run("git", ["fetch", "--prune", "--quiet"], repo).catch(() => {});
+  await gitFetch(repo, ["--prune", "--quiet"]).catch(() => {});
   forgetPR(session.id);
 }
 

@@ -6,10 +6,9 @@
  * nothing.
  */
 
-import { execFile } from "child_process";
-import { promisify } from "util";
 import { db } from "../db";
 import { createWorktree } from "../worktrees";
+import { git as runGit } from "../git-exec";
 import { setupWorktree } from "../env-setup";
 import {
   generateBranchName,
@@ -35,8 +34,6 @@ import {
   type SetupView,
 } from "./setup-progress";
 
-const execFileAsync = promisify(execFile);
-
 export interface WorktreeSetupInput {
   sessionId: string;
   projectPath: string;
@@ -50,7 +47,18 @@ export interface WorktreeSetupInput {
 }
 
 const git = (cwd: string, args: string[], timeout = 60_000) =>
-  execFileAsync("git", ["-C", cwd, ...args], { timeout });
+  runGit(cwd, args, { timeout });
+
+// git's own last line says it best ("not a git repository ..."), without
+// the "git fetch failed: " a GitError puts before a one-line stderr (or
+// createWorktree's "Failed to create worktree: " before that).
+const lastLine = (message: string) =>
+  (message.trim().split("\n").pop() ?? "")
+    .replace(
+      /^(?:Failed to create worktree: )?git [\w-]+(?: [\w-]+)? failed: /,
+      ""
+    )
+    .replace(/^fatal: /, "");
 
 // No remote: nothing to fetch. A fetch that fails fails the setup: a
 // worktree cut from an old base would start the agent on stale code.
@@ -64,9 +72,7 @@ async function fetchBase(view: SetupView, cwd: string, base: string) {
   try {
     await git(cwd, ["fetch", "origin", "--", base]);
   } catch (error) {
-    const why = (
-      (error as Error).message.trim().split("\n").pop() ?? ""
-    ).replace(/^fatal: /, "");
+    const why = lastLine((error as Error).message);
     throw new Error(`Fetching ${base} failed: ${why}`);
   }
 }
@@ -140,11 +146,9 @@ export async function setUpWorktree(input: WorktreeSetupInput): Promise<void> {
     // No worktree: the agent doesn't start. Its message stays queued, and
     // the session falls back to the project's folder if sent anyway.
     // git's own last line says it best ("not a git repository ...").
-    const message = (error instanceof Error ? error.message : String(error))
-      .trim()
-      .split("\n")
-      .pop()!
-      .replace(/^fatal: /, "");
+    const message = lastLine(
+      error instanceof Error ? error.message : String(error)
+    );
     db.prepare(`UPDATE sessions SET working_directory = ? WHERE id = ?`).run(
       projectPath,
       sessionId

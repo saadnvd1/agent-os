@@ -4,7 +4,7 @@
 
 import type { Session } from "../db";
 import type { TaskPR } from "../tasks";
-import { run } from "../tasks/gh";
+import { git, gitPush } from "../git-exec";
 import { projectPathFor } from "../tasks/session";
 import { PROTECTED_BRANCHES } from "../tasks/finish";
 import { liveChildren } from "../stacks/guard";
@@ -23,15 +23,14 @@ export async function deleteMergedRemote(
     liveChildren(s.id).length
   )
     return false;
-  const line = await run(
-    "git",
-    ["ls-remote", "--heads", "origin", `refs/heads/${branch}`],
+  const line = await git(
     repo,
-    30000
+    ["ls-remote", "--heads", "origin", `refs/heads/${branch}`],
+    { timeout: 30000 }
   ).catch(() => "");
   const tip = line.trim().split(/\s+/)[0];
   if (!tip || tip !== pr.head) return false;
-  return run("git", ["push", "origin", "--delete", branch], repo, 60000)
+  return gitPush(repo, ["origin", "--delete", branch], { timeout: 60000 })
     .then(() => true)
     .catch(() => false);
 }

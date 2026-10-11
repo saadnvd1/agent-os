@@ -9,7 +9,7 @@
 
 import fs from "fs";
 import type { ProjectConfig } from "../project-config";
-import { run } from "../tasks/gh";
+import { gitFetch, isAncestor } from "../git-exec";
 import { expandHome } from "../tasks/session";
 import { selfUrl } from "../agents/self-env";
 import { commitTime } from "../orchestrator/repo";
@@ -61,15 +61,11 @@ async function contains(
   sha: string
 ): Promise<boolean> {
   if (tip === sha) return true;
-  const ancestor = () =>
-    run("git", ["merge-base", "--is-ancestor", sha, tip], repo).then(
-      () => true,
-      () => false
-    );
+  const ancestor = () => isAncestor(repo, sha, tip);
   if (await ancestor()) return true;
   // The deployed commit may be newer than this checkout knows. A fetch that
   // fails throws, so stale refs never read as "not deployed".
-  await run("git", ["fetch", "--quiet", "origin"], repo);
+  await gitFetch(repo, ["--quiet", "origin"]);
   return ancestor();
 }
 

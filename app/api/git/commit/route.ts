@@ -45,7 +45,8 @@ export async function POST(request: NextRequest) {
 
     if (
       branchName &&
-      (typeof branchName !== "string" || !isValidBranchName(path, branchName))
+      (typeof branchName !== "string" ||
+        !(await isValidBranchName(path, branchName)))
     ) {
       return NextResponse.json(
         { error: "Invalid branch name" },
@@ -64,8 +65,8 @@ export async function POST(request: NextRequest) {
 
     // Create new branch if on main/master and branch name provided
     let newBranch = false;
-    if (branchName && isMainBranch(path)) {
-      createBranch(path, branchName);
+    if (branchName && (await isMainBranch(path))) {
+      await createBranch(path, branchName);
       newBranch = true;
     }
 

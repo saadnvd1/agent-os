@@ -31,8 +31,6 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
             prs.set(b, { ...pr, state: "MERGED" });
         return "";
       }
-      if (cmd === "git" && args[0] === "push" && args.includes("--delete"))
-        remoteDeletes.push(args.at(-1)!);
       if (cmd === "tmux") {
         await cleanupGate;
         throw new Error("no tmux in tests");
@@ -46,6 +44,17 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
     },
   };
 });
+vi.mock("@/lib/git-exec", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/git-exec")>();
+  return {
+    ...real,
+    gitPush: (...a: Parameters<typeof real.gitPush>) => {
+      if (a[1].includes("--delete")) remoteDeletes.push(a[1].at(-1)!);
+      return real.gitPush(...a);
+    },
+  };
+});
+
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
   statusDetector: {

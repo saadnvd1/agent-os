@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const commits = getCommitHistory(path, limit);
+    const commits = await getCommitHistory(path, limit);
     return NextResponse.json({ commits });
   } catch (error) {
     console.error("Error getting commit history:", error);

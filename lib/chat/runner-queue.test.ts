@@ -433,13 +433,11 @@ describe("a worker from an older build whose turn ends", () => {
 });
 
 describe("listFiles", () => {
-  for (const [cmd, args] of LISTERS)
-    it.skipIf(!has(cmd))(
-      `lists a folder with ${cmd}, leaving ignored files out`,
+  for (const lister of LISTERS)
+    it.skipIf(!has(lister.cmd))(
+      `lists a folder with ${lister.cmd}, leaving ignored files out`,
       async () => {
-        const all = (await listFiles(repo(), [[cmd, args]])).map(
-          (p) => p.file.path
-        );
+        const all = (await listFiles(repo(), [lister])).map((p) => p.file.path);
         expect(all).toEqual(
           expect.arrayContaining(["lib", "lib/queue.ts", "notes.md"])
         );

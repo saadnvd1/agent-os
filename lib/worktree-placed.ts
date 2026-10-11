@@ -12,12 +12,10 @@
  */
 
 import { createHash } from "crypto";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import fs from "fs";
 import path from "path";
+import { git } from "./git-exec";
 
-const execFileAsync = promisify(execFile);
 const MANIFEST = "agentos-placed.json";
 // A copied folder bigger than this isn't recorded, so it keeps blocking.
 const MAX_FILES = 2000;
@@ -27,13 +25,8 @@ export interface Placed {
   files: Record<string, { size: number; sha: string }>;
 }
 
-async function gitText(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
-    timeout: 30000,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  return stdout;
-}
+const gitText = (cwd: string, args: string[]) =>
+  git(cwd, args, { timeout: 30000 });
 
 const manifestPath = async (worktree: string) =>
   path.join(

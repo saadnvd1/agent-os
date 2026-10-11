@@ -1,98 +1,60 @@
 /**
- * Git utilities for worktree management
+ * Repository questions AgentOS asks: is this a repo, which branch is the
+ * default, which branches exist. Every git call goes through lib/git-exec.
  */
 
-import { execFile } from "child_process";
-import { promisify } from "util";
+import * as os from "os";
 import * as path from "path";
+import { currentBranch, git, gitOk, resolveRef } from "./git-exec";
 
-const execFileAsync = promisify(execFile);
+const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 
 /**
  * Check if a directory is a git repository
  */
 export async function isGitRepo(dirPath: string): Promise<boolean> {
-  try {
-    const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-    await execFileAsync("git", ["-C", resolvedPath, "rev-parse", "--git-dir"], {
-      timeout: 5000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return gitOk(expandHome(dirPath), ["rev-parse", "--git-dir"], {
+    timeout: 5000,
+  });
 }
 
 /**
- * Get the current branch name
+ * The checked-out branch, "HEAD" when detached.
  */
 export async function getCurrentBranch(dirPath: string): Promise<string> {
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  const { stdout } = await execFileAsync(
-    "git",
-    ["-C", resolvedPath, "rev-parse", "--abbrev-ref", "HEAD"],
-    { timeout: 5000 }
+  return (
+    (await currentBranch(expandHome(dirPath), { timeout: 5000 })) || "HEAD"
   );
-  return stdout.trim();
 }
 
 /**
- * Get the default branch (main or master)
+ * The default branch: the remote's, else main, else master, else the
+ * current one.
  */
 export async function getDefaultBranch(dirPath: string): Promise<string> {
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  try {
-    // Try to get the default branch from remote
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", resolvedPath, "symbolic-ref", "refs/remotes/origin/HEAD"],
-      { timeout: 5000 }
-    );
-    const name = stdout.trim().replace(/^refs\/remotes\/origin\//, "");
-    // The remote picks this name: anything that isn't a plain branch name
-    // (a "$(...)" a hostile repo could set) is ignored.
-    if (name && isBranchName(name)) {
-      return name;
-    }
-  } catch {
-    // Ignore
-  }
-
-  // Fallback: check if main or master exists
-  try {
-    await execFileAsync(
-      "git",
-      ["-C", resolvedPath, "rev-parse", "--verify", "main"],
-      {
-        timeout: 5000,
-      }
-    );
-    return "main";
-  } catch {
-    try {
-      await execFileAsync(
-        "git",
-        ["-C", resolvedPath, "rev-parse", "--verify", "master"],
-        {
-          timeout: 5000,
-        }
-      );
-      return "master";
-    } catch {
-      // Return current branch as fallback
-      return getCurrentBranch(resolvedPath);
-    }
-  }
+  const dir = expandHome(dirPath);
+  const opts = { timeout: 5000 };
+  const remote = await git(
+    dir,
+    ["symbolic-ref", "refs/remotes/origin/HEAD"],
+    opts
+  ).catch(() => "");
+  const name = remote.trim().replace(/^refs\/remotes\/origin\//, "");
+  // The remote picks this name: anything that isn't a plain branch name
+  // (a "$(...)" a hostile repo could set) is ignored.
+  if (name && isBranchName(name)) return name;
+  if (await resolveRef(dir, "main", opts)) return "main";
+  if (await resolveRef(dir, "master", opts)) return "master";
+  return getCurrentBranch(dir);
 }
 
 /**
  * Get list of local branches
  */
 export async function getBranches(dirPath: string): Promise<string[]> {
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  const { stdout } = await execFileAsync(
-    "git",
-    ["-C", resolvedPath, "branch", "--format=%(refname:short)"],
+  const stdout = await git(
+    expandHome(dirPath),
+    ["branch", "--format=%(refname:short)"],
     { timeout: 5000 }
   );
   return stdout
@@ -108,32 +70,18 @@ export async function branchExists(
   dirPath: string,
   branchName: string
 ): Promise<boolean> {
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  try {
-    await execFileAsync(
-      "git",
-      [
-        "-C",
-        resolvedPath,
-        "rev-parse",
-        "--verify",
-        "--end-of-options",
-        branchName,
-      ],
-      { timeout: 5000 }
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  return gitOk(
+    expandHome(dirPath),
+    ["rev-parse", "--verify", "--end-of-options", branchName],
+    { timeout: 5000 }
+  );
 }
 
 /**
  * Get the repository name from path
  */
 export function getRepoName(dirPath: string): string {
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  return path.basename(resolvedPath);
+  return path.basename(expandHome(dirPath));
 }
 
 /**
@@ -169,11 +117,10 @@ export async function remoteBranchExists(
   dirPath: string,
   branchName: string
 ): Promise<boolean> {
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
   try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", resolvedPath, "ls-remote", "--heads", "origin", "--", branchName],
+    const stdout = await git(
+      expandHome(dirPath),
+      ["ls-remote", "--heads", "origin", "--", branchName],
       { timeout: 10000 }
     );
     return stdout.trim().length > 0;
@@ -194,72 +141,9 @@ export async function renameBranch(
 ): Promise<void> {
   if (await remoteBranchExists(dirPath, oldBranchName))
     throw new Error(`${oldBranchName} is on the remote; keeping its name`);
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-  await execFileAsync(
-    "git",
-    ["-C", resolvedPath, "branch", "-m", "--", oldBranchName, newBranchName],
+  await git(
+    expandHome(dirPath),
+    ["branch", "-m", "--", oldBranchName, newBranchName],
     { timeout: 10000 }
   );
-}
-
-/**
- * Get git status summary (files changed, ahead/behind)
- */
-export async function getGitStatus(dirPath: string): Promise<{
-  staged: number;
-  unstaged: number;
-  untracked: number;
-  ahead: number;
-  behind: number;
-}> {
-  const resolvedPath = dirPath.replace(/^~/, process.env.HOME || "");
-
-  // Get file counts
-  const { stdout: statusOutput } = await execFileAsync(
-    "git",
-    ["-C", resolvedPath, "status", "--porcelain"],
-    { timeout: 5000 }
-  );
-
-  const lines = statusOutput.trim().split("\n").filter(Boolean);
-  let staged = 0;
-  let unstaged = 0;
-  let untracked = 0;
-
-  for (const line of lines) {
-    const index = line[0];
-    const worktree = line[1];
-    if (index === "?" && worktree === "?") {
-      untracked++;
-    } else {
-      if (index !== " " && index !== "?") staged++;
-      if (worktree !== " " && worktree !== "?") unstaged++;
-    }
-  }
-
-  // Get ahead/behind counts
-  let ahead = 0;
-  let behind = 0;
-  try {
-    // No upstream throws, and counts as level.
-    const { stdout: aheadBehind } = await execFileAsync(
-      "git",
-      [
-        "-C",
-        resolvedPath,
-        "rev-list",
-        "--left-right",
-        "--count",
-        "HEAD...@{upstream}",
-      ],
-      { timeout: 5000 }
-    );
-    const [a, b] = aheadBehind.trim().split(/\s+/);
-    ahead = parseInt(a, 10) || 0;
-    behind = parseInt(b, 10) || 0;
-  } catch {
-    // No upstream, ignore
-  }
-
-  return { staged, unstaged, untracked, ahead, behind };
 }

@@ -23,6 +23,7 @@ import { notifyPhone } from "../notify";
 import { getProject } from "../projects";
 import { loadProjectConfig } from "../project-config";
 import { run } from "../tasks/gh";
+import { git } from "../git-exec";
 import { expandHome } from "../tasks/session";
 import { auditId, auditsRoot, writeAtomic } from "../session-audit/store";
 import {
@@ -199,11 +200,11 @@ async function dirtySessions(ids: string[]): Promise<Set<string>> {
         // A linked machine's worktree isn't on this disk.
         if (!s || (s.host_id && s.host_id !== "local")) return;
         const dir = expandHome(s.worktree_path || s.working_directory);
-        const out = await run(
-          "git",
-          ["status", "--porcelain", "--untracked-files=normal"],
-          dir
-        ).catch(() => "");
+        const out = await git(dir, [
+          "status",
+          "--porcelain",
+          "--untracked-files=normal",
+        ]).catch(() => "");
         if (out.trim()) dirty.add(id);
       })
     );

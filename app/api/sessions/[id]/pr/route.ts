@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { getDb, queries, type Session } from "@/lib/db";
+import { gitPush } from "@/lib/git-exec";
 
 const execFileAsync = promisify(execFile);
 
@@ -69,8 +70,7 @@ async function createPR(
 ): Promise<PRInfo> {
   // First push the branch if not already pushed
   try {
-    await execFileAsync("git", ["push", "-u", "origin", "--", branchName], {
-      cwd: projectPath,
+    await gitPush(projectPath, ["-u", "origin", "--", branchName], {
       timeout: 30000,
     });
   } catch {

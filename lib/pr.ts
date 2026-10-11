@@ -1,25 +1,7 @@
-import { execFileSync } from "child_process";
+import { getDefaultBranch } from "./git";
+import { currentBranch, git, gitPush, mergeBase } from "./git-exec";
 import { run } from "./tasks/gh";
 import { GhBackoffError, isRateLimit } from "./tasks/gh-limit";
-
-/** The remote's default branch, or "main" when it has none. */
-export function remoteDefaultBranch(workingDir: string): string {
-  try {
-    return execFileSync(
-      "git",
-      ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-      {
-        cwd: workingDir,
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "ignore"],
-      }
-    )
-      .trim()
-      .replace(/^origin\//, "");
-  } catch {
-    return "main";
-  }
-}
 
 export interface PRInfo {
   number: number;
@@ -62,26 +44,20 @@ export async function getCommitsSinceBase(
     // Get the merge base
     // Names come from the repository (its remote's default branch): they
     // are arguments, never shell text or options.
-    const mergeBase = (
-      await run(
-        "git",
-        ["merge-base", "--end-of-options", baseBranch, "HEAD"],
-        workingDir,
-        10_000
-      )
-    ).trim();
+    const base = await mergeBase(workingDir, baseBranch, "HEAD", {
+      timeout: 10_000,
+    });
 
     // Get commits since merge base
-    const output = await run(
-      "git",
+    const output = await git(
+      workingDir,
       [
         "log",
-        `${mergeBase}..HEAD`,
+        `${base}..HEAD`,
         "--format=COMMIT_START%n%H%n%s%n%b%nCOMMIT_END",
         "--",
       ],
-      workingDir,
-      10_000
+      { timeout: 10_000 }
     );
 
     const commits: CommitInfo[] = [];
@@ -214,12 +190,9 @@ export async function createPR(
 ): Promise<PRInfo> {
   // First ensure branch is pushed
   try {
-    await run(
-      "git",
-      ["push", "-u", "origin", "--", branchName],
-      workingDir,
-      30_000
-    );
+    await gitPush(workingDir, ["-u", "origin", "--", branchName], {
+      timeout: 30_000,
+    });
   } catch {
     // Branch might already be pushed
   }
@@ -251,27 +224,13 @@ export async function createPR(
 }
 
 /**
- * Get current branch name
+ * Get current branch name, "" when HEAD is detached.
  */
 export async function getCurrentBranch(workingDir: string): Promise<string> {
-  return (
-    await run("git", ["branch", "--show-current"], workingDir, 10_000)
-  ).trim();
+  return currentBranch(workingDir, { timeout: 10_000 });
 }
 
 /**
- * Get the default base branch: the remote's, or "main" when it has none.
+ * The PR's default base: the repository's default branch.
  */
-export async function getBaseBranch(workingDir: string): Promise<string> {
-  try {
-    const ref = await run(
-      "git",
-      ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-      workingDir,
-      10_000
-    );
-    return ref.trim().replace(/^origin\//, "");
-  } catch {
-    return "main";
-  }
-}
+export const getBaseBranch = getDefaultBranch;

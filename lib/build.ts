@@ -3,20 +3,16 @@
 // A worker whose build isn't the server's is running code from before a
 // redeploy.
 
-import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import type { ChatState } from "./chat/events";
+import { gitSync } from "./git-exec";
 
 export function buildId(): string {
   if (process.env.AGENTOS_BUILD) return process.env.AGENTOS_BUILD;
   let id = "";
   try {
-    id = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    id = gitSync(process.cwd(), ["rev-parse", "HEAD"]).trim();
   } catch {}
   if (!id) {
     try {

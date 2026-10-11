@@ -7,7 +7,6 @@ import {
   branchExists,
   getBranches,
   getDefaultBranch,
-  getGitStatus,
   remoteBranchExists,
 } from "./git";
 
@@ -119,17 +118,5 @@ describe("git reads run without a shell", () => {
     expect(await remoteBranchExists(dir, "main")).toBe(true);
     expect(await remoteBranchExists(dir, "other")).toBe(false);
     expect(await remoteBranchExists(dir, "--upload-pack=x")).toBe(false);
-  });
-
-  it("counts changes, with no upstream as level", async () => {
-    const dir = repo();
-    fs.writeFileSync(path.join(dir, "new.txt"), "x");
-    expect(await getGitStatus(dir)).toEqual({
-      staged: 0,
-      unstaged: 0,
-      untracked: 1,
-      ahead: 0,
-      behind: 0,
-    });
   });
 });

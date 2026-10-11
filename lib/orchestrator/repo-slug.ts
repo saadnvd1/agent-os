@@ -4,7 +4,7 @@
 // of its projects'.
 
 import type { Project } from "../db";
-import { run } from "../tasks/gh";
+import { git } from "../git-exec";
 import { expandHome } from "../tasks/session";
 import { workspaceProjects } from "./brief";
 
@@ -24,12 +24,9 @@ const slugs = new Map<string, { at: number; slug: string | null }>();
 export async function repoSlug(dir: string): Promise<string | null> {
   const hit = slugs.get(dir);
   if (hit && Date.now() - hit.at < SLUG_TTL_MS) return hit.slug;
-  const url = await run(
-    "git",
-    ["config", "--get", "remote.origin.url"],
-    dir,
-    10000
-  ).catch(() => "");
+  const url = await git(dir, ["config", "--get", "remote.origin.url"], {
+    timeout: 10000,
+  }).catch(() => "");
   const slug = slugOfRemote(url);
   slugs.set(dir, { at: Date.now(), slug });
   return slug;

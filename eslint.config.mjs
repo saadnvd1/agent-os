@@ -8,6 +8,33 @@ const SYNC_CALL =
 const SYNC_MESSAGE =
   "Blocks the event loop for every client: use the async form (fs/promises, promisified execFile, spawn) with a timeout.";
 
+// git spawned anywhere but lib/git-exec.ts: each copy drifts in its timeout,
+// environment (a prompt that hangs, the server's TMUX) and error shape.
+const GIT_MESSAGE =
+  "Run git through lib/git-exec (git(), gitResult(), gitOk() or a named operation): one timeout, environment and error type.";
+const GIT_SPAWN = [
+  {
+    // execFile("git", …), spawn("git", …), run("git", …). An injected
+    // runner (deps.runner) defaults to run(), which routes git to the helper.
+    selector:
+      'CallExpression[arguments.0.value="git"]:not([callee.property.name="runner"])',
+    message: GIT_MESSAGE,
+  },
+  {
+    // exec("git …") through a shell.
+    selector:
+      "CallExpression[callee.name=/^(exec|execSync|execAsync)$/][arguments.0.value=/^\\s*git\\s/]",
+    message: GIT_MESSAGE,
+  },
+  {
+    selector:
+      "CallExpression[callee.name=/^(exec|execSync|execAsync)$/] > TemplateLiteral.arguments:first-child[quasis.0.value.raw=/^\\s*git\\s/]",
+    message: GIT_MESSAGE,
+  },
+];
+const SERVER_CODE = ["lib/**/*.ts", "app/**/*.ts", "server.ts", "mcp/**/*.ts"];
+const NOT_GIT_HELPER = ["lib/git-exec.ts", "**/*.test.ts"];
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -49,6 +76,11 @@ export default defineConfig([
     },
   },
   {
+    files: SERVER_CODE,
+    ignores: NOT_GIT_HELPER,
+    rules: { "no-restricted-syntax": ["error", ...GIT_SPAWN] },
+  },
+  {
     // A synchronous child process or file call in a route handler stalls the
     // whole server (every terminal, chat stream and request) until it ends.
     files: ["app/api/**/*.ts"],
@@ -64,6 +96,9 @@ export default defineConfig([
           selector: `CallExpression > MemberExpression.callee[property.name=${SYNC_CALL}]`,
           message: SYNC_MESSAGE,
         },
+        // This block's rule replaces the one above for app/api, so it
+        // carries the git rule too.
+        ...GIT_SPAWN,
       ],
     },
   },

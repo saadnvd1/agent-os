@@ -3,7 +3,8 @@ import os from "os";
 import { db, queries, type Session } from "../db";
 import { isBranchName } from "../git";
 import { getProject } from "../projects";
-import { findPRStrict, run } from "./gh";
+import { findPRStrict } from "./gh";
+import { currentBranch, git } from "../git-exec";
 import { lookupPR } from "./pr-poll";
 import type { TaskPR } from "./state";
 
@@ -43,15 +44,14 @@ async function worktreeBranch(session: Session): Promise<string | null> {
   const dir = localWorktree(session);
   if (!dir) return null;
   try {
-    const out = await run("git", ["branch", "--show-current"], dir, 5000);
-    return out.trim() || null;
+    return (await currentBranch(dir, { timeout: 5000 })) || null;
   } catch {
     return null;
   }
 }
 
 const hasRef = (dir: string, ref: string) =>
-  run("git", ["rev-parse", "--verify", "--quiet", ref], dir, 5000).then(
+  git(dir, ["rev-parse", "--verify", "--quiet", ref], { timeout: 5000 }).then(
     () => true,
     // Exit 1 is "no such branch"; a timeout or a lock isn't an answer.
     (e: { code?: unknown }) => e?.code !== 1
@@ -94,7 +94,7 @@ function moveBranch(session: Session, branch: string): void {
 
 // git merge-base --is-ancestor: exit 0 yes, 1 no, anything else can't say.
 const isAncestor = (dir: string, sha: string, ref: string) =>
-  run("git", ["merge-base", "--is-ancestor", sha, ref], dir, 5000).then(
+  git(dir, ["merge-base", "--is-ancestor", sha, ref], { timeout: 5000 }).then(
     () => true as const,
     (e: { code?: unknown }) => (e?.code === 1 ? (false as const) : null)
   );

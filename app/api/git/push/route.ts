@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if remote exists
-    const remoteUrl = getRemoteUrl(path);
+    const remoteUrl = await getRemoteUrl(path);
     if (!remoteUrl) {
       return NextResponse.json(
         { error: "No remote origin configured" },
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Push (set upstream if needed)
-    const needsUpstream = !hasUpstream(path);
+    const needsUpstream = !(await hasUpstream(path));
     const output = await push(path, needsUpstream);
 
     forgetGitStatus(path);

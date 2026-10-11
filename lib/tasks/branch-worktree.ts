@@ -8,10 +8,11 @@ import fs from "fs";
 import path from "path";
 import { getRepoName, slugify } from "../git";
 import { WORKTREES_DIR } from "../worktrees";
-import { run } from "./gh";
+import { git as runGit } from "../git-exec";
 import { pushedRef } from "./move";
 
-const git = (cwd: string, ...args: string[]) => run("git", args, cwd, 120000);
+const git = (cwd: string, ...args: string[]) =>
+  runGit(cwd, args, { timeout: 120000 });
 
 /** The worktree that has this branch checked out, if one does. */
 export function worktreeOnBranch(
