@@ -154,8 +154,14 @@ describe("isUnread", () => {
     expect(isUnread(chat.session, "idle")).toBe(true);
     expect(isUnread(chat.session, "running")).toBe(false);
 
-    // An event after it doesn't hide the reply, nor bring it back once seen.
+    // Events after it don't hide the reply, nor bring it back once seen.
     chat.user(event);
+    chat.end();
+    chat.user({ from: "agentos" });
+    chat.user({
+      text: '[AgentOS message from "poise-task" (abc-123)] done',
+      tagged: undefined,
+    });
     chat.end();
     expect(isUnread(chat.session, "idle")).toBe(true);
     expect(isUnread({ ...chat.session, last_seen_at: replied }, "idle")).toBe(
