@@ -40,6 +40,9 @@ const ONCE = "once:";
 export const answerKey = (askId: number) => `ask:${askId}`;
 export const isAnswer = (e: Pick<EventRow, "key">) =>
   e.key.startsWith(`${ONCE}ask:`);
+// Away mode's own one-off lines (lib/away/run) all start "away".
+export const isAwayEvent = (e: Pick<EventRow, "key">) =>
+  e.key.startsWith(`${ONCE}away`);
 
 const iso = (ms: number) => new Date(ms).toISOString();
 

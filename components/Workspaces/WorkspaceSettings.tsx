@@ -6,6 +6,7 @@ import { TaskLimitForm } from "./TaskLimitForm";
 import { RulesForm } from "./RulesForm";
 import { FreshStartForm } from "./FreshStartForm";
 import { WorkspaceModelsForm } from "./WorkspaceModelsForm";
+import { AwayWindowForm } from "@/components/Away/AwayWindowForm";
 
 // Settings > Workspaces: each workspace's own settings.
 export function WorkspaceSettings() {
@@ -52,6 +53,7 @@ export function WorkspaceSettings() {
         </section>
       ))}
       <FreshStartForm />
+      <AwayWindowForm />
     </div>
   );
 }

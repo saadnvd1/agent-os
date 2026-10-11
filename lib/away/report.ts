@@ -87,19 +87,22 @@ export function inFlightWhy(t: {
   checks: CheckRow[];
   failures: FailureRow[];
   askKinds: string[];
-  nudges: number;
+  // Times the sweep listed it for its orchestrator this period.
+  flagged: number;
 }): string {
   const escalated = t.failures.filter((f) => f.escalated_at);
   if (escalated.length)
     return `with you: the ${escalated.map((f) => f.gate).join(" and ")} gate failed twice`;
   if (t.askKinds.length) return `waiting on your answer (${t.askKinds[0]})`;
-  const nudged = t.nudges ? `; nudged ${t.nudges}x while you were away` : "";
-  if (!t.prNumber) return `no PR yet${nudged}`;
+  const flagged = t.flagged
+    ? `; flagged to the orchestrator ${t.flagged}x while you were away`
+    : "";
+  if (!t.prNumber) return `no PR yet${flagged}`;
   const of = (kind: string) => t.checks.find((c) => c.kind === kind);
   const review = of("review");
   const ci = of("ci");
   if (ci && ci.status !== "pass" && ci.status !== "running")
-    return `CI failing at ${sha7(ci.sha)}${nudged}`;
+    return `CI failing at ${sha7(ci.sha)}${flagged}`;
   if (review?.status === "block")
     return `review found blocking issues at ${sha7(review.sha)}`;
   const failed = t.failures.filter((f) => f.count > 0);
@@ -112,6 +115,9 @@ export function inFlightWhy(t: {
   if (t.armed) return "armed to merge, waiting on its gates";
   return "PR open and reviewed, waiting on sign-off";
 }
+
+// What the sweep did to a task (./run), not just saw.
+const TOUCHED = "'stalled', 'commit', 'review'";
 
 interface TaskRow {
   id: string;
@@ -165,6 +171,8 @@ function merged(
   });
 }
 
+// Running tasks the sweep touched: listed for the orchestrator, or their
+// review run again. Ones it left alone aren't counted.
 function inFlight(workspaceId: string, awayId: number): InFlightItem[] {
   const tasks = db
     .prepare(
@@ -173,16 +181,18 @@ function inFlight(workspaceId: string, awayId: number): InFlightItem[] {
        FROM sessions s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
+         AND EXISTS (SELECT 1 FROM away_actions a WHERE a.away_id = ?
+           AND a.subject = s.id AND a.kind IN (${TOUCHED}))
        ORDER BY s.created_at, s.id`
     )
-    .all(workspaceId) as TaskRow[];
+    .all(workspaceId, awayId) as TaskRow[];
   if (!tasks.length) return [];
   const checks = checksBySession(workspaceId);
   const failures = failuresBySession(workspaceId);
   const asks = openAsks(workspaceId);
-  const nudges = db.prepare(
+  const flagged = db.prepare(
     `SELECT COUNT(*) AS n FROM away_actions
-     WHERE away_id = ? AND subject = ? AND kind = 'nudge'`
+     WHERE away_id = ? AND subject = ? AND kind IN ('stalled', 'commit')`
   );
   return tasks.map((t) => ({
     task: t.name,
@@ -197,7 +207,7 @@ function inFlight(workspaceId: string, awayId: number): InFlightItem[] {
       askKinds: asks
         .filter((a) => a.subject === `task:${t.id}`)
         .map((a) => a.kind),
-      nudges: (nudges.get(awayId, t.id) as { n: number }).n,
+      flagged: (flagged.get(awayId, t.id) as { n: number }).n,
     }),
   }));
 }
@@ -261,12 +271,16 @@ function waiting(workspaceId: string): WaitingItem[] {
   }));
 }
 
+// Only the workspaces Away mode reached (`reached`, whose orchestrator was
+// active and told); the rest were left alone.
 export function buildAwayReport(
   away: AwayRow,
-  deployConfigured: (projectId: string) => boolean
+  deployConfigured: (projectId: string) => boolean,
+  reached: ReadonlySet<string>
 ): AwayReport {
   const end = away.ended_at ?? away.started_at;
   const workspaces = listWorkspaces()
+    .filter((w) => reached.has(w.id))
     .map((w) => ({
       id: w.id,
       name: w.name,

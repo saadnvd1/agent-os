@@ -1174,23 +1174,29 @@ reset` yourself in a terminal on the machine: it refuses inside an
   sidebar header or ⌘K ("Away for 4 hours"), for 1 hour, 4 hours, until
   morning (8 AM) or until you're back. It's kept in `away_periods` (who set
   it, when, when it ends), the cup turns amber while it's on (with an amber dot on the phone's menu button), and it
-  ends on its own at its time. Every orchestrator gets an event, and a line
+  ends on its own at its time. It works only through orchestrators that
+  had a real turn (yours or theirs, not an AgentOS event or a status poll)
+  in the last hour, set in Settings → Workspaces → Away mode; the rest
+  aren't told or woken. Each active orchestrator gets an event, and a line
   leading its digest, saying you're away and to follow work through rather
   than only react. Every 10 minutes a sweep, written as code with no model
-  scanning, acts on what it finds and logs each step in the orchestrator's
-  chat: a task quiet 30 minutes with no PR (or failing CI) is nudged, at most
-  twice; an idle task with uncommitted work and no PR is asked to commit and
-  open one or say why not; a PR green and settled whose review never started
-  or was lost has it run again (once seen on two sweeps, so the orchestrator
-  had its turn); and after each merge, the project's `deploy` check says
-  whether it went live and the server came back, with a failure sent to the
-  orchestrator as an event. Interactive sessions are yours: one with
-  uncommitted work is asked once to wrap up, and nothing more. Paused
+  scanning, runs a review again when a PR is green and settled but its
+  review never started or was lost (once seen on two sweeps, so the
+  orchestrator had its turn), checks after each merge whether the project's
+  `deploy` went live and the server came back, and sends the orchestrator
+  one digest of what's new: tasks quiet 30 minutes with no PR (or failing
+  CI), idle tasks with uncommitted work and no PR, and your own sessions
+  idle with uncommitted work. Only sessions with a real turn inside the
+  window are listed, never stopped, finished or archived ones, and nothing
+  goes out when nothing changed. The sweep messages no session itself: the
+  orchestrator decides what needs work, and asks one of your sessions at
+  most once to wrap up. Away's own messages don't count as activity. Paused
   workspaces aren't swept. Hard lines still become asks, and while you're
   away the asks raised, failed deploys and any `aos notify` an orchestrator
   sends reach your phone as one message per sweep. Turning it off (or its running out) builds "While you were
-  away" from the database: what merged and deployed with PR links, what's
-  still in flight and which gate or blocker holds it, what failed, was dropped
+  away" from the database, for the workspaces Away reached: what merged and
+  deployed with PR links, what the sweep flagged that's still in flight and
+  which gate or blocker holds it, what failed, was dropped
   or was escalated, and what waits on you (an explicit "none"). It opens on
   whichever device is open until you dismiss it, a short summary goes to
   your phone, and the report stays in Settings → Audits (`away/`).

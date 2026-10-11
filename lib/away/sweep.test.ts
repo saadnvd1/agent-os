@@ -3,7 +3,6 @@ import { NOW, facts, pr, withTask } from "../orchestrator/fixtures";
 import type { SessionFacts } from "../orchestrator/facts";
 import {
   IDLE_DIRTY_MS,
-  MAX_NUDGES,
   STALE_REVIEW_MS,
   STALL_MS,
   needsGitCheck,
@@ -13,19 +12,28 @@ import {
   type SweepView,
 } from "./sweep";
 
+const WINDOW = 60 * 60 * 1000;
+
+// Each session's real turn is its lastActive unless a test says otherwise;
+// every interactive session's agent is up.
 const view = (
   list: SessionFacts[],
   over: Partial<SweepView> = {}
 ): SweepView => ({
   now: NOW,
   facts: list,
+  turns: new Map(list.map((f) => [f.id, f.lastActive])),
+  windowMs: WINDOW,
+  live: new Set(list.filter((f) => !f.task).map((f) => f.id)),
   dirty: new Set(),
   reviewOf: () => null,
   held: new Set(),
   acted: new Set(),
-  nudges: new Map(),
   ...over,
 });
+
+const gitView = (list: SessionFacts[], over: Partial<SweepView> = {}) =>
+  view(list, over);
 
 const quiet = (ms: number) => NOW - ms;
 
@@ -43,21 +51,22 @@ const idleTask = (
   });
 
 const kinds = (v: SweepView) =>
-  pickCandidates(v).act.map((c) => `${c.kind}:${c.sessionId}`);
+  pickCandidates(v).flags.map((c) => `${c.kind}:${c.sessionId}`);
 
 describe("the away sweep's stalled tasks", () => {
-  it("nudges a task quiet past the stall time with no PR, and not one that's younger", () => {
+  it("lists a task quiet past the stall time with no PR, and not one that's younger", () => {
     const v = view([
       idleTask("old", STALL_MS + 60_000),
       idleTask("young", STALL_MS - 60_000),
     ]);
-    const { act } = pickCandidates(v);
-    expect(act.map((c) => `${c.kind}:${c.sessionId}`)).toEqual(["nudge:old"]);
-    expect(act[0].message).toContain("31 minutes");
-    expect(act[0].message).toContain("BLOCKED:");
+    const { flags } = pickCandidates(v);
+    expect(flags.map((c) => `${c.kind}:${c.sessionId}`)).toEqual([
+      "stalled:old",
+    ]);
+    expect(flags[0].line).toContain("no activity for 31m, no PR yet");
   });
 
-  it("nudges a quiet task whose CI is failing, and says so", () => {
+  it("lists a quiet task whose CI is failing, and says so", () => {
     const f = idleTask("ci", STALL_MS, {
       task: {
         state: "checks-failing",
@@ -65,9 +74,9 @@ describe("the away sweep's stalled tasks", () => {
         blocked: null,
       },
     });
-    const [c] = pickCandidates(view([f])).act;
-    expect(c.kind).toBe("nudge");
-    expect(c.message).toContain("CI is failing on PR #7");
+    const [c] = pickCandidates(view([f])).flags;
+    expect(c.kind).toBe("stalled");
+    expect(c.line).toContain("CI failing on PR #7");
   });
 
   it("leaves a task whose PR waits on CI or review alone, however quiet", () => {
@@ -97,35 +106,66 @@ describe("the away sweep's stalled tasks", () => {
     expect(kinds(view(list, { held: new Set(["held"]) }))).toEqual([]);
   });
 
-  it("nudges once per quiet spell, and at most MAX_NUDGES times a period", () => {
+  it("lists a task once per quiet spell", () => {
     const f = idleTask("t", STALL_MS);
-    const { act } = pickCandidates(view([f]));
-    // The same spell again: already acted on.
-    expect(kinds(view([f], { acted: new Set([act[0].key]) }))).toEqual([]);
-    // It moved and went quiet again: a new spell, nudged again.
+    const { flags } = pickCandidates(view([f]));
+    // The same spell again: already listed.
+    expect(kinds(view([f], { acted: new Set([flags[0].key]) }))).toEqual([]);
+    // It moved and went quiet again: a new spell, listed again.
     const later = idleTask("t", STALL_MS + 1);
-    expect(kinds(view([later], { acted: new Set([act[0].key]) }))).toEqual([
-      "nudge:t",
+    expect(kinds(view([later], { acted: new Set([flags[0].key]) }))).toEqual([
+      "stalled:t",
     ]);
-    expect(
-      kinds(view([later], { nudges: new Map([["t", MAX_NUDGES]]) }))
-    ).toEqual([]);
+  });
+});
+
+describe("the away window", () => {
+  it("never lists a session whose last real turn is older than the window", () => {
+    const old = idleTask("old", WINDOW + 60_000);
+    const mine = facts("mine", {
+      task: null,
+      status: "idle",
+      lastActive: quiet(WINDOW + 60_000),
+    });
+    const v = view([old, mine], { dirty: new Set(["old", "mine"]) });
+    expect(kinds(v)).toEqual([]);
+    expect(needsGitCheck(v)).toEqual([]);
+  });
+
+  it("goes by the real turn, not a status poll's bump of lastActive", () => {
+    // Polled a minute ago, last worked two hours ago.
+    const f = idleTask("polled", 60_000);
+    const v = view([f], {
+      turns: new Map([["polled", quiet(2 * WINDOW)]]),
+      dirty: new Set(["polled"]),
+    });
+    expect(kinds(v)).toEqual([]);
+  });
+
+  it("follows the configured window", () => {
+    const f = idleTask("t", 90 * 60_000);
+    expect(kinds(view([f]))).toEqual([]);
+    expect(kinds(view([f], { windowMs: 2 * WINDOW }))).toEqual(["stalled:t"]);
+  });
+
+  it("treats a session with no turn at all as left alone", () => {
+    const f = idleTask("never", STALL_MS);
+    expect(kinds(view([f], { turns: new Map() }))).toEqual([]);
   });
 });
 
 describe("the away sweep's uncommitted work", () => {
-  it("asks an idle task with uncommitted work and no PR to commit and open one", () => {
+  it("lists an idle task with uncommitted work and no PR", () => {
     const f = idleTask("dirty", IDLE_DIRTY_MS);
-    const { act } = pickCandidates(view([f], { dirty: new Set(["dirty"]) }));
-    expect(act.map((c) => c.kind)).toEqual(["commit"]);
-    expect(act[0].message).toMatch(/Commit it and open a pull request/);
-    expect(act[0].message).toMatch(/why not/);
+    const { flags } = pickCandidates(view([f], { dirty: new Set(["dirty"]) }));
+    expect(flags.map((c) => c.kind)).toEqual(["commit"]);
+    expect(flags[0].line).toMatch(/uncommitted work and no PR/);
   });
 
-  it("asks only once for the same idle spell", () => {
+  it("lists it only once for the same idle spell", () => {
     const f = idleTask("dirty", IDLE_DIRTY_MS);
     const v = view([f], { dirty: new Set(["dirty"]) });
-    const [c] = pickCandidates(v).act;
+    const [c] = pickCandidates(v).flags;
     expect(
       kinds({ ...v, acted: new Set([c.key]) }).filter((k) =>
         k.startsWith("commit")
@@ -147,8 +187,12 @@ describe("the away sweep's uncommitted work", () => {
         lastActive: quiet(IDLE_DIRTY_MS),
       }),
     ];
-    expect(needsGitCheck(list, NOW, new Set())).toEqual(["yes", "mine"]);
-    expect(needsGitCheck(list, NOW, new Set(["wrapup:mine"]))).toEqual(["yes"]);
+    expect(needsGitCheck(gitView(list))).toEqual(["yes", "mine"]);
+    expect(
+      needsGitCheck(gitView(list, { acted: new Set(["wrapup:mine"]) }))
+    ).toEqual(["yes"]);
+    // An interactive session whose agent isn't up is never read.
+    expect(needsGitCheck(gitView(list, { live: new Set() }))).toEqual(["yes"]);
   });
 });
 
@@ -157,17 +201,24 @@ describe("the away sweep and Saad's own sessions", () => {
     facts("mine", {
       task: null,
       status: "idle",
-      lastActive: quiet(STALL_MS * 4),
+      lastActive: quiet(STALL_MS + 60_000),
       ...over,
     });
 
-  it("only asks an interactive session to wrap up, once a period, and never nudges it", () => {
+  it("lists a recent interactive session with uncommitted work once a period, and nothing else", () => {
     const v = view([mine()], { dirty: new Set(["mine"]) });
-    const { act } = pickCandidates(v);
-    expect(act.map((c) => c.kind)).toEqual(["wrapup"]);
-    expect(act[0].message).toMatch(/Wrap up/);
-    expect(act[0].message).toMatch(/don't start anything new/);
-    expect(kinds({ ...v, acted: new Set([act[0].key]) })).toEqual([]);
+    const { flags } = pickCandidates(v);
+    expect(flags.map((c) => c.kind)).toEqual(["wrapup"]);
+    expect(flags[0].line).toMatch(/Saad's own session/);
+    expect(kinds({ ...v, acted: new Set([flags[0].key]) })).toEqual([]);
+  });
+
+  it("skips an interactive session that's stopped or whose agent isn't up", () => {
+    const dirty = new Set(["mine"]);
+    expect(
+      kinds(view([mine({ status: "dead" })], { dirty, live: new Set() }))
+    ).toEqual([]);
+    expect(kinds(view([mine()], { dirty, live: new Set() }))).toEqual([]);
   });
 
   it("leaves a clean or busy interactive session alone", () => {
@@ -177,6 +228,9 @@ describe("the away sweep and Saad's own sessions", () => {
     ).toEqual([]);
   });
 });
+
+const reviewKinds = (v: SweepView) =>
+  pickCandidates(v).reviews.map((c) => `${c.kind}:${c.sessionId}`);
 
 describe("the away sweep's lost reviews", () => {
   const green = (
@@ -189,11 +243,11 @@ describe("the away sweep's lost reviews", () => {
 
   it("runs a review never started on the head, once seen on two sweeps", () => {
     const first = pickCandidates(view([green("t")]));
-    expect(first.act).toEqual([]);
+    expect(first.reviews).toEqual([]);
     expect(first.firstSeen).toEqual([seenKey("t", "abc1234def")]);
     const second = pickCandidates(view([green("t")], { acted: seen("t") }));
-    expect(second.act.map((c) => c.kind)).toEqual(["review"]);
-    expect(second.act[0].log).toContain("never started");
+    expect(second.reviews.map((c) => c.kind)).toEqual(["review"]);
+    expect(second.reviews[0].line).toContain("never started");
   });
 
   it("runs again an errored review, and one cut off long enough ago", () => {
@@ -202,10 +256,12 @@ describe("the away sweep's lost reviews", () => {
       at: NOW - ageMs,
     });
     expect(
-      kinds(view([green("t")], { acted: seen("t"), reviewOf: at("error", 0) }))
+      reviewKinds(
+        view([green("t")], { acted: seen("t"), reviewOf: at("error", 0) })
+      )
     ).toEqual(["review:t"]);
     expect(
-      kinds(
+      reviewKinds(
         view([green("t")], {
           acted: seen("t"),
           reviewOf: at("running", STALE_REVIEW_MS),
@@ -213,7 +269,7 @@ describe("the away sweep's lost reviews", () => {
       )
     ).toEqual(["review:t"]);
     expect(
-      kinds(
+      reviewKinds(
         view([green("t")], {
           acted: seen("t"),
           reviewOf: at("running", STALE_REVIEW_MS - 1000),
@@ -221,7 +277,9 @@ describe("the away sweep's lost reviews", () => {
       )
     ).toEqual([]);
     expect(
-      kinds(view([green("t")], { acted: seen("t"), reviewOf: at("pass", 0) }))
+      reviewKinds(
+        view([green("t")], { acted: seen("t"), reviewOf: at("pass", 0) })
+      )
     ).toEqual([]);
   });
 
@@ -238,7 +296,7 @@ describe("the away sweep's lost reviews", () => {
       "review:t:abc1234def",
     ]);
     expect(
-      kinds(
+      reviewKinds(
         view([pending, settling, green("h"), green("t")], {
           acted,
           held: new Set(["h"]),

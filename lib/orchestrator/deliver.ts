@@ -2,6 +2,7 @@ import type { ChatOrigin, ChatState } from "../chat/events";
 import type { CompactFirst } from "../chat/stale";
 import {
   isAnswer,
+  isAwayEvent,
   deliveriesSince,
   lastDeliveredAt,
   logDeliveries,
@@ -91,6 +92,7 @@ export async function deliverEvents(opts: {
     kind: "event",
     label: "AgentOS",
     ...(decided.length ? { decided } : {}),
+    ...(pending.every((e) => isAwayEvent(e)) ? { away: true as const } : {}),
   };
   markDelivered(ids, now);
   const logged = logDeliveries(

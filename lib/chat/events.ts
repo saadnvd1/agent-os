@@ -80,6 +80,9 @@ export interface ChatOrigin {
   body?: string;
   // Lines of an event batch that are the reader's answers to asks.
   decided?: string[];
+  // Only Away mode's own lines: the turn it starts isn't anyone's activity
+  // (lib/away/activity).
+  away?: true;
 }
 
 // Who sent a message, carried with it through the queue and the worker.

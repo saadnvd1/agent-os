@@ -18,7 +18,6 @@ import { holdingEscalations } from "../orchestrator/gates";
 import { review } from "../orchestrator/review";
 import { repoOf } from "../orchestrator/repo";
 import { clip } from "../orchestrator/digest";
-import { sendMessage } from "../bus";
 import { notifyPhone } from "../notify";
 import { getProject } from "../projects";
 import { loadProjectConfig } from "../project-config";
@@ -29,6 +28,8 @@ import { auditId, auditsRoot, writeAtomic } from "../session-audit/store";
 import {
   activeAway,
   claimSweep,
+  reachedWorkspaces,
+  toldKey,
   endAway,
   fromSql,
   isExpired,
@@ -44,6 +45,7 @@ import {
   SWEEP_EVERY_MS,
   type Candidate,
 } from "./sweep";
+import { agentLive, awayWindowMs, lastTurnAt } from "./activity";
 import { checkDeploy } from "./deploy";
 import { buildAwayReport, phoneSummary, reportMarkdown } from "./report";
 import { awayOnLine } from "./brief";
@@ -59,9 +61,57 @@ function orchestrated(): { workspaceId: string; orchestratorId: string }[] {
     .map((o) => ({ workspaceId: o.workspace_id!, orchestratorId: o.id }));
 }
 
-function tellOrchestrators(key: string, line: string, now: number): void {
-  for (const { workspaceId } of orchestrated())
-    queueEvent(workspaceId, key, null, line, now);
+const sessionRow = (id: string) =>
+  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+    | Session
+    | undefined;
+
+// Away mode reaches a workspace only through an orchestrator that's been
+// working inside the window: one left alone isn't told or woken.
+export function orchestratorActive(
+  orchestratorId: string,
+  now = Date.now()
+): boolean {
+  const s = sessionRow(orchestratorId);
+  if (!s) return false;
+  const turn = lastTurnAt(s);
+  return turn > 0 && now - turn <= awayWindowMs();
+}
+
+// Tells an active orchestrator Saad is away: once a period, or again when
+// `resend` (the end moved). False when it isn't active (now), so it's
+// left alone.
+function tellAway(
+  away: AwayRow,
+  workspaceId: string,
+  orchestratorId: string,
+  now: number,
+  resend = false
+): boolean {
+  // Checked every time: a digest's own turn isn't activity, so Away can't
+  // keep an orchestrator going that nothing else has.
+  if (!orchestratorActive(orchestratorId, now)) return false;
+  const told = reachedWorkspaces(away.id).has(workspaceId);
+  if (!told) {
+    db.prepare(
+      `INSERT OR IGNORE INTO away_actions (away_id, workspace_id, subject, kind, key)
+       VALUES (?, ?, ?, 'told', ?)`
+    ).run(away.id, workspaceId, orchestratorId, toldKey(workspaceId));
+    addNote(
+      workspaceId,
+      `Saad turned Away on, ${untilText(away, now)}.`,
+      "away"
+    );
+  }
+  if (!told || resend)
+    queueEvent(
+      workspaceId,
+      `away:${away.id}`,
+      null,
+      awayOnLine(away, now),
+      now
+    );
+  return true;
 }
 
 // In Settings > Audits under "away", named for when it ended (local time)
@@ -79,14 +129,8 @@ export function turnAwayOn(
 ): AwayRow {
   const { row, started } = startAway(input, now);
   // Sent again when the end moves, so the orchestrator has the new one.
-  tellOrchestrators(`away:${row.id}`, awayOnLine(row, now), now);
-  if (started)
-    for (const { workspaceId } of orchestrated())
-      addNote(
-        workspaceId,
-        `Saad turned Away on, ${untilText(row, now)}.`,
-        "away"
-      );
+  for (const { workspaceId, orchestratorId } of orchestrated())
+    tellAway(row, workspaceId, orchestratorId, now, !started);
   return row;
 }
 
@@ -101,7 +145,11 @@ export function turnAwayOff(
   const done = db.transaction(() => {
     const row = endAway(by, now);
     if (!row) return null;
-    const report = buildAwayReport(row, deployConfigured);
+    const report = buildAwayReport(
+      row,
+      deployConfigured,
+      reachedWorkspaces(row.id)
+    );
     saveReport(row.id, report);
     return { ended: row, report };
   })();
@@ -116,13 +164,14 @@ export function turnAwayOff(
     by === "expired"
       ? "Away mode ran out: Saad may be back. Go back to reacting to events; don't drive interactive sessions."
       : "Saad is back: Away mode is off. Go back to reacting to events.";
-  tellOrchestrators(`back:${ended.id}`, line, now);
-  for (const { workspaceId } of orchestrated())
+  for (const workspaceId of reachedWorkspaces(ended.id)) {
+    queueEvent(workspaceId, `away-back:${ended.id}`, null, line, now);
     addNote(
       workspaceId,
       by === "expired" ? "Away ran out." : "Saad turned Away off.",
       "away"
     );
+  }
   // What came up since the last sweep's batch (a held `aos notify` is in
   // no report), then the summary. A second later, so the window takes
   // everything up to now.
@@ -175,21 +224,6 @@ function actedKeys(awayId: number, workspaceId: string): Set<string> {
   );
 }
 
-function nudgeCounts(awayId: number, workspaceId: string): Map<string, number> {
-  const rows = db
-    .prepare(
-      `SELECT subject, COUNT(*) AS n FROM away_actions
-       WHERE away_id = ? AND workspace_id = ? AND kind = 'nudge' GROUP BY subject`
-    )
-    .all(awayId, workspaceId) as { subject: string; n: number }[];
-  return new Map(rows.map((r) => [r.subject, r.n]));
-}
-
-const sessionRow = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
-
 async function dirtySessions(ids: string[]): Promise<Set<string>> {
   const dirty = new Set<string>();
   // A few at a time: a burst of spawns is what loads the machine.
@@ -211,29 +245,19 @@ async function dirtySessions(ids: string[]): Promise<Set<string>> {
   return dirty;
 }
 
-async function act(
+// A lost review run again: a reviewer, never a message to the session.
+async function rerunReview(
   away: AwayRow,
   workspaceId: string,
-  orchestratorId: string,
   c: Candidate
-): Promise<void> {
-  if (!claim(away, workspaceId, c.sessionId, c.kind, c.key)) return;
+): Promise<string | null> {
+  if (!claim(away, workspaceId, c.sessionId, c.kind, c.key)) return null;
   try {
-    if (c.kind === "review") await review(workspaceId, c.sessionId);
-    else
-      await sendMessage({
-        fromId: orchestratorId,
-        to: c.sessionId,
-        body: c.message!,
-      });
-    addNote(workspaceId, `Away sweep: ${c.log}`, "away");
+    await review(workspaceId, c.sessionId);
+    return c.line;
   } catch (error) {
     const why = error instanceof Error ? error.message : String(error);
-    addNote(
-      workspaceId,
-      `Away sweep: ${c.log} It didn't go through: ${clip(why, 200)}`,
-      "away"
-    );
+    return `${c.line.replace(/; AgentOS ran it again\.$/, "")}; running it again failed: ${clip(why, 200)}`;
   }
 }
 
@@ -257,12 +281,14 @@ async function mergeCommit(repo: string, pr: number): Promise<string | null> {
   return SHA.test(sha) ? sha : null;
 }
 
-// Each task merged while away, until its deploy is decided.
+// Each task merged while away, until its deploy is decided. Returns the
+// digest's line for each one decided now.
 async function checkDeploys(
   away: AwayRow,
   workspaceId: string,
   now: number
-): Promise<void> {
+): Promise<string[]> {
+  const lines: string[] = [];
   const merged = db
     .prepare(
       `SELECT s.* FROM sessions s JOIN projects p ON p.id = s.project_id
@@ -297,24 +323,46 @@ async function checkDeploys(
     if (!claim(away, workspaceId, s.id, kind, `deploy:${s.id}`, verdict.detail))
       continue;
     if (verdict.state === "unchecked") continue;
-    const line = `task ${s.name}: PR #${s.pr_number ?? "?"} merged; ${verdict.state === "ok" ? verdict.detail : `deploy failed: ${verdict.detail}`}`;
-    addNote(workspaceId, `Away sweep: ${line}`, "away");
-    if (verdict.state === "failed")
-      queueEvent(workspaceId, `deploy:${s.id}`, s.id, line, now);
+    lines.push(
+      `task ${s.name}: PR #${s.pr_number ?? "?"} merged; ${verdict.state === "ok" ? verdict.detail : `deploy failed: ${verdict.detail}`}`
+    );
   }
+  return lines;
 }
 
+const DIGEST_HEAD =
+  "Away sweep: what changed in this workspace since the last digest. Sessions not listed had no real activity inside the window or nothing new; leave them alone.";
+
+const candidateLabel: Record<Candidate["kind"], string> = {
+  stalled: "stalled",
+  commit: "uncommitted, no PR",
+  review: "review",
+  wrapup: "interactive",
+};
+
+// Sweeps a workspace whose orchestrator is active: lost reviews run again,
+// deploys checked, and what's new goes to the orchestrator as one digest
+// event. No other session is ever messaged. Returns the digest, if one went.
 export async function sweepWorkspace(
   away: AwayRow,
   workspaceId: string,
   orchestratorId: string,
   now = Date.now()
-): Promise<void> {
+): Promise<string | null> {
   // Paused means it acts on nothing, the sweep included.
-  if (isPaused(workspaceId)) return;
+  if (isPaused(workspaceId)) return null;
+  if (!tellAway(away, workspaceId, orchestratorId, now)) return null;
   const facts = await sessionFacts(workspaceId);
   const acted = actedKeys(away.id, workspaceId);
-  const dirty = await dirtySessions(needsGitCheck(facts, now, acted));
+  const rows = new Map(
+    facts.map((f) => [f.id, sessionRow(f.id)] as const).filter(([, s]) => s)
+  ) as Map<string, Session>;
+  const turns = new Map([...rows].map(([id, s]) => [id, lastTurnAt(s)]));
+  const live = new Set(
+    facts
+      .filter((f) => !f.task && rows.has(f.id) && agentLive(rows.get(f.id)!))
+      .map((f) => f.id)
+  );
   const openOn = new Set(
     (
       db
@@ -329,13 +377,19 @@ export async function sweepWorkspace(
       .filter((f) => openOn.has(f.id) || holdingEscalations(f.id).length)
       .map((f) => f.id)
   );
-  const { act: todo, firstSeen } = pickCandidates({
+  const windowMs = awayWindowMs();
+  const dirty = await dirtySessions(
+    needsGitCheck({ facts, now, turns, windowMs, live, held, acted })
+  );
+  const { flags, reviews, firstSeen } = pickCandidates({
     now,
     facts,
+    turns,
+    windowMs,
+    live,
     dirty,
     held,
     acted,
-    nudges: nudgeCounts(away.id, workspaceId),
     reviewOf: (id, sha) => {
       const c = getCheck(id, sha, "review");
       return c ? { status: c.status, at: fromSql(c.created_at) } : null;
@@ -343,8 +397,37 @@ export async function sweepWorkspace(
   });
   for (const key of firstSeen)
     claim(away, workspaceId, key.split(":")[1], "seen", key);
-  for (const c of todo) await act(away, workspaceId, orchestratorId, c);
-  await checkDeploys(away, workspaceId, now);
+  const lines: string[] = [];
+  for (const c of reviews) {
+    const line = await rerunReview(away, workspaceId, c);
+    if (line) lines.push(`- review: ${line}`);
+  }
+  for (const c of flags)
+    if (claim(away, workspaceId, c.sessionId, c.kind, c.key))
+      lines.push(`- ${candidateLabel[c.kind]}: ${c.line}`);
+  for (const line of await checkDeploys(away, workspaceId, now))
+    lines.push(`- deploy: ${line}`);
+  if (!lines.length) return null;
+  // Claimed like the rest, so a period's digests are counted and a sweep
+  // that ended meanwhile sends none.
+  if (
+    !claim(
+      away,
+      workspaceId,
+      orchestratorId,
+      "digest",
+      `digest:${workspaceId}:${now}`
+    )
+  )
+    return null;
+  const digest = [DIGEST_HEAD, ...lines].join("\n");
+  queueEvent(workspaceId, `away-digest:${away.id}:${now}`, null, digest, now);
+  addNote(
+    workspaceId,
+    `Away sweep: sent the orchestrator a digest of ${lines.length} ${lines.length === 1 ? "item" : "items"}.`,
+    "away"
+  );
+  return digest;
 }
 
 // One phone message for what came up since the last: new asks across

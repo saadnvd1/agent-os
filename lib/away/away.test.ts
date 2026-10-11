@@ -8,8 +8,10 @@ import { db } from "../db";
 import { seedWorkspace } from "../orchestrator/testing";
 import { ensureOrchestrator } from "../orchestrator/home";
 import { buildDigest } from "../orchestrator/digest";
+import { saveItem } from "../chat/store";
 import * as route from "@/app/api/away/route";
 import * as seenRoute from "@/app/api/away/seen/route";
+import * as settingsRoute from "@/app/api/away/settings/route";
 import {
   activeAway,
   claimSweep,
@@ -46,6 +48,18 @@ beforeEach(() => {
 });
 
 const MIN = 60 * 1000;
+
+// An orchestrator Saad talked to a minute ago, so Away reaches its workspace.
+function activeOrchestrator(w: string) {
+  const orch = ensureOrchestrator(w);
+  saveItem(orch.id, {
+    id: `user-${orch.id}-${Date.now()}`,
+    kind: "user",
+    text: "Ship the login fix",
+    createdAt: Date.now() - MIN,
+  });
+  return orch;
+}
 
 function events(workspaceId: string) {
   return db
@@ -97,21 +111,35 @@ describe("Away's state", () => {
 describe("turning Away on and off", () => {
   it("tells each orchestrator, leads its digest, and on return builds the report and tells his phone", () => {
     const w = seedWorkspace().workspace.id;
-    ensureOrchestrator(w);
+    activeOrchestrator(w);
+    // One left alone for three hours isn't told.
+    const idle = seedWorkspace().workspace.id;
+    saveItem(ensureOrchestrator(idle).id, {
+      id: `user-idle-${Date.now()}`,
+      kind: "user",
+      text: "Old work",
+      createdAt: Date.now() - 180 * MIN,
+    });
     const now = Date.now();
     const row = turnAwayOn(
       { setBy: "this machine", expiresAt: now + 4 * 60 * MIN },
       now
     );
+    expect(events(idle)).toEqual([]);
+    expect(buildDigest(idle)).not.toContain("Saad is away");
     const on = events(w).find((e) => e.key === `once:away:${row.id}`);
     expect(on?.line).toMatch(/^Saad is away \(Away mode/);
-    expect(on?.line).toMatch(/only ask them to wrap up, never drive them/);
+    expect(on?.line).toMatch(/ask a listed one at most once to wrap up/);
+    expect(on?.line).toMatch(/without messaging any session/);
     expect(on?.line).toMatch(/Hard lines still go to ask_saad/);
     expect(buildDigest(w)).toContain("Saad is away (Away mode");
 
     const off = turnAwayOff("saad", now + MIN);
     expect(off?.ended_by).toBe("saad");
-    expect(events(w).some((e) => e.key === `once:back:${row.id}`)).toBe(true);
+    expect(events(w).some((e) => e.key === `once:away-back:${row.id}`)).toBe(
+      true
+    );
+    expect(events(idle)).toEqual([]);
     expect(buildDigest(w)).not.toContain("Saad is away");
     expect(JSON.parse(getAway(row.id)!.report!).awayId).toBe(row.id);
     expect(fs.readFileSync(reportFile(getAway(row.id)!), "utf-8")).toContain(
@@ -194,6 +222,7 @@ describe("the batched phone notification", () => {
   });
 
   it("keeps Away on, with no report, when the report can't be built", () => {
+    activeOrchestrator(seedWorkspace().workspace.id);
     const now = Date.now();
     const row = turnAwayOn({ setBy: "x", expiresAt: null }, now);
     db.exec(`ALTER TABLE orchestrator_notes RENAME TO notes_away_test`);
@@ -260,5 +289,23 @@ describe("the Away routes", () => {
     const seen = await seenRoute.POST(req({ id: on.away.id }));
     expect(seen.status).toBe(200);
     expect((await route.GET().json()).report).toBeNull();
+  });
+
+  it("sets the away window only from a trusted place, in range", async () => {
+    const put = (windowMinutes: unknown, trust = "loopback") => {
+      const r = req({ windowMinutes }, trust);
+      return settingsRoute.PUT(
+        new NextRequest(r.url, {
+          method: "PUT",
+          headers: r.headers,
+          body: JSON.stringify({ windowMinutes }),
+        })
+      );
+    };
+    expect((await put(90, "device")).status).toBe(403);
+    expect((await put(3)).status).toBe(400);
+    expect(await (await put(90)).json()).toEqual({ windowMinutes: 90 });
+    expect(await settingsRoute.GET().json()).toEqual({ windowMinutes: 90 });
+    expect(await (await put(60)).json()).toEqual({ windowMinutes: 60 });
   });
 });

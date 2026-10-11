@@ -48,6 +48,23 @@ export function getAway(id: number): AwayRow | null {
   );
 }
 
+// The away_actions row marking a workspace Away mode reached this period:
+// its orchestrator was active and was told (./run). Keys are unique per
+// period, so it names the workspace.
+export const toldKey = (workspaceId: string) => `told:${workspaceId}`;
+
+export function reachedWorkspaces(awayId: number): Set<string> {
+  return new Set(
+    (
+      db
+        .prepare(
+          `SELECT workspace_id FROM away_actions WHERE away_id = ? AND kind = 'told'`
+        )
+        .all(awayId) as { workspace_id: string }[]
+    ).map((r) => r.workspace_id)
+  );
+}
+
 export const isExpired = (row: AwayRow, now = Date.now()) =>
   !!row.expires_at && fromSql(row.expires_at) <= now;
 
