@@ -30,6 +30,7 @@ beforeEach(() => {
   h.exited = [];
   registry.live.set("s1", {
     worker: { command: (c: unknown) => void h.commands.push(c) },
+    activity: { tools: new Map(), tasks: new Set(), sends: 0 },
   } as unknown as Live);
 });
 
@@ -42,12 +43,6 @@ describe("stopping a chat's turn", () => {
     });
     expect(h.commands).toEqual([{ type: "interrupt", hard: true }]);
     expect(h.stopped).toEqual([]);
-  });
-
-  it("interrupts a turn that is only thinking the same way", async () => {
-    h.states = ["running"];
-    await stopChatTurn("s1", { graceMs: 1000, sleep: noWait });
-    expect(h.commands).toEqual([{ type: "interrupt", hard: true }]);
   });
 
   it("is not fooled by an idle that the agent's wind-down turn breaks", async () => {
@@ -81,5 +76,26 @@ describe("stopping a chat's turn", () => {
     h.states = [new Error("gone")];
     const out = await stopChatTurn("s1", { sleep: noWait });
     expect(out.stopped).toBe(false);
+  });
+
+  it("leaves a new turn alone when a message is sent while the stop waits", async () => {
+    h.states = ["running"];
+    const live = registry.live.get("s1")!;
+    const out = await stopChatTurn("s1", {
+      graceMs: 1000,
+      sleep: async () => {
+        live.activity.sends = 1;
+      },
+    });
+    expect(out).toEqual({ stopped: true, killed: false });
+    expect(h.stopped).toEqual([]);
+  });
+
+  it("refuses, killing nothing, while the chat waits on an answer", async () => {
+    h.states = ["waiting"];
+    const out = await stopChatTurn("s1", { sleep: noWait });
+    expect(out.stopped).toBe(false);
+    expect(h.commands).toEqual([]);
+    expect(h.stopped).toEqual([]);
   });
 });

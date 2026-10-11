@@ -41,6 +41,7 @@ export function track(live: Live, e: WorkerEvent): void {
     a.lastAt = Date.now();
     a.lastWhat = e.type === "delta" ? "writing" : lastWhat(e.item);
   }
+  if (e.type === "item" && e.item.kind === "user") a.sends = (a.sends ?? 0) + 1;
   if (e.type === "item" && e.item.kind === "tool") {
     if (e.item.status === "running")
       a.tools.set(e.item.id, { label: e.item.title, since: e.item.createdAt });
@@ -85,6 +86,8 @@ export interface Stall {
 // A turn that has produced nothing (no token, item or result) for the
 // threshold. Never one waiting on an answer, nor one with a background task
 // running: a command it started can legitimately be quiet.
+const TOOL_STALL_FACTOR = 4;
+
 export function stallOf(
   live: Live,
   now: number,
@@ -93,6 +96,9 @@ export function stallOf(
   const a = live.activity;
   if (live.state !== "running" || thresholdMs <= 0 || a.tasks.size > 0)
     return null;
+  // A foreground tool call (a long test run) says nothing while it works:
+  // it gets a much longer allowance before it counts as stuck.
+  if (a.tools.size > 0) thresholdMs *= TOOL_STALL_FACTOR;
   const since = a.lastAt ?? a.turnStartedAt;
   if (!since || now - since < thresholdMs) return null;
   return { silentMs: now - since, last: a.lastWhat ?? "unknown", since };

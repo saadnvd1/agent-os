@@ -1,4 +1,5 @@
 import { endTmuxSession } from "../tmux/end";
+import { hostLink } from "../hosts/remote-api";
 import { stopChatTurn } from "../chat/stop";
 import type { Session } from "../db";
 
@@ -11,6 +12,10 @@ export async function stopSession(
   s: Pick<Session, "id" | "name" | "view" | "host_id" | "tmux_name">
 ): Promise<string> {
   if (s.view === "chat") {
+    if (hostLink(s.host_id))
+      throw new Error(
+        `Couldn't stop ${s.name}: it runs on another machine; stop it there.`
+      );
     const out = await stopChatTurn(s.id);
     if (!out.stopped)
       throw new Error(`Couldn't stop ${s.name}: ${out.reason}.`);

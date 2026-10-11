@@ -365,7 +365,9 @@ Stop button does the same. A stopped turn keeps what it wrote.
 
 Stop ends the turn even while the model is still thinking, before any tool
 call: the turn is interrupted, and if it hasn't ended within a few seconds the
-agent process is ended and restarted for the next message. The conversation and
+agent process is ended and restarted for the next message (not if the chat is
+waiting on an approval or question, or if a new message has started a new
+turn meanwhile). The conversation and
 worktree are kept, and whatever is sent next (yours, another agent's, the
 orchestrator's) runs as the next turn, never queued behind the stopped one.
 The UI, the orchestrator's `stop` tool and `aos stop` all take this one path
@@ -375,8 +377,8 @@ A turn that has produced nothing (no token, tool call or result) for 8 minutes
 shows as **Stalled** in the session list, and its workspace's orchestrator gets
 one event naming the session, how long it has been silent and its last action.
 It fires once per stall and starts over when the session does something. A
-long tool call still producing output, or a session waiting on a background
-command it started, isn't flagged. Set the time (2 to 120 minutes, 0 for off)
+foreground tool call gets four times as long, and a session waiting on a
+background command it started isn't flagged. Set the time (2 to 120 minutes, 0 for off)
 in Settings → Workspaces → Stall alerts.
 
 The access picker under the composer sets what the agent may do on its own:

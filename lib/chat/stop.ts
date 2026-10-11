@@ -105,12 +105,23 @@ export async function stopChatTurn(
     };
   }
   if (!state || state === "idle") return { stopped: true, killed: false };
+  // Its agent is asked a question: killing it would lose the card.
+  if (state === "waiting")
+    return {
+      stopped: false,
+      reason:
+        "it's waiting on an approval or question in its chat; answer or dismiss that first",
+    };
+  const sendsAtStop = registry.live.get(sessionId)?.activity.sends ?? 0;
   registry.live
     .get(sessionId)
     ?.worker.command({ type: "interrupt", hard: true });
   let idleFor = 0;
   for (let waited = 0; waited < graceMs + SETTLE_MS; waited += TURN_POLL_MS) {
     await sleep(TURN_POLL_MS);
+    // A message sent meanwhile has started a new turn: not ours to kill.
+    if ((registry.live.get(sessionId)?.activity.sends ?? 0) !== sendsAtStop)
+      return { stopped: true, killed: false };
     const now = await chatStateNow(sessionId).catch(
       () => "unreachable" as const
     );

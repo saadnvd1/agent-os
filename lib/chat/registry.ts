@@ -38,6 +38,9 @@ export interface ChatActivity {
   // and what that was; unset between turns. Silence from here is a stall.
   lastAt?: number;
   lastWhat?: string;
+  // Messages the user side has sent this conversation: a change while a stop
+  // waits means a new turn began, which the stop must leave alone.
+  sends?: number;
   // Running tool calls by id: their label and when they started.
   tools: Map<string, { label: string; since: number }>;
   // Running background tasks (not housekeeping ones).

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stallOf, track } from "./activity";
 import type { Live } from "./registry";
 import type { WorkerEvent } from "./worker/protocol";
@@ -9,6 +9,11 @@ const live = (): Live =>
     state: "running",
     activity: { tools: new Map(), tasks: new Set() },
   }) as unknown as Live;
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1_000_000_000);
+});
+afterEach(() => vi.useRealTimers());
 const ev = (e: unknown) => e as WorkerEvent;
 
 describe("stall detection", () => {
@@ -26,13 +31,26 @@ describe("stall detection", () => {
   it("never fires while output keeps flowing, and a stall resets on activity", () => {
     const l = live();
     track(l, ev({ type: "state", state: "running" }));
-    const first = stallOf(l, Date.now() + 9 * MIN, 8 * MIN);
+    vi.advanceTimersByTime(9 * MIN);
+    const first = stallOf(l, Date.now(), 8 * MIN);
     expect(first).not.toBeNull();
     track(l, ev({ type: "delta" }));
-    expect(stallOf(l, Date.now() + 1000, 8 * MIN)).toBeNull();
-    const second = stallOf(l, Date.now() + 9 * MIN, 8 * MIN);
+    vi.advanceTimersByTime(MIN);
+    expect(stallOf(l, Date.now(), 8 * MIN)).toBeNull();
+    vi.advanceTimersByTime(9 * MIN);
+    const second = stallOf(l, Date.now(), 8 * MIN);
     // A new stall has a new identity, so the orchestrator hears of it again.
-    expect(second?.since).toBeGreaterThanOrEqual(first!.since);
+    expect(second?.since).toBeGreaterThan(first!.since);
+  });
+
+  it("gives a foreground tool call a much longer allowance", () => {
+    const l = live();
+    track(l, ev({ type: "state", state: "running" }));
+    l.activity.tools.set("t", { label: "Run tests", since: Date.now() });
+    vi.advanceTimersByTime(20 * MIN);
+    expect(stallOf(l, Date.now(), 8 * MIN)).toBeNull();
+    vi.advanceTimersByTime(15 * MIN);
+    expect(stallOf(l, Date.now(), 8 * MIN)).not.toBeNull();
   });
 
   it("ignores a session waiting on a background task, an answer, or no turn", () => {
