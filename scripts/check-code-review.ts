@@ -3,9 +3,13 @@
 // apply). Reads PR_BODY and HEAD_SHA from the environment.
 import { codeReviewRefusal, parseCodeReview } from "../lib/tasks/code-review";
 
+// A head AgentOS rebased itself is covered by the review of the head it
+// rebased, as its gates allow.
+const section = parseCodeReview(process.env.PR_BODY ?? "");
 const refusal = codeReviewRefusal(
-  parseCodeReview(process.env.PR_BODY ?? ""),
-  process.env.HEAD_SHA || undefined
+  section,
+  process.env.HEAD_SHA || undefined,
+  section?.restacked
 );
 if (refusal) {
   console.error(`✗ ${refusal}.`);

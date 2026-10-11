@@ -47,6 +47,7 @@ export interface ListedPR {
   headRefName?: string;
   isCrossRepository?: boolean;
   createdAt?: string;
+  mergeable?: TaskPR["mergeable"];
 }
 
 export interface FindPROpts {
@@ -74,7 +75,7 @@ export async function findPRStrict(
       "--limit",
       "10",
       "--json",
-      "number,url,state,headRefOid,statusCheckRollup,body,isCrossRepository,createdAt",
+      "number,url,state,headRefOid,statusCheckRollup,body,isCrossRepository,createdAt,mergeable",
     ],
     repoDir,
     15000
@@ -108,6 +109,7 @@ export async function toTaskPR(repoDir: string, pr: ListedPR): Promise<TaskPR> {
     checkCount: (pr.statusCheckRollup ?? []).length,
     codeReview: pr.body === undefined ? undefined : parseCodeReview(pr.body),
     scopeChange: parseScopeChange(pr.body),
+    ...(pr.mergeable && { mergeable: pr.mergeable }),
   };
 }
 

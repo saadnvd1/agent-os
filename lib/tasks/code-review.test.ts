@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { codeReviewRefusal, parseCodeReview } from "./code-review";
+import {
+  codeReviewRefusal,
+  parseCodeReview,
+  withRestackedLine,
+} from "./code-review";
 
 const HEAD = "4f2a9c1e0b7d3a5c6e8f9a0b1c2d3e4f5a6b7c8d";
 
@@ -175,5 +179,35 @@ describe("codeReviewRefusal", () => {
       /covers 7654321/
     );
     expect(codeReviewRefusal(null, HEAD, restacked)).toMatch(/no Code review/);
+  });
+});
+
+describe("the Restacked line", () => {
+  const NEW = "a".repeat(40);
+  it("is written after the Reviewed line, replacing an earlier one, and read back for CI", () => {
+    const body = section(`Reviewed: ${HEAD}`);
+    const once = withRestackedLine(body, HEAD, "b".repeat(40))!;
+    const twice = withRestackedLine(once, HEAD, NEW)!;
+    expect(twice.match(/^Restacked:/gm)).toHaveLength(1);
+    expect(twice).toContain(`Reviewed: ${HEAD}\nRestacked: ${HEAD} -> ${NEW}`);
+    const parsed = parseCodeReview(twice)!;
+    expect(parsed).toEqual({ sha: HEAD, restacked: { from: HEAD, to: NEW } });
+    // CI's rule: the rebased head is covered, any other head isn't.
+    expect(codeReviewRefusal(parsed, NEW, parsed.restacked)).toBeNull();
+    expect(codeReviewRefusal(parsed, "c".repeat(40), parsed.restacked)).toMatch(
+      /covers 4f2a9c1/
+    );
+  });
+
+  it("isn't written when the section reviewed another commit, or there is none", () => {
+    expect(
+      withRestackedLine(section(`Reviewed: ${HEAD}`), "d".repeat(40), NEW)
+    ).toBeNull();
+    expect(withRestackedLine("## What changed\n", HEAD, NEW)).toBeNull();
+  });
+
+  it("only counts inside the section, after its Reviewed line", () => {
+    const outside = `Restacked: ${HEAD} -> ${NEW}\n${section(`Reviewed: ${HEAD}`)}`;
+    expect(parseCodeReview(outside)).toEqual({ sha: HEAD });
   });
 });

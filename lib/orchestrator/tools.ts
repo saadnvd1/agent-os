@@ -76,6 +76,9 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Start an independent read-only review of a PR at its exact head commit, or read the stored verdict for that commit. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL, even one no task owns.",
   sign_off:
     "Merge a PR, with its project's merge method, through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL (an external PR). Refuses with the failing gate, or a repository outside the workspace.",
+  arm: "Arm a task's PR to merge: AgentOS merges it, through the same gates as sign_off, the moment they all pass at its head, and tells you with one event. A gate failure comes as one event and it stays armed for the fix; one that goes to Saad disarms it. Survives restarts. Use it instead of calling sign_off until it passes.",
+  disarm:
+    "Disarm a task armed to merge: it merges only through sign_off again.",
   ask_saad:
     "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event. To ask whether to merge a PR the gates refuse, give task and sha (its head): his approval lets sign_off merge it once, at that commit.",
 };

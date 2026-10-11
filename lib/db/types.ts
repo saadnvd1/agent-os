@@ -83,6 +83,16 @@ export interface Session {
   pr_url: string | null;
   pr_number: number | null;
   pr_status: "open" | "merged" | "closed" | null;
+  // Merge as soon as every gate passes (orchestrator/armed.ts), and the
+  // failure last reported while armed.
+  merge_armed_at?: string | null;
+  merge_armed_seen?: string | null;
+  // An automatic rebase onto the base: the head the task pushed and the
+  // head the rebase left (orchestrator/rebase.ts).
+  rebased_from?: string | null;
+  rebased_to?: string | null;
+  // The PR head the task was last asked to rebase by hand.
+  rebase_asked_head?: string | null;
   // Orchestration fields
   conductor_session_id: string | null;
   worker_task: string | null;

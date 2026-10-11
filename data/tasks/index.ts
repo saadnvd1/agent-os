@@ -67,6 +67,18 @@ export function useSignOffTask() {
   );
 }
 
+export function useArmTask() {
+  return useTaskMutation(async (input: { id: string; armed: boolean }) =>
+    json(
+      await fetch(`/api/tasks/${input.id}/arm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ armed: input.armed }),
+      })
+    )
+  );
+}
+
 export function useDropTask() {
   return useTaskMutation(async (id: string) =>
     json(await fetch(`/api/tasks/${id}/drop`, { method: "POST" }))

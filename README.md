@@ -456,7 +456,9 @@ project has none), fixes the Blocking and High findings, and ends the PR body
 with a **Code review** section: the commit it reviewed, the agents that ran,
 what it fixed and what it deferred and why. The orchestrator's `sign_off` and
 a stack's **Land** refuse a PR without that section for its head commit, and
-this repository's CI fails one too. The review agents are in
+this repository's CI fails one too. A head AgentOS rebased itself is
+covered by the review of the head it rebased: its gates go by what they
+recorded, and CI by the section's `Restacked:` line. The review agents are in
 [.claude/agents](.claude/agents) and the skill in
 [.claude/skills](.claude/skills/README.md).
 
@@ -840,7 +842,7 @@ it may do on its own, and the lines that always come back to you as asks.
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
   `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `note`,
-  `review`, `sign_off` and `ask_saad`. All are served in-process to its chat, refuse
+  `review`, `sign_off`, `arm`, `disarm` and `ask_saad`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and
   whether it has one, and `message_orchestrator` messages another workspace's
@@ -879,6 +881,23 @@ it may do on its own, and the lines that always come back to you as asks.
   as an ask, and the orchestrator stops merging that task. Failures count per
   task and gate: a review that blocks counts when its verdict arrives, once
   per commit, whether or not `sign_off` ever reads it.
+- **Arm to merge:** `arm` (or **Arm merge** on a task's row) makes AgentOS
+  merge the task's PR itself the moment every `sign_off` gate passes at its
+  head, starting the review once CI is green, so nothing polls `sign_off`.
+  The orchestrator hears one event: merged, or the failure (counted once per
+  head; the task stays armed for the fix, and one that goes to you disarms
+  it). The flag is in the database, so it survives a restart; `disarm`
+  takes it back.
+- **Automatic rebase:** when the base moves and GitHub says a task's PR now
+  conflicts (read in the PR poll AgentOS already makes), `git merge-tree`
+  checks it against the base. Clean, and with the task's agent idle and
+  nothing uncommitted, AgentOS rebases it in the task's worktree and pushes
+  only its branch with `--force-with-lease`; the Code review section gets a
+  `Restacked: <reviewed> -> <new>` line so the task needn't review again,
+  and the orchestrator's review carries over when the PR's own patch is
+  unchanged (same `git patch-id`; a fresh review starts otherwise). Not
+  clean: the task is asked once to rebase. Either way, one event. Main and
+  other tasks' branches are never written.
 - **External PRs and sessions:** `review` and `sign_off` also take an open
   PR no AgentOS task owns (dispatch, a person, dependabot) by `#N`,
   `owner/repo#N` or URL, as long as its repository is one of the workspace's

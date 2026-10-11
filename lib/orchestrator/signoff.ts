@@ -37,10 +37,14 @@ import { ciSettleIn, waitingState } from "./task-state";
 
 const short = (sha: string) => sha.slice(0, 7);
 
-// The heads AgentOS's own restack moved the task's branch between.
-function restackedOf(taskId: string) {
-  const item = stackQueries.itemForSession(db, taskId);
-  return item ? { from: item.restacked_from, to: item.restacked_to } : null;
+// The heads AgentOS's own restack, or its automatic rebase onto the base,
+// moved the task's branch between.
+function restackedOf(task: Session) {
+  const item = stackQueries.itemForSession(db, task.id);
+  if (item) return { from: item.restacked_from, to: item.restacked_to };
+  return task.rebased_to
+    ? { from: task.rebased_from ?? null, to: task.rebased_to }
+    : null;
 }
 
 // `approval`: Saad approved this merge on his asks list, for this commit.
@@ -90,7 +94,7 @@ export async function judge(
       codeReviewRefusal: codeReviewRefusal(
         pr.codeReview,
         sha,
-        restackedOf(task.id)
+        restackedOf(task)
       ),
     }),
     opts

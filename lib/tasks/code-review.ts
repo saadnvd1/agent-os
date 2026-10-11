@@ -6,6 +6,10 @@
 export interface CodeReviewSection {
   // The commit the review covered, as written in the section.
   sha: string | null;
+  // A "Restacked: <from> -> <to>" line AgentOS wrote after rebasing the
+  // branch itself. Only CI reads it: AgentOS's own gates go by what it
+  // recorded, never by what a body says.
+  restacked?: Restacked;
   // What kind of AI attribution the body carries, when it does: a fixed
   // label, never the body's own text, which goes into gate messages.
   attribution?: AttributionKind;
@@ -43,6 +47,8 @@ function attributionKind(line: string): AttributionKind | undefined {
 }
 const REVIEWED =
   /^[>*_ -]*reviewed(?: (?:commit|sha|at))?[*_ ]*:[*_` ]*([0-9a-f]{12,40})\b/i;
+const RESTACKED =
+  /^[>*_ -]*restacked[*_ ]*:[*_` ]*([0-9a-f]{40})[*_` ]*(?:->|→)[*_` ]*([0-9a-f]{40})\b/i;
 
 export function renderedLines(body: string): string[] {
   let text = body.slice(0, MAX_BODY);
@@ -85,7 +91,16 @@ export function parseCodeReview(
     const other = ANY_HEADING.exec(line);
     if (other && other[1].length <= level) level = 0;
     const current = sections.at(-1);
-    if (!level || !current || current.sha) continue;
+    if (!level || !current) continue;
+    if (current.sha) {
+      const moved = RESTACKED.exec(line);
+      if (moved)
+        current.restacked = {
+          from: moved[1].toLowerCase(),
+          to: moved[2].toLowerCase(),
+        };
+      continue;
+    }
     const sha = REVIEWED.exec(line)?.[1];
     if (sha) current.sha = sha.toLowerCase();
   }
@@ -134,4 +149,27 @@ export function codeReviewRefusal(
   if (covers(head)) return null;
   if (restacked?.to === head && covers(restacked.from)) return null;
   return `the PR's code review covers ${section.sha.slice(0, 7)}, not its head ${head.slice(0, 7)}: ${fix}`;
+}
+
+// The body with its Code review section saying AgentOS rebased the
+// reviewed head `from` to `to`: a "Restacked:" line right after the
+// section's "Reviewed:" line, replacing one already there. Null when the
+// body has no section, or its review isn't of `from`.
+export function withRestackedLine(
+  body: string,
+  from: string,
+  to: string
+): string | null {
+  const section = parseCodeReview(body);
+  if (!section?.sha || !from.toLowerCase().startsWith(section.sha)) return null;
+  const lines = body.split("\n");
+  const at = lines.findLastIndex(
+    (l) =>
+      REVIEWED.exec(l.replace(/\t/g, " "))?.[1]?.toLowerCase() === section.sha
+  );
+  if (at < 0) return null;
+  const line = `Restacked: ${from} -> ${to} (AgentOS rebased the reviewed commit onto its base; the PR's own changes are the ones reviewed)`;
+  const next = lines[at + 1]?.replace(/\t/g, " ") ?? "";
+  lines.splice(at + 1, RESTACKED.test(next) ? 1 : 0, line);
+  return lines.join("\n");
 }

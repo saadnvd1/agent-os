@@ -25,6 +25,9 @@ export interface TaskPR {
   codeReview?: CodeReviewSection | null;
   // The body's "Scope change" note (tasks/scope-change.ts), when it has one.
   scopeChange?: string | null;
+  // GitHub's word on merging it into its base: CONFLICTING once the base
+  // moved under it (UNKNOWN while GitHub works it out).
+  mergeable?: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
 }
 
 export type TaskState =

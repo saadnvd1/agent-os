@@ -178,6 +178,23 @@ export function queueEvent(
   ).run(workspaceId, `${ONCE}${key}`, subject, line, ARMED, iso(now));
 }
 
+// A condition the orchestrator has been told about another way (a one-off
+// event said it), so a later diff doesn't send it again.
+export function markTold(
+  workspaceId: string,
+  key: string,
+  subject: string,
+  now = Date.now()
+): void {
+  db.prepare(
+    `INSERT INTO orchestrator_events
+       (workspace_id, key, subject, line, sticky, low, hits, created_at, delivered_at)
+     VALUES (?, ?, ?, '', 1, 0, ?, ?, ?)
+     ON CONFLICT(workspace_id, key) DO UPDATE SET
+       hits = excluded.hits, delivered_at = excluded.delivered_at, cleared_at = NULL`
+  ).run(workspaceId, key, subject, ARMED, iso(now), iso(now));
+}
+
 // Ready to send: held on two diffs, not sent yet.
 export function pendingEvents(workspaceId: string): EventRow[] {
   return db
