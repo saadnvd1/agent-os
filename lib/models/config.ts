@@ -100,6 +100,7 @@ const providerSchema = z.strictObject({
       z.string().max(200)
     )
     .optional(),
+  contextWindow: z.number().int().min(100_000).max(10_000_000).optional(),
   enabled: z.boolean(),
 });
 

@@ -37,6 +37,9 @@ export interface ModelProvider {
   tiers?: ModelTiers;
   // Plain settings the endpoint wants (a longer timeout, say). Never a key.
   env?: Record<string, string>;
+  // The context window of its models, in tokens: Claude Code assumes a
+  // size from the model's name, and the compact window is capped at this.
+  contextWindow?: number;
   enabled: boolean;
 }
 
@@ -77,6 +80,9 @@ export const PROVIDER_PRESETS: ModelProvider[] = [
       sonnet: "deepseek-flash",
       haiku: "deepseek-flash",
     },
+    // 1M for deepseek-flash (api-docs.deepseek.com/quick_start/pricing);
+    // deepseek-v4-pro's isn't stated there, and is assumed to match.
+    contextWindow: 1_000_000,
     enabled: false,
   },
   {
@@ -88,6 +94,8 @@ export const PROVIDER_PRESETS: ModelProvider[] = [
     models: ["glm-5.3", "glm-5.3-flash"],
     tiers: { opus: "glm-5.3", sonnet: "glm-5.3", haiku: "glm-5.3-flash" },
     env: { API_TIMEOUT_MS: "3000000" },
+    // docs.z.ai/guides/llm/glm-5.3
+    contextWindow: 1_000_000,
     enabled: false,
   },
 ];

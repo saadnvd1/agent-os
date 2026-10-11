@@ -11,6 +11,7 @@
  */
 
 import { db } from "../db";
+import { effectiveModels } from "../models/config";
 import { MAX_REFRESH_TOKENS, MIN_REFRESH_TOKENS } from "./refresh-limits";
 
 export const ORCHESTRATOR_KEY = "orchestrator.refresh_tokens";
@@ -99,7 +100,12 @@ export function compactThreshold(
   tokens: number,
   provider: string | null | undefined
 ): number {
-  return tokens > 0 && provider ? tokens + PROVIDER_BASE_TOKENS : tokens;
+  if (tokens <= 0 || !provider) return tokens;
+  const window = effectiveModels().providers.find(
+    (p) => p.id === provider
+  )?.contextWindow;
+  const wanted = tokens + PROVIDER_BASE_TOKENS;
+  return window ? Math.min(wanted, window) : wanted;
 }
 
 // What an agent is launched with so it compacts itself at the threshold.
