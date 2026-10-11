@@ -18,6 +18,7 @@ import {
   taskOverride,
 } from "./resolve";
 import { ANTHROPIC } from "./roles";
+import { queueEvent } from "../orchestrator/events";
 
 export const PLAN_FILE = ".agentos/plan.md";
 
@@ -39,6 +40,52 @@ export function preparePlanDir(worktree: string): void {
   const dir = path.join(worktree, path.dirname(PLAN_FILE));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, ".gitignore"), "*\n");
+}
+
+const SUMMARY_LINE = 120;
+
+// The plan's first few headings and bullets, trimmed: what the orchestrator
+// needs to know what was decided, with no model call.
+export function planSummary(text: string, max = 5): string[] {
+  const clean = (l: string) =>
+    l
+      .replace(/^\s*(?:#+|[-*+]|\d+[.)])\s+/, "")
+      .replace(/[*`_]/g, "")
+      .trim();
+  const trim = (l: string) =>
+    l.length > SUMMARY_LINE ? `${l.slice(0, SUMMARY_LINE - 1)}…` : l;
+  const lines: { text: string; key: boolean }[] = [];
+  let fenced = false;
+  for (const raw of text.split("\n")) {
+    if (/^\s*```/.test(raw)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced || !raw.trim() || /^\s*(?:---+|\|)/.test(raw)) continue;
+    const t = clean(raw);
+    if (t)
+      lines.push({ text: t, key: /^\s*(?:#+|[-*+]|\d+[.)])\s+/.test(raw) });
+  }
+  const keyed = lines.filter((l) => l.key);
+  const picked = (keyed.length >= 3 ? keyed : lines).slice(0, max);
+  return picked.map((l) => trim(l.text));
+}
+
+// Tells the orchestrator that started a task its plan is written, once.
+function announcePlan(s: Session, ref: string): void {
+  if (!s.started_by) return;
+  const workspaceId = sessionWorkspace(s);
+  if (!workspaceId || !s.worktree_path) return;
+  const file = path.join(s.worktree_path, PLAN_FILE);
+  let head = `Task "${s.name}": no plan file was written; implementing on ${ref} anyway.`;
+  try {
+    const summary = planSummary(fs.readFileSync(file, "utf8"));
+    head = `Task "${s.name}": plan written to ${file}; implementing on ${ref}.`;
+    if (summary.length) head += `\n${summary.map((l) => `- ${l}`).join("\n")}`;
+  } catch {
+    // No plan file: the line says so.
+  }
+  queueEvent(workspaceId, `plan-done:${s.id}`, s.id, head);
 }
 
 export const implementMessageId = (sessionId: string) =>
@@ -88,6 +135,11 @@ export async function handoffAfterPlan(
     return true;
   })();
   if (!claimed) return false;
+  try {
+    announcePlan(s, routed.ref);
+  } catch (e) {
+    console.error("plan-done event failed:", e);
+  }
   await applySessionModel(sessionId, s.model_provider ?? ANTHROPIC, routed);
   await send(sessionId, id);
   return true;

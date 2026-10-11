@@ -494,8 +494,13 @@ The most specific setting wins: a task's own model, then its workspace's
 `AGENTOS_REVIEW_MODEL` (gate review and scope check) and
 `AGENTOS_TITLE_MODEL` (helpers) in the server's environment still replace a
 role's default where Settings names none. A
-Claude session started without a model (the orchestrator's `start_session`,
-the API) runs on the interactive role's; one you pick a model for keeps it.
+Claude session you start without a model runs on the interactive role's. One
+an orchestrator starts (its `start_session`, or `aos spawn` run from an
+orchestrator) is recorded as started by it (`started_by`) and runs on the
+implementation role instead, so delegated work doesn't use Opus by default;
+`start_session` takes a `model` (`"provider/model"`, checked like a task's:
+gate roles can't be set, other providers must be enabled). One you pick a
+model for keeps it.
 
 **Plan, then implement.** A chat task whose planning and implementation
 models differ starts with a plan step: its first turn runs on the planning
@@ -503,7 +508,13 @@ model and writes the plan to `.agentos/plan.md` in its worktree (ignored by
 git), changing nothing else. When that turn ends, the same conversation
 switches to the implementation model (a live model switch, or a resume with
 `--model` when the provider changes) and is told to follow the plan. Turn it
-off in Settings, or per task with `plan: false`. Terminal tasks skip it.
+off in Settings, or per task with `plan: false`. Terminal tasks skip it. An
+orchestrator decides it for every task: `start_task` requires `plan` and a
+short `plan_reason`, stored on the task and shown on its card ("Planned:
+touches 6 files across gates and UI" / "No plan: one-line default change"),
+and **Usage → Compare** splits cost into planned and not. When the plan step
+finishes, the orchestrator gets one event with the plan file's path and a
+3-5 line summary; the handoff to implementation stays automatic.
 
 **Per task.** The task draft has a **Model** chip ("Routed by role", or one
 model); `POST /api/tasks` and the orchestrator's `start_task` take `model`, as
@@ -1044,6 +1055,11 @@ it may do on its own, and the lines that always come back to you as asks.
   approve, answer an ask or pass a gate. The route
   they call answers only the orchestrator's worker, by a per-orchestrator
   secret. Its shell runs only `aos` commands that read.
+- **Triage:** its brief has it decide each job: small and clear is a task with
+  `plan: false` and the steps written into the brief; big, unclear or
+  cross-cutting is `plan: true`; work outside a repository is a
+  `start_session` (Sonnet) with the steps in the prompt. It puts
+  implementation on Opus only when the work needs deep reasoning, and says why.
 - **Files:** it reads anywhere and writes (Write, Edit, NotebookEdit) anywhere
   except a project repository, a task worktree (`~/.agent-os/worktrees`),
   AgentOS's own install and state (all of `~/.agent-os` but its own folder),

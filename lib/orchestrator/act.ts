@@ -4,7 +4,11 @@
  * the brakes.
  */
 
-import { parseOverride, type ModelOverride } from "../models/resolve";
+import {
+  parseOverride,
+  sessionModelRef,
+  type ModelOverride,
+} from "../models/resolve";
 import { sendMessage } from "../bus";
 import { chatState } from "../chat/runner";
 import { stopSession } from "../sessions/stop";
@@ -88,10 +92,12 @@ export async function startTask(
     after?: string;
     model?: ModelOverride;
     plan?: boolean;
+    planReason?: string;
   } = {}
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
   const model = parseOverride(opts.model) ?? undefined;
+  const startedBy = orchestratorId(workspaceId);
   // Its brakes read this machine's usage, not the other machine's account.
   if (isRemoteHost(project.host_id))
     throw new Error(
@@ -107,6 +113,9 @@ export async function startTask(
       name: opts.name,
       view,
       model,
+      plan: opts.plan,
+      planReason: opts.planReason,
+      startedBy,
       baseBranch: opts.base || undefined,
       after: opts.after,
       originWorkspaceId: workspaceId,
@@ -124,6 +133,8 @@ export async function startTask(
             view,
             model,
             plan: opts.plan,
+            planReason: opts.planReason,
+            startedBy,
           }),
         (s) => s.id
       )
@@ -133,16 +144,24 @@ export async function startTask(
     return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}. It starts by itself; you'll get an event when it does.`;
   }
   const task = out.started;
-  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.`;
+  const skipped =
+    opts.plan && task.plan_phase !== "planning"
+      ? ` Plan step skipped: ${view === "terminal" ? "a terminal task has none" : "planning and implementation use the same model"}.`
+      : "";
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${skipped}`;
 }
 
 export async function startSession(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  opts: { name?: string; view?: StartView } = {}
+  opts: { name?: string; view?: StartView; model?: string } = {}
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
+  const startedBy = orchestratorId(workspaceId);
+  const model = parseOverride(opts.model);
+  if (model && typeof model !== "string")
+    throw new Error(`model: a session takes one "provider/model"`);
   const view = opts.view ?? DEFAULT_START_VIEW;
   if (view === "chat" && isRemoteHost(project.host_id))
     throw new Error("Spawning on other machines isn't supported yet");
@@ -159,12 +178,20 @@ export async function startSession(
               name: opts.name,
               view,
               access: "full",
+              model,
+              startedBy,
             })
           ).session
-        : spawnSession({ project: project.id, prompt, name: opts.name }),
+        : spawnSession({
+            project: project.id,
+            prompt,
+            name: opts.name,
+            model,
+            startedBy,
+          }),
     (s) => s.id
   );
-  return `Started session "${session.name}" (id ${session.id.slice(0, 8)}, ${session.view}) in ${project.name}.`;
+  return `Started session "${session.name}" (id ${session.id.slice(0, 8)}, ${session.view}) in ${project.name} on ${sessionModelRef(session)}.`;
 }
 
 function itemLine(i: StackItemView): string {

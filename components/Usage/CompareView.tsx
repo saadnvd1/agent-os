@@ -197,14 +197,26 @@ function CompareTables({ data }: { data: Comparison }) {
         }))}
         total={sumSpend(data.roles)}
       />
+      {data.plans.length > 0 && (
+        <SpendTable
+          title="Planned · not planned"
+          rows={data.plans.map((r) => ({
+            ...r.spend,
+            key: r.key,
+            label: `${{ planned: "Planned", unplanned: "No plan", unstated: "Not stated" }[r.key]} · ${r.tasks} ${r.tasks === 1 ? "task" : "tasks"}`,
+          }))}
+          total={sumSpend(data.plans.map((r) => r.spend))}
+        />
+      )}
       <p className="text-muted-foreground text-[11px]">
         A task counts under the provider its own turns ran on (anthropic is the
         baseline); its reviews and checks count toward its cost. Dollars are
         list-price estimates; for Claude, the plan&apos;s real measure is its
         5-hour window, shared out by how far each turn moved it (an estimate).
-        Outcomes come from the orchestrator&apos;s checks, so only its tasks
-        have them. Under 10 tasks a column is a small sample: read it as a hint,
-        not a result.
+        Planned or not is the orchestrator&apos;s own call, recorded when it
+        started the task. Outcomes come from the orchestrator&apos;s checks, so
+        only its tasks have them. Under 10 tasks a column is a small sample:
+        read it as a hint, not a result.
       </p>
     </>
   );

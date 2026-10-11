@@ -35,6 +35,8 @@ export interface CompareTurn extends ModelTurnRow {
 export interface TaskOutcome {
   id: string;
   status: string | null;
+  // The decision on a plan step: null when none was recorded.
+  planned: boolean | null;
   // The first finished CI run, and review, on its PR: passed or not; null
   // when it never had one (no PR, or not under an orchestrator).
   ciFirstGreen: boolean | null;
@@ -74,11 +76,19 @@ export interface RoleModelRow extends TokenSpend {
   wallMs: number;
 }
 
+// Tasks split by whether the orchestrator chose a plan step for them.
+export interface PlanSplitRow {
+  key: "planned" | "unplanned" | "unstated";
+  tasks: number;
+  spend: TokenSpend;
+}
+
 export interface Comparison {
   from: number;
   to: number;
   cohorts: Cohort[];
   roles: RoleModelRow[];
+  plans: PlanSplitRow[];
 }
 
 const rate = (): Rate => ({ yes: 0, of: 0 });
@@ -154,6 +164,17 @@ export function compareRuns(
   }
   for (const c of cohorts.values()) c.smallSample = c.tasks < SMALL_SAMPLE;
 
+  const plans = new Map<PlanSplitRow["key"], PlanSplitRow>();
+  for (const [id, ts] of byTask) {
+    const planned = outcomes.get(id)!.planned;
+    const key =
+      planned === null ? "unstated" : planned ? "planned" : "unplanned";
+    let r = plans.get(key);
+    if (!r) plans.set(key, (r = { key, tasks: 0, spend: emptySpend() }));
+    r.tasks += 1;
+    for (const t of ts) addRow(r.spend, t, prices);
+  }
+
   const roles = new Map<string, RoleModelRow>();
   for (const t of inRange) {
     const { provider, model } = rowModel(t);
@@ -179,6 +200,9 @@ export function compareRuns(
     roles: [...roles.values()].sort(
       (a, b) => a.role.localeCompare(b.role) || b.costUsd - a.costUsd
     ),
+    plans: (["planned", "unplanned", "unstated"] as const)
+      .map((k) => plans.get(k))
+      .filter((r): r is PlanSplitRow => !!r),
   };
 }
 
@@ -201,10 +225,14 @@ export function taskOutcomes(ids: string[]): Map<string, TaskOutcome> {
   const marks = ids.map(() => "?").join(",");
   const tasks = db
     .prepare(
-      `SELECT id, task_status FROM sessions
+      `SELECT id, task_status, plan_decided FROM sessions
        WHERE id IN (${marks}) AND task_status IS NOT NULL`
     )
-    .all(...ids) as { id: string; task_status: string }[];
+    .all(...ids) as {
+    id: string;
+    task_status: string;
+    plan_decided: number | null;
+  }[];
   const checks = db
     .prepare(
       `SELECT id, session_id, sha, kind, status FROM orchestrator_checks
@@ -227,6 +255,7 @@ export function taskOutcomes(ids: string[]): Map<string, TaskOutcome> {
     out.set(t.id, {
       id: t.id,
       status: t.task_status,
+      planned: t.plan_decided === null ? null : t.plan_decided === 1,
       ciFirstGreen: null,
       reviewFirstPass: null,
       gateFailures: 0,

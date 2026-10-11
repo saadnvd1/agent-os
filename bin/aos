@@ -350,6 +350,7 @@ async function main() {
         project,
         prompt: words.join(" "),
         mode: cmd === "task" ? "task" : "session",
+        ...(me && { from: me }),
         ...(name && { name }),
         ...(on && { on }),
         ...(after && { after }),

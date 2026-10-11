@@ -11,7 +11,7 @@ import { db, queries, type Session } from "../db";
 import type { AgentType } from "../providers";
 import type { ChatAccess, ChatImage } from "../chat/events";
 import { resolveModelForAgent } from "../model-catalog";
-import { resolveRole, setSessionModel } from "../models/resolve";
+import { parseOverride, resolveRole, setSessionModel } from "../models/resolve";
 import { ANTHROPIC } from "../models/roles";
 import { getProject } from "../projects";
 import { getHost, isRemoteHost } from "../hosts";
@@ -71,6 +71,9 @@ export interface LaunchInput {
   name?: string | null;
   view?: "chat" | "terminal";
   parentSessionId?: string | null;
+  // The orchestrator session that starts it: it runs on the implementation
+  // role's model (or `model`), not the interactive one's.
+  startedBy?: string | null;
   groupPath?: string;
   systemPrompt?: string | null;
 }
@@ -222,10 +225,20 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       : DEFAULT_START_VIEW;
   // Claude with no model picked runs on the interactive role's, here; on
   // another provider only as a chat, whose worker carries its endpoint.
+  const role = input.startedBy ? "implement" : "interactive";
+  // An orchestrator's explicit model is validated like a task's.
+  const picked = input.startedBy ? parseOverride(input.model) : null;
+  if (picked && typeof picked !== "string")
+    throw new Error(`model: a session takes one "provider/model"`);
   const routed =
-    agentType === "claude" && !input.model?.trim() && !remote
-      ? resolveRole("interactive", { workspaceId: project?.workspace_id })
+    agentType === "claude" && (picked || !input.model?.trim()) && !remote
+      ? resolveRole(role, {
+          workspaceId: project?.workspace_id,
+          override: picked,
+        })
       : null;
+  if (picked && routed && routed.provider.id !== ANTHROPIC && view !== "chat")
+    throw new Error("Another provider's models run only as a chat");
   const interactive =
     routed && (routed.provider.id === ANTHROPIC || view === "chat")
       ? routed
@@ -264,8 +277,14 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       runOn
     );
   db.prepare(
-    `UPDATE sessions SET view = ?, name_source = ?, setup_status = ? WHERE id = ?`
-  ).run(view, naming.source, useWorktree ? "running" : null, id);
+    `UPDATE sessions SET view = ?, name_source = ?, setup_status = ?, started_by = ? WHERE id = ?`
+  ).run(
+    view,
+    naming.source,
+    useWorktree ? "running" : null,
+    input.startedBy ?? null,
+    id
+  );
   if (interactive) setSessionModel(id, interactive);
   if (input.access)
     db.prepare(`UPDATE sessions SET chat_access = ? WHERE id = ?`).run(

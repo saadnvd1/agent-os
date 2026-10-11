@@ -128,6 +128,9 @@ describe("role resolution", () => {
   it("names the role a session's next turn runs as", () => {
     expect(sessionRole({ role: "orchestrator" })).toBe("orchestrator");
     expect(sessionRole({})).toBe("interactive");
+    // Work an orchestrator started is implementation; Saad's own is not.
+    expect(sessionRole({ started_by: "orch-1" })).toBe("implement");
+    expect(sessionRole({ started_by: null })).toBe("interactive");
     expect(
       sessionRole({ task_status: "running", plan_phase: "planning" })
     ).toBe("plan");

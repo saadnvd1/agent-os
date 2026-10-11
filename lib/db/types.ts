@@ -20,6 +20,11 @@ export interface Session {
   model_overrides?: string | null;
   // A task's plan step: planning on the planning model, then implementing.
   plan_phase?: "planning" | "implementing" | null;
+  // The orchestrator session that started this one; null for a person.
+  started_by?: string | null;
+  // 1 planned, 0 no plan, null not stated; why, in the starter's words.
+  plan_decided?: number | null;
+  plan_reason?: string | null;
   system_prompt: string | null;
   group_path: string; // Deprecated - use project_id
   project_id: string | null;

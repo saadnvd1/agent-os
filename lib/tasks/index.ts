@@ -96,6 +96,8 @@ export interface TaskView {
   // plan step (lib/models).
   model?: string;
   planning?: boolean;
+  // What its starter decided about a plan step, and why; null if unstated.
+  plan?: { planned: boolean; reason: string | null } | null;
   // A quick change: the orchestrator session that makes it (no agent).
   quickOf?: string | null;
 }
@@ -111,6 +113,10 @@ export async function createTask(opts: {
   model?: ModelOverride;
   // Plan first on the planning model (Settings' default otherwise).
   plan?: boolean;
+  // Why the starter chose to plan or not: shown on the task's card.
+  planReason?: string | null;
+  // The orchestrator session that started it (null: a person).
+  startedBy?: string | null;
   // Started from this LumifyHub card, which the task then moves.
   cardId?: string;
   // Stacked: cut from another task's pushed branch, at this exact commit.
@@ -247,7 +253,8 @@ async function startTask(
   // Everything the launch needs is on the row, so a restart can resume it.
   db.prepare(
     `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ?,
-       model_provider = ?, model_overrides = ?, plan_phase = ? WHERE id = ?`
+       model_provider = ?, model_overrides = ?, plan_phase = ?,
+       plan_decided = ?, plan_reason = ?, started_by = ? WHERE id = ?`
   ).run(
     prompt,
     buildTaskBrief({
@@ -260,6 +267,9 @@ async function startTask(
     routing.first.provider.id === ANTHROPIC ? null : routing.first.provider.id,
     routing.override ? JSON.stringify(routing.override) : null,
     routing.plan ? "planning" : null,
+    opts.plan === undefined ? null : opts.plan ? 1 : 0,
+    opts.planReason?.trim() || null,
+    opts.startedBy ?? null,
     id
   );
   opts.onCreated?.(id);
@@ -376,6 +386,13 @@ export async function taskView(session: Session): Promise<TaskView> {
     armed: !!session.merge_armed_at,
     model: sessionModelRef(session),
     planning: session.plan_phase === "planning",
+    plan:
+      session.plan_decided == null
+        ? null
+        : {
+            planned: !!session.plan_decided,
+            reason: session.plan_reason ?? null,
+          },
     quickOf: session.quick_of ?? null,
   };
 }

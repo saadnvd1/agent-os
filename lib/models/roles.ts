@@ -91,8 +91,11 @@ export function sessionRole(session: {
   role?: string | null;
   task_status?: string | null;
   plan_phase?: string | null;
+  started_by?: string | null;
 }): ModelRole {
   if (session.role === "orchestrator") return "orchestrator";
-  if (!session.task_status) return "interactive";
+  // Work an orchestrator started is implementation, not a person's session.
+  if (!session.task_status)
+    return session.started_by ? "implement" : "interactive";
   return session.plan_phase === "planning" ? "plan" : "implement";
 }

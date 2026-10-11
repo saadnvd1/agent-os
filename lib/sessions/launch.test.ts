@@ -88,6 +88,52 @@ describe("launchSession (a draft's first send)", () => {
     expect(sent[0]).toEqual({ sessionId: session.id, id: queued.id });
   });
 
+  it("runs a session an orchestrator started on the implementation model, and Saad's on the interactive one", async () => {
+    const mine = await launchSession({
+      agentType: "claude",
+      prompt: "a",
+      access: "ask",
+    });
+    const delegated = await launchSession({
+      agentType: "claude",
+      prompt: "b",
+      access: "ask",
+      startedBy: "orch-1",
+    });
+    const opus = await launchSession({
+      agentType: "claude",
+      prompt: "c",
+      access: "ask",
+      startedBy: "orch-1",
+      model: "anthropic/claude-opus-5-5",
+    });
+    expect(row(mine.session.id)).toMatchObject({
+      model: "claude-opus-5-5",
+      started_by: null,
+    });
+    expect(row(delegated.session.id)).toMatchObject({
+      model: "claude-sonnet-5-5",
+      started_by: "orch-1",
+    });
+    expect(row(opus.session.id).model).toBe("claude-opus-5-5");
+    await until(() => sent.length === 3);
+  });
+
+  it("refuses an orchestrator's session on a gate role or a provider that isn't on", async () => {
+    const start = (model: string | Record<string, string>) =>
+      launchSession({
+        agentType: "claude",
+        prompt: "d",
+        access: "ask",
+        startedBy: "orch-1",
+        model: model as string,
+      });
+    await expect(
+      start({ review: "anthropic/claude-opus-5-5" })
+    ).rejects.toThrow();
+    await expect(start("deepseek/deepseek-v4-pro")).rejects.toThrow();
+  });
+
   it("makes one session for a repeated key, even while the first is starting", async () => {
     const id = "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b";
     const start = () =>

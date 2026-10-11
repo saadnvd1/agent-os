@@ -107,6 +107,7 @@ export async function runTool(
         after: a.after,
         model: a.model,
         plan: a.plan,
+        planReason: a.plan_reason,
       });
     }
     case "set_task_model": {
@@ -122,6 +123,7 @@ export async function runTool(
       return startSession(w, a.project, a.prompt, {
         name: a.name,
         view: a.view,
+        model: a.model,
       });
     }
     case "quick_change": {

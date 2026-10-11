@@ -37,6 +37,10 @@ function sessionLine(f: SessionFacts): string {
       task += `, BLOCKED: ${untrusted(f.name, f.task.blocked)}`;
     parts.push(task);
   }
+  if (f.plan)
+    parts.push(
+      `${f.plan.planned ? "planned" : "no plan"}${f.plan.reason ? `: ${untrusted(f.name, f.plan.reason)}` : ""}`
+    );
   if (f.stack) {
     const card = f.stack.ticket ? ` ${f.stack.ticket}` : "";
     parts.push(

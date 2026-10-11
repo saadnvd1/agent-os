@@ -47,6 +47,12 @@ export function TaskRow({ task }: { task: TaskView }) {
             {task.model &&
               ` · ${task.model}${task.planning ? " (planning)" : ""}`}
           </p>
+          {task.plan && (
+            <p className="text-muted-foreground truncate text-[11px]">
+              {task.plan.planned ? "Planned" : "No plan"}
+              {task.plan.reason && `: ${task.plan.reason}`}
+            </p>
+          )}
           {task.cardUrl && (
             <a
               href={task.cardUrl}

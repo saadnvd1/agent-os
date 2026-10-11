@@ -29,6 +29,24 @@ const turns = (id: string) =>
     .all(id);
 
 describe("recordTurn", () => {
+  it("records a session an orchestrator started as implementation", () => {
+    const mine = session();
+    const delegated = session();
+    getDb()
+      .prepare(`UPDATE sessions SET started_by = 'orch-1' WHERE id = ?`)
+      .run(delegated.id);
+    recordTurn(mine, null, totals(1, 10));
+    recordTurn(delegated, null, totals(1, 10));
+    const role = (id: string) =>
+      (
+        getDb()
+          .prepare(`SELECT role FROM chat_turns WHERE session_id = ?`)
+          .get(id) as { role: string }
+      ).role;
+    expect(role(mine.id)).toBe("interactive");
+    expect(role(delegated.id)).toBe("implement");
+  });
+
   it("writes nothing for a turn that spent nothing (/context)", () => {
     const s = session();
     const after = recordTurn(s, null, totals(0.5, 100));
