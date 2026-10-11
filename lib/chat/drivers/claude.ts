@@ -8,7 +8,7 @@ import {
 import type { ChatDriver, ChatConversation } from "../driver";
 import type { DriverEvent, FileSuggestion, McpServerView } from "../events";
 import { InputQueue } from "../queue";
-import { Approvals, isPlanFile, sdkMode } from "./claude-approvals";
+import { Approvals, guardHook, isPlanFile, sdkMode } from "./claude-approvals";
 import { toChatContext, usageTotals } from "../context";
 import { cacheTtlMs } from "../stale";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
@@ -194,6 +194,9 @@ export const claudeDriver: ChatDriver = {
               timeout: 24 * 60 * 60,
             },
             { matcher: "ExitPlanMode", hooks: [approvals.proposePlan] },
+            ...(options.toolGuard
+              ? [{ hooks: [guardHook(options.toolGuard)] }]
+              : []),
           ],
         },
         settings: { attribution: NO_ATTRIBUTION },

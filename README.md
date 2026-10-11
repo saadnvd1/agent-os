@@ -882,6 +882,18 @@ it may do on its own, and the lines that always come back to you as asks.
   approve, answer an ask or pass a gate. The route
   they call answers only the orchestrator's worker, by a per-orchestrator
   secret. Its shell runs only `aos` commands that read.
+- **Files:** it reads anywhere and writes (Write, Edit, NotebookEdit)
+  anywhere except a project repository, a task worktree
+  (`~/.agent-os/worktrees`), AgentOS's own install and state (all of
+  `~/.agent-os` but its own folder), and secret files (`.env`, keys,
+  `~/.ssh`, `~/.aws`, tokenvault and the like; the list the merge gates use
+  for secrets handling, `lib/secret-paths.ts`). Code changes to a project go
+  through a task, so its PR still passes CI, review and scope. Its chat
+  worker checks every write in a PreToolUse hook before it runs, on the path
+  with symlinks and `..` resolved as the system will, and refuses with the
+  reason; the repositories are read from the database on each write, so a
+  project added since counts. A worker from before an update picks the new
+  permissions up at its handover to the new build.
 - **Brakes:** every start is refused, with the reason, while 4 sessions run in
   the workspace, after 6 starts in an hour (`orch_max_running` and
   `orch_max_starts_per_hour` on `workspaces`), or when the account's 5-hour

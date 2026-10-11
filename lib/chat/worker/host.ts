@@ -150,6 +150,9 @@ export class ChatHost {
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
       throw new Error(`${session.agent_type} sessions can't run as chat yet`);
+    // Only the Claude driver runs a role's guard; anything else would skip it.
+    if (extras.toolGuard && session.agent_type !== "claude")
+      throw new Error(`${session.agent_type} can't enforce this role's tools`);
     this.atRest = driver.atRest !== false;
     const cwd = session.working_directory.replace(/^~/, os.homedir());
     const env = agentEnv(session.id);
@@ -195,6 +198,7 @@ export class ChatHost {
       allowedTools: extras.allowedTools,
       disallowedTools: extras.disallowedTools,
       permissionMode: extras.permissionMode,
+      toolGuard: extras.toolGuard,
     });
     this.suggestion = session.chat_suggestion ?? null;
     try {
