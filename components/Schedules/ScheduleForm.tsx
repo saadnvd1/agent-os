@@ -31,8 +31,10 @@ import {
   minGapMinutes,
   nextRuns,
   presetCron,
+  wall,
   type PresetKind,
 } from "@/lib/schedules/cron";
+import { parseWhen, relativeTime } from "@/lib/schedules/when";
 
 const KINDS: { value: ScheduleKind; label: string; hint: string }[] = [
   {
@@ -57,7 +59,10 @@ const KINDS: { value: ScheduleKind; label: string; hint: string }[] = [
   },
 ];
 
-const PRESETS: { value: PresetKind | "custom"; label: string }[] = [
+type Preset = PresetKind | "custom" | "once";
+
+const PRESETS: { value: Preset; label: string }[] = [
+  { value: "once", label: "Once" },
   { value: "every", label: "Every…" },
   { value: "hourly", label: "Hourly" },
   { value: "daily", label: "Daily" },
@@ -115,6 +120,17 @@ function Segmented<T extends string>({
   );
 }
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// The date and time inputs' values for an instant, as the zone's wall clock.
+function wallParts(ms: number, tz: string) {
+  const w = wall(ms, tz);
+  return {
+    date: `${w.y}-${pad(w.m)}-${pad(w.d)}`,
+    time: `${pad(w.h)}:${pad(w.mi)}`,
+  };
+}
+
 const Field = ({
   label,
   children,
@@ -148,7 +164,8 @@ export function ScheduleForm({
   const update = useUpdateSchedule();
   const mutation = existing ? update : create;
 
-  const initialPreset = existing ? cronPreset(existing.cron) : null;
+  const initialPreset =
+    existing && existing.run_at == null ? cronPreset(existing.cron) : null;
   const [wsId, setWsId] = useState(
     existing?.workspace_id ?? workspaceId ?? workspaces[0]?.id ?? ""
   );
@@ -161,9 +178,21 @@ export function ScheduleForm({
   );
   const [projectId, setProjectId] = useState(existing?.project_id ?? "");
   const [prompt, setPrompt] = useState(existing?.prompt ?? "");
-  const [preset, setPreset] = useState<PresetKind | "custom">(
-    existing ? (initialPreset?.kind ?? "custom") : draft ? "every" : "weekdays"
+  const [preset, setPreset] = useState<Preset>(
+    existing?.run_at != null
+      ? "once"
+      : existing
+        ? (initialPreset?.kind ?? "custom")
+        : draft
+          ? "every"
+          : "weekdays"
   );
+  const initialAt = wallParts(
+    existing?.run_at ?? Date.now() + 3_600_000,
+    existing?.timezone ?? DEFAULT_TIMEZONE
+  );
+  const [atDate, setAtDate] = useState(initialAt.date);
+  const [atTime, setAtTime] = useState(initialAt.time);
   const [every, setEvery] = useState(initialPreset?.every ?? 30);
   const [hour, setHour] = useState(initialPreset?.hour ?? 9);
   const [minute, setMinute] = useState(initialPreset?.minute ?? 0);
@@ -197,12 +226,14 @@ export function ScheduleForm({
     .sort((a, b) => a.name.localeCompare(b.name));
   const target = targets.find((s) => s.id === targetId)?.id ?? "";
 
-  const cron =
-    preset === "custom"
+  const once = preset === "once";
+  const cron = once
+    ? ""
+    : preset === "custom"
       ? custom.trim()
       : presetCron({ kind: preset, hour, minute, weekday, every });
   const tzOk = isTimezone(timezone);
-  const cronProblem = cronError(cron);
+  const cronProblem = once ? null : cronError(cron);
   // The preview counts from now, kept fresh while the form is open.
   const [openedAt, setOpenedAt] = useState(() => Date.now());
   useEffect(() => {
@@ -214,13 +245,32 @@ export function ScheduleForm({
     [cron, cronProblem, timezone, tzOk, openedAt]
   );
 
+  // The picked wall time in the zone, or null while it's incomplete.
+  const runAt = useMemo(() => {
+    if (!once || !tzOk || !atDate || !atTime) return null;
+    try {
+      return parseWhen(`${atDate}T${atTime}`, timezone);
+    } catch {
+      return null;
+    }
+  }, [once, tzOk, atDate, atTime, timezone]);
+  // Saving a done one-off at its old time can't reopen it; a new time must be ahead.
+  const atProblem =
+    once && tzOk
+      ? runAt === null
+        ? "Pick a date and time"
+        : runAt <= openedAt && runAt !== existing?.run_at
+          ? "That time has passed"
+          : null
+      : null;
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const input = {
       workspaceId: workspace,
       projectId: project || null,
       name,
-      cron,
+      ...(once ? { at: runAt } : { cron }),
       timezone,
       prompt,
       kind,
@@ -242,10 +292,11 @@ export function ScheduleForm({
   const tooOften = useMemo(
     () =>
       minGap > 0 &&
+      !once &&
       !cronProblem &&
       tzOk &&
       minGapMinutes(cron, timezone, openedAt) < minGap,
-    [minGap, cron, cronProblem, timezone, tzOk, openedAt]
+    [minGap, once, cron, cronProblem, timezone, tzOk, openedAt]
   );
 
   const ready =
@@ -253,6 +304,7 @@ export function ScheduleForm({
     prompt.trim() &&
     workspace &&
     !cronProblem &&
+    !atProblem &&
     tzOk &&
     !tooOften &&
     (kind === "message" ? target : kind === "orchestrator" || project);
@@ -362,7 +414,24 @@ export function ScheduleForm({
             setPreset(v);
           }}
         />
-        {preset === "custom" ? (
+        {once ? (
+          <div className="flex flex-wrap gap-2">
+            <Input
+              type="date"
+              aria-label="Date"
+              value={atDate}
+              onChange={(e) => setAtDate(e.target.value)}
+              className="h-11 w-44 md:h-9"
+            />
+            <Input
+              type="time"
+              aria-label="Time"
+              value={atTime}
+              onChange={(e) => setAtTime(e.target.value)}
+              className="h-11 w-32 md:h-9"
+            />
+          </div>
+        ) : preset === "custom" ? (
           <Input
             aria-label="Cron expression"
             value={custom}
@@ -450,10 +519,20 @@ export function ScheduleForm({
           className="text-muted-foreground h-11 md:h-8 md:text-xs"
         />
         <div className="bg-primary/[0.06] rounded-lg px-3 py-2.5 text-sm">
-          {cronProblem || !tzOk ? (
+          {cronProblem || !tzOk || atProblem ? (
             <p className="text-destructive">
-              {cronProblem ?? `Unknown time zone "${timezone}"`}
+              {!tzOk
+                ? `Unknown time zone "${timezone}"`
+                : (cronProblem ?? atProblem)}
             </p>
+          ) : once && runAt !== null ? (
+            <>
+              <p className="font-medium">{formatRunTime(runAt, timezone)}</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Runs once, {relativeTime(runAt, openedAt)}, then turns itself
+                off.
+              </p>
+            </>
           ) : (
             <>
               <p className="font-medium">{describeCron(cron)}</p>

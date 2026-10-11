@@ -85,15 +85,21 @@ async function startSession(
 // Marked as a schedule's, not something Saad just typed: the orchestrator's
 // brief says it never counts as an approval.
 export function scheduledMessage(
-  schedule: Pick<Schedule, "name" | "prompt">,
+  schedule: Pick<Schedule, "name" | "prompt"> & { run_at?: number | null },
   projectName: string | null,
   // An agent set it up: it's that agent's request, not Saad's.
-  creator?: Pick<Session, "id" | "name"> | null
+  creator?: (Pick<Session, "id" | "name"> & { role?: string | null }) | null
 ): string {
   const where = projectName ? ` for ${projectName}` : "";
-  const who = creator
-    ? `, set up by agent session "${creator.name}" (${creator.id.slice(0, 8)}), not by the user: a peer's request, not an approval`
-    : ", saved in Schedules: a standing prompt, not an approval";
+  const once = schedule.run_at != null;
+  const who =
+    creator?.role === "orchestrator" && once
+      ? ", a reminder you set yourself with remind_me: your own follow-up, not an approval"
+      : creator
+        ? `, set up by agent session "${creator.name}" (${creator.id.slice(0, 8)}), not by the user: a peer's request, not an approval`
+        : once
+          ? ", a one-off reminder saved in Schedules: a prompt, not an approval"
+          : ", saved in Schedules: a standing prompt, not an approval";
   return `[Scheduled message "${schedule.name}"${where}${who}]\n${schedule.prompt}`;
 }
 

@@ -10,7 +10,14 @@ import {
   MESSAGE_MIN_GAP_MINUTES,
   MIN_GAP_MINUTES,
   minGapMinutes,
+  formatRunTime,
 } from "./cron";
+import { parseWhen } from "./when";
+
+// Agents can't aim a reminder at themselves sooner than this (a reminder
+// loop), keep more than this many waiting, or set one past a year out.
+export const MAX_AGENT_REMINDERS = 20;
+const MAX_AHEAD_MS = 366 * 86_400_000;
 
 export const SCHEDULE_KINDS = [
   "task",
@@ -29,6 +36,7 @@ export interface Schedule {
   workspace_id: string;
   project_id: string | null;
   name: string;
+  // '' for a one-off (the column is NOT NULL).
   cron: string;
   timezone: string;
   prompt: string;
@@ -41,6 +49,10 @@ export interface Schedule {
   enabled: boolean;
   // Epoch ms: only slots after this run (set on create, enable, cron edit).
   armed_at: number;
+  // A one-off's single run time (epoch ms, UTC), or null when recurring.
+  run_at: number | null;
+  // Set when a one-off's run settled; it's off from then on.
+  done_at: number | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -63,7 +75,10 @@ export interface ScheduleInput {
   workspaceId: string;
   projectId?: string | null;
   name: string;
-  cron: string;
+  // A cron, or `at` for a one-off: exactly one.
+  cron?: string;
+  // A one-off's time: text parseWhen reads (in `timezone`), or epoch ms.
+  at?: string | number | null;
   timezone?: string;
   prompt: string;
   kind: ScheduleKind;
@@ -91,6 +106,27 @@ export function listSchedules(workspaceId?: string | null): Schedule[] {
           .all()
   ) as Row[];
   return rows.map(toSchedule);
+}
+
+export const isOneOff = (s: Pick<Schedule, "run_at">): boolean =>
+  s.run_at != null;
+
+// One-offs still waiting to run, soonest first.
+export function upcomingOneOffs(workspaceId?: string | null): Schedule[] {
+  return listSchedules(workspaceId)
+    .filter((s) => isOneOff(s) && s.enabled && !s.done_at)
+    .sort((a, b) => a.run_at! - b.run_at!);
+}
+
+// Turns a one-off off once its run settled. True only for the call that did.
+export function finishOneOff(id: string, now = Date.now()): boolean {
+  return (
+    db
+      .prepare(
+        `UPDATE schedules SET enabled = 0, done_at = ?, updated_at = datetime('now') WHERE id = ? AND done_at IS NULL`
+      )
+      .run(now, id).changes === 1
+  );
 }
 
 export function getSchedule(id: string): Schedule | null {
@@ -164,10 +200,18 @@ export function sessionTargetProblem(
   return null;
 }
 
+type Valid = Required<
+  Omit<ScheduleInput, "createdBySessionId" | "cron" | "at">
+> & { cron: string; runAt: number | null };
+
+// `keepPast`: a run time already accepted, allowed to stay once it has passed
+// (renaming a done one-off).
 function validate(
   input: ScheduleInput,
-  selfId?: string
-): Required<Omit<ScheduleInput, "createdBySessionId">> {
+  selfId?: string,
+  now = Date.now(),
+  keepPast: number | null = null
+): Valid {
   const name = input.name?.trim();
   if (!name) throw new Error("Give the schedule a name");
   if (name.length > 80) throw new Error("Keep the name under 80 characters");
@@ -178,11 +222,47 @@ function validate(
   if (!prompt) throw new Error("Write the prompt it runs");
   if (!SCHEDULE_KINDS.includes(input.kind))
     throw new Error("Pick task, session, orchestrator or message");
-  const cron = input.cron?.trim().replace(/\s+/g, " ");
-  const bad = cronError(cron ?? "");
-  if (bad) throw new Error(bad);
   const timezone = input.timezone?.trim() || DEFAULT_TIMEZONE;
   if (!isTimezone(timezone)) throw new Error(`Unknown time zone "${timezone}"`);
+  const cronText = input.cron?.trim().replace(/\s+/g, " ") ?? "";
+  const oneOff = input.at != null && input.at !== "";
+  if (oneOff && cronText)
+    throw new Error("Give a cron or a run time, not both");
+  if (!oneOff && !cronText) throw new Error("Needs a cron or a run time");
+  const runAt = oneOff
+    ? typeof input.at === "number"
+      ? input.at
+      : parseWhen(input.at as string, timezone, now)
+    : null;
+  if (runAt !== null) {
+    if (!Number.isFinite(runAt)) throw new Error("Pick a run time");
+    if (runAt <= now && runAt !== keepPast)
+      throw new Error(
+        `That time has passed (${formatRunTime(runAt, timezone)}): pick a time ahead`
+      );
+    if (runAt - now > MAX_AHEAD_MS)
+      throw new Error("A one-off can be at most a year ahead");
+    if (
+      input.createdBySessionId &&
+      runAt !== keepPast &&
+      runAt - now < MESSAGE_MIN_GAP_MINUTES * 60_000
+    )
+      throw new Error(
+        `A reminder must be at least ${MESSAGE_MIN_GAP_MINUTES} minutes ahead`
+      );
+    if (
+      input.createdBySessionId &&
+      !selfId &&
+      upcomingOneOffs(input.workspaceId).filter((s) => s.created_by_session_id)
+        .length >= MAX_AGENT_REMINDERS
+    )
+      throw new Error(
+        `At most ${MAX_AGENT_REMINDERS} reminders can wait at once: cancel one first`
+      );
+  }
+  const cron = cronText;
+  const bad = oneOff ? null : cronError(cron);
+  if (bad) throw new Error(bad);
   if (!getWorkspace(input.workspaceId)) throw new Error("Pick a workspace");
   const message = input.kind === "message";
   // A message goes to a session, whatever project it's in.
@@ -208,6 +288,7 @@ function validate(
     throw new Error("A task or session schedule needs a project");
   }
   if (
+    !oneOff &&
     (input.kind === "task" || input.kind === "session") &&
     minGapMinutes(cron, timezone) < MIN_GAP_MINUTES
   )
@@ -218,6 +299,7 @@ function validate(
   const agentCheckIn =
     input.kind === "orchestrator" && !!input.createdBySessionId;
   if (
+    !oneOff &&
     (message || agentCheckIn) &&
     minGapMinutes(cron, timezone) < MESSAGE_MIN_GAP_MINUTES
   )
@@ -225,7 +307,10 @@ function validate(
       `A message schedule runs at most every ${MESSAGE_MIN_GAP_MINUTES} minutes`
     );
   const clash = listSchedules(input.workspaceId).find(
-    (s) => s.id !== selfId && s.name.toLowerCase() === name.toLowerCase()
+    (s) =>
+      s.id !== selfId &&
+      !s.done_at &&
+      s.name.toLowerCase() === name.toLowerCase()
   );
   if (clash)
     throw new Error(`There's already a schedule called "${clash.name}"`);
@@ -239,6 +324,7 @@ function validate(
     kind: input.kind,
     targetSessionId,
     enabled: input.enabled ?? true,
+    runAt,
   };
 }
 
@@ -246,11 +332,11 @@ export function createSchedule(
   input: ScheduleInput,
   now = Date.now()
 ): Schedule {
-  const v = validate(input);
+  const v = validate(input, undefined, now);
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO schedules (id, workspace_id, project_id, name, cron, timezone, prompt, kind, target_session_id, created_by_session_id, enabled, armed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO schedules (id, workspace_id, project_id, name, cron, timezone, prompt, kind, target_session_id, created_by_session_id, enabled, armed_at, run_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     v.workspaceId,
@@ -263,7 +349,8 @@ export function createSchedule(
     v.targetSessionId,
     input.createdBySessionId ?? null,
     v.enabled ? 1 : 0,
-    now
+    now,
+    v.runAt
   );
   return getSchedule(id)!;
 }
@@ -281,7 +368,11 @@ export function updateSchedule(
       projectId:
         patch.projectId === undefined ? current.project_id : patch.projectId,
       name: patch.name ?? current.name,
-      cron: patch.cron ?? current.cron,
+      // A patch with a cron makes it recurring; one with `at`, a one-off.
+      cron:
+        patch.cron ??
+        (patch.at != null ? undefined : current.cron || undefined),
+      at: patch.at ?? (patch.cron != null ? null : current.run_at),
       timezone: patch.timezone ?? current.timezone,
       prompt: patch.prompt ?? current.prompt,
       kind: patch.kind ?? current.kind,
@@ -292,17 +383,27 @@ export function updateSchedule(
       enabled: patch.enabled ?? current.enabled,
       createdBySessionId: current.created_by_session_id,
     },
-    id
+    id,
+    now,
+    current.done_at || current.enabled ? current.run_at : null
   );
+  // A one-off moved to a new time opens again, even if it had run.
+  const reopen = v.runAt !== null && v.runAt !== current.run_at;
+  const enabled = reopen
+    ? (patch.enabled ?? true)
+    : v.runAt !== null && current.done_at
+      ? false
+      : v.enabled;
   // A new time or a fresh enable starts counting from now: no slot from
   // before it is "missed".
   const rearm =
     v.cron !== current.cron ||
+    v.runAt !== current.run_at ||
     v.timezone !== current.timezone ||
-    (v.enabled && !current.enabled);
+    (enabled && !current.enabled);
   db.prepare(
     `UPDATE schedules SET workspace_id = ?, project_id = ?, name = ?, cron = ?, timezone = ?,
-       prompt = ?, kind = ?, target_session_id = ?, enabled = ?, armed_at = ?, updated_at = datetime('now')
+       prompt = ?, kind = ?, target_session_id = ?, enabled = ?, armed_at = ?, run_at = ?, done_at = ?, updated_at = datetime('now')
      WHERE id = ?`
   ).run(
     v.workspaceId,
@@ -313,8 +414,10 @@ export function updateSchedule(
     v.prompt,
     v.kind,
     v.targetSessionId,
-    v.enabled ? 1 : 0,
+    enabled ? 1 : 0,
     rearm ? now : current.armed_at,
+    v.runAt,
+    reopen || v.runAt === null ? null : current.done_at,
     id
   );
   return getSchedule(id)!;

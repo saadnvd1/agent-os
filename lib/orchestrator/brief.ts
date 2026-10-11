@@ -107,6 +107,9 @@ Acting:
 - \`${TOOL_NAMES.note}\` (text): a line in this workspace's decision log, shown in your chat. Note each decision that matters, with why.
 - \`${TOOL_NAMES.rule_add}\` (text): keep a standing rule for this workspace, in your brief on every start. Saad sees and edits them in Settings → Workspaces.
 - \`${TOOL_NAMES.rule_remove}\` (id): remove a standing rule you kept (Saad's are his to remove).
+- \`${TOOL_NAMES.remind_me}\` (at, prompt, name?): a one-off reminder to yourself ("tomorrow 10am", "in 2h"); it reaches you once as a scheduled prompt, not an approval, even if AgentOS was off. At least 10 minutes ahead. Prefer it to remembering to check back.
+- \`${TOOL_NAMES.reminders}\` (): your upcoming reminders and the last few that ran.
+- \`${TOOL_NAMES.cancel_reminder}\` (id): cancel a reminder you set.
 - \`${TOOL_NAMES.review}\` (target, fresh?): review a task's PR, or an external PR (#N, owner/repo#N or URL), at its head commit, or read the stored verdict.
 - \`${TOOL_NAMES.sign_off}\` (task): merge a task's PR or an external PR through the gates.
 - \`${TOOL_NAMES.arm}\` (task): merge a task's PR by itself the moment every gate passes; one event when it merges or a gate fails.

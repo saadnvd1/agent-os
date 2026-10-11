@@ -30,6 +30,11 @@ describe("schedulesBadge", () => {
   });
 
   it("is quiet with no schedules", () => {
-    expect(schedulesBadge([])).toEqual({ next: null, failed: 0 });
+    expect(schedulesBadge([])).toEqual({
+      next: null,
+      failed: 0,
+      upcoming: 0,
+      nextUpcoming: null,
+    });
   });
 });

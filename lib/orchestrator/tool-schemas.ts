@@ -194,6 +194,23 @@ export const TOOL_SHAPES = {
       .describe("The rule, one sentence"),
   },
   rule_remove: { id: z.number().int().positive().describe("The rule's id") },
+  remind_me: {
+    at: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .describe('When: "tomorrow 10am", "in 2h" or 2026-10-12T10:00 (Central)'),
+    prompt: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2000)
+      .describe("What to remind yourself of, in words you'll understand later"),
+    name: z.string().trim().min(1).max(80).optional(),
+  },
+  reminders: {},
+  cancel_reminder: { id: ref("The reminder's id, from reminders") },
   review: {
     target: ref("The task, or its PR (#12 or URL)"),
     fresh: z

@@ -8,6 +8,8 @@ import { usePauseOrchestrator } from "@/data/orchestrators";
 import { useOrchestratorHeader } from "@/hooks/useOrchestratorHeader";
 import { headerParts } from "@/lib/orchestrator/header-line";
 import { cn } from "@/lib/utils";
+import { useSchedulesGlance } from "@/components/SessionList/useSchedulesGlance";
+import { schedulesUiActions } from "@/stores/schedulesUi";
 import { NO_PASSKEYS_HERE, passkeysHere } from "@/data/presence";
 import { AsksList } from "./AsksList";
 
@@ -21,6 +23,7 @@ export const OrchestratorBar = memo(function OrchestratorBar({
 }) {
   const { overview, counts } = useOrchestratorHeader(workspaceId);
   const pause = usePauseOrchestrator(workspaceId);
+  const { upcomingText } = useSchedulesGlance(workspaceId);
   const [open, setOpen] = useState(true);
   const canProve = useSyncExternalStore(
     () => () => {},
@@ -73,6 +76,15 @@ export const OrchestratorBar = memo(function OrchestratorBar({
           {counts.paused ? "Resume" : "Pause"}
         </Button>
       </div>
+      {upcomingText && (
+        <button
+          type="button"
+          onClick={() => schedulesUiActions.open(workspaceId)}
+          className="text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center px-1 text-left text-xs md:min-h-8"
+        >
+          {upcomingText}
+        </button>
+      )}
       {counts.paused && (
         <p className="text-muted-foreground px-1 text-xs">
           Paused: events wait and it won&apos;t start, merge or message anything
