@@ -702,9 +702,77 @@ describe("done right after a sign-off", () => {
       );
       expect(removalRunning(s.dir!)).toBe(true);
       expect(await removalSettled(s.dir!, 300)).toBe(false);
+      expect(
+        await worktreeFate(
+          { worktree_path: s.dir, base_branch: "main" },
+          { prHead: s.head },
+          300
+        )
+      ).toEqual({
+        action: "gone",
+        why: "still being removed by the merge cleanup",
+      });
+      expect(fs.existsSync(s.dir!)).toBe(true);
     } finally {
       sleeper.kill();
     }
+  });
+
+  it("ignores a marker too old to be a running removal, or unreadable", () => {
+    const t = setup();
+    const s = t.session("stale-marker", { task: true });
+    const marker = removalMarker(removalKey(s.dir!));
+    fs.writeFileSync(
+      marker,
+      JSON.stringify({ pid: process.pid, at: Date.now() - 11 * 60_000 })
+    );
+    expect(removalRunning(s.dir!)).toBe(false);
+    fs.writeFileSync(marker, "not json");
+    expect(removalRunning(s.dir!)).toBe(false);
+  });
+
+  it("doesn't count the merged PR's commits once the cleanup deleted its branch on origin", async () => {
+    const t = setup();
+    const s = t.session("merged-pruned", {
+      task: true,
+      commits: { "m.ts": "1\n" },
+    });
+    t.openPR(s, { state: "MERGED" });
+    db.prepare(
+      `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
+    ).run(s.id);
+    git(t.repo, "push", "-q", "origin", "--delete", s.branch);
+    git(s.dir!, "fetch", "-q", "--prune", "origin");
+    fs.writeFileSync(path.join(s.dir!, "notes.md"), "keep me\n");
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.worktree).toMatchObject({
+      action: "kept",
+      why: "it has uncommitted changes (1 file: notes.md)",
+    });
+  });
+
+  it("removes only after another process's removal ends, and leaves its marker to it", async () => {
+    const t = setup();
+    const s = t.session("waits-for-other", { task: true });
+    const marker = removalMarker(removalKey(s.dir!));
+    const sleeper = spawn("sleep", ["30"], { stdio: "ignore" });
+    const theirs = JSON.stringify({ pid: sleeper.pid, at: Date.now() });
+    fs.writeFileSync(marker, theirs);
+    let finished = false;
+    const removal = deleteWorktree(s.dir!, t.repo, true).finally(
+      () => (finished = true)
+    );
+    try {
+      await new Promise((r) => setTimeout(r, 400));
+      expect(finished).toBe(false);
+      expect(fs.existsSync(s.dir!)).toBe(true);
+      expect(fs.readFileSync(marker, "utf8")).toBe(theirs);
+    } finally {
+      sleeper.kill();
+    }
+    await removal;
+    expect(fs.existsSync(s.dir!)).toBe(false);
+    expect(fs.existsSync(marker)).toBe(false);
   });
 
   it("joins a running removal, and a join that asks still deletes the branch", async () => {

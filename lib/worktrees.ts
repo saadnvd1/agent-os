@@ -17,6 +17,8 @@ import { gitResult, isGitError, worktreeList } from "./git-exec";
 import {
   markRemoving,
   removalKey,
+  removalRunning,
+  removalSettled,
   removals,
   unmarkRemoving,
 } from "./worktree-removal";
@@ -260,7 +262,8 @@ async function undoFailedAdd(
 
 /**
  * Delete a worktree and optionally its branch. A second call while one is
- * running joins it, and still deletes the branch when it asks to.
+ * running joins it, and still deletes the branch when it asks to; one
+ * another process is running is waited for first.
  */
 export function deleteWorktree(
   worktreePath: string,
@@ -274,20 +277,28 @@ export function deleteWorktree(
     return deleteBranch
       ? running.done.then(async () => dropBranch(repo, await running.branch))
       : running.done;
+  // One another process is running goes first, and keeps its own marker.
+  const foreign = removalRunning(key)
+    ? removalSettled(key, undefined, { foreignOnly: true })
+    : null;
   // Read before anything is removed.
-  const branch = git(key, ["rev-parse", "--abbrev-ref", "HEAD"], 5000).then(
-    ({ stdout }) => stdout.trim() || null,
-    () => null
-  );
-  // Before anything is removed, so no reader catches it half-deleted.
-  markRemoving(key);
+  const branch = (async () => {
+    await foreign;
+    return git(key, ["rev-parse", "--abbrev-ref", "HEAD"], 5000).then(
+      ({ stdout }) => stdout.trim() || null,
+      () => null
+    );
+  })();
+  let marker: string | null = null;
   const done = (async () => {
     await branch;
+    // Before anything is removed, so no reader catches it half-deleted.
+    marker = markRemoving(key);
     await removeWorktree(key, repo);
     if (deleteBranch) await dropBranch(repo, await branch);
   })().finally(() => {
     removals.delete(key);
-    unmarkRemoving(key);
+    if (marker) unmarkRemoving(key, marker);
   });
   removals.set(key, { done, branch });
   return done;

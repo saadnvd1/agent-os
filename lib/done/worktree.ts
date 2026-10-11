@@ -113,12 +113,13 @@ const gone = (merged: MergedAs | null, still = false) => ({
 // git deletes it lists every deleted file as a change.
 export async function worktreeFate(
   session: Judged,
-  merged: MergedAs | null
+  merged: MergedAs | null,
+  waitMs = 60_000
 ): Promise<FatePreview> {
   const path = session.worktree_path;
   if (!path) return { action: "none" };
   for (;;) {
-    if (!(await removalSettled(path))) return gone(merged, true);
+    if (!(await removalSettled(path, waitMs))) return gone(merged, true);
     if (!fs.existsSync(path)) return gone(merged);
     const fate = await judge(session, merged);
     // A removal that started while it read: read what it leaves.

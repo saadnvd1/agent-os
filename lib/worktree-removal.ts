@@ -34,19 +34,28 @@ export const removalMarker = (key: string) =>
 // cut short (a restart) and no longer means anything.
 const STALE_MS = 10 * 60_000;
 
-export function markRemoving(key: string): void {
+// Returns what it wrote, so only the removal that wrote it clears it.
+export function markRemoving(key: string): string | null {
   const marker = removalMarker(key);
   const tmp = `${marker}.${process.pid}`;
+  const body = JSON.stringify({ pid: process.pid, at: Date.now() });
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ pid: process.pid, at: Date.now() }));
+    fs.writeFileSync(tmp, body);
     fs.renameSync(tmp, marker);
+    return body;
   } catch {
     // No marker only means other processes can't see this removal.
+    return null;
   }
 }
 
-export function unmarkRemoving(key: string): void {
-  fs.rmSync(removalMarker(key), { force: true });
+export function unmarkRemoving(key: string, body: string): void {
+  const marker = removalMarker(key);
+  try {
+    if (fs.readFileSync(marker, "utf8") === body) fs.rmSync(marker);
+  } catch {
+    // Already gone.
+  }
 }
 
 const alive = (pid: number) => {
@@ -84,16 +93,18 @@ const sleep = (ms: number) =>
 
 /**
  * Resolves once no removal of this worktree is running: true, or false
- * when one still is after `timeoutMs`.
+ * when one still is after `timeoutMs`. `foreignOnly` waits only for one
+ * another process (or a copy of this module) marked.
  */
 export async function removalSettled(
   worktreePath: string,
-  timeoutMs = 60_000
+  timeoutMs = 60_000,
+  { foreignOnly = false } = {}
 ): Promise<boolean> {
   const key = removalKey(worktreePath);
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const own = removals.get(key);
+    const own = foreignOnly ? undefined : removals.get(key);
     if (!own && !markerLive(key)) return true;
     const left = deadline - Date.now();
     if (left <= 0) return false;
