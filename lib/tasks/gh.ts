@@ -6,6 +6,7 @@ import { assertGhAllowed, noteGhFailure, noteGhSuccess } from "./gh-limit";
 import {
   checksVerdict,
   failingCheck,
+  failingUrl,
   rerunsToLookUp,
   settleReruns,
   type ActionsRun,
@@ -106,6 +107,7 @@ export async function toTaskPR(repoDir: string, pr: ListedPR): Promise<TaskPR> {
     checks: checksVerdict(rollup),
     head: pr.headRefOid,
     failing: failingCheck(rollup),
+    failingUrl: failingUrl(rollup),
     checkCount: (pr.statusCheckRollup ?? []).length,
     codeReview: pr.body === undefined ? undefined : parseCodeReview(pr.body),
     scopeChange: parseScopeChange(pr.body),

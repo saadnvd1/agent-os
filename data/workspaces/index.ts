@@ -53,6 +53,8 @@ export function useUpdateWorkspace() {
       collapsed?: boolean;
       // Running tasks at once; null for no limit.
       maxRunningTasks?: number | null;
+      // Message tasks about failing checks and reviews on their PRs.
+      wakeTasksOnPR?: boolean;
     }) =>
       json(
         await fetch(`/api/workspaces/${id}`, {
@@ -61,7 +63,7 @@ export function useUpdateWorkspace() {
           body: JSON.stringify(updates),
         })
       ),
-    onMutate: async ({ id, maxRunningTasks, ...updates }) => {
+    onMutate: async ({ id, maxRunningTasks, wakeTasksOnPR, ...updates }) => {
       await queryClient.cancelQueries({ queryKey: workspaceKeys.list() });
       queryClient.setQueryData<Workspace[]>(workspaceKeys.list(), (prev) =>
         prev?.map((w) =>
@@ -71,6 +73,9 @@ export function useUpdateWorkspace() {
                 ...updates,
                 ...(maxRunningTasks !== undefined && {
                   max_running_tasks: maxRunningTasks,
+                }),
+                ...(wakeTasksOnPR !== undefined && {
+                  wake_tasks_on_pr: wakeTasksOnPR,
                 }),
               }
             : w
