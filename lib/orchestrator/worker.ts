@@ -9,6 +9,7 @@ import {
   orchestratorToolsDigest,
 } from "./tools";
 import type { RoleExtras } from "../chat/worker/extras";
+import { refreshSettings } from "../chat/refresh";
 
 // What an orchestrator's chat worker starts with on top of any chat: its
 // brief, its tools, and permissions fixed by its role.
@@ -29,5 +30,9 @@ export async function orchestratorExtras(
     },
     ...ORCHESTRATOR_PERMISSIONS,
     toolsDigest: orchestratorToolsDigest(),
+    refresh: {
+      atTokens: refreshSettings().orchestratorTokens,
+      role: "orchestrator",
+    },
   };
 }

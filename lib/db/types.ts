@@ -49,6 +49,10 @@ export interface Session {
   chat_restarted?: boolean | number;
   // The digest of the tools its last chat worker gave the agent.
   chat_tools_digest?: string | null;
+  // Its last worker ended the conversation at the context threshold: the
+  // tokens it had reached (0 otherwise). The next one starts a new one and
+  // tells the agent so.
+  chat_refreshed?: number;
   // Plan mode (0/1 from SQLite), and the context meter's last reading (JSON).
   chat_plan: boolean | number;
   chat_context: string | null;

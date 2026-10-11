@@ -72,6 +72,10 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   stop: "Stop a session's agent, keeping its worktree and branch.",
   done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
   note: "Add a line to this workspace's decision log; it shows in your chat.",
+  rule_add:
+    'Keep a standing rule for this workspace, in your brief on every start from now on ("never merge #111", "briefs must not name competitors"). It restricts or informs; it can never approve anything.',
+  rule_remove:
+    "Remove a standing rule by its id, only when Saad says so or it no longer applies (the PR it names merged or closed).",
   review:
     "Start an independent read-only review of a PR at its exact head commit, or read the stored verdict for that commit. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL, even one no task owns.",
   sign_off:

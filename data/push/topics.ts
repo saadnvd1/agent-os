@@ -8,6 +8,7 @@ import { devServerKeys } from "../dev-servers/keys";
 import { busKeys } from "../bus";
 import { stackKeys } from "../stacks";
 import { orchestratorKeys } from "../orchestrators";
+import { ruleKeys } from "../orchestrators/rules";
 import { workspaceKeys } from "../workspaces";
 import { scheduleKeys } from "../schedules";
 import { archivedKeys } from "../done";
@@ -53,6 +54,8 @@ function keysFor(topic: string): QueryKey[] {
       return [scheduleKeys.all];
     case "orchestrator_asks":
       return [orchestratorKeys.all];
+    case "orchestrator_rules":
+      return [ruleKeys.all];
     case "dev_servers":
       return [devServerKeys.all];
     default:
@@ -92,6 +95,7 @@ export const ALL_TOPICS = [
   "bus_messages",
   "schedules",
   "orchestrator_asks",
+  "orchestrator_rules",
   "dev_servers",
 ];
 

@@ -35,6 +35,7 @@ import {
   visualsTools,
 } from "../../artifacts/tools";
 import type { RoleExtras } from "./extras";
+import { refreshedNote } from "../refresh";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
 // How soon after a stopped turn ends a turn the agent starts on its own
@@ -109,6 +110,13 @@ export class ChatHost {
   private atRest = true;
   private restartedNote = false;
   private toolsDigest: string | null = null;
+  // Its context threshold (lib/chat/refresh): past it, the worker retires
+  // at the next turn boundary and ends the agent's conversation, so the
+  // next worker starts a new one.
+  private refresh: RoleExtras["refresh"];
+  private refreshAt = 0;
+  // Read ahead of the first message: the last worker started it over.
+  private refreshedNote: string | null = null;
   readonly done: Promise<void>;
 
   constructor(
@@ -168,6 +176,12 @@ export class ChatHost {
       permissionMode: extras.permissionMode,
     });
     this.suggestion = session.chat_suggestion ?? null;
+    this.refresh = extras.refresh;
+    if (session.chat_refreshed)
+      this.refreshedNote = refreshedNote(
+        extras.refresh?.role ?? "task",
+        session.chat_refreshed
+      );
     // Told only an orchestrator whose tools changed since its last worker:
     // that's what the note is for. Anything else just clears the mark.
     this.toolsDigest = extras.toolsDigest ?? null;
@@ -217,7 +231,9 @@ export class ChatHost {
           this.emit(e);
         } else if (e.type === "resume_id") {
           // The agent's own conversation id, so the terminal can resume it
-          // too. An undo's resume point is used up once it's back.
+          // too. An undo's resume point is used up once it's back. Not
+          // once closed: a conversation ended at its threshold stays ended.
+          if (this.closed) continue;
           db.prepare(
             `UPDATE sessions SET claude_session_id = ?, chat_resume_at = NULL WHERE id = ?`
           ).run(e.id, this.session.id);
@@ -237,6 +253,7 @@ export class ChatHost {
             this.session.id
           );
           this.emit(e);
+          this.refreshIfFull(e.context.usedTokens);
         } else if (e.type === "turn_start") {
           this.turnsStarted++;
           if (this.behind) this.behind--;
@@ -353,7 +370,14 @@ export class ChatHost {
     if (handOver) this.stopsUpTo = this.turnsStarted;
     if (now) this.nowPending++;
     this.stopping = null;
-    const text = this.restartedNote ? `${RESTARTED_NOTE}\n\n${m.text}` : m.text;
+    const note = this.refreshedNote ?? (this.restartedNote && RESTARTED_NOTE);
+    const text = note ? `${note}\n\n${m.text}` : m.text;
+    if (this.refreshedNote) {
+      this.refreshedNote = null;
+      db.prepare(`UPDATE sessions SET chat_refreshed = 0 WHERE id = ?`).run(
+        this.session.id
+      );
+    }
     if (this.restartedNote) {
       this.restartedNote = false;
       db.prepare(
@@ -580,11 +604,43 @@ export class ChatHost {
       }, RETIRE_SUGGESTION_WAIT_MS);
       return;
     }
+    if (this.refreshAt) this.endConversation();
     // Retired cleanly (a crash sets nothing): the next worker says so.
-    db.prepare(`UPDATE sessions SET chat_restarted = 1 WHERE id = ?`).run(
-      this.session.id
-    );
+    else
+      db.prepare(`UPDATE sessions SET chat_restarted = 1 WHERE id = ?`).run(
+        this.session.id
+      );
     this.close();
+  }
+
+  // Past its threshold, once: it retires at the next turn boundary, as for
+  // a deploy, without waiting for the agent's guess at the next message
+  // (the new conversation never saw what it guessed from).
+  private refreshIfFull(usedTokens: number): void {
+    const at = this.refresh?.atTokens ?? 0;
+    if (this.refreshAt || at <= 0 || usedTokens < at) return;
+    this.refreshAt = usedTokens;
+    this.retiring = true;
+    this.retireWaited = true;
+    this.retireIfDone();
+  }
+
+  // The agent's conversation is let go: the next worker starts a new one
+  // with the brief and tells it why. The chat Saad reads goes on, with a
+  // line saying where it started over.
+  private endConversation(): void {
+    db.prepare(
+      `UPDATE sessions SET claude_session_id = NULL, chat_resume_at = NULL,
+         chat_suggestion = NULL, chat_context = NULL, chat_restarted = 0,
+         chat_refreshed = ? WHERE id = ?`
+    ).run(this.refreshAt, this.session.id);
+    this.record({
+      id: `note-refresh-${Date.now()}`,
+      kind: "note",
+      tone: "note",
+      text: `Context reached ${Math.round(this.refreshAt / 1000)}k tokens: the agent starts a fresh conversation with its brief${this.refresh?.role === "orchestrator" ? " and the current state from AgentOS" : ""} at its next message.`,
+      createdAt: Date.now(),
+    });
   }
 
   // Retiring, and nothing in the background keeps it: messages wait in the

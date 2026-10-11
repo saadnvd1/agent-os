@@ -7,6 +7,7 @@ import { InputQueue } from "../queue";
 import { listItems, saveItem } from "../store";
 import { enqueue, listQueue } from "../queued";
 import type { WorkerEvent } from "./protocol";
+import type { RoleExtras } from "./extras";
 
 // A conversation the test drives by hand.
 function fakeConversation() {
@@ -64,7 +65,8 @@ async function startHost(
   role = "agent",
   saved?: { resumeId?: string; usage?: object },
   // What's saved before the worker starts.
-  seed?: (id: string) => void
+  seed?: (id: string) => void,
+  extras?: RoleExtras
 ) {
   const { ChatHost } = await import("./host");
   const id = randomUUID();
@@ -79,13 +81,13 @@ async function startHost(
         `UPDATE sessions SET claude_session_id = ?, chat_usage = ? WHERE id = ?`
       )
       .run(saved.resumeId ?? null, JSON.stringify(saved.usage), id);
+  seed?.(id);
   const session = getDb()
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(id) as Session;
-  seed?.(id);
   current = fakeConversation();
   const emitted: WorkerEvent[] = [];
-  const host = new ChatHost(session, (e) => emitted.push(e));
+  const host = new ChatHost(session, (e) => emitted.push(e), extras);
   return { id, host, conversation: current, emitted };
 }
 
@@ -1364,5 +1366,132 @@ describe("ChatHost retiring after a deploy", () => {
     await next.handle({ type: "send", id: "user-1", text: "hello" });
     expect(current.send).toHaveBeenLastCalledWith("hello", undefined);
     next.close();
+  });
+});
+
+describe("ChatHost fresh start at the context threshold", () => {
+  const bus = {
+    from: "agentos",
+    origin: { kind: "event" as const, label: "AgentOS" },
+  };
+  const at = (atTokens: number): RoleExtras => ({
+    refresh: { atTokens, role: "orchestrator" },
+  });
+  const context = (usedTokens: number): DriverEvent => ({
+    type: "context",
+    context: {
+      usedTokens,
+      maxTokens: 1_000_000,
+      percentage: Math.round(usedTokens / 10_000),
+      categories: [],
+      at: Date.now(),
+    },
+  });
+  const row = (id: string) =>
+    getDb()
+      .prepare(
+        `SELECT claude_session_id, chat_refreshed, chat_context, chat_restarted FROM sessions WHERE id = ?`
+      )
+      .get(id) as {
+      claude_session_id: string | null;
+      chat_refreshed: number;
+      chat_context: string | null;
+      chat_restarted: number;
+    };
+
+  it("crossing it mid-turn ends the conversation once, at the turn's end, keeping what queued", async () => {
+    const { id, host, conversation } = await startHost(
+      "orchestrator",
+      { resumeId: "conv-old" },
+      undefined,
+      at(200_000)
+    );
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    conversation.events.push(context(210_000));
+    await tick();
+    // Mid-turn: nothing ends yet, and an event waits for the next worker.
+    expect(conversation.close).not.toHaveBeenCalled();
+    await host.handle({ type: "send", id: "user-2", text: "event", ...bus });
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    conversation.events.push(context(230_000));
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    const saved = row(id);
+    expect(saved.claude_session_id).toBeNull();
+    expect(saved.chat_context).toBeNull();
+    expect(saved.chat_refreshed).toBe(210_000);
+    expect(saved.chat_restarted).toBe(0);
+    expect(
+      listItems(id).filter(
+        (i) => i.kind === "note" && i.text.includes("fresh conversation")
+      )
+    ).toHaveLength(1);
+    await host.done;
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("idle when it's crossed, goes at once without waiting for a guess", async () => {
+    const { host, conversation } = await startHost(
+      "orchestrator",
+      undefined,
+      undefined,
+      at(200_000)
+    );
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    conversation.events.push({ type: "state", state: "idle" });
+    conversation.events.push(context(200_000));
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+  });
+
+  it("under the threshold, or with none, carries on", async () => {
+    for (const extras of [at(200_000), {}, at(0)]) {
+      const { host, conversation } = await startHost(
+        "orchestrator",
+        undefined,
+        undefined,
+        extras
+      );
+      await host.handle({ type: "send", id: "user-1", text: "work" });
+      conversation.events.push(
+        context(extras.refresh?.atTokens ? 199_999 : 900_000)
+      );
+      conversation.events.push({ type: "state", state: "idle" });
+      await tick();
+      expect(conversation.close).not.toHaveBeenCalled();
+      host.close();
+    }
+  });
+
+  it("the next worker starts a new conversation and says why, once", async () => {
+    const { id, host, conversation } = await startHost(
+      "orchestrator",
+      undefined,
+      (id) =>
+        getDb()
+          .prepare(`UPDATE sessions SET chat_refreshed = 210000 WHERE id = ?`)
+          .run(id),
+      at(200_000)
+    );
+    expect(started?.resumeId).toBeNull();
+    await host.handle({ type: "send", id: "user-1", text: "an event" });
+    const first = (conversation.send.mock.calls[0] as unknown[])[0] as string;
+    expect(first).toMatch(
+      /^\(AgentOS started you on a fresh conversation: the last one passed 210k tokens of context\. Your brief and "Where things stand" are current/
+    );
+    expect(first.endsWith("\n\nan event")).toBe(true);
+    // The chat shows the message as sent, without the note.
+    expect(listItems(id).find((i) => i.id === "user-1")).toMatchObject({
+      text: "an event",
+    });
+    expect(row(id).chat_refreshed).toBe(0);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    await host.handle({ type: "send", id: "user-2", text: "next" });
+    expect((conversation.send.mock.calls[1] as unknown[])[0]).toBe("next");
+    host.close();
   });
 });
