@@ -73,6 +73,9 @@ export interface Session {
   // An orchestrator's tool-call secret.
   orch_token?: string | null;
   workspace_id: string | null;
+  // A quick change: the orchestrator session that owns it and edits its
+  // worktree itself; it has no agent (orchestrator/quick.ts).
+  quick_of?: string | null;
   // LumifyHub card this task moves (and the board it's on)
   lh_card_id: string | null;
   lh_board_id: string | null;

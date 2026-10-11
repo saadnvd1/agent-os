@@ -235,7 +235,7 @@ async function rebaseOne(
     (await deps.idle(task)) &&
     !(await local()) &&
     (await catchUp(git, wt, task.branch_name!, pr.head, to));
-  if (!follows)
+  if (!follows && !task.quick_of)
     await deps.send(
       task.id,
       `AgentOS rebased your branch ${task.branch_name} onto ${branch} on origin (now ${short(to)}), because PR #${pr.number} conflicted with it. Your worktree is still on the old head: before changing anything, run \`git fetch origin && git reset --keep origin/${task.branch_name}\` (commit your work first). Its review carries over when its own patch didn't change.`
@@ -375,6 +375,16 @@ async function askToRebase(
     pr.head,
     task.id
   );
+  // A quick change has no agent to ask: it's the orchestrator's to redo.
+  if (task.quick_of) {
+    queueEvent(
+      workspaceId,
+      `conflict:${task.id}:${pr.head}`,
+      task.id,
+      `quick change ${task.name}: PR #${pr.number} conflicts with ${base} and can't be rebased automatically (${why.slice(0, 300)}). Drop it and make the change again in a new quick change.`
+    );
+    return;
+  }
   queueEvent(
     workspaceId,
     `conflict:${task.id}:${pr.head}`,

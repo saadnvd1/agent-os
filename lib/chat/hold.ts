@@ -43,13 +43,14 @@ export function collectWhileMoving(sessionId: string): () => void {
 interface HoldRow {
   task_status: string | null;
   moved_to: string | null;
+  quick_of: string | null;
   landing: number;
 }
 
 const holdRow = (sessionId: string) =>
   db
     .prepare(
-      `SELECT task_status, moved_to,
+      `SELECT task_status, moved_to, quick_of,
          EXISTS (SELECT 1 FROM stack_items i JOIN stacks s ON s.id = i.stack_id
                  WHERE i.session_id = @sid AND s.status = 'landing') AS landing
        FROM sessions WHERE id = @sid`
@@ -67,10 +68,13 @@ export function chatHold(sessionId: string): string | null {
 
 /**
  * Why nothing can be sent to it here at all: its agent runs on another
- * machine now, or its move has packed the queue and is on its way there.
+ * machine now, or its move has packed the queue and is on its way there,
+ * or it's a quick change, which has no agent (a message would start one).
  */
 export function chatRefusal(sessionId: string): string | null {
   const row = holdRow(sessionId);
+  if (row?.quick_of)
+    return "This is a quick change the orchestrator makes itself; it has no agent to message";
   const there = row?.moved_to ?? "another machine";
   if (row?.task_status === "moved")
     return `This task moved to ${there}; open it there`;

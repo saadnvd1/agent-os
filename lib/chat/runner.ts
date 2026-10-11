@@ -191,6 +191,11 @@ function emitQueue(sessionId: string): void {
 }
 
 function checkChattable(session: Session): void {
+  // A quick change has no agent: a worker would start one in its worktree.
+  if (session.quick_of)
+    throw new Error(
+      "This is a quick change the orchestrator makes itself; it has no agent to chat with"
+    );
   if (!chatDriverFor(session.agent_type))
     throw new Error(`${session.agent_type} sessions can't run as chat yet`);
   if (session.host_id && session.host_id !== "local") {

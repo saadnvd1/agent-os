@@ -146,7 +146,15 @@ export async function wakeTasks(
     const pr = f.task?.pr;
     const task = pr?.state === "OPEN" && pr.head ? sessionRow(f.id) : null;
     const repo = pr && repoOfPR(pr.url);
-    if (!task || task.task_status !== "running" || !repo || !pr?.head) {
+    // A quick change has no agent to wake: its PR's events reach the
+    // orchestrator that made it, as any task's do.
+    if (
+      !task ||
+      task.task_status !== "running" ||
+      task.quick_of ||
+      !repo ||
+      !pr?.head
+    ) {
       handled.delete(f.id);
       continue;
     }

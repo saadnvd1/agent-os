@@ -66,6 +66,10 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     'Resume a paused task on another model ("provider/model", or a map of role to one), keeping its conversation and worktree; it\'s told to carry on (or message). Refused mid-turn.',
   start_session:
     "Start an interactive agent session in a project with a prompt. It runs as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.",
+  quick_change:
+    "Make a small, low-risk edit yourself (a typo, a config value, a one-file fix): cuts a worktree and branch from the project's default branch and returns its path. You may write there (Write, Edit) and run git there as `git -C <path> ...` (status, diff, add, rm, mv, restore, reset, log, show); nowhere else in a project. Anything needing real work, tests or an investigation is a task (start_task).",
+  quick_pr:
+    "Commit everything in a quick change's worktree, push its branch (never the default branch) and open its PR, or push to the PR it already has. The PR goes through the same gates as a task's; with no task agent to run /do-code-review, its code-review gate is the independent review of its exact head, which starts now.",
   stack:
     "Run a LumifyHub board's open cards as stacked tasks (each start braked), or with plan_only just show the plan.",
   stack_status: "One stack's items, PRs and progress.",

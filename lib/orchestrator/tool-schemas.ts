@@ -135,6 +135,32 @@ export const TOOL_SHAPES = {
       .describe("A short name, 2-6 words (default: one made from the prompt)"),
     view,
   },
+  quick_change: {
+    project,
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .describe("A short name for the change, 2-6 words"),
+  },
+  quick_pr: {
+    change: ref("Your quick change, by name or id"),
+    title: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .describe("The PR's title, also its commit message"),
+    body: z
+      .string()
+      .trim()
+      .min(1)
+      .max(20000)
+      .describe(
+        "What changed and why; the review judges the change against it"
+      ),
+  },
   stack: {
     target: ref("Board or project name"),
     plan_only: z.boolean().optional(),

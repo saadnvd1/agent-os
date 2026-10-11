@@ -17,6 +17,8 @@ import { untrusted } from "./untrusted";
 export async function waitingState(
   task: Session
 ): Promise<{ blocked: string | null; waitingOn: string | null }> {
+  // A quick change has no agent to block or ask: the orchestrator makes it.
+  if (task.quick_of) return { blocked: null, waitingOn: null };
   // A linked machine's chat lives in that machine's store, not this one's:
   // its own reading of the task is asked for, fresh.
   const link = hostLink(task.host_id);
