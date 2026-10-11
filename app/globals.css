@@ -245,6 +245,13 @@ body {
   background: hsl(var(--background));
 }
 
+/* A conversation's rows stay in the page (so a selection can span them), and
+   the ones off screen skip layout and paint until they are near. */
+.chat-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 90px;
+}
+
 /* Streaming chat text ends in a blinking caret. */
 .streaming-cursor .prose > :last-child::after {
   content: "▍";
