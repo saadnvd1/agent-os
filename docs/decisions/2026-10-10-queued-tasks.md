@@ -23,25 +23,22 @@ one now, move it up or down, or remove it. A direct start holds its slot
 until its task row exists, so two starts at once can't both take the last
 one.
 
-## What t3code does
+## What a competing tool does
 
-t3code (pingdotgg/t3code) queues **messages within a thread**, not whole
-threads ([#11673](https://github.com/pingdotgg/t3code/pull/11673), issue
-[#267](https://github.com/pingdotgg/t3code/issues/267)):
+Another agent workspace we looked at queues **messages within a thread**, not
+whole threads:
 
 - A follow-up sent while the agent works is queued. It's sent at the next tool
   boundary or when the turn ends, first in first out (`startNextQueuedRun` in
-  orchestration v2, [#17773](https://github.com/pingdotgg/t3code/pull/17773)).
+  its orchestration v2).
   It holds while an approval or question is pending.
 - Each queued message shows as a dashed bubble with a clock and "Queued" at
   the end of the timeline, with **Send now** (steer) and **Remove**. It has no
   reorder control and doesn't show a position.
 - In v2 a run gets its ordinal when it's queued, not when it starts, in a
-  table with `UNIQUE(thread_id, ordinal)`
-  ([#17764](https://github.com/pingdotgg/t3code/pull/17764)).
+  table with `UNIQUE(thread_id, ordinal)`.
 - Upstream has **no concurrency limit** on threads. A proposed cap of 8
-  concurrent turns ([#10097](https://github.com/pingdotgg/t3code/pull/10097))
-  rejected the ninth turn instead of queueing it, and it was closed unmerged.
+  concurrent turns rejected the ninth turn instead of queueing it, and it was closed unmerged.
 
 AgentOS already queues chat messages the same way (lib/chat/queued.ts). What
 it lacked was the level above: whole tasks.
@@ -63,16 +60,16 @@ it lacked was the level above: whole tasks.
 
 ## What we do differently, and why
 
-- **We queue whole tasks behind a limit.** t3code's unit is a turn in one
+- **We queue whole tasks behind a limit.** The other tool's unit is a turn in one
   thread. Ours is a task with its own worktree and agent, which is what
   overloads the machine. So the limit counts running tasks per workspace.
   A task keeps its slot until it finishes, even with its PR open, because
   that's when its worktree, ports and database go away.
-- **Over the limit we queue, not reject.** t3code's proposed cap rejected the
+- **Over the limit we queue, not reject.** Its proposed cap rejected the
   extra turn. The orchestrator's running-session brake did the same, so the
   orchestrator kept "start X when a task finishes" in its own notes. A queue
   that holds the start makes that bookkeeping unnecessary.
-- **`after` is ours.** t3code has no dependency between threads. Ours covers
+- **`after` is ours.** It has no dependency between threads. Ours covers
   the orchestrator's real pattern: start this follow-up once that task lands.
 - **Reordering and a position number.** They're cheap here (swap two
   positions) and they answer "when does mine start?".

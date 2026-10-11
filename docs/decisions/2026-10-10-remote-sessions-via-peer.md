@@ -10,11 +10,10 @@ AgentOS running on that machine. That AgentOS owns the session: its tmux, its
 chat worker, its state. This machine is a client of it. ssh stays only as the
 route for machines that are not linked.
 
-## What t3code does
+## What a competing tool does
 
-t3code (pingdotgg/t3code, `docs/internals/remote.md`,
-`docs/user/remote-access.md` and the client runtime) models each machine as
-an **environment**: a server that owns execution, files, terminals, agents and
+Another agent workspace we looked at (its remote-access docs and client
+runtime) models each machine as an **environment**: a server that owns execution, files, terminals, agents and
 durable state. Clients only ever talk to it over authenticated RPC, the local
 desktop app included.
 
@@ -58,8 +57,8 @@ desktop app included.
 - **Snapshot, then live, on every (re)subscribe.** AgentOS's chat socket
   already sends a snapshot and then items, and its shared terminal attach
   already replays the screen from a reset on join. A reconnect anywhere in
-  the chain is a fresh subscribe that takes a snapshot, which is t3code's
-  model without its sequence cursor.
+  the chain is a fresh subscribe that takes a snapshot, which is the other
+  tool's model without its sequence cursor.
 - **Backoff reconnect for terminals.** A dropped peer connection retries at
   1, 2, 4, 8 and then 15 seconds, and gives up and says so after two minutes.
   A refused token (401/403) or a session that detached ends it at once. So
@@ -69,15 +68,15 @@ desktop app included.
   `Authorization` header of the HTTP call or WebSocket upgrade, never in the
   query string, and never reaches the browser. No Origin is sent, so the
   peer's Host/Origin checks see what they see for `aos` or curl.
-- **Sessions keyed by machine and name** (t3code: everything is scoped to its
-  environment id). The status detector, discovery, the managed-pane match and
+- **Sessions keyed by machine and name** (the other tool scopes everything to
+  its environment id). The status detector, discovery, the managed-pane match and
   the shared terminal attach all key by `host + name`, so a "main" on the box
   no longer hides a "main" here.
 
 ## What we do differently, and why
 
-- **The server relays, the browser doesn't connect to the peer.** In t3code
-  the client connects to each environment directly. Here the browser (often a
+- **The server relays, the browser doesn't connect to the peer.** In the other
+  tool the client connects to each environment directly. Here the browser (often a
   phone) talks only to this machine's AgentOS, and that server opens the
   connection to the peer. There are three reasons:
   1. The browser may not be able to reach the peer at all. The box is not
