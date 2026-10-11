@@ -80,6 +80,11 @@ describe("the pre-commit check", () => {
       fs.writeFileSync(path.join(repo, "x.md"), "ok\nlike others do\n");
       git("add", "x.md");
       expect(scan().status).toBe(0);
+      fs.writeFileSync(path.join(repo, "acme-notes.md"), "clean\n");
+      git("add", "acme-notes.md");
+      const named = scan();
+      expect(named.status).toBe(1);
+      expect(named.stderr).toContain("acme-notes.md:0");
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
       fs.rmSync(list, { force: true });
