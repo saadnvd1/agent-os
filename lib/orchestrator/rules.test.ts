@@ -92,7 +92,12 @@ describe("standing rules", () => {
   it("are kept once each, and capped", () => {
     const w = seedWorkspace().workspace.id;
     const first = addRule(w, "  One   rule ", "orchestrator");
-    expect(addRule(w, "One rule", "saad").id).toBe(first.id);
+    // Saad writing the same rule makes it his, so only he removes it.
+    const his = addRule(w, "One rule", "saad");
+    expect(his.id).toBe(first.id);
+    expect(his.added_by).toBe("saad");
+    expect(() => removeRule(w, first.id, "orchestrator")).toThrow(/Saad's/);
+    expect(addRule(w, "One rule", "orchestrator").added_by).toBe("saad");
     for (let i = 1; i < MAX_RULES; i++) addRule(w, `Rule ${i}`, "orchestrator");
     expect(() => addRule(w, "One too many", "saad")).toThrow(/remove one/);
     removeRule(w, first.id, "saad");

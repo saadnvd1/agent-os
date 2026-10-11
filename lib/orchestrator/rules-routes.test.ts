@@ -64,12 +64,18 @@ describe("the standing rules routes", () => {
     const b = seedWorkspace().workspace.id;
     const rule = addRule(a, "Never merge #7", "saad");
     const id = String(rule.id);
-    expect(
-      (await one.PATCH(req("PATCH", { text: "x" }), at(b, id))).status
-    ).toBe(400);
-    expect((await one.DELETE(req("DELETE"), at(b, id))).status).toBe(400);
-    for (const bad of ["abc", "0", "-1"])
-      expect((await one.DELETE(req("DELETE"), at(a, bad))).status).toBe(400);
+    for (const res of [
+      await one.PATCH(req("PATCH", { text: "x" }), at(b, id)),
+      await one.DELETE(req("DELETE"), at(b, id)),
+    ]) {
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/No rule/);
+    }
+    for (const bad of ["abc", "0", "-1", "1.5"]) {
+      const res = await one.DELETE(req("DELETE"), at(a, bad));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Bad rule id" });
+    }
     expect(listRules(a).map((r) => r.text)).toEqual(["Never merge #7"]);
     expect((await list.POST(req("POST", {}), at(a))).status).toBe(400);
     expect((await list.GET(req("GET"), at("no-such"))).status).toBe(404);

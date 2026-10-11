@@ -148,7 +148,7 @@ function asksSection(workspaceId: string): Section {
           ? ` | ${a.subject.slice(3)}`
           : "";
       const at = a.sha ? `@${sha7(a.sha)}` : "";
-      return `- [ask ${a.id}] ${a.kind}: ${clip(a.title, 160)}${on}${at}`;
+      return `- [ask ${a.id}] ${a.kind}: ${untrusted("ask title", clip(a.title, 160))}${on}${at}`;
     }),
     empty: "- None.",
     more: "",
@@ -282,7 +282,7 @@ function notesSection(workspaceId: string): Section {
     title: "Decision log, newest first",
     lines: rows.map(
       (n) =>
-        `- ${n.created_at.slice(0, 16)} UTC${n.kind === "note" ? `: ${untrusted("your note", clip(n.text))}` : ` ${n.kind}: ${clip(n.text)}`}`
+        `- ${n.created_at.slice(0, 16)} UTC${n.kind === "note" ? "" : ` ${n.kind}`}: ${untrusted(n.kind === "note" ? "your note" : `${n.kind} log line`, clip(n.text))}`
     ),
     more: "",
   };

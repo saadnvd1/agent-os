@@ -65,6 +65,14 @@ export function addRule(
   return db.transaction(() => {
     const rules = listRules(workspaceId);
     const same = rules.find((r) => r.text === body);
+    // Saad writing one the orchestrator kept makes it his.
+    if (same && by === "saad" && same.added_by !== "saad") {
+      db.prepare(
+        `UPDATE orchestrator_rules SET added_by = 'saad', updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(same.id);
+      return getRule(workspaceId, same.id)!;
+    }
     if (same) return same;
     if (rules.length >= MAX_RULES)
       throw new Error(
