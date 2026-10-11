@@ -117,8 +117,14 @@ const { doneSession } = await import("./index");
 const { signOffTask } = await import("@/lib/tasks");
 const { deleteWorktree } = await import("@/lib/worktrees");
 const { worktreeFate } = await import("./worktree");
-const { removalKey, removalMarker, removalRunning, removalSettled } =
-  await import("@/lib/worktree-removal");
+const {
+  markRemoving,
+  removalKey,
+  removalMarker,
+  removalRunning,
+  removalSettled,
+  unmarkRemoving,
+} = await import("@/lib/worktree-removal");
 const { setGlobalMergeSettings, setProjectMergeSettings } =
   await import("@/lib/tasks/merge-policy");
 
@@ -716,6 +722,19 @@ describe("done right after a sign-off", () => {
     } finally {
       sleeper.kill();
     }
+  });
+
+  it("clears only the marker it wrote, not one another removal wrote over it", () => {
+    const t = setup();
+    const s = t.session("marker-owner", { task: true });
+    const key = removalKey(s.dir!);
+    const ours = markRemoving(key)!;
+    const theirs = JSON.stringify({ pid: process.pid, at: Date.now() + 1 });
+    fs.writeFileSync(removalMarker(key), theirs);
+    unmarkRemoving(key, ours);
+    expect(fs.readFileSync(removalMarker(key), "utf8")).toBe(theirs);
+    unmarkRemoving(key, theirs);
+    expect(fs.existsSync(removalMarker(key))).toBe(false);
   });
 
   it("ignores a marker too old to be a running removal, or unreadable", () => {
