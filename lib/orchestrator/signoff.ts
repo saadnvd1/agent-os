@@ -15,6 +15,7 @@ import { getStack, landInBackground } from "../stacks";
 import { LAND_DEFAULTS } from "../stacks/land";
 import { db, stackQueries, type Session } from "../db";
 import { getCheck } from "./checks";
+import { isQuick, quickCodeReview } from "./quick";
 import {
   addedLines,
   changedFiles,
@@ -82,6 +83,22 @@ export async function judge(
     };
   const sha = pr.head;
   const repo = repoOf(task);
+  // A PR quick_pr opened (by the row AgentOS wrote, never the body): its
+  // code review is the independent review of this head, and until that
+  // passes it waits, before any gate is judged or counted.
+  const quick = isQuick(task)
+    ? quickCodeReview(
+        sha,
+        getCheck(task.id, sha, "review"),
+        restackedOf(task)?.to === sha
+      )
+    : null;
+  if (quick?.wait)
+    return {
+      ok: false,
+      wait: true,
+      text: `${task.name} (PR #${pr.number} at ${short(sha)}) can't merge yet: ${quick.wait}`,
+    };
   return gateVerdict(
     workspaceId,
     { id: task.id, name: task.name, repo, refs: task, pr, sha },
@@ -100,12 +117,17 @@ export async function judge(
       fromCard: !!task.lh_card_id,
       scope: getCheck(task.id, sha, "scope"),
       stackRefusal: landing ? null : signOffRefusal(task.id),
-      codeReview: codeReviewGate({
-        head: sha,
-        attribution: pr.attribution,
-        review: (at) => getCheck(task.id, at, "review"),
-        restacked: restackedOf(task),
-      }),
+      codeReview: (() => {
+        const gate = codeReviewGate({
+          head: sha,
+          attribution: pr.attribution,
+          review: (at) => getCheck(task.id, at, "review"),
+          restacked: restackedOf(task),
+        });
+        // A quick change keeps the body checks (attribution, unreadable);
+        // its wait on the review was judged above.
+        return quick ? { refusal: gate.refusal, wait: null } : gate;
+      })(),
     }),
     opts
   );

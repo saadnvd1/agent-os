@@ -10,6 +10,8 @@ import { db, type Session } from "../db";
 import { escalations } from "../orchestrator/gates";
 
 export function moveRefusal(session: Session): string | null {
+  if (session.quick_of)
+    return "It's a quick change its orchestrator makes on this machine, so it stays here";
   if (escalations(session.id).length)
     return "It's waiting on you (an escalated gate), so it stays here";
   const ask = db

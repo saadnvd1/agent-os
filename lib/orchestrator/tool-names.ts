@@ -16,6 +16,8 @@ export const TOOL_NAMES = {
   start_task: name("start_task"),
   set_task_model: name("set_task_model"),
   start_session: name("start_session"),
+  quick_change: name("quick_change"),
+  quick_pr: name("quick_pr"),
   stack: name("stack"),
   stack_status: name("stack_status"),
   land: name("land"),
@@ -39,8 +41,11 @@ export const TOOL_NAMES = {
 // braked; the shell keeps only `aos` commands that read, and notify, which
 // reaches only Saad, so `aos send`, `task`, `spawn` and `stack` can't go
 // around them. It writes files, but never in a project repository, a task
-// worktree, AgentOS's own state or a secret file: its worker checks each
-// write first (write-guard.ts).
+// worktree, AgentOS's own state or a secret file, except inside its own
+// quick changes' worktrees (quick.ts), where it may also run git that
+// looks, stages or undoes, never commits with hooks or pushes: its worker
+// checks each write and each shell command first (write-guard.ts,
+// git-guard.ts).
 export const ORCHESTRATOR_PERMISSIONS: {
   permissionMode: PermissionMode;
   allowedTools: string[];
@@ -67,6 +72,8 @@ export const ORCHESTRATOR_PERMISSIONS: {
     "Bash(aos notify:*)",
     "Bash(aos docs:*)",
     "Bash(aos doc:*)",
+    // Only `git -C <its own quick worktree>`, refused anywhere else.
+    "Bash(git:*)",
   ],
   disallowedTools: [],
 };

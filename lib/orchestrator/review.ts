@@ -43,6 +43,7 @@ import {
   checkRunTotals,
   describeCheckRuns,
 } from "../usage/check-runs";
+import { noteQuickReview } from "./quick";
 import { workspaceTask } from "./targets";
 import { untrusted } from "./untrusted";
 
@@ -272,6 +273,8 @@ export async function reviewAt(
       })
     )
     .then((done) => {
+      if (done.status === "pass" && target.task)
+        noteQuickReview(target.task, sha);
       const said =
         done.status === "pass"
           ? "passed"

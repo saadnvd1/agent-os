@@ -1,0 +1,201 @@
+/**
+ * The shell commands an orchestrator may run, read before the shell sees
+ * them. Its permissions allow `aos` commands and `git`; this makes sure each
+ * is one plain command (no `;`, `&&`, pipes, redirects, substitutions or
+ * globs a shell would act on), and that a git command works only in one of
+ * its own quick changes' worktrees (`-C <path>`), does nothing that runs
+ * other code or writes outside it, and never pushes: quick_pr pushes, and
+ * never to the default branch.
+ */
+
+// What git may do in a quick worktree: look, stage, undo. Committing is
+// quick_pr's alone: it runs with hooks off, where a shell commit would run
+// whatever the project (or the orchestrator's own edit) put in its hooks.
+const GIT_ALLOWED = new Set([
+  "status",
+  "diff",
+  "log",
+  "show",
+  "add",
+  "rm",
+  "restore",
+  "reset",
+  "rev-parse",
+  "ls-files",
+]);
+
+// Git config can run programs (core.fsmonitor, diff.external, filter and
+// textconv drivers), so git runs only at the worktree's own root, where it
+// finds the real git dir, never in a folder holding a repository the
+// orchestrator wrote (the write guard refuses HEAD, .git/ and .gitattributes
+// inside quick worktrees). A .gitattributes already committed can name a
+// driver, but a driver's command lives in config, which only a repository
+// the orchestrator can't write defines.
+export const GIT_LAYOUT_FILE =
+  /(^|\/)(HEAD|\.gitattributes)$|(^|\/)\.git(\/|$)/i;
+
+// `aos` commands carry free text (notify, send): only what a shell would
+// chain, redirect or substitute is refused, not ? ! # * or a plain $.
+export function aosRefusal(command: string): string | null {
+  const bad =
+    "use one plain aos command: no ;, &&, pipes, redirects, backticks or $( ) outside single quotes";
+  let q: string | null = null;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (q === "'") {
+      if (c === "'") q = null;
+      continue;
+    }
+    if (c === "\\") {
+      // zsh deletes a backslash-newline before it parses, joining $ to what
+      // follows; and its ${(e)...} evaluates what an escaped \$ or \` left.
+      const n = command[i + 1] ?? "";
+      if (/[\n\r]/.test(n) || (q === '"' && /[$`]/.test(n)))
+        return `Refused: ${bad}.`;
+      i++;
+      continue;
+    }
+    if (c === "`") return `Refused: ${bad}.`;
+    // After a $ only a plain variable name (or $?, $#, $@, $*, $-, a digit)
+    // or a literal $ may follow: ${..}, $[..], $'..' and the like evaluate
+    // or quote differently in the shell than here.
+    if (c === "$") {
+      const n = command[i + 1] ?? "";
+      if (!/^[\sA-Za-z0-9_?#@*-]?$/.test(n) && !(q === '"' && n === '"'))
+        return `Refused: ${bad}.`;
+    }
+    if (q === '"') {
+      if (c === '"') q = null;
+      continue;
+    }
+    if (c === "'" || c === '"') q = c;
+    else if (/[;&|<>()\n\r]/.test(c)) return `Refused: ${bad}.`;
+  }
+  return q ? "Refused: an unclosed quote." : null;
+}
+
+// Options that write a file somewhere else, read a command to run, or read
+// outside the repository. Git accepts any unique prefix of a long option
+// (--ext-di, --textc), so this refuses the prefixes, not the spellings.
+const GIT_REFUSED_ARG = /^--(ou|ex|te|no-i)/;
+
+// A shell word, with its quotes taken off, or why the command isn't one
+// plain command.
+export function shellWords(command: string): string[] | string {
+  const words: string[] = [];
+  let word: string | null = null;
+  const plain =
+    "use one plain command: no ;, &&, ||, pipes, redirects, $, backticks, globs or comments outside quotes (quote anything with those)";
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (c === " " || c === "\t") {
+      if (word !== null) words.push(word);
+      word = null;
+      continue;
+    }
+    if (c === "'") {
+      const end = command.indexOf("'", i + 1);
+      if (end < 0) return "an unclosed ' quote";
+      word = (word ?? "") + command.slice(i + 1, end);
+      i = end;
+      continue;
+    }
+    if (c === '"') {
+      let text = "";
+      let j = i + 1;
+      for (; j < command.length && command[j] !== '"'; j++) {
+        const d = command[j];
+        if (d === "$" || d === "`") return plain;
+        if (d === "\\" && j + 1 < command.length) {
+          const n = command[++j];
+          text += /["\\$`\n]/.test(n) ? n : `\\${n}`;
+          continue;
+        }
+        text += d;
+      }
+      if (j >= command.length) return 'an unclosed " quote';
+      word = (word ?? "") + text;
+      i = j;
+      continue;
+    }
+    if (c === "\\") {
+      if (i + 1 >= command.length || command[i + 1] === "\n") return plain;
+      word = (word ?? "") + command[++i];
+      continue;
+    }
+    if (/[;&|<>()$`\n\r*?[\]{}!#]/.test(c)) return plain;
+    // zsh expands a word starting with = or ~name; only ~ and ~/ are read
+    // (as the home folder), by the caller.
+    if (word === null && c === "=") return plain;
+    if (word === null && c === "~" && !/^~($|[\s/])/.test(command.slice(i)))
+      return plain;
+    word = (word ?? "") + c;
+  }
+  if (word !== null) words.push(word);
+  return words;
+}
+
+export type GitCommand =
+  | { refusal: string }
+  | { refusal: null; dir: string | null; sub: string | null };
+
+// A shell command read for the guard: why it's refused outright, or, for a
+// git command, the folder it runs in (from -C) to check against its quick
+// worktrees. `dir` and `sub` are null for a command that isn't git.
+export function readCommand(command: unknown): GitCommand {
+  if (typeof command !== "string" || !command.trim())
+    return { refusal: "No command to check." };
+  if (/^aos(\s|$)/.test(command.trim())) {
+    const refusal = aosRefusal(command.trim());
+    return refusal ? { refusal } : { refusal: null, dir: null, sub: null };
+  }
+  const words = shellWords(command.trim());
+  if (typeof words === "string") return { refusal: `Refused: ${words}.` };
+  if (words[0] !== "git") {
+    // `VAR=value git …` sets an environment variable the shell would act on
+    // (GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE), which can redirect git
+    // outside its quick worktree.
+    if (words[0].includes("="))
+      return {
+        refusal:
+          "Refused: no inline VAR=value before a command; environment variables can point git outside your worktree.",
+      };
+    return { refusal: null, dir: null, sub: null };
+  }
+  const usage =
+    "git runs only in one of your quick changes' worktrees, as `git -C <its path> <command>`";
+  let dir: string | null = null;
+  let i = 1;
+  for (; i < words.length; i++) {
+    const w = words[i];
+    if (w === "-C") {
+      if (dir !== null || i + 1 >= words.length)
+        return { refusal: `Refused: ${usage}, with one -C.` };
+      dir = words[++i];
+      continue;
+    }
+    if (w === "--no-pager" || w === "--no-optional-locks") continue;
+    if (w.startsWith("-"))
+      return {
+        refusal: `Refused: git's ${w} option isn't allowed here; ${usage}.`,
+      };
+    break;
+  }
+  if (dir === null) return { refusal: `Refused: ${usage}.` };
+  const sub = words[i] ?? null;
+  if (sub === "push")
+    return {
+      refusal:
+        "Refused: quick_pr pushes a quick change's branch and opens its PR; nothing pushes from the shell, and nothing ever pushes to the default branch.",
+    };
+  if (!sub || !GIT_ALLOWED.has(sub))
+    return {
+      refusal: `Refused: git ${sub ?? ""} isn't allowed here. In a quick worktree git may only ${[...GIT_ALLOWED].join(", ")}; quick_pr commits, pushes and opens the PR.`,
+    };
+  const bad = words.slice(i + 1).find((w) => GIT_REFUSED_ARG.test(w));
+  if (bad)
+    return {
+      refusal: `Refused: git's ${bad} option writes or runs something outside the worktree.`,
+    };
+  return { refusal: null, dir, sub };
+}

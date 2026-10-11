@@ -8,7 +8,7 @@ import {
   SquareTerminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { TaskState, TaskView } from "@/lib/tasks";
+import type { TaskView } from "@/lib/tasks";
 import { isFinished } from "@/lib/tasks/state";
 import { useArmTask, useDropTask, useSignOffTask } from "@/data/tasks";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
@@ -16,22 +16,7 @@ import { tasksUiActions } from "@/stores/tasksUi";
 import { cn } from "@/lib/utils";
 import { MoveTaskButton } from "./MoveTaskButton";
 import { ResumeOnModel } from "./ResumeOnModel";
-
-const STATE: Record<TaskState, { label: string; tone: string }> = {
-  working: { label: "Working", tone: "text-muted-foreground" },
-  "needs-input": {
-    label: "Needs input",
-    tone: "text-amber-600 dark:text-amber-400",
-  },
-  blocked: { label: "Blocked", tone: "text-amber-600 dark:text-amber-400" },
-  review: { label: "Ready for review", tone: "text-primary" },
-  "checks-failing": { label: "Checks failing", tone: "text-destructive" },
-  exited: { label: "Agent exited", tone: "text-amber-600 dark:text-amber-400" },
-  merged: { label: "Merged", tone: "text-emerald-600 dark:text-emerald-400" },
-  dropped: { label: "Dropped", tone: "text-muted-foreground/60" },
-  done: { label: "Done", tone: "text-emerald-600 dark:text-emerald-400" },
-  moving: { label: "Moving", tone: "text-amber-600 dark:text-amber-400" },
-};
+import { TASK_STATE as STATE } from "./task-state-labels";
 
 export function TaskRow({ task }: { task: TaskView }) {
   const signOff = useSignOffTask();

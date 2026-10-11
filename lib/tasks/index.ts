@@ -96,6 +96,8 @@ export interface TaskView {
   // plan step (lib/models).
   model?: string;
   planning?: boolean;
+  // A quick change: the orchestrator session that makes it (no agent).
+  quickOf?: string | null;
 }
 
 export async function createTask(opts: {
@@ -304,22 +306,31 @@ export async function taskView(session: Session): Promise<TaskView> {
   const setup = taskSetupOf(session);
   // A finished task's PR is in the database: only a running one asks gh.
   const chat = session.view === "chat";
+  // A quick change has no agent: the orchestrator is working on it until
+  // its PR is up, and nothing in it can be blocked.
+  const quick = !!session.quick_of;
   const [pr, chatTurn, screen] = await Promise.all([
     live ? prFor(session) : storedPR(session),
-    live && chat
+    live && chat && !quick
       ? chatStateNow(session.id).catch((): ChatTurn => "unknown")
       : Promise.resolve(null),
-    live && !chat
+    live && !chat && !quick
       ? statusDetector.getStatus(session.tmux_name)
       : Promise.resolve(undefined),
   ]);
   const sessionStatus = !live
     ? undefined
-    : chat
-      ? chatStatus(chatTurn)
-      : screen;
+    : quick
+      ? "running"
+      : chat
+        ? chatStatus(chatTurn)
+        : screen;
   const agentGone =
-    !chat && live && sessionStatus !== "dead" && sessionStatus !== undefined
+    !chat &&
+    !quick &&
+    live &&
+    sessionStatus !== "dead" &&
+    sessionStatus !== undefined
       ? await shellOnly(session.tmux_name)
       : false;
   const blocked =
@@ -365,6 +376,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     armed: !!session.merge_armed_at,
     model: sessionModelRef(session),
     planning: session.plan_phase === "planning",
+    quickOf: session.quick_of ?? null,
   };
 }
 

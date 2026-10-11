@@ -41,6 +41,10 @@ export interface SidebarRow {
   working: boolean;
   // Orchestration workers, nested under their conductor.
   workers: SidebarRow[];
+  // Its task's state, when it's a task.
+  task?: TaskState;
+  // An orchestrator's quick changes (orchestrator/quick.ts), nested under it.
+  quick?: SidebarRow[];
 }
 
 export interface Shelves {
@@ -113,6 +117,8 @@ function toRow(input: ShelfInput, session: Session): SidebarRow {
     unread: !!status?.unread,
     working: status?.status === "running",
     workers: [],
+    task: input.tasks[session.id],
+    quick: [],
   };
 }
 
@@ -129,6 +135,15 @@ export function buildShelves(input: ShelfInput): Shelves {
 
   const top: SidebarRow[] = [];
   for (const row of rows) {
+    // A quick change always sits under the orchestrator that makes it: it's
+    // that orchestrator's to carry, never one that needs you.
+    const owner = row.session.quick_of
+      ? byId.get(row.session.quick_of)
+      : undefined;
+    if (owner) {
+      (owner.quick ??= []).push(row);
+      continue;
+    }
     const conductor = row.session.conductor_session_id
       ? byId.get(row.session.conductor_session_id)
       : undefined;
@@ -200,8 +215,11 @@ export function sameRow(a: SidebarRow, b: SidebarRow): boolean {
     a.unread === b.unread &&
     a.working === b.working &&
     sameStatus(a.status, b.status) &&
+    a.task === b.task &&
     a.workers.length === b.workers.length &&
-    a.workers.every((w, i) => sameRow(w, b.workers[i]))
+    a.workers.every((w, i) => sameRow(w, b.workers[i])) &&
+    (a.quick?.length ?? 0) === (b.quick?.length ?? 0) &&
+    (a.quick ?? []).every((q, i) => sameRow(q, b.quick![i]))
   );
 }
 

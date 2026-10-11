@@ -8,6 +8,7 @@ import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { useMinuteTick } from "@/hooks/useMinuteTick";
 import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import { cn } from "@/lib/utils";
+import { QuickChangeRow } from "./QuickChangeRow";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowShell, type RowMenuKind } from "./RowShell";
@@ -115,6 +116,9 @@ export const SessionRow = memo(function SessionRow({
       )}
       {row.workers.map((worker) => (
         <SessionRow key={worker.session.id} row={worker} muted={muted} nested />
+      ))}
+      {row.quick?.map((q) => (
+        <QuickChangeRow key={q.session.id} row={q} />
       ))}
     </div>
   );

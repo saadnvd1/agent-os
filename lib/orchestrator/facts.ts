@@ -36,6 +36,8 @@ export interface SessionFacts {
   lastActive: number;
   // Work that should end in a PR: a task, or a session on its own branch.
   branch: string | null;
+  // A quick change the orchestrator makes itself (quick.ts): no agent.
+  quick?: boolean;
   task: {
     state: TaskState;
     pr: TaskPR | null;
@@ -131,6 +133,16 @@ export async function statusOf(s: Session): Promise<{
     (s.setup_status === "running" || s.setup_status === "held")
   )
     return { status: "running", activity: "setting up", needsInput: false };
+  // A quick change has no agent: the orchestrator is editing it until its
+  // PR is up, so nothing reads it as idle and cleans it up meanwhile.
+  if (s.quick_of)
+    return s.pr_number
+      ? { status: "idle", activity: "quick change, PR open", needsInput: false }
+      : {
+          status: "running",
+          activity: "quick change: the orchestrator is editing it",
+          needsInput: false,
+        };
   // A linked machine's chat isn't in this machine's store: that machine's
   // word, and unknown counts as busy.
   if (s.view === "chat" && hostLink(s.host_id)) {
@@ -243,6 +255,7 @@ export async function sessionFacts(
           latestChatAt(s.id)
         ),
         branch: s.branch_name,
+        quick: !!s.quick_of,
         task,
         stack: stackOf(s.id),
       };

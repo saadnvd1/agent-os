@@ -26,6 +26,8 @@ import { readSession } from "./read";
 import { reviewTarget, signOffTarget } from "./external-gates";
 import { land } from "./signoff";
 import { arm, disarm } from "./armed";
+import { quickChange, quickPR } from "./quick";
+import { review } from "./review";
 import { parseArgs as p, type ToolName } from "./tool-schemas";
 
 export { isToolName, TOOLS, type ToolName } from "./tool-schemas";
@@ -37,6 +39,8 @@ const ACTING = new Set<ToolName>([
   "start_task",
   "set_task_model",
   "start_session",
+  "quick_change",
+  "quick_pr",
   "stack",
   "land",
   "drop",
@@ -118,6 +122,19 @@ export async function runTool(
         name: a.name,
         view: a.view,
       });
+    }
+    case "quick_change": {
+      const a = p(tool, raw);
+      return quickChange(w, a.project, a.name);
+    }
+    case "quick_pr": {
+      const a = p(tool, raw);
+      const opened = await quickPR(w, a.change, a.title, a.body);
+      // Its code-review gate is this review: it starts at once.
+      const reviewing = await review(w, opened.id).catch(
+        (e: Error) => `Its review couldn't start (${e.message}): call review.`
+      );
+      return `${opened.text}\n${reviewing}`;
     }
     case "stack": {
       const a = p(tool, raw);

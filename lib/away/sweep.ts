@@ -80,6 +80,8 @@ export const recent = (
 // Live work with an agent to answer: not stopped, not finished, not a
 // linked machine's copy, not setting up, not waiting on someone already.
 function workable(f: SessionFacts): boolean {
+  // A quick change has no agent; the orchestrator carries it on.
+  if (f.quick) return false;
   if (f.status === "dead" || f.status === "waiting" || f.needsInput)
     return false;
   if (f.activity === "setting up") return false;

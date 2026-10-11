@@ -110,7 +110,8 @@ const workspaceOf = (projectId: string) =>
   getProject(projectId)?.workspace_id ?? null;
 
 // Running tasks hold their slot until they finish (merged, dropped, done),
-// PR open or not; a queued task being started counts too. Without a
+// PR open or not; a queued task being started counts too. A quick change
+// runs no agent, so it holds none. Without a
 // workspace, the project is the scope.
 function runningIn(scope: { workspaceId: string | null; projectId: string }) {
   const where = scope.workspaceId
@@ -120,7 +121,7 @@ function runningIn(scope: { workspaceId: string | null; projectId: string }) {
     db
       .prepare(
         `SELECT s.id FROM sessions s JOIN projects p ON p.id = s.project_id
-         WHERE ${where} AND s.archived_at IS NULL
+         WHERE ${where} AND s.archived_at IS NULL AND s.quick_of IS NULL
            AND s.task_status IN (${IN_FLIGHT.map((s) => `'${s}'`).join(", ")})`
       )
       .all({ ws: scope.workspaceId, project: scope.projectId }) as {

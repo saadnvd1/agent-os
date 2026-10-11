@@ -109,7 +109,8 @@ function sessionConditions(
       true
     );
 
-  const shouldPR = !!f.task || !!f.branch;
+  // A quick change is the orchestrator's own: nothing to tell it.
+  const shouldPR = (!!f.task || !!f.branch) && !f.quick;
   const finished = !!f.task && isFinished(f.task.state);
   const idleFor = now - f.lastActive;
   if (

@@ -21,6 +21,8 @@ import { isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
 import { LIMITS_FILE } from "./usage";
+import { GIT_LAYOUT_FILE, readCommand } from "./git-guard";
+import { quickWorktrees } from "./quick-store";
 
 // The tools that write a file, and the argument naming it.
 export const WRITE_TOOLS: Record<string, string> = {
@@ -43,6 +45,9 @@ export interface WriteBounds {
   home: string;
   // Folders whose files run (~/Library, PATH, the usage brake's input...).
   runs: string[];
+  // Its own quick changes' worktrees (quick.ts): the one place in a
+  // project it may write, everything else in `repos` still refused.
+  quick?: string[];
 }
 
 // Wherever they are, files that configure what an agent, git or a
@@ -129,6 +134,7 @@ export async function writeRefusal(
   let ownDir: string[];
   let home: string[];
   let runs: string[];
+  let quick: string[][];
   try {
     // Where it lands as written, and with `..` taken by name first, as a
     // tool that normalises the path before opening it would; and where it
@@ -151,16 +157,27 @@ export async function writeRefusal(
     state = await both(bounds.state);
     ownDir = await both(bounds.ownDir);
     home = await both(bounds.home);
+    quick = await Promise.all((bounds.quick ?? []).map(both));
   } catch (e) {
     return `Couldn't resolve ${filePath}: ${(e as Error).message}.`;
   }
   for (const target of targets) {
-    const repo = repos.find((r) => within(target, r));
+    // Inside one of its quick worktrees, the roots that hold that worktree
+    // (the worktrees folder, a project above it) don't count; any other
+    // root, one nested inside it included, still refuses.
+    const ownQuick = quick.find((q) => q.some((d) => within(target, d)));
+    const holdsQuick = (r: string) =>
+      !!ownQuick && ownQuick.some((d) => within(d, r));
+    const repo = repos.find((r) => within(target, r) && !holdsQuick(r));
     if (repo)
-      return `${filePath} is inside ${repo}, a project repository, task worktree or AgentOS itself. Change code there through a task (start_task), so its PR goes through the merge gates.`;
+      return `${filePath} is inside ${repo}, a project repository, task worktree or AgentOS itself. Change code there through a task (start_task), or for a small edit, in a quick change's worktree (quick_change), so its PR goes through the merge gates.`;
+    if (ownQuick && GIT_LAYOUT_FILE.test(target))
+      return `${filePath} is part of a git repository's layout (HEAD, .git/, .gitattributes); git config can run programs, so orchestrators never write those.`;
     if (AGENTOS_TEMP.test(target))
       return `${filePath} is in a checkout AgentOS is reviewing or rebasing; orchestrators never write there.`;
-    const own = ownDir.some((d) => within(target, d));
+    // Its folder, or a quick worktree (which sits in ~/.agent-os/worktrees):
+    // AgentOS's state and the home's dot-folders hold it, but it's its own.
+    const own = ownDir.some((d) => within(target, d)) || !!ownQuick;
     if (state.some((d) => within(target, d)) && !own)
       return `${filePath} is in AgentOS's own state (${bounds.state}); you may write only in your folder, ${bounds.ownDir}.`;
     if (isSecretPath(target) || isSecretPath(filePath))
@@ -219,6 +236,7 @@ export async function orchestratorWriteBounds(
       ...(process.env.PATH ?? "").split(":").filter((d) => d.startsWith("/")),
     ],
     ownDir: orchestratorDir(session.workspace_id ?? ""),
+    quick: quickWorktrees(session.id),
     state: path.join(os.homedir(), ".agent-os"),
     repos: [...repos, WORKTREES_DIR, process.cwd(), path.dirname(dbPath)],
   };
@@ -287,9 +305,68 @@ export async function orchestratorToolRefusal(
   tool: string,
   input: Record<string, unknown>
 ): Promise<string | null> {
+  if (tool === "Bash") return commandRefusal(session, input.command);
   const arg = WRITE_TOOLS[tool];
   if (!arg) return null;
   const filePath = input[arg];
   if (typeof filePath !== "string") return "No file path to check.";
   return writeRefusal(filePath, await orchestratorWriteBounds(session));
+}
+
+// A shell command: one plain command, and git only in its own quick
+// worktrees (git-guard.ts), the folder it names resolved like a write's.
+async function commandRefusal(
+  session: Session,
+  command: unknown
+): Promise<string | null> {
+  const read = readCommand(command);
+  if (read.refusal !== null || read.dir === null) return read.refusal;
+  const quick = quickWorktrees(session.id);
+  const dir = read.dir;
+  if (!dir.startsWith("/") || !quick.length)
+    return `Refused: git runs only in one of your quick changes' worktrees, named by its full path (${quick.length ? quick.join(", ") : "you have none open; start one with quick_change"}).`;
+  return (await isQuickRoot(dir, quick))
+    ? null
+    : `Refused: ${read.dir} isn't the root of one of your quick changes' worktrees (${quick.join(", ")}). Git runs at the root only, never in a subfolder, a project checkout or another session's worktree.`;
+}
+
+// Whether a folder is inside one of these worktrees by every way the
+// system could read it: as named, with `..` taken by name, and with links
+// followed.
+export async function insideQuick(
+  dir: string,
+  quick: string[]
+): Promise<boolean> {
+  try {
+    const forms = [
+      path.resolve(dir),
+      await physicalPath(dir),
+      await physicalPath(path.resolve(dir)),
+    ];
+    const roots = (
+      await Promise.all(
+        quick.map(async (q) => [path.resolve(q), await physicalPath(q)])
+      )
+    ).flat();
+    return forms.every((f) => roots.some((r) => within(f, r)));
+  } catch {
+    return false;
+  }
+}
+
+// Whether a folder is exactly the root of one of these worktrees (as named,
+// and with links followed), where git finds the real git dir.
+async function isQuickRoot(dir: string, quick: string[]): Promise<boolean> {
+  if (!(await insideQuick(dir, quick))) return false;
+  try {
+    const forms = [path.resolve(dir), await physicalPath(dir)];
+    const roots = (
+      await Promise.all(
+        quick.map(async (q) => [path.resolve(q), await physicalPath(q)])
+      )
+    ).flat();
+    return forms.every((f) => roots.includes(f));
+  } catch {
+    return false;
+  }
 }
