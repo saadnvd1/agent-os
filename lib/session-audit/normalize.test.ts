@@ -5,6 +5,7 @@ import {
   normalizeCommand,
   normalizeError,
   repoPath,
+  scrub,
   shellReadTarget,
   wasteClasses,
 } from "./normalize";
@@ -149,5 +150,23 @@ describe("shellReadTarget", () => {
   it("isn't fooled by a pipe's limiter", () => {
     expect(shellReadTarget("ls | head -5")).toBeNull();
     expect(shellReadTarget("git log | tail -20")).toBeNull();
+  });
+});
+
+describe("scrub", () => {
+  it("redacts credentials before session text leaves the extractor", () => {
+    expect(scrub(`curl -H "Authorization: Bearer abc.def-123" https://x`)).toBe(
+      `curl -H "Authorization: Bearer [redacted]" https://x`
+    );
+    expect(scrub("cd x && API_KEY=s3cr3t npm run job")).toBe(
+      "cd x && API_KEY=[redacted] npm run job"
+    );
+    expect(scrub("token ghp_0123456789abcdefghijABCDEFGHIJ")).toBe(
+      "token [redacted]"
+    );
+    // redact() drops the rest of a line that starts with an assignment.
+    expect(normalizeCommand("OPENAI_API_KEY=sk-live123 node x.js")).toBe(
+      "OPENAI_API_KEY=[redacted]"
+    );
   });
 });

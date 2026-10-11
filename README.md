@@ -1187,8 +1187,10 @@ summary, ranks a plan by impact and effort, compares it with the last audit,
 and offers to start the fixes you pick as tasks.
 
 Audits quote session content, so they stay on your machine in
-`~/.agent-os/audits/` (`AGENTOS_AUDITS_DIR` to move them) and never in a repo.
-Settings → Audits (or ⌘K, "Session audits") lists and renders them.
+`~/.agent-os/audits/<kind>/` (session audits in `sessions/`;
+`AGENTOS_AUDITS_DIR` moves the root) and never in a repo. Settings → Audits
+(or ⌘K, "Session audits") lists every kind's markdown reports, newest first,
+and renders them.
 
 ## Mobile access
 

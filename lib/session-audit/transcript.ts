@@ -16,7 +16,7 @@ import {
   repoPath,
   shellReadTarget,
   wasteClasses,
-  genericPath,
+  scrub,
   type ManualClass,
   type WasteClass,
 } from "./normalize";
@@ -134,7 +134,7 @@ function describeCall(
       ...base,
       key: normalizeCommand(command),
       exact: command.slice(0, 400),
-      excerpt: genericPath(command.replace(/\s*\n\s*/g, " ⏎ ")).slice(0, 240),
+      excerpt: scrub(command.replace(/\s*\n\s*/g, " ⏎ ")).slice(0, 240),
       readPath: target ? repoPath(absolute(target, cwd)) : null,
       waste: wasteClasses(command),
       manual: manualClasses(command),
@@ -155,7 +155,9 @@ function describeCall(
     };
   }
   if (name === "Grep" || name === "Glob") {
-    const key = `${str("pattern").slice(0, 60)} in ${repoPath(str("path")) || "."}`;
+    const key = scrub(
+      `${str("pattern").slice(0, 60)} in ${repoPath(str("path")) || "."}`
+    );
     return {
       ...base,
       key,
@@ -180,7 +182,7 @@ function describeCall(
     ...base,
     key: `${name} ${normalizeCommand(json).slice(0, 80)}`,
     exact: `${name} ${json.slice(0, 400)}`,
-    excerpt: genericPath(json).slice(0, 200),
+    excerpt: scrub(json).slice(0, 200),
   };
 }
 
@@ -427,7 +429,7 @@ export async function findExcerpts(
         block.type === "tool_use" &&
         out.length < limit
       ) {
-        const input = genericPath(JSON.stringify(block.input ?? {}));
+        const input = scrub(JSON.stringify(block.input ?? {}));
         if (!match.test(input) && !match.test(String(block.name))) continue;
         const x: Excerpt = {
           at,
@@ -442,7 +444,7 @@ export async function findExcerpts(
         const x = pending.get(String(block.tool_use_id));
         if (!x) continue;
         pending.delete(String(block.tool_use_id));
-        x.output = genericPath(contentText(block.content).text).slice(0, 400);
+        x.output = scrub(contentText(block.content).text).slice(0, 400);
         x.isError = block.is_error === true;
       }
     }

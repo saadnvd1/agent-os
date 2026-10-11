@@ -38,6 +38,7 @@ import {
   scanTranscript,
   type Range,
 } from "../../lib/session-audit/transcript";
+import { UNTRUSTED_RULE, untrusted } from "../../lib/orchestrator/untrusted";
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
@@ -53,7 +54,7 @@ export function parseTime(value: string | undefined, fallback: number): number {
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   }
-  // A bare date is local midnight, the way Saad reads a day.
+  // A bare date is local midnight: the day as the reader means it.
   const ms = /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? new Date(`${value}T00:00:00`).getTime()
     : Date.parse(value);
@@ -65,8 +66,8 @@ function dbPath(args: string[]): string {
   return path.resolve(flag(args, "db") || process.env.DB_PATH || "agent-os.db");
 }
 
-function range(args: string[]): Range {
-  const last = latestAudit();
+function range(args: string[], id?: string): Range {
+  const last = latestAudit(id);
   const today = parseTime("today", 0);
   const since = parseTime(
     flag(args, "since"),
@@ -99,7 +100,8 @@ async function pool<T, R>(
 
 async function extract(args: string[]) {
   const started = Date.now();
-  const r = range(args);
+  const id = flag(args, "id") || auditId();
+  const r = range(args, id);
   const db = openDb(dbPath(args));
   const sessions = loadSessions(db, r.since);
   const signals = loadSignals(
@@ -126,8 +128,7 @@ async function extract(args: string[]) {
   });
 
   const summary = summarize(inputs, signals, r);
-  const id = flag(args, "id") || auditId();
-  const last = latestAudit();
+  const last = latestAudit(id);
   const prev = last ? readSummary(last.id) : null;
   const cmp =
     last && prev
@@ -178,9 +179,13 @@ async function excerpt(args: string[]) {
     if (out.length >= limit) break;
     out.push(...(await findExcerpts(file, r, match, limit - out.length)));
   }
+  if (out.length) console.log(UNTRUSTED_RULE);
   for (const x of out)
     console.log(
-      `- ${x.at} ${x.tool}${x.isError ? " (error)" : ""}\n  in:  ${x.input}\n  out: ${x.output.replace(/\n/g, "⏎ ")}`
+      untrusted(
+        `transcript ${sessions[0].id.slice(0, 8)} ${x.at}`,
+        `${x.tool}${x.isError ? " (error)" : ""}\n  in:  ${x.input}\n  out: ${x.output.replace(/\n/g, "⏎ ")}`
+      )
     );
   if (!out.length) console.log("No matching calls.");
 }

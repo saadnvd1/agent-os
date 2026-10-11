@@ -4,6 +4,8 @@
  * and two worktrees never share a path or a sha.
  */
 
+import { redact } from "../orchestrator/untrusted";
+
 /** Tokens a text costs, by the usual 4 characters a token. An estimate. */
 export const estTokens = (chars: number) => Math.ceil(chars / 4);
 
@@ -21,6 +23,20 @@ export function genericPath(p: string): string {
     .replace(TMP, "<tmp>");
 }
 
+/**
+ * Session text fit to leave the extractor: the machine taken out and
+ * anything credential-shaped redacted, including a bearer token or an
+ * inline KEY=value that redact's line-anchored rule misses.
+ */
+export function scrub(text: string): string {
+  return redact(genericPath(text))
+    .replace(/(bearer\s+)[^\s'"]+/gi, "$1[redacted]")
+    .replace(
+      /(\b[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|CREDENTIALS?|AUTH)[A-Z0-9_]*=)[^\s'"]+/g,
+      "$1[redacted]"
+    );
+}
+
 /** A file as the repo knows it, so the same file read in two worktrees is one key. */
 export function repoPath(p: string): string {
   return genericPath(p).replace(/^<wt>\//, "");
@@ -34,7 +50,7 @@ export function normalizeCommand(command: string): string {
   // `cd <somewhere> &&` only says where; the rest is what ran.
   while (/^cd\s+\S+\s*(&&|;)\s*/.test(c))
     c = c.replace(/^cd\s+\S+\s*(&&|;)\s*/, "");
-  c = genericPath(c)
+  c = scrub(c)
     .replace(/"(?:[^"\\]|\\.)*"/g, '"…"')
     .replace(/'(?:[^'\\]|\\.)*'/g, "'…'")
     .replace(
@@ -59,7 +75,7 @@ export function normalizeError(text: string): string {
       (l) => l && !/^Exit code \d+$/.test(l) && !/^<\/?tool_use_error>$/.test(l)
     );
   const line = (lines[0] ?? "").replace(/<\/?tool_use_error>/g, "");
-  const n = genericPath(line)
+  const n = scrub(line)
     .replace(
       /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
       "<id>"

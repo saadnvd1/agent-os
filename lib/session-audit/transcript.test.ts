@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { summarize } from "./aggregate";
 import { compare, renderSummary } from "./render";
 import type { DbSignals } from "./sources";
-import { recordAudit, readIndex, writeSummary } from "./store";
+import { latestAudit, recordAudit, readIndex, writeSummary } from "./store";
 import { findExcerpts, scanTranscript } from "./transcript";
 
 // A transcript the way Claude Code writes one: an assistant turn is one line
@@ -281,14 +281,17 @@ describe("recordAudit", () => {
     const summary = summarize([], NO_SIGNALS, RANGE);
     writeSummary("2026-10-10-2000", summary, "# data\n");
     expect(() => recordAudit("2026-10-10-2000")).toThrow(/No report/);
-    fs.writeFileSync(path.join(dir, "2026-10-10-2000.md"), "# report\n");
     fs.writeFileSync(
-      path.join(dir, "2026-10-10-2000.json"),
+      path.join(dir, "sessions", "2026-10-10-2000.md"),
+      "# report\n"
+    );
+    fs.writeFileSync(
+      path.join(dir, "sessions", "2026-10-10-2000.json"),
       JSON.stringify({ findings: [{ title: "no key" }] })
     );
     expect(() => recordAudit("2026-10-10-2000")).toThrow(/key and a title/);
     fs.writeFileSync(
-      path.join(dir, "2026-10-10-2000.json"),
+      path.join(dir, "sessions", "2026-10-10-2000.json"),
       JSON.stringify({
         headline: "h",
         findings: [
@@ -306,5 +309,9 @@ describe("recordAudit", () => {
       }),
     ]);
     expect(() => recordAudit("../etc")).toThrow(/Bad audit id/);
+    expect(latestAudit()?.id).toBe("2026-10-10-2000");
+    // Re-running that audit compares it with the one before, not itself.
+    expect(latestAudit("2026-10-10-2000")).toBeNull();
+    expect(latestAudit("2026-10-11-0900")?.id).toBe("2026-10-10-2000");
   });
 });

@@ -9,7 +9,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { claudeProjectDir, isClaudeSessionId } from "../tasks/transcript";
-import { normalizeError } from "./normalize";
+import { normalizeError, scrub } from "./normalize";
 
 export type SessionKind = "task" | "orchestrator" | "chat" | "terminal";
 
@@ -40,15 +40,15 @@ interface SessionRow {
   project: string | null;
 }
 
-const expand = (p: string) =>
-  p === "~" || p.startsWith("~/") ? path.join(os.homedir(), p.slice(1)) : p;
+const expand = (p: string, home: string) =>
+  p === "~" || p.startsWith("~/") ? path.join(home, p.slice(1)) : p;
 
 /** Folders only one AgentOS session (or one workspace's orchestrator) ever runs in. */
-function ownsFolder(cwd: string): boolean {
-  const home = path.join(os.homedir(), ".agent-os");
+function ownsFolder(cwd: string, home: string): boolean {
+  const root = path.join(home, ".agent-os");
   return (
-    cwd.startsWith(path.join(home, "worktrees") + "/") ||
-    cwd.startsWith(path.join(home, "orchestrators") + "/")
+    cwd.startsWith(path.join(root, "worktrees") + "/") ||
+    cwd.startsWith(path.join(root, "orchestrators") + "/")
   );
 }
 
@@ -73,7 +73,8 @@ export function openDb(dbPath: string): Database.Database {
  */
 export function loadSessions(
   db: Database.Database,
-  since: number
+  since: number,
+  home = os.homedir()
 ): AuditSession[] {
   const rows = db
     .prepare(
@@ -92,7 +93,7 @@ export function loadSessions(
   const claimed = new Set<string>();
 
   for (const row of rows) {
-    const cwd = expand(row.worktree_path || row.working_directory);
+    const cwd = expand(row.worktree_path || row.working_directory, home);
     const s: AuditSession = {
       id: row.id,
       name: row.name,
@@ -105,7 +106,7 @@ export function loadSessions(
       briefChars: row.task_brief_chars ?? 0,
     };
     sessions.set(row.id, s);
-    if (ownsFolder(cwd)) {
+    if (ownsFolder(cwd, home)) {
       const list = byFolder.get(cwd) ?? [];
       list.push(s);
       byFolder.set(cwd, list);
@@ -138,7 +139,9 @@ export function loadSessions(
         continue;
       const file = path.join(dir, name);
       if (claimed.has(file) || !fresh(file, since)) continue;
-      const born = sqlTime(fs.statSync(file).birthtimeMs);
+      // Some filesystems report no birth time; the last write is next best.
+      const st = fs.statSync(file);
+      const born = sqlTime(st.birthtimeMs || st.mtimeMs);
       const owner =
         [...owners].reverse().find((o) => o.createdAt <= born) ?? owners[0];
       owner.files.push(file);
@@ -185,7 +188,7 @@ export function subagentFiles(
     out.push({
       file,
       type: meta.agentType || "unknown",
-      description: meta.description || "",
+      description: scrub(meta.description || ""),
     });
   }
   return out;
@@ -228,9 +231,11 @@ export function loadSignals(
   const all = <T>(sql: string, ...params: unknown[]): T[] => {
     try {
       return db.prepare(sql).all(...params) as T[];
-    } catch {
-      // A table an older database doesn't have yet.
-      return [];
+    } catch (error) {
+      // A table an older database doesn't have yet; any other error (a
+      // renamed column) must fail loudly, not read as zero.
+      if (/no such table/.test(String(error))) return [];
+      throw error;
     }
   };
 
