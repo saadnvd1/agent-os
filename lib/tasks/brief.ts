@@ -31,7 +31,7 @@ export function buildTaskBrief(opts: {
 - Branch: ${opts.branch} (based on ${opts.baseBranch}). Stay in this directory and on this branch.
 - Do the task fully. Run the project's own checks (typecheck, tests, lint) when they exist and keep them passing.
 - When the work is done, commit with a conventional commit message, run \`git push -u origin ${opts.branch}\` and open a pull request against ${opts.baseBranch} with \`gh pr create\`, using a clear title and a short body that says what changed and how you verified it. Then stop and wait.
-- You don't need to review it yourself: AgentOS runs an independent review of the PR's exact head commit before it can merge, and sends you any blocking findings to fix. For a risky change you may still run \`/do-code-review\` (or \`/code-review\`) before the PR.
+- You don't need to review it yourself: AgentOS runs an independent review of the PR's exact head commit before it can merge, and the orchestrator sends you any blocking findings to fix. For a risky change you may still run \`/do-code-review\` (or \`/code-review\`) before the PR.
 - Never merge the pull request, never push to ${opts.baseBranch}, and never delete branches or worktrees. A human reviews and merges.${opts.stack ? stackedLines(opts.baseBranch, opts.stack) : ""}
 - Write scratch files (PR bodies, review notes, logs, test output) outside the worktree, in your scratchpad or \$TMPDIR. Anything uncommitted left in the worktree keeps it from being removed when the task is done.
 - Do not add any AI or assistant attribution to commits or the pull request.
