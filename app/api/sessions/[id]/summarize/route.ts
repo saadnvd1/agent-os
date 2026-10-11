@@ -3,7 +3,7 @@ import { isRemoteHost } from "@/lib/hosts";
 import { spawn } from "child_process";
 import { getDb, queries, type Session } from "@/lib/db";
 import { randomUUID } from "crypto";
-import { readFileSync, existsSync } from "fs";
+import { readFile } from "fs/promises";
 import { homedir } from "os";
 import { pasteText, tmux } from "@/lib/tmux/exec";
 
@@ -36,20 +36,26 @@ function encodeProjectPath(cwd: string): string {
 }
 
 // Read and parse Claude session JSONL file
-function readClaudeSessionHistory(
+async function readClaudeSessionHistory(
   cwd: string,
   claudeSessionId: string
-): string | null {
+): Promise<string | null> {
   const projectPath = encodeProjectPath(cwd);
   const jsonlPath = `${homedir()}/.claude/projects/${projectPath}/${claudeSessionId}.jsonl`;
 
-  if (!existsSync(jsonlPath)) {
-    console.log(`[summarize] JSONL not found: ${jsonlPath}`);
+  let content: string;
+  try {
+    content = await readFile(jsonlPath, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      console.log(`[summarize] JSONL not found: ${jsonlPath}`);
+      return null;
+    }
+    console.error(`[summarize] Error reading JSONL:`, error);
     return null;
   }
 
   try {
-    const content = readFileSync(jsonlPath, "utf-8");
     const lines = content.trim().split("\n");
     const messages: string[] = [];
 
@@ -240,7 +246,10 @@ export async function POST(
       const claudeSessionId = await getClaudeSessionId(tmuxSessionName);
       if (claudeSessionId && cwdExpanded) {
         console.log(`[summarize] Found Claude session ID: ${claudeSessionId}`);
-        conversation = readClaudeSessionHistory(cwdExpanded, claudeSessionId);
+        conversation = await readClaudeSessionHistory(
+          cwdExpanded,
+          claudeSessionId
+        );
         if (conversation) {
           console.log(
             `[summarize] Read ${conversation.length} chars from JSONL`

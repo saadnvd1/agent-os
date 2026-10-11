@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process";
+import { run } from "./tasks/gh";
 
 /** The remote's default branch, or "main" when it has none. */
 export function remoteDefaultBranch(workingDir: string): string {
@@ -32,37 +33,55 @@ export interface CommitInfo {
   body: string;
 }
 
+// Every call here waits on git, gh or the network: all of it runs off the
+// event loop, so a slow GitHub never stalls the server's other requests.
+
+const AUTH_OK_MS = 5 * 60_000;
+let ghAuthOkAt = 0;
+
 /**
- * Check if gh CLI is installed and authenticated
+ * Check if gh CLI is installed and authenticated. A yes is remembered for a
+ * few minutes (every PR panel asks); a no is asked again, so a fresh
+ * `gh auth login` counts at once.
  */
-export function checkGhCli(): boolean {
+export async function checkGhCli(): Promise<boolean> {
+  if (Date.now() - ghAuthOkAt < AUTH_OK_MS) return true;
   try {
-    execFileSync("gh", ["auth", "status"], { timeout: 5000, stdio: "pipe" });
+    await run("gh", ["auth", "status"], process.cwd(), 5000);
+    ghAuthOkAt = Date.now();
     return true;
   } catch {
     return false;
   }
 }
 
+/** Forget a remembered gh login (tests). */
+export function resetGhCliCheck(): void {
+  ghAuthOkAt = 0;
+}
+
 /**
  * Get commits between current branch and base branch
  */
-export function getCommitsSinceBase(
+export async function getCommitsSinceBase(
   workingDir: string,
   baseBranch = "main"
-): CommitInfo[] {
+): Promise<CommitInfo[]> {
   try {
     // Get the merge base
     // Names come from the repository (its remote's default branch): they
     // are arguments, never shell text or options.
-    const mergeBase = execFileSync(
-      "git",
-      ["merge-base", "--end-of-options", baseBranch, "HEAD"],
-      { cwd: workingDir, encoding: "utf-8" }
+    const mergeBase = (
+      await run(
+        "git",
+        ["merge-base", "--end-of-options", baseBranch, "HEAD"],
+        workingDir,
+        10_000
+      )
     ).trim();
 
     // Get commits since merge base
-    const output = execFileSync(
+    const output = await run(
       "git",
       [
         "log",
@@ -70,7 +89,8 @@ export function getCommitsSinceBase(
         "--format=COMMIT_START%n%H%n%s%n%b%nCOMMIT_END",
         "--",
       ],
-      { cwd: workingDir, encoding: "utf-8" }
+      workingDir,
+      10_000
     );
 
     const commits: CommitInfo[] = [];
@@ -160,12 +180,12 @@ export function generatePRBody(commits: CommitInfo[]): string {
 /**
  * Get PR for a branch
  */
-export function getPRForBranch(
+export async function getPRForBranch(
   workingDir: string,
   branchName: string
-): PRInfo | null {
+): Promise<PRInfo | null> {
   try {
-    const output = execFileSync(
+    const output = await run(
       "gh",
       [
         "pr",
@@ -177,7 +197,8 @@ export function getPRForBranch(
         "--limit",
         "1",
       ],
-      { cwd: workingDir, encoding: "utf-8", timeout: 10000 }
+      workingDir,
+      10_000
     );
     const prs = JSON.parse(output);
     return prs.length > 0 ? prs[0] : null;
@@ -189,30 +210,32 @@ export function getPRForBranch(
 /**
  * Create a new PR
  */
-export function createPR(
+export async function createPR(
   workingDir: string,
   branchName: string,
   baseBranch: string,
   title: string,
   body: string
-): PRInfo {
+): Promise<PRInfo> {
   // First ensure branch is pushed
   try {
-    execFileSync("git", ["push", "-u", "origin", "--", branchName], {
-      cwd: workingDir,
-      timeout: 30000,
-      stdio: "pipe",
-    });
+    await run(
+      "git",
+      ["push", "-u", "origin", "--", branchName],
+      workingDir,
+      30_000
+    );
   } catch {
     // Branch might already be pushed
   }
 
   // Create PR using gh CLI
   // gh pr create outputs the PR URL on success
-  const output = execFileSync(
+  const output = await run(
     "gh",
     ["pr", "create", "--title", title, "--base", baseBranch, "--body", body],
-    { cwd: workingDir, encoding: "utf-8", timeout: 30000 }
+    workingDir,
+    30_000
   );
 
   // Parse URL from output (gh pr create prints the URL)
@@ -235,20 +258,24 @@ export function createPR(
 /**
  * Get current branch name
  */
-export function getCurrentBranch(workingDir: string): string {
-  return execFileSync("git", ["branch", "--show-current"], {
-    cwd: workingDir,
-    encoding: "utf-8",
-  }).trim();
+export async function getCurrentBranch(workingDir: string): Promise<string> {
+  return (
+    await run("git", ["branch", "--show-current"], workingDir, 10_000)
+  ).trim();
 }
 
 /**
- * Get the default base branch (main or master)
+ * Get the default base branch: the remote's, or "main" when it has none.
  */
-export function getBaseBranch(workingDir: string): string {
+export async function getBaseBranch(workingDir: string): Promise<string> {
   try {
-    // Try to get from remote HEAD
-    return remoteDefaultBranch(workingDir);
+    const ref = await run(
+      "git",
+      ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+      workingDir,
+      10_000
+    );
+    return ref.trim().replace(/^origin\//, "");
   } catch {
     return "main";
   }

@@ -28,6 +28,13 @@ export const queries = {
   getAllSessions: (db: Database.Database) =>
     getStmt(db, `SELECT * FROM sessions ORDER BY updated_at DESC`),
 
+  // The tmux names AgentOS owns, for telling discovered sessions apart.
+  getManagedTmuxNames: (db: Database.Database) =>
+    getStmt(
+      db,
+      `SELECT host_id, tmux_name FROM sessions WHERE tmux_name IS NOT NULL AND tmux_name != ''`
+    ),
+
   updateSessionStatus: (db: Database.Database) =>
     getStmt(
       db,
@@ -195,6 +202,12 @@ export const queries = {
 
   getProject: (db: Database.Database) =>
     getStmt(db, `SELECT * FROM projects WHERE id = ?`),
+
+  getProjectFolders: (db: Database.Database) =>
+    getStmt(
+      db,
+      `SELECT id, host_id, working_directory, is_uncategorized FROM projects`
+    ),
 
   getAllProjects: (db: Database.Database) =>
     getStmt(

@@ -22,7 +22,8 @@ async function fetchRipgrepAvailability(): Promise<boolean> {
 
 async function fetchCodeSearch(
   path: string,
-  query: string
+  query: string,
+  signal?: AbortSignal
 ): Promise<SearchResponse> {
   const params = new URLSearchParams({
     path,
@@ -31,7 +32,7 @@ async function fetchCodeSearch(
     contextLines: "2",
   });
 
-  const res = await fetch(`/api/code-search?${params}`);
+  const res = await fetch(`/api/code-search?${params}`, { signal });
   const data = await res.json();
 
   if (!res.ok) {
@@ -53,7 +54,8 @@ export function useRipgrepAvailable() {
 export function useCodeSearch(path: string, query: string, enabled = false) {
   return useQuery({
     queryKey: codeSearchKeys.search(path, query),
-    queryFn: () => fetchCodeSearch(path, query),
+    // A newer query cancels this one, and the server stops its rg.
+    queryFn: ({ signal }) => fetchCodeSearch(path, query, signal),
     enabled: enabled && query.length > 2,
     staleTime: 30000,
     gcTime: 60000,

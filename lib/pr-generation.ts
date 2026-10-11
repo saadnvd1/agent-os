@@ -1,4 +1,5 @@
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { run } from "./tasks/gh";
 import { UNTRUSTED_RULE, untrusted } from "./orchestrator/untrusted";
 
 export interface GeneratedPRContent {
@@ -15,7 +16,7 @@ export async function generatePRContent(
 ): Promise<GeneratedPRContent> {
   try {
     // Get git context
-    const { diff, commits, changedFiles } = getGitContext(
+    const { diff, commits, changedFiles } = await getGitContext(
       workingDir,
       baseBranch
     );
@@ -45,23 +46,17 @@ export async function generatePRContent(
 /**
  * Get git context for PR generation
  */
-function getGitContext(
+async function getGitContext(
   workingDir: string,
   baseBranch: string
-): { diff: string; commits: string[]; changedFiles: string[] } {
+): Promise<{ diff: string; commits: string[]; changedFiles: string[] }> {
   let diff = "";
   let commits: string[] = [];
   let changedFiles: string[] = [];
 
   // Names and text here come from the repository; every one is an
   // argument to git, never shell text or an option.
-  const git = (args: string[]) =>
-    execFileSync("git", args, {
-      cwd: workingDir,
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "pipe"],
-      maxBuffer: 10 * 1024 * 1024,
-    });
+  const git = (args: string[]) => run("git", args, workingDir, 10_000);
   const lines = (out: string) =>
     out
       .split("\n")
@@ -72,7 +67,7 @@ function getGitContext(
     // Try to get the remote base branch reference
     let baseBranchRef = baseBranch;
     try {
-      git([
+      await git([
         "rev-parse",
         "--verify",
         "--end-of-options",
@@ -82,7 +77,7 @@ function getGitContext(
     } catch {
       // Fall back to local branch
       try {
-        git(["rev-parse", "--verify", "--end-of-options", baseBranch]);
+        await git(["rev-parse", "--verify", "--end-of-options", baseBranch]);
       } catch {
         // Base branch doesn't exist
         return { diff, commits, changedFiles };
@@ -91,18 +86,18 @@ function getGitContext(
     const range = `${baseBranchRef}...HEAD`;
 
     try {
-      diff = git(["diff", "--stat", "--end-of-options", range, "--"]);
+      diff = await git(["diff", "--stat", "--end-of-options", range, "--"]);
     } catch {}
 
     try {
       changedFiles = lines(
-        git(["diff", "--name-only", "--end-of-options", range, "--"])
+        await git(["diff", "--name-only", "--end-of-options", range, "--"])
       );
     } catch {}
 
     try {
       commits = lines(
-        git([
+        await git([
           "log",
           "--pretty=format:%s",
           "--end-of-options",
@@ -114,11 +109,11 @@ function getGitContext(
 
     // Also include uncommitted changes
     try {
-      const workingDiff = git(["diff", "--stat"]);
+      const workingDiff = await git(["diff", "--stat"]);
       if (workingDiff) {
         diff = diff ? `${diff}\n${workingDiff}` : workingDiff;
       }
-      const uncommittedFiles = lines(git(["diff", "--name-only"]));
+      const uncommittedFiles = lines(await git(["diff", "--name-only"]));
       changedFiles = [...new Set([...changedFiles, ...uncommittedFiles])];
     } catch {}
   } catch (error) {
@@ -138,7 +133,7 @@ async function generateWithClaude(
 ): Promise<GeneratedPRContent | null> {
   // Check if Claude CLI is available
   try {
-    execFileSync("claude", ["--version"], { stdio: "pipe", timeout: 5000 });
+    await run("claude", ["--version"], workingDir, 5000);
   } catch {
     return null;
   }
@@ -148,19 +143,34 @@ async function generateWithClaude(
   try {
     // Use claude CLI with --print flag for non-interactive output
     // The prompt goes on stdin: never argv, never a shell.
-    const output = execFileSync("claude", ["--print"], {
-      cwd: workingDir,
-      input: prompt,
-      encoding: "utf-8",
-      timeout: 30000,
-      maxBuffer: 1024 * 1024,
-    });
-
+    const output = await claudePrint(workingDir, prompt);
     return parseClaudeResponse(output);
   } catch (error) {
     console.debug("Claude CLI invocation failed", error);
     return null;
   }
+}
+
+// `claude --print` with the prompt on stdin, off the event loop and killed
+// at the ceiling.
+function claudePrint(cwd: string, prompt: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      "claude",
+      ["--print"],
+      {
+        cwd,
+        encoding: "utf-8",
+        timeout: 30_000,
+        killSignal: "SIGKILL",
+        maxBuffer: 1024 * 1024,
+      },
+      (error, stdout) => (error ? reject(error) : resolve(stdout))
+    );
+    // claude exiting before it read the prompt is its failure, not a crash.
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(prompt);
+  });
 }
 
 /**

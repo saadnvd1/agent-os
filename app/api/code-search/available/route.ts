@@ -3,7 +3,7 @@ import { isRipgrepAvailable } from "@/lib/code-search";
 
 export async function GET() {
   try {
-    const available = isRipgrepAvailable();
+    const available = await isRipgrepAvailable();
     return NextResponse.json({ available });
   } catch (error) {
     console.error("Error checking ripgrep availability:", error);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, queries, type Session } from "@/lib/db";
 import { hostExec, isRemoteHost } from "@/lib/hosts";
 import { shellQuote } from "@/lib/hosts/ssh";
-import { appendFileSync } from "fs";
+import { appendFile } from "fs/promises";
 import { pasteText, tmux } from "@/lib/tmux/exec";
 
 // Log to file for debugging
@@ -11,9 +11,7 @@ function log(msg: string) {
   const timestamp = new Date().toISOString();
   const line = `[${timestamp}] ${msg}\n`;
   console.log(`[send-keys] ${msg}`);
-  try {
-    appendFileSync(LOG_FILE, line);
-  } catch {}
+  appendFile(LOG_FILE, line).catch(() => {});
 }
 
 // POST /api/sessions/[id]/send-keys - Send text to a tmux session

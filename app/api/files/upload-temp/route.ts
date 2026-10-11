@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
+import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import os from "os";
 
@@ -13,9 +13,7 @@ export async function POST(request: Request) {
 
     // Create temp directory for screenshots if it doesn't exist
     const tempDir = path.join(os.tmpdir(), "agent-os-screenshots");
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
+    await mkdir(tempDir, { recursive: true });
 
     // Generate unique filename
     const ext = mimeType?.split("/")[1] || "png";
@@ -28,7 +26,7 @@ export async function POST(request: Request) {
 
     // Decode base64 and write file
     const buffer = Buffer.from(base64, "base64");
-    fs.writeFileSync(filePath, buffer);
+    await writeFile(filePath, buffer);
 
     return NextResponse.json({ path: filePath });
   } catch (error) {

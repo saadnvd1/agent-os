@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!checkGhCli()) {
+  if (!(await checkGhCli())) {
     return NextResponse.json(
       {
         error:
@@ -41,8 +41,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const branch = getCurrentBranch(path);
-    const baseBranch = getBaseBranch(path);
+    const [branch, baseBranch] = await Promise.all([
+      getCurrentBranch(path),
+      getBaseBranch(path),
+    ]);
 
     // Check if on main/master (can't create PR from there)
     if (branch === "main" || branch === "master") {
@@ -52,11 +54,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if PR already exists
-    const existingPR = getPRForBranch(path, branch);
-
-    // Get commits for listing
-    const commits = getCommitsSinceBase(path, baseBranch);
+    // The existing PR (network) and the commits since base, side by side.
+    const [existingPR, commits] = await Promise.all([
+      getPRForBranch(path, branch),
+      getCommitsSinceBase(path, baseBranch),
+    ]);
 
     // Only generate suggested content if explicitly requested (for PR creation flow)
     let suggestedTitle: string | undefined;
@@ -123,15 +125,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!checkGhCli()) {
+    if (!(await checkGhCli())) {
       return NextResponse.json(
         { error: "GitHub CLI not installed or not authenticated" },
         { status: 400 }
       );
     }
 
-    const branch = getCurrentBranch(path);
-    const baseBranch = customBase || getBaseBranch(path);
+    const branch = await getCurrentBranch(path);
+    const baseBranch = customBase || (await getBaseBranch(path));
 
     // Check if on main/master
     if (branch === "main" || branch === "master") {
@@ -142,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if PR already exists
-    const existingPR = getPRForBranch(path, branch);
+    const existingPR = await getPRForBranch(path, branch);
     if (existingPR) {
       return NextResponse.json(
         { error: "PR already exists for this branch", pr: existingPR },
@@ -151,7 +153,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the PR
-    const pr = createPR(path, branch, baseBranch, title, description || "");
+    const pr = await createPR(
+      path,
+      branch,
+      baseBranch,
+      title,
+      description || ""
+    );
 
     return NextResponse.json({ pr }, { status: 201 });
   } catch (error) {

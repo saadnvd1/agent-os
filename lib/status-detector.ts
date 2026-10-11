@@ -662,6 +662,13 @@ class SessionStatusDetector {
     return [...this.cache.data.values()];
   }
 
+  // A new object whenever the listing or its errors change (the cache is
+  // replaced, never edited): readers derived from them can skip the work
+  // while it's the same one.
+  listingStamp(): object {
+    return this.cache;
+  }
+
   hostErrors(): Record<string, string> {
     return Object.fromEntries(this.cache.hostErrors);
   }

@@ -27,8 +27,15 @@ const hostKey = (hostId: string | null | undefined, name: string) =>
   `${hostId || "local"}\t${name}`;
 
 /** The project a folder on a machine sits in (the deepest), or null. */
+// Only what matching reads, so a narrow query can feed it.
+export type ProjectFolder = Pick<
+  Project,
+  "id" | "host_id" | "working_directory" | "is_uncategorized"
+>;
+export type ManagedTmux = Pick<Session, "host_id" | "tmux_name">;
+
 export function projectMatcher(
-  projects: Project[]
+  projects: ProjectFolder[]
 ): (hostId: string, path: string) => string | null {
   const dirs = projects
     .filter((p) => !p.is_uncategorized)
@@ -49,8 +56,8 @@ export function projectMatcher(
 
 export function discoverSessions(
   tmuxSessions: TmuxSessionInfo[],
-  projects: Project[],
-  managed: Session[]
+  projects: ProjectFolder[],
+  managed: ManagedTmux[]
 ): DiscoveredSession[] {
   // By machine and name: a session here doesn't hide one elsewhere.
   const managedNames = new Set(
