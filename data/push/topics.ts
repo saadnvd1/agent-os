@@ -12,6 +12,7 @@ import { ruleKeys } from "../orchestrators/rules";
 import { workspaceKeys } from "../workspaces";
 import { scheduleKeys } from "../schedules";
 import { archivedKeys } from "../done";
+import { awayKeys } from "../away";
 
 // What each pushed topic (a table that changed, lib/db/changes.ts, or a
 // pushed view) means the browser should refetch. Only queries on screen
@@ -56,6 +57,8 @@ function keysFor(topic: string): QueryKey[] {
       return [orchestratorKeys.all];
     case "orchestrator_rules":
       return [ruleKeys.all];
+    case "away_periods":
+      return [awayKeys.all];
     case "dev_servers":
       return [devServerKeys.all];
     default:
@@ -96,6 +99,7 @@ export const ALL_TOPICS = [
   "schedules",
   "orchestrator_asks",
   "orchestrator_rules",
+  "away_periods",
   "dev_servers",
 ];
 

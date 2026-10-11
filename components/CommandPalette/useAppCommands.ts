@@ -32,6 +32,7 @@ import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
 import { usageUiActions } from "@/stores/usageUi";
 import { settingsCommands } from "@/components/Settings/commands";
 import { DRAFT_KEYS } from "@/lib/drafts";
+import { useAwayCommands } from "@/components/Away/useAwayCommands";
 
 const LAST_THEME = "agentOS-last-theme-";
 
@@ -181,6 +182,7 @@ export function useAppCommands({
       })),
   ];
   usePaletteCommands("app", app);
+  useAwayCommands();
 
   usePaletteCommands(
     "sessions",

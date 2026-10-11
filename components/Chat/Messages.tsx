@@ -159,6 +159,7 @@ const NOTE_LABEL = {
   escalation: "Saad decides",
   ask: "Ask",
   pause: "Pause",
+  away: "Away",
 } as const;
 
 export function NoteLine({ item }: { item: Of<"note"> }) {

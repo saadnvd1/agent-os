@@ -73,6 +73,32 @@
       },
       "additionalProperties": false
     },
+    "deploy": {
+      "type": "object",
+      "properties": {
+        "deployed": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failed": {
+          "type": "string",
+          "minLength": 1
+        },
+        "health": {
+          "type": "string",
+          "minLength": 1
+        },
+        "within_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        }
+      },
+      "required": [
+        "deployed"
+      ],
+      "additionalProperties": false
+    },
     "test": {
       "type": "string",
       "minLength": 1
@@ -128,7 +154,9 @@
           "type": "string"
         }
       },
-      "required": ["from"],
+      "required": [
+        "from"
+      ],
       "additionalProperties": false
     },
     "mcp": {
@@ -179,7 +207,10 @@
                 "type": "string"
               }
             },
-            "required": ["board", "list"],
+            "required": [
+              "board",
+              "list"
+            ],
             "additionalProperties": {}
           }
         }
@@ -232,7 +263,9 @@
             ]
           }
         },
-        "required": ["path"],
+        "required": [
+          "path"
+        ],
         "additionalProperties": {}
       }
     },
@@ -259,7 +292,9 @@
             "type": "string"
           }
         },
-        "required": ["prompt"],
+        "required": [
+          "prompt"
+        ],
         "additionalProperties": {}
       }
     },
@@ -279,7 +314,11 @@
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["squash", "merge", "rebase"]
+          "enum": [
+            "squash",
+            "merge",
+            "rebase"
+          ]
         },
         "delete_remote_branch": {
           "type": "boolean"
@@ -303,7 +342,10 @@
               "type": "string"
             }
           },
-          "required": ["project", "token"],
+          "required": [
+            "project",
+            "token"
+          ],
           "additionalProperties": false
         }
       },

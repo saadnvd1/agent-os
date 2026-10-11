@@ -192,7 +192,7 @@ export type ChatItem =
   | (Base & {
       kind: "note";
       text: string;
-      tone: "note" | "brake" | "escalation" | "ask" | "pause";
+      tone: "note" | "brake" | "escalation" | "ask" | "pause" | "away";
     })
   | (Base & {
       kind: "approval";

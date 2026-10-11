@@ -3,6 +3,11 @@
   "ports": { "PORT": 3100 },
   "dev": "mkdir -p .dev-tmux && env -u TMUX -u AGENTOS_URL -u AGENTOS_PORT -u AGENTOS_SESSION_ID NODE_ENV=development TMUX_TMPDIR=\"$PWD/.dev-tmux\" DB_PATH=\"$PWD/.dev.db\" npm run dev",
   "ready": { "url": "/api/projects" },
+  "deploy": {
+    "deployed": "~/.agent-os/autodeploy/deployed",
+    "failed": "~/.agent-os/autodeploy/alerted",
+    "health": "/api/health"
+  },
   "test": "npm run typecheck && npx vitest run <the test files you touched>",
   "notes": [
     "Run targeted tests (`npx vitest run path/to/x.test.ts`) while you work; the full suite loads the machine.",

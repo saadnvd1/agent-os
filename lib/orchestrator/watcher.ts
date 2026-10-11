@@ -18,6 +18,7 @@ import { brakesOn, liftBrake } from "./brakes";
 import { anyArmed, mergeArmed } from "./armed";
 import { rebaseConflicting } from "./rebase";
 import { wakeTasks } from "./pr-wake";
+import { awayTick } from "../away/run";
 
 // Asks that stopped needing Saad: their task or PR finished some other
 // way, or brakes lifted with nothing trying to start.
@@ -101,6 +102,11 @@ async function tick(): Promise<void> {
   if (busy) return;
   busy = true;
   try {
+    try {
+      awayTick();
+    } catch (error) {
+      console.error("Away mode:", error);
+    }
     for (const orch of listOrchestrators()) {
       const workspaceId = orch.workspace_id;
       if (!workspaceId || !getWorkspace(workspaceId)) continue;

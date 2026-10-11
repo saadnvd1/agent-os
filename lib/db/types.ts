@@ -87,6 +87,8 @@ export interface Session {
   pr_url: string | null;
   pr_number: number | null;
   pr_status: "open" | "merged" | "closed" | null;
+  // When task_status became merged (a trigger sets it, migration 58).
+  merged_at?: string | null;
   // Merge as soon as every gate passes (orchestrator/armed.ts), and the
   // failure last reported while armed.
   merge_armed_at?: string | null;

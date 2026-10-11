@@ -35,6 +35,7 @@ import { settingsUiActions } from "@/stores/settingsUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { LoadGauge } from "./LoadGauge";
+import { AwayToggle } from "@/components/Away/AwayToggle";
 import { useSchedulesGlance } from "./useSchedulesGlance";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
         <LoadGauge />
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
+        <AwayToggle />
         <ADropdownMenu
           trigger={
             <Button

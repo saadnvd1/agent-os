@@ -38,6 +38,17 @@ const ready = z.strictObject({
   contains: z.string().optional(),
 });
 
+// How Away mode checks a merge went live (lib/away/deploy.ts): a file the
+// deploy writes the deployed commit to, one it writes a commit whose deploy
+// failed to, and a URL that answers 2xx when the server is healthy (a path
+// alone is this AgentOS server's own).
+const deploy = z.strictObject({
+  deployed: z.string().min(1),
+  failed: z.string().min(1).optional(),
+  health: z.string().min(1).optional(),
+  within_minutes: z.number().int().min(1).max(24 * 60).optional(),
+});
+
 const browse = z.strictObject({
   login: z.string().min(1).optional(),
   map: projectPath.optional(),
@@ -89,6 +100,7 @@ const shape = {
   clone: z.array(projectPath).optional(),
   dev: z.string().min(1).optional(),
   ready: ready.optional(),
+  deploy: deploy.optional(),
   test: z.string().min(1).optional(),
   notes: notes.optional(),
   browse: browse.optional(),
