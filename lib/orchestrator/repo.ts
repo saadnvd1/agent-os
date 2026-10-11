@@ -63,7 +63,10 @@ async function fetchBranches(
   branches: string[]
 ): Promise<"ok" | "gone" | "failed"> {
   try {
-    await gitFetch(repo, ["--quiet", "--", "origin", ...branches]);
+    // In English whatever the locale: the message is read below.
+    await gitFetch(repo, ["--quiet", "--", "origin", ...branches], {
+      env: { LC_ALL: "C" },
+    });
     return "ok";
   } catch (error) {
     const stderr = isGitError(error) ? error.stderr : "";

@@ -62,6 +62,13 @@ export function describeReview(row: CheckRow): string {
 // What a review reads: a task's PR, or a PR no task owns (external-pr.ts).
 // `id` keys its stored checks; `task` is set only for a task, whose card
 // gets a scope check.
+const baseBranchOf = (id: string) =>
+  (
+    db.prepare(`SELECT base_branch FROM sessions WHERE id = ?`).get(id) as
+      | { base_branch: string | null }
+      | undefined
+  )?.base_branch ?? null;
+
 export interface ReviewTarget {
   id: string;
   name: string;
@@ -82,6 +89,7 @@ async function reviewJob(
 ): Promise<CheckRow> {
   const { pr, repo, task } = target;
   const row = { workspaceId, sessionId: target.id, sha };
+  const judged = target.refs.base_branch;
   const base = await fetchRefs(repo, target.refs);
   const diff = await fullDiff(repo, base, sha);
   const parts =
@@ -146,6 +154,16 @@ async function reviewJob(
       });
       verdicts.push(toVerdict(answer));
     }
+    // A retarget while it ran (prFor records it): this verdict read the
+    // diff against the old base, so it covers nothing.
+    const now = task ? baseBranchOf(task.id) : judged;
+    if (now !== judged)
+      return putCheck({
+        ...row,
+        kind: "review",
+        status: "error",
+        detail: `the PR's base moved from ${judged} to ${now} while it was reviewed; review it again`,
+      });
     const done = putCheck({
       ...row,
       kind: "review",

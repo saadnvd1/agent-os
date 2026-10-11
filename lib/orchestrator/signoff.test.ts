@@ -64,6 +64,7 @@ const { releaseInterruptedClaims, spendApproval } =
   await import("./ask-approvals");
 const { amendBrief } = await import("./amendments");
 const { fetchRefs } = await import("./repo");
+const { getTaskSession } = await import("@/lib/tasks/session");
 const { changedFiles } = await import("./diff");
 
 // The one ask a task's escalation leaves on Saad's list.
@@ -1468,7 +1469,7 @@ describe("the PR's real base", () => {
   // The task stacked on a parent item, whose session is on `parentBranch`.
   function stackOn(
     t: ReturnType<typeof setup>,
-    parentStatus: "dropped" | "pr",
+    parentStatus: "dropped" | "pr" | "merged",
     parentBranch: string
   ) {
     const { project_id } = db
@@ -1483,7 +1484,7 @@ describe("the PR's real base", () => {
     const item = (
       id: string,
       position: number,
-      status: "dropped" | "pr",
+      status: "dropped" | "pr" | "merged",
       session: string,
       parent: string | null
     ) => ({
@@ -1545,6 +1546,77 @@ describe("the PR's real base", () => {
     expect(merges).toEqual([
       ["pr", "merge", "7", "--squash", "--match-head-commit", t.sha],
     ]);
+  });
+
+  it("keeps a merged parent's child on its branch until the restack moves it", async () => {
+    const t = setup();
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/parent-merged' WHERE id = ?`
+    ).run(t.task);
+    const child = stackOn(t, "merged", "feature/parent-merged");
+    pr = { ...pr!, base: "main" };
+    await reviewNow(t.w);
+    expect(baseOf(t.task)).toBe("main");
+    expect(child().base_branch).toBe("feature/parent-merged");
+    await expect(t.signOff()).rejects.toThrow(/never moved off its branch/);
+    expect(merges).toEqual([]);
+  });
+
+  it("records no base from a closed PR, a bad name, or a branch the task picked", async () => {
+    const t = setup();
+    const { prFor } = await import("@/lib/tasks/session");
+    const task = () => getTaskSession(t.task);
+    pr = { ...pr!, state: "CLOSED", base: "develop" };
+    await prFor(task(), true);
+    expect(baseOf(t.task)).toBe("main");
+    pr = { ...pr!, state: "OPEN", base: "$(touch x)" };
+    await prFor(task(), true);
+    expect(baseOf(t.task)).toBe("main");
+    // Retargeted to a branch of the task's own choosing: not followed, and
+    // the gates refuse it.
+    pr = { ...pr!, base: "feature/elsewhere" };
+    await prFor(task(), true);
+    expect(baseOf(t.task)).toBe("main");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(
+      /targets feature\/elsewhere, not its base main/
+    );
+    expect(merges).toEqual([]);
+  });
+
+  it("stops counting a review of the old base once the PR is retargeted", async () => {
+    const t = setup();
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/parent-gone' WHERE id = ?`
+    ).run(t.task);
+    stackOn(t, "dropped", "feature/parent-gone");
+    await reviewNow(t.w);
+    expect(getCheck(t.task, t.sha, "review")?.status).toBe("pass");
+    pr = { ...pr!, base: "main" };
+    await expect(t.signOff()).rejects.toThrow(
+      new RegExp(`review: not yet, no review of ${t.sha.slice(0, 7)} yet`)
+    );
+    expect(getCheck(t.task, t.sha, "review")).toBeNull();
+    expect(merges).toEqual([]);
+  });
+
+  it("doesn't store a verdict whose base moved while it ran", async () => {
+    const t = setup();
+    const r = reviewer("pass");
+    const text = await review(t.w, "add-a", {
+      wait: true,
+      claude: async (run) => {
+        db.prepare(
+          `UPDATE sessions SET base_branch = 'release' WHERE id = ?`
+        ).run(t.task);
+        return r.claude(run);
+      },
+    });
+    expect(text).toMatch(/couldn't run|base moved/);
+    expect(getCheck(t.task, t.sha, "review")).toMatchObject({
+      status: "error",
+      detail: expect.stringContaining("moved from main to release"),
+    });
   });
 
   it("falls back to the default branch when GitHub can't be reached and the recorded base is gone", async () => {

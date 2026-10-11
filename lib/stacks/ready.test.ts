@@ -110,10 +110,13 @@ describe("sign-off refusal", () => {
 
   it("lets a child go once its PR moved off a dropped parent's branch", () => {
     const retargeted = { ...child, base_branch: "main" };
-    for (const status of ["dropped", "failed"] as const)
-      expect(
-        refusalFor(retargeted, { ...parent, status }, "feature/p")
-      ).toBeNull();
+    expect(
+      refusalFor(retargeted, { ...parent, status: "dropped" }, "feature/p")
+    ).toBeNull();
+    // A failed parent can be retried, so it still blocks.
+    expect(
+      refusalFor(retargeted, { ...parent, status: "failed" }, "feature/p")
+    ).toContain("which is failed");
     // Still on the dropped parent's branch: it waits, as before.
     expect(
       refusalFor(child, { ...parent, status: "dropped" }, "feature/p")

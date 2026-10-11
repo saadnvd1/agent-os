@@ -1,7 +1,8 @@
 import fs from "fs";
 import os from "os";
 import { db, queries, stackQueries, type Session } from "../db";
-import { isBranchName } from "../git";
+import { getDefaultBranch, isBranchName } from "../git";
+import { parentBranchOf } from "../stacks/guard";
 import { getProject } from "../projects";
 import { findPRStrict } from "./gh";
 import { currentBranch, git } from "../git-exec";
@@ -134,8 +135,7 @@ export async function prFor(
   const repo = projectPathFor(session);
   if (!repo) return null;
   const cached = prCache.get(session.id);
-  if (!fresh && cached && Date.now() - cached.at < 20000)
-    return recordBase(session, cached.pr);
+  if (!fresh && cached && Date.now() - cached.at < 20000) return cached.pr;
   const renamed = await renamedBranch(session);
   const branch = renamed ?? session.branch_name;
   if (!branch) return null;
@@ -171,30 +171,50 @@ export async function prFor(
       `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`
     ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
   }
-  return recordBase(session, pr);
+  // Only an answer just read from GitHub: a cached one may predate a
+  // retarget AgentOS made itself (a restack).
+  if (fresh) await recordBase(session, repo, pr);
+  return pr;
 }
 
 // An open PR's base as GitHub has it now becomes the task's, in the row and
 // in `session`, so every diff, the stack logic and the UI read the truth:
 // the base recorded at the start goes stale when the PR is retargeted (a
-// stacked parent's branch deleted, so GitHub moved it to main). A stack
-// item on a merged parent keeps its base until the restack moves it, which
-// is also what takes the parent's commits off it.
-function recordBase(session: Session, pr: TaskPR | null): TaskPR | null {
+// stacked parent's branch deleted, so GitHub moved it to main). Only the
+// default branch or the stack parent's branch is taken: a base the task
+// picked itself would choose what its diff is judged against, so it stays
+// unrecorded and sign_off refuses it. Reviews and scope checks judged
+// against the old base no longer count. A stack item on a merged parent
+// keeps its base until the restack moves it, which is also what takes the
+// parent's commits off it.
+async function recordBase(
+  session: Session,
+  repo: string,
+  pr: TaskPR | null
+): Promise<void> {
   const base = pr?.state === "OPEN" ? pr.base : undefined;
-  if (!base || base === session.base_branch || !isBranchName(base)) return pr;
-  db.prepare(`UPDATE sessions SET base_branch = ? WHERE id = ?`).run(
-    base,
-    session.id
-  );
-  session.base_branch = base;
+  if (!base || base === session.base_branch || !isBranchName(base)) return;
   const item = stackQueries.itemForSession(db, session.id);
   const parent = item?.parent_item_id
     ? stackQueries.item(db, item.parent_item_id)
     : null;
-  if (item && item.base_branch !== base && parent?.status !== "merged")
-    stackQueries.updateItem(db, item.id, { base_branch: base });
-  return pr;
+  if (
+    base !== parentBranchOf(parent) &&
+    base !== (await getDefaultBranch(repo))
+  )
+    return;
+  db.transaction(() => {
+    db.prepare(`UPDATE sessions SET base_branch = ? WHERE id = ?`).run(
+      base,
+      session.id
+    );
+    db.prepare(
+      `DELETE FROM orchestrator_checks WHERE session_id = ? AND kind IN ('review', 'scope')`
+    ).run(session.id);
+    if (item && item.base_branch !== base && parent?.status !== "merged")
+      stackQueries.updateItem(db, item.id, { base_branch: base });
+  })();
+  session.base_branch = base;
 }
 
 // A finished task's PR as the database last saw it: no gh call.
