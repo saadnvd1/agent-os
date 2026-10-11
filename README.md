@@ -895,10 +895,13 @@ it may do on its own, and the lines that always come back to you as asks.
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent
   has merged, and the PR body's Code review section names that commit. `land` judges each item again at its own head right before
-  merging it. The second failure of a gate or a repo with no CI goes to you
-  as an ask, and the orchestrator stops merging that task. Failures count per
-  task and gate: a review that blocks counts when its verdict arrives, once
-  per commit, whether or not `sign_off` ever reads it.
+  merging it. A gate failing again on a different commit, or a repo with no
+  CI, goes to you as an ask, and the orchestrator stops merging that task.
+  A failure counts once per task, gate and head commit, however many times
+  and from wherever that commit is judged (the armed watcher, CI finishing,
+  `sign_off`, `done`, `land`); a pass in between doesn't reset it. A review
+  that blocks counts when its verdict arrives, whether or not `sign_off`
+  ever reads it.
 - **Arm to merge:** `arm` (or **Arm merge** on a task's row) makes AgentOS
   merge the task's PR itself the moment every `sign_off` gate passes at its
   head, starting the review once CI is green, so nothing polls `sign_off`.

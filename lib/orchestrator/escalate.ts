@@ -6,7 +6,6 @@ import { AskRefused, raiseAsk, workSubject } from "./asks";
 import {
   failureOf,
   markEscalated,
-  PER_COMMIT_GATES,
   recordFailure,
   type GateOutcome,
 } from "./gates";
@@ -20,7 +19,8 @@ export function escalate(
   url: string,
   sha: string | null = null
 ): string {
-  if (!failureOf(task.id, gate)) recordFailure(workspaceId, task.id, gate, why);
+  if (!failureOf(task.id, gate))
+    recordFailure(workspaceId, task.id, gate, why, sha);
   markEscalated(task.id, gate);
   let created = false;
   try {
@@ -50,8 +50,9 @@ export function escalate(
   return `Escalated to Saad: ${why}. It's on his asks list; his answer reaches you as an event. Don't retry; say so in your chat.`;
 }
 
-// Counts a gate's failure against the task; the second failure of the same
-// gate goes to Saad. A review or scope verdict counts once per commit.
+// Counts a gate's failure on this head against the task; the same gate
+// failing on a second, different head goes to Saad. The same head judged
+// again, from any path, isn't another failure.
 export function countFailure(
   workspaceId: string,
   task: { id: string; name: string },
@@ -59,12 +60,11 @@ export function countFailure(
   url: string,
   sha: string
 ): { line: string; escalated: boolean } {
-  const key = PER_COMMIT_GATES.includes(o.gate) ? sha : null;
-  const n = recordFailure(workspaceId, task.id, o.gate, o.reason ?? "", key);
+  const n = recordFailure(workspaceId, task.id, o.gate, o.reason ?? "", sha);
   const line = `- ${o.gate} failed (${n === 1 ? "first" : "again"}): ${o.reason}`;
   if (n < 2 || failureOf(task.id, o.gate)?.escalated_at)
     return { line, escalated: false };
-  const why = `the ${o.gate} gate failed twice: ${o.reason}`;
+  const why = `the ${o.gate} gate failed on two different commits: ${o.reason}`;
   return {
     line: `${line}\n  ${escalate(workspaceId, task, o.gate, why, url, sha)}`,
     escalated: true,

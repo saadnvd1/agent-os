@@ -3,7 +3,7 @@
  * commit that was judged. With merge approvals on (merge-approvals.ts),
  * anything touching CI config, build and hook scripts, agent config, deploys
  * or secrets handling goes to Saad whatever the gates say. A repository with
- * no CI and a gate failing twice on a task go to him either way. Once a task
+ * no CI and a gate failing on two different commits go to him either way. Once a task
  * is with Saad the orchestrator doesn't merge it; he signs it off or drops it.
  */
 
