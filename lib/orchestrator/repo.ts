@@ -39,7 +39,9 @@ export async function fetchRefs(
   if (recorded) {
     const fetched = await fetchBranches(repo, [recorded, ...head]);
     // A base gone on origin fails the fetch, so the head goes on its own.
-    if (fetched !== "ok" && head.length) await fetchBranches(repo, head);
+    if (fetched === "gone" && head.length)
+      requireFetched(await fetchBranches(repo, head));
+    requireFetched(fetched);
     if (fetched !== "gone") {
       const found = await existingRef(repo, recorded);
       if (found) return found;
@@ -47,7 +49,9 @@ export async function fetchRefs(
   }
   const fallback = await getDefaultBranch(repo);
   if (fallback !== recorded) {
-    await fetchBranches(repo, recorded ? [fallback] : [fallback, ...head]);
+    requireFetched(
+      await fetchBranches(repo, recorded ? [fallback] : [fallback, ...head])
+    );
     const found = await existingRef(repo, fallback);
     if (found) return found;
   }
@@ -56,8 +60,15 @@ export async function fetchRefs(
   );
 }
 
+// An unreachable origin leaves the tracking refs as they were, and a diff
+// against a stale base can hide or invent changes, so the gates stop.
+function requireFetched(result: "ok" | "gone" | "failed"): void {
+  if (result === "failed")
+    throw new Error("Couldn't fetch from origin, so the base can't be trusted");
+}
+
 // "gone" when origin answered that the first branch isn't there; any other
-// failure (origin unreachable) leaves what was fetched last.
+// failure is "failed" (origin unreachable).
 async function fetchBranches(
   repo: string,
   branches: string[]

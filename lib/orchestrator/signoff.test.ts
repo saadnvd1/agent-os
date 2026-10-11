@@ -1619,9 +1619,16 @@ describe("the PR's real base", () => {
     });
   });
 
-  it("falls back to the default branch when GitHub can't be reached and the recorded base is gone", async () => {
+  it("refuses to judge against a stale base when origin can't be reached", async () => {
     const t = setup();
     git(t.repo, "remote", "set-url", "origin", path.join(t.repo, "gone.git"));
+    await expect(
+      fetchRefs(t.repo, { base_branch: "main", branch_name: "feature/t" })
+    ).rejects.toThrow(/Couldn't fetch from origin/);
+  });
+
+  it("falls back to the default branch when GitHub can't be reached and the recorded base is gone", async () => {
+    const t = setup();
     const base = await fetchRefs(t.repo, {
       base_branch: "feature/parent-gone",
       branch_name: "feature/t",
