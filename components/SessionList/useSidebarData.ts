@@ -135,8 +135,8 @@ export function useSidebarData(
     [runningKey]
   );
 
-  // Per workspace, how many tasks wait in its line: the orchestrator row's
-  // "2 queued". Keyed by its counts, like the running ones.
+  // Per workspace, how many tasks wait in its line: they keep its
+  // orchestrator row Waiting. Keyed by its counts, like the running ones.
   const queuedKey = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of queue)

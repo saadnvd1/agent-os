@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
+import type { ChatItem } from "./chat/events";
 import { saveItem } from "./chat/store";
 import { chatNeed, isUnread, needsYou, terminalStatus } from "./needs-you";
 
@@ -107,75 +108,81 @@ describe("isUnread", () => {
     ).toBe(false);
   });
 
-  it("counts an orchestrator's reply to the reader, never one to an event", () => {
+  // An orchestrator's chat, its items a second apart (last_seen_at is
+  // to the second).
+  function orchestratorChat() {
     const id = randomUUID();
-    const orchestrator = {
-      id,
-      view: "chat" as const,
-      updated_at: "2026-10-06 12:00:00",
-      last_seen_at: null,
-      role: "orchestrator" as const,
+    const base = Date.parse("2026-10-06T12:00:00Z");
+    let n = 0;
+    const at = () => base + ++n * 1000;
+    return {
+      session: {
+        id,
+        view: "chat" as const,
+        updated_at: "2026-10-06 12:00:00",
+        last_seen_at: null as string | null,
+        role: "orchestrator" as const,
+      },
+      user: (over: Partial<Extract<ChatItem, { kind: "user" }>> = {}) =>
+        saveItem(id, {
+          id: randomUUID(),
+          kind: "user",
+          text: "status?",
+          tagged: true,
+          createdAt: at(),
+          ...over,
+        }),
+      end: () => {
+        const createdAt = at();
+        saveItem(id, { id: randomUUID(), kind: "turn_end", createdAt });
+        return new Date(createdAt).toISOString().slice(0, 19).replace("T", " ");
+      },
     };
-    const now = Date.now();
-    const event = (n: number) =>
-      saveItem(id, {
-        id: `e${n}`,
-        kind: "user",
-        text: "PR #12 merged",
-        tagged: true,
-        origin: { kind: "event", label: "AgentOS" },
-        createdAt: now + n,
-      });
-    const end = (n: number) =>
-      saveItem(id, { id: `t${n}`, kind: "turn_end", createdAt: now + n });
+  }
+  const event = { origin: { kind: "event" as const, label: "AgentOS" } };
 
+  it("counts an orchestrator's reply to the reader, never one to an event", () => {
+    const chat = orchestratorChat();
     // An event and the turn it started: routine, not news.
-    event(1);
-    end(2);
-    expect(isUnread(orchestrator, "idle")).toBe(false);
+    chat.user(event);
+    chat.end();
+    expect(isUnread(chat.session, "idle")).toBe(false);
 
     // The reader asks, it replies: unread until seen.
-    saveItem(id, {
-      id: "u3",
-      kind: "user",
-      text: "status?",
-      tagged: true,
-      createdAt: now + 3,
-    });
-    end(4);
-    expect(isUnread(orchestrator, "idle")).toBe(true);
-    expect(isUnread(orchestrator, "running")).toBe(false);
+    chat.user();
+    const replied = chat.end();
+    expect(isUnread(chat.session, "idle")).toBe(true);
+    expect(isUnread(chat.session, "running")).toBe(false);
 
-    // An event after it doesn't hide the reply, and doesn't count once seen.
-    event(5);
-    end(6);
-    expect(isUnread(orchestrator, "idle")).toBe(true);
-    expect(
-      isUnread({ ...orchestrator, last_seen_at: "2999-01-01 00:00:00" }, "idle")
-    ).toBe(false);
+    // An event after it doesn't hide the reply, nor bring it back once seen.
+    chat.user(event);
+    chat.end();
+    expect(isUnread(chat.session, "idle")).toBe(true);
+    expect(isUnread({ ...chat.session, last_seen_at: replied }, "idle")).toBe(
+      false
+    );
   });
 
-  it("ignores an orchestrator's old untagged event messages by their text", () => {
-    const id = randomUUID();
-    saveItem(id, {
-      id: "p1",
-      kind: "user",
-      text: '[AgentOS message from "poise-task" (abc-123)] done',
-      createdAt: Date.now(),
-    });
-    saveItem(id, { id: "t1", kind: "turn_end", createdAt: Date.now() });
-    expect(
-      isUnread(
+  it("counts a decision as the reader's; peers, schedules and AgentOS don't", () => {
+    const cases: [Partial<Extract<ChatItem, { kind: "user" }>>, boolean][] = [
+      [{ origin: { kind: "decision", label: "Plan" } }, true],
+      [{ peer: { sessionId: "s1", body: "done" }, from: "poise" }, false],
+      [{ from: "agentos" }, false],
+      [{ origin: { kind: "schedule", label: "Nightly" } }, false],
+      [
         {
-          id,
-          view: "chat",
-          updated_at: "2026-10-06 12:00:00",
-          last_seen_at: null,
-          role: "orchestrator",
+          text: '[AgentOS message from "poise-task" (abc-123)] done',
+          tagged: undefined,
         },
-        "idle"
-      )
-    ).toBe(false);
+        false,
+      ],
+    ];
+    for (const [over, unread] of cases) {
+      const chat = orchestratorChat();
+      chat.user(over);
+      chat.end();
+      expect(isUnread(chat.session, "idle"), JSON.stringify(over)).toBe(unread);
+    }
   });
 
   it("follows updated_at for a terminal", () => {

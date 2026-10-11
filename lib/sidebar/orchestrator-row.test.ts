@@ -51,7 +51,7 @@ describe("orchestratorRowText", () => {
       "Waiting"
     );
     expect(orchestratorRowText(idle, { ...quiet, queued: 3 }).status).toBe(
-      "Waiting · 3 queued"
+      "Waiting"
     );
   });
 

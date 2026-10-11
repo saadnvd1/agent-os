@@ -1,5 +1,6 @@
 // What the pinned orchestrator row says: its state with the workspace's
-// running, in-review and queued counts, and Saad's open asks. Client-safe.
+// running and in-review counts, and Saad's open asks. Client-safe. Queued
+// tasks make it Waiting but aren't counted: the line has room for the asks.
 import type { SidebarRow } from "./shelves";
 
 export interface OrchestratorRowCounts {
@@ -43,7 +44,6 @@ export function orchestratorRowText(
     state,
     c.running > 0 && `${c.running} running`,
     c.inReview > 0 && `${c.inReview} in review`,
-    c.queued > 0 && `${c.queued} queued`,
   ]
     .filter(Boolean)
     .join(" · ");
