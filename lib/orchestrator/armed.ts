@@ -123,6 +123,7 @@ function fingerprint(
   return [
     head,
     pr.checks,
+    pr.mergeable,
     (f.task?.ciSettleIn ?? 0) > 0,
     getCheck(task.id, head, "review")?.status,
     getCheck(task.id, head, "scope")?.status,

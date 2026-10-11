@@ -75,6 +75,8 @@ export async function judgeExternal(
           checkCount: pr.checkCount ?? 0,
           committedAt: await commitTime(ext.repo, sha),
         }),
+        mergeable: pr.mergeable,
+        baseName: ext.base,
         review,
         blocked: null,
         waitingOn: null,

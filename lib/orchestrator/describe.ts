@@ -17,7 +17,9 @@ export function ciWord(pr: TaskPR): string {
       ? `CI failed: ${untrusted("CI", pr.failing)}`
       : "CI failed";
   if (pr.checks === "pending") return "CI pending";
-  return "no CI";
+  return pr.mergeable === "CONFLICTING"
+    ? "conflicts with its base, no CI yet"
+    : "no checks yet";
 }
 
 export const shortId = (id: string) => id.slice(0, 8);

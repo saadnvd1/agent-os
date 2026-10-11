@@ -63,7 +63,7 @@ export type GateTarget =
   | { kind: "external"; pr: ExternalPR };
 
 const FIELDS =
-  "number,url,state,headRefOid,headRefName,baseRefName,isDraft,labels,isCrossRepository,statusCheckRollup,body,title";
+  "number,url,state,headRefOid,headRefName,baseRefName,isDraft,labels,isCrossRepository,statusCheckRollup,body,title,mergeable";
 
 interface ViewedPR extends ListedPR {
   baseRefName?: string;

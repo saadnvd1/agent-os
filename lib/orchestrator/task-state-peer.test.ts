@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { getDb, type Session } from "../db";
 import { fakePeer } from "../__fixtures__/fake-peer";
 import { linkedHost } from "../__fixtures__/linked-host";
-import { waitingState } from "./task-state";
+import { CHECKLESS_MS, checklessFor, waitingState } from "./task-state";
 
 const cleanups: (() => unknown)[] = [];
 afterEach(async () => {
@@ -166,5 +166,34 @@ describe("a linked machine's chat task for the orchestrator", () => {
     const out = await readSession(ws.workspace.id, "remote-chat", 10);
     expect(out).toContain("chat on");
     expect(out).not.toContain("no messages yet");
+  });
+});
+
+describe("checklessFor", () => {
+  const open = {
+    state: "OPEN",
+    checks: "none",
+    mergeable: "MERGEABLE",
+  } as const;
+
+  it("starts its clock on a mergeable head with no checks", () => {
+    expect(checklessFor("t1", { ...open, head: "a" }, 1000)).toBe(0);
+    expect(
+      checklessFor("t1", { ...open, head: "a" }, 1000 + CHECKLESS_MS)
+    ).toBe(CHECKLESS_MS);
+  });
+
+  it("restarts for a new head and stops when a check appears", () => {
+    checklessFor("t2", { ...open, head: "a" }, 0);
+    expect(checklessFor("t2", { ...open, head: "b" }, 5000)).toBe(0);
+    expect(
+      checklessFor("t2", { ...open, head: "b", checks: "pending" }, 9000)
+    ).toBeUndefined();
+  });
+
+  it("doesn't start while the PR conflicts", () => {
+    expect(
+      checklessFor("t3", { ...open, head: "a", mergeable: "CONFLICTING" }, 0)
+    ).toBeUndefined();
   });
 });

@@ -57,10 +57,36 @@ describe("the merge gates", () => {
     expect(gate(input({ checks: "none", settleIn: 40 }), "ci").state).toBe(
       "wait"
     );
-    expect(gate(input({ checks: "none" }), "ci")).toMatchObject({
+    expect(gate(input({ checks: "none", repoCI: "no" }), "ci")).toMatchObject({
       state: "escalate",
       reason: expect.stringContaining("no checks to gate a merge on"),
     });
+  });
+
+  it("ci: a head with no checks is a repository question, and a conflict is just not yet", () => {
+    const conflict = gate(
+      input({
+        checks: "none",
+        mergeable: "CONFLICTING",
+        baseName: "main",
+        repoCI: "no",
+      }),
+      "ci"
+    );
+    expect(conflict.state).toBe("wait");
+    expect(conflict.reason).toContain("PR conflicts with main");
+    expect(conflict.reason).toContain("rebased");
+    expect(
+      gate(
+        input({ checks: "none", mergeable: "CONFLICTING", settleIn: 40 }),
+        "ci"
+      ).reason
+    ).toContain("conflicts");
+    for (const repoCI of ["yes", "unknown", undefined] as const)
+      for (const mergeable of ["MERGEABLE", "UNKNOWN"] as const)
+        expect(
+          gate(input({ checks: "none", repoCI, mergeable }), "ci").state
+        ).toBe("wait");
   });
 
   it("review: only a pass of this exact commit counts", () => {

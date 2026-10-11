@@ -1,7 +1,8 @@
 /**
  * The merge gates, ported from dispatch orchestrate. Each one passes, waits
  * (not ready yet: CI running or settling, no review of this commit yet),
- * fails, or goes straight to Saad (no CI at all). Only a failure counts
+ * fails, or goes straight to Saad (the repository has no CI at all, never
+ * just a head with no checks). Only a failure counts
  * against the task, and a gate failing again on a different commit goes to
  * Saad instead of being retried. A failure counts once per task, gate and
  * head commit, whichever path judged it (the armed watcher, CI finishing,
@@ -12,9 +13,10 @@
 
 import { db } from "../db";
 import type { CodeReviewGate } from "../tasks/code-review";
-import type { ChecksVerdict } from "../tasks/state";
+import type { ChecksVerdict, TaskPR } from "../tasks/state";
 import type { CheckRow } from "./checks";
 import { APPROVAL_GATES, mergeApprovalsOn } from "./merge-approvals";
+import type { RepoCI } from "./repo-ci";
 import { untrusted } from "./untrusted";
 
 export type GateName =
@@ -37,6 +39,11 @@ export interface GateInput {
   failing?: string | null;
   // Seconds until CI on this commit counts as settled (tasks/task-state).
   settleIn: number;
+  // GitHub's word on merging the PR into its base, and that base's name.
+  mergeable?: TaskPR["mergeable"];
+  baseName?: string | null;
+  // Whether the repository has CI; only read when the head has no checks.
+  repoCI?: RepoCI;
   review: CheckRow | null;
   // A BLOCKED: line, or an approval or question the agent is waiting on.
   blocked: string | null;
@@ -68,22 +75,48 @@ function ciGate(i: GateInput): GateOutcome {
       state: "fail",
       reason: `CI failed on ${at}${i.failing ? ` (${untrusted("CI", i.failing)})` : ""}`,
     };
+  if (i.checks === "none") return noChecks(i, at);
   if (i.settleIn > 0)
     return {
       gate,
       state: "wait",
-      reason:
-        i.checks === "none"
-          ? `no CI checks have registered on ${at} yet (looking again in ${i.settleIn}s)`
-          : `CI is green on ${at} but settling: ${i.settleIn}s more with no new check`,
+      reason: `CI is green on ${at} but settling: ${i.settleIn}s more with no new check`,
     };
-  if (i.checks === "none")
+  return { gate, state: "pass" };
+}
+
+// A head with no checks. Only a repository with no CI at all has nothing to
+// gate on; in one with CI the head is not yet, whatever the reason.
+function noChecks(i: GateInput, at: string): GateOutcome {
+  const gate = "ci";
+  const wait = (reason: string): GateOutcome => ({
+    gate,
+    state: "wait",
+    reason,
+  });
+  if (i.mergeable === "CONFLICTING")
+    return wait(
+      `PR conflicts with ${i.baseName ?? "its base"}; CI can't run on ${at} until it's rebased`
+    );
+  if (i.settleIn > 0)
+    return wait(
+      `no CI checks have registered on ${at} yet (looking again in ${i.settleIn}s)`
+    );
+  if (i.repoCI === "no")
     return {
       gate,
       state: "escalate",
-      reason: `no CI ran on ${at}: this repository has no checks to gate a merge on`,
+      reason: `no CI ran on ${at}: this repository has no checks to gate a merge on (no workflow files, and no check has run on its default branch or recent PRs)`,
     };
-  return { gate, state: "pass" };
+  if (i.repoCI === "yes")
+    return wait(
+      i.mergeable === "UNKNOWN"
+        ? `no CI checks on ${at} yet: GitHub is still working out whether it merges cleanly`
+        : `no CI checks on ${at} yet: CI hasn't been triggered on this head`
+    );
+  return wait(
+    `no CI checks on ${at}, and whether this repository has CI couldn't be read; looking again`
+  );
 }
 
 // A stored check of this exact commit: missing, running or broken waits.

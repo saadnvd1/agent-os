@@ -2,6 +2,7 @@
 // live inputs to the blocked and ci gates.
 
 import type { Session } from "../db";
+import type { TaskPR } from "../tasks/state";
 import { chatStateNow } from "../chat/runner";
 import { saidSinceLastMessage } from "../chat/store";
 import { blockedReason } from "../tasks/state";
@@ -138,4 +139,34 @@ export function ciSettleIn(input: {
     });
   const settledAt = Math.max(input.committedAt, changedAt) + SETTLE_S;
   return Math.max(0, settledAt - now);
+}
+
+// A head with no checks for this long after its PR became mergeable, in a
+// repository with CI, is news for the orchestrator (never an escalation).
+export const CHECKLESS_MS = 30 * 60 * 1000;
+
+const checkless = new Map<string, number>();
+
+// How long this head has had no checks while its PR could merge cleanly, in
+// ms, or undefined when it isn't in that state. In memory: a restart only
+// restarts the clock.
+export function checklessFor(
+  taskId: string,
+  pr: Pick<TaskPR, "state" | "checks" | "head" | "mergeable">,
+  now = Date.now()
+): number | undefined {
+  const key = `${taskId}:${pr.head ?? ""}`;
+  for (const k of checkless.keys())
+    if (k.startsWith(`${taskId}:`) && k !== key) checkless.delete(k);
+  if (
+    pr.state !== "OPEN" ||
+    pr.checks !== "none" ||
+    pr.mergeable !== "MERGEABLE"
+  ) {
+    checkless.delete(key);
+    return undefined;
+  }
+  const since = checkless.get(key) ?? now;
+  checkless.set(key, since);
+  return now - since;
 }

@@ -134,4 +134,27 @@ describe("conditionsFor", () => {
     expect(stalled(2000)[0].key).not.toBe(a[0].key);
     expect(lines([facts("s", { status: "running" })])).toEqual([]);
   });
+
+  describe("a head with no checks for a long while", () => {
+    const quiet = (ciSilentMs?: number, over = {}) =>
+      lines([
+        withTask("s", {
+          pr: pr({ checks: "none", mergeable: "MERGEABLE", ...over }),
+          ciSilentMs,
+        }),
+      ]);
+
+    it("is one event when the repository has CI, never an ask", () => {
+      expect(quiet(31 * 60 * 1000).join("\n")).toMatch(
+        /PR #12 at aaa has been mergeable for 31m with no CI check registered/
+      );
+    });
+
+    it("says nothing before it is set, or while the PR has checks", () => {
+      expect(quiet(undefined).join("\n")).not.toMatch(/no CI check/);
+      expect(quiet(31 * 60 * 1000, { checks: "pass" }).join("\n")).not.toMatch(
+        /no CI check/
+      );
+    });
+  });
 });

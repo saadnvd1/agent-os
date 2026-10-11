@@ -13,12 +13,23 @@ const merges: string[][] = [];
 let pane = "";
 // What GitHub says when it refuses a merge, or null to merge.
 let refuseMerge: string | null = null;
+// What the repository CI probes (check runs, statuses, recent PRs) print.
+let probeOut: string | Error = "0";
+const isProbe = (args: string[]) =>
+  args[0] === "api" ||
+  (args[0] === "pr" &&
+    args[1] === "list" &&
+    args.includes("statusCheckRollup"));
 
 vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
   return {
     ...real,
     run: async (cmd: string, args: string[], cwd: string, t?: number) => {
+      if (cmd === "gh" && isProbe(args)) {
+        if (probeOut instanceof Error) throw probeOut;
+        return probeOut;
+      }
       if (cmd === "gh") {
         if (refuseMerge) throw new Error(refuseMerge);
         merges.push(args);
@@ -31,6 +42,11 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
     findPR: async () => pr,
   };
 });
+// The test clones have a local origin; the CI probes need a GitHub name.
+vi.mock("./repo-slug", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repo-slug")>()),
+  repoSlug: async () => "o/r",
+}));
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: (t: string) => /Allow\?/.test(t),
   statusDetector: {
@@ -54,6 +70,7 @@ const { landDeps, refundIfRefused } = await import("./signoff");
 const { resumeReviews, review } = await import("./review");
 const { getCheck, putCheck } = await import("./checks");
 const { failureOf, recordFailure } = await import("./gates");
+const { clearRepoCI } = await import("./repo-ci");
 const { listNotes } = await import("./notes");
 const { listItems } = await import("@/lib/chat/store");
 const { claudeArgs } = await import("./claude-cli");
@@ -82,6 +99,9 @@ function oneGateAsk(w: string, task: string, sha: string) {
   return asks[0];
 }
 
+// Poll for the condition, generously: a loaded machine is slow, not wrong.
+const POLL = { timeout: 20000, interval: 20 };
+
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-signoff-"));
   vi.spyOn(os, "homedir").mockReturnValue(home);
@@ -89,6 +109,8 @@ beforeAll(() => {
 beforeEach(() => {
   merges.length = 0;
   refuseMerge = null;
+  probeOut = "0";
+  clearRepoCI();
   // A live terminal at its prompt, nothing waiting.
   pane = "❯ ";
 });
@@ -344,8 +366,9 @@ describe("review", () => {
     });
     const r = reviewer("pass");
     expect(await resumeReviews(r.claude)).toEqual([t.task]);
-    await vi.waitFor(() =>
-      expect(getCheck(t.task, t.sha, "scope")?.status).toBe("pass")
+    await vi.waitFor(
+      () => expect(getCheck(t.task, t.sha, "scope")?.status).toBe("pass"),
+      POLL
     );
     expect(getCheck(t.task, t.sha, "review")?.status).toBe("pass");
     // One review and one scope check, both of the commit that was cut off.
@@ -406,8 +429,9 @@ describe("review", () => {
     const next = t.push("src/b.ts", "export const b = 2;\n");
     const r = reviewer("pass");
     await resumeReviews(r.claude);
-    await vi.waitFor(() =>
-      expect(getCheck(t.task, next, "review")?.status).toBe("pass")
+    await vi.waitFor(
+      () => expect(getCheck(t.task, next, "review")?.status).toBe("pass"),
+      POLL
     );
     // The old commit never passes on the strength of the new review.
     expect(getCheck(t.task, t.sha, "review")?.status).toBe("error");
@@ -424,10 +448,12 @@ describe("review", () => {
         `review of ${t.sha.slice(0, 7)} was cut off by a restart and not run again: Reviewing add-a at ${next.slice(0, 7)}`
       )
     );
-    await vi.waitFor(() =>
-      expect(line(next)).toBe(
-        `task add-a: review of ${next.slice(0, 7)} passed`
-      )
+    await vi.waitFor(
+      () =>
+        expect(line(next)).toBe(
+          `task add-a: review of ${next.slice(0, 7)} passed`
+        ),
+      POLL
     );
   });
 });
@@ -1143,6 +1169,63 @@ describe("CI and blocked, strictly", () => {
     );
     expect(failureOf(t.task, "ci")?.escalated_at).toBeTruthy();
     expect(oneGateAsk(t.w, t.task, t.sha).detail).toMatch(/no CI ran/);
+  });
+
+  it("treats a conflicting PR in a repository with CI as not yet, not as no CI", async () => {
+    const t = setup({ onMain: [[".github/workflows/ci.yml", "on: push\n"]] });
+    await reviewNow(t.w);
+    pr = {
+      ...pr!,
+      checks: "none",
+      checkCount: 0,
+      mergeable: "CONFLICTING",
+      base: "main",
+    };
+    await expect(t.signOff()).rejects.toThrow(
+      /ci: not yet, PR conflicts with main; CI can't run .* rebased/
+    );
+    expect(failureOf(t.task, "ci")).toBeNull();
+    expect(openAsks(t.w)).toHaveLength(0);
+    expect(merges).toEqual([]);
+  });
+
+  it("says a conflict is not yet even when nothing says the repository has CI", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    pr = {
+      ...pr!,
+      checks: "none",
+      checkCount: 0,
+      mergeable: "CONFLICTING",
+      base: "main",
+    };
+    await expect(t.signOff()).rejects.toThrow(
+      /ci: not yet, PR conflicts with main/
+    );
+    expect(openAsks(t.w)).toHaveLength(0);
+  });
+
+  it("waits on a check-less head when the base has workflow files", async () => {
+    const t = setup({ onMain: [[".github/workflows/ci.yml", "on: push\n"]] });
+    await reviewNow(t.w);
+    pr = { ...pr!, checks: "none", checkCount: 0, mergeable: "MERGEABLE" };
+    await expect(t.signOff()).rejects.toThrow(
+      /ci: not yet, .*hasn't been triggered/
+    );
+    expect(failureOf(t.task, "ci")).toBeNull();
+    expect(openAsks(t.w)).toHaveLength(0);
+  });
+
+  it("waits, and doesn't escalate, when the repository's CI can't be read", async () => {
+    const t = setup();
+    await reviewNow(t.w);
+    probeOut = new Error("gh: rate limited");
+    pr = { ...pr!, checks: "none", checkCount: 0 };
+    await expect(t.signOff()).rejects.toThrow(
+      /ci: not yet, .*couldn't be read/
+    );
+    expect(failureOf(t.task, "ci")).toBeNull();
+    expect(openAsks(t.w)).toHaveLength(0);
   });
 
   it("won't clear a task whose terminal is gone", async () => {
