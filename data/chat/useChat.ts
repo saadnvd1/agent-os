@@ -18,6 +18,7 @@ import type {
   ToolBody,
   UndoPreview,
 } from "@/lib/chat/events";
+import type { SearchResult } from "@/lib/chat/find";
 
 // The index of the item with `id`, searched from the end: what changes is
 // almost always the latest.
@@ -147,6 +148,9 @@ export function useChat(
   const fileRequests = useRef(
     new Map<string, (files: FileSuggestion[]) => void>()
   );
+  const searchRequests = useRef(
+    new Map<string, (result: SearchResult) => void>()
+  );
   const [taskOutputs, setTaskOutputs] = useState<Record<string, string | null>>(
     {}
   );
@@ -215,6 +219,9 @@ export function useChat(
         } else if (m.type === "files") {
           fileRequests.current.get(m.reqId)?.(m.files);
           fileRequests.current.delete(m.reqId);
+        } else if (m.type === "search") {
+          searchRequests.current.get(m.reqId)?.(m);
+          searchRequests.current.delete(m.reqId);
         } else if (m.type === "state") {
           setState(m.state);
         } else if (m.type === "capabilities") {
@@ -393,6 +400,27 @@ export function useChat(
     });
   }, []);
 
+  // A page of find's results from the stored conversation, newest first;
+  // null when the socket is down or no answer comes (a linked machine's
+  // AgentOS too old to search).
+  const search = useCallback((query: string, before?: number) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN)
+      return Promise.resolve<SearchResult | null>(null);
+    const reqId = Math.random().toString(36).slice(2);
+    return new Promise<SearchResult | null>((resolve) => {
+      const timer = setTimeout(() => {
+        searchRequests.current.delete(reqId);
+        resolve(null);
+      }, 10_000);
+      searchRequests.current.set(reqId, (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      });
+      ws.send(JSON.stringify({ type: "search", reqId, query, before }));
+    });
+  }, []);
+
   const loadTaskOutput = useCallback((taskId: string) => {
     wsRef.current?.send(JSON.stringify({ type: "task_output", taskId }));
   }, []);
@@ -451,5 +479,6 @@ export function useChat(
     queueSendNow,
     suggestion,
     requestFiles,
+    search,
   };
 }

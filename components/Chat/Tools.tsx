@@ -132,7 +132,7 @@ function ToolRow({ tool }: { tool: ToolItem }) {
     tool.status === "error" || !!tool.diff || !!tool.hasDiff
   );
   return (
-    <div>
+    <div data-item={tool.id}>
       <button
         type="button"
         onClick={() => setOpen(!open)}

@@ -30,6 +30,7 @@ import {
   watchChat,
 } from "./runner";
 import { clientSend } from "./client-send";
+import { searchChat } from "./search";
 import { DEMO_CHAT_READS, handleDemoChat } from "./demo";
 import { titleChatFromMessage } from "../session-titles";
 import { peerChatLink, relayChatSocket } from "./peer-relay";
@@ -200,6 +201,17 @@ function onChatMessage(
       type: "tool_body",
       id: String(msg.id),
       body: chatToolBody(sessionId, String(msg.id)),
+    });
+  else if (msg.type === "search" && typeof msg.query === "string")
+    reply({
+      type: "search",
+      reqId: String(msg.reqId),
+      query: msg.query,
+      ...searchChat(
+        sessionId,
+        msg.query,
+        Number.isFinite(msg.before) ? msg.before : null
+      ),
     });
   else if (msg.type === "undo")
     run(

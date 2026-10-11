@@ -252,3 +252,13 @@ body {
   color: hsl(var(--primary));
   animation: status-pulse 1s ease-in-out infinite;
 }
+
+/* Find in a conversation (components/Chat/find-highlight): every match, and
+   the one it's on, in the browser's own find colours. */
+::highlight(chat-find) {
+  background-color: rgb(250 204 21 / 0.35);
+}
+::highlight(chat-find-current) {
+  background-color: rgb(249 115 22);
+  color: rgb(0 0 0);
+}

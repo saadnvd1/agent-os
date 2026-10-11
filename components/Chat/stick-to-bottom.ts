@@ -206,6 +206,11 @@ export function stickToBottom(
   return {
     isStuck: () => stuck,
     pin,
+    /** Stops following, for a jump up the conversation (find). */
+    release() {
+      set(false);
+      pickAnchors();
+    },
     /** Back to the end, following again. */
     toBottom() {
       set(true);
@@ -271,8 +276,9 @@ export function useStickToBottom(
   }, [latest]);
 
   const toBottom = useCallback(() => ctl.current?.toBottom(), []);
+  const release = useCallback(() => ctl.current?.release(), []);
 
   const stuck = away === null;
   const unread = !stuck && away.seen !== latest;
-  return { stuck, unread, toBottom };
+  return { stuck, unread, toBottom, release };
 }

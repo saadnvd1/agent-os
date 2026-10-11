@@ -187,6 +187,32 @@ describe("/ws/chat in demo mode", () => {
     expect(errors(sent)).toHaveLength(1);
     ws.message({ type: "history", before: 1 });
     expect(sent.at(-1)?.type).toBe("history");
+    ws.message({ type: "search", reqId: "r1", query: "hello" });
+    expect(sent.at(-1)).toMatchObject({ type: "search", reqId: "r1" });
+  });
+});
+
+describe("/ws/chat search", () => {
+  it("answers from the socket's own conversation only", async () => {
+    const { saveItem } = await import("./store");
+    const mine = session();
+    const other = session();
+    const said = (id: string) => ({
+      id,
+      kind: "assistant" as const,
+      text: "the word is plover",
+      createdAt: 1,
+    });
+    saveItem(mine, said("m1"));
+    saveItem(other, said("o1"));
+    const { ws, sent } = open(mine);
+    ws.message({ type: "search", reqId: "q", query: "PLOVER" });
+    const answer = sent.at(-1);
+    expect(answer).toMatchObject({ type: "search", reqId: "q", total: 1 });
+    expect(answer?.type === "search" && answer.hits.map((h) => h.id)).toEqual([
+      "m1",
+    ]);
+    ws.emit("close");
   });
 });
 
@@ -217,6 +243,11 @@ describe("/ws/chat for a linked machine's session", () => {
       ws.message({ type: "interrupt" });
       await until(() => peer.sockets[0].got.length === 1);
       expect(peer.sockets[0].got[0]).toEqual({ type: "interrupt" });
+      // Find searches the conversation where it's stored: on that machine.
+      const search = { type: "search", reqId: "r", query: "x" };
+      ws.message(search);
+      await until(() => peer.sockets[0].got.length === 2);
+      expect(peer.sockets[0].got[1]).toEqual(search);
       ws.emit("close");
     } finally {
       remove(id);
