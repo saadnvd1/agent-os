@@ -170,7 +170,7 @@ export function MobileTabBar({
           aria-label={
             away ? `Menu (Away ${awayUntil(away.expiresAt)})` : "Menu"
           }
-          className="relative h-8 w-8 shrink-0"
+          className="relative h-8 w-8 shrink-0 after:absolute after:-inset-1.5 after:content-['']"
         >
           <Menu className="h-4 w-4" />
           {/* The sidebar's amber cup is out of sight here: Away still shows. */}

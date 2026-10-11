@@ -12,6 +12,7 @@ import type { ProjectConfig } from "../project-config";
 import { run } from "../tasks/gh";
 import { expandHome } from "../tasks/session";
 import { selfUrl } from "../agents/self-env";
+import { commitTime } from "../orchestrator/repo";
 
 export type DeployConfig = NonNullable<ProjectConfig["deploy"]>;
 
@@ -36,6 +37,10 @@ export interface DeployDeps {
   health: (
     url: string
   ) => Promise<{ ok: boolean; why?: string; startedAt?: number }>;
+  // When GitHub made the merge commit, in ms (0 when unknown): the time a
+  // restart has to come after. Not when AgentOS noticed the merge, which
+  // can be after a restart that already took it.
+  committedAt: (repo: string, sha: string) => Promise<number>;
 }
 
 const SHA = /^[0-9a-f]{40}$/;
@@ -88,7 +93,13 @@ async function health(
   }
 }
 
-export const DEFAULT_DEPS: DeployDeps = { readSha, contains, health };
+export const DEFAULT_DEPS: DeployDeps = {
+  readSha,
+  contains,
+  health,
+  committedAt: async (repo, sha) =>
+    (await commitTime(repo, sha).catch(() => 0)) * 1000,
+};
 
 // A path alone is this AgentOS server's own.
 export const healthUrl = (health: string) =>
@@ -130,10 +141,11 @@ async function judge(
     if (!config.health) return { state: "ok", detail: `${short} deployed` };
     const url = healthUrl(config.health);
     const answer = await deps.health(url);
-    const stale =
-      answer.ok &&
-      answer.startedAt !== undefined &&
-      answer.startedAt < input.mergedAt;
+    const merged =
+      answer.ok && answer.startedAt !== undefined
+        ? await deps.committedAt(input.repo, mergeSha)
+        : 0;
+    const stale = !!merged && answer.startedAt! < merged;
     if (answer.ok && !stale)
       return { state: "ok", detail: `${short} deployed, server healthy` };
     if (input.now - deployed.at < HEALTH_GRACE_MS) return { state: "pending" };

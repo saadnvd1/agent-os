@@ -1,5 +1,6 @@
-const clock = (d: Date) =>
-  d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+// `locale` undefined: the browser's own.
+const clock = (d: Date, locale?: string) =>
+  d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 
 // "until 4:30 PM", "until Sat 8:00 AM", or "until you're back".
 export function awayUntil(expiresAt: string | null, now = new Date()): string {
@@ -16,13 +17,16 @@ export function awayUntil(expiresAt: string | null, now = new Date()): string {
 const utc = (t: string) =>
   new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : `${t.replace(" ", "T")}Z`);
 
-export function awayRange(startedAt: string, endedAt: string): string {
+export function awayRange(
+  startedAt: string,
+  endedAt: string,
+  locale?: string
+): string {
   const a = utc(startedAt);
   const b = utc(endedAt);
   const sameDay = a.toDateString() === b.toDateString();
-  const day = (d: Date) =>
-    d.toLocaleDateString(undefined, { weekday: "short" });
+  const day = (d: Date) => d.toLocaleDateString(locale, { weekday: "short" });
   return sameDay
-    ? `${clock(a)} to ${clock(b)}`
-    : `${day(a)} ${clock(a)} to ${day(b)} ${clock(b)}`;
+    ? `${clock(a, locale)} to ${clock(b, locale)}`
+    : `${day(a)} ${clock(a, locale)} to ${day(b)} ${clock(b, locale)}`;
 }

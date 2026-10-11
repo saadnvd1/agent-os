@@ -1,5 +1,14 @@
+import { execFileSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { describe, expect, it } from "vitest";
-import { checkDeploy, HEALTH_GRACE_MS, type DeployDeps } from "./deploy";
+import {
+  checkDeploy,
+  DEFAULT_DEPS,
+  HEALTH_GRACE_MS,
+  type DeployDeps,
+} from "./deploy";
 
 const NOW = Date.parse("2026-10-10T20:00:00Z");
 // Commits are built here rather than written out.
@@ -13,6 +22,7 @@ function deps(opts: {
   files?: Record<string, { sha: string; at?: number }>;
   history?: Record<string, string[]>;
   healthy?: boolean;
+  committedAt?: number;
 }): DeployDeps & { asked: string[] } {
   const asked: string[] = [];
   return {
@@ -23,6 +33,7 @@ function deps(opts: {
     },
     contains: async (_repo, tip, s) =>
       tip === s || (opts.history?.[tip] ?? []).includes(s),
+    committedAt: async () => opts.committedAt ?? 0,
     health: async (url) => {
       asked.push(url);
       return opts.healthy === false
@@ -129,25 +140,60 @@ describe("checking a merge's deploy", () => {
     ).toEqual({ state: "pending" });
   });
 
-  it("catches a server that answers but hasn't restarted since the merge", async () => {
-    const mergedAt = NOW - 10 * 60 * 1000;
+  it("catches a server that answers but hasn't restarted since the merge commit", async () => {
+    const committedAt = NOW - 10 * 60 * 1000;
     const files = (at: number) => ({ [config.deployed]: { sha: MERGE, at } });
-    const old = (at: number) => {
-      const d = deps({ files: files(at) });
-      d.health = async () => ({ ok: true, startedAt: mergedAt - 1000 });
+    const server = (at: number, startedAt: number) => {
+      const d = deps({ files: files(at), committedAt });
+      d.health = async () => ({ ok: true, startedAt });
       return d;
     };
-    expect(await checkDeploy(input({ mergedAt }), old(NOW - 1000))).toEqual({
+    const before = committedAt - 1000;
+    expect(await checkDeploy(input(), server(NOW - 1000, before))).toEqual({
       state: "pending",
     });
     expect(
-      await checkDeploy(input({ mergedAt }), old(NOW - HEALTH_GRACE_MS))
+      await checkDeploy(input(), server(NOW - HEALTH_GRACE_MS, before))
     ).toMatchObject({
       state: "failed",
       detail: expect.stringContaining("hasn't restarted since the merge"),
     });
-    const fresh = deps({ files: files(NOW - HEALTH_GRACE_MS) });
-    fresh.health = async () => ({ ok: true, startedAt: mergedAt + 1000 });
-    expect((await checkDeploy(input({ mergedAt }), fresh)).state).toBe("ok");
+    // AgentOS noticed the merge after the restart: still healthy, since the
+    // restart came after the commit.
+    expect(
+      (
+        await checkDeploy(
+          input({ mergedAt: NOW }),
+          server(NOW - HEALTH_GRACE_MS, committedAt + 1000)
+        )
+      ).state
+    ).toBe("ok");
+  });
+});
+
+describe("whether a deployed commit has the merge, in a real repository", () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
+
+  function repo() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "away-deploy-"));
+    git(dir, "init", "-q");
+    git(dir, "config", "user.email", "test@example.test");
+    git(dir, "config", "user.name", "test");
+    git(dir, "commit", "-q", "--allow-empty", "-m", "one");
+    const first = git(dir, "rev-parse", "HEAD");
+    git(dir, "commit", "-q", "--allow-empty", "-m", "two");
+    const second = git(dir, "rev-parse", "HEAD");
+    // An origin that can't be fetched from.
+    git(dir, "remote", "add", "origin", path.join(dir, "missing"));
+    return { dir, first, second };
+  }
+
+  it("tells from history without fetching, and throws when a fetch would be needed and fails", async () => {
+    const { dir, first, second } = repo();
+    expect(await DEFAULT_DEPS.contains(dir, second, first)).toBe(true);
+    await expect(
+      DEFAULT_DEPS.contains(dir, second, "f".repeat(40))
+    ).rejects.toThrow();
   });
 });

@@ -179,9 +179,32 @@ describe("the batched phone notification", () => {
     expect(await notifyFrom(orch.id, "PR #9 needs your call")).toMatchObject({
       state: "held",
     });
+    // A task's own notify isn't held: it goes to the phone (none is set
+    // up here, so it says so).
+    const { task } = seedWorkspace();
+    await expect(notifyFrom(task, "done")).rejects.toThrow(/No phone notifier/);
     const text = notifyBatch(getAway(row.id)!, now + MIN);
     expect(text).toMatch(/^While you're away: 1 note from an orchestrator/);
     expect(text).toContain("PR #9 needs your call");
+    // Back: the orchestrator's goes straight out again.
+    endAway("saad");
+    await expect(notifyFrom(orch.id, "after")).rejects.toThrow(
+      /No phone notifier/
+    );
+  });
+
+  it("keeps Away on, with no report, when the report can't be built", () => {
+    const now = Date.now();
+    const row = turnAwayOn({ setBy: "x", expiresAt: null }, now);
+    db.exec(`ALTER TABLE orchestrator_notes RENAME TO notes_away_test`);
+    try {
+      expect(() => turnAwayOff("saad", now + MIN)).toThrow();
+    } finally {
+      db.exec(`ALTER TABLE notes_away_test RENAME TO orchestrator_notes`);
+    }
+    expect(activeAway()?.id).toBe(row.id);
+    expect(getAway(row.id)!.report).toBeNull();
+    expect(turnAwayOff("saad", now + 2 * MIN)?.report).toBeTruthy();
   });
 
   it("sends what's held since the last batch when Away ends, before the summary", async () => {

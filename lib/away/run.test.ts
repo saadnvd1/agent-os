@@ -5,7 +5,7 @@ import { ensureOrchestrator } from "../orchestrator/home";
 import { setPaused } from "../orchestrator/pause";
 import type { SessionFacts } from "../orchestrator/facts";
 import type { DeployVerdict } from "./deploy";
-import { getAway, startAway, type AwayRow } from "./state";
+import { fromSql, getAway, startAway, toSql, type AwayRow } from "./state";
 import { STALL_MS } from "./sweep";
 import { sweepWorkspace } from "./run";
 
@@ -18,10 +18,16 @@ const h = vi.hoisted(() => ({
   sent: [] as { to: string; body: string }[],
   reviewed: [] as string[],
   gitDirs: [] as string[],
+  deployInputs: [] as { mergeSha: string | null; mergedAt: number }[],
+  // Runs as the sweep reads its facts: something changing mid-sweep.
+  meanwhile: null as null | (() => void),
 }));
 
 vi.mock("../orchestrator/facts", () => ({
-  sessionFacts: async () => h.facts,
+  sessionFacts: async () => {
+    h.meanwhile?.();
+    return h.facts;
+  },
 }));
 vi.mock("../bus", () => ({
   sendMessage: async (o: { to: string; body: string }) => {
@@ -48,9 +54,21 @@ vi.mock("../tasks/gh", async (importOriginal) => ({
 }));
 vi.mock("./deploy", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./deploy")>()),
-  checkDeploy: async () => h.verdict,
+  checkDeploy: async (i: { mergeSha: string | null; mergedAt: number }) => {
+    h.deployInputs.push({ mergeSha: i.mergeSha, mergedAt: i.mergedAt });
+    return h.verdict;
+  },
 }));
 vi.mock("../notify", () => ({ notifyPhone: () => {} }));
+// Every project deploys, so the merge commit is looked up.
+vi.mock("../project-config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../project-config")>()),
+  loadProjectConfig: () => ({
+    config: { deploy: { deployed: "~/deployed" } },
+    source: "agentos.json",
+    error: null,
+  }),
+}));
 
 const NOW = Date.now();
 let away: AwayRow;
@@ -66,6 +84,8 @@ beforeEach(() => {
   h.sent = [];
   h.reviewed = [];
   h.gitDirs = [];
+  h.deployInputs = [];
+  h.meanwhile = null;
 });
 
 // A task gone quiet past the stall time, with no PR.
@@ -147,6 +167,16 @@ describe("sweeping a workspace while away", () => {
     expect(actions(w)).toEqual([]);
   });
 
+  it("stops acting when Saad pauses the workspace during a sweep", async () => {
+    const { w, task, orch } = seed();
+    h.facts = [stalled(task)];
+    h.meanwhile = () => setPaused(w, true);
+    await sweepWorkspace(away, w, orch, NOW);
+    expect(h.sent).toEqual([]);
+    expect(actions(w)).toEqual([]);
+    setPaused(w, false);
+  });
+
   it("reads git only on this machine, and asks a dirty idle task to commit", async () => {
     const { w, task, orch, api } = seed();
     const remote = seedSession({
@@ -202,6 +232,22 @@ describe("checking deploys after a merge while away", () => {
     h.verdict = { state: "ok", detail: "deployed" };
     await sweepWorkspace(away, w, orch, NOW);
     expect(actions(w)).toHaveLength(1);
+  });
+
+  it("checks with the merge commit and merge time, and skips what merged before Away", async () => {
+    const { w, orch, api } = seed();
+    const id = merged(w, api.id);
+    const before = seedSession({ projectId: api.id, name: "old", task: true });
+    db.prepare(
+      `UPDATE sessions SET task_status = 'merged', pr_number = 6, merged_at = ? WHERE id = ?`
+    ).run(toSql(NOW - 2 * 60 * 60 * 1000), before);
+    await sweepWorkspace(away, w, orch, NOW);
+    const at = db
+      .prepare(`SELECT merged_at FROM sessions WHERE id = ?`)
+      .get(id) as { merged_at: string };
+    expect(h.deployInputs).toEqual([
+      { mergeSha: "a".repeat(40), mergedAt: fromSql(at.merged_at) },
+    ]);
   });
 
   it("records an unchecked project once, with no event", async () => {
