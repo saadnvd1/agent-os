@@ -1,4 +1,5 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import { WATCHED_TABLES } from "@/lib/db/changes";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "../tasks/keys";
 import { projectKeys } from "../projects/keys";
@@ -88,19 +89,7 @@ export function invalidateTopics(
 }
 
 // Every pushed topic but git folders: after a gap the stream can't replay.
-export const ALL_TOPICS = [
-  "sessions",
-  "projects",
-  "workspaces",
-  "hosts",
-  "discovered",
-  "stacks",
-  "bus_messages",
-  "schedules",
-  "orchestrator_asks",
-  "orchestrator_rules",
-  "away_periods",
-  "dev_servers",
-];
+// Every table the triggers watch is in it, so a new one can't be left out.
+export const ALL_TOPICS = [...new Set([...WATCHED_TABLES, "discovered"])];
 
 export { keysFor as topicKeys };

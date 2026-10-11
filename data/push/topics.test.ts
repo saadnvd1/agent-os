@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { WATCHED_TABLES } from "@/lib/db/changes";
 import { gitKeys } from "../git/keys";
+import { taskKeys } from "../tasks/keys";
 import { sessionKeys } from "../sessions/keys";
 import { ALL_TOPICS, invalidateTopics, topicKeys } from "./topics";
 
@@ -14,6 +15,14 @@ describe("pushed topics", () => {
   it("covers every topic a snapshot refetches", () => {
     for (const topic of ALL_TOPICS)
       expect(topicKeys(topic), topic).not.toEqual([]);
+  });
+
+  it("a snapshot refetches the queue and every other watched table", () => {
+    for (const table of WATCHED_TABLES) expect(ALL_TOPICS).toContain(table);
+    const client = new QueryClient();
+    client.setQueryData(taskKeys.queue(), []);
+    invalidateTopics(client, ALL_TOPICS);
+    expect(client.getQueryState(taskKeys.queue())?.isInvalidated).toBe(true);
   });
 
   it("maps a git folder and a session's setup to their queries", () => {

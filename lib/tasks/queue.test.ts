@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
 import { db } from "@/lib/db";
+import { changeWatcher } from "@/lib/db/changes";
 import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
 import { setPaused } from "@/lib/orchestrator/pause";
 import { updateWorkspace } from "@/lib/workspaces";
@@ -403,6 +404,47 @@ describe("the task queue", () => {
     expect(
       db.prepare(`SELECT id FROM task_queue WHERE id = ?`).get(id)
     ).toBeUndefined();
+  });
+});
+
+// Every change to the line moves the task_queue topic, which the browser
+// refetches the list from (data/push/topics.ts).
+describe("queue changes reach the browser", () => {
+  const watch = changeWatcher(() => db);
+  const moved = (change: () => unknown) => {
+    watch();
+    change();
+    return watch();
+  };
+
+  it("enqueue, reorder, remove and start each move task_queue", async () => {
+    const t = setup(1);
+    const a = moved(() => queueIfNeeded({ projectId: t.app.id, prompt: "a" }));
+    expect(a).toContain("task_queue");
+    const first = listQueue().find((q) => q.name === "a")!;
+    const second = queueIfNeeded({ projectId: t.app.id, prompt: "b" })!;
+    expect(moved(() => moveQueued(second.id, -1))).toContain("task_queue");
+    expect(moved(() => removeQueued(second.id))).toContain("task_queue");
+    finish(t.task);
+    watch();
+    await tick();
+    expect(statusOf(first.id)).toBe("started");
+    expect(watch()).toContain("task_queue");
+  });
+
+  it("a start now, an after-any start at once, and a failed start move it", async () => {
+    const t = setup(1);
+    const now = queueIfNeeded({ projectId: t.app.id, prompt: "now" })!;
+    watch();
+    await startQueuedNow(now.id);
+    expect(watch()).toContain("task_queue");
+    const failing = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "fail now",
+    })!;
+    watch();
+    await startQueuedNow(failing.id).catch(() => {});
+    expect(watch()).toContain("task_queue");
   });
 });
 
