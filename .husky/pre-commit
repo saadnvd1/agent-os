@@ -1,5 +1,6 @@
 # Fast checks on what is staged, so a commit doesn't fail CI for something
-# avoidable: formatting, and a token-shaped string the merge gate refuses.
+# avoidable: formatting, a token-shaped string the merge gate refuses, and
+# names that must never land in this public repo.
 # Typecheck, lint and tests are CI's (scripts/check); too slow for here.
 # Skip in an emergency with `git commit --no-verify`.
 set -e
@@ -29,12 +30,7 @@ fi
 
 "$bin/tsx" scripts/hooks/staged-secrets.ts
 
-# Names that must never land in the repo, one regex per line, kept outside it
-# (the list itself would be a mention).
-BANNED="${AGENTOS_BANNED_NAMES:-$HOME/.config/agent-os/banned-names}"
-if [ -s "$BANNED" ]; then
-  if git diff --cached -U0 --no-color | grep '^+' | grep -v '^+++' | grep -i -E -f "$BANNED"; then
-    echo "✗ a staged line names something on $BANNED; reword it" >&2
-    exit 1
-  fi
-fi
+# A generic term and a private denylist kept outside the repo
+# (~/.config/agent-os/banned-names, one regex per line; the list itself
+# would be a mention).
+"$bin/tsx" scripts/hooks/banned-terms.ts

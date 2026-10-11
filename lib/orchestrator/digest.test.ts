@@ -14,7 +14,7 @@ function seed() {
   const s = seedWorkspace();
   const w = s.workspace.id;
   addRule(w, "Never merge #111", "orchestrator");
-  addRule(w, "Briefs must not name competitors", "saad");
+  addRule(w, "Briefs must not name third-party products", "saad");
   db.prepare(
     `UPDATE sessions SET pr_number = 42, pr_status = 'open' WHERE id = ?`
   ).run(s.task);
@@ -52,7 +52,7 @@ describe("the startup digest", () => {
       "### Standing rules",
       'kept by you] <untrusted source="a rule you kept">Never merge #111</untrusted>',
       "from Saad]",
-      "Briefs must not name competitors",
+      "Briefs must not name third-party products",
       "### Open asks",
       `decision: <untrusted source="ask title">Merge #42 though CI failed twice?</untrusted> | task ${task.slice(0, 8)}@bbbbbbb`,
       "### Running tasks",

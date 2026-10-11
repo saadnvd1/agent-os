@@ -13,10 +13,13 @@ export interface SecretHit {
   what: string;
 }
 
-// Each added line of a `git diff -U0` with the file and new line number it
-// lands on. Headers are only read before a file's first hunk, so an added
-// line that itself starts with "++" isn't taken for one.
-export function scanDiff(diff: string): SecretHit[] {
+// Each added line of a `git diff -U0` that `check` flags, with the file and
+// new line number it lands on. Headers are only read before a file's first
+// hunk, so an added line that itself starts with "++" isn't taken for one.
+export function scanDiff(
+  diff: string,
+  check: (line: string) => string | null = secretsIn
+): SecretHit[] {
   const hits: SecretHit[] = [];
   let file = "";
   let line = 0;
@@ -30,7 +33,7 @@ export function scanDiff(diff: string): SecretHit[] {
       header = false;
       line = Number(l.match(/\+(\d+)/)?.[1] ?? 0);
     } else if (!header && l.startsWith("+")) {
-      const what = secretsIn(l.slice(1));
+      const what = check(l.slice(1));
       if (what) hits.push({ file, line, what });
       line++;
     }
@@ -38,8 +41,8 @@ export function scanDiff(diff: string): SecretHit[] {
   return hits;
 }
 
-if (process.argv[1]?.endsWith("staged-secrets.ts")) {
-  const diff = execFileSync(
+export const stagedDiff = () =>
+  execFileSync(
     "git",
     [
       "diff",
@@ -51,7 +54,9 @@ if (process.argv[1]?.endsWith("staged-secrets.ts")) {
     ],
     { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }
   );
-  const hits = scanDiff(diff);
+
+if (process.argv[1]?.endsWith("staged-secrets.ts")) {
+  const hits = scanDiff(stagedDiff());
   for (const h of hits)
     console.error(`✗ ${h.file}:${h.line}: looks like a secret (${h.what})`);
   if (hits.length) {

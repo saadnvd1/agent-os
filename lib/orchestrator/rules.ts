@@ -1,7 +1,7 @@
 /**
  * A workspace's standing rules: what its orchestrator must keep knowing
  * across fresh starts ("never merge #111", "briefs must not name
- * competitors"). The orchestrator writes them with rule_add and rule_remove,
+ * third-party products"). The orchestrator writes them with rule_add and rule_remove,
  * Saad in Settings → Workspaces, and every start reads them into its brief.
  * They restrict and inform; none can approve anything. A removed rule stays
  * in the table, marked.

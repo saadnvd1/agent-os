@@ -947,7 +947,7 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Decision log:** `note` and the brakes and escalations write to
   `orchestrator_notes`, and each line shows in its chat.
 - **Standing rules:** what it must keep knowing ("never merge #111", "briefs
-  must not name competitors") it keeps with `rule_add` and drops with
+  must not name third-party products") it keeps with `rule_add` and drops with
   `rule_remove`, in `orchestrator_rules`. You see, add, edit and remove them in
   Settings → Workspaces, each change with your passkey (any process on the
   machine reaches the route, and a rule of yours is your word to it). A rule restricts or informs; it never approves an
@@ -1273,7 +1273,12 @@ added lines for token-shaped secrets with the merge gate's own rule
 (`scripts/hooks/staged-secrets.ts` reads `secretsIn` from
 `lib/orchestrator/diff.ts`), naming the file and line. Build a test's fake
 token at runtime (`"gh" + "p_" + "a".repeat(36)`) rather than writing it
-whole. It runs in the worktrees AgentOS makes too, which have no `.husky/_`
+whole. It also refuses words that must not land in this public repo
+(`scripts/hooks/banned-terms.ts`): a short built-in list, plus, when it
+exists, a private list of regexes kept outside the repo in
+`~/.config/agent-os/banned-names` (`AGENTOS_BANNED_NAMES` overrides the
+path), checked against added lines and file names; `scripts/check` runs the
+same check over every tracked file. It runs in the worktrees AgentOS makes too, which have no `.husky/_`
 until `npm install` runs in them. Typecheck, lint and tests are left to CI.
 In an emergency, `git commit --no-verify` skips it. CI runs `scripts/check --build` on every pull request and push to main,
 which also holds the app's first-load JavaScript to a budget
