@@ -87,6 +87,20 @@ export function setRefreshSettings(input: Partial<RefreshSettings>): void {
 // as 150 and clamps anything under 100k up to it).
 export const AUTO_COMPACT_ENV = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
 const AUTO_COMPACT_MIN = 100_000;
+// Claude Code turns tool search off for a host that isn't Anthropic's, so
+// every MCP and deferred tool schema rides in each prompt: measured on
+// DeepSeek, the first call after a compaction is ~100k tokens against ~53k
+// on Claude. A window measured from zero left it 15-30k of room, so it
+// compacted every couple of minutes. Providers get that extra on top.
+export const PROVIDER_BASE_TOKENS = 60_000;
+
+// The compact threshold for a session on this provider (null: Anthropic).
+export function compactThreshold(
+  tokens: number,
+  provider: string | null | undefined
+): number {
+  return tokens > 0 && provider ? tokens + PROVIDER_BASE_TOKENS : tokens;
+}
 
 // What an agent is launched with so it compacts itself at the threshold.
 // Not an orchestrator: it starts over from its brief at its own threshold
@@ -95,11 +109,17 @@ const AUTO_COMPACT_MIN = 100_000;
 // the user's own environment still applies.
 export function autoCompactEnv(sessionId: string): Record<string, string> {
   const row = db
-    .prepare(`SELECT role FROM sessions WHERE id = ?`)
-    .get(sessionId) as { role: string | null } | undefined;
+    .prepare(`SELECT role, model_provider FROM sessions WHERE id = ?`)
+    .get(sessionId) as
+    | { role: string | null; model_provider: string | null }
+    | undefined;
   const tokens = refreshSettings().compactTokens;
   if (row?.role === "orchestrator" || tokens <= 0) return {};
-  return { [AUTO_COMPACT_ENV]: String(Math.max(AUTO_COMPACT_MIN, tokens)) };
+  const window = compactThreshold(
+    Math.max(AUTO_COMPACT_MIN, tokens),
+    row?.model_provider
+  );
+  return { [AUTO_COMPACT_ENV]: String(window) };
 }
 
 const k = (tokens: number) => `${Math.round(tokens / 1000)}k`;

@@ -105,6 +105,19 @@ describe("ChatHost", () => {
     host.close();
   });
 
+  it("loads only AgentOS's MCP servers for an agent on a routed provider", async () => {
+    const plain = await startHost();
+    expect(started?.strictMcpConfig).toBe(false);
+    plain.host.close();
+    const routed = await startHost("agent", undefined, (id) =>
+      getDb()
+        .prepare(`UPDATE sessions SET model_provider = 'deepseek' WHERE id = ?`)
+        .run(id)
+    );
+    expect(started?.strictMcpConfig).toBe(true);
+    routed.host.close();
+  });
+
   it("keeps a browser away from an orchestrator", async () => {
     const { host } = await startHost("orchestrator");
     expect(started?.mcpServers?.visuals).toBeUndefined();

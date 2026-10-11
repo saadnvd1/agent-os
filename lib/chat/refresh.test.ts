@@ -5,6 +5,8 @@ import { agentEnv } from "../agents/launch";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import {
   AUTO_COMPACT_ENV,
+  PROVIDER_BASE_TOKENS,
+  compactThreshold,
   refreshSettings,
   setRefreshSettings,
 } from "./refresh";
@@ -88,6 +90,16 @@ describe("the compact threshold at launch", () => {
     expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("150000");
     expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe("150000");
     expect(agentEnv(orch)[AUTO_COMPACT_ENV]).toBeUndefined();
+    // A non-Anthropic provider's prompt carries every tool schema, so its
+    // window sits that much higher.
+    db.prepare(
+      `UPDATE sessions SET model_provider = 'deepseek' WHERE id = ?`
+    ).run(task);
+    expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe(
+      String(150_000 + PROVIDER_BASE_TOKENS)
+    );
+    expect(compactThreshold(0, "deepseek")).toBe(0);
+    expect(compactThreshold(150_000, null)).toBe(150_000);
     try {
       // Under Claude Code's 100k floor, it gets the floor; off sets nothing.
       setRefreshSettings({ compactTokens: 60_000 });
