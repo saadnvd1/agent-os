@@ -183,36 +183,36 @@ export function recordFailure(
   reason: string,
   sha: string | null = null
 ): number {
-  return recordFailureTx.immediate(workspaceId, sessionId, gate, reason, sha);
+  return db
+    .transaction(countOnce)
+    .immediate(workspaceId, sessionId, gate, reason, sha);
 }
 
-const recordFailureTx = db.transaction(
-  (
-    workspaceId: string,
-    sessionId: string,
-    gate: string,
-    reason: string,
-    sha: string | null
-  ): number => {
-    const fresh =
-      sha === null ||
-      db
-        .prepare(
-          `INSERT OR IGNORE INTO orchestrator_gate_failure_commits (session_id, gate, sha, workspace_id, reason)
+function countOnce(
+  workspaceId: string,
+  sessionId: string,
+  gate: string,
+  reason: string,
+  sha: string | null
+): number {
+  const fresh =
+    sha === null ||
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO orchestrator_gate_failure_commits (session_id, gate, sha, workspace_id, reason)
            VALUES (?, ?, ?, ?, ?)`
-        )
-        .run(sessionId, gate, sha, workspaceId, reason).changes > 0;
-    db.prepare(
-      `INSERT INTO orchestrator_gate_failures (session_id, gate, workspace_id, count, last_reason, last_sha)
+      )
+      .run(sessionId, gate, sha, workspaceId, reason).changes > 0;
+  db.prepare(
+    `INSERT INTO orchestrator_gate_failures (session_id, gate, workspace_id, count, last_reason, last_sha)
        VALUES (?, ?, ?, 1, ?, ?)
        ON CONFLICT(session_id, gate) DO UPDATE SET
          count = count + ?,
          last_reason = excluded.last_reason,
          last_sha = excluded.last_sha`
-    ).run(sessionId, gate, workspaceId, reason, sha, fresh ? 1 : 0);
-    return failureOf(sessionId, gate)!.count;
-  }
-);
+  ).run(sessionId, gate, workspaceId, reason, sha, fresh ? 1 : 0);
+  return failureOf(sessionId, gate)!.count;
+}
 
 export function failureOf(sessionId: string, gate: string): FailureRow | null {
   return (
