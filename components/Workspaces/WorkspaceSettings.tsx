@@ -5,6 +5,7 @@ import { useUpdateWorkspace, useWorkspacesQuery } from "@/data/workspaces";
 import { TaskLimitForm } from "./TaskLimitForm";
 import { RulesForm } from "./RulesForm";
 import { FreshStartForm } from "./FreshStartForm";
+import { StallForm } from "./StallForm";
 import { WorkspaceModelsForm } from "./WorkspaceModelsForm";
 import { AwayWindowForm } from "@/components/Away/AwayWindowForm";
 
@@ -53,6 +54,7 @@ export function WorkspaceSettings() {
         </section>
       ))}
       <FreshStartForm />
+      <StallForm />
       <AwayWindowForm />
     </div>
   );

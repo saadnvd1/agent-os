@@ -10,7 +10,7 @@ import { statusDetector } from "../status-detector";
 import { hostLink } from "../hosts/remote-api";
 import { peerStatus } from "../hosts/peer-sessions";
 import { chatState } from "../chat/runner";
-import { chatActivityLine } from "../chat/activity";
+import { chatActivityLine, chatStall, type Stall } from "../chat/activity";
 import { lastUserTask } from "../chat/store";
 import { needsYou } from "../needs-you";
 import { programSummary } from "../program-status/store";
@@ -32,6 +32,8 @@ export interface SessionFacts {
   // Really stopped on an answer: a chat's approval or question card, or a
   // terminal at its prompt. A chat that merely finished doesn't count.
   needsInput: boolean;
+  // A chat turn silent past the stall threshold (lib/chat/stall).
+  stalled?: Stall | null;
   // Last sign of life, in ms.
   lastActive: number;
   // Work that should end in a PR: a task, or a session on its own branch.
@@ -249,6 +251,8 @@ export async function sessionFacts(
         status,
         activity,
         needsInput,
+        stalled:
+          s.view === "chat" && !hostLink(s.host_id) ? chatStall(s.id) : null,
         lastActive: Math.max(
           sqliteMs(s.updated_at),
           statusDetector.getTimestamp(s.tmux_name) * 1000,

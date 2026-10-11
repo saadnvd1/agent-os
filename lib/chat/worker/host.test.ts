@@ -465,6 +465,42 @@ describe("ChatHost queue", () => {
     host.close();
   });
 
+  it("after a hard stop, another agent's message runs as the next turn", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A" });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "interrupt", hard: true });
+    expect(conversation.interrupt).toHaveBeenCalledOnce();
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "from a peer",
+      from: "Session 3",
+      peer: { sessionId: "s3", body: "from a peer" },
+      queue: true,
+    });
+    expect(conversation.send).toHaveBeenLastCalledWith(
+      "from a peer",
+      undefined,
+      { now: true }
+    );
+    expect(listQueue(id)).toEqual([]);
+    host.close();
+  });
+
+  it("a hard stop cuts short the turn the agent starts to answer it", async () => {
+    const { host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "A" });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    await host.handle({ type: "interrupt", hard: true });
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    expect(conversation.interrupt).toHaveBeenCalledTimes(2);
+    host.close();
+  });
+
   it("a message typed after the stopped turn ended goes as usual", async () => {
     const { host, conversation } = await startHost();
     await host.handle({ type: "send", id: "user-1", text: "long job" });

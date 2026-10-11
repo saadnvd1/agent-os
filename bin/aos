@@ -45,6 +45,9 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      only sessions in your workspace or project
   aos done --all-idle                clean up every idle or stopped session there;
                                      never merges, lists open PRs instead
+  aos stop <session>                 end its turn in progress, even mid-thought;
+                                     its conversation and worktree are kept and
+                                     your next message runs as its next turn
 
   Docs, when your project's workspace is linked to LumifyHub:
   aos docs [query]                   list the workspace's pages (id, title)
@@ -509,6 +512,14 @@ async function main() {
         session,
         allIdle,
       });
+      console.log(summary);
+      return;
+    }
+    case "stop": {
+      const session = args.join(" ");
+      if (!session) fail("usage: aos stop <session>");
+      needMe();
+      const { summary } = await post("/api/bus/stop", { from: me, session });
       console.log(summary);
       return;
     }

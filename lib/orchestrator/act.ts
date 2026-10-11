@@ -6,9 +6,9 @@
 
 import { parseOverride, type ModelOverride } from "../models/resolve";
 import { sendMessage } from "../bus";
-import { chatState, interruptChat } from "../chat/runner";
+import { chatState } from "../chat/runner";
+import { stopSession } from "../sessions/stop";
 import { isRemoteHost } from "../hosts";
-import { endTmuxSession } from "../tmux/end";
 import { spawnSession } from "../agents/spawn";
 import {
   DEFAULT_START_VIEW,
@@ -226,11 +226,5 @@ export async function done(workspaceId: string, ref: string): Promise<string> {
 // Stops the agent and keeps everything else: a chat's turn is interrupted,
 // a terminal's tmux session ends. Its worktree and branch stay.
 export async function stop(workspaceId: string, ref: string): Promise<string> {
-  const s = findWorkspaceSession(workspaceId, ref);
-  if (s.view === "chat") {
-    await interruptChat(s.id);
-    return `Stopped ${s.name}'s turn.`;
-  }
-  await endTmuxSession(s.host_id, s.tmux_name);
-  return `Stopped ${s.name}: its agent is ended, its worktree and branch are kept.`;
+  return stopSession(findWorkspaceSession(workspaceId, ref));
 }

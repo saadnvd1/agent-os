@@ -16,7 +16,6 @@ import {
   chatToolBody,
   deleteQueuedChat,
   editQueuedChat,
-  interruptChat,
   moveQueuedChat,
   refreshCapabilities,
   respondChat,
@@ -29,6 +28,7 @@ import {
   undoChat,
   watchChat,
 } from "./runner";
+import { stopChatTurn } from "./stop";
 import { clientSend } from "./client-send";
 import { searchChat } from "./search";
 import { DEMO_CHAT_READS, handleDemoChat } from "./demo";
@@ -175,7 +175,7 @@ function onChatMessage(
         .catch(() => [])
         .then(answer)
     );
-  } else if (msg.type === "interrupt") run(interruptChat(sessionId));
+  } else if (msg.type === "interrupt") run(stopChatTurn(sessionId));
   else if (msg.type === "set_model") run(setChatModel(sessionId, msg.model));
   else if (msg.type === "set_access") run(setChatAccess(sessionId, msg.access));
   else if (msg.type === "set_plan") run(setChatPlan(sessionId, !!msg.plan));

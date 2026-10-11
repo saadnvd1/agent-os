@@ -363,6 +363,24 @@ fired `mid_turn` or `between_turns`, and the context before and after), so cost 
 menu, dialog or the command list is open (those close first). On a phone the
 Stop button does the same. A stopped turn keeps what it wrote.
 
+Stop ends the turn even while the model is still thinking, before any tool
+call: the turn is interrupted, and if it hasn't ended within a few seconds the
+agent process is ended and restarted for the next message (not if the chat is
+waiting on an approval or question, or if a new message has started a new
+turn meanwhile). The conversation and
+worktree are kept, and whatever is sent next (yours, another agent's, the
+orchestrator's) runs as the next turn, never queued behind the stopped one.
+The UI, the orchestrator's `stop` tool and `aos stop` all take this one path
+and report "stopped" or a real error.
+
+A turn that has produced nothing (no token, tool call or result) for 8 minutes
+shows as **Stalled** in the session list, and its workspace's orchestrator gets
+one event naming the session, how long it has been silent and its last action.
+It fires once per stall and starts over when the session does something. A
+foreground tool call gets four times as long, and a session waiting on a
+background command it started isn't flagged. Set the time (2 to 120 minutes, 0 for off)
+in Settings → Workspaces → Stall alerts.
+
 The access picker under the composer sets what the agent may do on its own:
 **Ask first** (an approval card in the chat for anything not already allowed),
 **Accept edits** (edits files, asks before other commands) or **Full access**
@@ -852,6 +870,7 @@ aos schedule run <name>           # run a schedule now
 aos schedule add --session <s> --every 30m "prompt"  # check in on a session
 aos notify "text"                 # push a message to your phone
 aos heavy -- npm test             # run it now; says first what else heavy is running
+aos stop <session>                # stop its turn now; the next message runs as a new turn
 aos done <session>                # finished: merge through the gates, archive
 aos done --all-idle               # the same for every idle session around you
 aos docs [query]                  # LumifyHub pages, when the workspace is linked

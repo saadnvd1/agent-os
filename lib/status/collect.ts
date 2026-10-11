@@ -21,7 +21,7 @@ import {
 } from "../providers/registry";
 import { getDb, type Session } from "../db";
 import { chatState } from "../chat/runner";
-import { chatActivityLine } from "../chat/activity";
+import { chatActivityLine, chatStall } from "../chat/activity";
 import {
   chatNeed,
   isUnread,
@@ -60,6 +60,8 @@ export interface SessionStatusResponse {
   asks?: number;
   need?: SessionNeed | null;
   unread?: boolean;
+  // A chat turn silent past the stall threshold (lib/chat/stall).
+  stalled?: boolean;
   // A program's own message (OSC 7501): untrusted, plain text only.
   detail?: string | null;
   progress?: number | null;
@@ -464,6 +466,7 @@ async function collect(): Promise<StatusSnapshot> {
       agentType: session.agent_type,
       need: chatNeed(session, state, asks),
       unread: isUnread(session, state),
+      ...(chatStall(session.id) && { stalled: true }),
       ...(session.role === "orchestrator" && { asks }),
     };
   }

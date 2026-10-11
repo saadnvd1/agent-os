@@ -697,6 +697,8 @@ export async function undoChat(
   reply({ type: "undone", from, text: target.text });
 }
 
+// A plain Esc: ends the turn the way the agent would, and leaves a queue
+// behind it alone. Stop (./stop stopChatTurn) is the one that must end it.
 export async function interruptChat(sessionId: string): Promise<void> {
   registry.live.get(sessionId)?.worker.command({ type: "interrupt" });
 }

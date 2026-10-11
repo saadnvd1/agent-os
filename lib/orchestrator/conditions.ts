@@ -109,6 +109,17 @@ function sessionConditions(
       true
     );
 
+  // Keyed on when it last did anything, so it is one event per stall and
+  // anything the session does after it makes the next stall a new one.
+  if (f.stalled)
+    add(
+      `stalled:${f.stalled.since}`,
+      `${who}: stalled: no output for ${Math.floor(f.stalled.silentMs / 60000)}m mid-turn (last: ${untrusted(f.name, f.stalled.last)}). Read it; stop it if it's stuck.`,
+      false,
+      false,
+      true
+    );
+
   // A quick change is the orchestrator's own: nothing to tell it.
   const shouldPR = (!!f.task || !!f.branch) && !f.quick;
   const finished = !!f.task && isFinished(f.task.state);
