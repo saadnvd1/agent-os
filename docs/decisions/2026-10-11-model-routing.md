@@ -12,10 +12,13 @@ model reference, `provider/model`:
 | plan                                | `anthropic/claude-opus-5-5`           |
 | review (gate review)                | `anthropic/claude-opus-5-5`           |
 | implement                           | `anthropic/claude-sonnet-5-5`         |
-| orchestrator                        | `anthropic/claude-sonnet-5-5`         |
+| orchestrator                        | `anthropic/claude-opus-5-5`           |
 | scope (scope check)                 | `anthropic/claude-sonnet-5-5`         |
 | interactive                         | `anthropic/claude-opus-5-5`           |
 | helper (titles, summaries, PR text) | `anthropic/claude-haiku-4-5-20251001` |
+
+The orchestrator defaults to Opus (amended 2026-10-11): it plans and steers
+work rather than writing it.
 
 Resolution is most-specific-wins: the task's own override (one ref for its
 plan and implement roles, or a map of those to refs), its workspace's,

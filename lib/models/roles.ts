@@ -53,7 +53,7 @@ export const DEFAULT_ROLE_MODELS: Record<ModelRole, string> = {
   plan: OPUS,
   review: OPUS,
   implement: SONNET,
-  orchestrator: SONNET,
+  orchestrator: OPUS,
   scope: SONNET,
   interactive: OPUS,
   helper: HAIKU,
