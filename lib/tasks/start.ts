@@ -23,6 +23,7 @@ import { deleteQueued, enqueue, listQueue } from "../chat/queued";
 import { sendQueuedNow } from "../chat/runner";
 import { hasItem } from "../chat/store";
 import { firstMessageId, launchPending } from "./launch-gate";
+import { planPrompt, preparePlanDir } from "../models/plan-step";
 
 export { firstMessageId, launchPending };
 import { expandHome } from "./session";
@@ -136,7 +137,10 @@ export async function finishTaskStart(
       ms: setup.ms,
       error: "Not launched: the task was closed during setup",
     });
-  const prompt = (session.task_prompt ?? "") + setupNote(setup);
+  const task = (session.task_prompt ?? "") + setupNote(setup);
+  const planning = session.plan_phase === "planning";
+  if (planning) preparePlanDir(session.worktree_path);
+  const prompt = planning ? planPrompt(task) : task;
   try {
     if (session.view === "chat") await launchChat(sessionId, prompt);
     else {
@@ -148,6 +152,7 @@ export async function finishTaskStart(
         tmuxName: session.tmux_name,
         cwd: session.worktree_path,
         model: session.model,
+        provider: session.model_provider,
         prompt,
         brief: session.task_brief ?? undefined,
       });
@@ -190,7 +195,7 @@ function earlierSetup(row: SetupColumns): TaskSetup | undefined {
   return undefined;
 }
 
-const killTmux = (name: string) =>
+export const killTmux = (name: string) =>
   execFileAsync("tmux", ["kill-session", "-t", `=${name}`], {
     timeout: 5000,
   }).catch(() => undefined);

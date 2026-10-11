@@ -174,7 +174,7 @@ export async function generateTitle(
       prompt: input,
       schema: SCHEMA,
       tools: [],
-      model: process.env.AGENTOS_TITLE_MODEL || "haiku",
+      role: "helper",
       timeoutMs: 30_000,
     })) as { title?: unknown };
     return cleanTitle(out?.title);

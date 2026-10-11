@@ -155,6 +155,8 @@ async function reviewJob(
         tools: ["Read", "Grep", "Glob"],
         allow: [`Read(/${dir}/**)`, `Grep(/${dir}/**)`, `Glob(/${dir}/**)`],
         onUsage,
+        role: "review",
+        workspaceId,
       });
       verdicts.push(toVerdict(answer));
     }

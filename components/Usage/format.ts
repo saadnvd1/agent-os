@@ -10,3 +10,12 @@ export function formatDuration(seconds: number): string {
   if (h < 48) return `${h}h${m % 60 ? ` ${m % 60}m` : ""}`;
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
+
+export function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return String(n);
+}
+
+export const formatPct = (yes: number, of: number) =>
+  of ? `${Math.round((yes / of) * 100)}%` : "—";

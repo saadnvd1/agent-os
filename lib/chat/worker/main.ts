@@ -29,13 +29,14 @@ async function main(sessionId: string) {
   const { db } = await import("../../db");
   const { ChatHost } = await import("./host");
 
-  const session = db
+  const row = db
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(sessionId) as Session | undefined;
-  if (!session) {
+  if (!row) {
     console.error(`No session ${sessionId}`);
     process.exit(1);
   }
+  const session = (await import("../../models/launch")).routeOrchestrator(row);
 
   const clients = new Set<net.Socket>();
   const emit = (e: WorkerEvent) => {

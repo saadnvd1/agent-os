@@ -12,10 +12,18 @@ import {
 import { useUsageQuery } from "@/data/usage";
 import type { UsageRange } from "@/lib/usage/aggregate";
 import { cn } from "@/lib/utils";
-import { usageUi, usageUiActions } from "@/stores/usageUi";
+import { usageUi, usageUiActions, type UsageTab } from "@/stores/usageUi";
+import { CompareView } from "./CompareView";
+import { ModelSpend } from "./ModelSpend";
 import { DayBars, SpendList } from "./SpendCharts";
 import { WindowCard } from "./WindowCard";
 import { formatUsd } from "./format";
+
+const TABS: { value: UsageTab; label: string }[] = [
+  { value: "spend", label: "Spend" },
+  { value: "models", label: "By model" },
+  { value: "compare", label: "Compare" },
+];
 
 const RANGES: { value: UsageRange; label: string }[] = [
   { value: "today", label: "Today" },
@@ -26,7 +34,7 @@ const RANGES: { value: UsageRange; label: string }[] = [
 // The account's rolling windows, and what chats cost by day, session and
 // workspace.
 export function UsageDialog() {
-  const { open } = useSnapshot(usageUi);
+  const { open, tab } = useSnapshot(usageUi);
   const [range, setRange] = useState<UsageRange>("7d");
   const { data, isPending, isError, error } = useUsageQuery(range, open);
   const report = data?.report;
@@ -56,7 +64,34 @@ export function UsageDialog() {
           )}
         </section>
 
-        <section className="space-y-3">
+        <div
+          role="tablist"
+          aria-label="Usage views"
+          className="bg-foreground/[0.04] flex rounded-lg p-0.5"
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.value}
+              onClick={() => usageUiActions.setTab(t.value)}
+              className={cn(
+                "h-11 flex-1 rounded-md px-3 text-xs md:h-8",
+                tab === t.value
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "models" && <ModelSpend data={data?.models} />}
+        {tab === "compare" && <CompareView enabled={open} />}
+
+        <section className={cn("space-y-3", tab !== "spend" && "hidden")}>
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium">Chat spend</h3>
             <div className="bg-foreground/[0.04] flex rounded-lg p-0.5">

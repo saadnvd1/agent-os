@@ -4,6 +4,14 @@
  * drops it.
  */
 
+import {
+  parseOverride,
+  resolveRole,
+  sessionModelRef,
+  type ModelOverride,
+} from "../models/resolve";
+import { effectiveModels } from "../models/config";
+import { ANTHROPIC } from "../models/roles";
 import { processTable, runsSomething } from "../process-table";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
@@ -19,7 +27,6 @@ import {
   isBranchName,
   slugify,
 } from "../git";
-import { resolveModelForAgent } from "../model-catalog";
 import { getProvider } from "../providers";
 import { statusDetector } from "../status-detector";
 import { buildTaskBrief, type StackedOn } from "./brief";
@@ -85,6 +92,10 @@ export interface TaskView {
   hostError: string | null;
   // Merges by itself once every gate passes (orchestrator/armed.ts).
   armed?: boolean;
+  // What it runs on now, "provider/model", and whether it's still in its
+  // plan step (lib/models).
+  model?: string;
+  planning?: boolean;
 }
 
 export async function createTask(opts: {
@@ -92,7 +103,12 @@ export async function createTask(opts: {
   prompt: string;
   // Its name; generated from the prompt when absent.
   name?: string;
-  model?: string;
+  // Its own model: "provider/model" (or an Anthropic alias) for all its
+  // roles, or a map of role to one (lib/models). Its workspace's and
+  // Settings' role models otherwise.
+  model?: ModelOverride;
+  // Plan first on the planning model (Settings' default otherwise).
+  plan?: boolean;
   // Started from this LumifyHub card, which the task then moves.
   cardId?: string;
   // Stacked: cut from another task's pushed branch, at this exact commit.
@@ -169,7 +185,7 @@ async function startTask(
       id,
       prompt,
       name: opts.name,
-      model: opts.model,
+      model: typeof opts.model === "string" ? opts.model : undefined,
       baseBranch: opts.baseBranch,
       view,
     });
@@ -179,6 +195,12 @@ async function startTask(
 
   if (opts.baseBranch !== undefined && !isBranchName(opts.baseBranch))
     throw new Error(`"${opts.baseBranch}" isn't a branch name`);
+  const routing = taskRouting(
+    project.workspace_id,
+    view,
+    opts.model,
+    opts.plan
+  );
   const projectPath = expandHome(project.working_directory);
   const naming = await nameFor(prompt, projectPath, opts.name);
   const feature = `${slugify(naming.name.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
@@ -198,10 +220,7 @@ async function startTask(
   });
 
   const provider = getProvider("claude");
-  const model = resolveModelForAgent(
-    "claude",
-    opts.model || project.default_model
-  );
+  const model = routing.first.model;
   const tmuxName = `${provider.id}-${id}`;
 
   queries
@@ -225,7 +244,8 @@ async function startTask(
     .run(wt.worktreePath, wt.branchName, baseBranch, null, id);
   // Everything the launch needs is on the row, so a restart can resume it.
   db.prepare(
-    `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ? WHERE id = ?`
+    `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ?,
+       model_provider = ?, model_overrides = ?, plan_phase = ? WHERE id = ?`
   ).run(
     prompt,
     buildTaskBrief({
@@ -235,6 +255,9 @@ async function startTask(
     }),
     naming.source,
     view,
+    routing.first.provider.id === ANTHROPIC ? null : routing.first.provider.id,
+    routing.override ? JSON.stringify(routing.override) : null,
+    routing.plan ? "planning" : null,
     id
   );
   opts.onCreated?.(id);
@@ -340,6 +363,8 @@ export async function taskView(session: Session): Promise<TaskView> {
     hostName: null,
     hostError: null,
     armed: !!session.merge_armed_at,
+    model: sessionModelRef(session),
+    planning: session.plan_phase === "planning",
   };
 }
 
@@ -364,4 +389,30 @@ export async function listTasks(): Promise<TaskView[]> {
   return [...local, ...remote].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt)
   );
+}
+
+// The model a task starts on, and whether it plans first: only as a chat,
+// where the handoff can follow the end of its plan turn, and only when
+// planning and implementing are on different models. Both roles resolve
+// now, so a bad override or a provider that's off fails the start.
+export function taskRouting(
+  workspaceId: string | null,
+  view: StartView,
+  model: unknown,
+  plan?: boolean
+) {
+  const override = parseOverride(model);
+  const models = effectiveModels();
+  const opts = { workspaceId, override };
+  const implement = resolveRole("implement", opts, models);
+  const planning = resolveRole("plan", opts, models);
+  const planStep =
+    view === "chat" &&
+    (plan ?? models.planStep) &&
+    planning.ref !== implement.ref;
+  return {
+    override,
+    plan: planStep,
+    first: planStep ? planning : implement,
+  };
 }

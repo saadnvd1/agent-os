@@ -1,3 +1,5 @@
+import { resumeOnModel } from "../models/resume";
+import { workspaceTask } from "./targets";
 import { getWorkspace } from "../workspaces";
 import {
   done,
@@ -33,6 +35,7 @@ const ACTING = new Set<ToolName>([
   "send",
   "message_orchestrator",
   "start_task",
+  "set_task_model",
   "start_session",
   "stack",
   "land",
@@ -97,7 +100,17 @@ export async function runTool(
         name: a.name,
         view: a.view,
         after: a.after,
+        model: a.model,
+        plan: a.plan,
       });
+    }
+    case "set_task_model": {
+      const a = p(tool, raw);
+      const task = workspaceTask(w, a.task);
+      const out = await resumeOnModel(task.id, a.model, a.message);
+      return out.resumed
+        ? `Resumed ${task.name} on ${out.ref}: same conversation and worktree.`
+        : `${task.name} hasn't launched yet; it starts on ${out.ref}.`;
     }
     case "start_session": {
       const a = p(tool, raw);

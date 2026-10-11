@@ -87,6 +87,8 @@ export async function checkScope(input: {
           sha,
           kind: "scope",
         }),
+        role: "scope",
+        workspaceId,
       })) as { within?: boolean; reason?: string };
       if (answer.within !== true) break;
     }

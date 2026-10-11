@@ -1,4 +1,7 @@
 import { db } from "../db";
+import { effectiveModels } from "../models/config";
+import { LEDGER_SQL } from "./compare";
+import { spendByModel, type ModelTurnRow, type SpendByModel } from "./by-model";
 import { listWorkspaces } from "../workspaces";
 import {
   aggregateUsage,
@@ -42,4 +45,27 @@ export function checkRunReport(range: UsageRange, now = Date.now()) {
   }));
   const names = Object.fromEntries(listWorkspaces().map((w) => [w.id, w.name]));
   return aggregateUsage(named, range, names, now);
+}
+
+const HOUR = 3600 * 1000;
+
+// Spend by model and role in the plan's current 5-hour window (its start
+// from when it resets, or the last five hours) and the last 24 hours.
+export function modelUsage(
+  fiveHourResetsIn: number | null | undefined,
+  now = Date.now()
+): { fiveHour: SpendByModel; day: SpendByModel } {
+  const day = now - 24 * HOUR;
+  const fiveHour =
+    fiveHourResetsIn != null
+      ? now + fiveHourResetsIn * 1000 - 5 * HOUR
+      : now - 5 * HOUR;
+  const rows = db
+    .prepare(LEDGER_SQL)
+    .all({ from: Math.min(day, fiveHour), to: now }) as ModelTurnRow[];
+  const { prices } = effectiveModels();
+  return {
+    fiveHour: spendByModel(rows, fiveHour, prices),
+    day: spendByModel(rows, day, prices),
+  };
 }

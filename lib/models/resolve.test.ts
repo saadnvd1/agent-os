@@ -1,0 +1,166 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "../db";
+import { seedWorkspace } from "../orchestrator/testing";
+import { setModelSettings, setWorkspaceModels } from "./config";
+import { PROVIDER_PRESETS } from "./providers";
+import { parseOverride, resolveRole } from "./resolve";
+import { DEFAULT_ROLE_MODELS, parseModelRef, sessionRole } from "./roles";
+
+const deepseek = {
+  ...PROVIDER_PRESETS.find((p) => p.id === "deepseek")!,
+  auth: { kind: "keychain" as const, service: "deepseek-api" },
+  enabled: true,
+};
+
+beforeEach(() => {
+  db.prepare(`DELETE FROM settings WHERE key LIKE 'models%'`).run();
+});
+
+describe("role resolution", () => {
+  it("runs every role on Claude by default", () => {
+    for (const [role, ref] of Object.entries(DEFAULT_ROLE_MODELS)) {
+      const r = resolveRole(role as keyof typeof DEFAULT_ROLE_MODELS);
+      expect(r.ref).toBe(ref);
+      expect(r.provider.id).toBe("anthropic");
+      expect(r.source).toBe("default");
+    }
+    expect(resolveRole("plan").model).toBe("claude-opus-5-5");
+    expect(resolveRole("implement").model).toBe("claude-sonnet-5-5");
+    expect(resolveRole("helper").model).toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("takes Settings over the default, the workspace over Settings, and the task over both", () => {
+    const { workspace } = seedWorkspace();
+    setModelSettings({
+      roles: { implement: "anthropic/claude-opus-5-5" },
+      providers: [deepseek],
+    });
+    expect(resolveRole("implement")).toMatchObject({
+      model: "claude-opus-5-5",
+      source: "settings",
+    });
+
+    setWorkspaceModels(workspace.id, {
+      roles: { implement: "deepseek/deepseek-v4-pro" },
+    });
+    const ws = resolveRole("implement", { workspaceId: workspace.id });
+    expect(ws).toMatchObject({ model: "deepseek-v4-pro", source: "workspace" });
+    expect(ws.provider.id).toBe("deepseek");
+    // Another workspace still follows Settings.
+    expect(resolveRole("implement", { workspaceId: "other" }).source).toBe(
+      "settings"
+    );
+
+    const one = parseOverride("anthropic/claude-sonnet-5-5");
+    expect(
+      resolveRole("implement", { workspaceId: workspace.id, override: one })
+    ).toMatchObject({ model: "claude-sonnet-5-5", source: "task" });
+    // A map overrides only the roles it names.
+    const map = parseOverride({ plan: "deepseek/deepseek-flash" });
+    expect(
+      resolveRole("plan", { workspaceId: workspace.id, override: map })
+    ).toMatchObject({ model: "deepseek-flash", source: "task" });
+    expect(
+      resolveRole("implement", { workspaceId: workspace.id, override: map })
+        .source
+    ).toBe("workspace");
+  });
+
+  it("never lets a task pick the model that gates it", () => {
+    setModelSettings({ providers: [deepseek] });
+    expect(() => parseOverride({ review: "deepseek/deepseek-flash" })).toThrow(
+      /can't pick its own review model/
+    );
+    expect(() => parseOverride({ scope: "deepseek/deepseek-flash" })).toThrow(
+      /scope/
+    );
+    // One model for the task covers its own roles, not its review.
+    const one = parseOverride("deepseek/deepseek-flash");
+    expect(resolveRole("implement", { override: one }).model).toBe(
+      "deepseek-flash"
+    );
+    expect(resolveRole("review", { override: one })).toMatchObject({
+      model: "claude-opus-5-5",
+      source: "default",
+    });
+    expect(resolveRole("scope", { override: one }).source).toBe("default");
+  });
+
+  it("refuses a provider that's off, unknown or keyless", () => {
+    expect(() => parseOverride("deepseek/deepseek-v4-pro")).toThrow(/off/);
+    expect(() => parseOverride("nowhere/model-x")).toThrow(/No model provider/);
+    setModelSettings({ providers: [{ ...deepseek, auth: undefined }] });
+    expect(() => parseOverride("deepseek/deepseek-v4-pro")).toThrow(
+      /base URL and a key/
+    );
+  });
+
+  it("reads a bare model as Anthropic's", () => {
+    expect(parseModelRef("opus")).toEqual({
+      provider: "anthropic",
+      model: "opus",
+    });
+    expect(parseOverride("sonnet")).toBe("anthropic/sonnet");
+    expect(parseModelRef("or/anthropic/claude-x")).toEqual({
+      provider: "or",
+      model: "anthropic/claude-x",
+    });
+  });
+
+  it("names the role a session's next turn runs as", () => {
+    expect(sessionRole({ role: "orchestrator" })).toBe("orchestrator");
+    expect(sessionRole({})).toBe("interactive");
+    expect(
+      sessionRole({ task_status: "running", plan_phase: "planning" })
+    ).toBe("plan");
+    expect(sessionRole({ task_status: "running" })).toBe("implement");
+  });
+});
+
+describe("model settings", () => {
+  it("rejects what could carry a key or reach a shell", () => {
+    expect(() =>
+      setModelSettings({
+        providers: [{ ...deepseek, env: { ANTHROPIC_AUTH_TOKEN: "x" } }],
+      })
+    ).toThrow(/providers\.0\.env/);
+    expect(() =>
+      setModelSettings({
+        providers: [
+          { ...deepseek, auth: { kind: "tokenvault", project: "-rf" } },
+        ],
+      })
+    ).toThrow(/can't start with -/);
+    expect(() =>
+      setModelSettings({
+        providers: [
+          {
+            ...deepseek,
+            auth: { kind: "keychain", service: "a$(touch x)" },
+          },
+        ],
+      })
+    ).toThrow();
+    expect(() =>
+      setModelSettings({
+        providers: [{ ...deepseek, baseUrl: "http://example.com" }],
+      })
+    ).toThrow(/https/);
+    expect(() =>
+      setModelSettings({ roles: { implement: "not a ref" } })
+    ).toThrow(/provider\/model/);
+  });
+
+  it("keeps the Claude login as anthropic", () => {
+    expect(() =>
+      setModelSettings({
+        providers: [
+          {
+            ...PROVIDER_PRESETS[0],
+            baseUrl: "https://example.com",
+          },
+        ],
+      })
+    ).toThrow(/Claude login/);
+  });
+});

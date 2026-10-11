@@ -33,6 +33,17 @@ sign-off. A workspace's running task limit (Settings → Workspaces) caps how ma
 wait under **Queued** with their place in line and start on their own, and
 `aos task --after` holds one until another finishes. [More](#tasks)
 
+### Each kind of work on the right model
+
+Planning and gate reviews run on Opus, implementation, the orchestrator and
+scope checks on Sonnet, titles and summaries on Haiku, each editable in
+Settings → Models and per workspace. A task plans on one model and
+implements on another in the same conversation, can be resumed on any
+model, and can run on another provider (DeepSeek, GLM, any
+Anthropic-compatible endpoint) whose key stays a reference.
+**Usage → Compare** shows Claude-only and routed tasks side by side.
+[More](#model-routing)
+
 ![A task's chat: the edit, the tests, the code review and the PR it opened](screenshots/task-chat.png)
 
 ![Two queued tasks in the sidebar, one in line and one waiting on another task, with its menu open](screenshots/queued.png)
@@ -436,6 +447,88 @@ shows them under **Queued** with their place in line or what they wait on,
 and the same actions in each row's menu; a row becomes the task's own row
 when it starts. Why it works
 this way: [docs/decisions/2026-10-10-queued-tasks.md](docs/decisions/2026-10-10-queued-tasks.md).
+
+## Model routing
+
+Each kind of work AgentOS launches an agent for runs on its own model, set in
+**Settings → Models** (⌘K → Model settings). A model is named
+`provider/model`:
+
+| Role                                                | Default                               |
+| --------------------------------------------------- | ------------------------------------- |
+| Task planning (a task's plan step)                  | `anthropic/claude-opus-5-5`           |
+| Gate review                                         | `anthropic/claude-opus-5-5`           |
+| Task implementation                                 | `anthropic/claude-sonnet-5-5`         |
+| Orchestrator                                        | `anthropic/claude-sonnet-5-5`         |
+| Scope check                                         | `anthropic/claude-sonnet-5-5`         |
+| Interactive sessions                                | `anthropic/claude-opus-5-5`           |
+| Chat & summary helpers (titles, summaries, PR text) | `anthropic/claude-haiku-4-5-20251001` |
+
+The most specific setting wins: a task's own model, then its workspace's
+(**Settings → Workspaces → Models**), then Settings, then the default. A
+Claude session started without a model (the orchestrator's `start_session`,
+the API) runs on the interactive role's; one you pick a model for keeps it.
+
+**Plan, then implement.** A chat task whose planning and implementation
+models differ starts with a plan step: its first turn runs on the planning
+model and writes the plan to `.agentos/plan.md` in its worktree (ignored by
+git), changing nothing else. When that turn ends, the same conversation
+switches to the implementation model (a live model switch, or a resume with
+`--model` when the provider changes) and is told to follow the plan. Turn it
+off in Settings, or per task with `plan: false`. Terminal tasks skip it.
+
+**Per task.** The task draft has a **Model** chip ("Routed by role", or one
+model); `POST /api/tasks` and the orchestrator's `start_task` take `model`, as
+`"provider/model"` for the task's own roles or a map such as
+`{"implement": "zai/glm-5.3"}`, and `plan`. Its gate review and scope check
+never follow a task's model, only Settings and its workspace, so work can't
+pick its own reviewer. **Resume on model…** on a task's row
+(or `POST /api/tasks/<id>/model`, or the orchestrator's `set_task_model`)
+moves a paused task to another model: same conversation, same worktree, and
+it keeps that model from then on. Each turn records the model, provider and
+role it ran as.
+
+**Providers.** `anthropic` is your Claude login and needs no key. Others are
+Anthropic-compatible endpoints (OpenAI-compatible ones can be defined and
+tested, but Claude Code can't run on them): a base URL, where the key lives,
+the models, and Claude Code's opus/sonnet/haiku tiers mapped to them so
+subagents and background calls stay on that provider. DeepSeek
+(`https://api.deepseek.com/anthropic`) and Z.ai GLM
+(`https://api.z.ai/api/anthropic`) ship as presets, off until given a key.
+Claude stays the default: another provider runs only where a role or a task
+picks it. **Test provider** sends one tiny request and says whether it
+answered.
+
+The key is never stored by AgentOS. A provider names where to read it: a
+tokenvault entry (`tv get <project> <desc>`), a macOS Keychain item
+(`security find-generic-password -s <service> -w`) or an environment
+variable. It's read when an agent launches and goes only into that agent's
+environment (`ANTHROPIC_BASE_URL` with `ANTHROPIC_AUTH_TOKEN` or
+`ANTHROPIC_API_KEY`), never its command line, the database, a prompt or a
+log; a terminal task's shell reads it from the reference itself. Errors that
+might echo a key are scrubbed of it.
+
+**Usage by model.** **Usage → By model** shows tokens and estimated cost per
+role and per model in the plan's 5-hour window and the last 24 hours, from
+the price table in Settings → Models (dollars per million input, cache
+write, cache read and output tokens, editable).
+
+**How to read the comparison.** **Usage → Compare** (or ⌘K → Model
+comparison, or the sidebar menu) puts Claude-only tasks (the baseline,
+including everything from before routing) beside routed ones, per provider,
+over 7, 30 or 90 days, with a total column. A task counts under the provider
+its own planning and implementation turns ran on; its reviews and checks add
+to its cost wherever they ran. For each column: tasks, turns, tokens,
+estimated dollars (list prices; for Claude, what the API would charge),
+Claude window points per task (how far each turn moved the plan's 5-hour
+window, an estimate), agent time, CI green on the first push, review passed
+on the first try, gate failures and rework commits per task (heads checked
+after the first review), and merged or dropped. Outcomes come from the
+orchestrator's checks, so tasks it didn't run have cost but no outcome. A
+column with fewer than 10 tasks is marked a small sample: a hint, not a
+result. Parity means the routed column's outcome rows match the baseline's
+while its window points per task drop. Why it works this way:
+[docs/decisions/2026-10-11-model-routing.md](docs/decisions/2026-10-11-model-routing.md).
 
 ## New sessions
 

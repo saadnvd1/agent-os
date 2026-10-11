@@ -4,6 +4,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { getProvider } from "../providers";
+import { sessionShellEnv } from "../models/launch";
 import { shellQuote } from "../hosts/ssh";
 import { runInBackground } from "../async-operations";
 import { trustPromptKeys } from "../tasks/state";
@@ -64,6 +65,8 @@ export async function launchClaude(opts: {
   tmuxName: string;
   cwd: string;
   model: string;
+  // The model's provider (lib/models); Anthropic when absent.
+  provider?: string | null;
   prompt: string;
   brief?: string;
   // Continue this Claude conversation; the prompt is its next message.
@@ -88,7 +91,13 @@ export async function launchClaude(opts: {
       sessionId: opts.resume,
     })
     .join(" ");
-  const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${provider.command} ${flags} ${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
+  // The provider's key is fetched by the pane's own shell from its
+  // reference: only the reference is in this command line.
+  const routing = sessionShellEnv({
+    model: opts.model,
+    model_provider: opts.provider ?? null,
+  });
+  const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${routing.exportKey} ${provider.command} ${flags} ${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
   await execFileAsync(
     "tmux",
     [
@@ -98,7 +107,7 @@ export async function launchClaude(opts: {
       opts.tmuxName,
       "-c",
       opts.cwd,
-      ...envArgs(agentEnv(opts.sessionId)),
+      ...envArgs({ ...agentEnv(opts.sessionId), ...routing.env }),
       agent,
     ],
     { cwd: opts.cwd }

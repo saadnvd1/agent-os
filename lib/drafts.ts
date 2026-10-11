@@ -23,6 +23,9 @@ export interface Draft {
   openPr: boolean;
   // A task that runs in a terminal rather than a chat (the default).
   terminal?: boolean;
+  // A task's own model, "provider/model"; unset, its roles' models
+  // (lib/models).
+  taskModel?: string | null;
   createdAt: number;
 }
 

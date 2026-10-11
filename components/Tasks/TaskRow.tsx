@@ -15,6 +15,7 @@ import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { cn } from "@/lib/utils";
 import { MoveTaskButton } from "./MoveTaskButton";
+import { ResumeOnModel } from "./ResumeOnModel";
 
 const STATE: Record<TaskState, { label: string; tone: string }> = {
   working: { label: "Working", tone: "text-muted-foreground" },
@@ -58,6 +59,8 @@ export function TaskRow({ task }: { task: TaskView }) {
           <p className="text-muted-foreground truncate font-mono text-[11px]">
             {task.hostName && `${task.hostName} · `}
             {task.projectName} · {task.branch}
+            {task.model &&
+              ` · ${task.model}${task.planning ? " (planning)" : ""}`}
           </p>
           {task.cardUrl && (
             <a
@@ -114,6 +117,7 @@ export function TaskRow({ task }: { task: TaskView }) {
             </Button>
           )}
           <MoveTaskButton task={task} onError={setMoveError} />
+          {!task.hostId && <ResumeOnModel task={task} />}
           <span className="flex-1" />
           {confirmDrop ? (
             <Button
