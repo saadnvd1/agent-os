@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { CheckRow } from "./checks";
-import { evaluateGates, type GateInput } from "./gates";
+import { db } from "../db";
+import {
+  evaluateGates,
+  failureOf,
+  recordFailure,
+  type GateInput,
+} from "./gates";
 import { parseRaw, ruleBreaks, secretsIn, sensitiveFiles } from "./diff";
 
 const SHA = "abc1234def";
@@ -275,5 +281,31 @@ describe("the plain diff rules", () => {
       "const sha = 'abc123';",
     ])
       expect(secretsIn(ok), ok).toBeNull();
+  });
+});
+
+describe("counting a gate's failures", () => {
+  const A = "a".repeat(40);
+  const B = "b".repeat(40);
+
+  it.each(["ci", "review", "code-review", "blocked", "scope", "stack"])(
+    "counts %s once per head, and a second head as the second failure",
+    (gate) => {
+      const task = `count-${gate}`;
+      for (let i = 0; i < 3; i++)
+        expect(recordFailure("w", task, gate, "why", A)).toBe(1);
+      expect(recordFailure("w", task, gate, "why", B)).toBe(2);
+      // Back on A (a reset branch) isn't a third.
+      expect(recordFailure("w", task, gate, "why", A)).toBe(2);
+      expect(failureOf(task, gate)).toMatchObject({ count: 2, last_sha: A });
+    }
+  );
+
+  it("forgets a task's commits when its failures are cleared", () => {
+    recordFailure("w", "count-clear", "ci", "why", A);
+    db.prepare(
+      `DELETE FROM orchestrator_gate_failures WHERE session_id = 'count-clear'`
+    ).run();
+    expect(recordFailure("w", "count-clear", "ci", "why", A)).toBe(1);
   });
 });

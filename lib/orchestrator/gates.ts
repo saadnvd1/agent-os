@@ -2,10 +2,12 @@
  * The merge gates, ported from dispatch orchestrate. Each one passes, waits
  * (not ready yet: CI running or settling, no review of this commit yet),
  * fails, or goes straight to Saad (no CI at all). Only a failure counts
- * against the task, and the second failure of the same gate goes to Saad
- * instead of being retried. The count is per task and gate: a review that
- * blocks counts when its verdict arrives, whether or not sign_off ever
- * reads it, and reading the same commit's verdict again isn't another.
+ * against the task, and a gate failing again on a different commit goes to
+ * Saad instead of being retried. A failure counts once per task, gate and
+ * head commit, whichever path judged it (the armed watcher, CI finishing,
+ * sign_off, done, land, a review's verdict arriving): judging the same head
+ * again is never another failure. A pass doesn't reset the count, so a gate
+ * that fails on A, passes on B and fails on C has failed twice.
  */
 
 import { db } from "../db";
@@ -170,12 +172,10 @@ export interface FailureRow {
   last_sha: string | null;
 }
 
-// The gates whose failure is a verdict stored against one commit: the same
-// verdict read again is the same failure.
-export const PER_COMMIT_GATES: readonly string[] = ["review", "scope"];
-
-// Counts one failure; returns the count now. With `sha`, a failure of the
-// commit last counted for this gate isn't counted again.
+// Counts one failure; returns the count now. With `sha`, a failure is
+// counted once per commit: the (task, gate, sha) key in
+// orchestrator_gate_failure_commits decides, so neither a restart nor two
+// evaluations at once count the same head twice.
 export function recordFailure(
   workspaceId: string,
   sessionId: string,
@@ -183,14 +183,34 @@ export function recordFailure(
   reason: string,
   sha: string | null = null
 ): number {
+  return db
+    .transaction(countOnce)
+    .immediate(workspaceId, sessionId, gate, reason, sha);
+}
+
+function countOnce(
+  workspaceId: string,
+  sessionId: string,
+  gate: string,
+  reason: string,
+  sha: string | null
+): number {
+  const fresh =
+    sha === null ||
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO orchestrator_gate_failure_commits (session_id, gate, sha, workspace_id, reason)
+           VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(sessionId, gate, sha, workspaceId, reason).changes > 0;
   db.prepare(
     `INSERT INTO orchestrator_gate_failures (session_id, gate, workspace_id, count, last_reason, last_sha)
-     VALUES (?, ?, ?, 1, ?, ?)
-     ON CONFLICT(session_id, gate) DO UPDATE SET
-       count = count + CASE WHEN excluded.last_sha IS NOT NULL AND last_sha IS excluded.last_sha THEN 0 ELSE 1 END,
-       last_reason = excluded.last_reason,
-       last_sha = excluded.last_sha`
-  ).run(sessionId, gate, workspaceId, reason, sha);
+       VALUES (?, ?, ?, 1, ?, ?)
+       ON CONFLICT(session_id, gate) DO UPDATE SET
+         count = count + ?,
+         last_reason = excluded.last_reason,
+         last_sha = excluded.last_sha`
+  ).run(sessionId, gate, workspaceId, reason, sha, fresh ? 1 : 0);
   return failureOf(sessionId, gate)!.count;
 }
 
