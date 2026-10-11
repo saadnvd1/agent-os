@@ -1,7 +1,7 @@
 /**
  * Land a stack: merge every PR bottom-up, ported from dispatch's `land`.
- * A preflight checks EVERY PR before anything merges: CI, and a Code review
- * section in its body for its head commit. Each sign-off restacks
+ * A preflight checks EVERY PR before anything merges: CI, and a passing
+ * independent review of its head commit (tasks/code-review.ts). Each sign-off restacks
  * what sits on it, so a restacked PR's checks are waited out again (its green
  * was against the parent's branch). It stops at the first failure and says
  * what landed. A chat item's agent is stopped between turns before anything
@@ -17,6 +17,8 @@ import {
   codeReviewRefusal,
   type TaskPR,
 } from "../tasks";
+import type { ReviewState } from "../tasks/code-review";
+import { getCheck } from "../orchestrator/checks";
 import { itemName } from "./guard";
 import { refreshItems } from "./tick";
 import { outputOf } from "./git";
@@ -34,6 +36,8 @@ export interface LandDeps {
   signOff: (sessionId: string, head?: string) => Promise<void>;
   beforeMerge?: MergeGate;
   prOf: (session: Session) => Promise<TaskPR | null>;
+  // The independent review of a task at a commit.
+  reviewOf: (sessionId: string, sha: string) => ReviewState | null;
   sleep: (ms: number) => Promise<void>;
   refresh: (stackId: string) => Promise<void>;
   waitMs: number;
@@ -52,6 +56,7 @@ export const LAND_DEFAULTS: LandDeps = {
     await signOffTask(id, { wait: true, head });
   },
   prOf: (s) => taskPR(s, true),
+  reviewOf: (id, sha) => getCheck(id, sha, "review"),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   refresh: refreshItems,
   waitMs: 45 * 60_000,
@@ -90,8 +95,20 @@ async function waitGreen(
   }
 }
 
+// Why an item can't merge on its review: none passed of its head, or of
+// the head the task pushed before a restack moved it.
+function unreviewed(item: StackItemRow, pr: TaskPR, deps: LandDeps) {
+  return codeReviewRefusal({
+    head: pr.head,
+    attribution: pr.attribution,
+    review: (sha) =>
+      item.session_id ? deps.reviewOf(item.session_id, sha) : null,
+    restacked: { from: item.restacked_from, to: item.restacked_to },
+  });
+}
+
 // Without the orchestrator's gate: the item's head right before merging,
-// only if its Code review section covers that commit. A push since the
+// only if a passing review covers that commit. A push since the
 // preflight needs a new review; the merge is pinned to this head.
 async function reviewedHead(
   item: StackItemRow,
@@ -100,12 +117,7 @@ async function reviewedHead(
   const now = q.item(db, item.id) ?? item;
   const session = sessionOf(now.session_id);
   const pr = session ? await deps.prOf(session) : null;
-  const refusal = pr
-    ? codeReviewRefusal(pr.codeReview, pr.head, {
-        from: now.restacked_from,
-        to: now.restacked_to,
-      })
-    : "its PR is gone";
+  const refusal = pr ? unreviewed(now, pr, deps) : "its PR is gone";
   if (refusal) throw new Stop(`stopped at ${itemName(now)}: ${refusal}`);
   return pr!.head!;
 }
@@ -157,14 +169,9 @@ export async function landStack(
       const pr =
         session && item.status === "pr" ? await deps.prOf(session) : null;
       const verdict = canSignOff(pr);
-      const unreviewed =
-        pr &&
-        codeReviewRefusal(pr.codeReview, pr.head, {
-          from: item.restacked_from,
-          to: item.restacked_to,
-        });
+      const refusal = pr && unreviewed(item, pr, deps);
       if (!verdict.ok) missing.push(`${itemName(item)}: ${verdict.reason}`);
-      else if (unreviewed) missing.push(`${itemName(item)}: ${unreviewed}`);
+      else if (refusal) missing.push(`${itemName(item)}: ${refusal}`);
       else if (item.error) missing.push(`${itemName(item)}: ${item.error}`);
       hadChecks.set(item.id, pr?.checks !== "none");
     }

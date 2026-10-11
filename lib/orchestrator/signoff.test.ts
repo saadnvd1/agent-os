@@ -8,6 +8,7 @@ import type { ClaudeRun } from "./claude-cli";
 
 // A real repository with a local bare remote; gh is faked around it.
 let pr: TaskPR | null = null;
+const ATTRIBUTED = "a Co-Authored-By trailer naming Claude" as const;
 const merges: string[][] = [];
 let pane = "";
 // What GitHub says when it refuses a merge, or null to merge.
@@ -164,7 +165,7 @@ function setup(
     head: sha,
     failing: null,
     checkCount: 1,
-    codeReview: { sha },
+    attribution: null,
   };
   const w = workspace.id;
   // CI has looked settled on every head for a while.
@@ -188,8 +189,7 @@ function setup(
     },
     push: (file: string, text: string, link?: string) => {
       const next = commit(repo, file, text, link);
-      // The task re-runs /do-code-review and updates the PR body.
-      pr = { ...pr!, head: next, codeReview: { sha: next } };
+      pr = { ...pr!, head: next };
       return next;
     },
   };
@@ -236,6 +236,51 @@ const reviewNow = (
 };
 
 describe("review", () => {
+  it("records what each reviewer and scope run cost, and says it with the verdict", async () => {
+    const t = setup({ card: true });
+    const r = reviewer("pass");
+    const metered = async (run: ClaudeRun) => {
+      run.onUsage?.({
+        model: "claude-opus-5-5",
+        inputTokens: 10,
+        cacheWriteTokens: 20_000,
+        cacheReadTokens: 180_000,
+        outputTokens: 3_000,
+        costUsd: 0.42,
+        durationMs: 65_000,
+      });
+      return r.claude(run);
+    };
+    const text = await review(t.w, "add-a", { wait: true, claude: metered });
+    expect(text).toMatch(
+      /: pass\. \(2 runs · 406k tokens · \$0\.84 · 2m 10s · claude-opus-5-5\)/
+    );
+    expect(
+      db
+        .prepare(
+          `SELECT kind, label, pr_number, sha, cache_read_tokens, duration_ms FROM check_runs WHERE session_id = ? ORDER BY id`
+        )
+        .all(t.task)
+    ).toEqual([
+      {
+        kind: "review",
+        label: "task add-a",
+        pr_number: 7,
+        sha: t.sha,
+        cache_read_tokens: 180_000,
+        duration_ms: 65_000,
+      },
+      {
+        kind: "scope",
+        label: "task add-a",
+        pr_number: 7,
+        sha: t.sha,
+        cache_read_tokens: 180_000,
+        duration_ms: 65_000,
+      },
+    ]);
+  });
+
   it("runs read-only in a checkout of the exact head commit and stores it per sha", async () => {
     const t = setup();
     const { text, runs } = await reviewNow(t.w);
@@ -457,19 +502,29 @@ describe("sign_off", () => {
     }
   });
 
-  it("refuses a PR whose body has no code review of its head", async () => {
+  it("refuses a PR whose body carries AI attribution, reviewed or not", async () => {
     const t = setup();
     await reviewNow(t.w);
-    pr = { ...pr!, codeReview: null };
+    pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(
-      /- code-review failed \(first\): the PR body has no Code review section/
+      /- code-review failed \(first\): the PR body carries AI attribution/
     );
-    // Another reason on the same head is still that head's one failure.
-    pr = { ...pr!, codeReview: { sha: "1234567" } };
+    // An unread body is the same head's one failure.
+    pr = { ...pr!, attribution: undefined };
     await expect(t.signOff()).rejects.toThrow(
-      /code-review failed \(first\): the PR's code review covers 1234567/
+      /code-review failed \(first\): the PR body couldn't be read/
     );
     expect(merges).toEqual([]);
+  });
+
+  it("needs no Code review section: the independent review of the head is the code review", async () => {
+    const t = setup();
+    // No review yet: the review gate waits, and only it says so.
+    const first = await t.signOff().catch((e: Error) => e.message);
+    expect(first).toMatch(/review: not yet, no review of/);
+    expect(first).not.toMatch(/code-review/);
+    await reviewNow(t.w);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
 
   // The task's PR is a stack item whose branch AgentOS restacked from the
@@ -516,25 +571,9 @@ describe("sign_off", () => {
   it("accepts a review of the commit AgentOS restacked into the head", async () => {
     const t = setup();
     const head = t.push("b.txt", "b\n");
-    pr = { ...pr!, codeReview: { sha: t.sha } };
     restacked(t, t.sha, head);
     await reviewNow(t.w);
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
-  });
-
-  it("refuses that review once the task pushes after the restack", async () => {
-    const t = setup();
-    const head = t.push("b.txt", "b\n");
-    restacked(t, t.sha, head);
-    const next = t.push("c.txt", "c\n");
-    pr = { ...pr!, codeReview: { sha: t.sha } };
-    await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(
-      new RegExp(
-        `code-review failed \\(first\\): the PR's code review covers ${t.sha.slice(0, 7)}, not its head ${next.slice(0, 7)}`
-      )
-    );
-    expect(merges).toEqual([]);
   });
 
   it("escalates the same gate failing on a second commit, and then holds the task for Saad", async () => {
@@ -1210,14 +1249,13 @@ describe("gate failures count per task and gate", () => {
   it("counts a failure once per head, however often and however concurrently that head is judged", async () => {
     const t = setup();
     await reviewNow(t.w);
-    // The PR body's Code review section names the previous commit, and CI
-    // fails on the same stale section: both judged by sign_off, again when
-    // CI finishes, and several times at once.
+    // The PR body carries AI attribution, and CI fails too: both judged by
+    // sign_off, again when CI finishes, and several times at once.
     pr = {
       ...pr!,
       checks: "fail",
       failing: "pr-body",
-      codeReview: { sha: "6467c7a".padEnd(40, "0") },
+      attribution: ATTRIBUTED,
     };
     await expect(t.signOff()).rejects.toThrow(/code-review failed \(first\)/);
     const again = await Promise.allSettled([
@@ -1336,6 +1374,7 @@ describe("a merge decision from Saad", () => {
     await ask(t, { task: "add-a", sha: t.sha });
     expect(openAsks(t.w)[0].detail).toMatch(/; review: block\n/);
     const next = t.push("src/b.ts", "export const b = 2;\n");
+    await reviewNow(t.w, "block");
     await expect(ask(t, { task: "add-a", sha: next })).resolves.toMatch(
       /Already on Saad's list as ask \d+; updated it/
     );
@@ -1377,18 +1416,19 @@ describe("a merge decision from Saad", () => {
     });
   });
 
-  it("still needs a code review of the commit Saad approved", async () => {
+  it("still needs a finished review of the commit Saad approved, whatever it found", async () => {
     const t = setup();
-    await reviewNow(t.w, "block");
     await ask(t, { task: "add-a", sha: t.sha });
     const [raised] = openAsks(t.w);
     answerAsk(t.w, raised.id, { action: "approve" });
-    pr = { ...pr!, codeReview: null };
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved this commit, but the PR body has no Code review section/
+      /Saad approved this commit, but no passing independent review of \w+: call review/
     );
     expect(merges).toEqual([]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
+    // A review that blocks is his to override.
+    await reviewNow(t.w, "block");
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
 
   it("never lets its approval skip the code review of a held task", async () => {
@@ -1397,7 +1437,7 @@ describe("a merge decision from Saad", () => {
     // The code-review gate fails on a second commit and the task is held
     // for Saad.
     recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
-    pr = { ...pr!, codeReview: null };
+    pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
     const gate = oneGateAsk(t.w, t.task, t.sha);
     // Saad replies rather than approving: the task stays held, and the
@@ -1407,16 +1447,16 @@ describe("a merge decision from Saad", () => {
     const [raised] = openAsks(t.w);
     expect(raised).toMatchObject({ raised_by: "orchestrator", sha: t.sha });
     expect(raised.detail).toMatch(
-      /held for you by the gates: code-review \(the PR body has no Code review section/
+      /held for you by the gates: code-review \(the PR body carries AI attribution/
     );
     answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved this commit, but the PR body has no Code review section/
+      /Saad approved this commit, but the PR body carries AI attribution/
     );
     expect(merges).toEqual([]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
-    // With the review in the body, that approval merges it once.
-    pr = { ...pr!, codeReview: { sha: t.sha } };
+    // With the attribution gone, that approval merges it once.
+    pr = { ...pr!, attribution: null };
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
     expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
   });
@@ -1429,17 +1469,17 @@ describe("a merge decision from Saad", () => {
     // The code-review gate then fails on a second commit and escalates
     // onto that ask.
     recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
-    pr = { ...pr!, codeReview: null };
+    pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
     expect(openAsks(t.w)).toMatchObject([
       { id: raised.id, raised_by: "orchestrator", sha: t.sha },
     ]);
     answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved this commit, but the PR body has no Code review section/
+      /Saad approved this commit, but the PR body carries AI attribution/
     );
     expect(merges).toEqual([]);
-    pr = { ...pr!, codeReview: { sha: t.sha } };
+    pr = { ...pr!, attribution: null };
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
 

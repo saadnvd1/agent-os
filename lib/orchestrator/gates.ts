@@ -11,6 +11,7 @@
  */
 
 import { db } from "../db";
+import type { CodeReviewGate } from "../tasks/code-review";
 import type { ChecksVerdict } from "../tasks/state";
 import type { CheckRow } from "./checks";
 import { APPROVAL_GATES, mergeApprovalsOn } from "./merge-approvals";
@@ -45,11 +46,9 @@ export interface GateInput {
   fromCard: boolean;
   scope: CheckRow | null;
   stackRefusal: string | null;
-  // Why the PR body's Code review section doesn't cover this commit.
-  codeReviewRefusal: string | null;
-  // Why it isn't covered yet but will be (an external PR whose own review
-  // of this commit stands in for the section).
-  codeReviewWait?: string | null;
+  // Whether a passing independent review covers this commit, and the body
+  // carries no AI attribution (tasks/code-review.ts).
+  codeReview: CodeReviewGate;
   // A PR no task owns has no session to read: a draft isn't ready yet, and
   // a label saying it's blocked holds it.
   prDraft?: string | null;
@@ -147,11 +146,12 @@ export function evaluateGates(i: GateInput): GateOutcome[] {
   const stack: GateOutcome = i.stackRefusal
     ? { gate: "stack", state: "fail", reason: i.stackRefusal }
     : { gate: "stack", state: "pass" };
-  const codeReview: GateOutcome = i.codeReviewRefusal
-    ? { gate: "code-review", state: "fail", reason: i.codeReviewRefusal }
-    : i.codeReviewWait
-      ? { gate: "code-review", state: "wait", reason: i.codeReviewWait }
-      : { gate: "code-review", state: "pass" };
+  // Its wait is the review gate's own (no passing review of this exact
+  // head), which already holds the merge: only paths without that gate (an
+  // approval, a stack's land) read it.
+  const codeReview: GateOutcome = i.codeReview.refusal
+    ? { gate: "code-review", state: "fail", reason: i.codeReview.refusal }
+    : { gate: "code-review", state: "pass" };
   return [
     ciGate(i),
     checkGate("review", i.review, i.sha),

@@ -49,7 +49,7 @@ import { chatStateNow } from "../chat/runner";
 import { saidSinceLastMessage } from "../chat/store";
 
 export * from "./state";
-export { codeReviewRefusal, parseCodeReview } from "./code-review";
+export { codeReviewGate, codeReviewRefusal } from "./code-review";
 export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
 export { prFor as taskPR } from "./session";
 export { moveTask } from "./move-flow";

@@ -199,8 +199,7 @@ function setup() {
       head: s.head!,
       failing: null,
       checkCount: 1,
-      // The task's /do-code-review of its head, in the PR body.
-      codeReview: { sha: s.head! },
+      attribution: null,
       ...over,
     };
     prs.set(s.branch, pr);
@@ -219,16 +218,16 @@ function setup() {
 }
 
 describe("done, by state", () => {
-  it("(a) refuses an open PR whose body has no code review of its head", async () => {
+  it("(a) refuses an open PR whose body carries AI attribution", async () => {
     const t = setup();
     const s = t.session("unreviewed", {
       task: true,
       commits: { "src/a.ts": "export const a = 1;\n" },
       live: "idle",
     });
-    t.openPR(s, { codeReview: null });
+    t.openPR(s, { attribution: 'a "Generated with" AI footer' });
     await expect(doneSession(s.id, { by: "direct" })).rejects.toThrow(
-      /Not done, nothing merged[\s\S]*no Code review section/
+      /Not done, nothing merged[\s\S]*AI attribution/
     );
     expect(merges).toEqual([]);
   });

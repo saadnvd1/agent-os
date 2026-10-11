@@ -184,7 +184,7 @@ describe("wakeTasks: failing checks", () => {
       `at step <untrusted source="CI">Run tests</untrusted>`
     );
     expect(msg).toContain("FAIL src/a.test.ts > adds");
-    expect(msg).toContain("update the Reviewed: line");
+    expect(msg).not.toContain("do-code-review");
     const log = msg
       .split('<untrusted source="CI log">')[1]
       .split("</untrusted>")[0]

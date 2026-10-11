@@ -199,6 +199,7 @@ describe("agentEnv", () => {
     expect(Object.keys(agentEnv(id)).sort()).toEqual([
       "AGENTOS_SESSION_ID",
       "AGENTOS_URL",
+      "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
       "PATH",
     ]);
   });

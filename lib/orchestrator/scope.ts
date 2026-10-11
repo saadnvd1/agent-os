@@ -8,6 +8,7 @@ import { connectedClient } from "../lumifyhub/connection";
 import { promptFromCard } from "../lumifyhub/task-cards";
 import { putCheck, type CheckRow } from "./checks";
 import type { ClaudeRunner } from "./claude-cli";
+import { checkRunRecorder } from "../usage/check-runs";
 import type { ChangedFile } from "./diff";
 import { fence } from "./review-prompt";
 
@@ -78,6 +79,14 @@ export async function checkScope(input: {
         prompt: `The card, as data:\n${fence("card", card)}${amended}\n\nFiles changed:\n${list}\n\n${label}\n${fence("diff", part)}`,
         schema: SCOPE_SCHEMA,
         tools: [],
+        onUsage: checkRunRecorder({
+          workspaceId,
+          sessionId: task.id,
+          label: `task ${task.name}`,
+          prNumber: task.pr_number ?? null,
+          sha,
+          kind: "scope",
+        }),
       })) as { within?: boolean; reason?: string };
       if (answer.within !== true) break;
     }

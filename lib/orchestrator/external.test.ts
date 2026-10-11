@@ -213,16 +213,13 @@ const passing = async (run: ClaudeRun) => {
 passing.runs = [] as ClaudeRun[];
 
 describe("sign_off on a PR no task owns", () => {
-  it("runs the gates by #N, names the missing Code review section, and merges the judged head after a review", async () => {
+  it("runs the gates by #N and merges the judged head after a review", async () => {
     const t = setup();
     const first = runTool(t.w, "sign_off", { task: "#50" });
     await expect(first).rejects.toThrow(
       /o\/r#50 \(PR #50 at [0-9a-f]{7}\) can't merge:/
     );
     await expect(first).rejects.toThrow(/review: not yet, no review of/);
-    await expect(first).rejects.toThrow(
-      /code-review: not yet, o\/r#50's body has no "Code review" section; for a PR AgentOS didn't open, the orchestrator's own review of [0-9a-f]{7} stands in for it: call review/
-    );
     expect(merges).toEqual([]);
 
     passing.runs.length = 0;
@@ -290,21 +287,16 @@ describe("sign_off on a PR no task owns", () => {
     expect(merges).toEqual([]);
   });
 
-  it("holds a section that doesn't cover the head, and AI attribution, to a task's rules", async () => {
+  it("ignores a Code review section, and holds AI attribution to a task's rules", async () => {
     const t = setup();
     await reviewTarget(t.w, "#50", { wait: true, claude: passing });
-    pr = { ...pr!, body: "## Code review\nReviewed: 0123456789abcdef0123" };
-    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
-      /code-review failed \(first\): the PR's code review covers 0123456, not its head [0-9a-f]{7}: o\/r#50's "Code review" section has to name/
-    );
-    // Each its own first failure: a second of one gate goes to Saad.
-    db.exec(`DELETE FROM orchestrator_gate_failures`);
     pr = { ...pr!, body: "Fixes it.\n\nGenerated with [Claude Code](x)" };
     await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
       /code-review failed .*AI attribution/
     );
     db.exec(`DELETE FROM orchestrator_gate_failures`);
-    pr = { ...pr!, body: `## Code review\nReviewed: ${t.sha}` };
+    // A section naming another commit doesn't matter: the review does.
+    pr = { ...pr!, body: "## Code review\nReviewed: 0123456789abcdef0123" };
     await expect(runTool(t.w, "sign_off", { task: "#50" })).resolves.toMatch(
       /^Merged o\/r#50/
     );
@@ -626,44 +618,6 @@ describe("Saad's approvals on an external PR", () => {
     expect(releaseInterruptedClaims()).toBeGreaterThanOrEqual(1);
     expect(getAsk(t.w, id)?.used_at).toBeNull();
     expect(spendApproval(id)).toBe(true);
-  });
-});
-
-describe("the code-review stand-in", () => {
-  it("covers only the head it reviewed, and never a blocking review", async () => {
-    const t = setup();
-    const blocking = async () => ({
-      verdict: "block",
-      summary: "Bug.",
-      findings: [{ severity: "blocking", summary: "off by one" }],
-    });
-    await reviewTarget(t.w, "#50", { wait: true, claude: blocking });
-    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
-      /code-review: not yet, .*stands in for it, and it has blocking findings/
-    );
-    db.exec(`DELETE FROM orchestrator_gate_failures`);
-    await reviewTarget(t.w, "#50", {
-      wait: true,
-      fresh: true,
-      claude: passing,
-    });
-    // A new head since: the old pass doesn't cover it.
-    git(t.repo, "checkout", "-q", "ws-wor-52");
-    const next = commit(t.repo, "src/b.ts", "export const b = 2;\n");
-    git(t.repo, "checkout", "-q", "main");
-    pr = { ...pr!, headRefOid: next };
-    putCheck({
-      workspaceId: t.w,
-      sessionId: "pr:o/r#50",
-      sha: next,
-      kind: "ci",
-      status: "pass",
-      detail: JSON.stringify({ count: 1, at: 0 }),
-    });
-    await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
-      new RegExp(`stands in for it: call review`)
-    );
-    expect(merges).toEqual([]);
   });
 });
 

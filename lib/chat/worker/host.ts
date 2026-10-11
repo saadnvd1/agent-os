@@ -29,7 +29,11 @@ import {
 } from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
 import { isHeld } from "../hold";
-import { recordTurn, startingTotals } from "../../usage/turns";
+import {
+  recordCompaction,
+  recordTurn,
+  startingTotals,
+} from "../../usage/turns";
 import {
   VISUALS_BRIEF,
   VISUALS_SERVER,
@@ -37,7 +41,7 @@ import {
 } from "../../artifacts/tools";
 import type { RoleExtras } from "./extras";
 import { refreshSettings, refreshedNote } from "../refresh";
-import { staleLabel, staleness, type Staleness } from "../stale";
+import { compactionDue, staleLabel, type Staleness } from "../stale";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 
 // How soon after a stopped turn ends a turn the agent starts on its own
@@ -127,15 +131,17 @@ export class ChatHost {
   private contextBase: number | null = null;
   // How full the conversation was at its last turn's end (lib/chat/stale).
   private context: ChatContext | null = null;
-  // A compaction run ahead of a message to a stale chat: the message waits
-  // at the front of the queue until it ends (compactFirst).
+  // A compaction run ahead of a message (compactFirst): the message waits
+  // at the front of the queue until it ends.
   private compacting: {
-    idleMs: number;
+    // Set when it ran because the chat was stale.
+    idleMs?: number;
     before: number;
     done?: boolean;
   } | null = null;
   // Its line, until the agent's next measure gives the size after.
   private compactedLine: Extract<ChatItem, { kind: "compacted" }> | null = null;
+  private compactedBy = "threshold";
   // An orchestrator gone stale starts over rather than compacting.
   private staleRefresh: Staleness | null = null;
   readonly done: Promise<void>;
@@ -253,8 +259,10 @@ export class ChatHost {
           // a failed one printed still shows.
           if (this.compacting?.done && e.item.kind === "command_output")
             continue;
-          if (this.compacting && e.item.kind === "compacted")
-            e.item = this.compactedItem(e.item);
+          if (e.item.kind === "compacted") {
+            if (this.compacting) e.item = this.compactedItem(e.item);
+            else this.logCompacted(e.item, e.item.trigger ?? "manual");
+          }
           if ("streaming" in e.item && e.item.streaming)
             this.streaming.set(e.item.id, e.item);
           else this.streaming.delete(e.item.id);
@@ -663,15 +671,19 @@ export class ChatHost {
     this.close();
   }
 
-  // A stale chat (lib/chat/stale) is compacted before the message goes in,
-  // only between turns: the message waits at the front of the queue, and
-  // the compaction's end sends it. "yes" is the reader's choice, made on
-  // what the composer showed; "auto" checks for itself.
+  // A chat over the compact threshold or stale (lib/chat/stale) is
+  // compacted before the message goes in, only between turns: the message
+  // waits at the front of the queue, and the compaction's end sends it.
+  // "yes" is the reader's choice, made on what the composer showed; "auto"
+  // checks for itself.
   private compactFirst(cmd: Extract<WorkerCommand, { type: "send" }>): boolean {
     if (!cmd.compact || this.busy() || this.closed || this.handingOver())
       return false;
     const stale = this.staleNow(cmd.compact);
-    if (!stale) return false;
+    // An orchestrator starts over at its own threshold (lib/chat/refresh);
+    // only one gone stale does it early.
+    if (!stale || (this.session.role === "orchestrator" && !stale.stale))
+      return false;
     try {
       enqueue(this.session.id, cmd);
     } catch {
@@ -692,13 +704,16 @@ export class ChatHost {
       this.retireIfDone();
       return true;
     }
-    this.compacting = { idleMs: stale.idleMs, before: stale.tokens };
+    this.compacting = {
+      idleMs: stale.stale ? stale.idleMs : undefined,
+      before: stale.tokens,
+    };
     this.currentTurn = null;
     this.stopping = null;
     this.conversation.send("/compact");
     this.setState("running");
     console.error(
-      `${new Date().toISOString()} compacting ${this.session.id} before a message: idle ${Math.round(stale.idleMs / 60_000)}m, ${stale.tokens} tokens`
+      `${new Date().toISOString()} compacting ${this.session.id} before a message: ${stale.stale ? `idle ${Math.round(stale.idleMs / 60_000)}m, ` : ""}${stale.tokens} tokens`
     );
     return true;
   }
@@ -707,11 +722,17 @@ export class ChatHost {
     const context = this.context;
     // Only an agent that says which cache it uses has one to lose.
     if (!context?.cacheTtlMs) return null;
-    if (compact === "yes")
-      return { idleMs: Date.now() - context.at, tokens: context.usedTokens };
-    return staleness(context, {
+    if (compact === "yes") {
+      const idleMs = Date.now() - context.at;
+      return {
+        idleMs,
+        tokens: context.usedTokens,
+        stale: idleMs > context.cacheTtlMs,
+      };
+    }
+    return compactionDue(context, {
       state: this.state,
-      thresholdTokens: refreshSettings().staleCompactTokens,
+      thresholdTokens: refreshSettings().compactTokens,
     });
   }
 
@@ -724,8 +745,9 @@ export class ChatHost {
       idleMs: this.compacting?.idleMs,
       before: item.before ?? this.compacting?.before,
     };
+    this.compactedBy = line.idleMs !== undefined ? "stale" : "threshold";
     this.compactedLine = line.after === undefined ? line : null;
-    if (line.after !== undefined) this.logCompacted(line);
+    if (line.after !== undefined) this.logCompacted(line, this.compactedBy);
     return line;
   }
 
@@ -736,13 +758,26 @@ export class ChatHost {
     this.compactedLine = null;
     const settled = { ...line, after: usedTokens };
     this.record(settled);
-    this.logCompacted(settled);
+    this.logCompacted(settled, this.compactedBy);
   }
 
-  private logCompacted(line: { before?: number; after?: number }): void {
+  // Logged, and kept for the usage history (lib/usage/turns).
+  private logCompacted(
+    line: { before?: number; after?: number },
+    trigger: string
+  ): void {
     console.error(
-      `${new Date().toISOString()} compacted ${this.session.id}: ${line.before ?? "?"} -> ${line.after ?? "?"} tokens`
+      `${new Date().toISOString()} compacted ${this.session.id} (${trigger}): ${line.before ?? "?"} -> ${line.after ?? "?"} tokens`
     );
+    try {
+      recordCompaction(this.session, {
+        trigger,
+        before: line.before,
+        after: line.after,
+      });
+    } catch (e) {
+      console.error(`recording ${this.session.id}'s compaction:`, e);
+    }
   }
 
   // Past its threshold, once: it retires at the next turn boundary, as for

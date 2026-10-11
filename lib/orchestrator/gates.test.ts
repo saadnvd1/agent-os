@@ -32,7 +32,7 @@ const input = (over: Partial<GateInput> = {}): GateInput => ({
   fromCard: false,
   scope: null,
   stackRefusal: null,
-  codeReviewRefusal: null,
+  codeReview: { refusal: null, wait: null },
   ...over,
 });
 const gate = (i: GateInput, name: string) =>
@@ -138,13 +138,19 @@ describe("the merge gates", () => {
     ).toBe("fail");
   });
 
-  it("code-review: a PR body without a review of this commit fails", () => {
+  it("code-review: attribution fails it, and an unreviewed head is left to the review gate", () => {
     expect(
       gate(
-        input({ codeReviewRefusal: "no Code review section" }),
+        input({ codeReview: { refusal: "AI attribution", wait: null } }),
         "code-review"
       )
-    ).toMatchObject({ state: "fail", reason: "no Code review section" });
+    ).toMatchObject({ state: "fail", reason: "AI attribution" });
+    expect(
+      gate(
+        input({ codeReview: { refusal: null, wait: "no passing review" } }),
+        "code-review"
+      )
+    ).toEqual({ gate: "code-review", state: "pass" });
   });
 });
 
@@ -212,7 +218,6 @@ describe("the plain diff rules", () => {
       "README.md",
       "lib/securityish.ts",
       "lib/tasks/code-review.ts",
-      "scripts/check-code-review.ts",
       "lib/tasks/code-review.test.ts",
     ].map((p) => ({ path: p, status: "M" }));
     expect(sensitiveFiles(files).map((s) => `${s.path}:${s.why}`)).toEqual([
@@ -261,7 +266,6 @@ describe("the plain diff rules", () => {
       "lib/security/auth.ts:secrets handling",
       "app/api/pair/route.ts:secrets handling",
       "lib/tasks/code-review.ts:the code review gate",
-      "scripts/check-code-review.ts:the code review gate",
     ]);
   });
 

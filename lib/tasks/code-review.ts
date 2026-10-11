@@ -1,27 +1,13 @@
-// The "Code review" section every task's PR body carries (the task brief
-// asks for it, after /do-code-review). Merges refuse a PR without one for
-// its head commit. No imports: CI runs this file on its own
-// (scripts/check-code-review.ts).
-
-export interface CodeReviewSection {
-  // The commit the review covered, as written in the section.
-  sha: string | null;
-  // A "Restacked: <from> -> <to>" line AgentOS wrote after rebasing the
-  // branch itself. Only CI reads it: AgentOS's own gates go by what it
-  // recorded, never by what a body says.
-  restacked?: Restacked;
-  // What kind of AI attribution the body carries, when it does: a fixed
-  // label, never the body's own text, which goes into gate messages.
-  attribution?: AttributionKind;
-}
+// The code-review gate, the same for every PR: a passing independent
+// review (lib/orchestrator/review) of its exact head, and a body with no AI
+// attribution. Tasks don't write a review section in the body any more: the
+// orchestrator's review is the one review.
 
 // Matched one line at a time, never across lines: the body is written by
 // the task, and a regex that backtracks over it would block the server.
 // Only what renders counts: fenced code and HTML comments are skipped, so an
-// example of the section isn't read as the section.
+// example isn't read as the real thing.
 const MAX_BODY = 65_536;
-const HEADING = /^ {0,3}(#{1,6}) *code review *:?$/i;
-const ANY_HEADING = /^ {0,3}(#{1,6}) +\S/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 // AI attribution ("Co-Authored-By: Claude", "Generated with [Claude Code]").
 // The same rule as the commit-msg hook's ATTRIBUTION_ERE in
@@ -45,10 +31,6 @@ function attributionKind(line: string): AttributionKind | undefined {
   if (/^claude-session:/i.test(line)) return "a Claude-Session link";
   return 'a "Generated with" AI footer';
 }
-const REVIEWED =
-  /^[>*_ -]*reviewed(?: (?:commit|sha|at))?[*_ ]*:[*_` ]*([0-9a-f]{12,40})\b/i;
-const RESTACKED =
-  /^[>*_ -]*restacked[*_ ]*:[*_` ]*([0-9a-f]{40})[*_` ]*(?:->|→)[*_` ]*([0-9a-f]{40})\b/i;
 
 export function renderedLines(body: string): string[] {
   let text = body.slice(0, MAX_BODY);
@@ -70,45 +52,7 @@ export function renderedLines(body: string): string[] {
   return lines;
 }
 
-// The last Code review section that names a commit (or the last one, when
-// none does); null when the body has none. A section runs to the next
-// heading of its level or higher, so its own subheadings stay inside it.
-export function parseCodeReview(
-  body: string | null | undefined
-): CodeReviewSection | null {
-  if (!body) return null;
-  const sections: CodeReviewSection[] = [];
-  let level = 0;
-  let attribution: AttributionKind | undefined;
-  for (const line of renderedLines(body)) {
-    attribution ??= attributionKind(line.trimStart());
-    const heading = HEADING.exec(line);
-    if (heading) {
-      level = heading[1].length;
-      sections.push({ sha: null });
-      continue;
-    }
-    const other = ANY_HEADING.exec(line);
-    if (other && other[1].length <= level) level = 0;
-    const current = sections.at(-1);
-    if (!level || !current) continue;
-    if (current.sha) {
-      const moved = RESTACKED.exec(line);
-      if (moved)
-        current.restacked = {
-          from: moved[1].toLowerCase(),
-          to: moved[2].toLowerCase(),
-        };
-      continue;
-    }
-    const sha = REVIEWED.exec(line)?.[1];
-    if (sha) current.sha = sha.toLowerCase();
-  }
-  const found = sections.findLast((s) => s.sha) ?? sections.at(-1) ?? null;
-  return found && attribution ? { ...found, attribution } : found;
-}
-
-// The AI attribution a body carries anywhere, Code review section or not.
+// The AI attribution a body carries anywhere.
 export function attributionIn(
   body: string | null | undefined
 ): AttributionKind | undefined {
@@ -119,57 +63,75 @@ export function attributionIn(
   }
 }
 
-// A branch AgentOS rebased itself (a stack restack): the head the task
-// pushed and reviewed, and the head the restack left.
+// A branch AgentOS rebased itself (a stack restack, or the automatic
+// rebase onto its base): the head the task pushed, and the head AgentOS
+// left.
 export interface Restacked {
   from: string | null;
   to: string | null;
 }
 
-// Why a PR can't merge on its code review, or null when it can. Fails
-// closed: an unread body or an unknown head refuses. A review of the head
-// the task pushed still counts after AgentOS restacked it, but only while
-// the head is exactly the one the restack left: a push by the task after
-// that needs a new review.
-export function codeReviewRefusal(
-  section: CodeReviewSection | null | undefined,
-  head: string | undefined,
-  restacked?: Restacked | null,
-  fix = "the task has to run /do-code-review and put a Code review section naming the reviewed commit in the PR body"
-): string | null {
-  if (section === undefined) return `the PR body couldn't be read: ${fix}`;
-  if (!head) return `the PR's head commit is unknown: ${fix}`;
-  if (!section) return `the PR body has no Code review section: ${fix}`;
-  if (section.attribution)
-    return `the PR body carries AI attribution (${section.attribution}): remove it with \`gh pr edit --body-file\``;
-  if (!section.sha)
-    return `the PR's Code review section doesn't name the reviewed commit ("Reviewed: <sha>"): ${fix}`;
-  const covers = (sha: string | null | undefined) =>
-    !!sha && sha.toLowerCase().startsWith(section.sha!);
-  if (covers(head)) return null;
-  if (restacked?.to === head && covers(restacked.from)) return null;
-  return `the PR's code review covers ${section.sha.slice(0, 7)}, not its head ${head.slice(0, 7)}: ${fix}`;
+export interface ReviewState {
+  sha: string;
+  status: "running" | "pass" | "block" | "error";
 }
 
-// The body with its Code review section saying AgentOS rebased the
-// reviewed head `from` to `to`: a "Restacked:" line right after the
-// section's "Reviewed:" line, replacing one already there. Null when the
-// body has no section, or its review isn't of `from`.
-export function withRestackedLine(
-  body: string,
-  from: string,
-  to: string
+export interface CodeReviewGate {
+  // Fails the gate: counts against the task.
+  refusal: string | null;
+  // Not covered yet, but a review will cover it.
+  wait: string | null;
+  // A review covering the head finished, passing or not. Saad's approval
+  // of the commit overrides what it found, never whether one ran.
+  ran?: boolean;
+}
+
+const short = (sha: string) => sha.slice(0, 7);
+
+// Fails closed: an unread body or an unknown head refuses. A review of the
+// head the task pushed still counts after AgentOS restacked or rebased it
+// cleanly, but only while the head is exactly the one AgentOS left: a push
+// by the task after that needs a new review.
+export function codeReviewGate(opts: {
+  head: string | undefined;
+  // The AI attribution in the PR body (attributionIn): null for none,
+  // undefined when the body couldn't be read.
+  attribution: AttributionKind | null | undefined;
+  review: (sha: string) => ReviewState | null;
+  restacked?: Restacked | null;
+}): CodeReviewGate {
+  const { head, restacked } = opts;
+  const no = (refusal: string) => ({ refusal, wait: null });
+  const { attribution } = opts;
+  if (attribution === undefined) return no("the PR body couldn't be read");
+  if (!head) return no("the PR's head commit is unknown");
+  if (attribution)
+    return no(
+      `the PR body carries AI attribution (${attribution}): remove it with \`gh pr edit --body-file\``
+    );
+  // The reviews that cover the head: its own, and the one of the head the
+  // task pushed while the head is the one AgentOS left.
+  const covering = [
+    opts.review(head),
+    restacked?.to === head && restacked.from
+      ? opts.review(restacked.from)
+      : null,
+  ];
+  if (covering.some((r) => r?.status === "pass"))
+    return { refusal: null, wait: null, ran: true };
+  const now = covering[0];
+  return {
+    refusal: null,
+    wait: `no passing independent review of ${short(head)}${now?.status === "running" ? " yet (it's running)" : now?.status === "block" ? " (it has blocking findings)" : ": call review"}`,
+    ran: covering.some((r) => r?.status === "block"),
+  };
+}
+
+// The gate as one reason, for paths that only merge or refuse (a stack
+// landing, an approved merge): a wait refuses there too.
+export function codeReviewRefusal(
+  opts: Parameters<typeof codeReviewGate>[0]
 ): string | null {
-  const section = parseCodeReview(body);
-  if (!section?.sha || !from.toLowerCase().startsWith(section.sha)) return null;
-  const lines = body.split("\n");
-  const at = lines.findLastIndex(
-    (l) =>
-      REVIEWED.exec(l.replace(/\t/g, " "))?.[1]?.toLowerCase() === section.sha
-  );
-  if (at < 0) return null;
-  const line = `Restacked: ${from} -> ${to} (AgentOS rebased the reviewed commit onto its base; the PR's own changes are the ones reviewed)`;
-  const next = lines[at + 1]?.replace(/\t/g, " ") ?? "";
-  lines.splice(at + 1, RESTACKED.test(next) ? 1 : 0, line);
-  return lines.join("\n");
+  const gate = codeReviewGate(opts);
+  return gate.refusal ?? gate.wait;
 }

@@ -41,8 +41,8 @@ export function UsageDialog() {
         <DialogHeader>
           <DialogTitle>Usage</DialogTitle>
           <DialogDescription>
-            The account&apos;s limits, and what chat sessions on this machine
-            cost.
+            The account&apos;s limits, and what chat sessions and gate reviews
+            on this machine cost.
           </DialogDescription>
         </DialogHeader>
 
@@ -124,6 +124,35 @@ export function UsageDialog() {
             </>
           )}
         </section>
+
+        {data?.reviews && data.reviews.total.turns > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-medium">Gate reviews</h3>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-semibold tabular-nums">
+                {formatUsd(data.reviews.total.costUsd)}
+              </span>
+              <span className="text-muted-foreground text-xs">
+                estimate · {data.reviews.total.turns} runs ·{" "}
+                {data.reviews.total.tokens.toLocaleString()} tokens
+              </span>
+            </div>
+            <SpendList
+              title="By PR"
+              rows={data.reviews.sessions.map((s) => ({
+                key: s.id,
+                label: s.name,
+                ...s,
+              }))}
+              total={data.reviews.total}
+              limit={10}
+            />
+            <p className="text-muted-foreground text-[11px]">
+              Each run of the orchestrator&apos;s independent reviewer and scope
+              check, from its own result. Not part of chat spend.
+            </p>
+          </section>
+        )}
       </DialogContent>
     </Dialog>
   );

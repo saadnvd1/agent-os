@@ -93,7 +93,7 @@ const SENSITIVE: { why: string; test: RegExp }[] = [
     // What merges check a PR's code review with: a change that weakens it
     // must not merge through it.
     why: "the code review gate",
-    test: /^(lib\/tasks\/code-review\.ts|scripts\/check-code-review\.ts)$/i,
+    test: /^lib\/tasks\/code-review\.ts$/i,
   },
   {
     why: "secrets handling",

@@ -1,13 +1,15 @@
 ---
 name: do-code-review
-description: "Review a branch or PR by dispatching this repo's specialized review agents in parallel, verifying every finding, and reporting what survives by severity. Mandatory before every pull request (the PR body carries its 'Code review' section). Use when: (1) before opening a pull request, (2) the user asks for a PR or code review, (3) after finishing a feature or a large change."
+description: "Review a branch or PR by dispatching this repo's specialized review agents in parallel, verifying every finding, and reporting what survives by severity. Optional: merges need only AgentOS's own independent review of the PR's head, so run this when a change is risky enough to want a deeper look first. Use when: (1) the user asks for a PR or code review, (2) before opening a PR for a risky change (security, gates, durability)."
 user-invocable: true
 argument-hint: "[PR number] (defaults to the current branch vs main)"
 ---
 
 # Code review
 
-Run the relevant review agents from `.claude/agents/` in parallel, have `review-finding-verifier` check every finding against the code, and report what survives in one list ranked by severity. Then fix, and write the PR body's "Code review" section. Merges are refused without that section for the PR's head commit (`lib/tasks/code-review.ts`, enforced by the orchestrator's `sign_off`, stacks' `land` and the `Code review` CI workflow).
+Run the relevant review agents from `.claude/agents/` in parallel, have `review-finding-verifier` check every finding against the code, and report what survives in one list ranked by severity. Then fix.
+
+This review is optional and costs about nine agents. What merges require is the orchestrator's independent review of the PR's exact head (`lib/tasks/code-review.ts`, enforced by `sign_off` and stacks' `land`), which AgentOS runs itself. Run this one when the change is risky enough to want a deeper look before the PR, or when the user asks for it. For a narrower look, run only the agents that matter.
 
 ## Process
 
@@ -91,27 +93,18 @@ _Found by: review-security_
 - **Nothing confirmed:** "No issues found." followed by one bullet per agent that ran, saying in a sentence why it flagged nothing (or that its findings were rejected in verification, and why).
 - **No agent triggered** (only docs changed): read the diff yourself and flag only obvious problems.
 
-## After the review: fix, then write the section
+## After the review: fix
 
 1. Fix every Blocking and High finding. Fix Medium ones when the fix is small and in scope; otherwise defer them with a reason.
-2. Commit, then re-run only the agents that had confirmed findings, on the new diff, and verify again. Stop after two rounds of fixes: list what's still open.
-3. The commit you finally reviewed is the PR's head. Put this section at the end of the PR body (`gh pr create --body-file`, or `gh pr edit <n> --body-file` later; write the body file and any review notes in your scratchpad or `$TMPDIR`, never in the worktree, where an uncommitted file keeps the worktree from being removed when the task is done):
+2. Commit, then re-run only the agents that had confirmed findings, on the new diff, and verify again. Stop after two rounds of fixes: list what's still open in the PR body.
 
-```
-## Code review
-Reviewed: <full sha of the head commit>
-Agents: review-security, review-durability, review-test-quality, review-finding-verifier
-Fixed: #1 upgrade trusted loopback behind a proxy (server.ts); #3 migration id collided after rebase
-Deferred: #4 composer button is 40px on the sheet (Medium) — the sheet is being replaced in ENG-31
-```
-
-Any push of yours after that (a CI fix, a rebase) means a new head: re-run the review on what changed and update the `Reviewed:` line. The CI check reads the PR as it is when it runs, so update the body first and then push, or re-run the check after editing it. A section naming another commit is refused like a missing one. The one exception is a stack restack: when AgentOS rebases your branch onto a merged parent, your review still counts for the head it pushed, until you push again.
+No "Code review" section is needed in the PR body: the gate goes by AgentOS's own review of the head, not by anything the body says.
 
 ## Rules
 
-- Never approve, merge or request changes on GitHub; this is a local report plus the PR body section
+- Never approve, merge or request changes on GitHub; this is a local report
 - High confidence only. Agents flag clear problems with a failure scenario and a known fix, not speculative improvements
-- Report only findings that survived verification, plus the docs check. Don't invent findings, and never write a section for a review that didn't run
+- Report only findings that survived verification, plus the docs check. Don't invent findings
 - If the user asks for a narrower review (e.g. "just security"), run only those agents, and still verify
 
 ## The invariants, in brief

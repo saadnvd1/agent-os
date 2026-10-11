@@ -9,6 +9,8 @@ export const usageKeys = {
 
 export interface UsageResponse {
   report: UsageReport;
+  // The orchestrator's reviewer and scope check runs, by PR.
+  reviews: UsageReport;
   windows: UsageWindows;
 }
 

@@ -1,4 +1,4 @@
-import type { CodeReviewSection } from "./code-review";
+import type { AttributionKind } from "./code-review";
 
 export type TaskStatus =
   | "running"
@@ -22,9 +22,9 @@ export interface TaskPR {
   failingUrl?: string | null;
   // How many checks are registered on the head.
   checkCount?: number;
-  // The body's Code review section: null when it has none, undefined
-  // when the body wasn't read.
-  codeReview?: CodeReviewSection | null;
+  // The AI attribution the body carries (tasks/code-review.ts): null for
+  // none, undefined when the body wasn't read.
+  attribution?: AttributionKind | null;
   // The body's "Scope change" note (tasks/scope-change.ts), when it has one.
   scopeChange?: string | null;
   // GitHub's word on merging it into its base: CONFLICTING once the base

@@ -285,9 +285,9 @@ export function ChatPanel({
     toEnd();
     send(text);
   };
-  // A stale chat compacts before the next message unless the reader picks
-  // "Send as-is", for that send only.
-  const staleCompactTokens = useFreshStartQuery().data?.staleCompactTokens ?? 0;
+  // A chat past the compact threshold compacts before the next message
+  // unless the reader picks "Send as-is", for that send only.
+  const compactTokens = useFreshStartQuery().data?.compactTokens ?? 0;
   const [asIsFor, setAsIsFor] = useState<string | null>(null);
   const asIs = asIsFor === sessionId;
   const setAsIs = (on: boolean) => setAsIsFor(on ? sessionId : null);
@@ -529,7 +529,7 @@ export function ChatPanel({
         <StaleChip
           context={context}
           state={state}
-          thresholdTokens={staleCompactTokens}
+          thresholdTokens={compactTokens}
           asIs={asIs}
           onAsIs={setAsIs}
         />
@@ -547,7 +547,7 @@ export function ChatPanel({
             toEnd();
             const compact = composerCompacts(text, context, {
               state,
-              thresholdTokens: staleCompactTokens,
+              thresholdTokens: compactTokens,
               asIs,
             });
             setAsIs(false);
