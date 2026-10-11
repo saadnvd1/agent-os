@@ -1814,6 +1814,10 @@ describe("ChatHost compacts a stale chat before a message", () => {
     expect(sentTexts(current)[0]).toMatch(
       /^\(AgentOS started you on a fresh conversation[^)]*"Where things stand"/
     );
+    // The message that woke it goes in, behind the note, and nothing waits.
+    expect(sentTexts(current)).toHaveLength(1);
+    expect(sentTexts(current)[0]).toMatch(/\n\n\[AgentOS event\] ci failed$/);
+    expect(listQueue(id)).toEqual([]);
     next.close();
   });
 });
