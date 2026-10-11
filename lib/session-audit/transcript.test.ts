@@ -334,7 +334,7 @@ describe("redaction on the way out", () => {
       result(
         "2026-10-10T01:00:01Z",
         "t1",
-        "token ghp_0123456789abcdefghijABCDEFGHIJ ok"
+        `token ${["gh", "p_", "0".repeat(36)].join("")} ok`
       ),
     ]);
     const s = await scanTranscript(file, RANGE);

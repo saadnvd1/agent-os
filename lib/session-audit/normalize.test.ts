@@ -153,6 +153,9 @@ describe("shellReadTarget", () => {
   });
 });
 
+// Built at runtime: no token-shaped literal is ever committed.
+const FAKE_GITHUB_TOKEN = ["gh", "p_", "0".repeat(36)].join("");
+
 describe("scrub", () => {
   it("redacts credentials before session text leaves the extractor", () => {
     expect(scrub(`curl -H "Authorization: Bearer abc.def-123" https://x`)).toBe(
@@ -161,11 +164,9 @@ describe("scrub", () => {
     expect(scrub("cd x && API_KEY=s3cr3t npm run job")).toBe(
       "cd x && API_KEY=[redacted] npm run job"
     );
-    expect(scrub("token ghp_0123456789abcdefghijABCDEFGHIJ")).toBe(
-      "token [redacted]"
-    );
+    expect(scrub(`token ${FAKE_GITHUB_TOKEN}`)).toBe("token [redacted]");
     // redact() drops the rest of a line that starts with an assignment.
-    expect(normalizeCommand("OPENAI_API_KEY=sk-live123 node x.js")).toBe(
+    expect(normalizeCommand("OPENAI_API_KEY=not-a-real-value node x.js")).toBe(
       "OPENAI_API_KEY=[redacted]"
     );
   });
