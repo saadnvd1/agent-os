@@ -59,21 +59,50 @@ describe("authorize", () => {
     }
   );
 
-  it("never trusts a request that came through the Connect tunnel", () => {
-    // A TunnelStream has no address; its Host is the machine's public name.
-    const tunnel = {
+  describe("through Connect's tunnel (cloudflared on loopback)", () => {
+    const tunnel = (headers: IncomingHttpHeaders = {}) => ({
       url: "/api/sessions",
-      headers: { host: "k7q2mz9x.on.runagentos.com" },
-      remoteAddress: undefined,
-      localAddress: undefined,
-    };
-    expect(authorize(tunnel, policy)).toEqual({ ok: false });
-    expect(
-      authorize(
-        { ...tunnel, headers: { ...tunnel.headers, host: "localhost" } },
-        policy
-      )
-    ).toEqual({ ok: false });
+      headers: { host: "m-0123456789abcdef.runagentos.com", ...headers },
+      remoteAddress: "127.0.0.1",
+      localAddress: "127.0.0.1",
+      tunnel: true,
+    });
+
+    it("is a stranger with a localhost Host and no forwarding headers", () => {
+      expect(authorize(tunnel({ host: "localhost:3444" }), policy)).toEqual({
+        ok: false,
+      });
+      expect(authorize(tunnel({ host: "127.0.0.1" }), policy)).toEqual({
+        ok: false,
+      });
+      expect(authorize(tunnel(), policy)).toEqual({ ok: false });
+    });
+
+    it("is a stranger whatever forwarding headers claim", () => {
+      const spoofed = tunnel({
+        host: "localhost",
+        "x-forwarded-host": "localhost",
+        forwarded: "for=127.0.0.1;host=localhost",
+        "x-original-host": "127.0.0.1",
+        "x-forwarded-for": "127.0.0.1",
+      });
+      expect(authorize(spoofed, policy)).toEqual({ ok: false });
+    });
+
+    it("is never the tailnet, and only a paired device gets in", () => {
+      expect(
+        authorize(
+          { ...tunnel(), remoteAddress: "100.64.0.9", localAddress: TS_SELF },
+          policy
+        )
+      ).toEqual({ ok: false });
+      expect(
+        authorize(
+          tunnel({ host: "localhost", authorization: "Bearer aosd_good" }),
+          policy
+        )
+      ).toEqual({ ok: true, via: "device", deviceId: "dev-1" });
+    });
   });
 
   it("refuses a malformed cookie instead of throwing", () => {
@@ -153,10 +182,13 @@ describe("authorize", () => {
     ).toBe(true);
   });
 
-  it("never opens a Connect stream, even with auth off", () => {
+  it("never opens Connect's tunnel, even with auth off", () => {
     const tunnel = {
       url: "/api/exec",
-      headers: { host: "abcd1234.on.runagentos.com" },
+      headers: { host: "localhost" },
+      remoteAddress: "127.0.0.1",
+      localAddress: "127.0.0.1",
+      tunnel: true,
     };
     expect(authorize(tunnel, { ...policy, off: true })).toEqual({ ok: false });
   });

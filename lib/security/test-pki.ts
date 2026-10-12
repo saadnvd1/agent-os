@@ -1,5 +1,5 @@
 /**
- * Test-only: a throwaway CA and leaf certificates. Shared with the relay.
+ * Test-only: a throwaway CA and leaf certificates.
  *
  * Keys come from Node (named P-256); openssl only signs, with SHA-256 named
  * explicitly. macOS's LibreSSL would otherwise sign with SHA-1 and write EC

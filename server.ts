@@ -313,7 +313,8 @@ app.prepare().then(async () => {
         : []),
     ];
   };
-  // AgentOS Connect: reachable at <id>.<machine domain> through the relay.
+  // AgentOS Connect: reachable at m-<16 hex>.runagentos.com through a
+  // Cloudflare tunnel, served on a listener of its own (lib/connect/serve).
   const connect = demo
     ? { hostname: () => null }
     : startConnect({ onRequest, onUpgrade }, port);

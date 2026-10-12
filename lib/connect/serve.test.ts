@@ -1,104 +1,311 @@
-import { describe, it, expect, afterAll, vi } from "vitest";
+import { describe, it, expect, afterAll, afterEach } from "vitest";
+import crypto from "crypto";
+import { EventEmitter } from "events";
 import fs from "fs";
+import http from "http";
+import net, { type AddressInfo } from "net";
 import os from "os";
 import path from "path";
-import https from "https";
-import { generateMachineKey } from "./identity";
-import { makeTestPki } from "./test-pki";
-import { testRelay } from "./test-relay";
-import { connectStatus, startConnect } from "./serve";
-import { setConnectEnabled } from "./config";
+import { PassThrough } from "stream";
+import { gateRequest, gateUpgrade } from "@/lib/security/gate";
+import {
+  DEVICE_HEADER,
+  REMOTE_HEADER,
+  TRUST_HEADER,
+  type AuthPolicy,
+} from "@/lib/security/auth";
+import {
+  connectStatus,
+  startConnect,
+  tunnelListener,
+  type Handlers,
+} from "./serve";
+import type { Spawn } from "./supervise";
 
-const HOST = "abcd1234.on.test";
-const wait = async (f: () => boolean, ms = 8000) => {
-  for (let t = 0; t < ms && !f(); t += 50)
-    await new Promise((r) => setTimeout(r, 50));
-};
+const HOST = "m-0123456789abcdef.runagentos.com";
+// A paired device's token, made per run.
+const DEVICE_TOKEN = `aosd_${crypto.randomBytes(16).toString("hex")}`;
+const fakeToken = () =>
+  Buffer.from(
+    JSON.stringify({
+      a: crypto.randomBytes(16).toString("hex"),
+      t: crypto.randomUUID(),
+      s: crypto.randomBytes(32).toString("base64"),
+    })
+  ).toString("base64");
 
-describe("Connect runtime", () => {
-  afterAll(() => {
-    vi.unstubAllEnvs();
+/** What server.ts does past net.ts: the real gate, then a handler that says who it saw. */
+function gated(policy: AuthPolicy) {
+  const seen: http.IncomingHttpHeaders[] = [];
+  const handlers: Handlers = {
+    onRequest: (req, res) => {
+      if (!gateRequest(req, res, policy)) return;
+      seen.push({ ...req.headers });
+      res.end(
+        JSON.stringify({
+          trust: req.headers[TRUST_HEADER],
+          device: req.headers[DEVICE_HEADER],
+        })
+      );
+    },
+    onUpgrade: (req, socket) => {
+      if (!gateUpgrade(req, socket, policy)) return;
+      socket.end("HTTP/1.1 101 Switching Protocols\r\n\r\n");
+    },
+  };
+  return { handlers, seen };
+}
+
+const servers: http.Server[] = [];
+afterAll(() => servers.forEach((s) => s.close()));
+
+async function listen(server: http.Server) {
+  servers.push(server);
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  return (server.address() as AddressInfo).port;
+}
+
+function get(
+  port: number,
+  headers: Record<string, string>,
+  pathname = "/api/sessions"
+) {
+  return new Promise<{ status: number; body: string }>((resolve, reject) => {
+    const req = http.request(
+      { host: "127.0.0.1", port, path: pathname, headers, setHost: false },
+      (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => resolve({ status: res.statusCode!, body }));
+      }
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+function upgrade(port: number, headers: Record<string, string>) {
+  return new Promise<string>((resolve) => {
+    const s = net.connect(port, "127.0.0.1", () => {
+      s.write(
+        `GET /ws/terminal HTTP/1.1\r\n${Object.entries({
+          connection: "Upgrade",
+          upgrade: "websocket",
+          ...headers,
+        })
+          .map(([k, v]) => `${k}: ${v}`)
+          .join("\r\n")}\r\n\r\n`
+      );
+    });
+    let data = "";
+    s.on("data", (c) => (data += c));
+    s.on("close", () => resolve(data.split("\r\n")[0]));
+    s.on("error", () => resolve(data.split("\r\n")[0]));
+  });
+}
+
+describe("the tunnel listener", () => {
+  const policy: AuthPolicy = {
+    tailnet: [],
+    lookup: (t) => (t === DEVICE_TOKEN ? { id: "dev-1" } : null),
+  };
+
+  it("is a stranger from loopback with the machine's own Host and no forwarding headers", async () => {
+    const { handlers } = gated(policy);
+    const port = await listen(tunnelListener(() => HOST, handlers));
+    const r = await get(port, { host: HOST });
+    expect(r.status).toBe(401);
+    expect(r.body).toContain("pairing required");
   });
 
-  it("follows the switch, pins the Host, and only runs where it should", async () => {
-    const pki = makeTestPki();
-    const machine = generateMachineKey();
-    const relay = await testRelay(machine.publicKey);
+  it("refuses a localhost Host outright (it would look like this machine)", async () => {
+    const { handlers, seen } = gated(policy);
+    const port = await listen(tunnelListener(() => HOST, handlers));
+    for (const host of [
+      "localhost",
+      `localhost:${port}`,
+      "127.0.0.1",
+      "[::1]",
+      `${HOST}.evil.com`,
+      `${HOST}:443`,
+    ]) {
+      expect((await get(port, { host })).status).toBe(421);
+      expect(
+        (await get(port, { host, authorization: `Bearer ${DEVICE_TOKEN}` }))
+          .status
+      ).toBe(421);
+    }
+    expect(seen).toHaveLength(0);
+  });
+
+  it("strips spoofed forwarding headers and still wants a paired device", async () => {
+    const { handlers, seen } = gated(policy);
+    const port = await listen(tunnelListener(() => HOST, handlers));
+    const spoofed = {
+      host: HOST,
+      "x-forwarded-host": "localhost",
+      forwarded: "for=127.0.0.1;host=localhost;proto=http",
+      "x-original-host": "127.0.0.1",
+      "x-forwarded-for": "127.0.0.1",
+    };
+    expect((await get(port, spoofed)).status).toBe(401);
+    const ok = await get(port, {
+      ...spoofed,
+      authorization: `Bearer ${DEVICE_TOKEN}`,
+    });
+    expect(ok.status).toBe(200);
+    expect(JSON.parse(ok.body)).toEqual({ trust: "device", device: "dev-1" });
+    expect(seen[0]["x-forwarded-host"]).toBeUndefined();
+    expect(seen[0].forwarded).toBeUndefined();
+    expect(seen[0]["x-original-host"]).toBeUndefined();
+    expect(seen[0][REMOTE_HEADER]).toBe("connect");
+  });
+
+  it("never lets AGENTOS_AUTH=off open it", async () => {
+    const { handlers } = gated({ ...policy, off: true });
+    const port = await listen(tunnelListener(() => HOST, handlers));
+    expect((await get(port, { host: HOST })).status).toBe(401);
+  });
+
+  it("refuses an unpaired or misaddressed WebSocket upgrade", async () => {
+    const { handlers } = gated(policy);
+    const port = await listen(tunnelListener(() => HOST, handlers));
+    expect(await upgrade(port, { host: "localhost" })).toContain("421");
+    expect(await upgrade(port, { host: HOST })).toContain("401");
+    expect(
+      await upgrade(port, {
+        host: HOST,
+        "x-forwarded-host": "localhost",
+        forwarded: "host=localhost",
+      })
+    ).toContain("401");
+    expect(
+      await upgrade(port, {
+        host: HOST,
+        authorization: `Bearer ${DEVICE_TOKEN}`,
+      })
+    ).toContain("101");
+  });
+
+  it("serves nothing until the machine has a name", async () => {
+    const { handlers } = gated(policy);
+    const port = await listen(tunnelListener(() => "", handlers));
+    expect((await get(port, { host: "" })).status).toBe(421);
+    expect((await get(port, { host: "localhost" })).status).toBe(421);
+  });
+});
+
+describe("startConnect", () => {
+  let close: (() => void) | null = null;
+  afterEach(() => {
+    close?.();
+    close = null;
+    delete process.env.AGENTOS_CONNECT_DIR;
+  });
+
+  async function freePort() {
+    const s = net.createServer();
+    await new Promise<void>((r) => s.listen(0, "127.0.0.1", r));
+    const p = (s.address() as AddressInfo).port;
+    await new Promise((r) => s.close(r));
+    return p;
+  }
+
+  it("runs cloudflared while on, names the machine, and stops it all when turned off", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-serve-"));
-    const leaf = pki.leaf(HOST);
+    process.env.AGENTOS_CONNECT_DIR = dir;
+    const { privateKey } = crypto.generateKeyPairSync("ed25519");
+    fs.writeFileSync(
+      path.join(dir, "machine.key"),
+      privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+      { mode: 0o600 }
+    );
     fs.writeFileSync(
       path.join(dir, "connect.json"),
       JSON.stringify({
-        machineId: "abcd1234",
-        hostname: HOST,
-        relayUrl: relay.url,
+        machineId: "k7q2mz9x",
+        hostname: "k7q2mz9x.on.runagentos.com",
+        relayUrl: "wss://relay.example",
+        apiUrl: "https://runagentos.com",
       })
     );
-    fs.writeFileSync(path.join(dir, "machine.key"), machine.privateKey);
-    fs.writeFileSync(path.join(dir, "tls.key"), leaf.key);
-    fs.writeFileSync(path.join(dir, "tls.crt"), leaf.cert);
-    vi.stubEnv("AGENTOS_CONNECT_DIR", dir);
-
-    // A dev server never tunnels.
-    vi.stubEnv("NODE_ENV", "development");
-    startConnect({ onRequest: () => {}, onUpgrade: () => {} }, 3011, () => {});
-    expect(connectStatus()).toMatchObject({
-      state: "refused",
-      reason: "not a production build",
-    });
-
-    vi.stubEnv("NODE_ENV", "production");
-    const logs: string[] = [];
-    startConnect(
-      {
-        onRequest: (_q, s) => s.end("agentos"),
-        onUpgrade: (_q, s) => s.destroy(),
-      },
-      3011,
-      (l) => logs.push(l)
-    );
-    await wait(() => relay.connected());
-    expect(connectStatus().state).toBe("up");
-
-    const get = (host: string) =>
-      new Promise<{ status: number; body: string }>((resolve, reject) => {
-        https
-          .get(
-            {
-              host: "127.0.0.1",
-              port: relay.frontPort,
-              servername: HOST,
-              headers: { Host: host },
-              ca: pki.ca,
-              agent: false,
-            },
-            (res) => {
-              let body = "";
-              res.on("data", (c) => (body += c));
-              res.on("end", () => resolve({ status: res.statusCode!, body }));
-            }
-          )
-          .on("error", reject);
+    const tunnelPort = await freePort();
+    const asked: number[] = [];
+    const children: (EventEmitter & { signals: string[] })[] = [];
+    const spawn: Spawn = (_bin, _args, opts) => {
+      const c = Object.assign(new EventEmitter(), {
+        pid: 0,
+        env: opts.env,
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        signals: [] as string[],
+        kill(sig: NodeJS.Signals = "SIGTERM") {
+          c.signals.push(sig);
+          setImmediate(() => c.emit("exit", null));
+          return true;
+        },
       });
-    expect(await get(HOST)).toEqual({ status: 200, body: "agentos" });
-    expect((await get("evil.example")).status).toBe(421);
+      children.push(c);
+      setImmediate(() =>
+        c.stderr.write(
+          JSON.stringify({
+            level: "info",
+            message: "Registered tunnel connection",
+            connIndex: 0,
+          }) + "\n"
+        )
+      );
+      return c;
+    };
+    const g = gated({ tailnet: [], lookup: () => null });
+    const started = startConnect(
+      g.handlers,
+      3011,
+      () => {},
+      {
+        ensureBinary: async (d) => path.join(d, "bin", "cloudflared"),
+        requestTunnel: async (_c, _k, port) => {
+          asked.push(port);
+          return { hostname: HOST, token: fakeToken() };
+        },
+        spawn,
+        delays: { min: 10, max: 40, setupMax: 40, denied: 30 },
+      },
+      {
+        NODE_ENV: "production",
+        AGENTOS_CONNECT_PORT: String(tunnelPort),
+      }
+    );
+    close = started.close;
 
-    // A second process sharing this folder can't take the tunnel.
-    const lock = fs.readFileSync(path.join(dir, "connect.lock"), "utf8");
-    expect(lock).toBe(String(process.pid));
+    const until = async (cond: () => boolean) => {
+      const end = Date.now() + 8000;
+      while (!cond()) {
+        if (Date.now() > end) throw new Error("timed out");
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    };
+    await until(() => connectStatus().state === "up");
+    expect(asked).toEqual([tunnelPort]);
+    expect(connectStatus()).toMatchObject({ hostname: HOST, enrolled: true });
+    expect(started.hostname()).toBe(HOST);
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(dir, "connect.json"), "utf8")
+    );
+    expect(saved).toEqual({
+      machineId: "k7q2mz9x",
+      hostname: HOST,
+      apiUrl: "https://runagentos.com",
+    });
+    expect((await get(tunnelPort, { host: HOST })).status).toBe(401);
 
-    // The switch closes the tunnel within seconds, without a restart.
-    setConnectEnabled(false, dir);
-    await wait(() => !relay.connected());
-    expect(relay.connected()).toBe(false);
-    expect(connectStatus().state).toBe("off");
-    expect(fs.existsSync(path.join(dir, "connect.lock"))).toBe(false);
-
-    setConnectEnabled(true, dir);
-    await wait(() => relay.connected());
-    expect(relay.connected()).toBe(true);
-    setConnectEnabled(false, dir);
-    await wait(() => !relay.connected());
-    relay.close();
-  }, 30_000);
+    // Turned off: cloudflared is stopped and the listener closes.
+    fs.writeFileSync(
+      path.join(dir, "connect.json"),
+      JSON.stringify({ ...saved, enabled: false })
+    );
+    await until(() => connectStatus().state === "off");
+    expect(children[0].signals).toContain("SIGTERM");
+    await expect(get(tunnelPort, { host: HOST })).rejects.toThrow();
+  }, 15_000);
 });

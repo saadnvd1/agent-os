@@ -9,6 +9,7 @@ import {
   authorize,
   cookieToken,
   isPublicPath,
+  isTunnelSocket,
   plainAddress,
   DEVICE_HEADER,
   TRUST_HEADER,
@@ -44,22 +45,24 @@ export function authPolicy(env = process.env): AuthPolicy {
   };
 }
 
-// Connect streams have no address. Give them a fixed label so rate limits
-// can't be steered by headers the caller chose.
-export const sourceLabel = (remote?: string) =>
-  plainAddress(remote) || "connect";
+// Everything through Connect arrives from cloudflared on loopback. Give it
+// a fixed label so rate limits can't be steered by headers the caller chose.
+export const sourceLabel = (remote?: string, tunnel = false) =>
+  tunnel ? "connect" : plainAddress(remote) || "unknown";
 
 function decide(req: IncomingMessage, policy: AuthPolicy): AuthResult {
   // Never trust a client-supplied verdict.
   delete req.headers[DEVICE_HEADER];
   delete req.headers[TRUST_HEADER];
-  req.headers[REMOTE_HEADER] = sourceLabel(req.socket.remoteAddress);
+  const tunnel = isTunnelSocket(req.socket);
+  req.headers[REMOTE_HEADER] = sourceLabel(req.socket.remoteAddress, tunnel);
   const result = authorize(
     {
       url: req.url,
       headers: req.headers,
       remoteAddress: req.socket.remoteAddress,
       localAddress: req.socket.localAddress,
+      tunnel,
     },
     policy
   );
