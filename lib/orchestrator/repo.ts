@@ -88,7 +88,7 @@ async function fetchBranches(
 }
 
 // origin/<branch> when it's there, else a local <branch>.
-async function existingRef(
+export async function existingRef(
   repo: string,
   branch: string
 ): Promise<string | null> {

@@ -148,3 +148,27 @@ export async function renameBranch(
     { timeout: 10000 }
   );
 }
+
+export interface GitCheck {
+  isGitRepo: boolean;
+  branches: string[];
+  defaultBranch: string | null;
+  currentBranch: string | null;
+}
+
+/** Whether a path is a repository, and its branches. */
+export async function gitCheck(dirPath: string): Promise<GitCheck> {
+  if (!(await isGitRepo(dirPath)))
+    return {
+      isGitRepo: false,
+      branches: [],
+      defaultBranch: null,
+      currentBranch: null,
+    };
+  const [branches, defaultBranch, currentBranch] = await Promise.all([
+    getBranches(dirPath),
+    getDefaultBranch(dirPath),
+    getCurrentBranch(dirPath),
+  ]);
+  return { isGitRepo: true, branches, defaultBranch, currentBranch };
+}

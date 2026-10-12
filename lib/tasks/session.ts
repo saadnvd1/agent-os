@@ -37,7 +37,7 @@ export function projectPathFor(session: Session): string | null {
 
 // The task's worktree, when it's here to look at: null when it's gone or on
 // another host.
-function localWorktree(session: Session): string | null {
+export function localWorktree(session: Session): string | null {
   if (!session.worktree_path) return null;
   if (session.host_id && session.host_id !== "local") return null;
   const dir = expandHome(session.worktree_path);
