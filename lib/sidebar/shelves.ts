@@ -2,6 +2,7 @@
 // orchestrator, Pinned, Needs you, Working, then Done. Client-safe: no database.
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
+import type { PrStage } from "@/lib/tasks/pr-stage";
 import type { TaskState } from "@/lib/tasks/state";
 
 // Why a session is blocked on you.
@@ -33,6 +34,7 @@ export interface RowStatus {
   // A chat summarising its context (status stays "running").
   compacting?: { since: number; before?: number };
   asks?: number;
+  prStage?: PrStage;
   // A program's own message (OSC 7501): untrusted, plain text only.
   detail?: string | null;
 }
@@ -264,6 +266,9 @@ function sameStatus(a: RowStatus | undefined, b: RowStatus | undefined) {
     (a.compacting?.since ?? null) === (b.compacting?.since ?? null) &&
     (a.compacting?.before ?? null) === (b.compacting?.before ?? null) &&
     a.asks === b.asks &&
+    (a.prStage?.stage ?? null) === (b.prStage?.stage ?? null) &&
+    (a.prStage?.number ?? null) === (b.prStage?.number ?? null) &&
+    (a.prStage?.sha ?? null) === (b.prStage?.sha ?? null) &&
     (a.detail ?? null) === (b.detail ?? null)
   );
 }

@@ -1,3 +1,4 @@
+import type { PrStage } from "@/lib/tasks/pr-stage";
 import type { SessionNeed } from "@/lib/sidebar/shelves";
 import type { Session } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
@@ -15,6 +16,7 @@ export interface SessionStatus {
   unread?: boolean;
   // A chat summarising its context; status stays "running".
   compacting?: { since: number; before?: number };
+  prStage?: PrStage;
   claudeSessionId?: string | null;
   // From a program's OSC 7501 report: untrusted, rendered as plain text.
   detail?: string | null;

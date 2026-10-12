@@ -9,6 +9,7 @@ import { getProject } from "../projects";
 import { findPRStrict } from "./gh";
 import { currentBranch, git } from "../git-exec";
 import { lookupPR } from "./pr-poll";
+import { notifyStatusChanged } from "../status/hub";
 import type { TaskPR } from "./state";
 
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
@@ -128,6 +129,15 @@ export const isoUTC = (t: string) =>
 
 const prCache = new Map<string, { at: number; pr: TaskPR | null }>();
 
+const prSignature = (pr: TaskPR | null | undefined) =>
+  pr
+    ? `${pr.number}|${pr.state}|${pr.checks}|${pr.head}|${pr.mergeable}|${pr.checkCount}`
+    : "";
+
+// The PR as the last poll saw it, with no gh call; undefined before one.
+export const cachedPR = (sessionId: string): TaskPR | null | undefined =>
+  prCache.get(sessionId)?.pr;
+
 // strict: a gh failure throws instead of reading as "no PR".
 export async function prFor(
   session: Session,
@@ -167,7 +177,10 @@ export async function prFor(
     }
   }
   if (renamed && !refused) moveBranch(session, renamed);
+  const before = prCache.get(session.id)?.pr;
   prCache.set(session.id, { at: Date.now(), pr });
+  // A PR whose stage inputs moved is news for the sidebar's badge.
+  if (prSignature(before) !== prSignature(pr)) notifyStatusChanged();
   if (pr) {
     db.prepare(
       `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`

@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionPrStage } from "@/components/PrStageBadge";
 import { ViewSwitch } from "@/components/Chat/ViewSwitch";
 import { paletteActions } from "@/stores/palette";
 import { newDraft } from "@/stores/drafts";
@@ -317,6 +318,7 @@ export function MobileTabBar({
       >
         <Plus className="h-4 w-4" />
       </Button>
+      <SessionPrStage sessionId={session?.id} />
       <ViewSwitch session={session} />
 
       {/* View mode toggle */}

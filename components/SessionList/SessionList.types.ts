@@ -1,3 +1,4 @@
+import type { PrStage } from "@/lib/tasks/pr-stage";
 import type { SessionNeed } from "@/lib/sidebar/shelves";
 
 export interface SessionStatus {
@@ -11,6 +12,7 @@ export interface SessionStatus {
   unread?: boolean;
   stalled?: boolean;
   compacting?: { since: number; before?: number };
+  prStage?: PrStage;
 }
 
 export interface SessionListProps {

@@ -30,6 +30,8 @@ import {
   terminalStatus,
 } from "../needs-you";
 import type { SessionNeed } from "../sidebar/shelves";
+import type { PrStage } from "../tasks/pr-stage";
+import { addPrStages } from "./pr-stages";
 import type { Compacting } from "../chat/events";
 import { openAskCount } from "../orchestrator/asks";
 import { lastUserTask } from "../chat/store";
@@ -65,6 +67,8 @@ export interface SessionStatusResponse {
   stalled?: boolean;
   // A chat whose agent is summarising its context ("status" stays running).
   compacting?: Compacting;
+  // Where a task's PR is in the gates (lib/tasks/pr-stage.ts).
+  prStage?: PrStage;
   // A program's own message (OSC 7501): untrusted, plain text only.
   detail?: string | null;
   progress?: number | null;
@@ -476,6 +480,8 @@ async function collect(): Promise<StatusSnapshot> {
       ...(session.role === "orchestrator" && { asks }),
     };
   }
+
+  addPrStages(statusMap);
 
   // Cleanup old trackers
   statusDetector.cleanup();

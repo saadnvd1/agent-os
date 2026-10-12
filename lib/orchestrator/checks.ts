@@ -5,6 +5,7 @@
  */
 
 import { db } from "../db";
+import { notifyStatusChanged } from "../status/hub";
 
 // ci: when the check count on a commit last changed, for settling.
 export type CheckKind = "review" | "scope" | "ci";
@@ -57,6 +58,7 @@ export function putCheck(row: {
     row.status,
     row.detail ?? null
   );
+  notifyStatusChanged();
   return getCheck(row.sessionId, row.sha, row.kind)!;
 }
 

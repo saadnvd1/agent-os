@@ -12,6 +12,7 @@ import { QuickChangeRow } from "./QuickChangeRow";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowShell, type RowMenuKind } from "./RowShell";
+import { PrStageBadge } from "@/components/PrStageBadge";
 import { RowBadge, RowDot, RowRename } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
@@ -96,6 +97,7 @@ export const SessionRow = memo(function SessionRow({
         trailing={
           <>
             <RowBadge row={row} />
+            {!row.need && <PrStageBadge stage={row.status?.prStage} compact />}
             {!row.need && <TimeAgo at={session.updated_at} />}
           </>
         }
