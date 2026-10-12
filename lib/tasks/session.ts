@@ -9,6 +9,7 @@ import { getProject } from "../projects";
 import { findPRStrict } from "./gh";
 import { currentBranch, git } from "../git-exec";
 import { lookupPR } from "./pr-poll";
+import { captureMergedTask } from "../session-logs";
 import { notifyStatusChanged } from "../status/hub";
 import type { TaskPR } from "./state";
 
@@ -185,6 +186,9 @@ export async function prFor(
     db.prepare(
       `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`
     ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
+    // Merged on GitHub rather than through AgentOS: its log is due too.
+    if (pr.state === "MERGED")
+      void captureMergedTask(session.id, { head: pr.head });
   }
   // Only an answer just read from GitHub: a cached one may predate a
   // retarget AgentOS made itself (a restack).

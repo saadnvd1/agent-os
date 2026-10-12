@@ -57,6 +57,19 @@ export const TOOL_SHAPES = {
   cards: {
     board: ref("One board, by board or project name").optional(),
   },
+  logs: {
+    project: project.optional(),
+    task: ref(
+      "One merged task's log, by task name, id (or its first characters) or PR (#12); without it, the latest headers"
+    ).optional(),
+    n: z
+      .number()
+      .int()
+      .min(1)
+      .max(50)
+      .optional()
+      .describe("How many headers, newest first (default 10)"),
+  },
   send: {
     session,
     message: z.string().trim().min(1).max(8000),

@@ -25,6 +25,7 @@ import { sessionMergePolicy } from "../tasks/finish";
 import { releasePorts } from "../ports";
 import { dropSessionDatabase } from "../project-config/database";
 import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
+import { captureMergedTask } from "../session-logs";
 
 export interface DoneOptions {
   // Who asked: the orchestrator's gate failures count toward Saad, as its
@@ -102,6 +103,7 @@ function mark(s: Session, status: "merged" | "done", pr: TaskPR | null) {
       : `UPDATE sessions SET task_status = 'done' WHERE id = ?`
   ).run(s.id);
   syncTaskCardInBackground(s, status, pr);
+  if (status === "merged") void captureMergedTask(s.id, { head: pr?.head });
 }
 
 export async function doneSession(

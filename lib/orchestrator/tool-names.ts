@@ -10,6 +10,7 @@ export const TOOL_NAMES = {
   sessions: name("sessions"),
   read: name("read"),
   cards: name("cards"),
+  logs: name("logs"),
   send: name("send"),
   orchestrators: name("orchestrators"),
   message_orchestrator: name("message_orchestrator"),

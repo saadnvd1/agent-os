@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -72,6 +73,14 @@ interface ProjectSettingsDialogProps {
   onClose: () => void;
   onSave: () => void;
 }
+
+const ProjectLogsSection = dynamic(
+  () =>
+    import("@/components/SessionLogs/ProjectLogsSection").then(
+      (mod) => mod.ProjectLogsSection
+    ),
+  { ssr: false }
+);
 
 export function ProjectSettingsDialog({
   project,
@@ -765,6 +774,8 @@ export function ProjectSettingsDialog({
             </div>
 
             <ProjectMergeSection projectId={project.id} open={open} />
+
+            <ProjectLogsSection projectId={project.id} open={open} />
 
             {error && <p className="text-sm text-red-500">{error}</p>}
 

@@ -17,7 +17,7 @@ import { PaneMenu } from "./PaneMenu";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { usePaneBarSlots } from "./PaneBarSlots";
 
-type ViewMode = "terminal" | "files" | "git" | "workers";
+type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
 interface Tab {
   id: string;
@@ -35,6 +35,7 @@ interface DesktopTabBarProps {
   viewMode: ViewMode;
   isFocused: boolean;
   isConductor: boolean;
+  hasLog?: boolean;
   workerCount: number;
   canSplit: boolean;
   canClose: boolean;
@@ -62,6 +63,7 @@ export function DesktopTabBar({
   viewMode,
   isFocused,
   isConductor,
+  hasLog,
   workerCount,
   canSplit,
   canClose,
@@ -163,6 +165,7 @@ export function DesktopTabBar({
             viewMode={viewMode}
             isLocalSession={isLocalSession}
             isConductor={isConductor}
+            hasLog={hasLog}
             workerCount={workerCount}
             gitDrawerOpen={gitDrawerOpen}
             shellDrawerOpen={shellDrawerOpen}

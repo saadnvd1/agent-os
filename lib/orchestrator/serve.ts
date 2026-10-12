@@ -12,6 +12,7 @@ import {
   stop,
 } from "./act";
 import { readCards } from "./cards";
+import { readLogs } from "./logs";
 import { describeSessions } from "./describe";
 import { sessionFacts } from "./facts";
 import { describeExternal, externalSessions } from "./external-sessions";
@@ -85,6 +86,10 @@ export async function runTool(
     }
     case "cards":
       return readCards(w, p(tool, raw).board);
+    case "logs": {
+      const a = p(tool, raw);
+      return readLogs(w, a);
+    }
     case "send": {
       const a = p(tool, raw);
       return send(w, a.session, a.message, {

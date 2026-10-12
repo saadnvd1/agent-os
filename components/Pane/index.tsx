@@ -1,5 +1,6 @@
 "use client";
 
+import { useTaskLogQuery } from "@/data/session-logs";
 import { SetupCard } from "@/components/Chat/SetupCard";
 import type { TabData } from "@/lib/panes";
 import { useRef, useCallback, useEffect, memo, useMemo } from "react";
@@ -34,6 +35,14 @@ import { useDemoMode } from "@/data/demo";
 import { DemoNotice } from "@/components/DemoNotice";
 
 // Dynamic imports for client-only components with loading states
+const LogDocument = dynamic(
+  () =>
+    import("@/components/SessionLogs/LogDocument").then(
+      (mod) => mod.LogDocument
+    ),
+  { ssr: false }
+);
+
 const Terminal = dynamic(
   () => import("@/components/Terminal").then((mod) => mod.Terminal),
   { ssr: false, loading: () => <TerminalSkeleton /> }
@@ -87,7 +96,7 @@ interface PaneProps {
   onAttachSession?: (terminal: TerminalHandle, session: Session) => void;
 }
 
-type ViewMode = "terminal" | "files" | "git" | "workers";
+type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
 export const Pane = memo(function Pane({
   paneId,
@@ -172,6 +181,12 @@ export const Pane = memo(function Pane({
   }, [session, sessions]);
 
   const isConductor = workerCount > 0;
+
+  // A merged task keeps the log AgentOS wrote of it.
+  const merged =
+    !!session?.task_prompt &&
+    (session.task_status === "merged" || session.pr_status === "merged");
+  const hasLog = !!useTaskLogQuery(session?.id, merged).data;
 
   // Get current project and its repositories
   const currentProject = useMemo(() => {
@@ -403,6 +418,7 @@ export const Pane = memo(function Pane({
           projects={projects}
           viewMode={viewMode}
           isConductor={isConductor}
+          hasLog={hasLog}
           workerCount={workerCount}
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
@@ -423,6 +439,7 @@ export const Pane = memo(function Pane({
           viewMode={viewMode}
           isFocused={isFocused}
           isConductor={isConductor}
+          hasLog={hasLog}
           workerCount={workerCount}
           canSplit={canSplit}
           canClose={canClose}
@@ -485,6 +502,11 @@ export const Pane = memo(function Pane({
             </div>
           )}
 
+          {/* Log */}
+          {viewMode === "log" && session && (
+            <LogDocument sessionId={session.id} />
+          )}
+
           {/* Workers */}
           {viewMode === "workers" && session && (
             <ConductorPanel
@@ -540,6 +562,11 @@ export const Pane = memo(function Pane({
                         projectId={session.project_id}
                       />
                     </div>
+                  )}
+
+                  {/* Log */}
+                  {viewMode === "log" && session && (
+                    <LogDocument sessionId={session.id} />
                   )}
 
                   {/* Workers */}
