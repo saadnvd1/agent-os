@@ -28,7 +28,13 @@ import {
   type ConnectConfig,
 } from "./config";
 import { shouldStartConnect, takeConnectLock } from "./guard";
-import { checkApiUrl, requestTunnel, type Tunnel } from "./control-api";
+import {
+  checkApiUrl,
+  heartbeat as sendHeartbeat,
+  requestTunnel,
+  type Tunnel,
+} from "./control-api";
+import { appVersion, startHeartbeat } from "./heartbeat";
 import { ensureCloudflared } from "./cloudflared";
 import { superviseTunnel, type Spawn, type TunnelState } from "./supervise";
 
@@ -93,12 +99,15 @@ export interface ConnectDeps {
   ) => Promise<Tunnel>;
   spawn?: Spawn;
   delays?: Parameters<typeof superviseTunnel>[0]["delays"];
+  heartbeat?: typeof sendHeartbeat;
+  heartbeatMs?: number;
 }
 
 interface Running {
   server: http.Server;
   sockets: Set<Socket>;
   supervisor: ReturnType<typeof superviseTunnel>;
+  heartbeat: ReturnType<typeof startHeartbeat>;
   release: () => void;
 }
 
@@ -115,6 +124,9 @@ export function startConnect(
   let base: ConnectStatus = { state: "off" };
   let hostname = "";
   let running: Running | null = null;
+  // Set when the service disabled or dropped this machine; sync() leaves it
+  // off until connect.json is turned off or relinked.
+  let halted: string | null = null;
   // Set while the tunnel listener can't bind; it keeps trying.
   let bindError: string | undefined;
   g.__agentosConnect = () => {
@@ -140,6 +152,7 @@ export function startConnect(
   const down = (why: string) => {
     if (!running) return;
     bindError = undefined;
+    running.heartbeat.stop();
     running.supervisor.stop();
     running.sockets.forEach((s) => s.destroy());
     running.server.close();
@@ -162,6 +175,14 @@ export function startConnect(
     hostname = config.hostname;
     base = { state: "off", enrolled: true, hostname: hostname || undefined };
     if (!read.enabled) return;
+    if (halted) {
+      base = {
+        ...base,
+        state: "off",
+        reason: "stopped by the Connect service",
+      };
+      return;
+    }
     try {
       checkApiUrl(config.apiUrl, env.AGENTOS_CONNECT_OPERATOR === "1");
     } catch (err) {
@@ -225,7 +246,22 @@ export function startConnect(
         return { bin, token: tunnel.token };
       },
     });
-    running = { server, sockets, supervisor, release: lock.release };
+    const beat = deps.heartbeat ?? sendHeartbeat;
+    const version = appVersion();
+    const heartbeat = startHeartbeat({
+      beat: () => beat(config, machineKey, version),
+      log,
+      intervalMs: deps.heartbeatMs,
+      onDisabled: () => {
+        halted = config.machineId;
+        down("disabled in your account");
+      },
+      onGone: () => {
+        halted = config.machineId;
+        down("machine no longer linked");
+      },
+    });
+    running = { server, sockets, supervisor, heartbeat, release: lock.release };
     server.listen(tunnelPort, "127.0.0.1");
   };
 
@@ -233,7 +269,12 @@ export function startConnect(
   const sync = () => {
     try {
       const read = readConnect(dir);
-      const want = read.ok && read.enabled;
+      if (
+        halted &&
+        (!read.ok || !read.enabled || read.files.config.machineId !== halted)
+      )
+        halted = null;
+      const want = read.ok && read.enabled && !halted;
       if (running && !want) down(read.ok ? "turned off" : read.reason);
       else if (!running && want) up();
       else if (!running) up(); // refreshes what the status shows
