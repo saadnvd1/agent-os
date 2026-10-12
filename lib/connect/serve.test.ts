@@ -268,7 +268,13 @@ describe("startConnect", () => {
     }
   };
 
-  function start(m: Awaited<ReturnType<typeof machine>>, tunnelPort: number) {
+  function start(
+    m: Awaited<ReturnType<typeof machine>>,
+    tunnelPort: number,
+    heartbeat: () => Promise<{ enabled: boolean }> = async () => ({
+      enabled: true,
+    })
+  ) {
     const g = gated({ tailnet: [], lookup: () => null });
     const started = startConnect(
       g.handlers,
@@ -281,6 +287,7 @@ describe("startConnect", () => {
           return { hostname: HOST, token: fakeToken() };
         },
         spawn: m.spawn,
+        heartbeat,
         delays: { min: 10, max: 40, setupMax: 40, denied: 30 },
       },
       {
@@ -320,6 +327,21 @@ describe("startConnect", () => {
     await until(() => connectStatus().state === "off");
     expect(children[0].signals).toContain("SIGTERM");
     await expect(get(tunnelPort, { host: HOST })).rejects.toThrow();
+  }, 15_000);
+
+  it("stops the tunnel when the heartbeat says the account disabled it, and stays off", async () => {
+    const m = await machine();
+    const tunnelPort = await freePort();
+    let beats = 0;
+    start(m, tunnelPort, async () => {
+      beats++;
+      return { enabled: beats < 1 };
+    });
+    await until(() => beats === 1);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(connectStatus().state).toBe("off");
+    expect(beats).toBe(1);
+    expect(m.children.every((c) => c.signals.includes("SIGTERM"))).toBe(true);
   }, 15_000);
 
   it("keeps trying to bind the tunnel port while something else holds it", async () => {
