@@ -7,6 +7,7 @@
  */
 
 import { db } from "../db";
+import { markAllStatusDirty } from "../status/dirty";
 
 const KEY = "orchestrator.merge_approvals";
 
@@ -26,4 +27,5 @@ export function setMergeApprovals(on: boolean): void {
     `INSERT INTO settings (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
   ).run(KEY, on ? "1" : "0");
+  markAllStatusDirty();
 }

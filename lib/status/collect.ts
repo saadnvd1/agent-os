@@ -19,7 +19,8 @@ import {
   getProviderIdFromSessionName,
   getSessionIdFromName,
 } from "../providers/registry";
-import { getDb, type Session } from "../db";
+import { getDb } from "../db";
+import { beginPass, chatMemo } from "./incremental";
 import { chatCompacting, chatState } from "../chat/runner";
 import { chatActivityLine, chatStall } from "../chat/activity";
 import {
@@ -243,32 +244,16 @@ function getAgentTypeFromSessionName(sessionName: string): AgentType {
   return getProviderIdFromSessionName(sessionName) || "claude";
 }
 
-function terminalRow(db: ReturnType<typeof getDb>, id: string) {
-  return db
-    .prepare(
-      `SELECT id, view, updated_at, last_seen_at FROM sessions WHERE id = ?`
-    )
-    .get(id) as
-    | Pick<Session, "id" | "view" | "updated_at" | "last_seen_at">
-    | undefined;
-}
-
-async function collect(): Promise<StatusSnapshot> {
+async function collect(full = false): Promise<StatusSnapshot> {
   const sessions = await getTmuxSessions();
 
   const db = getDb();
+  // Read once the sessions are listed, so what was kept is as new as it.
+  const pass = beginPass(Date.now(), full);
+  const rows = [...pass.rows.values()];
   const panes = managedPanes(
     sessions,
-    db
-      .prepare(
-        `SELECT id, tmux_name, agent_type, host_id FROM sessions WHERE archived_at IS NULL AND (view IS NULL OR view != 'chat')`
-      )
-      .all() as {
-      id: string;
-      tmux_name: string | null;
-      agent_type: string | null;
-      host_id: string | null;
-    }[],
+    rows.filter((s) => s.view !== "chat"),
     (name) => UUID_PATTERN.test(name),
     getSessionIdFromName
   );
@@ -351,7 +336,7 @@ async function collect(): Promise<StatusSnapshot> {
     lastLine,
     agentType,
   } of results) {
-    const row = terminalRow(db, id);
+    const row = pass.rows.get(id);
     const shared = {
       sessionName,
       lastLine,
@@ -418,6 +403,8 @@ async function collect(): Promise<StatusSnapshot> {
   // Update claude_session_id directly here instead of requiring separate API calls
   for (const { id, claudeSessionId, agentType } of results) {
     if (!claudeSessionId) continue;
+    // Already stored (as the rows above read it): nothing to write.
+    if (pass.rows.get(id)?.claude_session_id === claudeSessionId) continue;
     if (agentType === "claude")
       updateClaudeIdStmt.run(claudeSessionId, id, claudeSessionId);
     else
@@ -432,14 +419,9 @@ async function collect(): Promise<StatusSnapshot> {
 
   // A linked machine's sessions: its AgentOS says how they are.
   const linked = linkedHostIds();
-  const mirrors = (
-    db
-      .prepare(
-        `SELECT id, tmux_name, agent_type, host_id FROM sessions
-          WHERE archived_at IS NULL AND host_id IS NOT NULL AND host_id != 'local'`
-      )
-      .all() as Pick<Session, "id" | "tmux_name" | "agent_type" | "host_id">[]
-  ).filter((s) => linked.has(s.host_id));
+  const mirrors = rows.filter(
+    (s) => s.host_id && s.host_id !== "local" && linked.has(s.host_id)
+  );
   for (const s of mirrors) {
     const status = peerStatus(s.host_id, s.id);
     if (status)
@@ -452,36 +434,39 @@ async function collect(): Promise<StatusSnapshot> {
 
   // Chat sessions have no tmux pane: their live conversation is the status.
   // A linked machine's chats are its own (above).
-  for (const session of db
-    .prepare(
-      `SELECT * FROM sessions WHERE view = 'chat' AND archived_at IS NULL
-         AND (host_id IS NULL OR host_id = 'local')`
-    )
-    .all() as Session[]) {
+  for (const session of rows.filter(
+    (s) => s.view === "chat" && (!s.host_id || s.host_id === "local")
+  )) {
     const state = chatState(session.id);
-    const asks =
-      session.role === "orchestrator" ? openAskCount(session.workspace_id) : 0;
+    const orchestrator = session.role === "orchestrator";
+    // What the database says; the rest below moves with time or the process.
+    const base = chatMemo(pass, session.id, orchestrator, state ?? "", () => {
+      const asks = orchestrator ? openAskCount(session.workspace_id) : 0;
+      return {
+        asks,
+        waiting: needsYou(session, state),
+        need: chatNeed(session, state, asks),
+        unread: isUnread(session, state),
+        lastTask: lastUserTask(session.id),
+      };
+    });
     statusMap[session.id] = {
       sessionName: session.tmux_name,
       status:
-        state === "running"
-          ? "running"
-          : needsYou(session, state)
-            ? "waiting"
-            : "idle",
-      task: chatActivityLine(session.id) ?? lastUserTask(session.id),
+        state === "running" ? "running" : base.waiting ? "waiting" : "idle",
+      task: chatActivityLine(session.id) ?? base.lastTask,
       agentType: session.agent_type,
-      need: chatNeed(session, state, asks),
-      unread: isUnread(session, state),
+      need: base.need,
+      unread: base.unread,
       ...(chatStall(session.id) && { stalled: true }),
       ...(chatCompacting(session.id) && {
         compacting: chatCompacting(session.id)!,
       }),
-      ...(session.role === "orchestrator" && { asks }),
+      ...(orchestrator && { asks: base.asks }),
     };
   }
 
-  addPrStages(statusMap);
+  addPrStages(statusMap, pass);
 
   // Cleanup old trackers
   statusDetector.cleanup();
@@ -492,8 +477,11 @@ async function collect(): Promise<StatusSnapshot> {
 // Callers at the same moment share one pass over tmux.
 let inflight: Promise<StatusSnapshot> | null = null;
 
-export function collectStatuses(): Promise<StatusSnapshot> {
-  inflight ??= collect().finally(() => {
+/** `full`: recompute everything kept from earlier passes. */
+export function collectStatuses({
+  full = false,
+}: { full?: boolean } = {}): Promise<StatusSnapshot> {
+  inflight ??= collect(full).finally(() => {
     inflight = null;
   });
   return inflight;

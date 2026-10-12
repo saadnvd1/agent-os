@@ -6,6 +6,7 @@
 
 import { db } from "../db";
 import { notifyStatusChanged } from "../status/hub";
+import { markAllStatusDirty, markStatusDirty } from "../status/dirty";
 
 // ci: when the check count on a commit last changed, for settling.
 export type CheckKind = "review" | "scope" | "ci";
@@ -58,6 +59,7 @@ export function putCheck(row: {
     row.status,
     row.detail ?? null
   );
+  markStatusDirty(row.sessionId);
   notifyStatusChanged();
   return getCheck(row.sessionId, row.sha, row.kind)!;
 }
@@ -68,4 +70,5 @@ export function clearStaleRunning(maxAgeMinutes = 30): void {
     `UPDATE orchestrator_checks SET status = 'error', detail = 'Interrupted: run it again'
      WHERE status = 'running' AND created_at < datetime('now', ?)`
   ).run(`-${maxAgeMinutes} minutes`);
+  markAllStatusDirty();
 }

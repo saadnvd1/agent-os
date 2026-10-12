@@ -1,5 +1,6 @@
 import { db } from "../db";
 import type { ChatItem } from "./events";
+import { markStatusDirty } from "../status/dirty";
 
 // Items keep the position they were first written at, so replacing one
 // (a finished tool call, a streamed message's final text) never reorders.
@@ -11,6 +12,7 @@ export function saveItem(sessionId: string, item: ChatItem): void {
      ON CONFLICT(session_id, item_id) DO UPDATE SET data = excluded.data`
   ).run(sessionId, item.id, sessionId, JSON.stringify(item));
   seqs.delete(sessionId);
+  markStatusDirty(sessionId);
 }
 
 // The streaming path. Every update of an item is a write, so they're held
@@ -79,6 +81,7 @@ export function flushItems(): void {
         for (const [itemId, p] of items)
           insert.run(sessionId, itemId, p.seq, p.data);
     })();
+    for (const sessionId of pending.keys()) markStatusDirty(sessionId);
     pending.clear();
   } catch (error) {
     // Kept for the next try rather than lost.
@@ -96,6 +99,7 @@ export function moveToEnd(sessionId: string, itemId: string): void {
      WHERE session_id = ? AND item_id = ?`
   ).run(sessionId, sessionId, itemId);
   seqs.delete(sessionId);
+  markStatusDirty(sessionId);
 }
 
 export function listItems(sessionId: string): ChatItem[] {
@@ -223,6 +227,7 @@ export function deleteItems(sessionId: string): void {
   pending.delete(sessionId);
   seqs.delete(sessionId);
   db.prepare(`DELETE FROM chat_items WHERE session_id = ?`).run(sessionId);
+  markStatusDirty(sessionId);
 }
 
 // With no live conversation, nothing is still streaming or running: those

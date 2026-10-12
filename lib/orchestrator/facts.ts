@@ -20,6 +20,7 @@ import { storedPR } from "../tasks/session";
 import { commitTime, repoOf } from "./repo";
 import { CHECKLESS_MS, checklessFor, ciSettleIn } from "./task-state";
 import { repoHasCI } from "./repo-ci";
+import { markStatusDirty } from "../status/dirty";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -211,7 +212,10 @@ export async function settleIn(
   let at = committed.get(pr.head);
   if (at === undefined) {
     at = await commitTime(repoOf(s), pr.head).catch(() => 0);
-    if (at) committed.set(pr.head, at);
+    if (at) {
+      committed.set(pr.head, at);
+      markStatusDirty(s.id);
+    }
   }
   return ciSettleIn({
     workspaceId,
