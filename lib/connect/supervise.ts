@@ -3,13 +3,24 @@
  * the Connect service for a fresh connector token, which goes to the child
  * in TUNNEL_TOKEN only: never argv, never a file, never a log line. The
  * child exits → it's started again with backoff; stop() ends it.
+ *
+ * cloudflared must never outlive AgentOS: it would go on publishing
+ * whatever next holds the tunnel port. So it runs in a process group of its
+ * own under a small shell that kills it the moment AgentOS goes, however it
+ * goes (SIGKILL and out-of-memory included), and a copy a crash left behind
+ * anyway is killed before the next one starts.
  */
 
-import { execFile, spawn as nodeSpawn } from "child_process";
+import {
+  execFile,
+  spawn as nodeSpawn,
+  type ChildProcess,
+  type SpawnOptions,
+} from "child_process";
 import fs from "fs";
 import path from "path";
 import readline from "readline";
-import type { Readable } from "stream";
+import type { Readable, Writable } from "stream";
 import { ApiError, clean } from "./control-api";
 
 export type TunnelState = "connecting" | "up" | "denied" | "error" | "stopped";
@@ -21,6 +32,7 @@ export interface Prepared {
 
 interface Child {
   pid?: number;
+  stdin?: Writable | null;
   stdout: Readable | null;
   stderr: Readable | null;
   kill(signal?: NodeJS.Signals): boolean;
@@ -53,7 +65,48 @@ const DELAYS = {
 // cloudflared can be chatty while the network flaps.
 const LOG_LINES_PER_MINUTE = 20;
 
-/** A cloudflared left running by an AgentOS that died without stopping it. */
+// $1 is cloudflared, the rest its arguments. Its stdin is a pipe only
+// AgentOS holds the other end of: when AgentOS ends, the read sees EOF and
+// cloudflared is killed outright (a SIGTERM would let it drain, still
+// forwarding, for half a minute). The shell exits with cloudflared's code.
+const WATCHDOG = `exec 3<&0 </dev/null
+"$@" 3<&- &
+child=$!
+trap 'kill -TERM "$child" 2>/dev/null' TERM INT HUP
+{ read -r _ <&3; kill -KILL "$child" 2>/dev/null; } &
+watch=$!
+exec 3<&-
+while :; do
+  wait "$child"; code=$?
+  kill -0 "$child" 2>/dev/null || break
+done
+kill "$watch" 2>/dev/null
+exit "$code"`;
+
+/** cloudflared under the watchdog, its group killed as one. */
+export const spawnTunnel: Spawn = (bin, args, opts) => {
+  if (process.platform === "win32")
+    return (nodeSpawn as unknown as Spawn)(bin, args, opts);
+  const proc: ChildProcess = nodeSpawn(
+    "/bin/sh",
+    ["-c", WATCHDOG, "agentos-cloudflared", bin, ...args],
+    {
+      env: opts.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      detached: true,
+    } as SpawnOptions
+  );
+  proc.stdin?.on("error", () => {});
+  return Object.assign(proc, {
+    kill: (signal: NodeJS.Signals = "SIGTERM") => {
+      try {
+        if (proc.pid) return process.kill(-proc.pid, signal);
+      } catch {}
+      return proc.kill(signal);
+    },
+  }) as unknown as Child;
+};
+
 const commandOf = (pid: number) =>
   new Promise<string>((resolve) =>
     execFile(
@@ -64,25 +117,60 @@ const commandOf = (pid: number) =>
     )
   );
 
-async function stopStale(pidFile: string, binDir: string) {
+const signal = (pid: number, sig: NodeJS.Signals | 0) => {
+  try {
+    process.kill(pid, sig);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export interface ReapDeps {
+  commandOf?: (pid: number) => Promise<string>;
+  /** process.kill: false when there was nothing to signal. */
+  kill?: (pid: number, sig: NodeJS.Signals | 0) => boolean;
+  waitMs?: number;
+}
+
+/**
+ * Kills a cloudflared an AgentOS that died left running, named by the pid
+ * file, and only if that pid is still one of ours (pids get reused). Call
+ * it only while holding connect.lock: then no live AgentOS owns it.
+ */
+export async function reapTunnel(
+  dir: string,
+  binDir = path.join(dir, "bin"),
+  deps: ReapDeps = {}
+) {
+  const pidFile = path.join(dir, "cloudflared.pid");
+  const kill = deps.kill ?? signal;
   let pid = 0;
   try {
     pid = Number(fs.readFileSync(pidFile, "utf8")) || 0;
   } catch {
-    return;
+    return false;
   }
+  let reaped = false;
   if (pid > 1) {
-    const command = await commandOf(pid);
-    try {
-      if (command.startsWith(binDir + path.sep)) process.kill(pid, "SIGTERM");
-    } catch {}
+    const command = await (deps.commandOf ?? commandOf)(pid);
+    if (command.includes(binDir + path.sep)) {
+      // Its group (the watchdog and cloudflared), or a bare cloudflared an
+      // older AgentOS started outside one.
+      reaped = kill(-pid, "SIGKILL");
+      reaped = kill(pid, "SIGKILL") || reaped;
+      const end = Date.now() + (deps.waitMs ?? 2000);
+      while (kill(pid, 0) && Date.now() < end)
+        await new Promise((r) => setTimeout(r, 25));
+    }
   }
   fs.rmSync(pidFile, { force: true });
+  return reaped;
 }
 
 export function superviseTunnel(opts: SuperviseOptions) {
   const log = opts.log ?? (() => {});
-  const spawn = opts.spawn ?? (nodeSpawn as unknown as Spawn);
+  const spawn = opts.spawn ?? spawnTunnel;
   const delays = opts.delays ?? DELAYS;
   const pidFile = path.join(opts.dir, "cloudflared.pid");
   const home = path.join(opts.dir, "cloudflared-home");
@@ -145,7 +233,7 @@ export function superviseTunnel(opts: SuperviseOptions) {
 
   const run = async ({ bin, token }: Prepared) => {
     const redact = (line: string) => clean(line.split(token).join("[token]"));
-    await stopStale(pidFile, path.dirname(bin));
+    await reapTunnel(opts.dir, path.dirname(bin));
     if (stopped) return;
     fs.mkdirSync(home, { recursive: true, mode: 0o700 });
     // Its own config and home, so no config.yml elsewhere on the machine
@@ -256,8 +344,18 @@ export function superviseTunnel(opts: SuperviseOptions) {
     proc.on("exit", (code) => end(`cloudflared exited (${code ?? "signal"})`));
   };
 
+  // A stop that never ran (the process exiting, or a signal nobody else
+  // handles) still takes cloudflared's whole group down first.
   const killNow = () => child?.kill("SIGTERM");
+  const SIGNALS = ["SIGTERM", "SIGINT", "SIGHUP"] as const;
+  const onSignal = (sig: NodeJS.Signals) => {
+    killNow();
+    for (const s of SIGNALS) process.removeListener(s, onSignal);
+    // Nobody else handles it: end the way the signal would have.
+    if (process.listenerCount(sig) === 0) process.kill(process.pid, sig);
+  };
   process.once("exit", killNow);
+  for (const s of SIGNALS) process.on(s, onSignal);
   tick();
 
   return {
@@ -268,6 +366,7 @@ export function superviseTunnel(opts: SuperviseOptions) {
       stopped = true;
       state = "stopped";
       process.removeListener("exit", killNow);
+      for (const s of SIGNALS) process.removeListener(s, onSignal);
       if (timer) clearTimeout(timer);
       const proc = child;
       if (!proc) return;

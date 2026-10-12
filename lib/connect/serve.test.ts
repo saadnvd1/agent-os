@@ -16,8 +16,10 @@ import {
 } from "@/lib/security/auth";
 import {
   connectStatus,
+  listenerIsOurs,
   startConnect,
   tunnelListener,
+  type ConnectDeps,
   type Handlers,
 } from "./serve";
 import type { Spawn } from "./supervise";
@@ -231,6 +233,8 @@ describe("startConnect", () => {
       })
     );
     const asked: number[] = [];
+    // What happened, in order: binds seen by cloudflared, kills, spawns.
+    const events: string[] = [];
     const children: (EventEmitter & { signals: string[] })[] = [];
     const spawn: Spawn = (_bin, _args, opts) => {
       const c = Object.assign(new EventEmitter(), {
@@ -246,6 +250,7 @@ describe("startConnect", () => {
         },
       });
       children.push(c);
+      events.push("spawn");
       setImmediate(() =>
         c.stderr.write(
           JSON.stringify({
@@ -257,7 +262,7 @@ describe("startConnect", () => {
       );
       return c;
     };
-    return { dir, asked, children, spawn };
+    return { dir, asked, children, spawn, events };
   }
 
   const until = async (cond: () => boolean) => {
@@ -273,7 +278,8 @@ describe("startConnect", () => {
     tunnelPort: number,
     heartbeat: () => Promise<{ enabled: boolean }> = async () => ({
       enabled: true,
-    })
+    }),
+    extra: Partial<ConnectDeps> = {}
   ) {
     const g = gated({ tailnet: [], lookup: () => null });
     const started = startConnect(
@@ -289,6 +295,7 @@ describe("startConnect", () => {
         spawn: m.spawn,
         heartbeat,
         delays: { min: 10, max: 40, setupMax: 40, denied: 30 },
+        ...extra,
       },
       {
         NODE_ENV: "production",
@@ -358,4 +365,86 @@ describe("startConnect", () => {
     await until(() => connectStatus().state === "up");
     expect((await get(tunnelPort, { host: HOST })).status).toBe(401);
   }, 15_000);
+
+  it("never starts cloudflared or asks for a token while it can't hold the port", async () => {
+    const m = await machine();
+    const tunnelPort = await freePort();
+    const squatter = net.createServer();
+    await new Promise<void>((r) => squatter.listen(tunnelPort, "127.0.0.1", r));
+    start(m, tunnelPort);
+    await until(
+      () => connectStatus().reason?.includes("can't listen") ?? false
+    );
+    await new Promise((r) => setTimeout(r, 200));
+    expect(m.children).toHaveLength(0);
+    expect(m.asked).toHaveLength(0);
+    await new Promise((r) => squatter.close(r));
+    await until(() => m.children.length === 1);
+    expect(connectStatus().reason ?? "").not.toContain("can't listen");
+  }, 15_000);
+
+  it("kills a cloudflared a crashed AgentOS left running before it starts one", async () => {
+    const m = await machine();
+    const tunnelPort = await freePort();
+    fs.writeFileSync(path.join(m.dir, "cloudflared.pid"), "4242");
+    const kills: [number, NodeJS.Signals | 0][] = [];
+    start(m, tunnelPort, undefined, {
+      reap: {
+        commandOf: async (pid) =>
+          pid === 4242
+            ? `/bin/sh -c ... agentos-cloudflared ${m.dir}/bin/cloudflared tunnel run`
+            : "",
+        kill: (pid, sig) => {
+          kills.push([pid, sig]);
+          if (sig !== 0) m.events.push(`kill ${pid}`);
+          return sig !== 0;
+        },
+        waitMs: 50,
+      },
+    });
+    await until(() => m.children.length === 1);
+    expect(m.events.slice(0, 3)).toEqual(["kill -4242", "kill 4242", "spawn"]);
+    expect(kills.filter(([, s]) => s === "SIGKILL")).toEqual([
+      [-4242, "SIGKILL"],
+      [4242, "SIGKILL"],
+    ]);
+  }, 15_000);
+
+  it("leaves a pid it can't tie to its own cloudflared alone", async () => {
+    const m = await machine();
+    const tunnelPort = await freePort();
+    fs.writeFileSync(path.join(m.dir, "cloudflared.pid"), "4242");
+    const kills: number[] = [];
+    start(m, tunnelPort, undefined, {
+      reap: {
+        commandOf: async () => "/usr/sbin/sshd -D",
+        kill: (pid) => (kills.push(pid), true),
+      },
+    });
+    await until(() => m.children.length === 1);
+    expect(kills).toEqual([]);
+  }, 15_000);
+});
+
+describe("listenerIsOurs", () => {
+  it("is true only for the server connections to the port reach", async () => {
+    const ours = net.createServer((s) => s.destroy()) as unknown as http.Server;
+    const port = await listen(ours);
+    expect(await listenerIsOurs(ours, port)).toBe(true);
+    // Listening, but somewhere else: the port belongs to another server.
+    const other = net.createServer((s) =>
+      s.destroy()
+    ) as unknown as http.Server;
+    await listen(other);
+    expect(await listenerIsOurs(other, port, 300)).toBe(false);
+  });
+
+  it("is false when nothing listens", async () => {
+    const lone = http.createServer();
+    const s = net.createServer();
+    await new Promise<void>((r) => s.listen(0, "127.0.0.1", r));
+    const port = (s.address() as AddressInfo).port;
+    await new Promise((r) => s.close(r));
+    expect(await listenerIsOurs(lone, port, 300)).toBe(false);
+  });
 });

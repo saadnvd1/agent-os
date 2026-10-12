@@ -5,6 +5,7 @@
  * another site's page (drive-by requests from any website the user visits).
  */
 
+import { isIP } from "net";
 import os from "os";
 
 const TAILSCALE_V4 = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./; // 100.64.0.0/10
@@ -72,6 +73,8 @@ export function bindAddresses(
 export interface AccessPolicy {
   bound: string[];
   extraHosts: string[];
+  /** This machine's Connect address (connect.json), when it has one. */
+  machineHost?: () => string | null;
 }
 
 const LOCAL_NAMES = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -82,6 +85,23 @@ function hostname(hostOrUrlHost: string): string {
   return h.replace(/:\d+$/, "");
 }
 
+// Every Connect machine is m-<16 hex>.runagentos.com, so all of them are
+// the same site: another machine's page is never one of ours.
+const MACHINE_HOST = /^m-[0-9a-f]{16}\.runagentos\.com$/;
+
+const machineHostOf = (policy: AccessPolicy) =>
+  policy.machineHost?.()?.toLowerCase() || null;
+
+/** Names that are this machine whatever it's bound to. */
+function ownHost(h: string, policy: AccessPolicy): boolean {
+  return (
+    LOCAL_NAMES.has(h) ||
+    (h !== "0.0.0.0" && policy.bound.includes(h)) ||
+    policy.extraHosts.includes(h) ||
+    machineHostOf(policy) === h
+  );
+}
+
 export function hostAllowed(
   host: string | undefined,
   policy: AccessPolicy
@@ -89,25 +109,39 @@ export function hostAllowed(
   if (!host) return false;
   if (policy.bound.includes("0.0.0.0")) return true;
   const h = hostname(host);
-  return (
-    LOCAL_NAMES.has(h) ||
-    policy.bound.includes(h) ||
-    h.endsWith(".ts.net") ||
-    policy.extraHosts.includes(h)
-  );
+  return ownHost(h, policy) || h.endsWith(".ts.net");
 }
 
+/**
+ * A page may talk to this machine only from one of this machine's own
+ * origins, whatever AGENTOS_BIND says: its loopback, bound and configured
+ * names, its own Connect address, or the host the request itself names when
+ * that is one of its addresses (a page served here on any of its ports; the
+ * mobile app's native socket sends that one). A wildcard bind widens the
+ * Host check, never this one: not another machine's m- address, not a name
+ * rebound to this machine's address.
+ */
 export function originAllowed(
   origin: string | undefined,
-  policy: AccessPolicy
+  policy: AccessPolicy,
+  requestHost?: string
 ): boolean {
-  if (!origin) return true; // not a browser page: curl, aos, server-side
+  if (!origin) return true; // not a browser page: curl, aos, peers, the app
   if (origin === "null") return false;
+  let h: string;
   try {
-    return hostAllowed(new URL(origin).host, policy);
+    h = hostname(new URL(origin).host);
   } catch {
     return false;
   }
+  if (!h) return false;
+  if (MACHINE_HOST.test(h)) return h === machineHostOf(policy);
+  if (ownHost(h, policy)) return true;
+  return (
+    !!requestHost &&
+    h === hostname(requestHost) &&
+    (h.endsWith(".ts.net") || isIP(h) !== 0)
+  );
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -145,7 +179,7 @@ export function requestAllowed(
   if (!req.url?.startsWith("/api/")) return true;
   if (req.fetchSite === "cross-site") return crossSiteNavigationAllowed(req);
   if (!SAFE_METHODS.has((req.method ?? "GET").toUpperCase())) {
-    return originAllowed(req.origin, policy);
+    return originAllowed(req.origin, policy, req.host);
   }
   return true;
 }
@@ -154,5 +188,7 @@ export function upgradeAllowed(
   req: { host?: string; origin?: string },
   policy: AccessPolicy
 ): boolean {
-  return hostAllowed(req.host, policy) && originAllowed(req.origin, policy);
+  return (
+    hostAllowed(req.host, policy) && originAllowed(req.origin, policy, req.host)
+  );
 }
