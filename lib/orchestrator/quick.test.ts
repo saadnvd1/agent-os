@@ -280,91 +280,64 @@ describe("the write guard with a quick change open", () => {
     expect(await write(s, path.join(gone.wt, "README.md"))).not.toBeNull();
   });
 
-  it("runs git only with -C in its own quick worktree", async () => {
-    expect(await bash(s, `git -C ${wt} status`)).toBeNull();
-    expect(await bash(s, `git -C '${wt}' diff --stat`)).toBeNull();
-    expect(await bash(s, `git -C ${wt} add -A`)).toBeNull();
-    expect(await bash(s, `git status`)).toMatch(/quick changes' worktrees/);
-    expect(await bash(s, `git -C ${s.repo} status`)).toMatch(
-      /isn't the root of one of your quick changes/
-    );
-    expect(await bash(s, `git -C ${s.other} add -A`)).toMatch(
-      /isn't the root of one of your quick changes/
-    );
-    expect(
-      await bash(s, `git -C ${wt}/../${path.basename(s.other)} add -A`)
-    ).toMatch(/isn't the root of one of your quick changes/);
-    expect(await bash(s, `git -C ${wt}/main-link status`)).toMatch(
-      /isn't the root of one of your quick changes/
-    );
-  });
-
-  it("refuses a push from the shell, to the default branch or any", async () => {
-    expect(await bash(s, `git -C ${wt} push origin main`)).toMatch(
-      /pushes to the default branch/
-    );
-    expect(await bash(s, `git -C ${wt} push origin HEAD:main`)).toMatch(
-      /quick_pr pushes/
-    );
-    expect(await bash(s, `git -C ${wt} push`)).toMatch(/quick_pr pushes/);
-  });
-
-  it("refuses git that runs hooks, other code, or writes elsewhere", async () => {
+  it("runs any git in its own quick worktree and reads anywhere, but never pushes", async () => {
     for (const cmd of [
-      `git -C ${wt} commit -m x`,
-      `git -C ${wt} config core.hooksPath /tmp`,
-      `git -C ${wt} checkout main`,
-      `git -C ${wt} stash`,
-      `git -c core.hooksPath=/tmp -C ${wt} status`,
-      `git --git-dir=${s.repo}/.git -C ${wt} status`,
-      `git -C ${wt} -C ${s.repo} status`,
-      `git -C ${wt} log --output=/tmp/x`,
-      `git -C ${wt} diff --ext-diff`,
-      `git -C ${wt} show --textconv HEAD:README.md`,
-      `git -C ${wt} rebase --exec true`,
-      `git -C ${wt} diff --ext-di`,
-      `git -C ${wt} show --textc HEAD:README.md`,
-      `git -C ${wt} diff --no-index -- /etc/hosts /dev/null`,
+      `git -C ${wt} status`,
+      `git -C ${wt} add -A && git -C ${wt} commit -m fix`,
+      `cd ${wt} && git reset --hard && git status`,
+      `git -C ${s.repo} log --oneline | head -3`,
+      `git -C ${s.other} diff --stat`,
+      `gh pr list --json number | jq length`,
     ])
-      expect(await bash(s, cmd), cmd).toMatch(/Refused/);
+      expect(await bash(s, cmd), cmd).toBeNull();
+    for (const cmd of [
+      `git -C ${wt} push origin HEAD`,
+      `git -C ${wt} push origin HEAD:main`,
+      `bash -c 'git -C ${wt} push'`,
+    ])
+      expect(await bash(s, cmd), cmd).toMatch(/quick_pr pushes/);
   });
 
-  it("never runs git in a repository it wrote inside the worktree", async () => {
-    const sub = path.join(wt, "sub");
-    // The files of a bare repository whose config would run a program.
-    fs.mkdirSync(path.join(sub, "refs"), { recursive: true });
-    fs.mkdirSync(path.join(sub, "objects"));
-    fs.writeFileSync(path.join(sub, "HEAD"), "ref: refs/heads/main\n");
-    fs.writeFileSync(
-      path.join(sub, "config"),
-      "[core]\n\tbare = true\n\tfsmonitor = true\n"
-    );
-    fs.symlinkSync(sub, path.join(wt, "sub-link"));
-    try {
-      for (const cmd of [
-        `git -C ${sub} status`,
-        `git -C ${wt}/sub/ status`,
-        `git -C ${wt}/sub-link status`,
-      ])
-        expect(await bash(s, cmd), cmd).toMatch(
-          /isn't the root of one of your quick changes/
-        );
-      // A quoted ~ is a literal folder to the shell; it must be a full path.
-      expect(
-        await bash(s, `git -C '~/${path.relative(os.homedir(), wt)}' status`)
-      ).toMatch(/full path/);
-      expect(await bash(s, `git -C ${wt} mv a b`)).toMatch(/isn't allowed/);
-      // The root itself, however it is spelled, still works.
-      for (const cmd of [
-        `git -C ${wt}/ status`,
-        `git -C ${wt}/. status`,
-        `git -C ${wt}/sub/.. status`,
-      ])
-        expect(await bash(s, cmd), cmd).toBeNull();
-    } finally {
-      fs.rmSync(sub, { recursive: true });
-      fs.rmSync(path.join(wt, "sub-link"));
-    }
+  it("refuses git and file writes in the project and other tasks' worktrees", async () => {
+    for (const cmd of [
+      `git -C ${s.repo} commit -m x`,
+      `git -C ${s.other} reset --hard`,
+      `cd ${s.repo} && git checkout main`,
+      `git -C ${wt}/main-link stash`,
+      `git -C ${wt}/../${path.basename(s.other)} clean -fd`,
+      `echo x > ${s.repo}/README.md`,
+      `cd ${s.other} && rm README.md`,
+      `cp ${wt}/README.md ${wt}/other-link/README.md`,
+    ])
+      expect(await bash(s, cmd), cmd).toMatch(
+        /project repository, task worktree/
+      );
+    // Its own quick worktree is its to change.
+    expect(await bash(s, `echo x > ${wt}/notes.md`)).toBeNull();
+  });
+
+  it("refuses writes to AgentOS's state outside its folder", async () => {
+    const { orchestratorDir } = await import("./home");
+    const own = orchestratorDir(s.w);
+    const dbFile = process.env.DB_PATH!;
+    expect(await bash(s, `echo x > ${own}/notes.md`)).toBeNull();
+    expect(
+      await bash(s, `echo x > ${path.join(home, ".agent-os", "limits.json")}`)
+    ).toMatch(/AgentOS's own state/);
+    expect(
+      await bash(
+        s,
+        `sqlite3 -readonly ${dbFile} 'select count(*) from sessions'`
+      )
+    ).toBeNull();
+    for (const cmd of [
+      `sqlite3 ${dbFile} 'select 1'`,
+      `sqlite3 -readonly ${dbFile} 'DELETE FROM sessions'`,
+    ])
+      expect(await bash(s, cmd), cmd).toMatch(/-readonly/);
+  });
+
+  it("still never writes a repository's layout in its worktree", async () => {
     for (const f of [
       "HEAD",
       "head",
@@ -377,57 +350,6 @@ describe("the write guard with a quick change open", () => {
       expect(await write(s, path.join(wt, f)), f).toMatch(/layout/);
     for (const f of ["src/HEADER.md", "heads.txt", "docs/.github/x.md"])
       expect(await write(s, path.join(wt, f)), f).toBeNull();
-  });
-
-  it("keeps aos messages with ? ! # * and $ working", async () => {
-    for (const cmd of [
-      `aos notify "Done? Yes! PR #5 costs $3 *all* good"`,
-      `aos notify 'a\\' b`,
-      `aos notify 'it'"'"'s $HOME'`,
-      `aos send peer 'merged: $HOME ?'`,
-      `aos notify Stack landed`,
-    ])
-      expect(await bash(s, cmd), cmd).toBeNull();
-    for (const cmd of [
-      `aos notify hi; rm -rf /`,
-      `aos notify "$(id)"`,
-      "aos notify `id`",
-      `aos notify hi | sh`,
-      `aos notify hi > /etc/x`,
-      `aos notify hi && x`,
-      "aos notify hi\nrm -rf /",
-      "aos notify 'unclosed",
-      'aos notify "unclosed',
-      'aos notify "x`id`"',
-      'aos notify "${(e):-\\$(touch /tmp/pwn)}"',
-      'aos notify "${(e):-\\`touch /tmp/pwn\\`}"',
-      "aos notify ${(e):-x}",
-      "aos x $\\\n{x[ '$(touch /tmp/pwn5)' ]}",
-      "aos x $\\\n(id)",
-      'aos x "$[1+1]"',
-      "aos notify x $'\\'' ; touch /tmp/pwned ; echo \\'",
-      `aos notify 'a\\'; rm -rf /`,
-    ])
-      expect(await bash(s, cmd), cmd).toMatch(/Refused/);
-  });
-
-  it("refuses anything a shell would chain, redirect or expand", async () => {
-    for (const cmd of [
-      `git -C ${wt} status && rm -rf /`,
-      `git -C ${wt} status; git -C ${s.repo} push`,
-      `git -C ${wt} status | sh`,
-      `git -C ${wt} show HEAD > /tmp/x`,
-      `git -C $(echo ${s.repo}) status`,
-      `git -C ${wt} add "$(touch /tmp/x)"`,
-      `git -C ${wt} add \`id\``,
-      `git -C ${wt} add *`,
-      `aos peers && git -C ${s.repo} push`,
-      `GIT_DIR=${s.repo}/.git git -C ${wt} status`,
-    ])
-      expect(await bash(s, cmd), cmd).toMatch(/Refused/);
-    // Quoted, the same characters are only text.
-    expect(await bash(s, `git -C ${wt} add 'a;b|c.md'`)).toBeNull();
-    expect(await bash(s, `aos notify "Stack landed: 3 PRs"`)).toBeNull();
   });
 });
 

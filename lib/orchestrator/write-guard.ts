@@ -12,6 +12,7 @@
  * `..` resolved the way the system will resolve it.
  */
 
+import { execFile } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -21,8 +22,8 @@ import { isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
 import { LIMITS_FILE } from "./usage";
-import { GIT_LAYOUT_FILE, readCommand } from "./git-guard";
 import { quickWorktrees } from "./quick-store";
+import { shellRefusal } from "./shell-guard";
 
 // The tools that write a file, and the argument naming it.
 export const WRITE_TOOLS: Record<string, string> = {
@@ -59,6 +60,11 @@ const RUNS_CODE =
 // (repo.ts, rebase.ts): an edit while a review runs would change what it
 // judges.
 const AGENTOS_TEMP = /(^|\/)aos-(review|rebase|body)-[^/]+(\/|$)/;
+
+// A git repository's layout. Git config can run programs (core.fsmonitor,
+// diff.external, filter and textconv drivers), so even in its own quick
+// worktrees an orchestrator never writes these.
+const GIT_LAYOUT_FILE = /(^|\/)(HEAD|\.gitattributes)$|(^|\/)\.git(\/|$)/i;
 
 const MAX_LINKS = 40;
 
@@ -120,10 +126,14 @@ const within = (p: string, root: string) => {
 
 const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 
-// Why a write to this path is refused, or null when it may go ahead.
+// Why a write to this path is refused, or null when it may go ahead. For a
+// shell command (`shell`), only the deny list's places count: a project
+// repository or task worktree that isn't its own quick change, a review's
+// checkout, and AgentOS's state outside its folder.
 export async function writeRefusal(
   filePath: string,
-  bounds: WriteBounds
+  bounds: WriteBounds,
+  { shell = false }: { shell?: boolean } = {}
 ): Promise<string | null> {
   if (!filePath) return "No file path to check.";
   const given = expandHome(filePath);
@@ -171,7 +181,7 @@ export async function writeRefusal(
     const repo = repos.find((r) => within(target, r) && !holdsQuick(r));
     if (repo)
       return `${filePath} is inside ${repo}, a project repository, task worktree or AgentOS itself. Change code there through a task (start_task), or for a small edit, in a quick change's worktree (quick_change), so its PR goes through the merge gates.`;
-    if (ownQuick && GIT_LAYOUT_FILE.test(target))
+    if (ownQuick && !shell && GIT_LAYOUT_FILE.test(target))
       return `${filePath} is part of a git repository's layout (HEAD, .git/, .gitattributes); git config can run programs, so orchestrators never write those.`;
     if (AGENTOS_TEMP.test(target))
       return `${filePath} is in a checkout AgentOS is reviewing or rebasing; orchestrators never write there.`;
@@ -180,6 +190,7 @@ export async function writeRefusal(
     const own = ownDir.some((d) => within(target, d)) || !!ownQuick;
     if (state.some((d) => within(target, d)) && !own)
       return `${filePath} is in AgentOS's own state (${bounds.state}); you may write only in your folder, ${bounds.ownDir}.`;
+    if (shell) continue;
     if (isSecretPath(target) || isSecretPath(filePath))
       return `${filePath} holds or guards secrets; orchestrators never write those.`;
     const runsIn = runs.find((r) => within(target, r));
@@ -201,6 +212,9 @@ export async function writeRefusal(
   return null;
 }
 
+const agentOsDbPath = () =>
+  path.resolve(process.env.DB_PATH || path.join(process.cwd(), "agent-os.db"));
+
 // What an orchestrator's writes are held to, read fresh for each one so a
 // project added since counts: every local project's repositories (not just
 // its workspace's, since a write to another workspace's repo skips its gates
@@ -219,9 +233,7 @@ export async function orchestratorWriteBounds(
         WHERE worktree_path IS NOT NULL AND worktree_path != ''`
     )
     .all() as { dir: string }[];
-  const dbPath = path.resolve(
-    process.env.DB_PATH || path.join(process.cwd(), "agent-os.db")
-  );
+  const dbPath = agentOsDbPath();
   const repos = projects.map((p) => expandHome(p.dir)).filter((d) => d !== "");
   return {
     cwd: expandHome(session.working_directory),
@@ -313,60 +325,45 @@ export async function orchestratorToolRefusal(
   return writeRefusal(filePath, await orchestratorWriteBounds(session));
 }
 
-// A shell command: one plain command, and git only in its own quick
-// worktrees (git-guard.ts), the folder it names resolved like a write's.
+// A shell command, against the deny list (shell-guard.ts), its writes held
+// to the shell's share of the write bounds.
 async function commandRefusal(
   session: Session,
   command: unknown
 ): Promise<string | null> {
-  const read = readCommand(command);
-  if (read.refusal !== null || read.dir === null) return read.refusal;
-  const quick = quickWorktrees(session.id);
-  const dir = read.dir;
-  if (!dir.startsWith("/") || !quick.length)
-    return `Refused: git runs only in one of your quick changes' worktrees, named by its full path (${quick.length ? quick.join(", ") : "you have none open; start one with quick_change"}).`;
-  return (await isQuickRoot(dir, quick))
-    ? null
-    : `Refused: ${read.dir} isn't the root of one of your quick changes' worktrees (${quick.join(", ")}). Git runs at the root only, never in a subfolder, a project checkout or another session's worktree.`;
+  const bounds = await orchestratorWriteBounds(session);
+  const dbFile = agentOsDbPath();
+  return shellRefusal(command, {
+    cwd: bounds.cwd,
+    writeRefusal: (p) => writeRefusal(p, bounds, { shell: true }),
+    isAgentOsState: async (p) => {
+      const real = await physicalPath(p);
+      const dbReal = await physicalPath(dbFile);
+      if ([p, real].some((f) => f === dbFile || f === dbReal)) return true;
+      const own = await physicalPath(bounds.ownDir);
+      const state = await physicalPath(bounds.state);
+      return within(real, state) && !within(real, own);
+    },
+    protectedPids,
+  });
 }
 
-// Whether a folder is inside one of these worktrees by every way the
-// system could read it: as named, with `..` taken by name, and with links
-// followed.
-export async function insideQuick(
-  dir: string,
-  quick: string[]
-): Promise<boolean> {
-  try {
-    const forms = [
-      path.resolve(dir),
-      await physicalPath(dir),
-      await physicalPath(path.resolve(dir)),
-    ];
-    const roots = (
-      await Promise.all(
-        quick.map(async (q) => [path.resolve(q), await physicalPath(q)])
-      )
-    ).flat();
-    return forms.every((f) => roots.some((r) => within(f, r)));
-  } catch {
-    return false;
-  }
-}
-
-// Whether a folder is exactly the root of one of these worktrees (as named,
-// and with links followed), where git finds the real git dir.
-async function isQuickRoot(dir: string, quick: string[]): Promise<boolean> {
-  if (!(await insideQuick(dir, quick))) return false;
-  try {
-    const forms = [path.resolve(dir), await physicalPath(dir)];
-    const roots = (
-      await Promise.all(
-        quick.map(async (q) => [path.resolve(q), await physicalPath(q)])
-      )
-    ).flat();
-    return forms.every((f) => roots.includes(f));
-  } catch {
-    return false;
-  }
+// AgentOS's server (whatever listens on its port), the tmux servers its
+// sessions run in, and this worker. A lookup that fails refuses the kill.
+async function protectedPids(): Promise<Set<number>> {
+  const port = process.env.AGENTOS_PORT || process.env.PORT || "3011";
+  const pids = (cmd: string, args: string[]) =>
+    new Promise<number[]>((resolve, reject) =>
+      execFile(cmd, args, { timeout: 5000 }, (e, out) => {
+        // Exit 1 is "nothing matched".
+        if (e && (e as { code?: unknown }).code !== 1)
+          return reject(new Error(`couldn't list processes with ${cmd}`));
+        resolve(out.split(/\s+/).filter(Boolean).map(Number));
+      })
+    );
+  const [server, tmux] = await Promise.all([
+    pids("lsof", ["-ti", `tcp:${port}`, "-sTCP:LISTEN"]),
+    pids("pgrep", ["-x", "tmux"]),
+  ]);
+  return new Set([...server, ...tmux, process.pid, process.ppid]);
 }
