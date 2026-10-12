@@ -65,7 +65,7 @@ export function RowShell({
       )}
     >
       {leading}
-      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+      <span className="flex min-w-[7rem] flex-1 flex-col leading-tight">
         {children}
       </span>
       {aside}
