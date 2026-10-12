@@ -198,21 +198,26 @@ export function recentTasks(
     .map((r) => JSON.parse(r.data));
 }
 
-// Tool calls saved as still running.
-export function runningTools(
-  sessionId: string
-): Extract<ChatItem, { kind: "tool" }>[] {
+// Items of a kind saved as still running, read from the running index.
+export function runningItems<K extends "tool" | "task">(
+  sessionId: string,
+  kind: K
+): Extract<ChatItem, { kind: K }>[] {
   flushItems();
   return (
     db
       .prepare(
         `SELECT data FROM chat_items WHERE session_id = ?
-         AND kind = 'tool'
-         AND json_extract(data, '$.status') = 'running'`
+         AND kind = ? AND json_extract(data, '$.status') = 'running'
+         ORDER BY seq`
       )
-      .all(sessionId) as { data: string }[]
+      .all(sessionId, kind) as { data: string }[]
   ).map((r) => JSON.parse(r.data));
 }
+
+// Tool calls saved as still running.
+export const runningTools = (sessionId: string) =>
+  runningItems(sessionId, "tool");
 
 export function deleteItems(sessionId: string): void {
   pending.delete(sessionId);

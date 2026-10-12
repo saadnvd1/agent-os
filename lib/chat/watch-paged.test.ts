@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ChatItem, ChatServerMessage } from "./events";
 
 const { saveItem } = await import("./store");
@@ -27,9 +27,9 @@ function longChat(n: number) {
   return id;
 }
 
-function snapshot(id: string, paged: boolean) {
+function snapshot(id: string) {
   const sent: ChatServerMessage[] = [];
-  const stop = watchChat(id, (m) => sent.push(m), paged);
+  const stop = watchChat(id, (m) => sent.push(m));
   stop();
   const snap = sent.find((m) => m.type === "snapshot");
   if (snap?.type !== "snapshot") throw new Error("no snapshot");
@@ -39,7 +39,7 @@ function snapshot(id: string, paged: boolean) {
 describe("watchChat", () => {
   it("sends a paged client the latest page and pages the rest in", () => {
     const id = longChat(PAGE_ITEMS + 30);
-    const snap = snapshot(id, true);
+    const snap = snapshot(id);
     expect(snap.items).toHaveLength(PAGE_ITEMS);
     expect(snap.items.at(-1)?.id).toBe("task-old");
     expect(snap.hasMore).toBe(true);
@@ -65,7 +65,7 @@ describe("watchChat", () => {
     for (let i = 0; i < PAGE_ITEMS + 5; i++)
       saveItem(id, { id: `m${i}`, kind: "assistant", text: "", createdAt: i });
     // No worker: a task saved as running was cut off.
-    expect(snapshot(id, true).tasks).toMatchObject([
+    expect(snapshot(id).tasks).toMatchObject([
       { id: "task-old", status: "stopped" },
     ]);
   });
@@ -106,15 +106,35 @@ describe("watchChat", () => {
       endedAt: Date.now(),
       createdAt: Date.now(),
     } as ChatItem);
-    const snap = snapshot(id, true);
+    const snap = snapshot(id);
     expect(snap.tasks.map((t) => t.id)).toEqual(["task-recent"]);
     expect(snap.items.some((i) => i.id === "task-new")).toBe(true);
   });
 
-  it("sends every item to a client that didn't ask for pages", () => {
-    const id = longChat(PAGE_ITEMS + 30);
-    const snap = snapshot(id, false);
-    expect(snap.items).toHaveLength(PAGE_ITEMS + 31);
-    expect(snap.hasMore).toBe(false);
+  it("reads a bounded number of rows however long the chat is", () => {
+    const id = longChat(2000);
+    const parse = vi.spyOn(JSON, "parse");
+    const snap = snapshot(id);
+    const parsed = parse.mock.calls.length;
+    parse.mockRestore();
+    expect(snap.items).toHaveLength(PAGE_ITEMS);
+    expect(parsed).toBeLessThan(PAGE_ITEMS + 25);
+  });
+
+  it("pages back through every older item in order", () => {
+    const id = longChat(PAGE_ITEMS * 3 + 7);
+    const snap = snapshot(id);
+    const pages = [snap.items];
+    let { cursor, hasMore } = snap;
+    while (hasMore) {
+      const page = chatHistory(id, cursor!);
+      pages.unshift(page.items);
+      ({ cursor, hasMore } = page);
+    }
+    const all = pages.flat().map((i) => i.id);
+    expect(all).toEqual([
+      ...Array.from({ length: PAGE_ITEMS * 3 + 7 }, (_, i) => `m${i}`),
+      "task-old",
+    ]);
   });
 });

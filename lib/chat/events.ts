@@ -311,7 +311,7 @@ export interface ToolBody {
 export type ChatServerMessage =
   | {
       type: "snapshot";
-      // Every item, or the latest page for a client that asked (?paged=1).
+      // The latest page; older ones come with `history`.
       items: ChatItem[];
       // Where older items start, and whether there are any.
       cursor: number | null;
