@@ -276,7 +276,8 @@ async function merge(
     return;
   }
   setArmed(task.id, false);
-  // The merged condition would say it again on the next diff.
+  // The merged condition would say it again on the next diff, so this armed
+  // line is the one merged notice. deliver.ts never caps `armed:` events.
   markTold(workspaceId, `merged:${task.id}`, task.id);
   event(
     workspaceId,

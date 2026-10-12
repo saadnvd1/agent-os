@@ -8,6 +8,8 @@ import {
   queueEvent,
   recordConditions,
   REFIRE_MS,
+  deliveriesSince,
+  suppressedSince,
 } from "./events";
 import {
   backoffMs,
@@ -220,6 +222,34 @@ describe("deliverEvents", () => {
       await deliver(NOW + i * BATCH_WINDOW_MS);
     }
     expect(sent).toHaveLength(SUBJECT_CAP);
+  });
+
+  it("still delivers a terminal event once the subject is capped, and records a capped one", async () => {
+    const { subjects, add, sent, deliver, w } = batch();
+    for (let i = 0; i < SUBJECT_CAP; i++) {
+      add(cond(subjects[0], `step${i}`));
+      await deliver(NOW + i * BATCH_WINDOW_MS);
+    }
+    expect(sent).toHaveLength(SUBJECT_CAP);
+    const at = NOW + SUBJECT_CAP * BATCH_WINDOW_MS;
+    queueEvent(
+      w.id,
+      `armed:${subjects[0]}`,
+      subjects[0],
+      "task x: Merged (armed)",
+      at
+    );
+    await deliver(at);
+    expect(sent).toHaveLength(SUBJECT_CAP + 1);
+    expect(sent.at(-1)).toContain("Merged (armed)");
+
+    add(cond(subjects[0], "ci-green"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await deliver(at + BATCH_WINDOW_MS);
+    warn.mockRestore();
+    expect(sent).toHaveLength(SUBJECT_CAP + 1);
+    expect(suppressedSince(w.id, subjects[0], NOW)).toBe(1);
+    expect(deliveriesSince(w.id, subjects[0], NOW)).toBe(SUBJECT_CAP + 1);
   });
 
   it("puts events back and backs off when sending fails", async () => {

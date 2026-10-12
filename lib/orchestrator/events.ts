@@ -238,6 +238,38 @@ export function logDeliveries(
   )();
 }
 
+// Events held back by the subject cap: logged with the line, never counted
+// as deliveries.
+export function logSuppressed(
+  workspaceId: string,
+  events: Pick<EventRow, "subject" | "key">[],
+  at: number
+): void {
+  const stmt = db.prepare(
+    `INSERT INTO orchestrator_event_log (workspace_id, subject, delivered_at, suppressed) VALUES (?, ?, ?, ?)`
+  );
+  db.transaction(() => {
+    for (const e of events) stmt.run(workspaceId, e.subject, iso(at), e.key);
+  })();
+}
+
+// Events suppressed for a subject in the window.
+export function suppressedSince(
+  workspaceId: string,
+  subject: string,
+  since: number
+): number {
+  return (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM orchestrator_event_log
+         WHERE workspace_id = ? AND subject = ? AND delivered_at >= ?
+           AND suppressed IS NOT NULL`
+      )
+      .get(workspaceId, subject, iso(since)) as { n: number }
+  ).n;
+}
+
 export function unlogDeliveries(ids: number[]): void {
   const stmt = db.prepare(`DELETE FROM orchestrator_event_log WHERE id = ?`);
   db.transaction(() => ids.forEach((id) => stmt.run(id)))();
@@ -246,7 +278,7 @@ export function unlogDeliveries(ids: number[]): void {
 export function lastDeliveredAt(workspaceId: string): number {
   const row = db
     .prepare(
-      `SELECT MAX(delivered_at) AS at FROM orchestrator_event_log WHERE workspace_id = ?`
+      `SELECT MAX(delivered_at) AS at FROM orchestrator_event_log WHERE workspace_id = ? AND suppressed IS NULL`
     )
     .get(workspaceId) as { at: string | null };
   return row.at ? Date.parse(row.at) : 0;
@@ -261,7 +293,8 @@ export function deliveriesSince(
     db
       .prepare(
         `SELECT COUNT(*) AS n FROM orchestrator_event_log
-         WHERE workspace_id = ? AND subject = ? AND delivered_at >= ?`
+         WHERE workspace_id = ? AND subject = ? AND delivered_at >= ?
+           AND suppressed IS NULL`
       )
       .get(workspaceId, subject, iso(since)) as { n: number }
   ).n;
