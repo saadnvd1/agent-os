@@ -200,6 +200,7 @@ export async function statusOf(s: Session): Promise<{
 
 // A commit's time never changes: read once per sha.
 const committed = new Map<string, number>();
+export const knownCommitTime = (sha: string) => committed.get(sha) ?? 0;
 
 export async function settleIn(
   workspaceId: string,

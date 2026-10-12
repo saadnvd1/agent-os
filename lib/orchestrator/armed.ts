@@ -12,6 +12,7 @@
  * database, so it survives a restart.
  */
 
+import { notifyStatusChanged } from "../status/hub";
 import { db, type Session } from "../db";
 import type { TaskPR } from "../tasks/state";
 import { latestApproval } from "./ask-approvals";
@@ -37,6 +38,7 @@ export function setArmed(sessionId: string, armed: boolean): void {
        merge_armed_seen = NULL WHERE id = ?`
   ).run(sessionId);
   looked.delete(sessionId);
+  notifyStatusChanged();
 }
 
 // The workspace a task's PR merges through when armed: its project's, with

@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionPrStage } from "@/components/PrStageBadge";
 import { ViewSwitch } from "@/components/Chat/ViewSwitch";
 import { ContextMeter } from "@/components/Chat/ContextMeter";
 import { Button } from "@/components/ui/button";
@@ -155,6 +156,7 @@ export function DesktopTabBar({
       <div className="flex shrink-0 items-center gap-1.5">
         <HostBadge hostId={session?.host_id} />
         <ContextMeter sessionId={session?.id} />
+        <SessionPrStage sessionId={session?.id} />
         <ViewSwitch session={session} />
         {session?.working_directory && (
           <PaneViewToggle

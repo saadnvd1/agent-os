@@ -114,6 +114,20 @@ async function peerChatWaiting(
 // check has registered on it for 2 minutes. Seconds still to wait.
 export const SETTLE_S = 120;
 
+// When the check count last changed, as ciSettleIn stored it.
+const lastSeen = (detail: string | null | undefined) =>
+  detail ? (JSON.parse(detail) as { count: number; at: number }) : null;
+
+const settleLeft = (
+  last: { count: number; at: number } | null,
+  checkCount: number,
+  committedAt: number,
+  now: number
+) => {
+  const changedAt = last && last.count === checkCount ? last.at : now;
+  return Math.max(0, Math.max(committedAt, changedAt) + SETTLE_S - now);
+};
+
 export function ciSettleIn(input: {
   workspaceId: string;
   taskId: string;
@@ -123,11 +137,7 @@ export function ciSettleIn(input: {
   now?: number;
 }): number {
   const now = Math.floor((input.now ?? Date.now()) / 1000);
-  const seen = getCheck(input.taskId, input.sha, "ci");
-  const last = seen?.detail
-    ? (JSON.parse(seen.detail) as { count: number; at: number })
-    : null;
-  const changedAt = last && last.count === input.checkCount ? last.at : now;
+  const last = lastSeen(getCheck(input.taskId, input.sha, "ci")?.detail);
   if (!last || last.count !== input.checkCount)
     putCheck({
       workspaceId: input.workspaceId,
@@ -137,8 +147,21 @@ export function ciSettleIn(input: {
       status: "pass",
       detail: JSON.stringify({ count: input.checkCount, at: now }),
     });
-  const settledAt = Math.max(input.committedAt, changedAt) + SETTLE_S;
-  return Math.max(0, settledAt - now);
+  return settleLeft(last, input.checkCount, input.committedAt, now);
+}
+
+// The same answer from what ciSettleIn stored, writing nothing: for a
+// status that only looks.
+export function ciSettleLeft(input: {
+  taskId: string;
+  sha: string;
+  checkCount: number;
+  committedAt: number;
+  now?: number;
+}): number {
+  const now = Math.floor((input.now ?? Date.now()) / 1000);
+  const last = lastSeen(getCheck(input.taskId, input.sha, "ci")?.detail);
+  return settleLeft(last, input.checkCount, input.committedAt, now);
 }
 
 // A head with no checks for this long after its PR became mergeable, in a
