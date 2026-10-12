@@ -160,6 +160,77 @@ describe("ChatHost", () => {
     host.close();
   });
 
+  describe("batched item writes", () => {
+    const stored = (id: string, itemId: string) =>
+      (
+        getDb()
+          .prepare(
+            `SELECT data FROM chat_items WHERE session_id = ? AND item_id = ?`
+          )
+          .get(id, itemId) as { data: string } | undefined
+      )?.data;
+    const partial = (text: string): DriverEvent => ({
+      type: "item",
+      item: {
+        id: "a1",
+        kind: "assistant",
+        text,
+        streaming: true,
+        createdAt: 1,
+      },
+    });
+
+    it("holds streaming updates, but writes a completed item and pushes every one live", async () => {
+      const { id, host, conversation, emitted } = await startHost();
+      await host.handle({ type: "send", id: "user-1", text: "go" });
+      conversation.events.push(partial("He"));
+      conversation.events.push(partial("Hel"));
+      await tick();
+      expect(emitted.filter((e) => e.type === "item")).toHaveLength(3);
+      // A crash here loses only the partial text, never the sent message.
+      expect(stored(id, "user-1")).toBeDefined();
+      expect(stored(id, "a1")).toBeUndefined();
+      conversation.events.push({
+        type: "item",
+        item: { id: "a1", kind: "assistant", text: "Hello", createdAt: 1 },
+      });
+      await tick();
+      expect(stored(id, "a1")).toContain("Hello");
+      host.close();
+    });
+
+    it("flushes at the end of a turn", async () => {
+      const { id, host, conversation } = await startHost();
+      conversation.events.push(partial("Hel"));
+      await tick();
+      expect(stored(id, "a1")).toBeUndefined();
+      conversation.events.push({ type: "state", state: "idle" });
+      await tick();
+      expect(stored(id, "a1")).toContain("Hel");
+      host.close();
+    });
+
+    it("flushes on an interrupt", async () => {
+      const { id, host, conversation } = await startHost();
+      await host.handle({ type: "send", id: "user-1", text: "go" });
+      conversation.events.push(partial("Hel"));
+      await tick();
+      expect(stored(id, "a1")).toBeUndefined();
+      await host.handle({ type: "interrupt" });
+      expect(stored(id, "a1")).toContain("Hel");
+      host.close();
+    });
+
+    it("flushes when the worker closes", async () => {
+      const { id, host, conversation } = await startHost();
+      conversation.events.push(partial("Hel"));
+      await tick();
+      expect(stored(id, "a1")).toBeUndefined();
+      host.close();
+      expect(stored(id, "a1")).toContain("Hel");
+    });
+  });
+
   it("answers /mcp itself, without starting a turn", async () => {
     const { id, host, conversation } = await startHost();
     await host.handle({ type: "send", id: "user-1", text: "/mcp" });

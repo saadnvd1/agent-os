@@ -22,9 +22,10 @@ import type {
 } from "../events";
 import {
   itemsOfKind,
+  flushItems,
   moveToEnd,
+  queueItem,
   runningTools,
-  saveItem,
   settle,
 } from "../store";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
@@ -261,7 +262,10 @@ export class ChatHost {
   }
 
   private record(item: ChatItem): void {
-    saveItem(this.session.id, item);
+    // Streaming updates are written in batches; anything else right away.
+    queueItem(this.session.id, item, {
+      flush: !("streaming" in item && item.streaming),
+    });
     this.emit({ type: "item", item });
   }
 
@@ -354,6 +358,7 @@ export class ChatHost {
           }
         } else if (e.type === "state") {
           if (e.state === "idle") {
+            flushItems();
             // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
             this.settleStreaming();
             this.closeTools();
@@ -406,6 +411,7 @@ export class ChatHost {
       this.settleStreaming();
       this.closeTools();
       this.showHandedOver();
+      flushItems();
       this.setState("idle");
     }
   }
@@ -485,7 +491,7 @@ export class ChatHost {
       checkpoint,
     };
     if (handOver) {
-      saveItem(this.session.id, user);
+      queueItem(this.session.id, user, { flush: true });
       this.handedOver.push(user);
     } else this.record(user);
     this.setState("running");
@@ -631,6 +637,7 @@ export class ChatHost {
         }
         return;
       case "interrupt":
+        flushItems();
         await this.modeChange.catch(() => {});
         if (cmd.hard) {
           this.hardStopAt = Date.now();
@@ -877,6 +884,7 @@ export class ChatHost {
     clearTimeout(this.retireTimer);
     clearTimeout(this.restTimer);
     this.closed = true;
+    flushItems();
     this.onClose();
     this.conversation.close();
   }
