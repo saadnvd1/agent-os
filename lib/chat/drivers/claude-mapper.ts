@@ -224,6 +224,13 @@ export class ClaudeMapper {
       case "task_progress":
       case "task_notification":
         return this.task(m);
+      case "status": {
+        // "compacting" while the context is summarised, null once it's done.
+        const status = (m as { status?: string | null }).status;
+        return status === "compacting" || status === null
+          ? [{ type: "compacting", active: status === "compacting" }]
+          : [];
+      }
       case "compact_boundary":
         return [
           {

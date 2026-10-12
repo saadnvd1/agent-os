@@ -13,6 +13,8 @@ export interface SessionStatus {
   asks?: number;
   need?: SessionNeed | null;
   unread?: boolean;
+  // A chat summarising its context; status stays "running".
+  compacting?: { since: number; before?: number };
   claudeSessionId?: string | null;
   // From a program's OSC 7501 report: untrusted, rendered as plain text.
   detail?: string | null;

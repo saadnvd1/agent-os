@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { NEED_LABEL, type SidebarRow } from "@/lib/sidebar/shelves";
 import { cn } from "@/lib/utils";
 
-// Amber when it needs you, red when it failed, green while it works.
+// Amber when it needs you, red when it failed, green while it works, and a
+// pulsing blue while it summarises its context.
 export function RowDot({ row }: { row: SidebarRow }) {
   return (
     <span
@@ -15,9 +16,11 @@ export function RowDot({ row }: { row: SidebarRow }) {
           ? "bg-red-500"
           : row.need
             ? "bg-amber-500"
-            : row.working
-              ? "bg-green-500 ring-[3px] ring-green-500/25"
-              : "bg-muted-foreground/35"
+            : row.compacting
+              ? "animate-pulse bg-blue-500 ring-[3px] ring-blue-500/25"
+              : row.working
+                ? "bg-green-500 ring-[3px] ring-green-500/25"
+                : "bg-muted-foreground/35"
       )}
     />
   );
@@ -41,6 +44,12 @@ export function RowBadge({ row }: { row: SidebarRow }) {
       </span>
     );
   }
+  if (row.compacting)
+    return (
+      <span className="rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400">
+        Compacting
+      </span>
+    );
   if (row.status?.stalled)
     return (
       <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">

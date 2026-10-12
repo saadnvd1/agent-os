@@ -30,6 +30,8 @@ export interface RowStatus {
   need?: SessionNeed | null;
   unread?: boolean;
   stalled?: boolean;
+  // A chat summarising its context (status stays "running").
+  compacting?: { since: number; before?: number };
   asks?: number;
   // A program's own message (OSC 7501): untrusted, plain text only.
   detail?: string | null;
@@ -41,6 +43,8 @@ export interface SidebarRow {
   need: SessionNeed | null;
   unread: boolean;
   working: boolean;
+  // Working, but summarising its context, not on the task.
+  compacting?: boolean;
   // Orchestration workers, nested under their conductor.
   workers: SidebarRow[];
   // Its task's state, when it's a task.
@@ -120,6 +124,7 @@ function toRow(input: ShelfInput, session: Session): SidebarRow {
     need: needOf(session, status, input.tasks[session.id]),
     unread: !!status?.unread,
     working: status?.status === "running",
+    compacting: !!status?.compacting,
     workers: [],
     task: input.tasks[session.id],
     quick: [],
@@ -256,6 +261,8 @@ function sameStatus(a: RowStatus | undefined, b: RowStatus | undefined) {
     (a.need ?? null) === (b.need ?? null) &&
     !!a.unread === !!b.unread &&
     !!a.stalled === !!b.stalled &&
+    (a.compacting?.since ?? null) === (b.compacting?.since ?? null) &&
+    (a.compacting?.before ?? null) === (b.compacting?.before ?? null) &&
     a.asks === b.asks &&
     (a.detail ?? null) === (b.detail ?? null)
   );

@@ -20,7 +20,7 @@ import {
   getSessionIdFromName,
 } from "../providers/registry";
 import { getDb, type Session } from "../db";
-import { chatState } from "../chat/runner";
+import { chatCompacting, chatState } from "../chat/runner";
 import { chatActivityLine, chatStall } from "../chat/activity";
 import {
   chatNeed,
@@ -30,6 +30,7 @@ import {
   terminalStatus,
 } from "../needs-you";
 import type { SessionNeed } from "../sidebar/shelves";
+import type { Compacting } from "../chat/events";
 import { openAskCount } from "../orchestrator/asks";
 import { lastUserTask } from "../chat/store";
 import { hostExecFile, isRemoteHost } from "../hosts";
@@ -62,6 +63,8 @@ export interface SessionStatusResponse {
   unread?: boolean;
   // A chat turn silent past the stall threshold (lib/chat/stall).
   stalled?: boolean;
+  // A chat whose agent is summarising its context ("status" stays running).
+  compacting?: Compacting;
   // A program's own message (OSC 7501): untrusted, plain text only.
   detail?: string | null;
   progress?: number | null;
@@ -467,6 +470,9 @@ async function collect(): Promise<StatusSnapshot> {
       need: chatNeed(session, state, asks),
       unread: isUnread(session, state),
       ...(chatStall(session.id) && { stalled: true }),
+      ...(chatCompacting(session.id) && {
+        compacting: chatCompacting(session.id)!,
+      }),
       ...(session.role === "orchestrator" && { asks }),
     };
   }

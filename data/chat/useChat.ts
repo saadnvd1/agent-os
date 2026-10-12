@@ -13,6 +13,7 @@ import type {
   ChatModel,
   ChatServerMessage,
   ChatState,
+  Compacting,
   FileSuggestion,
   QueuedMessage,
   ToolBody,
@@ -138,6 +139,7 @@ export function useChat(
     return () => void visibleBodies.current.delete(id);
   }, []);
   const [state, setState] = useState<ChatState>("idle");
+  const [compacting, setCompacting] = useState<Compacting | null>(null);
   const [connected, setConnected] = useState(false);
   const [commands, setCommands] = useState<ChatCommand[]>([]);
   const [models, setModels] = useState<ChatModel[]>([]);
@@ -218,6 +220,7 @@ export function useChat(
           setToolBodies((prev) => keptBodies(prev, before, m.items));
           setLoadingOlder(false);
           setState(m.state);
+          setCompacting(m.compacting ?? null);
           setQueue(m.queue ?? []);
           setSuggestion(m.suggestion ?? null);
         } else if (m.type === "queue") {
@@ -230,8 +233,11 @@ export function useChat(
         } else if (m.type === "search") {
           searchRequests.current.get(m.reqId)?.(m);
           searchRequests.current.delete(m.reqId);
+        } else if (m.type === "compacting") {
+          setCompacting(m.compacting);
         } else if (m.type === "state") {
           setState(m.state);
+          if (m.state === "idle" || m.state === "error") setCompacting(null);
         } else if (m.type === "capabilities") {
           setRefreshingCommands(false);
           setCommands(m.commands);
@@ -469,6 +475,7 @@ export function useChat(
     requestToolBody,
     pinToolBody,
     state,
+    compacting,
     connected,
     commands,
     refreshCommands,

@@ -90,7 +90,11 @@ export class PiMapper {
           e.isError ? "error" : "done",
           resultText(e.result)
         );
+      case "compaction_start":
+        return this.emit({ type: "compacting", active: true });
       case "compaction_end":
+        // Failed or not, it's over.
+        this.emit({ type: "compacting", active: false });
         if (!e.result) return;
         return this.emit({
           type: "item",

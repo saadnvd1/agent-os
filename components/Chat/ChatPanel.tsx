@@ -263,6 +263,7 @@ export function ChatPanel({
     suggestion,
     requestFiles,
     search,
+    compacting,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const startFresh = useFreshStart();
   const { isMobile } = useViewport();
@@ -542,7 +543,12 @@ export function ChatPanel({
         )}
       </div>
       <div className="mx-auto w-full max-w-3xl px-3 pb-3">
-        <ActivityLine items={items} state={state} onStop={interrupt} />
+        <ActivityLine
+          items={items}
+          state={state}
+          compacting={compacting}
+          onStop={interrupt}
+        />
         <BackgroundTasks
           items={tasks}
           outputs={taskOutputs}

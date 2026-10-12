@@ -15,6 +15,7 @@ import type {
   ChatContext,
   ChatImage,
   ChatState,
+  Compacting,
   SentBy,
   UndoPreview,
 } from "./events";
@@ -159,8 +160,14 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     const item = live.streaming.get(e.id);
     if (item && "text" in item) item.text += e.text;
     emit(sessionId, e);
+  } else if (e.type === "compacting") {
+    live.compacting = e.compacting;
+    emit(sessionId, e);
   } else if (e.type === "state") {
     live.state = e.state;
+    // Whatever ended the turn ended the compaction too.
+    if (e.state === "idle" || e.state === "error")
+      setCompacting(sessionId, live, null);
     emit(sessionId, e);
     clearTimeout(live.retiring);
     live.retiring = undefined;
@@ -185,6 +192,16 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
       emitCapabilities(session);
     }
   }
+}
+
+function setCompacting(
+  sessionId: string,
+  live: Live,
+  compacting: Compacting | null
+): void {
+  if (!live.compacting && !compacting) return;
+  live.compacting = compacting;
+  emit(sessionId, { type: "compacting", compacting });
 }
 
 function emitQueue(sessionId: string): void {
@@ -236,6 +253,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       onClose: (detached: boolean) => {
         if (live && registry.live.get(sessionId) === live) {
           registry.live.delete(sessionId);
+          emit(sessionId, { type: "compacting", compacting: null });
           emit(sessionId, { type: "state", state: "idle" });
         }
         // It retired itself for a current worker, or ended its agent's
@@ -276,6 +294,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
     live = {
       worker: client,
       state: hello.state,
+      compacting: hello.compacting ?? null,
       streaming: new Map(hello.streaming.map((i) => [i.id, i])),
       activity,
       build: hello.build,
@@ -299,6 +318,8 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
     if (live.canPlan)
       client.command({ type: "set_plan", plan: !!saved.chat_plan });
     emit(sessionId, { type: "state", state: live.state });
+    if (live.compacting)
+      emit(sessionId, { type: "compacting", compacting: live.compacting });
     return live;
   })();
   registry.connecting.set(sessionId, connecting);
@@ -770,6 +791,8 @@ export function stopChat(sessionId: string): void {
   const live = registry.live.get(sessionId);
   if (live) {
     registry.live.delete(sessionId);
+    if (live.compacting)
+      emit(sessionId, { type: "compacting", compacting: null });
     live.worker.command({ type: "close" });
     live.worker.detach();
     return;
@@ -786,6 +809,9 @@ export async function releaseChat(sessionId: string): Promise<void> {
   resumed.delete(sessionId);
   await resumeQueue(sessionId);
 }
+
+export const chatCompacting = (sessionId: string): Compacting | null =>
+  registry.live.get(sessionId)?.compacting ?? null;
 
 export function chatState(sessionId: string): ChatState | null {
   return registry.live.get(sessionId)?.state ?? null;
@@ -851,6 +877,7 @@ export function watchChat(
     hasMore: page.hasMore,
     tasks: present(sessionId, tasks),
     state: live?.state ?? "idle",
+    compacting: live?.compacting ?? null,
     queue: listQueue(sessionId),
     suggestion: getSession(sessionId).chat_suggestion ?? null,
   });

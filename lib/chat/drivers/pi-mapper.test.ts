@@ -29,6 +29,31 @@ function replay() {
   return { events, items: [...items.values()] };
 }
 
+describe("PiMapper compaction", () => {
+  const run = (...events: Record<string, unknown>[]) => {
+    const out: DriverEvent[] = [];
+    const mapper = new PiMapper((e) => out.push(e));
+    for (const e of events) mapper.map(e);
+    return out;
+  };
+
+  it("is compacting from its start to its end, failed or not", () => {
+    expect(
+      run({ type: "compaction_start" }, { type: "compaction_end", result: {} })
+    ).toMatchObject([
+      { type: "compacting", active: true },
+      { type: "compacting", active: false },
+      { type: "item", item: { kind: "compacted" } },
+    ]);
+    expect(
+      run({ type: "compaction_start" }, { type: "compaction_end" })
+    ).toEqual([
+      { type: "compacting", active: true },
+      { type: "compacting", active: false },
+    ]);
+  });
+});
+
 describe("PiMapper", () => {
   it("turns a recorded run into chat items, one turn per run", () => {
     const { events, items } = replay();
