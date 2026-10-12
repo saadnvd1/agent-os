@@ -15,6 +15,7 @@ import { useSessionsQuery } from "@/data/sessions";
 import { useLinkedHostNames } from "@/data/hosts";
 import { useProjectsQuery } from "@/data/projects";
 import { useQueuedTasksQuery, useTasksQuery } from "@/data/tasks";
+import { rollups, type Rollup } from "@/lib/sidebar/rollup";
 import { queuedRows } from "@/lib/sidebar/queued";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useOrchestratorsQuery } from "@/data/orchestrators";
@@ -69,7 +70,7 @@ export function useSidebarData(
   );
   const project = workspaceProjects.find((p) => p.id === ui.projectId) ?? null;
 
-  const { shelves, machines } = useMemo(() => {
+  const { all, shelves, machines } = useMemo(() => {
     const byId = new Map(projects.map((p) => [p.id, p]));
     const workspaceName = new Map(workspaces.map((w) => [w.id, w.name]));
     const taskStates: Record<string, TaskState> = {};
@@ -84,23 +85,32 @@ export function useSidebarData(
       projectName,
       query: ui.query,
     };
+    const input = {
+      ...common,
+      sessions: sessions.filter(
+        (s) =>
+          !onMachineOnly(s, linked) &&
+          inWorkspace(
+            s,
+            (id) => byId.get(id)?.workspace_id,
+            workspace?.id ?? null
+          )
+      ),
+      projectId: project?.id ?? null,
+      currentOrchestrators,
+    };
+    // The rollups count the whole list; the filter only narrows what shows.
+    const all = buildShelves(input);
     return {
-      shelves: buildShelves({
-        ...common,
-        sessions: sessions.filter(
-          (s) =>
-            !onMachineOnly(s, linked) &&
-            inWorkspace(
-              s,
-              (id) => byId.get(id)?.workspace_id,
-              workspace?.id ?? null
-            )
-        ),
-        projectId: project?.id ?? null,
-        currentOrchestrators,
-      }),
-      // Not in any project, so not under a chosen one.
-      machines: project ? [] : machineGroups({ ...common, sessions }, linked),
+      all,
+      shelves: ui.orchestratorId
+        ? buildShelves({ ...input, startedBy: ui.orchestratorId })
+        : all,
+      // Not in any project, nor started by an orchestrator.
+      machines:
+        project || ui.orchestratorId
+          ? []
+          : machineGroups({ ...common, sessions }, linked),
     };
   }, [
     linked,
@@ -113,6 +123,7 @@ export function useSidebarData(
     workspace,
     project,
     ui.query,
+    ui.orchestratorId,
   ]);
 
   // Per workspace, how many of its project sessions are working: the
@@ -150,7 +161,7 @@ export function useSidebarData(
   );
 
   // Tasks waiting to start, in their line's order.
-  const queued = useMemo(
+  const queuedAll = useMemo(
     () =>
       queuedRows({
         queue,
@@ -160,6 +171,39 @@ export function useSidebarData(
         query: ui.query,
       }),
     [queue, sessions, workspace, project, ui.query]
+  );
+  const queued = useMemo(
+    () =>
+      ui.orchestratorId
+        ? queuedAll.filter((r) => r.item.startedBy === ui.orchestratorId)
+        : queuedAll,
+    [queuedAll, ui.orchestratorId]
+  );
+
+  // Each orchestrator's started work, keyed by its counts like the ones
+  // above so a push that changed none of them redraws no row.
+  const rollupKey = useMemo(
+    () => JSON.stringify([...rollups(all, queuedAll)].sort()),
+    [all, queuedAll]
+  );
+  const rollupByOrchestrator = useMemo(
+    () => new Map(JSON.parse(rollupKey) as [string, Rollup][]),
+    [rollupKey]
+  );
+
+  // Orchestrator session id -> the workspace it serves, for tags and chips.
+  const orchestratorKey = JSON.stringify(
+    sessions
+      .filter((s) => s.role === "orchestrator")
+      .map((s) => [
+        s.id,
+        workspaces.find((w) => w.id === s.workspace_id)?.name ?? s.name,
+      ])
+      .sort()
+  );
+  const orchestratorNames = useMemo(
+    () => new Map(JSON.parse(orchestratorKey) as [string, string][]),
+    [orchestratorKey]
   );
 
   const taskCardUrl = useCallback(
@@ -194,6 +238,8 @@ export function useSidebarData(
     projectNames,
     runningByWorkspace,
     queuedByWorkspace,
+    rollupByOrchestrator,
+    orchestratorNames,
     workspaces,
     workspace,
     workspaceProjects,

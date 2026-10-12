@@ -19,6 +19,8 @@ export function queuedRows(input: {
   workspaceId: string | null;
   projectId?: string | null;
   query?: string;
+  // Only what this orchestrator session queued.
+  startedBy?: string | null;
 }): QueuedRow[] {
   const q = (input.query ?? "").trim().toLowerCase();
   // Each line's waiting tasks, in order, for what a move can swap with.
@@ -34,6 +36,7 @@ export function queuedRows(input: {
         !input.sessionIds.has(item.id) &&
         (!input.workspaceId || item.workspaceId === input.workspaceId) &&
         (!input.projectId || item.projectId === input.projectId) &&
+        (!input.startedBy || item.startedBy === input.startedBy) &&
         (!q ||
           item.name.toLowerCase().includes(q) ||
           (item.projectName ?? "").toLowerCase().includes(q))

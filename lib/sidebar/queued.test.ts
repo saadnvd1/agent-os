@@ -18,6 +18,7 @@ const item = (
   afterId: null,
   note: null,
   error: null,
+  startedBy: null,
   createdAt: "2026-10-10T00:00:00Z",
   ...over,
 });
