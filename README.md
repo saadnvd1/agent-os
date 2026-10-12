@@ -485,6 +485,17 @@ and the same actions in each row's menu; a row becomes the task's own row
 when it starts. Why it works
 this way: [docs/decisions/2026-10-10-queued-tasks.md](docs/decisions/2026-10-10-queued-tasks.md).
 
+A paired device's token can run the building loop through read-only routes:
+`GET /api/start-options?projectId=` (agents and models, the models a task can
+run on, machines, branches, whether a task plans first, in one request),
+`GET /api/tasks/<id>/diff` (the task's whole change, base to head: a file list,
+then `?file=<path>` for one file's patch; capped, with `truncated` when a cap
+is hit; read from the worktree, else the PR), and `GET /api/tasks/<id>/checks`
+(the PR head's checks, the tail of a failing job's log, and the review gate's
+verdict). A task's `plan` in `GET /api/tasks` carries `status` (`writing`,
+`ready` or `approved`), a title and capped text. Their shapes are in
+`lib/tasks/loop-types.ts`, which has no server imports so a client can share it.
+
 ## Model routing
 
 Each kind of work AgentOS launches an agent for runs on its own model, set in

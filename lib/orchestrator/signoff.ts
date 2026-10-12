@@ -43,7 +43,7 @@ const short = (sha: string) => sha.slice(0, 7);
 
 // The heads AgentOS's own restack, or its automatic rebase onto the base,
 // moved the task's branch between.
-function restackedOf(task: Session) {
+export function restackedOf(task: Session) {
   const item = stackQueries.itemForSession(db, task.id);
   if (item) return { from: item.restacked_from, to: item.restacked_to };
   return task.rebased_to

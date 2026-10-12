@@ -112,14 +112,4 @@ export function useCompareQuery(days: number, enabled = true) {
 }
 
 // Every model a role can be set to: each usable provider's, as references.
-export function modelChoices(effective: EffectiveModels | undefined) {
-  return (effective?.providers ?? [])
-    .filter((p) => p.enabled)
-    .flatMap((p) =>
-      p.models.map((m) => ({
-        ref: `${p.id}/${m}`,
-        label: m,
-        provider: p.label,
-      }))
-    );
-}
+export { modelChoices } from "@/lib/models/choices";

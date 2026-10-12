@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProject } from "@/lib/projects";
-import { projectRef } from "@/lib/tasks/project-ref";
-import { projectOnPeers } from "@/lib/hosts/peer-actions";
-import { linkedHostIds } from "@/lib/hosts/remote-api";
+import { projectMachines } from "@/lib/hosts/project-machines";
 
 // Which linked machines can take a session for this project, and why not
 // where one can't: { machines: { [hostId]: reason | null } }.
@@ -13,19 +11,5 @@ export async function GET(
   const project = getProject((await params).id);
   if (!project || project.is_uncategorized)
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  if ((project.host_id || "local") !== "local")
-    return NextResponse.json({ machines: {} });
-  try {
-    return NextResponse.json({
-      machines: await projectOnPeers(await projectRef(project)),
-    });
-  } catch {
-    // A project outside the home folder has no place on another machine.
-    const reason = "Its folder is outside your home folder";
-    return NextResponse.json({
-      machines: Object.fromEntries(
-        [...linkedHostIds()].map((id) => [id, reason])
-      ),
-    });
-  }
+  return NextResponse.json({ machines: await projectMachines(project) });
 }

@@ -133,7 +133,7 @@ const RUN_CACHE_MAX = 2000;
 // The rollup with stale reruns dropped. Only a check that ran more than once
 // costs an API call, one per workflow run attempt. A run outside the PR's
 // repo, or one the API can't describe, leaves its check unsettled.
-async function settledRollup(
+export async function settledRollup(
   repoDir: string,
   prUrl: string,
   head: string | undefined,

@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  isGitRepo,
-  getBranches,
-  getDefaultBranch,
-  getCurrentBranch,
-} from "@/lib/git";
+import { gitCheck } from "@/lib/git";
 
 /**
  * POST /api/git/check
@@ -19,31 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
 
-    // Check if it's a git repo
-    const isRepo = await isGitRepo(dirPath);
-
-    if (!isRepo) {
-      return NextResponse.json({
-        isGitRepo: false,
-        branches: [],
-        defaultBranch: null,
-        currentBranch: null,
-      });
-    }
-
-    // Get branch info
-    const [branches, defaultBranch, currentBranch] = await Promise.all([
-      getBranches(dirPath),
-      getDefaultBranch(dirPath),
-      getCurrentBranch(dirPath),
-    ]);
-
-    return NextResponse.json({
-      isGitRepo: true,
-      branches,
-      defaultBranch,
-      currentBranch,
-    });
+    return NextResponse.json(await gitCheck(dirPath));
   } catch (error) {
     console.error("Error checking git repo:", error);
     return NextResponse.json(

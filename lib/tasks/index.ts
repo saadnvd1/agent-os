@@ -47,6 +47,8 @@ import { expandHome, prFor, storedPR, taskSessions } from "./session";
 import { InProgressError } from "./move-bundle";
 import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
+import { taskPlan } from "./plan-view";
+import type { TaskPlan } from "./loop-types";
 import { finishTaskStart } from "./start";
 import { isRemoteHost } from "../hosts";
 import { DEFAULT_START_VIEW, type StartView } from "../sessions/launch";
@@ -98,7 +100,8 @@ export interface TaskView {
   model?: string;
   planning?: boolean;
   // What its starter decided about a plan step, and why; null if unstated.
-  plan?: { planned: boolean; reason: string | null } | null;
+  // Its plan: ready to read or approve, with a title and capped text.
+  plan?: TaskPlan | null;
   // A quick change: the orchestrator session that makes it (no agent).
   quickOf?: string | null;
   // What it has cost so far in weighted tokens (lib/usage/weights).
@@ -389,13 +392,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     armed: !!session.merge_armed_at,
     model: sessionModelRef(session),
     planning: session.plan_phase === "planning",
-    plan:
-      session.plan_decided == null
-        ? null
-        : {
-            planned: !!session.plan_decided,
-            reason: session.plan_reason ?? null,
-          },
+    plan: taskPlan(session),
     quickOf: session.quick_of ?? null,
   };
 }
