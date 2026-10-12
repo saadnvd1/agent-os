@@ -131,6 +131,27 @@ describe("/api/devices/me/push", () => {
     expect(getDevicePush(b.id)).not.toBeNull();
   });
 
+  it("refuses an oversized body", async () => {
+    const { device } = mintDevice("phone");
+    const res = await call(PUT, "PUT", device.id, {
+      token: tok(14),
+      pad: "x".repeat(5000),
+    });
+    expect(res.status).toBe(413);
+    expect(getDevicePush(device.id)).toBeNull();
+  });
+
+  it("reads a corrupt saved category list as the defaults", async () => {
+    const { device } = mintDevice("phone");
+    await call(PUT, "PUT", device.id, { token: tok(15) });
+    for (const junk of ["{not json", '"asks"', "7"]) {
+      getDb()
+        .prepare(`UPDATE devices SET push_categories = ? WHERE id = ?`)
+        .run(junk, device.id);
+      expect(getDevicePush(device.id)?.categories).toEqual(defaultCategories());
+    }
+  });
+
   it("never returns the token", async () => {
     const { device } = mintDevice("phone");
     const res = await call(PUT, "PUT", device.id, { token: tok(10) });

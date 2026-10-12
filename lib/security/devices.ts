@@ -150,15 +150,24 @@ interface PushRow {
   push_last_error: string | null;
 }
 
+// A corrupt saved list reads as "none saved", so the defaults apply.
+function parseCategories(raw: string | null): unknown[] | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 const pushOf = (r: PushRow | undefined): DevicePush | null =>
   r?.push_token
     ? {
         token: r.push_token,
         platform: r.push_platform,
         environment: r.push_environment,
-        categories: enabledCategories(
-          r.push_categories ? JSON.parse(r.push_categories) : null
-        ),
+        categories: enabledCategories(parseCategories(r.push_categories)),
         updatedAt: r.push_updated_at,
         lastError: r.push_last_error,
       }
