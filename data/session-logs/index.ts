@@ -71,3 +71,40 @@ export function useSetLogFolder(projectId: string) {
       queryClient.setQueryData(sessionLogKeys.project(projectId), data),
   });
 }
+
+export interface WorkspaceHq {
+  hq: { folder: string; visibility: "private" | "internal" | "none" } | null;
+}
+
+const hqKey = (workspaceId: string) =>
+  [...sessionLogKeys.all, "hq", workspaceId] as const;
+
+async function hqState(res: Response): Promise<WorkspaceHq> {
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+export function useWorkspaceHqQuery(workspaceId: string) {
+  return useQuery({
+    queryKey: hqKey(workspaceId),
+    queryFn: async () =>
+      hqState(await fetch(`/api/workspaces/${workspaceId}/session-logs`)),
+    staleTime: 30_000,
+  });
+}
+
+export function useSetWorkspaceHq(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (folder: string) =>
+      hqState(
+        await fetch(`/api/workspaces/${workspaceId}/session-logs`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folder }),
+        })
+      ),
+    onSuccess: (data) => queryClient.setQueryData(hqKey(workspaceId), data),
+  });
+}

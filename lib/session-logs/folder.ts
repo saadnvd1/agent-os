@@ -1,8 +1,9 @@
 /**
- * Where a log's markdown file goes. By default
- * ~/.agent-os/session-logs/<workspace>/<project>/YYYY-MM-DD-<task>.md; a
- * project can name its own folder. Never inside the project's repository:
- * repositories can be public, and a log holds briefs and reviews.
+ * Where a log's markdown file goes, first match wins: the project's own
+ * folder, then the workspace's HQ repo (<hq>/docs/sessions/<project>/), then
+ * ~/.agent-os/session-logs/<workspace>/<project>/. All as
+ * YYYY-MM-DD-<task>.md. Never inside the project's repository: repositories
+ * can be public, and a log holds briefs and reviews.
  */
 
 import fs from "fs";
@@ -10,7 +11,9 @@ import os from "os";
 import path from "path";
 import { db } from "../db";
 import { slugify } from "../git";
-import { getProject, getProjectRepositories } from "../projects";
+import { getProject } from "../projects";
+import { usableHq, type Visibility } from "./hq";
+import { expand, repoPaths, resolved, within } from "./paths";
 
 // AGENTOS_SESSION_LOGS_DIR moves the default (tests keep it off the real one).
 export const DEFAULT_ROOT = () =>
@@ -18,39 +21,6 @@ export const DEFAULT_ROOT = () =>
   path.join(os.homedir(), ".agent-os", "session-logs");
 
 const key = (projectId: string) => `session-logs.folder.${projectId}`;
-
-const expand = (p: string) =>
-  p === "~" ? os.homedir() : p.replace(/^~(?=\/)/, os.homedir());
-
-// The path with symlinks resolved as far as it exists, so a link into a
-// repository is seen for what it is.
-function resolved(p: string): string {
-  let cur = path.resolve(p);
-  const rest: string[] = [];
-  while (!fs.existsSync(cur)) {
-    const up = path.dirname(cur);
-    if (up === cur) break;
-    rest.unshift(path.basename(cur));
-    cur = up;
-  }
-  return path.join(fs.realpathSync(cur), ...rest);
-}
-
-const within = (child: string, parent: string) => {
-  const rel = path.relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-};
-
-function repoPaths(projectId: string): string[] {
-  const project = getProject(projectId);
-  if (!project) return [];
-  return [
-    project.working_directory,
-    ...getProjectRepositories(projectId).map((r) => r.path),
-  ]
-    .filter(Boolean)
-    .map((p) => resolved(expand(p)));
-}
 
 // Throws a plain message when `dir` is inside one of the project's repos.
 export function assertOutsideRepos(projectId: string, dir: string): void {
@@ -91,6 +61,7 @@ export function setLogFolder(projectId: string, value: string | null): void {
 
 export interface FileTarget {
   workspace: string | null;
+  workspaceId?: string | null;
   project: string | null;
   projectId: string | null;
   name: string;
@@ -99,33 +70,56 @@ export interface FileTarget {
   day: string;
 }
 
+export interface Destination {
+  dir: string;
+  // The HQ repo the folder belongs to, when the log goes into one.
+  hq: { dir: string; visibility: Visibility } | null;
+}
+
 // The folder this task's log goes into: the project's override when it
-// still passes the repository check, else the default.
-export function targetDir(t: FileTarget): string {
+// still passes the repository check, else the workspace's HQ, else the
+// default.
+export function destination(t: FileTarget): Destination {
+  const projectSlug = slugify(t.project ?? "") || "no-project";
   const custom = t.projectId ? logFolder(t.projectId) : null;
   if (custom && t.projectId) {
     try {
       const dir = expand(custom);
       assertOutsideRepos(t.projectId, dir);
-      return dir;
+      return { dir, hq: null };
     } catch (error) {
       console.error(
         `[session-logs] ignoring the project's log folder: ${error instanceof Error ? error.message : error}`
       );
     }
   }
-  return path.join(
-    DEFAULT_ROOT(),
-    slugify(t.workspace ?? "") || "no-workspace",
-    slugify(t.project ?? "") || "no-project"
-  );
+  const workspaceId =
+    t.workspaceId ??
+    (t.projectId ? getProject(t.projectId)?.workspace_id : null) ??
+    null;
+  const hq = workspaceId ? usableHq(workspaceId) : null;
+  if (hq)
+    return { dir: path.join(hq.dir, "docs", "sessions", projectSlug), hq };
+  return {
+    dir: path.join(
+      DEFAULT_ROOT(),
+      slugify(t.workspace ?? "") || "no-workspace",
+      projectSlug
+    ),
+    hq: null,
+  };
 }
+
+export const targetDir = (t: FileTarget): string => destination(t).dir;
 
 // Writes the log once and returns its path. A file that's already there
 // (another task, same name, same day) is never overwritten.
-export function writeLogFile(t: FileTarget, markdown: string): string {
-  const dir = targetDir(t);
-  if (t.projectId && !logFolder(t.projectId))
+export function writeLogFileTo(
+  t: FileTarget,
+  markdown: string
+): { file: string; hq: Destination["hq"] } {
+  const { dir, hq } = destination(t);
+  if (t.projectId && !logFolder(t.projectId) && !hq)
     assertOutsideRepos(t.projectId, dir);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const slug = slugify(t.name) || t.id.slice(0, 8);
@@ -136,10 +130,13 @@ export function writeLogFile(t: FileTarget, markdown: string): string {
     const full = path.join(dir, file);
     try {
       fs.writeFileSync(full, markdown, { flag: "wx", mode: 0o600 });
-      return full;
+      return { file: full, hq };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     }
   }
   throw new Error(`a log file for ${t.name} already exists in ${dir}`);
 }
+
+export const writeLogFile = (t: FileTarget, markdown: string): string =>
+  writeLogFileTo(t, markdown).file;
