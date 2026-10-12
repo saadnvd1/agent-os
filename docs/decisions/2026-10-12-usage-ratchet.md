@@ -17,7 +17,7 @@ is cost per clean-merged PR, so a cheaper but worse day still shows.
 - The baseline is the first 7 complete days, then ratchets on the trailing 7 days; it never loosens.
 - Alerts need a minimum number of merges in the window so one expensive day on a quiet week doesn't page.
 - Limit windows come from the `rate_limit_event`s the CLI already sends. They carry one window at a time, so a
-  stale weekly figure is refreshed by one 1-token request per nightly pass, then estimated and marked.
+  stale weekly figure is estimated from recorded usage and marked. No extra requests are made for readings.
 
 **Not covered.** One-shot helper runs outside the reviewer (PR text, summaries) are not recorded; they are small.
 Check runs have no 5m/1h split (their result doesn't carry one) and count as 5m.

@@ -53,6 +53,35 @@ describe("ratchet", () => {
   });
 });
 
+describe("nextBaseline floor", () => {
+  const quiet = { merged: 0, clean: 0 };
+
+  it("waits when the first week has fewer merges than the floor", () => {
+    expect(nextBaseline(null, days(1, 7, quiet), cfg())).toBeNull();
+    expect(
+      nextBaseline(
+        null,
+        days(1, 7, { merged: 0, clean: 0 }).map((d, i) =>
+          i === 0 ? { ...d, merged: 2, clean: 2 } : d
+        ),
+        cfg()
+      )
+    ).toBeNull();
+  });
+
+  it("seeds from the latest week once it has enough work", () => {
+    const all = [...days(1, 7, quiet), ...days(8, 7)];
+    const b = nextBaseline(null, all, cfg())!;
+    expect(b.values.cleanRate).toBeCloseTo(0.8);
+  });
+
+  it("does not ratchet from a week below the floor", () => {
+    const base = nextBaseline(null, days(1, 7), cfg())!;
+    const thin = days(8, 7, { merged: 0, clean: 0, work: 1 });
+    expect(nextBaseline(base, [...days(1, 7), ...thin], cfg())).toEqual(base);
+  });
+});
+
 describe("nextBaseline", () => {
   it("waits for a week of rollups, then takes the first week", () => {
     expect(nextBaseline(null, days(1, 6), cfg())).toBeNull();

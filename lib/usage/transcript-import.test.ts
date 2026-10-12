@@ -123,4 +123,41 @@ describe("importTranscripts", () => {
       rows().map((r) => (r as { call_key: string }).call_key)
     ).not.toContain("x1");
   });
+
+  it("drains a backlog larger than the cap over several passes", async () => {
+    const since = Date.now() - 3_600_000;
+    const dir = path.join(root, "-tmp-work");
+    const ids: string[] = [];
+    for (let i = 0; i < 9; i++) {
+      const cid = randomUUID();
+      const sid = randomUUID();
+      db.prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, claude_session_id)
+         VALUES (?, 'bulk', ?, '/tmp', 'running', ?)`
+      ).run(sid, `claude-${sid}`, cid);
+      const file = path.join(dir, `${cid}.jsonl`);
+      fs.writeFileSync(file, line(`bulk-${i}`));
+      const t = new Date(Date.now() - (9 - i) * 1000);
+      fs.utimesSync(file, t, t);
+      ids.push(`bulk-${i}`);
+    }
+    // 11 files in all (the two from setup), 4 at a time.
+    let passes = 0;
+    for (; passes < 10; passes++)
+      if ((await importTranscripts(since, 4, root)).files === 0) break;
+    expect(passes).toBe(3);
+    const keys = rows().map((r) => (r as { call_key: string }).call_key);
+    for (const id of ids) expect(keys).toContain(id);
+  });
+
+  it("counts a CRLF file's bytes exactly, so nothing is read twice or lost", async () => {
+    const since = Date.now() - 3_600_000;
+    await importTranscripts(since, 400, root);
+    fs.appendFileSync(main, line("c1").replace("\n", "\r\n"));
+    await importTranscripts(since, 400, root);
+    fs.appendFileSync(main, line("c2").replace("\n", "\r\n"));
+    expect((await importTranscripts(since, 400, root)).calls).toBe(1);
+    const keys = rows().map((r) => (r as { call_key: string }).call_key);
+    expect(keys).toEqual(expect.arrayContaining(["c1", "c2"]));
+  });
 });

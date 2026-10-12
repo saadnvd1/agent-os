@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readUsageConfig } from "@/lib/usage/config";
-import { realDeps, nightly } from "@/lib/usage/nightly";
+import { realDeps, nightly, exclusive, usageBusy } from "@/lib/usage/nightly";
 import { loadBaseline, SUPPORTING_LABELS } from "@/lib/usage/ratchet";
 import { loadRollups, spanOf } from "@/lib/usage/rollup";
 import { db } from "@/lib/db";
@@ -27,14 +27,10 @@ export async function GET() {
 }
 
 // POST /api/usage/rollups - run the nightly pass now, in the background.
-let running = false;
 export async function POST() {
-  if (running) return NextResponse.json({ running: true }, { status: 202 });
-  running = true;
-  void nightly(realDeps)
-    .catch((error) => console.error("[usage] rollup failed:", error))
-    .finally(() => {
-      running = false;
-    });
+  if (usageBusy()) return NextResponse.json({ running: true }, { status: 202 });
+  void exclusive(() => nightly(realDeps)).catch((error) =>
+    console.error("[usage] rollup failed:", error)
+  );
   return NextResponse.json({ started: true }, { status: 202 });
 }

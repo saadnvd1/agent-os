@@ -36,6 +36,8 @@ export const USAGE_DEFAULTS: UsageConfig = {
   weeklyStaleHours: 6,
 };
 
+const DAY_COUNTS = new Set<keyof UsageConfig>(["baselineDays", "avgDays"]);
+
 export function readUsageConfig(): UsageConfig {
   const out: UsageConfig = { ...USAGE_DEFAULTS };
   for (const [name, key] of Object.entries(USAGE_KEYS)) {
@@ -43,7 +45,12 @@ export function readUsageConfig(): UsageConfig {
       .prepare(`SELECT value FROM settings WHERE key = ?`)
       .get(key) as { value: string } | undefined;
     const v = row ? Number(row.value) : NaN;
-    if (Number.isFinite(v) && v >= 0) out[name as keyof UsageConfig] = v;
+    const key2 = name as keyof UsageConfig;
+    // A day count is a whole number of days, at least one.
+    const ok = DAY_COUNTS.has(key2)
+      ? Number.isInteger(v) && v >= 1
+      : Number.isFinite(v) && v >= 0;
+    if (ok) out[key2] = v;
   }
   return out;
 }

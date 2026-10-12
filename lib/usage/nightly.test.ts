@@ -295,11 +295,9 @@ describe("usageRollupEnabled", () => {
 describe("nightly", () => {
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), "aos-usage-"));
   const sent: string[] = [];
-  let probes = 0;
   const deps = (now: number): NightlyDeps => ({
     now: () => now,
     notify: (t) => sent.push(t),
-    probe: async () => void probes++,
     transcriptsRoot: empty,
   });
   const noon = (day: string) => dayStart(day) + 12 * HOUR;
@@ -342,7 +340,6 @@ describe("nightly", () => {
       cleanRate: 1,
     });
     expect(sent).toEqual([]);
-    expect(probes).toBe(1);
 
     // Three days at twice the cost.
     for (let i = 0; i < 3; i++) seedDay(dayKey(today + i * DAY), 4, 8000);

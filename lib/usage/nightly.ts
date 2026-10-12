@@ -9,9 +9,7 @@ import { db } from "../db";
 import { notifyPhone } from "../notify";
 import { backfillCheckRuns } from "./calls";
 import { readUsageConfig } from "./config";
-import { probeLimits } from "./limit-probe";
 import type { Gh } from "./quality";
-import { lastReading } from "./rate-limits";
 import {
   applyAlertState,
   evaluateAlerts,
@@ -34,14 +32,12 @@ export interface NightlyDeps {
   now: () => number;
   gh?: Gh;
   notify: (text: string) => void;
-  probe: () => Promise<unknown>;
   transcriptsRoot?: string;
 }
 
 export const realDeps: NightlyDeps = {
   now: Date.now,
   notify: (text) => notifyPhone("usage", text),
-  probe: () => probeLimits(),
 };
 
 const addDays = (day: string, n: number) =>
@@ -74,9 +70,6 @@ export async function nightly(deps: NightlyDeps): Promise<void> {
   const cfg = readUsageConfig();
   const today = dayKey(now);
   await lightPass(deps);
-  const weekly = lastReading("seven_day", now);
-  if (!weekly || now - weekly.at > cfg.weeklyStaleHours * 3_600_000)
-    await deps.probe();
   const existing = loadRollups(60);
   const last = existing.filter((r) => r.day < today).at(-1)?.day;
   let day = last ? addDays(last, -3) : addDays(today, -cfg.baselineDays);
@@ -110,28 +103,41 @@ export function usageRollupEnabled(
     : env.AGENTOS_USAGE_ROLLUP !== "off";
 }
 
-const g = globalThis as unknown as { __agentosUsage?: { stop: () => void } };
+const g = globalThis as unknown as {
+  __agentosUsage?: { stop: () => void };
+  __agentosUsageBusy?: boolean;
+};
+
+// Runs a pass unless one is already running, in this process: the timer and
+// the API route share the flag (on globalThis, as the server and the routes
+// load separate copies of this module). Returns whether it ran.
+export async function exclusive(pass: () => Promise<void>): Promise<boolean> {
+  if (g.__agentosUsageBusy) return false;
+  g.__agentosUsageBusy = true;
+  try {
+    await pass();
+  } finally {
+    g.__agentosUsageBusy = false;
+  }
+  return true;
+}
+
+export const usageBusy = () => !!g.__agentosUsageBusy;
+
+// The due pass: the full one once a day, just after midnight.
+const duePass = (deps: NightlyDeps) =>
+  setting(LAST_RUN) !== dayKey(deps.now()) ? nightly(deps) : lightPass(deps);
 
 export function startUsageRollup(deps: NightlyDeps = realDeps): {
   stop: () => void;
 } {
   if (g.__agentosUsage) return g.__agentosUsage;
   let timer: NodeJS.Timeout | undefined;
-  let busy = false;
   let stopped = false;
-  const run = async () => {
-    if (busy) return;
-    busy = true;
-    try {
-      // The full pass is due once a day, just after midnight.
-      if (setting(LAST_RUN) !== dayKey(deps.now())) await nightly(deps);
-      else await lightPass(deps);
-    } catch (error) {
-      console.error("[usage] rollup failed:", error);
-    } finally {
-      busy = false;
-    }
-  };
+  const run = () =>
+    exclusive(() => duePass(deps)).catch((error) =>
+      console.error("[usage] rollup failed:", error)
+    );
   const next = () => {
     if (stopped) return;
     timer = setTimeout(() => void run().finally(next), TICK_MS);

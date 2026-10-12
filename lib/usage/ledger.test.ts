@@ -10,7 +10,6 @@ import {
   taskCosts,
 } from "./calls";
 import { recordCheckRun } from "./check-runs";
-import { readingsFromHeaders, probeLimits } from "./limit-probe";
 import {
   currentWindow,
   estimateWeekly,
@@ -260,11 +259,11 @@ describe("parseRateLimit", () => {
     ]);
   });
 
-  it("takes a percent as it is, a window object, and nothing from junk", () => {
+  it("takes a plan window object as a percent, and nothing from junk", () => {
     expect(
-      parseRateLimit({ rateLimitType: "five_hour", utilization: 63 })[0]
+      parseRateLimit({ rateLimitType: "five_hour", utilization: 0.63 })[0]
         .utilization
-    ).toBe(63);
+    ).toBeCloseTo(63);
     const plan = parseRateLimit({
       five_hour: { utilization: 10, resets_at: "2026-10-12T20:00:00Z" },
       seven_day: { utilization: 55, resets_at: null },
@@ -349,68 +348,5 @@ describe("readings", () => {
 
   it("has no estimate before any reading", () => {
     expect(estimateWeekly(Date.now())).toBeNull();
-  });
-});
-
-describe("limit probe", () => {
-  const headers = (h: Record<string, string>) => new Headers(h);
-
-  it("reads both windows from the headers, as percent and ms", () => {
-    const r = readingsFromHeaders(
-      headers({
-        "anthropic-ratelimit-unified-5h-utilization": "0.25",
-        "anthropic-ratelimit-unified-5h-reset": "1800000000",
-        "anthropic-ratelimit-unified-7d-utilization": "0.6",
-        "anthropic-ratelimit-unified-7d-reset": "1800500000",
-        "anthropic-ratelimit-unified-status": "allowed",
-      })
-    );
-    expect(r.map((x) => [x.window, x.utilization, x.resetsAt])).toEqual([
-      ["five_hour", 25, 1_800_000_000_000],
-      ["seven_day", 60, 1_800_500_000_000],
-    ]);
-  });
-
-  it("probes with the env token, reads a 429's headers, and stores them", async () => {
-    const token = `tok-${randomUUID()}`;
-    let sent: RequestInit | undefined;
-    const fake = (async (_url: unknown, init?: RequestInit) => {
-      sent = init;
-      return new Response("{}", {
-        status: 429,
-        headers: { "anthropic-ratelimit-unified-7d-utilization": "0.5" },
-      });
-    }) as typeof fetch;
-    const result = await probeLimits({ CLAUDE_CODE_OAUTH_TOKEN: token }, fake);
-    expect(result.ok).toBe(true);
-    expect((sent?.headers as Record<string, string>).authorization).toBe(
-      `Bearer ${token}`
-    );
-    expect(JSON.parse(String(sent?.body)).max_tokens).toBe(1);
-    expect(currentWindow("seven_day")).toMatchObject({
-      pct: 50,
-      estimated: false,
-    });
-    const stored = JSON.stringify([
-      db.prepare(`SELECT * FROM rate_limit_readings`).all(),
-      db.prepare(`SELECT * FROM usage_calls`).all(),
-    ]);
-    expect(stored).not.toContain(token);
-  });
-
-  it("does not call out without a token, or on a reply with no headers", async () => {
-    let calls = 0;
-    const fake = (async () => {
-      calls++;
-      return new Response("{}");
-    }) as typeof fetch;
-    expect(await probeLimits({}, fake)).toEqual({
-      ok: false,
-      why: "no token for a probe",
-    });
-    expect(calls).toBe(0);
-    expect((await probeLimits({ CLAUDE_CODE_OAUTH_TOKEN: "x" }, fake)).ok).toBe(
-      false
-    );
   });
 });

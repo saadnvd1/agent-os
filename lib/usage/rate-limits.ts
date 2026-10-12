@@ -26,9 +26,10 @@ const WINDOWS: LimitWindow[] = ["five_hour", "seven_day"];
 const num = (v: unknown) =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
 
-// A fraction (0.42) or a percent (42). 1 is 100%: the headers are fractions.
-export const toPercent = (raw: number) => (raw <= 1 ? raw * 100 : raw);
-const toMs = (t: number) => (t < 1e12 ? t * 1000 : t);
+// A rate_limit_event carries what the headers said: utilization as a
+// fraction (0.42) and the reset in epoch seconds. A plan's per-window object
+// carries a percent (42) and an ISO time. Each source has one unit.
+const eventPercent = (fraction: number) => fraction * 100;
 
 // Readings in what the CLI emits: a rate_limit_event's info, or a plan's
 // per-window object. Anything else gives none.
@@ -43,9 +44,9 @@ export function parseRateLimit(info: unknown): Reading[] {
     const reset = num(i.resetsAt);
     out.push({
       window: type,
-      utilization: toPercent(raw),
+      utilization: eventPercent(raw),
       raw,
-      resetsAt: reset === null ? null : toMs(reset),
+      resetsAt: reset === null ? null : reset * 1000,
       status,
     });
   }
@@ -54,14 +55,12 @@ export function parseRateLimit(info: unknown): Reading[] {
     const u = o && num(o.utilization);
     if (!o || u === null || u === undefined) continue;
     const reset =
-      typeof o.resets_at === "string"
-        ? Date.parse(o.resets_at)
-        : num(o.resets_at);
+      typeof o.resets_at === "string" ? Date.parse(o.resets_at) : NaN;
     out.push({
       window: w,
-      utilization: toPercent(u),
+      utilization: u,
       raw: u,
-      resetsAt: reset === null || !Number.isFinite(reset) ? null : toMs(reset),
+      resetsAt: Number.isFinite(reset) ? reset : null,
       status,
     });
   }

@@ -24,7 +24,7 @@ describe("usage ledger migration", () => {
     runMigrations(db);
     const tables = db
       .prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'usage_%' OR name = 'rate_limit_readings'`
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND (name LIKE 'usage_%' OR name = 'rate_limit_readings')`
       )
       .all()
       .map((r) => (r as { name: string }).name);

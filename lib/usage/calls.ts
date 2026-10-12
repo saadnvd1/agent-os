@@ -186,7 +186,7 @@ export function recordCall(
   upsertCall(row);
 }
 
-// A call that never goes through a conversation (a check run, a probe).
+// A call that never goes through a conversation (a check run).
 export function recordLooseCall(
   r: Omit<CallRow, "ctx" | "provider"> & { provider?: string }
 ): void {
@@ -244,7 +244,7 @@ export function recordCheckRunCall(
     callKey: `check_run:${id}`,
     at: c.at,
     sessionId: c.session_id,
-    taskId: c.session_id,
+    taskId: c.session_id ? sessionContext(c.session_id).taskId : null,
     workspaceId: c.workspace_id,
     projectId: c.project_id ?? null,
     sessionName: c.label,

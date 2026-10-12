@@ -8,7 +8,6 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import readline from "readline";
 import { db } from "../db";
 import {
   callFromAssistant,
@@ -97,6 +96,30 @@ async function agentTypeOf(file: string): Promise<string | null> {
   }
 }
 
+// Each line of the file from `start` that ends in a newline, as bytes; a last
+// line still being written is left for the next pass.
+async function* completeLines(
+  file: string,
+  start: number,
+  end: number
+): AsyncGenerator<Buffer> {
+  if (end <= start) return;
+  let rest: Buffer = Buffer.alloc(0);
+  // `end` is inclusive, so a line appended during the read waits too.
+  const stream = fs.createReadStream(file, { start, end: end - 1 });
+  for await (const chunk of stream) {
+    rest = rest.length
+      ? Buffer.concat([rest, chunk as Buffer])
+      : (chunk as Buffer);
+    let from = 0;
+    for (let i = rest.indexOf(10, from); i !== -1; i = rest.indexOf(10, from)) {
+      yield rest.subarray(from, i);
+      from = i + 1;
+    }
+    rest = rest.subarray(from);
+  }
+}
+
 interface Line {
   type?: string;
   timestamp?: string;
@@ -125,16 +148,11 @@ export async function importFile(
   const ctx = sessionContext(f.sessionId);
   let offset = start;
   let n = 0;
-  const rl = readline.createInterface({
-    input: fs.createReadStream(f.file, { encoding: "utf8", start }),
-    crlfDelay: Infinity,
-  });
   const pending: (() => void)[] = [];
-  for await (const line of rl) {
-    // A last line still being written has no newline yet.
-    const bytes = Buffer.byteLength(line) + 1;
-    if (offset + bytes > st.size) break;
-    offset += bytes;
+  for await (const raw of completeLines(f.file, start, st.size)) {
+    // Counted in bytes as they sit in the file, whatever ends the line.
+    offset += raw.length + 1;
+    const line = raw.toString("utf8");
     if (!line.includes('"assistant"')) continue;
     let d: Line;
     try {
@@ -171,18 +189,38 @@ export async function importFile(
   return n;
 }
 
+// Whether a file is as the last pass left it.
+function unchanged(f: TranscriptFile, st: fs.Stats): boolean {
+  const saved = db
+    .prepare(`SELECT offset, mtime FROM usage_import_offsets WHERE path = ?`)
+    .get(f.file) as { offset: number; mtime: number } | undefined;
+  return (
+    !!saved &&
+    saved.offset === st.size &&
+    saved.mtime === Math.floor(st.mtimeMs)
+  );
+}
+
 // One pass over everything modified since `since`, yielding between files so
-// the server keeps answering.
+// the server keeps answering. Files already up to date don't count against
+// the cap, and the rest go oldest first, so a backlog drains over passes
+// instead of the same first files being taken every time.
 export async function importTranscripts(
   since: number,
   maxFiles = 400,
   root?: string
 ): Promise<{ files: number; calls: number }> {
-  const files = (await transcriptFiles(since, root)).slice(0, maxFiles);
+  const todo: { f: TranscriptFile; mtime: number }[] = [];
+  for (const f of await transcriptFiles(since, root)) {
+    const st = await fs.promises.stat(f.file).catch(() => null);
+    if (st && !unchanged(f, st)) todo.push({ f, mtime: st.mtimeMs });
+  }
+  todo.sort((a, b) => a.mtime - b.mtime);
   let calls = 0;
-  for (const f of files) {
+  const batch = todo.slice(0, maxFiles);
+  for (const { f } of batch) {
     calls += await importFile(f, since).catch(() => 0);
     await new Promise((r) => setImmediate(r));
   }
-  return { files: files.length, calls };
+  return { files: batch.length, calls };
 }

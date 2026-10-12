@@ -77,9 +77,12 @@ export interface Baseline {
   setAt: number;
 }
 
-// The next baseline. None until `cfg.baselineDays` complete days exist; the
-// first is those first days, and each night after it, the trailing week of
-// days is ratcheted in. The supporting snapshot follows cost per merged PR:
+// The next baseline. None until `cfg.baselineDays` complete days exist with
+// at least `cfg.minMerges` merges among them: a quiet week would lock in a
+// baseline nothing can meet, so the seed waits for the first week that has
+// enough work, and a ratchet step skips a week that doesn't. The first is
+// those first days, and each night after it, the trailing week of days is
+// ratcheted in. The supporting snapshot follows cost per merged PR:
 // it is replaced only when that improves.
 export function nextBaseline(
   prev: Baseline | null,
@@ -90,7 +93,9 @@ export function nextBaseline(
   const days = [...complete].sort((a, b) => a.day.localeCompare(b.day));
   if (days.length < cfg.baselineDays) return prev;
   if (!prev) {
-    const s = spanOf(days.slice(0, cfg.baselineDays));
+    let s = spanOf(days.slice(0, cfg.baselineDays));
+    if (s.merged < cfg.minMerges) s = spanOf(days.slice(-cfg.baselineDays));
+    if (s.merged < cfg.minMerges) return null;
     return {
       values: {
         costPerMerged: s.costPerMerged,
@@ -102,6 +107,7 @@ export function nextBaseline(
     };
   }
   const s = spanOf(days.slice(-cfg.baselineDays));
+  if (s.merged < cfg.minMerges) return prev;
   const values = { ...prev.values };
   for (const k of Object.keys(HEADLINE) as HeadlineKey[])
     values[k] = ratchet(prev.values[k], s[k], HEADLINE[k]);

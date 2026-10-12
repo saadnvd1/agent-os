@@ -571,9 +571,7 @@ The 5-hour and weekly windows come from the `rate_limit_event`s Claude Code
 sends on each response (the `anthropic-ratelimit-unified-*` headers), stored
 with their time in `rate_limit_readings` with no extra calls. An event
 carries one window, so the weekly figure can go stale: when it is over 6
-hours old the nightly pass takes one reading with a 1-token request (needs
-`CLAUDE_CODE_OAUTH_TOKEN` in the server's environment), and anything still
-unknown is estimated from recorded usage and marked `~`.
+hours old it is estimated from recorded usage and marked `~`.
 
 A rollup job inside the server (no model) writes one `usage_rollups` row per
 day: weighted total, cost per merged PR, cost per _clean_-merged PR (the
