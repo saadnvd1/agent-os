@@ -12,7 +12,6 @@ import { QuickChangeRow } from "./QuickChangeRow";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowShell, type RowMenuKind } from "./RowShell";
-import { PrStageBadge } from "@/components/PrStageBadge";
 import { RowBadge, RowDot, RowRename } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
@@ -97,7 +96,6 @@ export const SessionRow = memo(function SessionRow({
         trailing={
           <>
             <RowBadge row={row} />
-            {!row.need && <PrStageBadge stage={row.status?.prStage} compact />}
             {!row.need && <TimeAgo at={session.updated_at} />}
           </>
         }
@@ -124,7 +122,15 @@ export const SessionRow = memo(function SessionRow({
             {session.name}
           </span>
         )}
-        <RowSubtitle session={session} detail={row.status?.detail} />
+        <RowSubtitle
+          session={session}
+          detail={row.status?.detail}
+          live={
+            row.need
+              ? undefined
+              : { compacting: row.compacting, prStage: row.status?.prStage }
+          }
+        />
       </RowShell>
       {session.role === "orchestrator" && row.need && (
         <OrchestratorAsks workspaceId={session.workspace_id} />

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   derivePrStage,
   PR_STAGE_BUSY,
+  PR_STAGE_SHORT,
+  PR_STAGES,
   prStageText,
   type PrStageInput,
 } from "./pr-stage";
@@ -108,5 +110,14 @@ describe("derivePrStage", () => {
     expect(prStageText({ stage: "review-running", number: 230 })).toBe(
       "PR #230 · reviewing"
     );
+  });
+});
+
+describe("PR_STAGE_SHORT", () => {
+  it("has a short label for every stage", () => {
+    for (const s of PR_STAGES)
+      expect(PR_STAGE_SHORT[s].length).toBeLessThan(15);
+    expect(PR_STAGE_SHORT["ci-running"]).toBe("CI");
+    expect(PR_STAGE_SHORT.open).toBe("PR");
   });
 });

@@ -26,7 +26,7 @@ export function RowDot({ row }: { row: SidebarRow }) {
   );
 }
 
-// What it needs from you, or a purple dot when it changed since you looked.
+// What it needs from you, stalled, or a purple dot when it changed since you looked.
 export function RowBadge({ row }: { row: SidebarRow }) {
   if (row.need) {
     const asks = row.status?.asks ?? 0;
@@ -44,12 +44,6 @@ export function RowBadge({ row }: { row: SidebarRow }) {
       </span>
     );
   }
-  if (row.compacting)
-    return (
-      <span className="rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400">
-        Compacting
-      </span>
-    );
   if (row.status?.stalled)
     return (
       <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">

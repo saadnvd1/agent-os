@@ -2,6 +2,7 @@
 
 import { HostBadge } from "@/components/Hosts";
 import type { Session } from "@/lib/db";
+import { LiveLine, type LiveInput } from "./LiveLine";
 import { headerParts } from "@/lib/orchestrator/header-line";
 import { cn } from "@/lib/utils";
 import { usageLabel, useSessionUsage } from "@/data/load";
@@ -16,9 +17,11 @@ const ATTENTION = (part: string) => part === "paused" || /\basks?$/.test(part);
 export function RowSubtitle({
   session,
   detail,
+  live,
 }: {
   session: Session;
   detail?: string | null;
+  live?: LiveInput;
 }) {
   const ctx = useRowContext();
   // What its processes use, on a busy session: "3.1 cores · 4.2 GB".
@@ -52,6 +55,7 @@ export function RowSubtitle({
   const project = ctx.projectNames.get(session.project_id ?? "");
   return (
     <span className="flex min-w-0 items-center gap-1.5">
+      <LiveLine {...live} />
       {(project || detail || usage) && (
         <span className="text-muted-foreground/70 truncate text-xs">
           {[usage && usageLabel(usage), detail?.slice(0, 200), project]
