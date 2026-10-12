@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { MoveTaskButton } from "./MoveTaskButton";
 import { ResumeOnModel } from "./ResumeOnModel";
 import { TASK_STATE as STATE } from "./task-state-labels";
+import { formatTokens } from "@/components/Usage/format";
 
 export function TaskRow({ task }: { task: TaskView }) {
   const signOff = useSignOffTask();
@@ -46,6 +47,7 @@ export function TaskRow({ task }: { task: TaskView }) {
             {task.projectName} · {task.branch}
             {task.model &&
               ` · ${task.model}${task.planning ? " (planning)" : ""}`}
+            {task.weighted ? ` · ${formatTokens(task.weighted)} weighted` : ""}
           </p>
           {task.plan && (
             <p className="text-muted-foreground truncate text-[11px]">

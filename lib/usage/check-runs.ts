@@ -6,6 +6,7 @@
  */
 
 import { db } from "../db";
+import { recordCheckRunCall } from "./calls";
 import { formatTokens } from "../chat/context";
 
 export interface RunUsage {
@@ -93,27 +94,47 @@ export function recordCheckRun(
   u: RunUsage,
   at = Date.now()
 ): void {
-  db.prepare(
-    `INSERT INTO check_runs (workspace_id, session_id, label, pr_number, sha, kind, model, provider,
+  const info = db
+    .prepare(
+      `INSERT INTO check_runs (workspace_id, session_id, label, pr_number, sha, kind, model, provider,
        input_tokens, cache_write_tokens, cache_read_tokens, output_tokens, cost_usd, duration_ms, at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    target.workspaceId,
-    target.sessionId,
-    target.label,
-    target.prNumber,
-    target.sha,
-    target.kind,
-    u.model,
-    u.provider ?? "anthropic",
-    u.inputTokens,
-    u.cacheWriteTokens,
-    u.cacheReadTokens,
-    u.outputTokens,
-    u.costUsd,
-    u.durationMs,
-    at
-  );
+    )
+    .run(
+      target.workspaceId,
+      target.sessionId,
+      target.label,
+      target.prNumber,
+      target.sha,
+      target.kind,
+      u.model,
+      u.provider ?? "anthropic",
+      u.inputTokens,
+      u.cacheWriteTokens,
+      u.cacheReadTokens,
+      u.outputTokens,
+      u.costUsd,
+      u.durationMs,
+      at
+    );
+  try {
+    recordCheckRunCall(Number(info.lastInsertRowid), {
+      workspace_id: target.workspaceId,
+      session_id: target.sessionId,
+      label: target.label,
+      kind: target.kind,
+      model: u.model,
+      provider: u.provider ?? "anthropic",
+      input_tokens: u.inputTokens,
+      cache_write_tokens: u.cacheWriteTokens,
+      cache_read_tokens: u.cacheReadTokens,
+      output_tokens: u.outputTokens,
+      at,
+    });
+  } catch (e) {
+    // The nightly backfill picks it up.
+    console.error(`[check-runs] ledger ${target.label}:`, e);
+  }
 }
 
 // A recorder for one check, that never lets a write break the check.

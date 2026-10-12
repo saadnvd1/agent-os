@@ -556,6 +556,43 @@ environment (`ANTHROPIC_BASE_URL` with `ANTHROPIC_AUTH_TOKEN` or
 log; a terminal task's shell reads it from the reference itself. Errors that
 might echo a key are scrubbed of it.
 
+**Usage → Daily: the usage ledger and the ratchet.** Every Claude response
+an AgentOS chat makes (subagents and the orchestrator included) is written to
+`usage_calls` as it arrives, with its input, cache read, 5-minute and 1-hour
+cache write and output tokens, its model, its context size and the
+session, task, workspace and role it belongs to. Terminal sessions, which no
+worker watches, are read from Claude's transcripts, and gate reviews come
+from `check_runs`; the same message id is never counted twice. Tokens are
+_weighted_ by the API's price ratios (Opus input 1, 5-minute write 1.25,
+1-hour write 2, cache read 0.1, output 5; Sonnet half, Haiku a quarter), an
+estimate of how much of the plan's limits a call uses.
+
+The 5-hour and weekly windows come from the `rate_limit_event`s Claude Code
+sends on each response (the `anthropic-ratelimit-unified-*` headers), stored
+with their time in `rate_limit_readings` with no extra calls. An event
+carries one window, so the weekly figure can go stale: when it is over 6
+hours old it is estimated from recorded usage and marked `~`.
+
+A rollup job inside the server (no model) writes one `usage_rollups` row per
+day: weighted total, cost per merged PR, cost per _clean_-merged PR (the
+headline: cost against quality), review cost per PR, the share of calls above
+200k context, model mix, orchestrator share, the weekly %, and the quality
+readings from existing data: first-try clean-merge rate (the first reviewed
+head passed review and CI, no gate failures, no later head), fix rounds per
+PR, gate escalations, scope changes, and escapes (a revert or fix PR touching
+the same files within 3 days, from `gh`; unknown rather than zero if `gh`
+fails). Spans of days are ratios of sums. The baseline is the first week of
+rollups and only ever moves to a better value. One phone alert fires (and
+stays quiet until it clears) when the 3-day cost per merged PR is over
+baseline by 15%, or the clean-merge rate is under it by 10 points, naming the
+supporting metric that moved most. The margins, the days averaged and the
+minimum merges to judge are settings (`usage.alert_cost_pct`,
+`usage.alert_clean_points`, `usage.avg_days`, `usage.alert_min_merges`,
+`usage.baseline_days`, `usage.weekly_stale_hours`). A dev server doesn't run
+it unless `AGENTOS_USAGE_ROLLUP=on`; `AGENTOS_USAGE_ROLLUP=off` turns it off
+in production. `POST /api/usage/rollups` runs the nightly pass now. Task
+cards show each task's weighted cost so far.
+
 **Usage by model.** **Usage → By model** shows tokens and estimated cost per
 role and per model in the plan's 5-hour window and the last 24 hours, from
 the price table in Settings → Models (dollars per million input, cache

@@ -80,7 +80,14 @@ export type WorkerEvent =
   | Exclude<
       DriverEvent,
       {
-        type: "resume_id" | "usage" | "usage_start" | "suggestion" | "at_rest";
+        type:
+          | "resume_id"
+          | "usage"
+          | "usage_start"
+          | "call_usage"
+          | "rate_limit"
+          | "suggestion"
+          | "at_rest";
       }
     >
   // The agent's guess at the next message, or null once it's stale.

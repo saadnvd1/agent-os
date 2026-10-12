@@ -13,6 +13,7 @@ import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
 import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
+import { startUsageRollup, usageRollupEnabled } from "./lib/usage/nightly";
 import { resumePhoneOutbox } from "./lib/notify";
 import {
   bindAddresses,
@@ -393,6 +394,8 @@ app.prepare().then(async () => {
   // Schedules tick here, once a minute, and nowhere else.
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
   resumePhoneOutbox();
+  // The usage ledger's daily rollup and its ratchet alerts.
+  if (usageRollupEnabled(process.env)) startUsageRollup();
   // Machine load: a gauge, notes on heavy commands, one alert when red.
   if (loadEnabled()) startLoadMonitor();
 });
