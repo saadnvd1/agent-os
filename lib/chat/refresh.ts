@@ -143,8 +143,26 @@ export function autoCompactEnv(sessionId: string): Record<string, string> {
 
 const k = (tokens: number) => `${Math.round(tokens / 1000)}k`;
 
+// Recorded as the size a conversation ended at when the reader asked for it.
+export const REQUESTED_FRESH = -1;
+
+// The agent's conversation is let go in the database: the next worker
+// starts a new one with the brief and the permissions the server has then.
+// `tokens` is the size it ended at, or REQUESTED_FRESH.
+export function releaseConversation(sessionId: string, tokens: number): void {
+  db.prepare(
+    `UPDATE sessions SET claude_session_id = NULL, chat_resume_at = NULL,
+       chat_suggestion = NULL, chat_context = NULL, chat_restarted = 0,
+       chat_refreshed = ? WHERE id = ?`
+  ).run(tokens, sessionId);
+}
+
 // What the agent reads ahead of its first message in the new conversation.
 export function refreshedNote(role: "orchestrator" | "task", tokens: number) {
+  if (tokens === REQUESTED_FRESH)
+    return role === "orchestrator"
+      ? `(AgentOS started you on a fresh conversation at the user's request. Your brief and "Where things stand" are current; carry on from them.)`
+      : `(AgentOS started you on a fresh conversation at the user's request. Your brief is above; check git status, git log and your PR to see how far you got, then carry on.)`;
   return role === "orchestrator"
     ? `(AgentOS started you on a fresh conversation: the last one passed ${k(tokens)} tokens of context. Your brief and "Where things stand" are current; carry on from them.)`
     : `(AgentOS started you on a fresh conversation: the last one passed ${k(tokens)} tokens of context. Your brief is above; check git status, git log and your PR to see how far you got, then carry on.)`;

@@ -48,3 +48,19 @@ export function insertCommand(name: string): string {
 export function leadingCommand(text: string): string | null {
   return text.match(/^\/[\w:.-]+(?=\s|$)/)?.[0] ?? null;
 }
+
+// AgentOS's own command for an orchestrator or task: starts the agent's
+// conversation over, with today's brief and permissions.
+export const FRESH_COMMAND: ChatCommand = {
+  name: "fresh",
+  description: "Start a fresh conversation with the current brief",
+};
+
+export const isFreshCommand = (text: string): boolean =>
+  text.trim().toLowerCase() === "/fresh";
+
+export function withFresh(commands: ChatCommand[]): ChatCommand[] {
+  return commands.some((c) => c.name === "fresh")
+    ? commands
+    : [FRESH_COMMAND, ...commands];
+}

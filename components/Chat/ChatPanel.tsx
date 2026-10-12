@@ -19,6 +19,8 @@ import {
   type TimelineBlock,
 } from "@/lib/chat/group";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
+import { isFreshCommand, withFresh } from "@/lib/chat/commands";
+import { useFreshStart } from "@/data/sessions";
 import {
   escapeAction,
   GHOST_SELECTOR,
@@ -206,6 +208,7 @@ export function ChatPanel({
   sessionName,
   accessLocked = false,
   orchestratorOf,
+  freshStart = false,
   active,
 }: {
   sessionId: string;
@@ -214,6 +217,8 @@ export function ChatPanel({
   accessLocked?: boolean;
   // The workspace it orchestrates: its header line, Pause and asks show on top.
   orchestratorOf?: string | null;
+  // An orchestrator or task: /fresh starts its conversation over.
+  freshStart?: boolean;
   // The tab on show in the focused pane: opening it takes the caret.
   active: boolean;
 }) {
@@ -259,6 +264,7 @@ export function ChatPanel({
     requestFiles,
     search,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
+  const startFresh = useFreshStart();
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -580,6 +586,10 @@ export function ChatPanel({
           disabled={!connected}
           placeholder={connected ? `Message ${sessionName}` : "Reconnecting…"}
           onSend={(text, images) => {
+            if (freshStart && isFreshCommand(text)) {
+              startFresh.mutate(sessionId);
+              return;
+            }
             toEnd();
             const compact = composerCompacts(text, context, {
               state,
@@ -590,7 +600,7 @@ export function ChatPanel({
             send(text, images.length ? images : undefined, compact);
           }}
           onStop={interrupt}
-          commands={commands}
+          commands={freshStart ? withFresh(commands) : commands}
           onRefreshCommands={refreshCommands}
           refreshingCommands={refreshingCommands}
           models={models}

@@ -41,7 +41,13 @@ import {
   visualsTools,
 } from "../../artifacts/tools";
 import type { RoleExtras } from "./extras";
-import { compactThreshold, refreshSettings, refreshedNote } from "../refresh";
+import {
+  REQUESTED_FRESH,
+  compactThreshold,
+  refreshSettings,
+  refreshedNote,
+  releaseConversation,
+} from "../refresh";
 import { compactContext } from "../compact-context";
 import { COMPACT_BRIEF, COMPACT_INSTRUCTIONS } from "../working-state";
 import { compactionDue, staleLabel, type Staleness } from "../stale";
@@ -679,9 +685,30 @@ export class ChatHost {
       case "retire":
         this.retiring = true;
         return this.retireIfDone();
+      case "fresh":
+        return this.freshOnRequest();
       case "close":
         return this.close();
     }
+  }
+
+  // A fresh start the reader asked for: the same retire as at the context
+  // threshold, so it waits for the turn boundary and says so meanwhile.
+  private freshOnRequest(): void {
+    if (this.refreshAt || this.closed) return;
+    this.refreshAt = REQUESTED_FRESH;
+    this.retiring = true;
+    this.retireWaited = true;
+    this.retireIfDone();
+    // Still here: a turn, background work or its rest timer holds it.
+    if (!this.closed)
+      this.record({
+        id: `note-fresh-pending-${Date.now()}`,
+        kind: "note",
+        tone: "note",
+        text: "Starts fresh after this turn",
+        createdAt: Date.now(),
+      });
   }
 
   private hardStopped(): boolean {
@@ -849,20 +876,19 @@ export class ChatHost {
   // with the brief and tells it why. The chat Saad reads goes on, with a
   // line saying where it started over.
   private endConversation(): void {
-    db.prepare(
-      `UPDATE sessions SET claude_session_id = NULL, chat_resume_at = NULL,
-         chat_suggestion = NULL, chat_context = NULL, chat_restarted = 0,
-         chat_refreshed = ? WHERE id = ?`
-    ).run(this.refreshAt, this.session.id);
+    releaseConversation(this.session.id, this.refreshAt);
     const brief = `its brief${this.session.role === "orchestrator" ? " and the current state from AgentOS" : ""}`;
     const stale = this.staleRefresh;
+    const requested = this.refreshAt === REQUESTED_FRESH;
     this.record({
       id: `note-refresh-${Date.now()}`,
       kind: "note",
       tone: "note",
-      text: stale
-        ? `${staleLabel(stale)}, past its prompt cache: the agent starts a fresh conversation with ${brief} before the next message.`
-        : `Context reached ${Math.round(this.refreshAt / 1000)}k tokens: the agent starts a fresh conversation with ${brief} at its next message.`,
+      text: requested
+        ? `Fresh start: the agent starts a new conversation with ${brief} at its next message.`
+        : stale
+          ? `${staleLabel(stale)}, past its prompt cache: the agent starts a fresh conversation with ${brief} before the next message.`
+          : `Context reached ${Math.round(this.refreshAt / 1000)}k tokens: the agent starts a fresh conversation with ${brief} at its next message.`,
       createdAt: Date.now(),
     });
     if (stale)

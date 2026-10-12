@@ -75,7 +75,7 @@ async function main(sessionId: string) {
         build: buildId(),
         state: host.state,
         streaming: [...host.streaming.values()],
-        caps: ["plan", "queue", "retire"],
+        caps: ["plan", "queue", "retire", "fresh"],
       } satisfies WorkerEvent)}\n`
     );
     client.on(

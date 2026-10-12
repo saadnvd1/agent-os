@@ -58,6 +58,10 @@ export type WorkerCommand =
   // wait in the queue) and closes at its next turn boundary, so a current
   // worker resumes the conversation with today's tools.
   | { type: "retire" }
+  // The reader asked for a fresh conversation: at the next turn boundary
+  // (now, if idle) the agent's conversation ends and the next worker
+  // starts a new one with today's brief and permissions.
+  | { type: "fresh" }
   | { type: "close" };
 
 // Worker -> server: what's live right now on connecting, then events.

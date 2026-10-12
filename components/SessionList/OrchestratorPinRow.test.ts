@@ -88,6 +88,7 @@ describe("OrchestratorPinRow", () => {
     onDelete: vi.fn(),
     onMoveToProject: vi.fn(),
     onPin: vi.fn(),
+    onFresh: vi.fn(),
   };
   const render = (over: Partial<RowContextValue> = {}, unread = false) =>
     act(async () =>
