@@ -469,14 +469,13 @@ async function stopRefusal(
   return null;
 }
 
-const SECRET_MSG = `Refused: orchestrators never read secrets (env files, keys, credential stores, tokenvault). If a step needs one, ${T.ask_saad}.`;
+const SECRET_MSG = `Refused: orchestrators never read secrets (env files, keys, credential stores). If a step needs one, ${T.ask_saad}.`;
+
+// Orchestrators may read tokenvault's folders (and run `tv`); writing them
+// is still refused by the write guard.
+const TOKENVAULT_DIR = /(^|\/)tokenvault(\/|$)/;
 
 function secretRefusal(inv: Invocation, cwd: string): string | null {
-  if (
-    (inv.name === "tv" || inv.name === "tokenvault") &&
-    /^(get|dump)$/.test(positionals(inv.args)[0] ?? "")
-  )
-    return SECRET_MSG;
   for (const w of [...inv.args, ...inv.cmd.reads]) {
     for (const p of [
       w,
@@ -487,7 +486,12 @@ function secretRefusal(inv: Invocation, cwd: string): string | null {
         /\//.test(p) ||
         p.startsWith(".") ||
         fs.existsSync(path.resolve(cwd, p));
-      if (pathish && isSecretPath(p)) return SECRET_MSG;
+      if (
+        pathish &&
+        isSecretPath(p) &&
+        !TOKENVAULT_DIR.test(path.resolve(cwd, p))
+      )
+        return SECRET_MSG;
     }
   }
   return null;
