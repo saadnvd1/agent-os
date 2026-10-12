@@ -70,6 +70,17 @@ export function insertLog(row: {
   );
 }
 
+// Replaces the text and header of a log that exists; the row stays.
+export function updateLog(
+  sessionId: string,
+  markdown: string,
+  header: Omit<LogHeader, "createdAt" | "filePath">
+): void {
+  db.prepare(
+    `UPDATE session_logs SET markdown = ?, data = ? WHERE session_id = ?`
+  ).run(markdown, JSON.stringify(header), sessionId);
+}
+
 export function setFilePath(sessionId: string, filePath: string): void {
   db.prepare(`UPDATE session_logs SET file_path = ? WHERE session_id = ?`).run(
     filePath,

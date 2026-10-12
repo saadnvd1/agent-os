@@ -123,11 +123,17 @@ const usd = (x: number, floor: boolean) =>
 const url = (u: string) =>
   /^https?:\/\/[^\s<>()[\]`]+$/.test(u) ? `<${u}>` : codeSpan(u);
 
+// A commit hash is not a secret, so it skips redact(): only a plain hash
+// (or one the log labels as the PR head) is printed, anything else is not.
+const SHA = /^[0-9a-f]{7,40}( \(PR head\))?$/;
+export const commitText = (sha: string | null): string =>
+  sha && SHA.test(sha) ? `\`${sha}\`` : "unknown";
+
 function header(d: LogData): string {
   const start = sqliteMs(d.startedAt);
   const end = sqliteMs(d.mergedAt);
   const duration =
-    start !== null && end !== null ? formatDuration(end - start) : "unknown";
+    start !== null && end !== null ? formatDuration(end - start) : null;
   const rows: [string, string][] = [
     ["Task", `${codeSpan(d.name)} (${codeSpan(d.id)})`],
     ["Workspace", d.workspace ? codeSpan(d.workspace) : "none"],
@@ -139,10 +145,10 @@ function header(d: LogData): string {
         ? `#${d.prNumber}${d.prUrl ? ` ${url(d.prUrl)}` : ""}`
         : "none recorded",
     ],
-    ["Merge commit", d.mergeCommit ? codeSpan(d.mergeCommit) : "not recorded"],
+    ["Merge commit", commitText(d.mergeCommit)],
     ["Started", when(d.startedAt)],
-    ["Merged", when(d.mergedAt)],
-    ["Duration", duration],
+    ["Merged", d.mergedAt ? when(d.mergedAt) : "unknown"],
+    ...(duration ? [["Duration", duration] as [string, string]] : []),
   ];
   return rows.map(([k, v]) => `- **${k}:** ${v}`).join("\n");
 }
