@@ -9,6 +9,7 @@ import os from "os";
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { InputQueue } from "../chat/queue";
 import { readUsage } from "../orchestrator/usage";
+import { currentWindow, type WindowReading } from "./rate-limits";
 
 export interface WindowView {
   pct: number;
@@ -17,6 +18,8 @@ export interface WindowView {
   // Seconds until it runs out at the current rate, when before it resets.
   capsIn?: number | null;
   burnPerMin?: number | null;
+  // Worked out from recorded usage, not read from the account.
+  estimated?: boolean;
 }
 
 export interface UsageWindows {
@@ -108,8 +111,30 @@ export function fromPlan(
   };
 }
 
+const fromReading = (
+  r: WindowReading | null,
+  nowMs: number
+): WindowView | null =>
+  r
+    ? {
+        pct: Math.round(r.pct),
+        resetsIn: r.resetsAt
+          ? Math.max(0, Math.round((r.resetsAt - nowMs) / 1000))
+          : null,
+        estimated: r.estimated || undefined,
+      }
+    : null;
+
 export async function usageWindows(): Promise<UsageWindows> {
   const sampled = readUsage();
+  const read = (w: "five_hour" | "seven_day") => {
+    try {
+      const now = Date.now();
+      return fromReading(currentWindow(w, now), now);
+    } catch {
+      return null;
+    }
+  };
   const plan = await planLimits();
   const fiveHour =
     "window" in sampled && sampled.window
@@ -119,8 +144,8 @@ export async function usageWindows(): Promise<UsageWindows> {
           capsIn: sampled.window.capsIn,
           burnPerMin: sampled.window.burnPerMin,
         }
-      : fromPlan(plan.limits?.five_hour);
-  const sevenDay = fromPlan(plan.limits?.seven_day);
+      : (fromPlan(plan.limits?.five_hour) ?? read("five_hour"));
+  const sevenDay = fromPlan(plan.limits?.seven_day) ?? read("seven_day");
   const note =
     !sevenDay || !fiveHour
       ? (plan.error ??

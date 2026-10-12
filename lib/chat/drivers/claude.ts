@@ -21,6 +21,7 @@ import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
 import { SuggestionTrace } from "./suggestion-trace";
 import { redact } from "../../orchestrator/untrusted";
 import { NO_ATTRIBUTION } from "../../agents/attribution";
+import { callFromAssistant } from "../../usage/calls";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
 // Code login. Asks for approval through chat cards unless given full access,
@@ -245,6 +246,7 @@ export const claudeDriver: ChatDriver = {
       )
       .catch(() => {});
 
+    const agents = new Map<string, string>();
     void (async () => {
       try {
         for await (const message of q) {
@@ -252,6 +254,7 @@ export const claudeDriver: ChatDriver = {
           if (m.session_id) sessionId = m.session_id;
           planFile = writtenPlanFile(m) ?? planFile;
           trace.message(m);
+          for (const e of usageEvents(m, agents)) out.push(e);
           for (const e of mapper.map(m)) out.push(e);
           if (m.type === "assistant" && !m.parent_tool_use_id)
             cacheTtl = cacheTtlMs(m.message?.usage?.cache_creation) ?? cacheTtl;
@@ -369,3 +372,46 @@ export const claudeDriver: ChatDriver = {
     };
   },
 };
+
+// The tokens of each response, subagents' too (the mapper drops those), and
+// the CLI's limit readings, for the usage ledger. `agents` maps a subagent's
+// parent tool call to its type, learned from the call that started it.
+export function usageEvents(
+  m: ClaudeMessage,
+  agents: Map<string, string>,
+  at = Date.now()
+): DriverEvent[] {
+  if (m.type === "rate_limit_event")
+    return [
+      {
+        type: "rate_limit",
+        info: (m as { rate_limit_info?: unknown }).rate_limit_info,
+      },
+    ];
+  if (m.type !== "assistant") return [];
+  const content = m.message?.content;
+  if (!m.parent_tool_use_id && Array.isArray(content))
+    for (const b of content as unknown as {
+      type?: string;
+      id?: string;
+      name?: string;
+      input?: { subagent_type?: unknown };
+    }[])
+      if (
+        b.type === "tool_use" &&
+        b.id &&
+        (b.name === "Agent" || b.name === "Task") &&
+        typeof b.input?.subagent_type === "string"
+      )
+        agents.set(b.id, b.input.subagent_type);
+  const agentType = m.parent_tool_use_id
+    ? (agents.get(m.parent_tool_use_id) ?? null)
+    : null;
+  const kind = !m.parent_tool_use_id
+    ? "main"
+    : agentType?.startsWith("review-")
+      ? "review"
+      : "sub";
+  const call = callFromAssistant(m.message, kind, agentType, at);
+  return call ? [{ type: "call_usage", call }] : [];
+}

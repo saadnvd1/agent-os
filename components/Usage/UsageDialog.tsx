@@ -14,12 +14,14 @@ import type { UsageRange } from "@/lib/usage/aggregate";
 import { cn } from "@/lib/utils";
 import { usageUi, usageUiActions, type UsageTab } from "@/stores/usageUi";
 import { CompareView } from "./CompareView";
+import { RatchetView } from "./RatchetView";
 import { ModelSpend } from "./ModelSpend";
 import { DayBars, SpendList } from "./SpendCharts";
 import { WindowCard } from "./WindowCard";
 import { formatUsd } from "./format";
 
 const TABS: { value: UsageTab; label: string }[] = [
+  { value: "daily", label: "Daily" },
   { value: "spend", label: "Spend" },
   { value: "models", label: "By model" },
   { value: "compare", label: "Compare" },
@@ -42,7 +44,10 @@ export function UsageDialog() {
   return (
     <Dialog open={open} onOpenChange={usageUiActions.setOpen}>
       <DialogContent
-        className="max-h-[90vh] max-w-xl overflow-y-auto"
+        className={cn(
+          "max-h-[90vh] max-w-xl overflow-y-auto",
+          tab === "daily" && "sm:max-w-4xl"
+        )}
         // Nothing to type in: no focus ring on the first range button.
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
@@ -88,6 +93,7 @@ export function UsageDialog() {
           ))}
         </div>
 
+        {tab === "daily" && <RatchetView enabled={open} />}
         {tab === "models" && <ModelSpend data={data?.models} />}
         {tab === "compare" && <CompareView enabled={open} />}
 

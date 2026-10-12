@@ -155,3 +155,6 @@
   hook calling an authenticated route that returns `compactContext`. Chats
   have it; the other chat drivers (codex, opencode, pi) only get the
   summary instructions.
+
+- Usage ledger: record the one-shot helper runs (PR text, summaries, titles) and give check runs the 1h cache
+  write split if the CLI result starts carrying it.

@@ -24,7 +24,7 @@ export function WindowCard({
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-muted-foreground text-xs">{label}</span>
         <span className="text-lg font-semibold tabular-nums">
-          {w ? `${w.pct}%` : "–"}
+          {w ? `${w.estimated ? "~" : ""}${w.pct}%` : "–"}
         </span>
       </div>
       <div className="bg-foreground/10 h-1.5 overflow-hidden rounded-full">
@@ -34,6 +34,7 @@ export function WindowCard({
         />
       </div>
       <p className="text-muted-foreground text-[11px]">
+        {w?.estimated && "Estimate from recorded usage · "}
         {!w
           ? "Not available"
           : w.capsIn

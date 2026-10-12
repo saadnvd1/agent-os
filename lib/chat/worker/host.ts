@@ -48,6 +48,8 @@ import {
   refreshedNote,
   releaseConversation,
 } from "../refresh";
+import { recordCall, sessionContext } from "../../usage/calls";
+import { parseRateLimit, recordReadings } from "../../usage/rate-limits";
 import { compactContext } from "../compact-context";
 import { COMPACT_BRIEF, COMPACT_INSTRUCTIONS } from "../working-state";
 import { compactionDue, staleLabel, type Staleness } from "../stale";
@@ -280,6 +282,17 @@ export class ChatHost {
     this.emit({ type: "state", state });
   }
 
+  // The usage ledger is a measure: a failed write never touches a turn.
+  private ledger(write: () => void): void {
+    try {
+      write();
+    } catch (error) {
+      if (!this.ledgerFailed) console.error("[usage] ledger write:", error);
+      this.ledgerFailed = true;
+    }
+  }
+  private ledgerFailed = false;
+
   private async pump(): Promise<void> {
     try {
       for await (const e of this.conversation.events) {
@@ -329,6 +342,14 @@ export class ChatHost {
           );
           this.turnStartedAt = null;
           this.turnsRecorded++;
+        } else if (e.type === "call_usage") {
+          this.ledger(() =>
+            recordCall(e.call, sessionContext(this.session.id), "live")
+          );
+        } else if (e.type === "rate_limit") {
+          this.ledger(() =>
+            recordReadings(parseRateLimit(e.info), "event", this.session.id)
+          );
         } else if (e.type === "usage_start") {
           // Too late once a turn was measured without it.
           if (!this.turnsRecorded) this.usage = e.totals;

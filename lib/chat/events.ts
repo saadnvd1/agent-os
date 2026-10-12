@@ -1,3 +1,4 @@
+import type { CallUsage } from "../usage/calls";
 import type { SearchResult } from "./find";
 
 /**
@@ -284,6 +285,8 @@ export type DriverEvent =
   | { type: "suggestion"; text: string } // the agent's guess at the next message
   | { type: "usage"; totals: UsageTotals } // running totals after a turn
   | { type: "usage_start"; totals: UsageTotals } // the totals it started from
+  | { type: "call_usage"; call: CallUsage } // one response's tokens
+  | { type: "rate_limit"; info: unknown } // the CLI's limit reading
   | { type: "context"; context: ChatContext } // context window use
   | { type: "turn_start" } // the agent started a turn (maybe one nobody sent)
   | { type: "at_rest" } // it has run every message it was given

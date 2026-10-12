@@ -4,6 +4,7 @@
  * drops it.
  */
 
+import { taskCosts } from "../usage/calls";
 import {
   parseOverride,
   resolveRole,
@@ -100,6 +101,8 @@ export interface TaskView {
   plan?: { planned: boolean; reason: string | null } | null;
   // A quick change: the orchestrator session that makes it (no agent).
   quickOf?: string | null;
+  // What it has cost so far in weighted tokens (lib/usage/weights).
+  weighted?: number;
 }
 
 export async function createTask(opts: {
@@ -415,6 +418,11 @@ export async function listTasks(): Promise<TaskView[]> {
     Promise.all(sessions.filter((s) => !isMirror(s)).map(taskView)),
     remoteTaskViews(sessions.filter(isMirror)),
   ]);
+  const costs = taskCosts(local.map((t) => t.id));
+  for (const t of local) {
+    const w = costs.get(t.id);
+    if (w) t.weighted = w;
+  }
   return [...local, ...remote].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt)
   );
