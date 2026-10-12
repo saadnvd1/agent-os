@@ -1,6 +1,12 @@
 import fs from "fs";
 import os from "os";
-import { db, queries, stackQueries, type Session } from "../db";
+import {
+  db,
+  queries,
+  sessionListColumns,
+  stackQueries,
+  type Session,
+} from "../db";
 import { getDefaultBranch, isBranchName } from "../git";
 import { parentBranchOf } from "../stacks/guard";
 import { voidApprovalsOn } from "../orchestrator/ask-approvals";
@@ -15,10 +21,14 @@ import type { TaskPR } from "./state";
 
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 
-export function taskSessions(): Session[] {
+// Without the brief and system prompt: a list doesn't need them.
+export function taskSessions(includeArchived = true): Session[] {
   return db
     .prepare(
-      `SELECT * FROM sessions WHERE task_status IS NOT NULL AND task_status != 'moved' ORDER BY created_at DESC`
+      `SELECT ${sessionListColumns(db)} FROM sessions
+         WHERE task_status IS NOT NULL AND task_status != 'moved'
+           ${includeArchived ? "" : "AND archived_at IS NULL"}
+         ORDER BY created_at DESC`
     )
     .all() as Session[];
 }

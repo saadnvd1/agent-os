@@ -37,6 +37,7 @@ import {
   getItem,
   hasItem,
   itemsOfKind,
+  recentTasks,
   listItems,
   saveItem,
   settle,
@@ -865,11 +866,7 @@ export function watchChat(
   // The composer lists background work still going or just done, even when
   // it started before the page.
   const recent = Date.now() - 60 * 60 * 1000;
-  const tasks = itemsOfKind(sessionId, "task").filter(
-    (t) =>
-      !onPage.has(t.id) &&
-      (t.status === "running" || (t.endedAt ?? t.createdAt) > recent)
-  );
+  const tasks = recentTasks(sessionId, recent).filter((t) => !onPage.has(t.id));
   listener({
     type: "snapshot",
     items: present(sessionId, page.items),

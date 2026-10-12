@@ -410,7 +410,7 @@ export function movedTasks(): { id: string; movedTo: string | null }[] {
 
 // Archived tasks aren't listed.
 export async function listTasks(): Promise<TaskView[]> {
-  const sessions = taskSessions().filter((s) => !s.archived_at);
+  const sessions = taskSessions(false);
   const [local, remote] = await Promise.all([
     Promise.all(sessions.filter((s) => !isMirror(s)).map(taskView)),
     remoteTaskViews(sessions.filter(isMirror)),

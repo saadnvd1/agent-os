@@ -13,6 +13,28 @@ function getStmt(db: Database.Database, sql: string): Database.Statement {
   return stmt;
 }
 
+// Every sessions column but the two large text ones, which only the single
+// session paths read; a list gets has_brief for whether a brief exists.
+const listColumns = new WeakMap<Database.Database, string>();
+export function sessionListColumns(db: Database.Database, alias = ""): string {
+  let cols = listColumns.get(db);
+  if (!cols) {
+    cols = (
+      db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
+    )
+      .map((c) => c.name)
+      .filter((n) => n !== "task_brief" && n !== "system_prompt")
+      .join(",");
+    listColumns.set(db, cols);
+  }
+  const prefix = alias ? `${alias}.` : "";
+  const list = cols
+    .split(",")
+    .map((c) => `${prefix}${c}`)
+    .join(", ");
+  return `${list}, (${prefix}task_brief IS NOT NULL AND ${prefix}task_brief != '') AS has_brief`;
+}
+
 export const queries = {
   // Sessions
   createSession: (db: Database.Database) =>
@@ -26,7 +48,22 @@ export const queries = {
     getStmt(db, `SELECT * FROM sessions WHERE id = ?`),
 
   getAllSessions: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM sessions ORDER BY updated_at DESC`),
+    getStmt(
+      db,
+      `SELECT ${sessionListColumns(db)} FROM sessions ORDER BY updated_at DESC`
+    ),
+
+  // The sidebar's sessions: not archived, and not a task that is over or
+  // lives on another machine.
+  getSidebarSessions: (db: Database.Database) =>
+    getStmt(
+      db,
+      `SELECT ${sessionListColumns(db)} FROM sessions
+         WHERE archived_at IS NULL
+           AND (task_status IS NULL
+                OR task_status NOT IN ('merged', 'dropped', 'moved'))
+         ORDER BY updated_at DESC`
+    ),
 
   // The tmux names AgentOS owns, for telling discovered sessions apart.
   getManagedTmuxNames: (db: Database.Database) =>
