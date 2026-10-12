@@ -901,3 +901,17 @@ export async function reattachChats(): Promise<void> {
   for (const id of queuedSessions(Date.now() - RESUME_WITHIN_MS))
     if (!live.has(id)) await resumeQueue(id);
 }
+
+// Asks a chat's worker to end at its next turn boundary, so the next message
+// starts one that reads its settings afresh (an orchestrator's permissions,
+// say). A worker already gone, or too old to understand, needs nothing.
+export async function retireChat(sessionId: string): Promise<void> {
+  const live =
+    registry.live.get(sessionId) ??
+    (runningWorkers().includes(sessionId)
+      ? await ensureLive(sessionId, false).catch(() => undefined)
+      : undefined);
+  if (!live || live.retireSent) return;
+  live.worker.command({ type: "retire" });
+  live.retireSent = true;
+}

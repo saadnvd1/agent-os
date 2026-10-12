@@ -1113,6 +1113,15 @@ it may do on its own, and the lines that always come back to you as asks.
   written, so an orchestrator misled by text it read could run code that way.
   That's accepted: task agents can already write anywhere, so an allowlist
   on the orchestrator alone would buy little.
+- **MCP servers.** An orchestrator runs without prompts, so an MCP server's
+  tools are refused unless its workspace allows the server. Settings →
+  Workspaces lists the servers configured on the machine (names only: user
+  servers, connectors and plugin servers; never their env, headers or tokens)
+  as toggles, and `linear` is allowed by default. A ticked server adds a bare
+  `mcp__<server>` rule to the orchestrator's allowed tools, covering all its
+  tools. Its worker ends at its next turn boundary when the list changes, and
+  the next one starts with the new permissions. Sending a message, email or
+  post through a server stays a hard line the brief sends to `ask_saad`.
   Its chat worker checks every write in a PreToolUse hook before it runs, on
   the path with symlinks and `..` resolved as the system will, and refuses
   with the reason; the repositories are read from the database on each write,

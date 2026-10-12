@@ -6,15 +6,39 @@
 import { randomUUID } from "crypto";
 import { db, type Workspace } from "./db";
 
-type WorkspaceRow = Omit<Workspace, "collapsed" | "wake_tasks_on_pr"> & {
+type WorkspaceRow = Omit<
+  Workspace,
+  "collapsed" | "wake_tasks_on_pr" | "orch_mcp_servers"
+> & {
   collapsed: number;
   wake_tasks_on_pr: number;
+  orch_mcp_servers: string;
 };
+
+function parseServers(raw: string): string[] {
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list)
+      ? list.filter((n): n is string => typeof n === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+// A list of server names: trimmed, deduplicated, none empty.
+function serverNames(value: unknown, current: string[]): string[] {
+  if (value === undefined) return current;
+  if (!Array.isArray(value) || value.some((n) => typeof n !== "string"))
+    throw new Error("mcpServers is a list of server names");
+  return [...new Set(value.map((n: string) => n.trim()).filter(Boolean))];
+}
 
 const toWorkspace = (row: WorkspaceRow): Workspace => ({
   ...row,
   collapsed: !!row.collapsed,
   wake_tasks_on_pr: !!row.wake_tasks_on_pr,
+  orch_mcp_servers: parseServers(row.orch_mcp_servers),
 });
 
 export function listWorkspaces(): Workspace[] {
@@ -62,19 +86,21 @@ export function updateWorkspace(
     sortOrder?: number;
     maxRunningTasks?: number | null;
     wakeTasksOnPR?: boolean;
+    mcpServers?: string[];
   }
 ): Workspace | null {
   const existing = getWorkspace(id);
   if (!existing) return null;
   const name = updates.name?.trim() || existing.name;
   db.prepare(
-    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ?, max_running_tasks = ?, wake_tasks_on_pr = ? WHERE id = ?`
+    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ?, max_running_tasks = ?, wake_tasks_on_pr = ?, orch_mcp_servers = ? WHERE id = ?`
   ).run(
     name,
     (updates.collapsed ?? existing.collapsed) ? 1 : 0,
     updates.sortOrder ?? existing.sort_order,
     taskLimit(updates.maxRunningTasks, existing.max_running_tasks),
     (updates.wakeTasksOnPR ?? existing.wake_tasks_on_pr) ? 1 : 0,
+    JSON.stringify(serverNames(updates.mcpServers, existing.orch_mcp_servers)),
     id
   );
   return getWorkspace(id);

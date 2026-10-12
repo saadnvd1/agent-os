@@ -23,6 +23,17 @@ export function useWorkspacesQuery() {
   });
 }
 
+// The MCP servers configured on this machine (names only).
+export function useMcpServersQuery() {
+  return useQuery({
+    queryKey: [...workspaceKeys.all, "mcp-servers"],
+    queryFn: async () =>
+      (await json<{ servers: string[] }>(await fetch("/api/mcp-servers")))
+        .servers,
+    staleTime: 60000,
+  });
+}
+
 export function useCreateWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -55,6 +66,8 @@ export function useUpdateWorkspace() {
       maxRunningTasks?: number | null;
       // Message tasks about failing checks and reviews on their PRs.
       wakeTasksOnPR?: boolean;
+      // MCP servers its orchestrator may use, by name.
+      mcpServers?: string[];
     }) =>
       json(
         await fetch(`/api/workspaces/${id}`, {
@@ -63,7 +76,13 @@ export function useUpdateWorkspace() {
           body: JSON.stringify(updates),
         })
       ),
-    onMutate: async ({ id, maxRunningTasks, wakeTasksOnPR, ...updates }) => {
+    onMutate: async ({
+      id,
+      maxRunningTasks,
+      wakeTasksOnPR,
+      mcpServers,
+      ...updates
+    }) => {
       await queryClient.cancelQueries({ queryKey: workspaceKeys.list() });
       queryClient.setQueryData<Workspace[]>(workspaceKeys.list(), (prev) =>
         prev?.map((w) =>
@@ -76,6 +95,9 @@ export function useUpdateWorkspace() {
                 }),
                 ...(wakeTasksOnPR !== undefined && {
                   wake_tasks_on_pr: wakeTasksOnPR,
+                }),
+                ...(mcpServers !== undefined && {
+                  orch_mcp_servers: mcpServers,
                 }),
               }
             : w

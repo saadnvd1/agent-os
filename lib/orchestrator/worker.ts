@@ -2,7 +2,9 @@ import type { Session } from "../db";
 import { agentEnv } from "../agents/launch";
 import { loadOrchestratorBrief } from "./brief";
 import { orchestratorToken } from "./home";
-import { ORCHESTRATOR_PERMISSIONS, ORCHESTRATOR_SERVER } from "./tool-names";
+import { ORCHESTRATOR_SERVER } from "./tool-names";
+import { orchestratorPermissions } from "./mcp-servers";
+import { getWorkspace } from "../workspaces";
 import {
   httpToolCaller,
   orchestratorTools,
@@ -19,6 +21,9 @@ export async function orchestratorExtras(
   session: Session
 ): Promise<RoleExtras> {
   const baseUrl = agentEnv(session.id).AGENTOS_URL;
+  const permissions = orchestratorPermissions(
+    getWorkspace(session.workspace_id ?? "")?.orch_mcp_servers ?? []
+  );
   return {
     systemAppend: await loadOrchestratorBrief(session),
     mcpServers: {
@@ -30,9 +35,9 @@ export async function orchestratorExtras(
         )
       ),
     },
-    ...ORCHESTRATOR_PERMISSIONS,
+    ...permissions,
     toolGuard: (tool, input) => orchestratorToolRefusal(session, tool, input),
-    toolsDigest: orchestratorToolsDigest(),
+    toolsDigest: orchestratorToolsDigest(permissions),
     refresh: {
       atTokens: refreshSettings().orchestratorTokens,
       role: "orchestrator",
