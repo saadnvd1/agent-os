@@ -45,7 +45,12 @@ import {
   SWEEP_EVERY_MS,
   type Candidate,
 } from "./sweep";
-import { agentLive, awayWindowMs, lastTurnAt } from "./activity";
+import {
+  agentLive,
+  awayWindowMs,
+  lastTurnAt,
+  saadMessagedRecently,
+} from "./activity";
 import { checkDeploy } from "./deploy";
 import { buildAwayReport, phoneSummary, reportMarkdown } from "./report";
 import { awayOnLine } from "./brief";
@@ -133,8 +138,14 @@ export function turnAwayOn(
 ): AwayRow {
   const { row, started } = startAway(input, now);
   // Sent again when the end moves, so the orchestrator has the new one.
-  for (const { workspaceId, orchestratorId } of orchestrated())
+  // Only to orchestrators Saad has messaged lately: waking the rest re-reads
+  // their whole context for nothing, and they read the away state in their
+  // brief when they next start.
+  for (const { workspaceId, orchestratorId } of orchestrated()) {
+    const s = sessionRow(orchestratorId);
+    if (!s || !saadMessagedRecently(s, now)) continue;
     tellAway(row, workspaceId, orchestratorId, now, !started);
+  }
   return row;
 }
 

@@ -110,11 +110,30 @@ const stalled = (id: string): SessionFacts => ({
   stack: null,
 });
 
-// A workspace whose orchestrator worked five minutes ago.
+// One chat item in a session; no origin means Saad typed it.
+let seq = 0;
+function chatItem(
+  sessionId: string,
+  at: number,
+  origin?: { kind: string; label: string }
+) {
+  db.prepare(
+    `INSERT INTO chat_items (session_id, item_id, seq, data) VALUES (?, ?, ?, ?)`
+  ).run(
+    sessionId,
+    `i${++seq}`,
+    seq,
+    JSON.stringify({ kind: "user", createdAt: at, text: "hi", origin })
+  );
+}
+
+// A workspace whose orchestrator worked, and was messaged by Saad, five
+// minutes ago.
 function seed() {
   const s = seedWorkspace();
   const orch = ensureOrchestrator(s.workspace.id);
   h.turns.set(orch.id, NOW - 5 * 60_000);
+  chatItem(orch.id, NOW - 5 * 60_000);
   return { ...s, w: s.workspace.id, orch: orch.id };
 }
 
@@ -350,6 +369,39 @@ describe("turning Away on and off", () => {
       workspaces: { id: string }[];
     };
     expect(report.workspaces.map((x) => x.id)).not.toContain(idle.w);
+  });
+});
+
+describe("telling orchestrators Away is on", () => {
+  it("messages only the one Saad wrote to inside 24 hours", () => {
+    db.exec(
+      `UPDATE away_periods SET ended_at = datetime('now'), ended_by = 'saad' WHERE ended_at IS NULL`
+    );
+    const mk = () => {
+      const s = seedWorkspace();
+      const orch = ensureOrchestrator(s.workspace.id);
+      h.turns.set(orch.id, NOW - 60_000);
+      return { w: s.workspace.id, orch: orch.id };
+    };
+    const recent = mk();
+    chatItem(recent.orch, NOW - 60 * 60_000);
+    const old = mk();
+    chatItem(old.orch, NOW - 3 * 24 * 60 * 60_000);
+    const automated = mk();
+    for (const kind of ["event", "schedule", "peer", "system"])
+      chatItem(automated.orch, NOW - 60_000, { kind, label: kind });
+
+    const row = turnAwayOn({ setBy: "x", expiresAt: null }, NOW);
+    expect(events(recent.w).map((e) => e.key)).toEqual([`once:away:${row.id}`]);
+    expect(events(old.w)).toEqual([]);
+    expect(events(automated.w)).toEqual([]);
+
+    turnAwayOff("saad", NOW + 1000);
+    expect(events(recent.w).map((e) => e.key)).toContain(
+      `once:away-back:${row.id}`
+    );
+    expect(events(old.w)).toEqual([]);
+    expect(events(automated.w)).toEqual([]);
   });
 });
 
