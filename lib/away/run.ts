@@ -96,6 +96,11 @@ function tellAway(
   // Checked every time: a digest's own turn isn't activity, so Away can't
   // keep an orchestrator going that nothing else has.
   if (!orchestratorActive(orchestratorId, now)) return false;
+  // Only one Saad has messaged lately: waking the rest re-reads their whole
+  // context for nothing, and they read the away state in their brief when
+  // they next start.
+  const s = sessionRow(orchestratorId);
+  if (!s || !saadMessagedRecently(s, now)) return false;
   const told = reachedWorkspaces(away.id).has(workspaceId);
   // One transaction: a crash can't leave the marker set with the event
   // never queued.
@@ -138,12 +143,7 @@ export function turnAwayOn(
 ): AwayRow {
   const { row, started } = startAway(input, now);
   // Sent again when the end moves, so the orchestrator has the new one.
-  // Only to orchestrators Saad has messaged lately: waking the rest re-reads
-  // their whole context for nothing, and they read the away state in their
-  // brief when they next start.
   for (const { workspaceId, orchestratorId } of orchestrated()) {
-    const s = sessionRow(orchestratorId);
-    if (!s || !saadMessagedRecently(s, now)) continue;
     tellAway(row, workspaceId, orchestratorId, now, !started);
   }
   return row;

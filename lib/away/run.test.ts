@@ -7,6 +7,7 @@ import type { SessionFacts } from "../orchestrator/facts";
 import type { DeployVerdict } from "./deploy";
 import { fromSql, getAway, startAway, toSql, type AwayRow } from "./state";
 import { IDLE_DIRTY_MS, STALL_MS } from "./sweep";
+import { awayDigestLine } from "./brief";
 import { sweepWorkspace, turnAwayOff, turnAwayOn } from "./run";
 
 // What the sweep reads and does, stood in for: the facts it's given, the
@@ -373,7 +374,7 @@ describe("turning Away on and off", () => {
 });
 
 describe("telling orchestrators Away is on", () => {
-  it("messages only the one Saad wrote to inside 24 hours", () => {
+  it("messages only the one Saad wrote to inside 24 hours", async () => {
     db.exec(
       `UPDATE away_periods SET ended_at = datetime('now'), ended_by = 'saad' WHERE ended_at IS NULL`
     );
@@ -388,13 +389,24 @@ describe("telling orchestrators Away is on", () => {
     const old = mk();
     chatItem(old.orch, NOW - 3 * 24 * 60 * 60_000);
     const automated = mk();
+    const decided = mk();
+    chatItem(decided.orch, NOW - 60_000, { kind: "decision", label: "Saad" });
     for (const kind of ["event", "schedule", "peer", "system"])
       chatItem(automated.orch, NOW - 60_000, { kind, label: kind });
 
     const row = turnAwayOn({ setBy: "x", expiresAt: null }, NOW);
     expect(events(recent.w).map((e) => e.key)).toEqual([`once:away:${row.id}`]);
+    expect(events(decided.w)).toHaveLength(1);
     expect(events(old.w)).toEqual([]);
     expect(events(automated.w)).toEqual([]);
+
+    // The sweep doesn't tell the skipped ones either, but their brief
+    // still says Saad is away.
+    await sweepWorkspace(row, old.w, old.orch, NOW);
+    await sweepWorkspace(row, automated.w, automated.orch, NOW);
+    expect(events(old.w)).toEqual([]);
+    expect(events(automated.w)).toEqual([]);
+    expect(awayDigestLine(NOW)).toContain("Saad is away");
 
     turnAwayOff("saad", NOW + 1000);
     expect(events(recent.w).map((e) => e.key)).toContain(

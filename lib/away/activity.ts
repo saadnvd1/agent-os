@@ -121,13 +121,15 @@ function chatTurn(sessionId: string): number {
 export const SAAD_MESSAGE_WINDOW_MS = 24 * 60 * 60_000;
 
 // When Saad last typed to a chat himself: a user item with no origin, so
-// not an event, a peer, a schedule or AgentOS. 0 when he never has.
+// not an event, a peer, a schedule or AgentOS, or his own decision made
+// outside the composer. 0 when he never has.
 function saadMessageAt(sessionId: string): number {
   const row = db
     .prepare(
       `SELECT json_extract(data, '$.createdAt') AS at FROM chat_items
        WHERE session_id = ? AND kind = 'user'
-         AND json_extract(data, '$.origin') IS NULL
+         AND (json_extract(data, '$.origin') IS NULL
+           OR json_extract(data, '$.origin.kind') = 'decision')
        ORDER BY seq DESC LIMIT 1`
     )
     .get(sessionId) as { at: number | null } | undefined;
