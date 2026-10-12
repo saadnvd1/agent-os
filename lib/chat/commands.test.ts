@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   insertCommand,
+  isFreshCommand,
+  withFresh,
   leadingCommand,
   rankCommands,
   slashQuery,
@@ -67,5 +69,20 @@ describe("leadingCommand", () => {
   it("ignores prose and paths", () => {
     expect(leadingCommand("fix /src/app.ts")).toBeNull();
     expect(leadingCommand("/src/app.ts is broken")).toBeNull();
+  });
+});
+
+describe("/fresh", () => {
+  it("is recognised alone, in any case, and not as prose", () => {
+    expect(isFreshCommand("/fresh")).toBe(true);
+    expect(isFreshCommand(" /Fresh ")).toBe(true);
+    expect(isFreshCommand("/fresh now please")).toBe(false);
+    expect(isFreshCommand("start /fresh")).toBe(false);
+  });
+
+  it("is offered once, ahead of the agent's own commands", () => {
+    const own = [{ name: "review", description: "" }];
+    expect(withFresh(own).map((c) => c.name)).toEqual(["fresh", "review"]);
+    expect(withFresh(withFresh(own))).toHaveLength(2);
   });
 });

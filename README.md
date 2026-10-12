@@ -1221,6 +1221,12 @@ it may do on its own, and the lines that always come back to you as asks.
   Nothing is lost, because its state lives in the database; its chat goes on,
   with a line where it started over. The same can be switched on for chat
   tasks (off by default: a task keeps only its brief and its branch).
+  **Start fresh by hand:** after a deploy that changes its permissions or
+  brief, use **Start fresh** in the orchestrator's row menu or type `/fresh`
+  in its chat (task chats have both too). It takes the threshold's path: an
+  idle agent starts over at once; a running turn finishes first, with a
+  "Starts fresh after this turn" line. The next conversation launches with
+  the brief, permissions and workspace state the server has then.
 - **Events:** the server sends it one short line per event (a PR opened, CI
   failed, or green once it has settled so `sign_off`'s ci gate passes, a `BLOCKED:` line, a merge, a session needing input, a
   stack step, a task idle 30 minutes with no PR, a review's verdict). Events

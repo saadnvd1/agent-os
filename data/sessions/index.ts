@@ -11,4 +11,5 @@ export {
   useSessionSetup,
 } from "./queries";
 export { usePinSession } from "./pin";
+export { useFreshStart } from "./fresh";
 export type { LaunchSessionInput, SessionSetup } from "./queries";

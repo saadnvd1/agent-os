@@ -15,6 +15,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  RotateCcw,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -172,6 +173,12 @@ export function SessionRowMenu({
             <Sparkles className={icon} />
           )}
           {summarizing ? "Summarizing..." : "Fresh start"}
+        </Item>
+      )}
+      {(session.role === "orchestrator" || session.task_brief) && !blocked && (
+        <Item onClick={() => ctx.onFresh(session.id)}>
+          <RotateCcw className={icon} />
+          Start fresh
         </Item>
       )}
       {session.pr_url && (

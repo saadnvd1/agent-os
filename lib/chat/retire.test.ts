@@ -35,7 +35,7 @@ vi.mock("./worker/client", () => ({
 }));
 
 const { registry } = await import("./registry");
-const { reattachChats } = await import("./runner");
+const { reattachChats, freshStartChat } = await import("./runner");
 const { enqueue, listQueue } = await import("./queued");
 const { seedSession } = await import("../orchestrator/testing");
 const { createProject } = await import("../projects");
@@ -152,5 +152,58 @@ describe("a worker that ended its conversation at the context threshold", () => 
     expect(workers.connects[1].spawn).toBe(true);
     await new Promise((r) => setTimeout(r, 50));
     expect(workers.connects).toHaveLength(2);
+  });
+});
+
+describe("a fresh start the reader asked for", () => {
+  const resumeId = async (id: string, value: string) =>
+    (await import("../db")).db
+      .prepare(`UPDATE sessions SET claude_session_id = ? WHERE id = ?`)
+      .run(value, id);
+  const saved = async (id: string) =>
+    (await import("../db")).db
+      .prepare(
+        `SELECT claude_session_id, chat_refreshed FROM sessions WHERE id = ?`
+      )
+      .get(id);
+
+  it("with no worker running, ends the conversation in the database at once", async () => {
+    const id = chat();
+    workers.running = [];
+    await resumeId(id, "conv-old");
+    expect(await freshStartChat(id)).toBe("now");
+    expect(await saved(id)).toEqual({
+      claude_session_id: null,
+      chat_refreshed: -1,
+    });
+    expect(workers.connects).toHaveLength(0);
+  });
+
+  it("tells a running worker, which waits for the turn boundary", async () => {
+    const id = chat();
+    workers.hellos = [
+      { build: buildId(), state: "running", caps: [...ALL, "fresh"] },
+    ];
+    await reattachChats();
+    expect(await freshStartChat(id)).toBe("after-turn");
+    expect(workers.connects[0].commands).toContainEqual({ type: "fresh" });
+    // Nothing is touched here: the worker ends it when its turn does.
+    expect((await saved(id)) as object).toMatchObject({ chat_refreshed: 0 });
+  });
+
+  it("answers now for an idle worker", async () => {
+    const id = chat();
+    workers.hellos = [
+      { build: buildId(), state: "idle", caps: [...ALL, "fresh"] },
+    ];
+    await reattachChats();
+    expect(await freshStartChat(id)).toBe("now");
+  });
+
+  it("won't guess for a busy worker from before it existed", async () => {
+    const id = chat();
+    workers.hellos = [{ build: buildId(), state: "running", caps: ALL }];
+    await reattachChats();
+    await expect(freshStartChat(id)).rejects.toThrow(/turn has ended/);
   });
 });

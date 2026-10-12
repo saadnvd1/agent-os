@@ -289,6 +289,7 @@ export const Pane = memo(function Pane({
           sessionId={chat.id}
           sessionName={chat.name}
           accessLocked={chat.role === "orchestrator"}
+          freshStart={chat.role === "orchestrator" || !!chat.task_brief}
           orchestratorOf={
             chat.role === "orchestrator" ? chat.workspace_id : null
           }

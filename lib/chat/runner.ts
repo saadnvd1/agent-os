@@ -50,6 +50,7 @@ import {
   queuedSessions,
 } from "./queued";
 import { fallbackFileSuggestions } from "./files";
+import { REQUESTED_FRESH, releaseConversation } from "./refresh";
 import { holdsQueue, settingUp } from "../sessions/setup-progress";
 import { firstMessageId, launchPending } from "../tasks/launch-gate";
 import type { ChatItem, FileSuggestion } from "./events";
@@ -280,6 +281,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       build: hello.build,
       canPlan: !!hello.caps?.includes("plan"),
       canQueue: !!hello.caps?.includes("queue"),
+      canFresh: !!hello.caps?.includes("fresh"),
     };
     // From an older build and busy, or running background work: it goes at
     // its next turn boundary, by itself if it can. Messages meanwhile wait
@@ -714,6 +716,43 @@ function retire(sessionId: string, live: Live, resume = true): void {
   if (registry.live.get(sessionId) !== live) return;
   stopChat(sessionId);
   if (resume) void resumeQueue(sessionId);
+}
+
+// A fresh start the reader asked for, by the path the context threshold
+// takes (the worker's endConversation): "now" when nothing is running, else
+// "after-turn", at the next turn boundary. The next worker reads the brief
+// and permissions as the server has them then, nothing held over.
+export async function freshStartChat(
+  sessionId: string
+): Promise<"now" | "after-turn"> {
+  const session = getSession(sessionId);
+  checkChattable(session);
+  const live =
+    registry.live.get(sessionId) ??
+    (runningWorkers().includes(sessionId)
+      ? await ensureLive(sessionId, false).catch(() => undefined)
+      : undefined);
+  if (live) {
+    // A worker from before this existed would ignore the command.
+    if (live.canFresh) {
+      live.worker.command({ type: "fresh" });
+      return live.state === "idle" ? "now" : "after-turn";
+    }
+    if (live.state !== "idle")
+      throw new Error("Try again when the current turn has ended");
+    stopChat(sessionId);
+  }
+  releaseConversation(sessionId, REQUESTED_FRESH);
+  const item: ChatItem = {
+    id: `note-refresh-${Date.now()}`,
+    kind: "note",
+    tone: "note",
+    text: `Fresh start: the agent starts a new conversation with its brief${session.role === "orchestrator" ? " and the current state from AgentOS" : ""} at its next message.`,
+    createdAt: Date.now(),
+  };
+  saveItem(sessionId, item);
+  emit(sessionId, { type: "item", item });
+  return "now";
 }
 
 export function stopChat(sessionId: string): void {

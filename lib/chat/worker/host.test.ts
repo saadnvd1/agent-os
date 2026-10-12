@@ -2025,3 +2025,96 @@ describe("a role's tool guard", () => {
     ).rejects.toThrow(/can't enforce this role's tools/);
   });
 });
+
+describe("ChatHost fresh start on request", () => {
+  const sessionRow = (id: string) =>
+    getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  const savedRow = (id: string) =>
+    getDb()
+      .prepare(
+        `SELECT claude_session_id, chat_refreshed FROM sessions WHERE id = ?`
+      )
+      .get(id) as { claude_session_id: string | null; chat_refreshed: number };
+  const notes = (id: string) =>
+    listItems(id).flatMap((i) => (i.kind === "note" ? [i.text] : []));
+
+  it("ends an idle orchestrator's conversation at once, with the usual line", async () => {
+    const { id, host, conversation } = await startHost("orchestrator", {
+      resumeId: "conv-old",
+    });
+    await host.handle({ type: "fresh" });
+    await host.done;
+    expect(conversation.close).toHaveBeenCalledOnce();
+    expect(savedRow(id)).toEqual({
+      claude_session_id: null,
+      chat_refreshed: -1,
+    });
+    expect(notes(id).filter((t) => t.startsWith("Fresh start"))).toHaveLength(
+      1
+    );
+  });
+
+  it("waits for the turn boundary mid-turn, saying so, and keeps what queued", async () => {
+    const { id, host, conversation } = await startHost("orchestrator", {
+      resumeId: "conv-old",
+    });
+    await host.handle({ type: "send", id: "user-1", text: "work" });
+    await host.handle({ type: "fresh" });
+    expect(conversation.close).not.toHaveBeenCalled();
+    expect(savedRow(id).claude_session_id).toBe("conv-old");
+    expect(notes(id)).toContain("Starts fresh after this turn");
+    // Asking twice doesn't say it twice.
+    await host.handle({ type: "fresh" });
+    expect(
+      notes(id).filter((t) => t === "Starts fresh after this turn")
+    ).toHaveLength(1);
+    await host.handle({
+      type: "send",
+      id: "user-2",
+      text: "event",
+      from: "agentos",
+      origin: { kind: "event", label: "AgentOS" },
+    });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.close).toHaveBeenCalledOnce();
+    expect(savedRow(id).claude_session_id).toBeNull();
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-2"]);
+    await host.done;
+  });
+
+  it("relaunches with the permissions and brief the server has now", async () => {
+    const { ORCHESTRATOR_PERMISSIONS } =
+      await import("../../orchestrator/tool-names");
+    const { roleExtras } = await import("./extras");
+    const { ChatHost } = await import("./host");
+    const { seedWorkspace } = await import("../../orchestrator/testing");
+    const ws = seedWorkspace();
+    const first = await startHost("orchestrator", { resumeId: "conv-old" });
+    getDb()
+      .prepare(
+        `UPDATE sessions SET workspace_id = ?, project_id = ?, chat_access = 'full' WHERE id = ?`
+      )
+      .run(ws.workspace.id, ws.app.id, first.id);
+    await first.host.handle({ type: "fresh" });
+    await first.host.done;
+
+    // A deploy changed the permissions and the saved access since it began.
+    const marker = "Bash(echo fresh-test:*)";
+    ORCHESTRATOR_PERMISSIONS.allowedTools.push(marker);
+    getDb()
+      .prepare(`UPDATE sessions SET chat_access = 'read' WHERE id = ?`)
+      .run(first.id);
+    try {
+      current = fakeConversation();
+      const row = sessionRow(first.id);
+      const next = new ChatHost(row, () => {}, await roleExtras(row));
+      expect(started?.resumeId).toBeNull();
+      expect(started?.allowedTools).toContain(marker);
+      expect(started?.access).toBe("read");
+      next.close();
+    } finally {
+      ORCHESTRATOR_PERMISSIONS.allowedTools.pop();
+    }
+  });
+});

@@ -29,6 +29,7 @@ export interface RowContextValue {
   onDelete: (sessionId: string) => void;
   onMoveToProject: (sessionId: string, projectId: string) => void;
   onPin: (sessionId: string, pinned: boolean) => void;
+  onFresh: (sessionId: string) => void;
 }
 
 const RowContext = createContext<RowContextValue | null>(null);

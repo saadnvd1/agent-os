@@ -4,7 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDocsWorkspace } from "@/data/lumifyhub/docs";
-import { usePinSession } from "@/data/sessions";
+import { useFreshStart, usePinSession } from "@/data/sessions";
 import { useOrchestratorsQuery } from "@/data/orchestrators";
 import { docsUiActions } from "@/stores/docsUi";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
@@ -47,6 +47,7 @@ export function SessionList({
   const mutations = useSessionListMutations({ onSelectSession: onSelect });
   const bulkDelete = useBulkDelete();
   const pin = usePinSession();
+  const fresh = useFreshStart();
   const { data: orchestrators = NO_ORCHESTRATORS } = useOrchestratorsQuery();
   const [dialog, setDialog] = useState<SidebarDialog | null>(null);
   const addProject = useAddProject();
@@ -70,9 +71,23 @@ export function SessionList({
   // Rows read their handlers through the latest render, so the context only
   // changes when what rows draw does: a status push redraws the rows it
   // touched, not the whole list.
-  const latest = useRef({ orderedIds, onSelect, onOpenInTab, mutations, pin });
+  const latest = useRef({
+    orderedIds,
+    onSelect,
+    onOpenInTab,
+    mutations,
+    pin,
+    fresh,
+  });
   useLayoutEffect(() => {
-    latest.current = { orderedIds, onSelect, onOpenInTab, mutations, pin };
+    latest.current = {
+      orderedIds,
+      onSelect,
+      onOpenInTab,
+      mutations,
+      pin,
+      fresh,
+    };
   });
   const canOpenInTab = !!onOpenInTab;
   const handlers = useMemo(
@@ -92,6 +107,7 @@ export function SessionList({
         latest.current.mutations.handleMoveSessionToProject(id, projectId),
       onPin: (id: string, pinned: boolean) =>
         latest.current.pin.mutate({ id, pinned }),
+      onFresh: (id: string) => latest.current.fresh.mutate(id),
     }),
     [canOpenInTab]
   );
