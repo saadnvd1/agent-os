@@ -90,3 +90,17 @@ export const PR_STAGE_LABEL: Record<PrStageName, string> = {
 
 export const prStageText = (s: Pick<PrStage, "stage" | "number">) =>
   `PR #${s.number} · ${PR_STAGE_LABEL[s.stage]}`;
+
+// The short wording for the badge itself; the full wording is the tooltip.
+export const PR_STAGE_SHORT: Record<PrStageName, string> = {
+  merged: "Merged",
+  conflicts: "Conflicts",
+  "ci-failed": "CI failed",
+  "ci-running": "CI",
+  "ci-settling": "CI",
+  "review-running": "Review",
+  "review-blocked": "Blocked",
+  waiting: "Waiting on you",
+  armed: "Armed",
+  open: "PR",
+};

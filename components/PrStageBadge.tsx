@@ -6,6 +6,7 @@ import { statusKeys } from "@/data/sessions/keys";
 import {
   PR_STAGE_BUSY,
   prStageText,
+  PR_STAGE_SHORT,
   type PrStage,
   type PrStageName,
 } from "@/lib/tasks/pr-stage";
@@ -24,24 +25,31 @@ const TONE: Record<PrStageName, string> = {
   open: "bg-muted text-muted-foreground",
 };
 
-// Where a task's PR is in the gates, linking to the PR. `compact` drops the
-// "PR #n" for the sidebar row's tight space (the number stays in the title).
+// Where a task's PR is in the gates, linking to the PR. The short stage word
+// is all the text; the PR number, full wording and sha live in the tooltip
+// and label. `showNumber` (the session header) prefixes "PR #n".
 export function PrStageBadge({
   stage,
-  compact = false,
+  showNumber = false,
 }: {
   stage?: PrStage;
-  compact?: boolean;
+  showNumber?: boolean;
 }) {
   if (!stage) return null;
   const text = prStageText(stage);
+  const short = PR_STAGE_SHORT[stage.stage];
+  const visible = !showNumber
+    ? short
+    : stage.stage === "open"
+      ? `PR #${stage.number}`
+      : `PR #${stage.number} · ${short}`;
   return (
     <a
       href={stage.url}
       target="_blank"
       rel="noreferrer"
       title={`${text}${stage.sha ? ` · ${stage.sha}` : ""}`}
-      aria-label={text}
+      aria-label={`${text}${stage.sha ? ` · ${stage.sha}` : ""}`}
       onClick={(e) => e.stopPropagation()}
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap hover:underline",
@@ -51,7 +59,7 @@ export function PrStageBadge({
       {PR_STAGE_BUSY.has(stage.stage) && (
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
       )}
-      {compact ? text.replace("PR ", "") : text}
+      {visible}
     </a>
   );
 }
@@ -64,6 +72,7 @@ export function SessionPrStage({ sessionId }: { sessionId?: string | null }) {
   return (
     <PrStageBadge
       stage={sessionId ? data?.statuses[sessionId]?.prStage : undefined}
+      showNumber
     />
   );
 }

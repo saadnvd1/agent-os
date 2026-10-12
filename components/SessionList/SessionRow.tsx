@@ -81,6 +81,7 @@ export const SessionRow = memo(function SessionRow({
         }
         aside={
           <>
+            {!row.need && <PrStageBadge stage={row.status?.prStage} />}
             {viaName && (
               <span title={`Started by ${viaName}`} className="shrink-0">
                 <Workflow
@@ -97,7 +98,6 @@ export const SessionRow = memo(function SessionRow({
         trailing={
           <>
             <RowBadge row={row} />
-            {!row.need && <PrStageBadge stage={row.status?.prStage} compact />}
             {!row.need && <TimeAgo at={session.updated_at} />}
           </>
         }
