@@ -140,3 +140,8 @@ export function writeLogFileTo(
 
 export const writeLogFile = (t: FileTarget, markdown: string): string =>
   writeLogFileTo(t, markdown).file;
+
+// Rewrites a log's own file in place (never creates one, never moves it).
+export function overwriteLogFile(file: string, markdown: string): void {
+  if (fs.existsSync(file)) fs.writeFileSync(file, markdown, { mode: 0o600 });
+}

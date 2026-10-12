@@ -14,10 +14,22 @@ import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { run } from "../tasks/gh";
 import { buildLogMarkdown, sqliteMs } from "./build";
-import { writeLogFileTo, type Destination } from "./folder";
+import {
+  overwriteLogFile,
+  destination,
+  writeLogFileTo,
+  type Destination,
+} from "./folder";
 import { commitLogs } from "./hq";
 import { gatherLogData, readPlanFile } from "./gather";
-import { hasLog, insertLog, setFilePath } from "./store";
+import {
+  getLog,
+  hasLog,
+  headerOf,
+  insertLog,
+  setFilePath,
+  updateLog,
+} from "./store";
 
 export * from "./store";
 export { buildLogMarkdown } from "./build";
@@ -43,6 +55,10 @@ export interface CaptureOpts {
   // Given, the file is handed over instead of committed: a batch commits
   // once at its end.
   onFile?: (file: string, hq: NonNullable<Destination["hq"]>) => void;
+  // Regenerate a log that exists: update its row and file in place.
+  rewrite?: boolean;
+  // With rewrite: report whether the log would change, write nothing.
+  dryRun?: boolean;
 }
 
 function eligible(s: Session | undefined): s is Session {
@@ -55,29 +71,49 @@ function eligible(s: Session | undefined): s is Session {
   );
 }
 
-async function mergeCommitOf(s: Session): Promise<string | null> {
+// GitHub's ISO time as SQLite's UTC "YYYY-MM-DD HH:MM:SS"; null when absent.
+export function ghTimeToSqlite(iso: unknown): string | null {
+  if (typeof iso !== "string") return null;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms)
+    ? null
+    : new Date(ms).toISOString().replace("T", " ").slice(0, 19);
+}
+
+async function mergeInfoOf(
+  s: Session
+): Promise<{ commit: string | null; mergedAt: string | null }> {
+  const none = { commit: null, mergedAt: null };
   const project = s.project_id ? getProject(s.project_id) : undefined;
   if (!project || !s.pr_number || process.env.AGENTOS_SESSION_LOGS_NO_GH)
-    return null;
+    return none;
   try {
     const out = await run(
       "gh",
-      [
-        "pr",
-        "view",
-        String(s.pr_number),
-        "--json",
-        "mergeCommit",
-        "-q",
-        ".mergeCommit.oid",
-      ],
+      ["pr", "view", String(s.pr_number), "--json", "mergeCommit,mergedAt"],
       project.working_directory.replace(/^~/, os.homedir()),
       15_000
     );
-    return out.trim() || null;
+    const j = JSON.parse(out) as {
+      mergeCommit?: { oid?: string } | null;
+      mergedAt?: string | null;
+    };
+    return {
+      commit: j.mergeCommit?.oid?.trim() || null,
+      mergedAt: ghTimeToSqlite(j.mergedAt),
+    };
   } catch {
-    return null;
+    return none;
   }
+}
+
+const planSection = (md: string) =>
+  /^## Plan\n[\s\S]*?(?=\n## Timeline\n)/m.exec(md)?.[0] ?? null;
+
+function keepPlan(fresh: string, old: string): string {
+  const was = planSection(old);
+  const now = planSection(fresh);
+  return was && now ? fresh.replace(now, () => was) : fresh;
 }
 
 export async function writeLog(
@@ -87,20 +123,77 @@ export async function writeLog(
   const row = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
     | Session
     | undefined;
-  if (!eligible(row) || hasLog(id)) return false;
-  const s = { ...row, merged_at: row.merged_at ?? sqliteNow() };
-  const mergeCommit = opts.noGh ? null : await mergeCommitOf(s);
+  const existing = getLog(id);
+  if (!eligible(row) || (existing && !opts.rewrite)) return false;
+  const info = opts.noGh
+    ? { commit: null, mergedAt: null }
+    : await mergeInfoOf(row);
+  const mergeCommit = info.commit;
+  const s = { ...row, merged_at: row.merged_at ?? info.mergedAt };
+  const kept = existing ? headerOf(existing) : null;
   const data = gatherLogData(s, {
     plan: opts.plan ?? null,
-    planKept: opts.planKept ?? true,
+    planKept: kept ? kept.planKept : (opts.planKept ?? true),
     head: opts.head ?? null,
     mergeCommit: mergeCommit ?? (opts.head ? `${opts.head} (PR head)` : null),
   });
-  const markdown = buildLogMarkdown(data);
+  let markdown = buildLogMarkdown(data);
+  // The plan file went with the worktree: keep the plan the log has.
+  if (existing && kept?.hasPlan)
+    markdown = keepPlan(markdown, existing.markdown);
   const start = sqliteMs(data.startedAt);
   const end = sqliteMs(data.mergedAt);
   const workspaceId =
     s.workspace_id ?? getProject(s.project_id ?? "")?.workspace_id ?? null;
+  if (existing) {
+    const changed = existing.markdown !== markdown;
+    if (opts.dryRun || !changed) return changed;
+    // Only the generated text changes; the row, its id and its file stay.
+    updateLog(id, markdown, {
+      id,
+      name: data.name,
+      workspace: data.workspace,
+      project: data.project,
+      branch: data.branch,
+      prNumber: data.prNumber,
+      prUrl: data.prUrl,
+      mergeCommit: data.mergeCommit,
+      startedAt: data.startedAt,
+      mergedAt: data.mergedAt,
+      durationMs: start !== null && end !== null ? end - start : null,
+      costUsd: data.usage.reduce((t, u) => t + u.costUsd, 0),
+      planKept: data.planKept,
+      hasPlan: kept?.hasPlan ?? data.plan !== null,
+    });
+    if (existing.file_path) {
+      try {
+        overwriteLogFile(existing.file_path, markdown);
+        const { hq } = destination({
+          workspace: data.workspace,
+          workspaceId,
+          project: data.project,
+          projectId: s.project_id,
+          name: data.name,
+          id,
+          day: "",
+        });
+        if (hq && existing.file_path.startsWith(hq.dir)) {
+          if (opts.onFile) opts.onFile(existing.file_path, hq);
+          else
+            await commitLogs(
+              hq.dir,
+              [existing.file_path],
+              `session log rewritten: ${data.name.replace(/\s+/g, " ").trim().slice(0, 100)}`,
+              hq.visibility
+            );
+        }
+      } catch (error) {
+        console.error(`[session-logs] file for ${id}:`, error);
+      }
+    }
+    return true;
+  }
+  if (opts.dryRun) return true;
   const stored = insertLog({
     sessionId: id,
     projectId: s.project_id,

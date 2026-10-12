@@ -40,6 +40,7 @@ import { seedWorkspace } from "../orchestrator/testing";
 import { buildLogMarkdown } from "./build";
 import {
   captureMergedTask,
+  writeLog,
   getLog,
   listLogs,
   resetSessionLogState,
@@ -224,5 +225,68 @@ describe("captureMergedTask", () => {
         .filter((l) => /^\s*(import|export) .* from /.test(l));
       for (const l of imports) expect(`${f}: ${l}`).not.toMatch(forbidden);
     }
+  });
+});
+
+describe("merged time and rewrite", () => {
+  beforeEach(() => {
+    vi.stubEnv("AGENTOS_SESSION_LOGS_NO_GH", "");
+    return () => vi.unstubAllEnvs();
+  });
+
+  const ghJson = (mergedAt: string | null) =>
+    JSON.stringify({
+      mergeCommit: { oid: "a".repeat(40) },
+      mergedAt,
+    });
+
+  it("prefers merged_at, then GitHub's mergedAt, then unknown", async () => {
+    const a = mergedTask();
+    modelCalls.gh.mockResolvedValue(ghJson("2026-10-13T01:02:03Z"));
+    await captureMergedTask(a.id);
+    expect(getLog(a.id)!.markdown).toContain(
+      "**Merged:** 2026-10-12 10:15 UTC"
+    );
+
+    const b = mergedTask();
+    db.prepare(`UPDATE sessions SET merged_at = NULL WHERE id = ?`).run(b.id);
+    await captureMergedTask(b.id);
+    const md = getLog(b.id)!.markdown;
+    expect(md).toContain("**Merged:** 2026-10-13 01:02 UTC");
+    expect(md).toContain(`\`${"a".repeat(40)}\``);
+
+    const c = mergedTask();
+    db.prepare(
+      `UPDATE sessions SET merged_at = NULL, updated_at = '2026-10-20 00:00:00' WHERE id = ?`
+    ).run(c.id);
+    modelCalls.gh.mockResolvedValue(ghJson(null));
+    await captureMergedTask(c.id);
+    const unknown = getLog(c.id)!.markdown;
+    expect(unknown).toContain("**Merged:** unknown");
+    expect(unknown).not.toContain("**Duration:**");
+    expect(unknown).not.toContain("2026-10-20");
+  });
+
+  it("rewrites a log and its file in place, and a dry run changes nothing", async () => {
+    const t = mergedTask({ plan: "1. keep me" });
+    await captureMergedTask(t.id);
+    const before = getLog(t.id)!;
+    db.prepare(
+      `UPDATE session_logs SET markdown = replace(markdown, 'Merge commit:** unknown', 'Merge commit:** [redacted]') WHERE session_id = ?`
+    ).run(t.id);
+    modelCalls.gh.mockResolvedValue(ghJson(null));
+
+    expect(await writeLog(t.id, { rewrite: true, dryRun: true })).toBe(true);
+    expect(getLog(t.id)!.markdown).not.toBe(before.markdown);
+    expect(getLog(t.id)!.markdown).toContain("[redacted]");
+
+    expect(await writeLog(t.id, { rewrite: true })).toBe(true);
+    const after = getLog(t.id)!;
+    expect(after.created_at).toBe(before.created_at);
+    expect(after.file_path).toBe(before.file_path);
+    expect(after.markdown).toContain(`\`${"a".repeat(40)}\``);
+    expect(after.markdown).toContain("1. keep me");
+    expect(fs.readFileSync(after.file_path!, "utf8")).toBe(after.markdown);
+    expect(await writeLog(t.id, { rewrite: true })).toBe(false);
   });
 });

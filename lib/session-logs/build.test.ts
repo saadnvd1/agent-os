@@ -155,7 +155,8 @@ describe("buildLogMarkdown", () => {
     expect(md).toContain("No model usage was recorded");
     expect(md).toContain("left no final message");
     expect(md).toContain("**Pull request:** none recorded");
-    expect(md).toContain("**Duration:** unknown");
+    expect(md).toContain("**Merged:** unknown");
+    expect(md).not.toContain("**Duration:**");
     expect(md).not.toContain("- Pull request:");
   });
 
@@ -235,6 +236,40 @@ describe("buildLogMarkdown", () => {
     const md = buildLogMarkdown({ ...full(), outcome: `key ${key} here` });
     expect(md).not.toContain(key);
     expect(md).toContain("[redacted]");
+  });
+});
+
+describe("merge commit and merged time", () => {
+  it("prints a full hash as is, not redacted", () => {
+    const sha = "0123456789abcdef".repeat(3).slice(0, 40);
+    const md = buildLogMarkdown({ ...full(), mergeCommit: sha });
+    expect(md).toContain(`**Merge commit:** \`${sha}\``);
+    expect(md).not.toContain("[redacted]");
+  });
+
+  it.each([
+    "not-a-sha",
+    "abc12",
+    "g".repeat(40),
+    "a".repeat(41),
+    "abcdef1\n- **Injected:** x",
+    null,
+  ])("prints %j as unknown", (bad) => {
+    const md = buildLogMarkdown({ ...full(), mergeCommit: bad });
+    expect(md).toContain("**Merge commit:** unknown");
+    expect(md).not.toContain("Injected:**");
+  });
+
+  it("keeps free text redacted", () => {
+    const token = ["sk", "ant", "x".repeat(30)].join("-");
+    const md = buildLogMarkdown({ ...full(), prompt: `use ${token}` });
+    expect(md).not.toContain(token);
+  });
+
+  it("omits the duration when the merge time is unknown", () => {
+    const md = buildLogMarkdown({ ...full(), mergedAt: null });
+    expect(md).toContain("**Merged:** unknown");
+    expect(md).not.toContain("**Duration:**");
   });
 });
 
