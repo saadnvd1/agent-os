@@ -59,7 +59,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
       className={
         active
           ? "bg-primary/10 border-primary/30"
-          : "bg-muted/50 hover:bg-muted"
+          : "bg-muted/50 hover:bg-muted has-[[data-chip]:hover]:bg-muted/50"
       }
     >
       <Workflow
@@ -110,7 +110,8 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
               <button
                 type="button"
                 aria-pressed={filtering}
-                title={`Show only ${label}'s work`}
+                data-chip
+                aria-label={`Show only ${label}'s work`}
                 onClick={(e) => {
                   e.stopPropagation();
                   sidebarUiActions.setOrchestrator(
@@ -118,9 +119,10 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
                   );
                 }}
                 className={cn(
-                  "text-muted-foreground -mx-1 mt-0.5 flex min-h-6 flex-wrap items-center gap-x-2.5 rounded px-1 text-xs",
-                  "hover:bg-muted hover:text-foreground md:min-h-5",
-                  filtering && "bg-muted text-foreground"
+                  "text-muted-foreground -mx-1.5 mt-0.5 flex min-h-6 cursor-pointer flex-wrap items-center gap-x-2.5 self-start rounded-md px-1.5 text-xs transition-colors md:min-h-5",
+                  "hover:bg-foreground/10 hover:text-foreground",
+                  "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+                  filtering && "bg-foreground/10 text-foreground"
                 )}
               >
                 {chips.map((c) => (
