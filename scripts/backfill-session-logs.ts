@@ -3,12 +3,16 @@
  * the database still holds. Their plan files went with their worktrees, so
  * each says "plan not kept". Idempotent: a task with a log is skipped.
  *
- *   npx tsx scripts/backfill-session-logs.ts --db <path to agent-os.db> [--no-gh] [--dry]
+ *   npx tsx scripts/backfill-session-logs.ts --db <path to agent-os.db> [--no-gh] [--dry] [--reexport]
  *
  * --db is required so a run never lands on a database by accident. Files go
- * where new logs go (~/.agent-os/session-logs, or a project's folder); run
+ * where new logs go: a project's folder, else the workspace's HQ repo (one
+ * commit per HQ at the end of the run), else ~/.agent-os/session-logs; run
  * with HOME set elsewhere to keep a trial away from the real folder.
  * --no-gh skips asking GitHub for each merge commit.
+ * --reexport writes the files of logs already in the database to where they
+ * go now, from the stored markdown (no rebuild, no model), and writes no new
+ * logs. Old files are left in place.
  */
 
 const args = process.argv.slice(2);
@@ -17,16 +21,27 @@ const dbPath = args[args.indexOf("--db") + 1];
 
 if (!flag("--db") || !dbPath || dbPath.startsWith("--")) {
   console.error(
-    "usage: backfill-session-logs.ts --db <path> [--no-gh] [--dry]"
+    "usage: backfill-session-logs.ts --db <path> [--no-gh] [--dry] [--reexport]"
   );
   process.exit(2);
 }
 process.env.DB_PATH = dbPath;
 
+type Visibility = "private" | "internal" | "none";
+
 async function main() {
+  if (flag("--reexport")) {
+    const { reexportLogs } = await import("../lib/session-logs/reexport");
+    const r = await reexportLogs({ dry: flag("--dry"), log: console.log });
+    console.log(
+      `${r.moved} ${flag("--dry") ? "to move" : "moved"}, ${r.unchanged} already in place, ${r.failed} failed, ${r.committed} committed`
+    );
+    return;
+  }
   const { db } = await import("../lib/db");
   const { writeLog } = await import("../lib/session-logs");
   const { hasLog } = await import("../lib/session-logs/store");
+  const { commitLogs } = await import("../lib/session-logs/hq");
   const rows = db
     .prepare(
       `SELECT id, name FROM sessions
@@ -40,6 +55,7 @@ async function main() {
     `${rows.length} merged tasks, ${rows.length - todo.length} already logged, ${todo.length} to write${flag("--dry") ? " (dry run)" : ""}`
   );
   let written = 0;
+  const byHq = new Map<string, { files: string[]; visibility: Visibility }>();
   for (const r of todo) {
     if (flag("--dry")) {
       console.log(`  would log ${r.name} (${r.id.slice(0, 8)})`);
@@ -49,6 +65,14 @@ async function main() {
       const ok = await writeLog(r.id, {
         planKept: false,
         noGh: flag("--no-gh"),
+        onFile: (file, hq) => {
+          const e = byHq.get(hq.dir) ?? {
+            files: [],
+            visibility: hq.visibility,
+          };
+          e.files.push(file);
+          byHq.set(hq.dir, e);
+        },
       });
       if (ok) written++;
       console.log(
@@ -58,6 +82,13 @@ async function main() {
       console.error(`  FAILED ${r.name} (${r.id.slice(0, 8)}):`, error);
     }
   }
+  for (const [dir, { files, visibility }] of byHq)
+    await commitLogs(
+      dir,
+      files,
+      `session logs: ${files.length} backfilled`,
+      visibility
+    );
   console.log(`wrote ${written} logs`);
 }
 

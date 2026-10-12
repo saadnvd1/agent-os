@@ -1111,11 +1111,27 @@ or code spans, so it can't add headings or links to the document, and
 credential-shaped strings are redacted.
 
 The database is the record: `session_logs`, one row per task, never deleted.
-Each log is also written to
-`~/.agent-os/session-logs/<workspace>/<project>/YYYY-MM-DD-<task>.md`. A
-project's settings have a **Session log folder** (an absolute or `~` path) to
-put its files elsewhere; a folder inside the project's repository is refused,
-because repositories can be public, and the files are never written into one.
+Each log is also written to a file, `YYYY-MM-DD-<task>.md`, in the first of:
+
+1. the project's **Session log folder** (project settings; an absolute or `~`
+   path),
+2. the workspace's **HQ folder** (workspace settings):
+   `<hq>/docs/sessions/<project>/`,
+3. `~/.agent-os/session-logs/<workspace>/<project>/`.
+
+A folder inside the project's repository is refused, because repositories can
+be public, and the files are never written into one.
+
+The HQ folder is a git repo. Saving it checks that it is a repository, that it
+isn't inside or equal to any of the workspace's project repos, and (with one
+`gh repo view --json visibility`) that its GitHub remote isn't public; the
+result is stored. When a log lands in the HQ it is committed there as
+`session log: <task name>`, only that file, whatever else is changed in the
+tree, and pushed to the current branch's upstream only if the repo is
+private. A failed commit or push is logged and never reaches the merge; the
+next push carries the earlier commit. Commits to one HQ run one at a time.
+The database row is the record either way.
+
 The same dialog lists the project's logs, newest first, and a merged task's
 view has a **Log** tab. The orchestrator reads them with its `logs` tool: the
 latest headers of a workspace or project, or one log in full. It only reads.
@@ -1126,10 +1142,14 @@ failure is logged and never reaches the merge. For tasks that merged before
 this existed:
 
 ```bash
-npx tsx scripts/backfill-session-logs.ts --db <path to agent-os.db> [--no-gh] [--dry]
+npx tsx scripts/backfill-session-logs.ts --db <path to agent-os.db> [--no-gh] [--dry] [--reexport]
 ```
 
-Their plan files are gone, so those logs say "plan not kept".
+Their plan files are gone, so those logs say "plan not kept". Files go to the
+same destinations as above; into an HQ the backfill commits once at the end.
+`--reexport` writes no new logs: it rewrites the files of logs already in the
+database to where they'd go now, from the stored markdown (no rebuild, no
+model), leaves the old files in place, and does nothing on a second run.
 
 ### Orchestrator
 

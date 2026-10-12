@@ -14,13 +14,15 @@ import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { run } from "../tasks/gh";
 import { buildLogMarkdown, sqliteMs } from "./build";
-import { writeLogFile } from "./folder";
+import { writeLogFileTo, type Destination } from "./folder";
+import { commitLogs } from "./hq";
 import { gatherLogData, readPlanFile } from "./gather";
 import { hasLog, insertLog, setFilePath } from "./store";
 
 export * from "./store";
 export { buildLogMarkdown } from "./build";
 export { logFolder, setLogFolder } from "./folder";
+export { getHq, setHq } from "./hq";
 
 const inFlight = new Map<string, Promise<void>>();
 // Tasks known to have a log, so a poll that sees a merged PR again asks
@@ -38,6 +40,9 @@ export interface CaptureOpts {
   planKept?: boolean;
   // Skip asking GitHub for the merge commit (a batch of old tasks).
   noGh?: boolean;
+  // Given, the file is handed over instead of committed: a batch commits
+  // once at its end.
+  onFile?: (file: string, hq: NonNullable<Destination["hq"]>) => void;
 }
 
 function eligible(s: Session | undefined): s is Session {
@@ -94,11 +99,12 @@ export async function writeLog(
   const markdown = buildLogMarkdown(data);
   const start = sqliteMs(data.startedAt);
   const end = sqliteMs(data.mergedAt);
+  const workspaceId =
+    s.workspace_id ?? getProject(s.project_id ?? "")?.workspace_id ?? null;
   const stored = insertLog({
     sessionId: id,
     projectId: s.project_id,
-    workspaceId:
-      s.workspace_id ?? getProject(s.project_id ?? "")?.workspace_id ?? null,
+    workspaceId,
     markdown,
     header: {
       id,
@@ -120,9 +126,10 @@ export async function writeLog(
   });
   if (!stored) return false;
   try {
-    const file = writeLogFile(
+    const { file, hq } = writeLogFileTo(
       {
         workspace: data.workspace,
+        workspaceId,
         project: data.project,
         projectId: s.project_id,
         name: data.name,
@@ -132,6 +139,14 @@ export async function writeLog(
       markdown
     );
     setFilePath(id, file);
+    if (hq && opts.onFile) opts.onFile(file, hq);
+    else if (hq)
+      await commitLogs(
+        hq.dir,
+        [file],
+        `session log: ${data.name.replace(/\s+/g, " ").trim().slice(0, 100)}`,
+        hq.visibility
+      );
   } catch (error) {
     // The database holds the log; the file is a copy.
     console.error(`[session-logs] file for ${id}:`, error);
