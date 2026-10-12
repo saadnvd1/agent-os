@@ -5,6 +5,8 @@ import type { ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
 import { compactedLine } from "@/lib/chat/stale";
+import { splitInlineCode, splitUserText } from "@/lib/chat/user-text";
+import { CodeBlock } from "./Code";
 import { CopyButton } from "./CopyButton";
 import { ImageThumb } from "./ImageThumb";
 import { Markdown } from "./Markdown";
@@ -13,13 +15,44 @@ import { useRowState } from "./rowState";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
-function UserText({ text }: { text: string }) {
-  const command = leadingCommand(text);
-  if (!command) return <>{text}</>;
+function Prose({ text }: { text: string }) {
   return (
     <>
-      <span className="text-primary font-mono">{command}</span>
-      {text.slice(command.length)}
+      {splitInlineCode(text).map((p, i) =>
+        p.code ? (
+          <code
+            key={i}
+            className="bg-foreground/[0.06] rounded px-1 py-0.5 font-mono text-[0.9em]"
+          >
+            {p.text}
+          </code>
+        ) : (
+          <span key={i}>{p.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
+function UserText({ text }: { text: string }) {
+  return (
+    <>
+      {splitUserText(text).map((part, i) => {
+        if (part.kind === "code")
+          return (
+            <div key={i} className="my-1.5 first:mt-0 last:mb-0">
+              <CodeBlock code={part.code} language={part.language} />
+            </div>
+          );
+        const command = i === 0 ? leadingCommand(part.text) : null;
+        if (!command) return <Prose key={i} text={part.text} />;
+        return (
+          <span key={i}>
+            <span className="text-primary font-mono">{command}</span>
+            <Prose text={part.text.slice(command.length)} />
+          </span>
+        );
+      })}
     </>
   );
 }
