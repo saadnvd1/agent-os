@@ -5,7 +5,7 @@
  * child exits → it's started again with backoff; stop() ends it.
  */
 
-import { execFileSync, spawn as nodeSpawn } from "child_process";
+import { execFile, spawn as nodeSpawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import readline from "readline";
@@ -54,7 +54,17 @@ const DELAYS = {
 const LOG_LINES_PER_MINUTE = 20;
 
 /** A cloudflared left running by an AgentOS that died without stopping it. */
-function stopStale(pidFile: string, binDir: string) {
+const commandOf = (pid: number) =>
+  new Promise<string>((resolve) =>
+    execFile(
+      "ps",
+      ["-o", "command=", "-p", String(pid)],
+      { encoding: "utf8", timeout: 5000 },
+      (err, out) => resolve(err ? "" : out)
+    )
+  );
+
+async function stopStale(pidFile: string, binDir: string) {
   let pid = 0;
   try {
     pid = Number(fs.readFileSync(pidFile, "utf8")) || 0;
@@ -62,15 +72,8 @@ function stopStale(pidFile: string, binDir: string) {
     return;
   }
   if (pid > 1) {
+    const command = await commandOf(pid);
     try {
-      const command = execFileSync(
-        "ps",
-        ["-o", "command=", "-p", String(pid)],
-        {
-          encoding: "utf8",
-          timeout: 5000,
-        }
-      );
       if (command.startsWith(binDir + path.sep)) process.kill(pid, "SIGTERM");
     } catch {}
   }
@@ -104,21 +107,29 @@ export function superviseTunnel(opts: SuperviseOptions) {
     if (stopped) return;
     timer = setTimeout(() => {
       timer = null;
-      void attempt();
+      tick();
     }, wait);
     timer.unref?.();
   };
 
+  // Nothing here may reject: an unhandled rejection takes AgentOS down.
+  const tick = () =>
+    void attempt().catch(() => {
+      state = "error";
+      retry(delays.max);
+    });
+
   const attempt = async () => {
     if (stopped) return;
     state = "connecting";
-    let prepared: Prepared;
     try {
-      prepared = await opts.prepare();
+      const prepared = await opts.prepare();
+      if (stopped) return;
+      await run(prepared);
     } catch (err) {
       if (stopped) return;
       const status = err instanceof ApiError ? err.status : 0;
-      reason = clean((err as Error).message);
+      reason = clean((err as Error)?.message ?? String(err));
       log(`connect: ${reason}`);
       if (status === 401 || status === 403) {
         // Revoked or disabled: it won't fix itself in seconds.
@@ -129,15 +140,13 @@ export function superviseTunnel(opts: SuperviseOptions) {
         retry(delay);
         delay = Math.min(delay * 2, delays.setupMax);
       }
-      return;
     }
-    if (stopped) return;
-    run(prepared);
   };
 
-  const run = ({ bin, token }: Prepared) => {
+  const run = async ({ bin, token }: Prepared) => {
     const redact = (line: string) => clean(line.split(token).join("[token]"));
-    stopStale(pidFile, path.dirname(bin));
+    await stopStale(pidFile, path.dirname(bin));
+    if (stopped) return;
     fs.mkdirSync(home, { recursive: true, mode: 0o700 });
     // Its own config and home, so no config.yml elsewhere on the machine
     // changes what it does.
@@ -249,7 +258,7 @@ export function superviseTunnel(opts: SuperviseOptions) {
 
   const killNow = () => child?.kill("SIGTERM");
   process.once("exit", killNow);
-  void attempt();
+  tick();
 
   return {
     state: () => state,

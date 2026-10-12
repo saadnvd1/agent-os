@@ -115,14 +115,16 @@ export function startConnect(
   let base: ConnectStatus = { state: "off" };
   let hostname = "";
   let running: Running | null = null;
+  // Set while the tunnel listener can't bind; it keeps trying.
+  let bindError: string | undefined;
   g.__agentosConnect = () => {
     if (!running) return base;
     const s: TunnelState = running.supervisor.state();
     return {
       ...base,
       hostname: hostname || base.hostname,
-      state: s === "stopped" ? "off" : s,
-      reason: running.supervisor.reason(),
+      state: bindError ? "error" : s === "stopped" ? "off" : s,
+      reason: bindError ?? running.supervisor.reason(),
     };
   };
 
@@ -137,6 +139,7 @@ export function startConnect(
 
   const down = (why: string) => {
     if (!running) return;
+    bindError = undefined;
     running.supervisor.stop();
     running.sockets.forEach((s) => s.destroy());
     running.server.close();
@@ -182,16 +185,26 @@ export function startConnect(
       sockets.add(s);
       s.once("close", () => sockets.delete(s));
     });
+    // Something else may hold the port for a while (an AgentOS shutting
+    // down, say): keep trying with backoff rather than giving up.
+    const bindDelays = deps.delays ?? { min: 1000, max: 60_000 };
+    let bindDelay = bindDelays.min;
     server.on("error", (err) => {
-      base = {
-        ...base,
-        state: "error",
-        reason: `can't listen on 127.0.0.1:${tunnelPort}: ${err.message}`,
-      };
-      log(`connect: ${base.reason}`);
-      down("listener failed");
+      if (running?.server !== server) return;
+      bindError = `can't listen on 127.0.0.1:${tunnelPort}: ${err.message}`;
+      log(`connect: ${bindError}; trying again`);
+      const t = setTimeout(() => {
+        if (running?.server !== server) return;
+        server.close();
+        server.listen(tunnelPort, "127.0.0.1");
+      }, bindDelay);
+      t.unref?.();
+      bindDelay = Math.min(bindDelay * 2, bindDelays.max);
     });
-    server.listen(tunnelPort, "127.0.0.1");
+    server.on("listening", () => {
+      bindError = undefined;
+      bindDelay = bindDelays.min;
+    });
     const ensure =
       deps.ensureBinary ?? ((d: string) => ensureCloudflared({ dir: d }));
     const ask = deps.requestTunnel ?? requestTunnel;
@@ -213,6 +226,7 @@ export function startConnect(
       },
     });
     running = { server, sockets, supervisor, release: lock.release };
+    server.listen(tunnelPort, "127.0.0.1");
   };
 
   // Runs from a file watcher and a timer in the live server: never throws.

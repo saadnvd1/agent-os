@@ -211,7 +211,8 @@ describe("startConnect", () => {
     return p;
   }
 
-  it("runs cloudflared while on, names the machine, and stops it all when turned off", async () => {
+  /** A linked machine with an old relay name, and a cloudflared stand-in. */
+  async function machine() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-serve-"));
     process.env.AGENTOS_CONNECT_DIR = dir;
     const { privateKey } = crypto.generateKeyPairSync("ed25519");
@@ -229,7 +230,6 @@ describe("startConnect", () => {
         apiUrl: "https://runagentos.com",
       })
     );
-    const tunnelPort = await freePort();
     const asked: number[] = [];
     const children: (EventEmitter & { signals: string[] })[] = [];
     const spawn: Spawn = (_bin, _args, opts) => {
@@ -257,6 +257,18 @@ describe("startConnect", () => {
       );
       return c;
     };
+    return { dir, asked, children, spawn };
+  }
+
+  const until = async (cond: () => boolean) => {
+    const end = Date.now() + 8000;
+    while (!cond()) {
+      if (Date.now() > end) throw new Error("timed out");
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  };
+
+  function start(m: Awaited<ReturnType<typeof machine>>, tunnelPort: number) {
     const g = gated({ tailnet: [], lookup: () => null });
     const started = startConnect(
       g.handlers,
@@ -265,10 +277,10 @@ describe("startConnect", () => {
       {
         ensureBinary: async (d) => path.join(d, "bin", "cloudflared"),
         requestTunnel: async (_c, _k, port) => {
-          asked.push(port);
+          m.asked.push(port);
           return { hostname: HOST, token: fakeToken() };
         },
-        spawn,
+        spawn: m.spawn,
         delays: { min: 10, max: 40, setupMax: 40, denied: 30 },
       },
       {
@@ -277,14 +289,15 @@ describe("startConnect", () => {
       }
     );
     close = started.close;
+    return started;
+  }
 
-    const until = async (cond: () => boolean) => {
-      const end = Date.now() + 8000;
-      while (!cond()) {
-        if (Date.now() > end) throw new Error("timed out");
-        await new Promise((r) => setTimeout(r, 10));
-      }
-    };
+  it("runs cloudflared while on, names the machine, and stops it all when turned off", async () => {
+    const m = await machine();
+    const { dir, asked, children } = m;
+    const tunnelPort = await freePort();
+    const started = start(m, tunnelPort);
+
     await until(() => connectStatus().state === "up");
     expect(asked).toEqual([tunnelPort]);
     expect(connectStatus()).toMatchObject({ hostname: HOST, enrolled: true });
@@ -307,5 +320,20 @@ describe("startConnect", () => {
     await until(() => connectStatus().state === "off");
     expect(children[0].signals).toContain("SIGTERM");
     await expect(get(tunnelPort, { host: HOST })).rejects.toThrow();
+  }, 15_000);
+
+  it("keeps trying to bind the tunnel port while something else holds it", async () => {
+    const m = await machine();
+    const tunnelPort = await freePort();
+    const squatter = net.createServer();
+    await new Promise<void>((r) => squatter.listen(tunnelPort, "127.0.0.1", r));
+    start(m, tunnelPort);
+    await until(
+      () => connectStatus().reason?.includes("can't listen") ?? false
+    );
+    expect(connectStatus().state).toBe("error");
+    await new Promise((r) => squatter.close(r));
+    await until(() => connectStatus().state === "up");
+    expect((await get(tunnelPort, { host: HOST })).status).toBe(401);
   }, 15_000);
 });

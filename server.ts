@@ -39,6 +39,7 @@ import {
 } from "./lib/security/next-internals";
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
+import { serverPort } from "./lib/connect/config";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
 import {
   setStatusSource,
@@ -73,9 +74,7 @@ const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
 
 // Support: npm run dev -- -p 3012
-const pFlagIndex = process.argv.indexOf("-p");
-const portArg = pFlagIndex !== -1 ? process.argv[pFlagIndex + 1] : undefined;
-const port = parseInt(portArg || process.env.PORT || "3011", 10);
+const port = serverPort();
 claimAgentosEnv(port);
 // Demo mode: seeded data, nothing that runs code (lib/security/demo).
 const demo = demoMode();

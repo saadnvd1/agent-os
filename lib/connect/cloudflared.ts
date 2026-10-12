@@ -63,20 +63,27 @@ export function pinFor(
 const RELEASES = "https://github.com/cloudflare/cloudflared/releases/download";
 // The real assets are ~40 MB; nothing legitimate comes near this.
 const MAX_BYTES = 150 * 1024 * 1024;
+const DOWNLOAD_MS = 5 * 60_000;
 
 const sha256 = (data: Buffer) =>
   crypto.createHash("sha256").update(data).digest("hex");
 
-function sha256File(file: string): string | null {
+// Streamed: the binary is ~40 MB and this runs on every Connect start.
+async function sha256File(file: string): Promise<string | null> {
   try {
-    return sha256(fs.readFileSync(file));
+    const hash = crypto.createHash("sha256");
+    for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+    return hash.digest("hex");
   } catch {
     return null;
   }
 }
 
 async function download(url: string, fetchImpl: typeof fetch) {
-  const res = await fetchImpl(url);
+  // Covers reading the body too, so a stalled download can't hang a start.
+  const res = await fetchImpl(url, {
+    signal: AbortSignal.timeout(DOWNLOAD_MS),
+  });
   if (!res.ok || !res.body)
     throw new Error(`downloading cloudflared failed: ${res.status}`);
   const chunks: Buffer[] = [];
@@ -126,7 +133,7 @@ export async function ensureCloudflared(opts: {
     );
   const binDir = path.join(opts.dir, "bin");
   const target = path.join(binDir, `cloudflared-${CLOUDFLARED_VERSION}`);
-  if (sha256File(target) === pin.binarySha256) {
+  if ((await sha256File(target)) === pin.binarySha256) {
     fs.chmodSync(target, 0o700);
     return target;
   }
@@ -154,7 +161,7 @@ export async function ensureCloudflared(opts: {
     // it's known to be the pinned binary, then moved into place.
     const staged = path.join(work, "staged");
     fs.writeFileSync(staged, binary, { mode: 0o600 });
-    if (sha256File(staged) !== pin.binarySha256)
+    if ((await sha256File(staged)) !== pin.binarySha256)
       throw new Error("cloudflared binary doesn't match its pinned SHA-256");
     fs.chmodSync(staged, 0o700);
     fs.renameSync(staged, target);

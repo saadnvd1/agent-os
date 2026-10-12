@@ -6,6 +6,7 @@ import {
   connectTunnelPort,
   readConnect,
   saveConnect,
+  serverPort,
   setConnectEnabled,
   loadConnect,
 } from "./config";
@@ -131,5 +132,15 @@ describe("connectTunnelPort", () => {
     );
     for (const bad of ["70000", "0", "abc", "3011", "1.5"])
       expect(connectTunnelPort(3011, { AGENTOS_CONNECT_PORT: bad })).toBeNull();
+  });
+});
+
+describe("serverPort", () => {
+  it("reads the port the way server.ts does: -p, then PORT, then 3011", () => {
+    expect(
+      serverPort(["node", "server.ts", "-p", "3012"], { PORT: "4000" })
+    ).toBe(3012);
+    expect(serverPort(["node", "server.ts"], { PORT: "4000" })).toBe(4000);
+    expect(serverPort(["node", "server.ts"], {})).toBe(3011);
   });
 });

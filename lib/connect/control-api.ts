@@ -82,7 +82,11 @@ export class ApiError extends Error {
 async function call(url: string, init: RequestInit): Promise<Response> {
   // Never follow a redirect: it would replay the link code or the signed
   // headers to whatever host the response names.
-  const res = await fetch(url, { ...init, redirect: "error" });
+  const res = await fetch(url, {
+    ...init,
+    redirect: "error",
+    signal: AbortSignal.timeout(30_000),
+  });
   if (res.ok) return res;
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   throw new ApiError(

@@ -49,6 +49,18 @@ describe("ensureCloudflared", () => {
     expect(pinFor("darwin", "x64")?.assetSha256).toBe(
       "903845b81828c8cb3c5d13d816a2de71c06a3da5785469df8eb0e1b736d92f9f"
     );
+    expect(pinFor("darwin", "arm64")?.binarySha256).toBe(
+      "72edfd3eea463aef4d5cb89e2e209cecb048cc756c2b01915de2e0ad7cb39830"
+    );
+    expect(pinFor("darwin", "x64")?.binarySha256).toBe(
+      "0560c9ab7281ac3f746055323623ed23bc0405b6dab9400474020cba33a978da"
+    );
+    expect(pinFor("linux", "x64")?.assetSha256).toBe(
+      "d33ff2d14475178d2012c2c56beba87389ac5ded27649519f198a7d3134a99db"
+    );
+    expect(pinFor("linux", "arm64")?.assetSha256).toBe(
+      "e6422b9d4f72d3194bc5a38676f13667c06666523217b842a877d72a80b5ac08"
+    );
     expect(pinFor("linux", "x64")?.binarySha256).toBe(
       "d33ff2d14475178d2012c2c56beba87389ac5ded27649519f198a7d3134a99db"
     );
@@ -153,3 +165,23 @@ describe("ensureCloudflared", () => {
     );
   });
 });
+
+// Downloads ~160 MB, so it runs only when asked:
+// CHECK_CLOUDFLARED_RELEASE=1 npx vitest run lib/connect/cloudflared.test.ts
+describe.runIf(process.env.CHECK_CLOUDFLARED_RELEASE === "1")(
+  "the real 2026.10.0 release",
+  () => {
+    for (const [platform, arch] of [
+      ["darwin", "arm64"],
+      ["darwin", "x64"],
+      ["linux", "x64"],
+      ["linux", "arm64"],
+    ]) {
+      it(`matches every pinned hash for ${platform}-${arch}`, async () => {
+        const pin = pinFor(platform, arch)!;
+        const bin = await ensureCloudflared({ dir: tmp(), pin });
+        expect(sha(fs.readFileSync(bin))).toBe(pin.binarySha256);
+      }, 300_000);
+    }
+  }
+);

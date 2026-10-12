@@ -18,6 +18,7 @@ import {
   connectTunnelPort,
   readConnect,
   saveConnect,
+  serverPort,
   setConnectEnabled,
 } from "./config";
 import { enrol } from "./enrol";
@@ -65,7 +66,7 @@ async function main() {
 
   const dir = connectDir();
   const operator = process.env.AGENTOS_CONNECT_OPERATOR === "1";
-  const port = connectTunnelPort(Number(process.env.AGENT_OS_PORT || 3011));
+  const port = connectTunnelPort(serverPort());
   if (!port) throw new Error("AGENTOS_CONNECT_PORT isn't a usable port");
 
   const read = readConnect(dir);

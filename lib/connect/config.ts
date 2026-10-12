@@ -119,6 +119,18 @@ export function setConnectEnabled(
   return true;
 }
 
+/** AgentOS's own port, read the way server.ts reads it: `-p <port>`, then PORT. */
+export function serverPort(
+  argv: string[] = process.argv,
+  env: Partial<NodeJS.ProcessEnv> = process.env
+): number {
+  const i = argv.indexOf("-p");
+  return parseInt(
+    (i !== -1 ? argv[i + 1] : undefined) || env.PORT || "3011",
+    10
+  );
+}
+
 /**
  * The loopback port cloudflared delivers tunnel traffic to: AgentOS's port
  * + 433 (3444), or AGENTOS_CONNECT_PORT. Null when it isn't usable.

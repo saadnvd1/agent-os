@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import crypto from "crypto";
 import { EventEmitter } from "events";
 import fs from "fs";
@@ -78,15 +78,21 @@ function harness(prepare?: () => Promise<{ bin: string; token: string }>) {
 }
 
 const stops: (() => void)[] = [];
-afterEach(() => stops.splice(0).forEach((s) => s()));
+afterEach(() => {
+  stops.splice(0).forEach((s) => s());
+  vi.unstubAllEnvs();
+});
 
 describe("superviseTunnel", () => {
   it("hands the token to cloudflared in its env only, with nothing else of ours", async () => {
-    process.env.AGENTOS_TEST_SECRET = "not-for-cloudflared";
+    const secret = `secret-${crypto.randomUUID()}`;
+    vi.stubEnv("AGENTOS_TEST_SECRET", secret);
     const h = harness();
     await until(() => h.children.length === 1);
     const [c] = h.children;
     expect(Object.keys(c.env).sort()).toEqual(["HOME", "PATH", "TUNNEL_TOKEN"]);
+    expect(c.env.AGENTOS_TEST_SECRET).toBeUndefined();
+    expect(Object.values(c.env)).not.toContain(secret);
     expect(c.env.TUNNEL_TOKEN).toBe(h.tokens[0]);
     expect(c.env.HOME.startsWith(h.dir)).toBe(true);
     expect(c.args.join(" ")).not.toContain(h.tokens[0]);
@@ -106,7 +112,6 @@ describe("superviseTunnel", () => {
       if (fs.statSync(p).isFile())
         expect(fs.readFileSync(p, "utf8")).not.toContain(h.tokens[0]);
     }
-    delete process.env.AGENTOS_TEST_SECRET;
   });
 
   it("is up once a connection registers, and keeps the token out of its logs", async () => {
@@ -177,5 +182,34 @@ describe("superviseTunnel", () => {
     await until(() => calls >= 3);
     expect(h.sup.state()).toBe("error");
     expect(h.children).toHaveLength(0);
+  });
+
+  it("survives a failing write in its own folder and keeps retrying", async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (r: unknown) => rejections.push(r);
+    process.on("unhandledRejection", onRejection);
+    try {
+      let calls = 0;
+      const h: ReturnType<typeof harness> = harness(async () => {
+        calls++;
+        return {
+          bin: path.join(h.dir, "bin", "cloudflared"),
+          token: fakeToken(),
+        };
+      });
+      // cloudflared.yml can't be written while a folder sits in its place.
+      const config = path.join(h.dir, "cloudflared.yml");
+      fs.mkdirSync(config);
+      await until(() => calls >= 2);
+      expect(h.sup.state()).toBe("error");
+      expect(h.sup.reason()).toContain("EISDIR");
+      expect(h.children).toHaveLength(0);
+      fs.rmdirSync(config);
+      await until(() => h.children.length === 1);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(rejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
   });
 });
