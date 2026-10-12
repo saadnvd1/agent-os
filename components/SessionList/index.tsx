@@ -110,6 +110,8 @@ export function SessionList({
       orchestrators,
       runningByWorkspace: data.runningByWorkspace,
       queuedByWorkspace: data.queuedByWorkspace,
+      rollups: data.rollupByOrchestrator,
+      orchestratorNames: data.orchestratorNames,
       cardUrl: data.taskCardUrl,
     }),
     [
@@ -122,6 +124,8 @@ export function SessionList({
       orchestrators,
       data.runningByWorkspace,
       data.queuedByWorkspace,
+      data.rollupByOrchestrator,
+      data.orchestratorNames,
       data.taskCardUrl,
     ]
   );

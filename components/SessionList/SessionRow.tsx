@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react";
 import { useSnapshot } from "valtio";
-import { CheckSquare, GitFork, Square } from "lucide-react";
+import { CheckSquare, GitFork, Square, Workflow } from "lucide-react";
 import { compactTimeAgo, fromSqliteTime } from "@/lib/session-meta";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { useMinuteTick } from "@/hooks/useMinuteTick";
@@ -33,6 +33,9 @@ export const SessionRow = memo(function SessionRow({
   const [renaming, setRenaming] = useState(false);
   const { session } = row;
   const active = session.id === ctx.activeSessionId;
+  const viaName = session.started_by
+    ? ctx.orchestratorNames.get(session.started_by)
+    : undefined;
   const selecting = selectedIds.size > 0;
   const selected = selectedIds.has(session.id);
   const onClick = (e: React.MouseEvent) => {
@@ -76,9 +79,19 @@ export const SessionRow = memo(function SessionRow({
           )
         }
         aside={
-          session.parent_session_id && (
-            <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />
-          )
+          <>
+            {viaName && (
+              <span title={`Started by ${viaName}`} className="shrink-0">
+                <Workflow
+                  aria-label={`Via orchestrator: ${viaName}`}
+                  className="text-muted-foreground/60 h-3 w-3"
+                />
+              </span>
+            )}
+            {session.parent_session_id && (
+              <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />
+            )}
+          </>
         }
         trailing={
           <>

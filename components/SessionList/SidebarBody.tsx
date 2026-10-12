@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertCircle, FolderPlus, Plus } from "lucide-react";
+import { AlertCircle, FolderPlus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ShimmeringLoader } from "@/components/ui/skeleton";
+import { sidebarUiActions } from "@/stores/sidebarUi";
 import type { SidebarData } from "./useSidebarData";
 import { MachineShelves, SessionShelves } from "./SessionShelves";
 import { SidebarExtras } from "./SidebarExtras";
@@ -71,6 +72,21 @@ export function SidebarBody({
 
   return (
     <>
+      {ui.orchestratorId && (
+        <button
+          type="button"
+          onClick={() => sidebarUiActions.setOrchestrator(null)}
+          aria-label="Clear the orchestrator filter"
+          className="bg-muted hover:bg-muted/70 text-foreground mx-2.5 mt-2 flex min-h-8 max-w-[calc(100%-1.25rem)] items-center gap-1.5 rounded-full px-3 text-xs md:min-h-7"
+        >
+          <span className="truncate">
+            Showing{" "}
+            {data.orchestratorNames.get(ui.orchestratorId) ?? "orchestrator"}
+            &rsquo;s work
+          </span>
+          <X className="h-3 w-3 shrink-0" />
+        </button>
+      )}
       <DraftShelf projects={data.projects} />
       {count === 0 &&
         (ui.query ? (

@@ -920,7 +920,13 @@ other sessions. Sessions sit on shelves: **Pinned** (pin from a row's ⋯
 menu), **Needs you** (an approval, a question, a terminal waiting for input, a
 message typed and never sent, a failed task, or the orchestrator's open asks,
 each with a badge), **Working**,
-and **Done**, newest first, ten at a time. A purple dot marks a session that
+and **Done**. Done is folded to one row, "3 done today · 12 earlier", until you
+tap it (open or folded is remembered per device); open, it lists newest first,
+ten at a time. The orchestrator's row carries small chips for the work it
+started: running, in review, blocked and queued, each left out at zero. Tap
+them to show only that orchestrator's work on the same shelves; the "Showing
+… work ×" chip at the top clears it (it resets on reload). A session an
+orchestrator started has a small orchestrator icon on its row. A purple dot marks a session that
 finished or changed since you last opened it. Search matches
 titles and project names, and the project filter narrows the list to one
 project and holds that project's own actions: new session, terminal, dev

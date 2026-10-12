@@ -11,12 +11,19 @@ interface Remembered {
 }
 
 export const sidebarUi = proxy<
-  Remembered & { query: string; donePages: number; hydrated: boolean }
+  Remembered & {
+    query: string;
+    donePages: number;
+    hydrated: boolean;
+    // Filter to one orchestrator's work; session-only, resets on reload.
+    orchestratorId: string | null;
+  }
 >({
   workspaceId: null,
   projectId: null,
-  doneCollapsed: false,
+  doneCollapsed: true,
   query: "",
+  orchestratorId: null,
   donePages: 0,
   hydrated: false,
 });
@@ -35,7 +42,7 @@ export const sidebarUiActions = {
     const saved = read();
     sidebarUi.workspaceId = saved.workspaceId ?? null;
     sidebarUi.projectId = saved.projectId ?? null;
-    sidebarUi.doneCollapsed = !!saved.doneCollapsed;
+    sidebarUi.doneCollapsed = saved.doneCollapsed ?? true;
     sidebarUi.hydrated = true;
     subscribe(sidebarUi, () => {
       try {
@@ -52,10 +59,15 @@ export const sidebarUiActions = {
   setWorkspace: (id: string | null) => {
     sidebarUi.workspaceId = id;
     sidebarUi.projectId = null;
+    sidebarUi.orchestratorId = null;
     sidebarUi.donePages = 0;
   },
   setProject: (id: string | null) => {
     sidebarUi.projectId = id;
+    sidebarUi.donePages = 0;
+  },
+  setOrchestrator: (id: string | null) => {
+    sidebarUi.orchestratorId = id;
     sidebarUi.donePages = 0;
   },
   setQuery: (query: string) => {

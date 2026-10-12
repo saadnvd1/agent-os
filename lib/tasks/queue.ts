@@ -87,6 +87,8 @@ export interface QueuedTaskView {
   afterId: string | null;
   note: string | null;
   error: string | null;
+  // The orchestrator session that queued it, when one did.
+  startedBy: string | null;
   createdAt: string;
 }
 
@@ -380,6 +382,7 @@ export function listQueue(): QueuedTaskView[] {
       afterId: r.after_task,
       note: r.note,
       error: r.error,
+      startedBy: r.started_by,
       createdAt: r.created_at,
     };
   });

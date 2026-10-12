@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import * as DM from "@/components/ui/dropdown-menu";
 import * as CM from "@/components/ui/context-menu";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
+import { visibleChips } from "@/lib/sidebar/rollup";
+import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
+import { useSnapshot } from "valtio";
 import { orchestratorRowText } from "@/lib/sidebar/orchestrator-row";
 import { cn } from "@/lib/utils";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
@@ -36,6 +39,9 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
     inReview: overview?.inReview ?? 0,
     queued: ctx.queuedByWorkspace.get(ws) ?? 0,
   });
+  const chips = visibleChips(ctx.rollups.get(session.id));
+  const { orchestratorId } = useSnapshot(sidebarUi);
+  const filtering = orchestratorId === session.id;
   const label = ctx.workspaceNames.get(ws) ?? "Orchestrator";
   const summary = asks ? `${status} · ${asks}` : status;
   const menu = (kind: "dropdown" | "context") => (
@@ -100,6 +106,36 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
                 </>
               )}
             </span>
+            {chips.length > 0 && (
+              <button
+                type="button"
+                aria-pressed={filtering}
+                title={`Show only ${label}'s work`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sidebarUiActions.setOrchestrator(
+                    filtering ? null : session.id
+                  );
+                }}
+                className={cn(
+                  "text-muted-foreground -mx-1 mt-0.5 flex min-h-6 flex-wrap items-center gap-x-2.5 rounded px-1 text-xs",
+                  "hover:bg-muted hover:text-foreground md:min-h-5",
+                  filtering && "bg-muted text-foreground"
+                )}
+              >
+                {chips.map((c) => (
+                  <span key={c.key} className="flex items-center gap-1">
+                    <span
+                      aria-hidden
+                      className={cn("h-1.5 w-1.5 rounded-full", c.dot)}
+                    />
+                    <span className="tabular-nums">
+                      {ctx.rollups.get(session.id)![c.key]} {c.label}
+                    </span>
+                  </span>
+                ))}
+              </button>
+            )}
           </>
         )}
       </span>

@@ -2,7 +2,12 @@
 
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
-import { DONE_PAGE, doneLimit, type Shelves } from "@/lib/sidebar/shelves";
+import {
+  DONE_PAGE,
+  doneLimit,
+  doneSummary,
+  type Shelves,
+} from "@/lib/sidebar/shelves";
 import type { MachineGroup } from "@/lib/sidebar/machines";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
@@ -97,6 +102,7 @@ export function SessionShelves({
 }) {
   const shown = shelves.done.slice(0, doneLimit(donePages));
   const hidden = shelves.done.length - shown.length;
+  const summary = doneSummary(shelves.done).text;
   return (
     <>
       {shelves.orchestrators.length + toStart.length > 0 && (
@@ -140,7 +146,7 @@ export function SessionShelves({
       {shelves.done.length > 0 && (
         <section aria-label="Done">
           <ShelfLabel
-            label="Done"
+            label={doneCollapsed ? summary : "Done"}
             collapsed={doneCollapsed}
             onToggle={sidebarUiActions.toggleDone}
           />

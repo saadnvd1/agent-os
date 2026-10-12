@@ -1,6 +1,7 @@
 // The sidebar's one flat list, sorted onto shelves: the workspace's pinned
 // orchestrator, Pinned, Needs you, Working, then Done. Client-safe: no database.
 import type { Session } from "@/lib/db/types";
+import { fromSqliteTime } from "@/lib/session-meta";
 import type { TaskState } from "@/lib/tasks/state";
 
 // Why a session is blocked on you.
@@ -102,6 +103,8 @@ export interface ShelfInput {
   // Each workspace's current orchestrator (its overview's sessionId). Any
   // other orchestrator session is an ordinary row, pinned or not.
   currentOrchestrators?: ReadonlySet<string>;
+  // Only the sessions this orchestrator session started.
+  startedBy?: string | null;
 }
 
 const newestFirst = (a: SidebarRow, b: SidebarRow) =>
@@ -129,6 +132,7 @@ export function buildShelves(input: ShelfInput): Shelves {
       (s) =>
         !s.archived_at &&
         (!input.projectId || s.project_id === input.projectId) &&
+        (!input.startedBy || s.started_by === input.startedBy) &&
         matchesQuery(s, input.projectName(s), input.query ?? "")
     )
     .map((s) => toRow(input, s));
@@ -180,6 +184,26 @@ export function buildShelves(input: ShelfInput): Shelves {
 // Done shows 10 at first, then 25 more per "Show more".
 export const doneLimit = (pages: number) =>
   DONE_FIRST_PAGE + Math.max(0, pages) * DONE_PAGE;
+
+// What a folded Done shelf says: how many finished today (local time), and
+// how many before.
+export function doneSummary(
+  done: readonly SidebarRow[],
+  now: Date = new Date()
+): { today: number; earlier: number; text: string } {
+  const day = now.toDateString();
+  const today = done.filter(
+    (r) => fromSqliteTime(r.session.updated_at).toDateString() === day
+  ).length;
+  const earlier = done.length - today;
+  const text = [
+    today > 0 && `${today} done today`,
+    earlier > 0 && `${earlier} earlier`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return { today, earlier, text };
+}
 
 // A workspace holds its projects' sessions and its own orchestrator; no
 // workspace selected means every session.
