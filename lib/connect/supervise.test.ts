@@ -6,7 +6,13 @@ import os from "os";
 import path from "path";
 import { PassThrough } from "stream";
 import { ApiError } from "./control-api";
-import { superviseTunnel, type Spawn } from "./supervise";
+import { execFileSync } from "child_process";
+import {
+  reapTunnel,
+  spawnTunnel,
+  superviseTunnel,
+  type Spawn,
+} from "./supervise";
 
 const fakeToken = () =>
   Buffer.from(
@@ -212,4 +218,162 @@ describe("superviseTunnel", () => {
       process.off("unhandledRejection", onRejection);
     }
   });
+});
+
+describe("cloudflared never outlives AgentOS", () => {
+  it("takes it down on a signal nobody else handles, before AgentOS goes", async () => {
+    const h = harness();
+    await until(() => h.children.length === 1);
+    // Stands in for whoever else handles it, so this test process lives on.
+    const other = () => {};
+    process.on("SIGTERM", other);
+    try {
+      process.emit("SIGTERM", "SIGTERM");
+      expect(h.children[0].signals).toEqual(["SIGTERM"]);
+    } finally {
+      process.off("SIGTERM", other);
+    }
+  });
+
+  it("drops its signal and exit handlers once stopped", async () => {
+    const before = ["SIGTERM", "SIGINT", "SIGHUP", "exit"].map((s) =>
+      process.listenerCount(s)
+    );
+    const h = harness();
+    await until(() => h.children.length === 1);
+    h.sup.stop();
+    expect(
+      ["SIGTERM", "SIGINT", "SIGHUP", "exit"].map((s) =>
+        process.listenerCount(s)
+      )
+    ).toEqual(before);
+  });
+
+  describe("reapTunnel", () => {
+    const setup = (pid: string) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-reap-"));
+      fs.writeFileSync(path.join(dir, "cloudflared.pid"), pid);
+      return dir;
+    };
+
+    it("kills the group and the pid when it's still our cloudflared", async () => {
+      const dir = setup("5151");
+      const calls: [number, NodeJS.Signals | 0][] = [];
+      let alive = 3;
+      const reaped = await reapTunnel(dir, undefined, {
+        commandOf: async () =>
+          `${path.join(dir, "bin", "cloudflared-2026.10.0")} tunnel run`,
+        kill: (pid, sig) => {
+          calls.push([pid, sig]);
+          return sig === 0 ? --alive > 0 : true;
+        },
+        waitMs: 1000,
+      });
+      expect(reaped).toBe(true);
+      expect(calls.slice(0, 2)).toEqual([
+        [-5151, "SIGKILL"],
+        [5151, "SIGKILL"],
+      ]);
+      // Waited for it to be gone.
+      expect(alive).toBe(0);
+      expect(fs.existsSync(path.join(dir, "cloudflared.pid"))).toBe(false);
+    });
+
+    it("never signals a reused pid that isn't ours", async () => {
+      const dir = setup("5151");
+      const calls: number[] = [];
+      const reaped = await reapTunnel(dir, undefined, {
+        commandOf: async () => "/Applications/Other.app/Contents/MacOS/Other",
+        kill: (pid) => (calls.push(pid), true),
+      });
+      expect(reaped).toBe(false);
+      expect(calls).toEqual([]);
+      expect(fs.existsSync(path.join(dir, "cloudflared.pid"))).toBe(false);
+    });
+
+    it("does nothing without a pid file", async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-reap-"));
+      expect(await reapTunnel(dir, undefined, { kill: () => true })).toBe(
+        false
+      );
+    });
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "spawnTunnel (real processes)",
+    () => {
+      const alive = (pid: number) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      // A stand-in cloudflared: notes its pid, then waits.
+      function fakeBin() {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-spawn-"));
+        const bin = path.join(dir, "cloudflared");
+        const pidOut = path.join(dir, "child.pid");
+        fs.writeFileSync(
+          bin,
+          `#!/bin/sh\necho $$ > "${pidOut}"\nexec sleep 30\n`,
+          { mode: 0o700 }
+        );
+        return { bin, pidOut };
+      }
+
+      async function run(token: string) {
+        const { bin, pidOut } = fakeBin();
+        const proc = spawnTunnel(bin, ["tunnel", "run"], {
+          env: {
+            PATH: process.env.PATH ?? "/usr/bin:/bin",
+            TUNNEL_TOKEN: token,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        const exited = new Promise<void>((r) => proc.on("exit", () => r()));
+        await until(
+          () =>
+            fs.existsSync(pidOut) && !!fs.readFileSync(pidOut, "utf8").trim(),
+          5000
+        );
+        const child = Number(fs.readFileSync(pidOut, "utf8"));
+        return { proc, child, exited };
+      }
+
+      it("keeps the token out of every argv ps can show", async () => {
+        const token = fakeToken();
+        const { proc, child, exited } = await run(token);
+        try {
+          const table = execFileSync(
+            "ps",
+            ["-o", "pid=,command=", "-p", `${proc.pid},${child}`],
+            { encoding: "utf8" }
+          );
+          expect(table).toContain(String(child));
+          expect(table).not.toContain(token);
+        } finally {
+          proc.kill("SIGKILL");
+          await exited;
+        }
+      });
+
+      it("kills cloudflared when AgentOS goes away (its end of the pipe closes)", async () => {
+        const { proc, child, exited } = await run(fakeToken());
+        expect(alive(child)).toBe(true);
+        proc.stdin!.destroy();
+        await exited;
+        await until(() => !alive(child), 5000);
+      });
+
+      it("kills the whole group, cloudflared included", async () => {
+        const { proc, child, exited } = await run(fakeToken());
+        proc.kill("SIGTERM");
+        await exited;
+        await until(() => !alive(child), 5000);
+      });
+    }
+  );
 });

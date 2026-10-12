@@ -8,6 +8,10 @@
  *   - takes only the machine's own Host (cloudflared pins it) and strips
  *     X-Forwarded-Host, Forwarded and X-Original-Host before any handler.
  *
+ * cloudflared starts only once that listener is bound and a connection to
+ * the port is seen to arrive on it, and stops if the listener goes: it must
+ * never publish whatever else holds the port.
+ *
  * Connect follows connect.json while running: `agent-os disconnect` or the
  * switch in Devices stops cloudflared and closes every tunnel connection at
  * once. Nothing here may stop AgentOS from starting.
@@ -15,6 +19,7 @@
 
 import fs from "fs";
 import http from "http";
+import net from "net";
 import path from "path";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Socket } from "net";
@@ -36,7 +41,13 @@ import {
 } from "./control-api";
 import { appVersion, startHeartbeat } from "./heartbeat";
 import { ensureCloudflared } from "./cloudflared";
-import { superviseTunnel, type Spawn, type TunnelState } from "./supervise";
+import {
+  reapTunnel,
+  superviseTunnel,
+  type ReapDeps,
+  type Spawn,
+  type TunnelState,
+} from "./supervise";
 
 export interface Handlers {
   onRequest: (req: IncomingMessage, res: ServerResponse) => void;
@@ -101,12 +112,51 @@ export interface ConnectDeps {
   delays?: Parameters<typeof superviseTunnel>[0]["delays"];
   heartbeat?: typeof sendHeartbeat;
   heartbeatMs?: number;
+  reap?: ReapDeps;
+}
+
+/**
+ * Whether connections to 127.0.0.1:<port> reach `server`: one is made and
+ * must show up on it. Never rejects.
+ */
+export function listenerIsOurs(
+  server: http.Server,
+  port: number,
+  timeoutMs = 3000
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const arrived = new Set<number>();
+    let probePort: number | undefined;
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      server.removeListener("connection", onConnection);
+      client.destroy();
+      resolve(ok);
+    };
+    const onConnection = (s: Socket) => {
+      if (s.remotePort === undefined) return;
+      arrived.add(s.remotePort);
+      if (s.remotePort === probePort) finish(true);
+    };
+    server.prependListener("connection", onConnection);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    timer.unref?.();
+    const client = net.connect(port, "127.0.0.1", () => {
+      probePort = client.localPort;
+      // The server may have seen it before this callback ran.
+      if (probePort !== undefined && arrived.has(probePort)) finish(true);
+    });
+    client.on("error", () => finish(false));
+  });
 }
 
 interface Running {
   server: http.Server;
   sockets: Set<Socket>;
-  supervisor: ReturnType<typeof superviseTunnel>;
+  supervisor: ReturnType<typeof superviseTunnel> | null;
   heartbeat: ReturnType<typeof startHeartbeat>;
   release: () => void;
 }
@@ -131,12 +181,12 @@ export function startConnect(
   let bindError: string | undefined;
   g.__agentosConnect = () => {
     if (!running) return base;
-    const s: TunnelState = running.supervisor.state();
+    const s: TunnelState = running.supervisor?.state() ?? "connecting";
     return {
       ...base,
       hostname: hostname || base.hostname,
       state: bindError ? "error" : s === "stopped" ? "off" : s,
-      reason: bindError ?? running.supervisor.reason(),
+      reason: bindError ?? running.supervisor?.reason(),
     };
   };
 
@@ -153,7 +203,7 @@ export function startConnect(
     if (!running) return;
     bindError = undefined;
     running.heartbeat.stop();
-    running.supervisor.stop();
+    running.supervisor?.stop();
     running.sockets.forEach((s) => s.destroy());
     running.server.close();
     running.release();
@@ -200,19 +250,50 @@ export function startConnect(
       log(`connect: ${base.reason}`);
       return;
     }
+    // The lock is ours, so a cloudflared in the pid file belongs to an
+    // AgentOS that died: it goes before anything else happens.
+    const reaped = reapTunnel(dir, undefined, deps.reap).catch(() => false);
     const server = tunnelListener(() => hostname, handlers);
     const sockets = new Set<Socket>();
     server.on("connection", (s: Socket) => {
       sockets.add(s);
       s.once("close", () => sockets.delete(s));
     });
+    const ensure =
+      deps.ensureBinary ?? ((d: string) => ensureCloudflared({ dir: d }));
+    const ask = deps.requestTunnel ?? requestTunnel;
+    const startTunnel = () =>
+      superviseTunnel({
+        dir,
+        log,
+        spawn: deps.spawn,
+        delays: deps.delays,
+        prepare: async () => {
+          const bin = await ensure(dir);
+          // Fresh every start; the token lives only in this call and the child's env.
+          const tunnel = await ask(config, machineKey, tunnelPort);
+          if (tunnel.hostname !== hostname) {
+            hostname = tunnel.hostname;
+            saveConnect({ ...config, hostname }, dir);
+            log(`connect: reachable at https://${hostname}`);
+          }
+          return { bin, token: tunnel.token };
+        },
+      });
+    const stopTunnel = () => {
+      if (running?.server !== server || !running.supervisor) return;
+      running.supervisor.stop();
+      running.supervisor = null;
+    };
     // Something else may hold the port for a while (an AgentOS shutting
-    // down, say): keep trying with backoff rather than giving up.
+    // down, say): keep trying with backoff rather than giving up, with
+    // cloudflared stopped meanwhile.
     const bindDelays = deps.delays ?? { min: 1000, max: 60_000 };
     let bindDelay = bindDelays.min;
-    server.on("error", (err) => {
+    const rebind = (why: string) => {
       if (running?.server !== server) return;
-      bindError = `can't listen on 127.0.0.1:${tunnelPort}: ${err.message}`;
+      stopTunnel();
+      bindError = `can't listen on 127.0.0.1:${tunnelPort}: ${why}`;
       log(`connect: ${bindError}; trying again`);
       const t = setTimeout(() => {
         if (running?.server !== server) return;
@@ -221,30 +302,19 @@ export function startConnect(
       }, bindDelay);
       t.unref?.();
       bindDelay = Math.min(bindDelay * 2, bindDelays.max);
-    });
-    server.on("listening", () => {
+    };
+    server.on("error", (err) => rebind(err.message));
+    server.on("close", () => stopTunnel());
+    server.on("listening", async () => {
+      const [ours] = await Promise.all([
+        listenerIsOurs(server, tunnelPort),
+        reaped,
+      ]);
+      if (running?.server !== server || !server.listening) return;
+      if (!ours) return rebind("connections there don't reach AgentOS");
       bindError = undefined;
       bindDelay = bindDelays.min;
-    });
-    const ensure =
-      deps.ensureBinary ?? ((d: string) => ensureCloudflared({ dir: d }));
-    const ask = deps.requestTunnel ?? requestTunnel;
-    const supervisor = superviseTunnel({
-      dir,
-      log,
-      spawn: deps.spawn,
-      delays: deps.delays,
-      prepare: async () => {
-        const bin = await ensure(dir);
-        // Fresh every start; the token lives only in this call and the child's env.
-        const tunnel = await ask(config, machineKey, tunnelPort);
-        if (tunnel.hostname !== hostname) {
-          hostname = tunnel.hostname;
-          saveConnect({ ...config, hostname }, dir);
-          log(`connect: reachable at https://${hostname}`);
-        }
-        return { bin, token: tunnel.token };
-      },
+      if (!running.supervisor) running.supervisor = startTunnel();
     });
     const beat = deps.heartbeat ?? sendHeartbeat;
     const version = appVersion();
@@ -261,7 +331,13 @@ export function startConnect(
         down("machine no longer linked");
       },
     });
-    running = { server, sockets, supervisor, heartbeat, release: lock.release };
+    running = {
+      server,
+      sockets,
+      supervisor: null,
+      heartbeat,
+      release: lock.release,
+    };
     server.listen(tunnelPort, "127.0.0.1");
   };
 

@@ -134,6 +134,105 @@ describe("requests from web pages", () => {
   });
 });
 
+describe("Origin of WebSocket upgrades and API writes, under each bind", () => {
+  const mine = "m-0123456789abcdef.runagentos.com";
+  const theirs = "m-fedcba9876543210.runagentos.com";
+  const modes: [string, AccessPolicy][] = [
+    ["loopback and tailnet", { ...policy, machineHost: () => mine }],
+    [
+      "AGENTOS_BIND=0.0.0.0",
+      { bound: ["0.0.0.0"], extraHosts: [], machineHost: () => mine },
+    ],
+    [
+      "AGENTOS_BIND=127.0.0.1,100.64.0.1",
+      {
+        bound: ["127.0.0.1", "100.64.0.1"],
+        extraHosts: [mine],
+        machineHost: () => mine,
+      },
+    ],
+  ];
+  const upgrade = (host: string, origin: string | undefined, p: AccessPolicy) =>
+    upgradeAllowed({ host, origin }, p);
+  const post = (host: string, origin: string, p: AccessPolicy) =>
+    requestAllowed({ host, origin, url: "/api/exec", method: "POST" }, p);
+
+  for (const [mode, p] of modes) {
+    describe(mode, () => {
+      it("refuses another Connect machine's page", () => {
+        expect(upgrade(mine, `https://${theirs}`, p)).toBe(false);
+        expect(post(mine, `https://${theirs}`, p)).toBe(false);
+        // Even when the request names that machine (a wildcard bind)
+        expect(upgrade(theirs, `https://${theirs}`, p)).toBe(false);
+      });
+
+      it("refuses foreign, opaque and malformed origins", () => {
+        for (const o of [
+          "https://evil.example",
+          "null",
+          "not a url",
+          "https://runagentos.com",
+          "https://other.example.ts.net",
+        ]) {
+          expect(upgrade("127.0.0.1:3011", o, p)).toBe(false);
+        }
+      });
+
+      it("refuses a name rebound to this machine", () => {
+        expect(
+          upgrade("evil.example:3011", "http://evil.example:3011", p)
+        ).toBe(false);
+      });
+
+      it("allows this machine's own origins", () => {
+        expect(upgrade(mine, `https://${mine}`, p)).toBe(true);
+        expect(post(mine, `https://${mine}`, p)).toBe(true);
+        expect(upgrade("127.0.0.1:3011", "http://localhost:3011", p)).toBe(
+          true
+        );
+        expect(upgrade("100.64.0.1:3011", "http://100.64.0.1:3011", p)).toBe(
+          true
+        );
+        expect(
+          upgrade(
+            "laptop.example.ts.net:3011",
+            "https://laptop.example.ts.net:3443",
+            p
+          )
+        ).toBe(true);
+      });
+
+      it("allows clients that send no Origin (the app, peers, curl)", () => {
+        expect(upgrade(mine, undefined, p)).toBe(true);
+        expect(upgrade("127.0.0.1:3011", undefined, p)).toBe(true);
+      });
+    });
+  }
+
+  it("a wildcard bind admits a page served on its LAN address, only there", () => {
+    const p = modes[1][1];
+    expect(upgrade("10.0.0.201:3011", "http://10.0.0.201:3011", p)).toBe(true);
+    expect(upgrade("10.0.0.201:3011", "http://10.0.0.99:3011", p)).toBe(false);
+  });
+
+  it("follows the Connect address as it changes", () => {
+    let host: string | null = null;
+    const p: AccessPolicy = { ...policy, machineHost: () => host };
+    expect(upgrade("127.0.0.1:3011", `https://${mine}`, p)).toBe(false);
+    host = mine;
+    expect(upgrade("127.0.0.1:3011", `https://${mine}`, p)).toBe(true);
+  });
+
+  it("refuses another machine's address even when configured as a host", () => {
+    const p: AccessPolicy = {
+      ...policy,
+      extraHosts: [theirs],
+      machineHost: () => mine,
+    };
+    expect(upgrade("127.0.0.1:3011", `https://${theirs}`, p)).toBe(false);
+  });
+});
+
 describe("tailscaleAddresses (only Tailscale's own interface)", () => {
   const v4 = (address: string) =>
     ({ address, family: "IPv4" }) as os.NetworkInterfaceInfo;

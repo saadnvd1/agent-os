@@ -318,6 +318,7 @@ app.prepare().then(async () => {
   const connect = demo
     ? { hostname: () => null }
     : startConnect({ onRequest, onUpgrade }, port);
+  policy.machineHost = () => connect.hostname();
   // HTTPS on the tailnet (its own port) for passkeys and other secure-origin APIs.
   if (
     !demo &&

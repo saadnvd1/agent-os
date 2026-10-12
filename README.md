@@ -1585,7 +1585,13 @@ device can use AgentOS but can't add devices or change access; only this
 machine and the tailnet can.
 
 AgentOS also refuses requests addressed to any other host name (DNS rebinding),
-and API calls or terminal connections made by another website's page.
+and API calls or terminal connections made by another website's page. That
+Origin check holds whatever `AGENTOS_BIND` says: a page may write to the API
+or open a terminal, chat or status socket only from this machine's own
+addresses (loopback, the addresses it listens on, its tailnet name, its own
+Connect address and `AGENTOS_ALLOWED_HOSTS`). Another Connect machine's page
+is always refused. With `AGENTOS_BIND=0.0.0.0`, reaching it by a DNS name
+other than these needs that name in `AGENTOS_ALLOWED_HOSTS`.
 
 | Variable                               | Effect                                                                                                 |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -1613,6 +1619,12 @@ While Connect is on, the production server:
 - asks the Connect service for a fresh connector token on every start and hands
   it to `cloudflared tunnel run` in `TUNNEL_TOKEN` only, never in argv, a file
   or a log;
+- starts cloudflared only once AgentOS holds the tunnel port and has seen a
+  connection to it arrive on its own listener, and stops it if the listener
+  goes, so it never publishes something else on that port;
+- runs cloudflared in a process group of its own under a small watchdog that
+  kills it the moment AgentOS exits, however it exits, and kills one a crash
+  left behind (from `cloudflared.pid`) before starting another;
 - restarts cloudflared with backoff if it exits, and stops it when Connect is
   turned off. Devices shows its state.
 
