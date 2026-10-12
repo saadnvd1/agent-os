@@ -112,7 +112,7 @@ describe("turning Away on and off", () => {
   it("tells each orchestrator, leads its digest, and on return builds the report and tells his phone", () => {
     const w = seedWorkspace().workspace.id;
     activeOrchestrator(w);
-    // One left alone for three hours isn't told.
+    // One left alone for three hours isn't told, but its brief still says so.
     const idle = seedWorkspace().workspace.id;
     saveItem(ensureOrchestrator(idle).id, {
       id: `user-idle-${Date.now()}`,
@@ -126,7 +126,7 @@ describe("turning Away on and off", () => {
       now
     );
     expect(events(idle)).toEqual([]);
-    expect(buildDigest(idle)).not.toContain("Saad is away");
+    expect(buildDigest(idle)).toContain("Saad is away (Away mode");
     const on = events(w).find((e) => e.key === `once:away:${row.id}`);
     expect(on?.line).toMatch(/^Saad is away \(Away mode/);
     expect(on?.line).toMatch(/ask a listed one at most once to wrap up/);

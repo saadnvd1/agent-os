@@ -324,7 +324,7 @@ export function buildDigest(
 ): string {
   const checks = checksBySession(workspaceId);
   const failures = failuresBySession(workspaceId);
-  const away = awayDigestLine(workspaceId);
+  const away = awayDigestLine();
   const head = `## Where things stand (read from AgentOS's database as you started)${away ? `\n\n${away}` : ""}`;
   const body = renderDigest(
     [

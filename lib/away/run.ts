@@ -45,7 +45,12 @@ import {
   SWEEP_EVERY_MS,
   type Candidate,
 } from "./sweep";
-import { agentLive, awayWindowMs, lastTurnAt } from "./activity";
+import {
+  agentLive,
+  awayWindowMs,
+  lastTurnAt,
+  saadMessagedRecently,
+} from "./activity";
 import { checkDeploy } from "./deploy";
 import { buildAwayReport, phoneSummary, reportMarkdown } from "./report";
 import { awayOnLine } from "./brief";
@@ -92,6 +97,14 @@ function tellAway(
   // keep an orchestrator going that nothing else has.
   if (!orchestratorActive(orchestratorId, now)) return false;
   const told = reachedWorkspaces(away.id).has(workspaceId);
+  // A first message goes only to one Saad has messaged lately: waking the
+  // rest re-reads their whole context for nothing, and they read the away
+  // state in their brief when they next start. One already told keeps its
+  // sweeps for the rest of the period.
+  if (!told) {
+    const s = sessionRow(orchestratorId);
+    if (!s || !saadMessagedRecently(s, now)) return false;
+  }
   // One transaction: a crash can't leave the marker set with the event
   // never queued.
   db.transaction(() => {
@@ -133,8 +146,9 @@ export function turnAwayOn(
 ): AwayRow {
   const { row, started } = startAway(input, now);
   // Sent again when the end moves, so the orchestrator has the new one.
-  for (const { workspaceId, orchestratorId } of orchestrated())
+  for (const { workspaceId, orchestratorId } of orchestrated()) {
     tellAway(row, workspaceId, orchestratorId, now, !started);
+  }
   return row;
 }
 

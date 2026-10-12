@@ -7,6 +7,7 @@ import type { SessionFacts } from "../orchestrator/facts";
 import type { DeployVerdict } from "./deploy";
 import { fromSql, getAway, startAway, toSql, type AwayRow } from "./state";
 import { IDLE_DIRTY_MS, STALL_MS } from "./sweep";
+import { awayDigestLine } from "./brief";
 import { sweepWorkspace, turnAwayOff, turnAwayOn } from "./run";
 
 // What the sweep reads and does, stood in for: the facts it's given, the
@@ -110,11 +111,30 @@ const stalled = (id: string): SessionFacts => ({
   stack: null,
 });
 
-// A workspace whose orchestrator worked five minutes ago.
+// One chat item in a session; no origin means Saad typed it.
+let seq = 0;
+function chatItem(
+  sessionId: string,
+  at: number,
+  origin?: { kind: string; label: string }
+) {
+  db.prepare(
+    `INSERT INTO chat_items (session_id, item_id, seq, data) VALUES (?, ?, ?, ?)`
+  ).run(
+    sessionId,
+    `i${++seq}`,
+    seq,
+    JSON.stringify({ kind: "user", createdAt: at, text: "hi", origin })
+  );
+}
+
+// A workspace whose orchestrator worked, and was messaged by Saad, five
+// minutes ago.
 function seed() {
   const s = seedWorkspace();
   const orch = ensureOrchestrator(s.workspace.id);
   h.turns.set(orch.id, NOW - 5 * 60_000);
+  chatItem(orch.id, NOW - 5 * 60_000);
   return { ...s, w: s.workspace.id, orch: orch.id };
 }
 
@@ -350,6 +370,64 @@ describe("turning Away on and off", () => {
       workspaces: { id: string }[];
     };
     expect(report.workspaces.map((x) => x.id)).not.toContain(idle.w);
+  });
+});
+
+describe("telling orchestrators Away is on", () => {
+  it("messages only the one Saad wrote to inside 24 hours", async () => {
+    db.exec(
+      `UPDATE away_periods SET ended_at = datetime('now'), ended_by = 'saad' WHERE ended_at IS NULL`
+    );
+    const mk = () => {
+      const s = seedWorkspace();
+      const orch = ensureOrchestrator(s.workspace.id);
+      h.turns.set(orch.id, NOW - 60_000);
+      return { w: s.workspace.id, orch: orch.id };
+    };
+    const recent = mk();
+    chatItem(recent.orch, NOW - 60 * 60_000);
+    const old = mk();
+    chatItem(old.orch, NOW - 3 * 24 * 60 * 60_000);
+    const automated = mk();
+    const decided = mk();
+    chatItem(decided.orch, NOW - 60_000, { kind: "decision", label: "Saad" });
+    for (const kind of ["event", "schedule", "peer", "system"])
+      chatItem(automated.orch, NOW - 60_000, { kind, label: kind });
+
+    const row = turnAwayOn({ setBy: "x", expiresAt: null }, NOW);
+    expect(events(recent.w).map((e) => e.key)).toEqual([`once:away:${row.id}`]);
+    expect(events(decided.w)).toHaveLength(1);
+    expect(events(old.w)).toEqual([]);
+    expect(events(automated.w)).toEqual([]);
+
+    // The sweep doesn't tell the skipped ones either, but their brief
+    // still says Saad is away.
+    await sweepWorkspace(row, old.w, old.orch, NOW);
+    await sweepWorkspace(row, automated.w, automated.orch, NOW);
+    expect(events(old.w)).toEqual([]);
+    expect(events(automated.w)).toEqual([]);
+    expect(awayDigestLine(NOW)).toContain("Saad is away");
+
+    turnAwayOff("saad", NOW + 1000);
+    expect(events(recent.w).map((e) => e.key)).toContain(
+      `once:away-back:${row.id}`
+    );
+    expect(events(old.w)).toEqual([]);
+    expect(events(automated.w)).toEqual([]);
+  });
+});
+
+describe("an orchestrator already told Away is on", () => {
+  it("keeps its sweeps after Saad's last message ages past 24 hours", async () => {
+    const t = seed();
+    const row = turnAwayOn({ setBy: "x", expiresAt: null }, NOW);
+    expect(events(t.w)).toHaveLength(1);
+    const later = NOW + 25 * 60 * 60_000;
+    h.turns.set(t.orch, later - 60_000);
+    h.facts = [{ ...stalled(t.task), lastActive: later - STALL_MS - 60_000 }];
+    expect(await sweepWorkspace(row, t.w, t.orch, later)).toMatch(
+      /^Away sweep:/
+    );
   });
 });
 

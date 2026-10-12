@@ -116,6 +116,33 @@ function chatTurn(sessionId: string): number {
   );
 }
 
+// How recently Saad must have messaged an orchestrator for turning Away on
+// to tell it.
+export const SAAD_MESSAGE_WINDOW_MS = 24 * 60 * 60_000;
+
+// When Saad last typed to a chat himself: a user item with no origin, so
+// not an event, a peer, a schedule or AgentOS, or his own decision made
+// outside the composer. 0 when he never has.
+function saadMessageAt(sessionId: string): number {
+  const row = db
+    .prepare(
+      `SELECT json_extract(data, '$.createdAt') AS at FROM chat_items
+       WHERE session_id = ? AND kind = 'user'
+         AND (json_extract(data, '$.origin') IS NULL
+           OR json_extract(data, '$.origin.kind') = 'decision')
+       ORDER BY seq DESC LIMIT 1`
+    )
+    .get(sessionId) as { at: number | null } | undefined;
+  return row?.at ?? 0;
+}
+
+// Whether Saad has been talking to this session lately. A terminal keeps
+// no record of who typed, so its last turn stands in.
+export function saadMessagedRecently(s: Session, now = Date.now()): boolean {
+  const at = s.view === "chat" ? saadMessageAt(s.id) : terminalTurn(s);
+  return at > 0 && now - at <= SAAD_MESSAGE_WINDOW_MS;
+}
+
 // A terminal's Claude conversation file is written on every turn and on
 // nothing else; other agents fall back to tmux's output clock, which a
 // status poll (capture-pane) doesn't move.
