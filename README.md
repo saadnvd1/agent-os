@@ -1081,7 +1081,7 @@ it may do on its own, and the lines that always come back to you as asks.
   ALTER or ATTACH; files under `~/.agent-os` outside its folder), stopping
   AgentOS or its tmux (`pkill`/`kill` aimed at it, `tmux kill-*`, a
   `launchctl` or `serviceman` restart), and reading secret files (the same
-  list as the write guard) or tokenvault (`tv get`, `tv dump`). It reads each
+  list as the write guard; tokenvault is allowed, through `tv` and its folders). It reads each
   command line the way a shell would, so these are caught inside pipes,
   chains and `$( )`, behind `bash -c`, `sh -c`, `env`, `sudo`, `xargs`,
   `find -exec` or an absolute path, and after a `cd` or `git -C`. **The deny

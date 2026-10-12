@@ -207,7 +207,7 @@ describe("the orchestrator's shell", () => {
     );
   });
 
-  it("refuses reading secret files or tokenvault", async () => {
+  it("refuses reading secret files", async () => {
     await expectRefused(
       [
         "cat ~/.ssh/id_ed25519",
@@ -217,12 +217,26 @@ describe("the orchestrator's shell", () => {
         ". ./.env",
         "grep TOKEN < /work/app/.env",
         "docker run --env-file=.env x",
-        "tv get github",
-        "tv dump",
-        "bash -c 'tv dump | jq .'",
-        "/usr/local/bin/tv get openai key",
         "ls ~/.ssh | head",
       ],
+      /never read secrets/
+    );
+  });
+
+  it("allows tokenvault through tv and its folders", async () => {
+    for (const c of [
+      "tv get x y",
+      "EXPO_TOKEN=\"$(tv get expo 'access token')\" eas build",
+      "tv dump",
+      "tv list",
+      "bash -c 'tv dump | jq .'",
+      "/usr/local/bin/tv get openai key",
+      `ls ${os.homedir()}/dev/tokenvault`,
+      `cat ${os.homedir()}/.config/tokenvault/master.key`,
+    ])
+      expect(await shellRefusal(c, ctx), c).toBeNull();
+    await expectRefused(
+      [`cat ${os.homedir()}/.config/tokenvault/../../.ssh/id_ed25519`],
       /never read secrets/
     );
   });
