@@ -26,6 +26,7 @@ import {
   Terminal as TerminalIcon,
   TextSearch,
   Users,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAwayQuery } from "@/data/away";
@@ -35,7 +36,7 @@ import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
-type ViewMode = "terminal" | "files" | "git" | "workers";
+type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
 interface ViewModeButtonProps {
   mode: ViewMode;
@@ -80,6 +81,7 @@ interface MobileTabBarProps {
   projects: Project[];
   viewMode: ViewMode;
   isConductor: boolean;
+  hasLog?: boolean;
   workerCount: number;
   onMenuClick?: () => void;
   onViewModeChange: (mode: ViewMode) => void;
@@ -95,6 +97,7 @@ export function MobileTabBar({
   projects,
   viewMode,
   isConductor,
+  hasLog,
   workerCount,
   onMenuClick,
   onViewModeChange,
@@ -343,6 +346,14 @@ export function MobileTabBar({
               mode="git"
               currentMode={viewMode}
               icon={GitBranch}
+              onClick={onViewModeChange}
+            />
+          )}
+          {hasLog && (
+            <ViewModeButton
+              mode="log"
+              currentMode={viewMode}
+              icon={ScrollText}
               onClick={onViewModeChange}
             />
           )}

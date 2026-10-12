@@ -15,6 +15,16 @@ process.env.AGENTOS_LIMITS_FILE = join(
   "missing.json"
 );
 
+// Nor GitHub: a test that fakes `gh` counts every call as a merge, and a
+// session log would otherwise ask it for the merge commit.
+process.env.AGENTOS_SESSION_LOGS_NO_GH = "1";
+
+// A merged task in a test writes its log file here, not to the real folder.
+process.env.AGENTOS_SESSION_LOGS_DIR = join(
+  mkdtempSync(join(tmpdir(), "agent-os-session-logs-")),
+  "logs"
+);
+
 // Nor the owner's phone: a test that sends sets its own notify command.
 delete process.env.AGENTOS_NOTIFY_CMD;
 

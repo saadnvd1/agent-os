@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderOpen, GitBranch, Home, Users } from "lucide-react";
+import { FolderOpen, GitBranch, Home, ScrollText, Users } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -8,12 +8,14 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "terminal" | "files" | "git" | "workers";
+type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
 interface PaneViewToggleProps {
   viewMode: ViewMode;
   isLocalSession: boolean;
   isConductor: boolean;
+  // The task merged and has a log.
+  hasLog?: boolean;
   workerCount: number;
   gitDrawerOpen: boolean;
   shellDrawerOpen: boolean;
@@ -68,6 +70,7 @@ export function PaneViewToggle({
   viewMode,
   isLocalSession,
   isConductor,
+  hasLog,
   workerCount,
   gitDrawerOpen,
   shellDrawerOpen,
@@ -109,6 +112,15 @@ export function PaneViewToggle({
             {">_"}
           </ToggleButton>
         </>
+      )}
+      {hasLog && (
+        <ToggleButton
+          label="Log"
+          active={viewMode === "log"}
+          onClick={() => onViewModeChange("log")}
+        >
+          <ScrollText className="h-3.5 w-3.5" />
+        </ToggleButton>
       )}
       {isConductor && (
         <ToggleButton

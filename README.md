@@ -1084,6 +1084,53 @@ to each idle or stopped session, and `aos done --all-idle` does the same
 sweep. A clean-up never merges: open PRs are listed for their own done.
 `aos done` reaches only sessions in the caller's workspace (or project).
 
+### Session logs
+
+When a task merges, AgentOS writes a log of it. It costs no model tokens: the
+log is a fixed template filled from records AgentOS already holds, and nothing
+that makes it can call a model (a test holds it to that). Dropped tasks get
+none.
+
+A log holds:
+
+- **Header:** task name and id, workspace, project, branch, PR number and
+  link, merge commit, start, merge time and duration.
+- **Brief:** the task's prompt and every scope change recorded on it, in
+  order.
+- **Plan:** `.agentos/plan.md`, read at the merge before cleanup removes the
+  worktree. A task with no plan says so.
+- **Timeline:** PR opened, gate failures per commit (CI with the failing
+  check's name, review, scope), each review and scope verdict per commit with
+  its text trimmed, escalations to you and your answers, and the merge.
+- **Usage:** tokens, estimated cost and model per role, from the usage ledger.
+- **Outcome:** the task agent's last message, verbatim.
+- **Links:** the PR and the session.
+
+Text from tasks, CI and reviewers is untrusted. It is written inside fences
+or code spans, so it can't add headings or links to the document, and
+credential-shaped strings are redacted.
+
+The database is the record: `session_logs`, one row per task, never deleted.
+Each log is also written to
+`~/.agent-os/session-logs/<workspace>/<project>/YYYY-MM-DD-<task>.md`. A
+project's settings have a **Session log folder** (an absolute or `~` path) to
+put its files elsewhere; a folder inside the project's repository is refused,
+because repositories can be public, and the files are never written into one.
+The same dialog lists the project's logs, newest first, and a merged task's
+view has a **Log** tab. The orchestrator reads them with its `logs` tool: the
+latest headers of a workspace or project, or one log in full. It only reads.
+
+The log is made once per task, in the background, from wherever the merge
+happens: a sign-off, Done, a stack landing, or a merge seen on GitHub. A
+failure is logged and never reaches the merge. For tasks that merged before
+this existed:
+
+```bash
+npx tsx scripts/backfill-session-logs.ts --db <path to agent-os.db> [--no-gh] [--dry]
+```
+
+Their plan files are gone, so those logs say "plan not kept".
+
 ### Orchestrator
 
 Each workspace has one standing orchestrator, pinned at the top of its

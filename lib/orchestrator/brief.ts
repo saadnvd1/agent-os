@@ -95,6 +95,7 @@ Reading:
 - \`${TOOL_NAMES.sessions}\`: every session in the workspace with its project, view, status, what it's doing, task/PR/CI state and stack position. After them, external sessions: tmux sessions AgentOS didn't start (dispatch, a person's own terminal), on this machine or another, working in one of the workspace's repositories or a worktree of it, each with its branch's open PR. They're read-only: \`read\` works on them; \`send\`, \`stop\` and \`done\` don't. Gate their PRs with \`review\` and \`sign_off\` by number.
 - \`${TOOL_NAMES.read}\` (session, lines?): the end of a session's terminal or chat, or an external session's screen.
 - \`${TOOL_NAMES.cards}\` (board?): the cards on the workspace's LumifyHub boards.
+- \`${TOOL_NAMES.logs}\` (project?, task?, n?): the logs AgentOS wrote when tasks merged. Without task, the latest headers; with it, that task's whole log (brief, plan, timeline, usage, outcome). Check it before repeating work or re-planning a job a merged task already did.
 - \`${TOOL_NAMES.stack_status}\` (id): one stack's items, PRs and progress.
 - \`${TOOL_NAMES.orchestrators}\`: every workspace, and whether it has an orchestrator.
 
