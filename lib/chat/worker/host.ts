@@ -699,7 +699,9 @@ export class ChatHost {
     this.refreshAt = REQUESTED_FRESH;
     this.retiring = true;
     this.retireWaited = true;
-    if (this.busy() || this.runningTasks.size)
+    this.retireIfDone();
+    // Still here: a turn, background work or its rest timer holds it.
+    if (!this.closed)
       this.record({
         id: `note-fresh-pending-${Date.now()}`,
         kind: "note",
@@ -707,7 +709,6 @@ export class ChatHost {
         text: "Starts fresh after this turn",
         createdAt: Date.now(),
       });
-    this.retireIfDone();
   }
 
   private hardStopped(): boolean {

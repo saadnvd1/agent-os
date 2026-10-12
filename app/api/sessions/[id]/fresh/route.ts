@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { queries, db, type Session } from "@/lib/db";
-import { freshStartChat } from "@/lib/chat/runner";
+import { FreshRefusal, freshStartChat } from "@/lib/chat/runner";
 
 // POST /api/sessions/:id/fresh - start the agent's conversation over (the
 // path the context threshold takes, lib/chat/refresh): now if it's idle,
@@ -23,6 +23,9 @@ export async function POST(
     return NextResponse.json({ when: await freshStartChat(id) });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 409 });
+    return NextResponse.json(
+      { error: message },
+      { status: error instanceof FreshRefusal ? 409 : 500 }
+    );
   }
 }

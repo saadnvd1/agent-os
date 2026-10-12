@@ -200,6 +200,20 @@ describe("a fresh start the reader asked for", () => {
     expect(await freshStartChat(id)).toBe("now");
   });
 
+  it("refuses a terminal-view session, leaving its conversation id alone", async () => {
+    const id = chat();
+    workers.running = [];
+    await resumeId(id, "conv-term");
+    (await import("../db")).db
+      .prepare(`UPDATE sessions SET view = 'terminal' WHERE id = ?`)
+      .run(id);
+    await expect(freshStartChat(id)).rejects.toThrow(/open chat session/);
+    expect(await saved(id)).toEqual({
+      claude_session_id: "conv-term",
+      chat_refreshed: 0,
+    });
+  });
+
   it("won't guess for a busy worker from before it existed", async () => {
     const id = chat();
     workers.hellos = [{ build: buildId(), state: "running", caps: ALL }];

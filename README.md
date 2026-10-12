@@ -1222,7 +1222,7 @@ it may do on its own, and the lines that always come back to you as asks.
   with a line where it started over. The same can be switched on for chat
   tasks (off by default: a task keeps only its brief and its branch).
   **Start fresh by hand:** after a deploy that changes its permissions or
-  brief, use **Start fresh** in the orchestrator's row menu or type `/fresh`
+  brief, use **New conversation (keep brief)** in the orchestrator's row menu or type `/fresh`
   in its chat (task chats have both too). It takes the threshold's path: an
   idle agent starts over at once; a running turn finishes first, with a
   "Starts fresh after this turn" line. The next conversation launches with

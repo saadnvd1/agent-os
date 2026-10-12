@@ -722,11 +722,20 @@ function retire(sessionId: string, live: Live, resume = true): void {
 // takes (the worker's endConversation): "now" when nothing is running, else
 // "after-turn", at the next turn boundary. The next worker reads the brief
 // and permissions as the server has them then, nothing held over.
+export class FreshRefusal extends Error {}
+
 export async function freshStartChat(
   sessionId: string
 ): Promise<"now" | "after-turn"> {
   const session = getSession(sessionId);
-  checkChattable(session);
+  // A terminal agent's conversation isn't ours to release: it keeps running.
+  if (session.view !== "chat" || session.archived_at)
+    throw new FreshRefusal("Only an open chat session can start fresh");
+  try {
+    checkChattable(session);
+  } catch (e) {
+    throw new FreshRefusal(e instanceof Error ? e.message : String(e));
+  }
   const live =
     registry.live.get(sessionId) ??
     (runningWorkers().includes(sessionId)
@@ -736,10 +745,12 @@ export async function freshStartChat(
     // A worker from before this existed would ignore the command.
     if (live.canFresh) {
       live.worker.command({ type: "fresh" });
-      return live.state === "idle" ? "now" : "after-turn";
+      return live.state === "idle" && !live.activity.tasks.size
+        ? "now"
+        : "after-turn";
     }
     if (live.state !== "idle")
-      throw new Error("Try again when the current turn has ended");
+      throw new FreshRefusal("Try again when the current turn has ended");
     stopChat(sessionId);
   }
   releaseConversation(sessionId, REQUESTED_FRESH);
