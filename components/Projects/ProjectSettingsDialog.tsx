@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -30,7 +31,6 @@ import {
 } from "lucide-react";
 import { FolderPicker } from "@/components/FolderPicker";
 import { ProjectMergeSection } from "@/components/Merge/ProjectMergeSection";
-import { ProjectLogsSection } from "@/components/SessionLogs/ProjectLogsSection";
 import { useUpdateProject } from "@/data/projects";
 import { useQueryClient } from "@tanstack/react-query";
 import { devServerKeys } from "@/data/dev-servers";
@@ -73,6 +73,14 @@ interface ProjectSettingsDialogProps {
   onClose: () => void;
   onSave: () => void;
 }
+
+const ProjectLogsSection = dynamic(
+  () =>
+    import("@/components/SessionLogs/ProjectLogsSection").then(
+      (mod) => mod.ProjectLogsSection
+    ),
+  { ssr: false }
+);
 
 export function ProjectSettingsDialog({
   project,

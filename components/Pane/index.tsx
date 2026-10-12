@@ -1,6 +1,5 @@
 "use client";
 
-import { LogDocument } from "@/components/SessionLogs/LogDocument";
 import { useTaskLogQuery } from "@/data/session-logs";
 import { SetupCard } from "@/components/Chat/SetupCard";
 import type { TabData } from "@/lib/panes";
@@ -36,6 +35,14 @@ import { useDemoMode } from "@/data/demo";
 import { DemoNotice } from "@/components/DemoNotice";
 
 // Dynamic imports for client-only components with loading states
+const LogDocument = dynamic(
+  () =>
+    import("@/components/SessionLogs/LogDocument").then(
+      (mod) => mod.LogDocument
+    ),
+  { ssr: false }
+);
+
 const Terminal = dynamic(
   () => import("@/components/Terminal").then((mod) => mod.Terminal),
   { ssr: false, loading: () => <TerminalSkeleton /> }
