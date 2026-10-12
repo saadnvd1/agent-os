@@ -226,3 +226,41 @@ export async function heartbeat(
   );
   return (await res.json()) as { enabled: boolean };
 }
+
+export interface PushRequestBody {
+  v: 1;
+  devices: { token: string; env: "production" | "sandbox" }[];
+  push_type: "alert" | "background";
+  priority: 10 | 5;
+  level: "passive" | "active" | "time-sensitive";
+  collapse_id?: string;
+  thread_id?: string;
+  payload: Record<string, unknown>;
+}
+
+export interface PushResult {
+  status: "sent" | "gone" | "retry" | "rejected";
+  apns_status?: number;
+  reason?: string;
+  prune?: boolean;
+  retry_after?: number;
+}
+
+/** One APNs send per device, answered in device order. Signed. */
+export async function pushRelay(
+  config: ConnectConfig,
+  privateKey: string,
+  body: PushRequestBody
+): Promise<PushResult[]> {
+  const res = await signed(config, privateKey)(
+    "POST",
+    `/api/v1/machines/${config.machineId}/push`,
+    body
+  );
+  const r = (await res.json().catch(() => null)) as {
+    results?: PushResult[];
+  } | null;
+  if (!Array.isArray(r?.results))
+    throw new Error("the Connect service sent no push results");
+  return r.results;
+}

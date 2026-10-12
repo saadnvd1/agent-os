@@ -16,6 +16,12 @@ import { findPRStrict } from "./gh";
 import { currentBranch, git } from "../git-exec";
 import { lookupPR } from "./pr-poll";
 import { captureMergedTask } from "../session-logs";
+import { getOrchestrator } from "../orchestrator/home";
+import {
+  pushCiFailed,
+  pushMerged,
+  pushReviewReady,
+} from "../notify/push/events";
 import { notifyStatusChanged } from "../status/hub";
 import type { TaskPR } from "./state";
 import { markStatusDirty } from "../status/dirty";
@@ -193,14 +199,19 @@ export async function prFor(
   prCache.set(session.id, { at: Date.now(), pr });
   markStatusDirty(session.id);
   // A PR whose stage inputs moved is news for the sidebar's badge.
-  if (prSignature(before) !== prSignature(pr)) notifyStatusChanged();
+  if (prSignature(before) !== prSignature(pr)) {
+    notifyStatusChanged();
+    if (pr) pushPrChange(session, pr);
+  }
   if (pr) {
     db.prepare(
       `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`
     ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
     // Merged on GitHub rather than through AgentOS: its log is due too.
-    if (pr.state === "MERGED")
+    if (pr.state === "MERGED") {
+      if (session.pr_status !== "merged") pushMerged(session.id);
       void captureMergedTask(session.id, { head: pr.head });
+    }
   }
   // Only an answer just read from GitHub: a cached one may predate a
   // retarget AgentOS made itself (a restack).
@@ -282,4 +293,17 @@ export function storedPR(s: Session): TaskPR | null {
 export function forgetPR(sessionId: string): void {
   prCache.delete(sessionId);
   markStatusDirty(sessionId);
+}
+
+// CI failing is news for the phone in any workspace. Green is "ready for
+// review" only where no orchestrator runs a review of its own (its verdict is
+// the signal there). Each head is pushed once: the event key holds the sha.
+export function pushPrChange(session: Session, pr: TaskPR): void {
+  if (pr.state !== "OPEN" || !pr.head) return;
+  if (pr.checks === "fail") pushCiFailed(session.id, pr.head);
+  else if (
+    pr.checks === "pass" &&
+    !(session.workspace_id && getOrchestrator(session.workspace_id))
+  )
+    pushReviewReady(session.id, pr.head);
 }

@@ -5,6 +5,7 @@
  * events to whoever is watching. Restarting the server leaves turns running.
  */
 
+import { pushPlanReady } from "../notify/push/events";
 import { handoffAfterPlan } from "../models/plan-step";
 import { randomUUID } from "crypto";
 import os from "os";
@@ -152,6 +153,8 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   if (e.type === "item" && e.item.kind === "task")
     retireIfStale(sessionId, live);
   if (e.type === "item") {
+    if (e.item.kind === "plan" && !e.item.carried)
+      pushPlanReady(sessionId, e.item.id);
     if ("streaming" in e.item && e.item.streaming)
       live.streaming.set(e.item.id, e.item);
     else live.streaming.delete(e.item.id);

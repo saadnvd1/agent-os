@@ -40,6 +40,8 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos notify <text...>               push a message to the owner's phone (or text
                                      on stdin); at most one a minute, the rest
                                      wait and go together
+  aos push test [--device <id>]      send a real test push to the paired phones
+                                     and say what came back
   aos done <session>                 finished: merge its open PR through the
                                      gates, stop it, archive it (not a rejection);
                                      only sessions in your workspace or project
@@ -487,6 +489,23 @@ async function main() {
       if (run.outcome === "failed") process.exit(2);
       return;
     }
+    case "push": {
+      if (args[0] !== "test") fail("usage: aos push test [--device <id>]");
+      const i = args.indexOf("--device");
+      const res = await post("/api/push/test", {
+        deviceId: i === -1 ? undefined : args[i + 1],
+      });
+      let bad = 0;
+      for (const r of res.results) {
+        if (r.status === "sent") console.log(`sent to ${r.deviceId}`);
+        else {
+          bad++;
+          console.log(`${r.deviceId}: ${r.status} (${r.error})`);
+        }
+      }
+      if (bad) process.exit(1);
+      return;
+    }
     case "notify": {
       const text = (args.join(" ") || (await stdin())).trim();
       if (!text) fail('usage: aos notify "<text>" (or text on stdin)');
@@ -496,6 +515,11 @@ async function main() {
         console.log("already sent this in the last minute; not sent again");
       else if (res.state === "dropped")
         console.log("dropped: too many already waiting from you this minute");
+      else if (res.state === "pushed") console.log("sent to the phone app");
+      else if (res.state === "skipped")
+        console.log(
+          "not sent: the phone has this turned off, or you are at the Mac"
+        );
       else if (res.state === "held")
         console.log(
           `held: goes out within ${Math.ceil(res.inMs / 1000)}s with anything else sent meanwhile`

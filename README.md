@@ -914,6 +914,32 @@ line at the bottom of Schedules), one of:
 - **Telegram**: a bot token and your chat id. The token is kept in the
   database and never shown again, returned by the API or logged.
 
+#### Push to the phone app
+
+A machine linked to Connect sends to the paired phones that have registered
+for push, instead of Telegram. A push is generic: the title "AgentOS", a
+category word and a link to open, no session or task text (the payload is a
+versioned envelope, so an encrypted body can replace it later). It goes
+through the Connect relay, signed with the machine key; AgentOS keeps a
+`push_outbox` that retries with backoff, forgets tokens the relay reports as
+dead, and caps alerting pushes at 10 an hour per device (one summary after).
+
+- **What pushes**: an ask raised, a session waiting on you for a minute,
+  a task ready for review, CI or a review failing, a plan ready to approve,
+  and the Away digest. Merged is off by default. Each device picks its
+  categories (`PATCH /api/devices/me/push`). A task mirrored from another
+  machine never pushes from here.
+- **Quiet rules**: waiting, review, CI and merged don't push while you're at
+  this Mac (keyboard or mouse used in the last 3 minutes). While Away is on,
+  everything except asks folds into the 10-minute digest.
+- **Fallback**: agent messages, the Away digest and machine alerts (load,
+  schedules) go to Telegram when push isn't configured or fails. The newer
+  events are push-only. If Connect says push isn't set up yet, AgentOS
+  stops asking for 10 minutes and uses Telegram meanwhile.
+- **Check it**: `aos push test` sends a real push to each registered phone
+  and prints what came back; Settings → Devices shows each device's push
+  state, categories, last error and a Send test button.
+
 ## Agent network
 
 Sessions started by AgentOS can find and talk to each other without you,
@@ -940,6 +966,7 @@ aos schedules                     # every schedule, its next run and last outcom
 aos schedule run <name>           # run a schedule now
 aos schedule add --session <s> --every 30m "prompt"  # check in on a session
 aos notify "text"                 # push a message to your phone
+aos push test                     # a real test push to the paired phones, and the result
 aos heavy -- npm test             # run it now; says first what else heavy is running
 aos stop <session>                # stop its turn now; the next message runs as a new turn
 aos done <session>                # finished: merge through the gates, archive

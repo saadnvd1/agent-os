@@ -30,7 +30,11 @@ const BACK_OFF =
   "Ask your running tasks to use targeted tests and hold off on full suites, type checks and builds until it clears. Nothing has been stopped.";
 
 export function raiseAlert(text: string): void {
-  notifyPhone("load", text);
+  notifyPhone("load", text, {
+    category: "system",
+    key: `system:load:${Date.now()}`,
+    collapse: "system:load",
+  });
   for (const orch of listOrchestrators()) {
     if (orch.archived_at) continue;
     sendMessage({

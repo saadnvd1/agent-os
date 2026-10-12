@@ -86,13 +86,52 @@ export function touchDevice(id: string, address?: string): boolean {
   return true;
 }
 
-export function listDevices(): Device[] {
-  return getDb()
+/** What the Devices page shows of a device's push: never the token. */
+export interface DevicePushView {
+  enabled: boolean;
+  categories: PushCategory[];
+  lastError: string | null;
+  updatedAt: string | null;
+}
+
+export type ListedDevice = Device & { push: DevicePushView };
+
+export function listDevices(): ListedDevice[] {
+  const rows = getDb()
     .prepare(
-      `SELECT id, name, user_agent, created_at, last_seen_at, last_address, revoked_at, can_approve
+      `SELECT id, name, user_agent, created_at, last_seen_at, last_address, revoked_at, can_approve,
+         ${PUSH_COLS}
        FROM devices WHERE revoked_at IS NULL ORDER BY created_at DESC`
     )
-    .all() as Device[];
+    .all() as (Device & PushRow)[];
+  return rows.map((r) => {
+    const {
+      push_token,
+      push_platform,
+      push_environment,
+      push_categories,
+      push_updated_at,
+      push_last_error,
+      ...device
+    } = r;
+    const push = pushOf({
+      push_token,
+      push_platform,
+      push_environment,
+      push_categories,
+      push_updated_at,
+      push_last_error,
+    });
+    return {
+      ...device,
+      push: {
+        enabled: !!push,
+        categories: push?.categories ?? [],
+        lastError: push_last_error,
+        updatedAt: push?.updatedAt ?? null,
+      },
+    };
+  });
 }
 
 export function renameDevice(id: string, name: string): boolean {
@@ -300,4 +339,18 @@ export function trackDeviceSocket(id: string, socket: Closable): void {
 function dropDeviceSockets(id: string): void {
   for (const s of sockets.get(id) ?? []) s.destroy();
   sockets.delete(id);
+}
+
+/**
+ * The relay said this token is dead: forget it, keep the chosen categories,
+ * say why. The app registers a fresh token on its next launch.
+ */
+export function pruneDevicePush(id: string, reason: string): void {
+  getDb()
+    .prepare(
+      `UPDATE devices SET push_token = NULL, push_platform = NULL,
+         push_environment = NULL, push_last_error = ?
+       WHERE id = ?`
+    )
+    .run(reason.slice(0, 200), id);
 }

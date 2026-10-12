@@ -158,3 +158,6 @@
 
 - Usage ledger: record the one-shot helper runs (PR text, summaries, titles) and give check runs the 1h cache
   write split if the CLI result starts carrying it.
+
+- Push: quiet hours (iOS Focus covers it per device for now), push-only enrolment so a tailnet-only
+  machine can send without a tunnel, and an encrypted v2 body decrypted on the phone.
