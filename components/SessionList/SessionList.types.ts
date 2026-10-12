@@ -10,6 +10,7 @@ export interface SessionStatus {
   need?: SessionNeed | null;
   unread?: boolean;
   stalled?: boolean;
+  compacting?: { since: number; before?: number };
 }
 
 export interface SessionListProps {

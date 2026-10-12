@@ -7,12 +7,15 @@ import type {
   ChatModel,
   ChatServerMessage,
   ChatState,
+  Compacting,
 } from "./events";
 
 // A conversation whose worker this server is connected to.
 export interface Live {
   worker: WorkerClient;
   state: ChatState;
+  // Set while its agent compacts the context, over a "running" state.
+  compacting?: Compacting | null;
   // Streamed items carry their latest text here, ahead of SQLite.
   streaming: Map<string, ChatItem>;
   // What the turn is doing right now, for the session list.
@@ -82,7 +85,11 @@ export function emit(sessionId: string, m: ChatServerMessage): void {
   registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
   // Idle, running, waiting and back, and a finished turn (unread): the
   // sidebar hears at once.
-  if (m.type === "state" || (m.type === "item" && m.item.kind === "turn_end"))
+  if (
+    m.type === "state" ||
+    m.type === "compacting" ||
+    (m.type === "item" && m.item.kind === "turn_end")
+  )
     notifyStatusChanged();
 }
 

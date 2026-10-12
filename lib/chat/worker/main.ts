@@ -74,6 +74,7 @@ async function main(sessionId: string) {
         version: PROTOCOL_VERSION,
         build: buildId(),
         state: host.state,
+        compacting: host.compactingNow,
         streaming: [...host.streaming.values()],
         caps: ["plan", "queue", "retire", "fresh"],
       } satisfies WorkerEvent)}\n`

@@ -244,6 +244,17 @@ describe("ClaudeMapper", () => {
     expect(measured).toMatchObject({ before: 412_000, after: 38_000 });
   });
 
+  it("maps the CLI's compacting status to start and end, and ignores other statuses", () => {
+    const m = new ClaudeMapper();
+    const status = (s: string | null) =>
+      m.map({ type: "system", subtype: "status", status: s } as never);
+    expect(status("compacting")).toEqual([
+      { type: "compacting", active: true },
+    ]);
+    expect(status(null)).toEqual([{ type: "compacting", active: false }]);
+    expect(status("requesting")).toEqual([]);
+  });
+
   it("shows a synthetic reply to a local command as command output", () => {
     const [out] = items(
       new ClaudeMapper().map({

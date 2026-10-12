@@ -69,6 +69,8 @@ export class CodexMapper {
   }
 
   private started(id: string, item: P): void {
+    if (item.type === "contextCompaction")
+      return this.emit({ type: "compacting", active: true });
     const start = toolStart(item);
     if (start) this.items.tool(id, start);
   }
@@ -82,11 +84,13 @@ export class CodexMapper {
       );
     if (item.type === "reasoning")
       return this.items.finishText(id, "reasoning");
-    if (item.type === "contextCompaction")
+    if (item.type === "contextCompaction") {
+      this.emit({ type: "compacting", active: false });
       return this.emit({
         type: "item",
         item: { id: randomUUID(), kind: "compacted", createdAt: Date.now() },
       });
+    }
     const start = toolStart(item);
     if (!start) return;
     if (!this.items.hasTool(id)) this.items.tool(id, start);

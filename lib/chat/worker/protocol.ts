@@ -12,6 +12,7 @@ import type {
   ChatImage,
   ChatItem,
   ChatState,
+  Compacting,
   DriverEvent,
   FileSuggestion,
   ChatOrigin,
@@ -72,6 +73,8 @@ export type WorkerEvent =
       // The build of the server that started it (lib/build).
       build?: string;
       state: ChatState;
+      // A compaction under way (an older worker never says: not compacting).
+      compacting?: Compacting | null;
       streaming: ChatItem[];
       // Commands it understands beyond the first protocol ("plan"), so the
       // server never trusts a worker from an older build with one it drops.
@@ -87,9 +90,12 @@ export type WorkerEvent =
           | "call_usage"
           | "rate_limit"
           | "suggestion"
-          | "at_rest";
+          | "at_rest"
+          | "compacting";
       }
     >
+  // Compacting began (with when, and the size going in) or ended (null).
+  | { type: "compacting"; compacting: Compacting | null }
   // The agent's guess at the next message, or null once it's stale.
   | { type: "suggestion"; text: string | null }
   | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string }

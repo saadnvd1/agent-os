@@ -1,4 +1,5 @@
 import type { ChatItem, ChatState } from "./events";
+import { formatTokens } from "./context";
 import { formatElapsed } from "./elapsed";
 import { registry, type Live } from "./registry";
 import { stallThresholdMs } from "./stall";
@@ -94,7 +95,13 @@ export function stallOf(
   thresholdMs: number
 ): Stall | null {
   const a = live.activity;
-  if (live.state !== "running" || thresholdMs <= 0 || a.tasks.size > 0)
+  // A compaction is silent for a while, by nature.
+  if (
+    live.state !== "running" ||
+    live.compacting ||
+    thresholdMs <= 0 ||
+    a.tasks.size > 0
+  )
     return null;
   // A foreground tool call (a long test run) says nothing while it works:
   // it gets a much longer allowance before it counts as stuck.
@@ -110,6 +117,8 @@ export function chatStall(sessionId: string): Stall | null {
   return live ? stallOf(live, Date.now(), stallThresholdMs()) : null;
 }
 
+export const COMPACTING_LABEL = "Compacting context";
+
 // One line on what a chat session is doing, for the session list and
 // notifications: the step running now and since when.
 export function chatActivity(sessionId: string): {
@@ -117,6 +126,8 @@ export function chatActivity(sessionId: string): {
   since?: number;
   background: number;
   stalled?: Stall;
+  // The context size going into a compaction under way.
+  compacting?: { before?: number };
 } | null {
   const live = registry.live.get(sessionId);
   if (!live) return null;
@@ -126,6 +137,13 @@ export function chatActivity(sessionId: string): {
     return { label: "Needs your answer", background };
   if (live.state !== "running")
     return background ? { label: "Idle", background } : null;
+  if (live.compacting)
+    return {
+      label: COMPACTING_LABEL,
+      since: live.compacting.since,
+      background,
+      compacting: { before: live.compacting.before },
+    };
   const stalled = stallOf(live, Date.now(), stallThresholdMs()) ?? undefined;
   if (stalled)
     return { label: "Stalled", since: stalled.since, background, stalled };
@@ -145,7 +163,11 @@ export function chatActivityLine(sessionId: string): string | null {
   if (a.label === "Idle") return background || null;
   if (a.stalled)
     return `Stalled · no output for ${formatElapsed(a.stalled.silentMs)} · last: ${a.stalled.last}`;
-  const parts = [a.label];
+  const parts = [
+    a.compacting?.before
+      ? `${a.label} (${formatTokens(a.compacting.before)} tokens)`
+      : a.label,
+  ];
   if (a.since) parts.push(formatElapsed(Date.now() - a.since));
   if (background) parts.push(background);
   return parts.join(" · ");

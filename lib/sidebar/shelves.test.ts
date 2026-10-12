@@ -208,6 +208,7 @@ describe("sameRow", () => {
       { a: { status: "running" } },
       { a: { status: "idle", detail: "building" } },
       { a: { status: "idle", asks: 2, need: "answer" as const } },
+      { a: { status: "running", compacting: { since: 5 } } },
       { a: { status: "idle" }, w: { status: "running" } },
     ];
     for (const statuses of changes)
@@ -289,5 +290,18 @@ describe("the pinned orchestrator", () => {
 
   it("is an ordinary row before the orchestrators have loaded", () => {
     expect(shelves([orch("current")]).orchestrators).toEqual([]);
+  });
+});
+
+describe("a compacting chat", () => {
+  it("is a working row that says it is compacting", () => {
+    const out = shelves([session("a"), session("b")], {
+      a: { status: "running", compacting: { since: 1, before: 150_000 } },
+      b: { status: "running" },
+    });
+    const row = (id: string) =>
+      out.raw.working.find((r) => r.session.id === id)!;
+    expect(row("a")).toMatchObject({ working: true, compacting: true });
+    expect(row("b")).toMatchObject({ working: true, compacting: false });
   });
 });

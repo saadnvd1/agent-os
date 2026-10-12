@@ -17,6 +17,7 @@ import type {
   ChatImage,
   ChatItem,
   ChatState,
+  Compacting,
   SentBy,
   UsageTotals,
 } from "../events";
@@ -151,6 +152,9 @@ export class ChatHost {
   private context: ChatContext | null = null;
   // A compaction run ahead of a message (compactFirst): the message waits
   // at the front of the queue until it ends.
+  // The agent compacting its context now, whoever started it: told to
+  // the server so it shows in place of plain "working".
+  compactingNow: Compacting | null = null;
   private compacting: {
     // Set when it ran because the chat was stale.
     idleMs?: number;
@@ -277,6 +281,17 @@ export class ChatHost {
     this.emit({ type: "item", item });
   }
 
+  private setCompacting(on: boolean, before?: number): void {
+    if (on === !!this.compactingNow) return;
+    this.compactingNow = on
+      ? {
+          since: Date.now(),
+          before: before ?? this.compacting?.before ?? this.context?.usedTokens,
+        }
+      : null;
+    this.emit({ type: "compacting", compacting: this.compactingNow });
+  }
+
   private setState(state: ChatState): void {
     this.state = state;
     this.emit({ type: "state", state });
@@ -301,6 +316,8 @@ export class ChatHost {
           // a failed one printed still shows.
           if (this.compacting?.done && e.item.kind === "command_output")
             continue;
+          if (e.item.kind === "compacted" || e.item.kind === "error")
+            this.setCompacting(false);
           if (e.item.kind === "compacted") {
             if (this.compacting) e.item = this.compactedItem(e.item);
             else this.logCompacted(e.item, e.item.trigger ?? "manual");
@@ -383,7 +400,12 @@ export class ChatHost {
             this.currentTurn = null;
             this.setState("running");
           }
+        } else if (e.type === "compacting") {
+          this.setCompacting(e.active);
         } else if (e.type === "state") {
+          // A stop, an error or the end of the turn ends a compaction too.
+          if (e.state === "idle" || e.state === "error")
+            this.setCompacting(false);
           if (e.state === "idle") {
             flushItems();
             // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
@@ -435,6 +457,7 @@ export class ChatHost {
         createdAt: Date.now(),
       });
     } finally {
+      this.setCompacting(false);
       this.settleStreaming();
       this.closeTools();
       this.showHandedOver();
@@ -502,6 +525,7 @@ export class ChatHost {
         `UPDATE sessions SET chat_restarted = 0, chat_tools_digest = ? WHERE id = ?`
       ).run(this.toolsDigest, this.session.id);
     }
+    if (/^\/compact\b/.test(m.text.trimStart())) this.setCompacting(true);
     const checkpoint = now
       ? this.conversation.send(text, m.images, { now })
       : this.conversation.send(text, m.images);
@@ -807,6 +831,7 @@ export class ChatHost {
     this.currentTurn = null;
     this.stopping = null;
     this.conversation.send(`/compact ${COMPACT_INSTRUCTIONS}`);
+    this.setCompacting(true, stale.tokens);
     this.setState("running");
     console.error(
       `${new Date().toISOString()} compacting ${this.session.id} before a message: ${stale.stale ? `idle ${Math.round(stale.idleMs / 60_000)}m, ` : ""}${stale.tokens} tokens`
@@ -931,6 +956,7 @@ export class ChatHost {
     clearTimeout(this.retireTimer);
     clearTimeout(this.restTimer);
     this.closed = true;
+    this.setCompacting(false);
     flushItems();
     this.onClose();
     this.conversation.close();

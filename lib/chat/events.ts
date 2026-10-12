@@ -267,6 +267,13 @@ export interface FileSuggestion {
 // Waiting: a turn is paused on the reader (an approval or a question).
 export type ChatState = "idle" | "running" | "waiting" | "error";
 
+// A compaction in progress, alongside a "running" state: when it began and
+// the context size going in, when known.
+export interface Compacting {
+  since: number;
+  before?: number;
+}
+
 export interface UndoPreview {
   canUndo: boolean;
   error?: string;
@@ -290,7 +297,9 @@ export type DriverEvent =
   | { type: "context"; context: ChatContext } // context window use
   | { type: "turn_start" } // the agent started a turn (maybe one nobody sent)
   | { type: "at_rest" } // it has run every message it was given
-  | { type: "state"; state: ChatState };
+  | { type: "state"; state: ChatState }
+  // The agent started (true) or finished (false) compacting its context.
+  | { type: "compacting"; active: boolean };
 
 // A tool call's output and diff, loaded when it's opened.
 export interface ToolBody {
@@ -310,6 +319,7 @@ export type ChatServerMessage =
       // Background tasks from before the page, for the composer's list.
       tasks: ChatItem[];
       state: ChatState;
+      compacting?: Compacting | null;
       queue: QueuedMessage[];
       suggestion: string | null;
     }
@@ -334,6 +344,7 @@ export type ChatServerMessage =
   | { type: "item"; item: ChatItem }
   | { type: "delta"; id: string; text: string }
   | { type: "state"; state: ChatState }
+  | { type: "compacting"; compacting: Compacting | null }
   | {
       type: "capabilities";
       commands: ChatCommand[];

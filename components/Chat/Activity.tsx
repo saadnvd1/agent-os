@@ -1,7 +1,8 @@
 "use client";
 
-import { Loader2, MessageCircleQuestion, Square } from "lucide-react";
-import type { ChatItem, ChatState } from "@/lib/chat/events";
+import { Loader2, MessageCircleQuestion, Shrink, Square } from "lucide-react";
+import type { ChatItem, ChatState, Compacting } from "@/lib/chat/events";
+import { formatTokens } from "@/lib/chat/context";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { useNow } from "./useNow";
 
@@ -11,10 +12,17 @@ type Tool = Extract<ChatItem, { kind: "tool" }>;
 // running step, else whether it's writing or thinking.
 export function currentActivity(
   items: ChatItem[],
-  state: ChatState
-): { label: string; since?: number } | null {
+  state: ChatState,
+  compacting: Compacting | null = null
+): { label: string; since?: number; compacting?: boolean } | null {
   if (state === "waiting") return { label: "Waiting for your answer" };
   if (state !== "running") return null;
+  if (compacting)
+    return {
+      label: `Compacting context…${compacting.before ? ` ${formatTokens(compacting.before)} tokens` : ""}`,
+      since: compacting.since,
+      compacting: true,
+    };
   const lastUser = items.findLast((i) => i.kind === "user");
   const tool = items.findLast(
     (i): i is Tool => i.kind === "tool" && i.status === "running"
@@ -39,13 +47,15 @@ export function currentActivity(
 export function ActivityLine({
   items,
   state,
+  compacting = null,
   onStop,
 }: {
   items: ChatItem[];
   state: ChatState;
+  compacting?: Compacting | null;
   onStop: () => void;
 }) {
-  const activity = currentActivity(items, state);
+  const activity = currentActivity(items, state, compacting);
   const now = useNow(!!activity?.since);
   if (!activity) return null;
   const waiting = state === "waiting";
@@ -53,6 +63,8 @@ export function ActivityLine({
     <div className="text-muted-foreground flex min-h-9 items-center gap-2 px-2 text-xs">
       {waiting ? (
         <MessageCircleQuestion className="text-primary h-3.5 w-3.5 shrink-0" />
+      ) : activity.compacting ? (
+        <Shrink className="h-3.5 w-3.5 shrink-0 animate-pulse text-blue-600 dark:text-blue-400" />
       ) : (
         <Loader2 className="text-primary h-3.5 w-3.5 shrink-0 animate-spin" />
       )}

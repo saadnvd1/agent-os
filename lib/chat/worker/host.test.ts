@@ -1656,6 +1656,110 @@ describe("ChatHost fresh start at the context threshold", () => {
   });
 });
 
+describe("ChatHost reports a compaction in progress", () => {
+  const compactingEvents = (emitted: unknown[]) =>
+    (emitted as { type: string; compacting?: unknown }[]).flatMap((e) =>
+      e.type === "compacting" ? [e.compacting] : []
+    );
+  const compactedItem = {
+    type: "item" as const,
+    item: { id: "c1", kind: "compacted" as const, createdAt: 1 },
+  };
+
+  it("starts with the agent's signal, takes the size from the last measure, and ends on the compacted line", async () => {
+    const { host, conversation, emitted } = await startHost("agent");
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({
+      type: "context",
+      context: {
+        usedTokens: 151_000,
+        maxTokens: 1_000_000,
+        percentage: 15,
+        categories: [],
+        at: Date.now(),
+      },
+    });
+    await tick();
+    conversation.events.push({ type: "compacting", active: true });
+    await tick();
+    expect(host.state).toBe("running");
+    expect(host.compactingNow).toMatchObject({ before: 151_000 });
+    // Said twice, it is told once.
+    conversation.events.push({ type: "compacting", active: true });
+    await tick();
+    expect(compactingEvents(emitted)).toHaveLength(1);
+    conversation.events.push(compactedItem);
+    await tick();
+    expect(host.compactingNow).toBeNull();
+    expect(compactingEvents(emitted)).toEqual([
+      expect.objectContaining({ before: 151_000 }),
+      null,
+    ]);
+    // The turn goes on after it.
+    expect(host.state).toBe("running");
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(host.state).toBe("idle");
+    host.close();
+  });
+
+  it("ends when the agent says so, even with no compacted line (a failed one)", async () => {
+    const { host, conversation } = await startHost("agent");
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "compacting", active: true });
+    await tick();
+    expect(host.compactingNow).not.toBeNull();
+    conversation.events.push({ type: "compacting", active: false });
+    await tick();
+    expect(host.compactingNow).toBeNull();
+    expect(host.state).toBe("running");
+    host.close();
+  });
+
+  it.each(["idle", "error"] as const)(
+    "is cleared when the turn goes %s mid-compaction",
+    async (state) => {
+      const { host, conversation, emitted } = await startHost("agent");
+      conversation.events.push({ type: "turn_start" });
+      conversation.events.push({ type: "compacting", active: true });
+      await tick();
+      expect(host.compactingNow).not.toBeNull();
+      conversation.events.push({ type: "state", state });
+      await tick();
+      expect(host.compactingNow).toBeNull();
+      expect(compactingEvents(emitted).at(-1)).toBeNull();
+      host.close();
+    }
+  );
+
+  it("is cleared when the host closes mid-compaction", async () => {
+    const { host, conversation, emitted } = await startHost("agent");
+    conversation.events.push({ type: "turn_start" });
+    conversation.events.push({ type: "compacting", active: true });
+    await tick();
+    host.close();
+    expect(host.compactingNow).toBeNull();
+    expect(compactingEvents(emitted).at(-1)).toBeNull();
+  });
+
+  it("a typed /compact shows as compacting before the agent says anything", async () => {
+    const { id, host, conversation } = await startHost("agent");
+    await host.handle({
+      type: "send",
+      id: "m1",
+      text: "/compact keep the plan",
+      from: "saad",
+      origin: { kind: "event", label: "AgentOS" },
+    });
+    expect(listQueue(id)).toEqual([]);
+    expect(host.compactingNow).not.toBeNull();
+    conversation.events.push(compactedItem);
+    await tick();
+    expect(host.compactingNow).toBeNull();
+    host.close();
+  });
+});
+
 describe("ChatHost compacts a stale chat before a message", () => {
   const HOUR = 60 * 60_000;
   const bus = {
@@ -1711,6 +1815,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
     expect(listQueue(id).map((m) => m.id)).toEqual(["m1"]);
     expect(host.state).toBe("running");
     expect(emitted.some((e) => e.type === "queue")).toBe(true);
+    expect(host.compactingNow).toMatchObject({ before: 412_000 });
     // What the CLI prints for /compact stays out of the chat.
     conversation.events.push({
       type: "item",
@@ -1733,6 +1838,7 @@ describe("ChatHost compacts a stale chat before a message", () => {
     });
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
+    expect(host.compactingNow).toBeNull();
     // The compaction's end sends the message.
     expect(sentTexts(conversation)).toEqual([COMPACT_CMD, "continue"]);
     expect(listQueue(id)).toEqual([]);

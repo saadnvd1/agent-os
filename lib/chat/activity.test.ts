@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { stallOf, track } from "./activity";
-import type { Live } from "./registry";
+import { chatActivityLine, stallOf, track } from "./activity";
+import { registry, type Live } from "./registry";
 import type { WorkerEvent } from "./worker/protocol";
 
 const MIN = 60_000;
@@ -71,5 +71,30 @@ describe("stall detection", () => {
     const l = live();
     track(l, ev({ type: "state", state: "running" }));
     expect(stallOf(l, Date.now() + 60 * MIN, 0)).toBeNull();
+  });
+});
+
+describe("a compacting chat", () => {
+  const compacting = (before?: number): Live =>
+    ({
+      state: "running",
+      compacting: { since: Date.now() - 40_000, before },
+      activity: { tools: new Map(), tasks: new Set() },
+    }) as unknown as Live;
+
+  it("reads as compacting, with the size going in, not as work", () => {
+    registry.live.set("s1", compacting(182_000));
+    expect(chatActivityLine("s1")).toBe(
+      "Compacting context (182k tokens) · 40s"
+    );
+    registry.live.set("s1", compacting());
+    expect(chatActivityLine("s1")).toBe("Compacting context · 40s");
+    registry.live.delete("s1");
+  });
+
+  it("is never flagged stalled, however long it stays silent", () => {
+    const l = compacting(1);
+    track(l, ev({ type: "state", state: "running" }));
+    expect(stallOf(l, Date.now() + 60 * MIN, 8 * MIN)).toBeNull();
   });
 });

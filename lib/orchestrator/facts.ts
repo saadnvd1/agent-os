@@ -9,7 +9,7 @@ import { db, type Session, type StackItemStatus } from "../db";
 import { statusDetector } from "../status-detector";
 import { hostLink } from "../hosts/remote-api";
 import { peerStatus } from "../hosts/peer-sessions";
-import { chatState } from "../chat/runner";
+import { chatCompacting, chatState } from "../chat/runner";
 import { chatActivityLine, chatStall, type Stall } from "../chat/activity";
 import { lastUserTask } from "../chat/store";
 import { needsYou } from "../needs-you";
@@ -35,6 +35,8 @@ export interface SessionFacts {
   needsInput: boolean;
   // A chat turn silent past the stall threshold (lib/chat/stall).
   stalled?: Stall | null;
+  // Its agent is summarising the context: not stuck, not plain work.
+  compacting?: boolean;
   // Last sign of life, in ms.
   lastActive: number;
   // Work that should end in a PR: a task, or a session on its own branch.
@@ -274,6 +276,8 @@ export async function sessionFacts(
         needsInput,
         stalled:
           s.view === "chat" && !hostLink(s.host_id) ? chatStall(s.id) : null,
+        compacting:
+          s.view === "chat" && !hostLink(s.host_id) && !!chatCompacting(s.id),
         lastActive: Math.max(
           sqliteMs(s.updated_at),
           statusDetector.getTimestamp(s.tmux_name) * 1000,

@@ -339,6 +339,13 @@ shows one quiet line with the context before and after. An orchestrator
 isn't compacted (a summary would lose the fence around what it read from
 tasks and CI): it starts a fresh conversation from its brief and the current
 state at its fresh-start threshold, or earlier once idle past its cache.
+While a chat compacts (any trigger, Claude, Pi or Codex) it is shown as
+compacting, not just working: a pulsing blue dot and a "Compacting" chip in
+the sidebar, and "Compacting context… 182k tokens" above the composer. The
+status API (`/api/sessions/status`) keeps `status: "running"` and adds
+`compacting: { since, before? }`; the orchestrator's `sessions` tool says
+"compacting context". It clears when the compaction ends, errors, is
+stopped, or the worker goes away.
 What survives a compaction: the summary is asked to keep the task, scope
 changes, every edited file by path, what's done, in progress and next, and
 the decisions. Right after it, AgentOS hands back a note built from its own

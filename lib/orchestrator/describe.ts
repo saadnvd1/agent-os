@@ -25,7 +25,7 @@ export function ciWord(pr: TaskPR): string {
 export const shortId = (id: string) => id.slice(0, 8);
 
 function sessionLine(f: SessionFacts): string {
-  const head = `- ${f.name} (${f.project ?? "no project"}, ${f.quick ? "your quick change" : f.view}, id ${shortId(f.id)}): ${STATUS_WORD[f.status]}`;
+  const head = `- ${f.name} (${f.project ?? "no project"}, ${f.quick ? "your quick change" : f.view}, id ${shortId(f.id)}): ${f.compacting ? "compacting context" : STATUS_WORD[f.status]}`;
   const parts = [
     f.activity ? `${head}, ${untrusted(f.name, f.activity)}` : head,
   ];

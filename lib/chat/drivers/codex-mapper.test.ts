@@ -12,6 +12,21 @@ import {
   threadParams,
 } from "./codex-args";
 
+describe("CodexMapper compaction", () => {
+  it("is compacting from the item's start to its completion", () => {
+    const events: DriverEvent[] = [];
+    const mapper = new CodexMapper((e) => events.push(e));
+    const item = { type: "contextCompaction", id: "c1" };
+    mapper.map("item/started", { item, threadId: "T", turnId: "U" });
+    mapper.map("item/completed", { item, threadId: "T", turnId: "U" });
+    expect(events).toMatchObject([
+      { type: "compacting", active: true },
+      { type: "compacting", active: false },
+      { type: "item", item: { kind: "compacted" } },
+    ]);
+  });
+});
+
 type Line = { method: string; id?: number; params: Record<string, unknown> };
 
 // Recorded from codex app-server 0.156 (ids shortened, paths set to /w).
