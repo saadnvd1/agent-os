@@ -1,4 +1,4 @@
-import type { CallUsage } from "../usage/calls";
+import type { CallUsage } from "../usage/types";
 import type { SearchResult } from "./find";
 
 /**
