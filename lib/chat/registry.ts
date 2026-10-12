@@ -9,6 +9,11 @@ import type {
   ChatState,
   Compacting,
 } from "./events";
+import { markStatusDirty } from "../status/dirty";
+import { FLUSH_MS } from "./store";
+
+// Long enough for the worker's buffered write of an item to land.
+const EMIT_SETTLE_MS = 2 * FLUSH_MS;
 
 // A conversation whose worker this server is connected to.
 export interface Live {
@@ -82,6 +87,9 @@ registry.caps ??= new Map();
 registry.connecting ??= new Map();
 
 export function emit(sessionId: string, m: ChatServerMessage): void {
+  // Items come from the worker, which writes them a moment after saying so.
+  if (m.type === "state" || m.type === "compacting" || m.type === "item")
+    markStatusDirty(sessionId, EMIT_SETTLE_MS);
   registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
   // Idle, running, waiting and back, and a finished turn (unread): the
   // sidebar hears at once.

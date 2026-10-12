@@ -18,6 +18,7 @@ import type { CheckRow } from "./checks";
 import { APPROVAL_GATES, mergeApprovalsOn } from "./merge-approvals";
 import type { RepoCI } from "./repo-ci";
 import { untrusted } from "./untrusted";
+import { markStatusDirty } from "../status/dirty";
 
 export type GateName =
   | "ci"
@@ -244,6 +245,7 @@ function countOnce(
          last_reason = excluded.last_reason,
          last_sha = excluded.last_sha`
   ).run(sessionId, gate, workspaceId, reason, sha, fresh ? 1 : 0);
+  markStatusDirty(sessionId);
   return failureOf(sessionId, gate)!.count;
 }
 
@@ -261,6 +263,7 @@ export function markEscalated(sessionId: string, gate: string): void {
   db.prepare(
     `UPDATE orchestrator_gate_failures SET escalated_at = datetime('now') WHERE session_id = ? AND gate = ?`
   ).run(sessionId, gate);
+  markStatusDirty(sessionId);
 }
 
 export function escalations(sessionId: string): FailureRow[] {

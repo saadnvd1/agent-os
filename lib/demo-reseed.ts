@@ -9,6 +9,7 @@ import fs from "fs";
 import type Database from "better-sqlite3";
 import { notifyStatusChanged } from "./status/hub";
 import { resetDemoChat } from "./chat/demo";
+import { markAllStatusDirty } from "./status/dirty";
 
 export const RESEED_MS = 10 * 60 * 1000;
 
@@ -92,6 +93,7 @@ export function startDemoReseed(
     try {
       restoreDemo(db, file);
       resetDemoChat();
+      markAllStatusDirty();
       notifyStatusChanged();
       onRestored();
     } catch (error) {

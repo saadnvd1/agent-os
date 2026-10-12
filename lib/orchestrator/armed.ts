@@ -26,6 +26,7 @@ import { isPaused } from "./pause";
 import { review } from "./review";
 import { judge, mergeJudged } from "./signoff";
 import { workspaceTask } from "./targets";
+import { markStatusDirty } from "../status/dirty";
 
 // Judged again at least this often, for what the fingerprint can't see.
 export const ARMED_RECHECK_MS = 5 * 60 * 1000;
@@ -38,6 +39,7 @@ export function setArmed(sessionId: string, armed: boolean): void {
        merge_armed_seen = NULL WHERE id = ?`
   ).run(sessionId);
   looked.delete(sessionId);
+  markStatusDirty(sessionId);
   notifyStatusChanged();
 }
 

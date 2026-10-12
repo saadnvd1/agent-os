@@ -12,6 +12,7 @@ const { seedSession, seedWorkspace } =
   await import("@/lib/orchestrator/testing");
 const { putCheck } = await import("@/lib/orchestrator/checks");
 const { addPrStages } = await import("./pr-stages");
+const { beginPass } = await import("./incremental");
 
 const open = (over: Partial<TaskPR> = {}): TaskPR => ({
   number: 7,
@@ -33,7 +34,7 @@ function task() {
 }
 const stageOf = (id: string) => {
   const statuses = { [id]: { sessionName: "x", status: "idle" as const } };
-  addPrStages(statuses);
+  addPrStages(statuses, beginPass(Date.now(), true));
   return (statuses[id] as { prStage?: { stage: string } }).prStage?.stage;
 };
 
@@ -70,7 +71,7 @@ describe("addPrStages", () => {
     cached = undefined;
     expect(stageOf(id)).toBe("open");
     const statuses = { nobody: { sessionName: "x", status: "idle" as const } };
-    addPrStages(statuses);
+    addPrStages(statuses, beginPass(Date.now(), true));
     expect(statuses.nobody).not.toHaveProperty("prStage");
   });
 });

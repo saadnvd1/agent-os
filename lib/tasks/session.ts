@@ -18,6 +18,7 @@ import { lookupPR } from "./pr-poll";
 import { captureMergedTask } from "../session-logs";
 import { notifyStatusChanged } from "../status/hub";
 import type { TaskPR } from "./state";
+import { markStatusDirty } from "../status/dirty";
 
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 
@@ -190,6 +191,7 @@ export async function prFor(
   if (renamed && !refused) moveBranch(session, renamed);
   const before = prCache.get(session.id)?.pr;
   prCache.set(session.id, { at: Date.now(), pr });
+  markStatusDirty(session.id);
   // A PR whose stage inputs moved is news for the sidebar's badge.
   if (prSignature(before) !== prSignature(pr)) notifyStatusChanged();
   if (pr) {
@@ -279,4 +281,5 @@ export function storedPR(s: Session): TaskPR | null {
 
 export function forgetPR(sessionId: string): void {
   prCache.delete(sessionId);
+  markStatusDirty(sessionId);
 }
