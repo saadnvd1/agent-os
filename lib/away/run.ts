@@ -96,12 +96,15 @@ function tellAway(
   // Checked every time: a digest's own turn isn't activity, so Away can't
   // keep an orchestrator going that nothing else has.
   if (!orchestratorActive(orchestratorId, now)) return false;
-  // Only one Saad has messaged lately: waking the rest re-reads their whole
-  // context for nothing, and they read the away state in their brief when
-  // they next start.
-  const s = sessionRow(orchestratorId);
-  if (!s || !saadMessagedRecently(s, now)) return false;
   const told = reachedWorkspaces(away.id).has(workspaceId);
+  // A first message goes only to one Saad has messaged lately: waking the
+  // rest re-reads their whole context for nothing, and they read the away
+  // state in their brief when they next start. One already told keeps its
+  // sweeps for the rest of the period.
+  if (!told) {
+    const s = sessionRow(orchestratorId);
+    if (!s || !saadMessagedRecently(s, now)) return false;
+  }
   // One transaction: a crash can't leave the marker set with the event
   // never queued.
   db.transaction(() => {

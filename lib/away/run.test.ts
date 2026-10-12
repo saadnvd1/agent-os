@@ -417,6 +417,20 @@ describe("telling orchestrators Away is on", () => {
   });
 });
 
+describe("an orchestrator already told Away is on", () => {
+  it("keeps its sweeps after Saad's last message ages past 24 hours", async () => {
+    const t = seed();
+    const row = turnAwayOn({ setBy: "x", expiresAt: null }, NOW);
+    expect(events(t.w)).toHaveLength(1);
+    const later = NOW + 25 * 60 * 60_000;
+    h.turns.set(t.orch, later - 60_000);
+    h.facts = [{ ...stalled(t.task), lastActive: later - STALL_MS - 60_000 }];
+    expect(await sweepWorkspace(row, t.w, t.orch, later)).toMatch(
+      /^Away sweep:/
+    );
+  });
+});
+
 describe("checking deploys after a merge while away", () => {
   function merged(w: string, projectId: string) {
     const id = seedSession({ projectId, name: "shipped", task: true });
