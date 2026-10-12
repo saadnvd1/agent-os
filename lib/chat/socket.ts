@@ -102,17 +102,16 @@ export function serveChatSocket(
   // A linked machine's session: its own AgentOS serves the chat.
   const link = demo ? null : peerChatLink(sessionId);
   if (link) {
-    const paged = params.get("paged");
     return relayChatSocket(
       ws,
       link,
-      { session: sessionId, ...(paged && { paged }) },
+      { session: sessionId, paged: "1" },
       send,
       (message) => reply(errorItem(message))
     );
   }
   try {
-    unwatch = watchChat(sessionId, reply, params.get("paged") === "1");
+    unwatch = watchChat(sessionId, reply);
   } catch (err) {
     fail(err);
     if (!closed) ws.close();

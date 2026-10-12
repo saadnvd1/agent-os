@@ -3,7 +3,7 @@ import { formatTokens } from "./context";
 import { formatElapsed } from "./elapsed";
 import { registry, type Live } from "./registry";
 import { stallThresholdMs } from "./stall";
-import { listItems } from "./store";
+import { lastItems, runningItems } from "./store";
 import type { WorkerEvent } from "./worker/protocol";
 
 const lastWhat = (i: ChatItem): string =>
@@ -55,23 +55,17 @@ export function track(live: Live, e: WorkerEvent): void {
 
 // After a reattach, what's still running comes from the saved items.
 export function restoreActivity(sessionId: string, state: ChatState) {
-  const items = listItems(sessionId);
   const activity: Live["activity"] = { tools: new Map(), tasks: new Set() };
-  if (state !== "idle")
-    activity.turnStartedAt = items.findLast(
-      (i) => i.kind === "user"
-    )?.createdAt;
   if (state !== "idle") {
-    const last = items.at(-1);
+    activity.turnStartedAt = lastItems(sessionId, 1, "user")[0]?.createdAt;
+    const last = lastItems(sessionId, 1)[0];
     activity.lastAt = last?.createdAt ?? activity.turnStartedAt;
     activity.lastWhat = last ? lastWhat(last) : undefined;
-  }
-  for (const i of items) {
-    if (i.kind === "tool" && i.status === "running" && state !== "idle")
+    for (const i of runningItems(sessionId, "tool"))
       activity.tools.set(i.id, { label: i.title, since: i.createdAt });
-    if (i.kind === "task" && i.status === "running" && !i.ambient)
-      activity.tasks.add(i.taskId);
   }
+  for (const i of runningItems(sessionId, "task"))
+    if (!i.ambient) activity.tasks.add(i.taskId);
   return activity;
 }
 

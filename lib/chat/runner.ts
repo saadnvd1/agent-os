@@ -38,7 +38,6 @@ import {
   hasItem,
   itemsOfKind,
   recentTasks,
-  listItems,
   saveItem,
   settle,
 } from "./store";
@@ -851,17 +850,11 @@ function present(sessionId: string, items: ChatItem[]): ChatItem[] {
   return runningWorkers().includes(sessionId) ? items : settle(items);
 }
 
-// Snapshot then live updates. Returns the unsubscribe function. `paged`
-// clients get the latest page and ask for the rest; others get everything.
-export function watchChat(
-  sessionId: string,
-  listener: Listener,
-  paged = false
-): () => void {
+// Snapshot then live updates. Returns the unsubscribe function. Every
+// client gets the latest page and asks for older ones.
+export function watchChat(sessionId: string, listener: Listener): () => void {
   const live = registry.live.get(sessionId);
-  const page = paged
-    ? readPage(sessionId)
-    : { items: listItems(sessionId), cursor: null, hasMore: false };
+  const page = readPage(sessionId);
   const onPage = new Set(page.items.map((i) => i.id));
   // The composer lists background work still going or just done, even when
   // it started before the page.
