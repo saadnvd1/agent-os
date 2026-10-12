@@ -38,17 +38,17 @@ export const TOOL_NAMES = {
   ask_saad: name("ask_saad"),
 } as const;
 
-// What it may do, fixed by its role: it reads other sessions' text, so it
-// never gets a general shell. Anything not listed is refused without asking.
-// It acts through its own tools, which are scoped to its workspace and
-// braked; the shell keeps only `aos` commands that read, and notify, which
-// reaches only Saad, so `aos send`, `task`, `spawn` and `stack` can't go
-// around them. It writes files, but never in a project repository, a task
-// worktree, AgentOS's own state or a secret file, except inside its own
-// quick changes' worktrees (quick.ts), where it may also run git that
-// looks, stages or undoes, never commits with hooks or pushes: its worker
-// checks each write and each shell command first (write-guard.ts,
-// git-guard.ts).
+// What it may do, fixed by its role. It acts through its own tools, which
+// are scoped to its workspace and braked. Its shell runs anything, without
+// asking: Saad chose that on 2026-10-11, knowing an orchestrator reads other
+// sessions' text and a misled one could get around the gates with
+// `python -c` or a script, which no parser sees. Its worker still refuses a
+// deny list of shell commands before they run (shell-guard.ts): merging,
+// closing or retargeting a PR, pushing, writing in a project repository or
+// task worktree other than its own quick changes, writing AgentOS's state,
+// stopping AgentOS or its tmux, and reading secrets. That catches honest
+// mistakes, not a determined bypass. Its file writes are checked the same
+// way, against a longer list (write-guard.ts).
 export const ORCHESTRATOR_PERMISSIONS: {
   permissionMode: PermissionMode;
   allowedTools: string[];
@@ -66,17 +66,8 @@ export const ORCHESTRATOR_PERMISSIONS: {
     "NotebookEdit",
     "ToolSearch",
     "TodoWrite",
-    "Bash(aos peers:*)",
-    "Bash(aos inbox:*)",
-    "Bash(aos history:*)",
-    "Bash(aos stacks:*)",
-    "Bash(aos schedules:*)",
-    // Reaches only Saad's phone, at most once a minute.
-    "Bash(aos notify:*)",
-    "Bash(aos docs:*)",
-    "Bash(aos doc:*)",
-    // Only `git -C <its own quick worktree>`, refused anywhere else.
-    "Bash(git:*)",
+    // Anything; its worker refuses the deny list (shell-guard.ts).
+    "Bash",
   ],
   disallowedTools: [],
 };

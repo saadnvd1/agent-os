@@ -1059,7 +1059,31 @@ it may do on its own, and the lines that always come back to you as asks.
   arrives marked as from that orchestrator and fenced as untrusted, so it can't
   approve, answer an ask or pass a gate. The route
   they call answers only the orchestrator's worker, by a per-orchestrator
-  secret. Its shell runs only `aos` commands that read.
+  secret.
+- **Shell:** it runs anything without asking, so an orchestrator can read and
+  investigate on its own: `gh pr list`, `gh run view --log-failed`, `gh api`
+  GETs, `curl`, `sqlite3 -readonly`, git in any repository, a skill's scripts,
+  pipes and chains. Its chat worker refuses a deny list before a command runs,
+  naming the tool to use instead: merging, closing or retargeting a PR
+  (`gh pr merge`, `gh pr close`, `gh pr edit --base`, and `gh api` or `curl`
+  calls that merge a pull request or PATCH or PUT one; use `sign_off`, `arm`,
+  `land` or `drop`), `git push` (`quick_pr` pushes), writing in a project
+  repository or task worktree other than its own open quick changes (git
+  commit, reset, checkout, rebase, merge, stash, clean or rm there, and `rm`,
+  `mv`, `cp`, `tee` or a redirect into one), writing AgentOS's state (`sqlite3`
+  on its database without `-readonly` or with INSERT, UPDATE, DELETE, DROP,
+  ALTER or ATTACH; files under `~/.agent-os` outside its folder), stopping
+  AgentOS or its tmux (`pkill`/`kill` aimed at it, `tmux kill-*`, a
+  `launchctl` or `serviceman` restart), and reading secret files (the same
+  list as the write guard) or tokenvault (`tv get`, `tv dump`). It reads each
+  command line the way a shell would, so these are caught inside pipes,
+  chains and `$( )`, behind `bash -c`, `sh -c`, `env`, `sudo`, `xargs`,
+  `find -exec` or an absolute path, and after a `cd` or `git -C`. **The deny
+  list catches honest mistakes, not a determined bypass:** a script or
+  `python -c` can do any of these where no parser sees it, and an
+  orchestrator reads other sessions' text, which can carry planted
+  instructions. The trade-off was chosen on 2026-10-11, for an orchestrator
+  that does its own investigating instead of handing it to him.
 - **Triage:** its brief has it decide each job: small and clear is a task with
   `plan: false` and the steps written into the brief; big, unclear or
   cross-cutting is `plan: true`; work outside a repository is a

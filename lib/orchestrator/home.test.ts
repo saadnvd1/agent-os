@@ -82,31 +82,16 @@ describe("the orchestrator's home", () => {
 });
 
 describe("what the orchestrator may do", () => {
-  it("never asks and never gets a general shell or file edits", () => {
+  it("never asks; its shell and file writes are its worker's to check", () => {
     const p = ORCHESTRATOR_PERMISSIONS;
     expect(p.permissionMode).toBe("dontAsk");
+    // The shell runs anything but a deny list (shell-guard.ts), and writes
+    // anywhere but a longer one (write-guard.ts), both refused by its worker.
     expect(p.allowedTools).toEqual(
-      expect.arrayContaining([
-        ...Object.values(TOOL_NAMES),
-        "Bash(aos peers:*)",
-      ])
+      expect.arrayContaining([...Object.values(TOOL_NAMES), "Bash"])
     );
-    expect(p.allowedTools).not.toContain("Bash");
-    // Starting and messaging go through its own braked, scoped tools.
-    for (const t of [
-      "Bash(aos:*)",
-      "Bash(aos task:*)",
-      "Bash(aos spawn:*)",
-      "Bash(aos send:*)",
-      "Bash(aos stack:*)",
-      "Bash(aos done:*)",
-    ])
-      expect(p.allowedTools).not.toContain(t);
-    // Writes are its worker's to check (write-guard.ts), not refused here.
-    for (const t of ["Edit", "Write", "NotebookEdit"]) {
-      expect(p.allowedTools).toContain(t);
+    for (const t of ["Bash", "Edit", "Write", "NotebookEdit"])
       expect(p.disallowedTools).not.toContain(t);
-    }
   });
 
   it("can't be switched to full access, or deleted on its own", async () => {
