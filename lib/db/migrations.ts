@@ -1630,6 +1630,27 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    id: 71,
+    name: "devices_push",
+    up: (db) => {
+      // Push belongs to a paired device, so revoking the device clears it.
+      // push_categories is a JSON array; NULL means the defaults.
+      for (const col of [
+        "push_token TEXT",
+        "push_platform TEXT",
+        "push_environment TEXT",
+        "push_categories TEXT",
+        "push_updated_at TEXT",
+        "push_last_error TEXT",
+      ])
+        db.exec(`ALTER TABLE devices ADD COLUMN ${col}`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_devices_push_token ON devices(push_token)
+         WHERE push_token IS NOT NULL`
+      );
+    },
+  },
 ];
 
 // `upTo`: stop after this id (tests that start from an older database).

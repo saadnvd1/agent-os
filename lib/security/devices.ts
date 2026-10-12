@@ -5,6 +5,12 @@
 
 import crypto from "crypto";
 import { getDb } from "@/lib/db";
+import { enabledCategories } from "@/lib/notify/copy";
+import type {
+  PushCategory,
+  PushEnvironment,
+  PushPlatform,
+} from "@/lib/notify/push-types";
 
 export interface Device {
   id: string;
@@ -115,11 +121,151 @@ export function revokeDevice(id: string): boolean {
   const changed =
     getDb()
       .prepare(
-        `UPDATE devices SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL`
+        `UPDATE devices SET revoked_at = datetime('now'),
+           push_token = NULL, push_platform = NULL, push_environment = NULL,
+           push_categories = NULL, push_updated_at = NULL, push_last_error = NULL
+         WHERE id = ? AND revoked_at IS NULL`
       )
       .run(id).changes > 0;
   if (changed) dropDeviceSockets(id);
   return changed;
+}
+
+export interface DevicePush {
+  token: string;
+  platform: PushPlatform;
+  environment: PushEnvironment;
+  /** What it receives: its saved list, or the defaults. */
+  categories: PushCategory[];
+  updatedAt: string;
+  lastError: string | null;
+}
+
+interface PushRow {
+  push_token: string | null;
+  push_platform: PushPlatform;
+  push_environment: PushEnvironment;
+  push_categories: string | null;
+  push_updated_at: string;
+  push_last_error: string | null;
+}
+
+const pushOf = (r: PushRow | undefined): DevicePush | null =>
+  r?.push_token
+    ? {
+        token: r.push_token,
+        platform: r.push_platform,
+        environment: r.push_environment,
+        categories: enabledCategories(
+          r.push_categories ? JSON.parse(r.push_categories) : null
+        ),
+        updatedAt: r.push_updated_at,
+        lastError: r.push_last_error,
+      }
+    : null;
+
+const PUSH_COLS = `push_token, push_platform, push_environment, push_categories,
+  push_updated_at, push_last_error`;
+
+export function getDevicePush(id: string): DevicePush | null {
+  return pushOf(
+    getDb()
+      .prepare(
+        `SELECT ${PUSH_COLS} FROM devices WHERE id = ? AND revoked_at IS NULL`
+      )
+      .get(id) as PushRow | undefined
+  );
+}
+
+/** Every live device that can be sent a push, for the sender. */
+export function listPushDevices(): { id: string; push: DevicePush }[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT id, ${PUSH_COLS} FROM devices
+       WHERE revoked_at IS NULL AND push_token IS NOT NULL`
+    )
+    .all() as (PushRow & { id: string })[];
+  return rows.flatMap((r) => {
+    const push = pushOf(r);
+    return push ? [{ id: r.id, push }] : [];
+  });
+}
+
+/**
+ * Registers or refreshes a device's push token. Idempotent. Saved categories
+ * are kept unless new ones are given. A token belongs to one device: if
+ * another row held it (a re-pair on the same phone), that row loses it so
+ * nothing is sent twice.
+ */
+export function setDevicePush(
+  id: string,
+  p: {
+    token: string;
+    platform: PushPlatform;
+    environment: PushEnvironment;
+    categories?: PushCategory[];
+  }
+): boolean {
+  const db = getDb();
+  return db.transaction(() => {
+    db.prepare(
+      `UPDATE devices SET push_token = NULL, push_platform = NULL,
+         push_environment = NULL, push_categories = NULL,
+         push_updated_at = NULL, push_last_error = NULL
+       WHERE push_token = ? AND id != ?`
+    ).run(p.token, id);
+    return (
+      db
+        .prepare(
+          `UPDATE devices SET push_token = ?, push_platform = ?, push_environment = ?,
+             push_categories = COALESCE(?, push_categories),
+             push_updated_at = datetime('now'), push_last_error = NULL
+           WHERE id = ? AND revoked_at IS NULL`
+        )
+        .run(
+          p.token,
+          p.platform,
+          p.environment,
+          p.categories ? JSON.stringify(p.categories) : null,
+          id
+        ).changes > 0
+    );
+  })();
+}
+
+/** False when the device has no push registered. */
+export function setDevicePushCategories(
+  id: string,
+  categories: PushCategory[]
+): boolean {
+  return (
+    getDb()
+      .prepare(
+        `UPDATE devices SET push_categories = ?, push_updated_at = datetime('now')
+         WHERE id = ? AND revoked_at IS NULL AND push_token IS NOT NULL`
+      )
+      .run(JSON.stringify(categories), id).changes > 0
+  );
+}
+
+/** The sender records why a send failed, so the Devices page can say. */
+export function setDevicePushError(id: string, error: string | null): void {
+  getDb()
+    .prepare(`UPDATE devices SET push_last_error = ? WHERE id = ?`)
+    .run(error ? error.slice(0, 200) : null, id);
+}
+
+export function clearDevicePush(id: string): boolean {
+  return (
+    getDb()
+      .prepare(
+        `UPDATE devices SET push_token = NULL, push_platform = NULL,
+           push_environment = NULL, push_categories = NULL,
+           push_updated_at = NULL, push_last_error = NULL
+         WHERE id = ? AND push_token IS NOT NULL`
+      )
+      .run(id).changes > 0
+  );
 }
 
 // Open WebSockets per device, so revoking one cuts its live terminal too.

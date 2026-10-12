@@ -59,6 +59,7 @@ export const STATIC_SIBLINGS = [
   "import",
   "init",
   "init-script",
+  "me",
   "items",
   "network",
   "queue",
