@@ -9,6 +9,9 @@ import { db, type Session } from "../db";
 import { Limiter, type Outcome } from "./limiter";
 import { holdForBatch, msToNextSweep } from "../away/state";
 import { selectNotifier, type TelegramConfig } from "./notifiers";
+import { pushAvailable, pushEvent } from "./push";
+import { setFallbackSink } from "./push/sender";
+import type { PushCategory } from "./push-types";
 
 export type { Outcome } from "./limiter";
 
@@ -99,6 +102,23 @@ export function resumePhoneOutbox(): void {
   }
 }
 
+// Held text that push couldn't deliver goes to Telegram once.
+setFallbackSink(async (source, text) => {
+  const outcome = await limiter().push(source, text);
+  if (outcome.state === "failed") throw new Error(outcome.why);
+});
+
+// Which phone-app category a message belongs to. A message with one goes to
+// a registered device instead of Telegram, and to Telegram if push is off.
+export interface PushRoute {
+  category: PushCategory;
+  id?: string | null;
+  key?: string | null;
+  collapse?: string | null;
+  /** The session it is about, so a mirror of another machine's never pushes. */
+  sessionId?: string | null;
+}
+
 export class NotConfigured extends Error {
   constructor() {
     super(
@@ -111,10 +131,21 @@ export class NotConfigured extends Error {
 // NotConfigured when nothing would send it.
 export async function sendPhone(
   source: string,
-  text: string
+  text: string,
+  push?: PushRoute
 ): Promise<Outcome> {
   const body = text.trim();
   if (!body) throw new Error("Nothing to send");
+  if (push && pushAvailable()) {
+    const { sessionId, ...event } = push;
+    const out = await pushEvent(event, {
+      sessionId,
+      fallback: { source, text: body },
+    });
+    if (out === "queued") return { state: "pushed" };
+    if (out === "folded") return { state: "held", inMs: msToNextSweep() };
+    if (out === "dropped" || out === "muted") return { state: "skipped" };
+  }
   if (!selectNotifier(process.env, telegramConfig())) throw new NotConfigured();
   const outcome = await limiter().push(source, body);
   if (outcome.state === "failed")
@@ -142,15 +173,23 @@ export async function notifyFrom(
     holdForBatch(session.workspace_id, session.id, body)
   )
     return { state: "held", inMs: msToNextSweep() };
-  return sendPhone(
-    session ? `session:${session.id}` : "cli",
-    session ? `${session.name}: ${body}` : body
-  );
+  const source = session ? `session:${session.id}` : "cli";
+  return sendPhone(source, session ? `${session.name}: ${body}` : body, {
+    category: "agents",
+    id: session?.id,
+    key: `agents:${session?.id ?? "cli"}:${Date.now()}`,
+    collapse: `agents:${session?.id ?? "cli"}`,
+    sessionId: session?.id,
+  });
 }
 
 // For the server's own alerts: never throws, never waits on the send.
-export function notifyPhone(source: string, text: string): void {
-  sendPhone(source, text).catch((error) => {
+export function notifyPhone(
+  source: string,
+  text: string,
+  push?: PushRoute
+): void {
+  sendPhone(source, text, push).catch((error) => {
     if (!(error instanceof NotConfigured))
       console.error(
         `[notify] ${source}:`,

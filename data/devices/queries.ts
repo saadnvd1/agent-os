@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Device } from "@/lib/security/devices";
+import type { ListedDevice } from "@/lib/security/devices";
 import type { NetworkState } from "@/lib/security/network-state";
 import type { PairingOffer } from "@/lib/security/pair-qr";
 import { deviceKeys } from "./keys";
@@ -12,7 +12,9 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export interface DevicesResponse {
-  devices: Device[];
+  devices: ListedDevice[];
+  // Whether this machine can reach the push relay at all.
+  push: { linked: boolean; unavailable: string | null };
   current: { deviceId: string | null; via: string | null };
 }
 
@@ -124,6 +126,32 @@ export function useSetCanApprove() {
           body: JSON.stringify({ canApprove }),
         })
       ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: deviceKeys.list() }),
+  });
+}
+
+export interface PushTestResponse {
+  results: {
+    deviceId: string;
+    status: "sent" | "gone" | "failed";
+    error: string | null;
+  }[];
+  unavailable: string | null;
+}
+
+export function useSendTestPush() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (deviceId: string) =>
+      json<PushTestResponse>(
+        await fetch("/api/push/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deviceId }),
+        })
+      ),
+    // A dead token is forgotten, and the last error changes.
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: deviceKeys.list() }),
   });

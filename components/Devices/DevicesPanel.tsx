@@ -43,6 +43,19 @@ export function DevicesPanel() {
         )
       )}
 
+      {data && !data.push.linked && (
+        <p className="text-muted-foreground text-sm">
+          Phone push needs this machine linked to Connect. Until then,
+          notifications go to Telegram if it&apos;s set up.
+        </p>
+      )}
+      {data?.push.unavailable && (
+        <p className="text-destructive text-sm">
+          Push is paused: {data.push.unavailable}. Notifications go to Telegram
+          meanwhile.
+        </p>
+      )}
+
       <div className="space-y-2">
         {isPending && (
           <div className="bg-muted/40 h-14 animate-pulse rounded-lg" />

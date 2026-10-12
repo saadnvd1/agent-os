@@ -16,6 +16,17 @@ const SECRET_PATTERNS: RegExp[] = [
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g,
 ];
 
+/**
+ * An id or key made by the app: no known token shape, and no single
+ * segment (split on - _ : .) that is a long hex or base64 run. A uuid or a
+ * timestamped id passes; a pasted key or a 40-character sha does not.
+ */
+function plainIdent(text: string): boolean {
+  if (SECRET_PATTERNS.some((re) => ((re.lastIndex = 0), re.test(text))))
+    return false;
+  return !text.split(/[-_:.]/).some((seg) => seg.length >= 24);
+}
+
 /** True when the string looks like a token, key or JWT. */
 export function looksSecret(text: string): boolean {
   return [...SECRET_PATTERNS, LONG_RUN].some((re) => {
@@ -42,7 +53,7 @@ export function safeId(id: unknown): string | null {
   if (typeof id !== "string" || id.length === 0 || id.length > MAX_ID)
     return null;
   if (!SAFE_ID.test(id)) return null;
-  return looksSecret(id) ? null : id;
+  return plainIdent(id) ? id : null;
 }
 
 /**
@@ -53,5 +64,5 @@ export function safeKey(key: unknown): string | null {
   if (typeof key !== "string" || key.length === 0 || key.length > 128)
     return null;
   if (!/^[A-Za-z0-9_:.-]+$/.test(key)) return null;
-  return looksSecret(key) ? null : key;
+  return plainIdent(key) ? key : null;
 }

@@ -165,6 +165,9 @@ describe("redact", () => {
   it("safeId and safeKey accept plain values only", () => {
     expect(safeId("abc-DEF_1")).toBe("abc-DEF_1");
     expect(safeId("a b")).toBeNull();
+    // App-made ids are long runs but not tokens.
+    expect(safeId("user-1760000000000-ab12c")).toBe("user-1760000000000-ab12c");
+    expect(safeId("aosd_abcdefghijklmnop")).toBeNull();
     expect(safeId(42)).toBeNull();
     expect(safeKey("review:t1:abc123")).toBe("review:t1:abc123");
     expect(safeKey("has space")).toBeNull();

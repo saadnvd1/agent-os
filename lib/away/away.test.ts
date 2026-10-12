@@ -196,6 +196,24 @@ describe("the batched phone notification", () => {
     expect(phone).toHaveLength(1);
   });
 
+  it("counts what push held back into the digest, even with no asks", () => {
+    const now = Date.now();
+    const { row } = startAway({ setBy: "x", expiresAt: null }, now - 10 * MIN);
+    for (const key of ["review:t1:a", "ci:t2:b"])
+      db.prepare(
+        `INSERT INTO push_outbox (event_key, device_id, category, level, payload, state, next_attempt_at, created_at)
+         VALUES (?, '', 'review', 'active', '{}', 'folded', ?, ?)`
+      ).run(key, now, now);
+    const text = notifyBatch(getAway(row.id)!, now);
+    expect(text).toMatch(/^While you're away: .*2 other updates/);
+    expect(
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM push_outbox WHERE state = 'folded'`)
+        .get()
+    ).toEqual({ n: 0 });
+    db.prepare(`DELETE FROM push_outbox`).run();
+  });
+
   it("holds an orchestrator's aos notify for the batch while away, and only then", async () => {
     const w = seedWorkspace().workspace.id;
     const orch = ensureOrchestrator(w);

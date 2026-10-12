@@ -12,6 +12,7 @@ import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
 import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
 import { endSessionAgent } from "../sessions/end";
 import { run } from "./gh";
+import { pushMerged } from "../notify/push/events";
 import { gitFetch, gitPush } from "../git-exec";
 import {
   mergePolicy,
@@ -155,6 +156,7 @@ export async function signOffTask(
     signingOff.delete(id);
   }
   syncTaskCardInBackground(session, "merged", pr);
+  pushMerged(id);
   // Reads the plan file now: cleanup below removes the worktree.
   void captureMergedTask(id, { head: opts.head ?? pr!.head ?? null });
   const head = opts.head ?? pr!.head;

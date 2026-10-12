@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { listDevices } from "@/lib/security/devices";
 import { DEVICE_HEADER, TRUST_HEADER } from "@/lib/security/auth";
 import { demoMode } from "@/lib/security/demo";
+import { pushStatus } from "@/lib/notify/push";
 
 // GET /api/devices - paired devices, and how this request was trusted
 export async function GET(request: NextRequest) {
@@ -10,6 +11,7 @@ export async function GET(request: NextRequest) {
     devices: demoMode()
       ? listDevices().map(({ last_address: _a, user_agent: _u, ...d }) => d)
       : listDevices(),
+    push: pushStatus(),
     current: {
       deviceId: request.headers.get(DEVICE_HEADER),
       via: request.headers.get(TRUST_HEADER),

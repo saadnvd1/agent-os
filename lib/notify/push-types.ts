@@ -74,4 +74,6 @@ export interface PushEvent {
   id?: string | null;
   /** Dedupe key, e.g. `ask:<id>` or `review:<task>:<sha>`. */
   key?: string | null;
+  /** Events sharing this replace each other on the phone. Defaults to key. */
+  collapse?: string | null;
 }

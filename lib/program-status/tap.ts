@@ -24,7 +24,9 @@ import {
   applyProgramReport,
   dropProgramTransient,
   programSessions,
+  programSummary,
 } from "./store";
+import { noteWaiting } from "../notify/push/waiting";
 
 const execFileAsync = promisify(execFile);
 const tmux = (args: string[]) =>
@@ -85,7 +87,15 @@ async function handle(name: string, event: OscEvent): Promise<void> {
             ? await foreground(name)
             : undefined
         );
-  if (changed) notifyStatusChanged();
+  if (changed) {
+    notifyStatusChanged();
+    const id = (
+      getDb()
+        .prepare(`SELECT id FROM sessions WHERE tmux_name = ?`)
+        .get(name) as { id: string } | undefined
+    )?.id;
+    if (id) noteWaiting(id, programSummary(name)?.state === "blocked");
+  }
 }
 
 // What one pane has said but isn't applied yet: the latest report per

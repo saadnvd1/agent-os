@@ -6,6 +6,7 @@
  * gate or brake ask is spent on that one item: never standing permission.
  */
 
+import { pushAskRaised } from "../notify/push/events";
 import { db } from "../db";
 import { answerKey, queueEvent } from "./events";
 import { addNote } from "./notes";
@@ -167,7 +168,7 @@ export function raiseAsk(input: {
   const sha = input.sha ?? null;
   const brakeKey = input.brakeKey ?? null;
   const raisedBy = input.raisedBy ?? null;
-  return db.transaction(() => {
+  const result = db.transaction(() => {
     const open = openBySubject(input.workspaceId, input.subject);
     if (open) {
       db.prepare(
@@ -209,6 +210,9 @@ export function raiseAsk(input: {
       created: true,
     };
   })();
+  // A new ask buzzes the phone; a refresh of an open one doesn't.
+  if (result.created) pushAskRaised(result.ask.id, input.workspaceId);
+  return result;
 }
 
 export function openAsks(workspaceId: string): AskRow[] {

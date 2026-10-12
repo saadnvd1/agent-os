@@ -2,8 +2,13 @@
 
 import { Laptop, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Device } from "@/lib/security/devices";
-import { useRevokeDevice, useSetCanApprove } from "@/data/devices";
+import type { ListedDevice } from "@/lib/security/devices";
+import { CATEGORIES } from "@/lib/notify/copy";
+import {
+  useRevokeDevice,
+  useSendTestPush,
+  useSetCanApprove,
+} from "@/data/devices";
 import { Switch } from "@/components/ui/switch";
 
 // SQLite's datetime('now') is UTC without a zone.
@@ -31,13 +36,22 @@ export function DeviceRow({
   isCurrent,
   canManage,
 }: {
-  device: Device;
+  device: ListedDevice;
   isCurrent: boolean;
   // Only this machine or the tailnet may let a device approve asks.
   canManage: boolean;
 }) {
   const revoke = useRevokeDevice();
   const setCanApprove = useSetCanApprove();
+  const sendTest = useSendTestPush();
+  const tested = sendTest.data?.results[0];
+  const testNote = sendTest.isError
+    ? sendTest.error.message
+    : tested
+      ? tested.status === "sent"
+        ? "Test sent"
+        : `Test failed: ${tested.error}`
+      : null;
 
   const onRevoke = () => {
     if (
@@ -64,7 +78,42 @@ export function DeviceRow({
           {lastSeen(device.last_seen_at)}
           {device.last_address ? ` · ${device.last_address}` : ""}
         </p>
+        {device.push.enabled && (
+          <p className="text-muted-foreground truncate text-xs">
+            Push on ·{" "}
+            {device.push.categories
+              .map((c) => CATEGORIES[c].label)
+              .join(", ") || "nothing selected"}
+          </p>
+        )}
+        {device.push.lastError && (
+          <p
+            className="text-destructive truncate text-xs"
+            title={device.push.lastError}
+          >
+            Push error: {device.push.lastError}
+          </p>
+        )}
+        {testNote && (
+          <p
+            className={`truncate text-xs ${tested?.status === "sent" ? "text-muted-foreground" : "text-destructive"}`}
+            role="status"
+          >
+            {testNote}
+          </p>
+        )}
       </div>
+      {device.push.enabled && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-11 shrink-0 sm:h-8"
+          onClick={() => sendTest.mutate(device.id)}
+          disabled={sendTest.isPending}
+        >
+          {sendTest.isPending ? "Sending…" : "Send test"}
+        </Button>
+      )}
       <label className="text-muted-foreground flex min-h-11 shrink-0 items-center gap-2 text-xs sm:min-h-8">
         Can approve
         <Switch

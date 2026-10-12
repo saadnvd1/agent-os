@@ -16,7 +16,12 @@ export type Outcome =
   | { state: "held"; inMs: number }
   | { state: "duplicate" }
   | { state: "dropped" }
-  | { state: "failed"; why: string };
+  | { state: "failed"; why: string }
+  // Went to the phone app; Telegram only steps in if that fails.
+  | { state: "pushed" }
+  // Push had nothing to do: the device turned the category off, or Saad is
+  // at the Mac.
+  | { state: "skipped" };
 
 export function collapse(texts: string[]): string {
   if (texts.length === 1) return texts[0];

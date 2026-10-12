@@ -19,6 +19,7 @@ import { review } from "../orchestrator/review";
 import { repoOf } from "../orchestrator/repo";
 import { clip } from "../orchestrator/digest";
 import { notifyPhone } from "../notify";
+import { takeFoldedPushes } from "../notify/push";
 import { getProject } from "../projects";
 import { loadProjectConfig } from "../project-config";
 import { run } from "../tasks/gh";
@@ -194,7 +195,11 @@ export function turnAwayOff(
   // no report), then the summary. A second later, so the window takes
   // everything up to now.
   notifyBatch(ended, now + 1000);
-  notifyPhone(PHONE_SOURCE, phoneSummary(report));
+  notifyPhone(PHONE_SOURCE, phoneSummary(report), {
+    category: "digest",
+    key: `digest:end:${ended.id}`,
+    collapse: "digest",
+  });
   return { ...ended, report: JSON.stringify(report) };
 }
 
@@ -516,7 +521,9 @@ export function notifyBatch(away: AwayRow, now = Date.now()): string | null {
   }[];
   const deploys = held.filter((h) => h.kind === "deploy_failed");
   const notes = held.filter((h) => h.kind === "notify");
-  if (!asks.length && !held.length) return null;
+  // What push held for this digest (ready for review, CI, agent messages).
+  const pushed = takeFoldedPushes(now);
+  if (!asks.length && !held.length && !pushed) return null;
   const lines = [
     ...deploys.map(
       (d) => `- ${d.workspace}: deploy failed: ${clip(d.detail ?? "", 120)}`
@@ -534,6 +541,7 @@ export function notifyBatch(away: AwayRow, now = Date.now()): string | null {
       "note from an orchestrator",
       "notes from orchestrators"
     ),
+    ...count(pushed, "other update", "other updates"),
   ];
   const head = `While you're away: ${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]}`;
   const shown = lines.slice(0, PHONE_LINES);
@@ -541,7 +549,11 @@ export function notifyBatch(away: AwayRow, now = Date.now()): string | null {
   const text = [head, ...shown, ...(more ? [`- and ${more} more`] : [])].join(
     "\n"
   );
-  notifyPhone(PHONE_SOURCE, text);
+  notifyPhone(PHONE_SOURCE, text, {
+    category: "digest",
+    key: `digest:${away.id}:${now}`,
+    collapse: "digest",
+  });
   return text;
 }
 

@@ -10,6 +10,7 @@
  * the orchestrator hears the verdict as an event.
  */
 
+import { pushReviewBlocked, pushReviewReady } from "../notify/push/events";
 import { db, type Session } from "../db";
 import { amendmentsOf } from "./amendments";
 import type { TaskPR } from "../tasks/state";
@@ -275,6 +276,8 @@ export async function reviewAt(
     .then((done) => {
       if (done.status === "pass" && target.task)
         noteQuickReview(target.task, sha);
+      if (done.status === "pass") pushReviewReady(target.id, sha);
+      else if (done.status === "block") pushReviewBlocked(target.id, sha);
       const said =
         done.status === "pass"
           ? "passed"

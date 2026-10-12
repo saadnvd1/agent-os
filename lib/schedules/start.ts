@@ -237,7 +237,11 @@ function notify(schedule: Schedule, why: string, paused?: boolean): void {
     const text = `Schedule "${schedule.name}" is paused: ${why}. Point it at another session or delete it.`;
     console.error(`[schedules] ${text}`);
     addNote(schedule.workspace_id, text, "pause");
-    notifyPhone(`schedule:${schedule.id}`, text);
+    notifyPhone(`schedule:${schedule.id}`, text, {
+      category: "system",
+      key: `system:schedule:${schedule.id}:${Date.now()}`,
+      collapse: `system:schedule:${schedule.id}`,
+    });
     return;
   }
   console.error(`[schedules] ${schedule.name} failed: ${why}`);
@@ -248,7 +252,12 @@ function notify(schedule: Schedule, why: string, paused?: boolean): void {
   );
   notifyPhone(
     `schedule:${schedule.id}`,
-    `Schedule "${schedule.name}" failed: ${why}`
+    `Schedule "${schedule.name}" failed: ${why}`,
+    {
+      category: "system",
+      key: `system:schedule:${schedule.id}:${Date.now()}`,
+      collapse: `system:schedule:${schedule.id}`,
+    }
   );
 }
 
