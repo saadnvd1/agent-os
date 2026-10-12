@@ -226,6 +226,7 @@ export function ChatPanel({
     earlierTasks,
     toolBodies,
     requestToolBody,
+    pinToolBody,
     state,
     connected,
     commands,
@@ -364,8 +365,13 @@ export function ChatPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const rowState = useMemo(() => new RowStore(), [sessionId]);
   const bodies = useMemo(
-    () => ({ bodies: toolBodies, request: requestToolBody, connected }),
-    [toolBodies, requestToolBody, connected]
+    () => ({
+      bodies: toolBodies,
+      request: requestToolBody,
+      pin: pinToolBody,
+      connected,
+    }),
+    [toolBodies, requestToolBody, pinToolBody, connected]
   );
   const itemsById = useMemo(
     () => new Map(items.map((i) => [i.id, i])),

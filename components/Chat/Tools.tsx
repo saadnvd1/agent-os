@@ -5,6 +5,7 @@ import { Check, ChevronRight, Loader2, Square, X } from "lucide-react";
 import type { FileDiff, ToolBody } from "@/lib/chat/events";
 import type { ToolItem } from "@/lib/chat/group";
 import { lineDiff, shortPath, type DiffLine } from "@/lib/chat/diff";
+import { needsBody } from "@/lib/chat/bodyCache";
 import { cn } from "@/lib/utils";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { Highlighted } from "./Code";
@@ -16,16 +17,21 @@ import { useRowState } from "./rowState";
 export const ToolBodies = createContext<{
   bodies: Record<string, ToolBody | null>;
   request: (id: string) => void;
+  // Marks a body as on screen until the returned cleanup runs.
+  pin: (id: string) => () => void;
   connected: boolean;
-}>({ bodies: {}, request: () => {}, connected: false });
+}>({ bodies: {}, request: () => {}, pin: () => () => {}, connected: false });
 
 // A tool call's output and diff: its own, or once loaded. `undefined` while
 // it loads.
 export function useToolBody(tool: ToolItem): ToolBody | null | undefined {
-  const { bodies, request, connected } = useContext(ToolBodies);
+  const { bodies, request, pin, connected } = useContext(ToolBodies);
   const body = tool.deferred ? bodies[tool.id] : tool;
   useEffect(() => {
-    if (tool.deferred && body === undefined && connected) request(tool.id);
+    if (tool.deferred) return pin(tool.id);
+  }, [tool.deferred, tool.id, pin]);
+  useEffect(() => {
+    if (needsBody(tool.deferred, body, connected)) request(tool.id);
   }, [tool.deferred, tool.id, body, request, connected]);
   return body;
 }

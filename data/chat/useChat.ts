@@ -19,6 +19,7 @@ import type {
   UndoPreview,
 } from "@/lib/chat/events";
 import type { SearchResult } from "@/lib/chat/find";
+import { addBody, touchBody } from "@/lib/chat/bodyCache";
 
 // The index of the item with `id`, searched from the end: what changes is
 // almost always the latest.
@@ -129,6 +130,13 @@ export function useChat(
   const [toolBodies, setToolBodies] = useState<Record<string, ToolBody | null>>(
     {}
   );
+  // Bodies open on screen, never evicted from toolBodies.
+  const visibleBodies = useRef(new Set<string>());
+  const pinToolBody = useCallback((id: string) => {
+    visibleBodies.current.add(id);
+    setToolBodies((prev) => touchBody(prev, id));
+    return () => void visibleBodies.current.delete(id);
+  }, []);
   const [state, setState] = useState<ChatState>("idle");
   const [connected, setConnected] = useState(false);
   const [commands, setCommands] = useState<ChatCommand[]>([]);
@@ -249,7 +257,9 @@ export function useChat(
           const have = new Set(prev.map((p) => p.id));
           setItems(m.items.filter((i) => !have.has(i.id)).concat(prev));
         } else if (m.type === "tool_body") {
-          setToolBodies((prev) => ({ ...prev, [m.id]: m.body }));
+          setToolBodies((prev) =>
+            addBody(prev, m.id, m.body, visibleBodies.current)
+          );
         } else if (m.type === "item") {
           withDeltas(() => {
             const routed = routeItem(
@@ -457,6 +467,7 @@ export function useChat(
     earlierTasks,
     toolBodies,
     requestToolBody,
+    pinToolBody,
     state,
     connected,
     commands,
