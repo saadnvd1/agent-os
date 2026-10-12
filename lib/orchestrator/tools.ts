@@ -118,8 +118,10 @@ export function orchestratorTools(
 // What the orchestrator's agent sees of its tools: names, descriptions,
 // arguments and permissions. A worker after a deploy tells the agent its
 // tools changed only when this did.
-export function orchestratorToolsDigest(): string {
-  return toolsDigest(DESCRIPTIONS, TOOL_SHAPES, ORCHESTRATOR_PERMISSIONS);
+export function orchestratorToolsDigest(
+  permissions: object = ORCHESTRATOR_PERMISSIONS
+): string {
+  return toolsDigest(DESCRIPTIONS, TOOL_SHAPES, permissions);
 }
 
 export function toolsDigest(

@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteWorkspace, updateWorkspace } from "@/lib/workspaces";
+import { applyMcpServers } from "@/lib/orchestrator/mcp-servers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
-  const { name, collapsed, sortOrder, maxRunningTasks, wakeTasksOnPR } =
-    await request.json();
+  const {
+    name,
+    collapsed,
+    sortOrder,
+    maxRunningTasks,
+    wakeTasksOnPR,
+    mcpServers,
+  } = await request.json();
   if (wakeTasksOnPR !== undefined && typeof wakeTasksOnPR !== "boolean")
     return NextResponse.json(
       { error: "wakeTasksOnPR is true or false" },
@@ -20,6 +27,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       sortOrder,
       maxRunningTasks,
       wakeTasksOnPR,
+      mcpServers,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -28,6 +36,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (!workspace) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
+  if (mcpServers !== undefined) await applyMcpServers(id);
   return NextResponse.json({ workspace });
 }
 

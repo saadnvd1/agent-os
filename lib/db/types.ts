@@ -220,6 +220,8 @@ export interface Workspace {
   orch_max_running: number;
   orch_max_starts_per_hour: number;
   orch_brake: string | null;
+  // MCP servers (by name) its orchestrator may use.
+  orch_mcp_servers: string[];
   // Set while Saad has the orchestrator paused.
   orch_paused_at: string | null;
   // Tasks running at once before new ones queue (lib/tasks/queue.ts); null: no limit.
