@@ -57,6 +57,7 @@ docs/*
 !docs/setup/
 !docs/issues/
 !docs/decisions/
+!docs/guides/
 .mcp.json
 .git-evening
 

@@ -117,6 +117,8 @@ conversation in **Messages** and can join in. [More](#agent-network)
 
 ![A session in terminal view, with the agent asking before it runs a command](screenshots/terminal.png)
 
+**Guides:** step-by-step how-tos are in [`docs/guides/`](docs/guides/), starting with [using AgentOS from your phone](docs/guides/phone.md).
+
 ## Install
 
 You need Node.js 20+, tmux, and at least one agent CLI:
