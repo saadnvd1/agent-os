@@ -1511,6 +1511,39 @@ and API calls or terminal connections made by another website's page.
 | `AGENTOS_TOKEN`                        | A device token for `aos` and the MCP server when they reach AgentOS over a network that needs pairing. |
 | `AGENTOS_AUTH=off`                     | No pairing, for when your own proxy does the login. Anyone who reaches the port gets a shell.          |
 
+### Connect
+
+Connect (in development) reaches this machine from anywhere at
+`https://m-<16 hex>.runagentos.com`. `agent-os connect` links the machine with
+a code from runagentos.com: it makes an Ed25519 key in `~/.agent-os/connect`
+that never leaves the machine, and the Connect service makes the machine a
+Cloudflare tunnel. Running it again on a linked machine links the same tunnel
+again, keeping its address. `agent-os disconnect` (or the switch in Devices)
+turns it off.
+
+While Connect is on, the production server:
+
+- downloads cloudflared 2026.10.0 into `~/.agent-os/connect/bin` (never one
+  from `PATH`) and checks its SHA-256 before making it executable or running it;
+- asks the Connect service for a fresh connector token on every start and hands
+  it to `cloudflared tunnel run` in `TUNNEL_TOKEN` only, never in argv, a file
+  or a log;
+- restarts cloudflared with backoff if it exits, and stops it when Connect is
+  turned off. Devices shows its state.
+
+Cloudflare's edge ends TLS and cloudflared delivers requests to a listener of
+their own on `127.0.0.1:<port + 433>`. That listener never trusts anything as
+this machine, the tailnet or `AGENTOS_AUTH=off`: every request needs a paired
+device. It answers only the machine's own host name and drops
+`X-Forwarded-Host`, `Forwarded` and `X-Original-Host` before anything reads
+them.
+
+| Variable               | Effect                                                              |
+| ---------------------- | ------------------------------------------------------------------- |
+| `AGENTOS_CONNECT=0`    | Never start Connect in this process.                                |
+| `AGENTOS_CONNECT_PORT` | The tunnel's loopback port (default AgentOS's port + 433).          |
+| `AGENTOS_CONNECT_DIR`  | Where the key and cloudflared live (default `~/.agent-os/connect`). |
+
 ### Demo mode
 
 `AGENTOS_DEMO=1` runs a server that is safe to show to strangers, over fake

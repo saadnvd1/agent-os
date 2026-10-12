@@ -2,9 +2,13 @@
  * Connect's state on this machine, in ~/.agent-os/connect (or
  * AGENTOS_CONNECT_DIR). No connect.json means Connect is off.
  *
- *   connect.json  {machineId, hostname, relayUrl, relayServername?, relayCa?}
- *   machine.key   Ed25519 private key: proves this machine to the relay
- *   tls.key/.crt  the certificate phones see; the key never leaves here
+ *   connect.json  {machineId, hostname, apiUrl, enabled?}
+ *   machine.key   Ed25519 private key: proves this machine to the Connect
+ *                 service, and never leaves here
+ *   bin/          the pinned cloudflared, checked against its SHA-256
+ *
+ * The tunnel's connector token is never written down: it's fetched fresh
+ * each time the tunnel starts.
  */
 
 import fs from "fs";
@@ -13,21 +17,19 @@ import path from "path";
 
 export interface ConnectConfig {
   machineId: string;
+  /** m-<16 hex>.runagentos.com; empty until the service names it. */
   hostname: string;
-  relayUrl: string;
-  /** SNI to present to the relay when relayUrl is an IP (tests). */
-  relayServername?: string;
-  /** PEM of a private CA the relay's certificate chains to (tests). */
-  relayCa?: string;
   /** The Connect service this machine enrolled with (signed API calls). */
-  apiUrl?: string;
+  apiUrl: string;
 }
 
 export interface ConnectFiles {
   config: ConnectConfig;
   machineKey: string;
-  tls: { key: string; cert: string };
 }
+
+/** The only shape of name a machine is reached at. */
+export const MACHINE_HOST = /^m-[0-9a-f]{16}\.runagentos\.com$/;
 
 export const connectDir = () =>
   process.env.AGENTOS_CONNECT_DIR ||
@@ -42,35 +44,41 @@ export function readConnect(dir = connectDir()): ConnectRead {
   const file = (f: string) => path.join(dir, f);
   if (!fs.existsSync(file("connect.json")))
     return { ok: false, reason: "not enrolled" };
-  let config: ConnectConfig & { enabled?: boolean };
+  let raw: Partial<ConnectConfig> & { enabled?: boolean };
   try {
-    config = JSON.parse(fs.readFileSync(file("connect.json"), "utf8"));
+    raw = JSON.parse(fs.readFileSync(file("connect.json"), "utf8")) ?? {};
   } catch {
     return { ok: false, reason: `${file("connect.json")} is not valid JSON` };
   }
-  if (!config.machineId || !config.hostname || !config.relayUrl) {
+  if (typeof raw.machineId !== "string" || !raw.machineId) {
     return {
       ok: false,
-      reason: `${file("connect.json")} is missing machineId, hostname or relayUrl`,
+      reason: `${file("connect.json")} is missing machineId`,
     };
   }
-  for (const f of ["machine.key", "tls.key", "tls.crt"]) {
-    if (!fs.existsSync(file(f)))
-      return {
-        ok: false,
-        reason: `${file(f)} is missing (run agent-os connect)`,
-      };
+  if (typeof raw.apiUrl !== "string" || !raw.apiUrl) {
+    return {
+      ok: false,
+      reason: `${file("connect.json")} has no Connect service (run agent-os connect with a link code)`,
+    };
   }
+  if (!fs.existsSync(file("machine.key")))
+    return {
+      ok: false,
+      reason: `${file("machine.key")} is missing (run agent-os connect)`,
+    };
+  // A name from before the tunnel (or anything else) is dropped: the next
+  // start asks the service again.
+  const hostname =
+    typeof raw.hostname === "string" && MACHINE_HOST.test(raw.hostname)
+      ? raw.hostname
+      : "";
   return {
     ok: true,
-    enabled: config.enabled !== false,
+    enabled: raw.enabled !== false,
     files: {
-      config,
+      config: { machineId: raw.machineId, hostname, apiUrl: raw.apiUrl },
       machineKey: fs.readFileSync(file("machine.key"), "utf8"),
-      tls: {
-        key: fs.readFileSync(file("tls.key"), "utf8"),
-        cert: fs.readFileSync(file("tls.crt"), "utf8"),
-      },
     },
   };
 }
@@ -78,6 +86,23 @@ export function readConnect(dir = connectDir()): ConnectRead {
 export function loadConnect(dir = connectDir()): ConnectFiles | null {
   const r = readConnect(dir);
   return r.ok && r.enabled ? r.files : null;
+}
+
+/** Writes connect.json owner-only, keeping `enabled` as it was. */
+export function saveConnect(config: ConnectConfig, dir = connectDir()) {
+  const p = path.join(dir, "connect.json");
+  let enabled: boolean | undefined;
+  try {
+    enabled = JSON.parse(fs.readFileSync(p, "utf8"))?.enabled;
+  } catch {}
+  const next = {
+    machineId: config.machineId,
+    hostname: config.hostname,
+    apiUrl: config.apiUrl,
+    ...(enabled === false && { enabled }),
+  };
+  fs.writeFileSync(p, JSON.stringify(next, null, 2), { mode: 0o600 });
+  fs.chmodSync(p, 0o600);
 }
 
 /** Turns Connect on or off without touching the keys. */
@@ -92,4 +117,28 @@ export function setConnectEnabled(
     mode: 0o600,
   });
   return true;
+}
+
+/** AgentOS's own port, read the way server.ts reads it: `-p <port>`, then PORT. */
+export function serverPort(
+  argv: string[] = process.argv,
+  env: Partial<NodeJS.ProcessEnv> = process.env
+): number {
+  const i = argv.indexOf("-p");
+  return parseInt(
+    (i !== -1 ? argv[i + 1] : undefined) || env.PORT || "3011",
+    10
+  );
+}
+
+/**
+ * The loopback port cloudflared delivers tunnel traffic to: AgentOS's port
+ * + 433 (3444), or AGENTOS_CONNECT_PORT. Null when it isn't usable.
+ */
+export function connectTunnelPort(
+  port: number,
+  env: Record<string, string | undefined> = process.env
+): number | null {
+  const p = Number(env.AGENTOS_CONNECT_PORT || port + 433);
+  return Number.isInteger(p) && p > 0 && p < 65536 && p !== port ? p : null;
 }

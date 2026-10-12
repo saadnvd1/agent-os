@@ -7,7 +7,7 @@ import type { ConnectStatus } from "@/lib/connect/serve";
 const STATE: Record<ConnectStatus["state"], string> = {
   up: "Connected",
   connecting: "Connecting…",
-  denied: "Refused by the relay",
+  denied: "Refused by Connect",
   off: "Off",
   refused: "Not running here",
   error: "Problem",
@@ -22,11 +22,12 @@ export function ConnectCard({
   canManage: boolean;
   onToggle: (on: boolean) => void;
 }) {
-  const enrolled = !!connect.hostname;
+  const enrolled = !!connect.enrolled || !!connect.hostname;
   const on =
     connect.state === "up" ||
     connect.state === "connecting" ||
-    connect.state === "denied";
+    connect.state === "denied" ||
+    (connect.state === "error" && !!connect.enrolled);
   return (
     <div className="bg-muted/40 flex items-start gap-3 rounded-lg px-3 py-2.5">
       <Cloud className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
@@ -38,27 +39,24 @@ export function ConnectCard({
           </span>
         </p>
         <p className="text-muted-foreground text-xs break-all">
-          {enrolled ? (
+          {connect.hostname ? (
             <>
               Reachable from anywhere at{" "}
               <span className="text-foreground font-mono">
                 https://{connect.hostname}
               </span>
-              . The relay passes encrypted traffic through and can&apos;t read
-              it.
+              . Cloudflare carries the connection; every request still needs a
+              paired device.
             </>
+          ) : enrolled ? (
+            <>Linked. The address appears once the tunnel starts.</>
           ) : (
             <>Not set up on this machine. Run agent-os connect in a terminal.</>
           )}
           {connect.reason && connect.state !== "off"
-            ? ` ${connect.reason}.`
+            ? ` ${connect.reason.replace(/\.$/, "")}.`
             : ""}
         </p>
-        {connect.cert?.warning && (
-          <p className="text-destructive mt-1 text-xs">
-            {connect.cert.warning}
-          </p>
-        )}
       </div>
       {enrolled && (
         <Switch

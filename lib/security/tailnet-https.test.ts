@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import https from "https";
-import { makeTestPki } from "@/lib/connect/test-pki";
+import { makeTestPki } from "./test-pki";
 import {
   startTailnetHttps,
   tailnetHttpsPort,

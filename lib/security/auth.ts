@@ -2,6 +2,11 @@
  * Who may use AgentOS once a request has passed the host/origin checks in
  * net.ts. Loopback and the tailnet are trusted as before; anything else
  * (Wi-Fi, a reverse proxy, Connect) needs a paired device's token.
+ *
+ * Connect's tunnel arrives from cloudflared on loopback, so its listener
+ * marks every socket it accepts: a marked socket is never loopback, never
+ * the tailnet and never let in by AGENTOS_AUTH=off, whatever its address,
+ * Host or headers say.
  */
 
 import type { IncomingHttpHeaders } from "http";
@@ -23,7 +28,17 @@ export interface AuthRequest {
   headers: IncomingHttpHeaders;
   remoteAddress?: string;
   localAddress?: string;
+  /** Came through Connect's tunnel listener: a paired device or nothing. */
+  tunnel?: boolean;
 }
+
+const TUNNEL_SOCKETS = new WeakSet<object>();
+/** Called by the tunnel listener for every socket, before any request. */
+export const markTunnelSocket = (socket: object) => {
+  TUNNEL_SOCKETS.add(socket);
+};
+export const isTunnelSocket = (socket: object | null | undefined) =>
+  !!socket && TUNNEL_SOCKETS.has(socket);
 
 export interface AuthPolicy {
   /** This machine's own Tailscale addresses. */
@@ -146,13 +161,14 @@ export function authorize(req: AuthRequest, policy: AuthPolicy): AuthResult {
 }
 
 function decide(req: AuthRequest, policy: AuthPolicy): AuthResult {
-  const trusted = networkTrust(req, policy);
+  const trusted = req.tunnel ? null : networkTrust(req, policy);
   if (trusted) return { ok: true, via: trusted };
   const token = readToken(req.headers);
   const device = token ? policy.lookup(token) : null;
   if (device) return { ok: true, via: "device", deviceId: device.id };
-  // AGENTOS_AUTH=off is for a login proxy on this side of the network. A
-  // Connect stream has no socket address and must never be let in by it.
-  if (policy.off && req.remoteAddress) return { ok: true, via: "open" };
+  // AGENTOS_AUTH=off is for a login proxy on this side of the network.
+  // Connect's tunnel must never be let in by it.
+  if (policy.off && !req.tunnel && req.remoteAddress)
+    return { ok: true, via: "open" };
   return { ok: false };
 }

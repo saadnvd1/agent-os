@@ -114,9 +114,9 @@ describe("the device cookie", () => {
 });
 
 describe("sourceLabel", () => {
-  it("labels address-less Connect streams so headers can't pick the bucket", () => {
-    expect(sourceLabel(undefined)).toBe("connect");
-    expect(sourceLabel("")).toBe("connect");
+  it("labels Connect's tunnel so headers can't pick the bucket", () => {
+    expect(sourceLabel("127.0.0.1", true)).toBe("connect");
+    expect(sourceLabel(undefined)).toBe("unknown");
     expect(sourceLabel("::ffff:10.0.0.9")).toBe("10.0.0.9");
   });
 });

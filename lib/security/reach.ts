@@ -44,7 +44,7 @@ export async function reachableAt(): Promise<Reach[]> {
     await tailscaleStatus(),
     lanEnabled() ? lanAddresses() : [],
     port,
-    loadConnect()?.config.hostname ?? null,
+    loadConnect()?.config.hostname || null,
     tailnetHttpsUrl()
   );
 }

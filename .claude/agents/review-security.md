@@ -23,7 +23,7 @@ Read first: `lib/security/auth.ts` (`proxied`, `isPublicPath`, `networkTrust`, `
 **The gate: every way in goes through it**
 
 - A new HTTP path or WebSocket upgrade that doesn't pass `gateRequest`/`gateUpgrade`, or an addition to `isPublicPath` that isn't an exact path (a prefix match lets `/public/../api/x` or `//api/x` through; the static prefixes reject `..`, `//`, backslashes and percent-encoding, and new ones must too).
-- Trust decided by address alone. Loopback trust needs a loopback peer **and** a loopback Host **and** no proxy header. `proxied()` must see every forwarding header: X-Forwarded-_, Forwarded, Via, CF-_, X-Real-IP, X-Client-IP, True-Client-IP, X-Original-Forwarded-For, Tailscale-\*. A new reverse path (Connect's tunnel, tailnet HTTPS, a dev proxy) that arrives on loopback is remote, never loopback.
+- Trust decided by address alone. Loopback trust needs a loopback peer **and** a loopback Host **and** no proxy header. `proxied()` must see every forwarding header: X-Forwarded-_, Forwarded, Via, CF-_, X-Real-IP, X-Client-IP, True-Client-IP, X-Original-Forwarded-For, Tailscale-\*. A new reverse path (Connect's tunnel, tailnet HTTPS, a dev proxy) that arrives on loopback is remote, never loopback. Connect's tunnel listener (`lib/connect/serve.ts`) must mark every socket (`markTunnelSocket`) before any request, pin Host to the machine's own name, and drop X-Forwarded-Host, Forwarded and X-Original-Host; a marked socket never gets loopback, tailnet or `AGENTOS_AUTH=off`.
 - Tailnet trust from the 100.64.0.0/10 range alone. Only Tailscale's own interface (`tailscale0`/`utun`) and the IPs `tailscale` reports count; any other VPN uses that range too.
 - `AGENTOS_AUTH=off` or any env switch that relaxes the gate applying to tunnelled (Connect) requests. It never does.
 - X-Forwarded-For or X-Forwarded-Proto honoured from anything but a loopback proxy, or Proto accepted as anything but exactly `http`/`https`.
@@ -99,11 +99,14 @@ Text written by another session, a terminal pane, CI output, a card, a PR body o
 **Crash on malformed input**
 One process serves every session, so an uncaught throw is a denial of service for all of them. Flag `JSON.parse` of a request body, WebSocket message, worker message, cookie or file without a try/catch; `new URL()`/`decodeURIComponent` on request data without one; a throw inside the auth path (it must deny, not crash); an `error` event on a socket, stream or child with no listener; a bad env value (`Number("abc")`, a port out of range) reaching `setInterval`/`listen` instead of being validated with one log line.
 
+**cloudflared (Connect)**
+The connector token must reach cloudflared only in `TUNNEL_TOKEN` in the child's env: never argv, a file, a log line or an error message. cloudflared must come from `~/.agent-os/connect/bin`, never `PATH`, and be checked against its pinned SHA-256 before chmod and exec; its log level never `debug` (it logs request headers, device tokens included).
+
 **Remote responses (Connect, LumifyHub, GitHub)**
 `fetch` following redirects with credentials or a signed request (`redirect: "manual"`), a URL from env or a server answer not validated (https only, no userinfo, expected host shape), server error text shown or logged without stripping control characters and capping length.
 
 **Resource caps**
-A new stream, buffer or queue fed by a client with no cap (Connect's are 256 streams, 4 MB buffered per stream, 1 MB per WebSocket message), and a request body read without a size limit.
+A new stream, buffer or queue fed by a client with no cap, and a request body read without a size limit.
 
 ## Output format
 

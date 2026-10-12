@@ -5,8 +5,8 @@
  */
 
 import crypto from "crypto";
-import type { ConnectConfig } from "./config";
-import type { DnsChallenge, Register } from "./enrol";
+import { MACHINE_HOST, type ConnectConfig } from "./config";
+import type { Register } from "./enrol";
 
 export const DEFAULT_API = "https://runagentos.com";
 export const MACHINE_ID = /^[a-z0-9]{8}$/;
@@ -68,51 +68,107 @@ export function signedHeaders(opts: {
   };
 }
 
+/** A refusal from the Connect service, with its status and answer. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: Record<string, unknown>
+  ) {
+    super(message);
+  }
+}
+
 async function call(url: string, init: RequestInit): Promise<Response> {
   // Never follow a redirect: it would replay the link code or the signed
   // headers to whatever host the response names.
-  const res = await fetch(url, { ...init, redirect: "error" });
+  const res = await fetch(url, {
+    ...init,
+    redirect: "error",
+    signal: AbortSignal.timeout(30_000),
+  });
   if (res.ok) return res;
-  const body = (await res.json().catch(() => ({}))) as { error?: unknown };
-  throw new Error(
-    typeof body.error === "string"
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  throw new ApiError(
+    typeof body?.error === "string"
       ? clean(body.error)
-      : `${init.method} ${new URL(url).pathname}: ${res.status}`
+      : `${init.method} ${new URL(url).pathname}: ${res.status}`,
+    res.status,
+    body && typeof body === "object" ? body : {}
   );
 }
 
-/** Enrolment with a link code from "Connect a machine" in the web app. */
-export function registerWithCode(
-  apiUrl: string,
-  linkCode: string,
-  name: string,
-  domain: string
-): Register {
-  return async (publicKey) => {
-    const res = await call(`${apiUrl}/api/v1/machines/enrol`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        link_code: linkCode,
-        name,
-        public_key: publicKey,
-      }),
-    });
-    return { ...enrolled(await res.json(), domain), apiUrl };
-  };
+export interface Tunnel {
+  hostname: string;
+  /** The connector token: handed to cloudflared, never stored or logged. */
+  token: string;
 }
 
-/** What the service answered, refused unless it names exactly <id>.<domain>. */
-export function enrolled(m: unknown, domain: string): ConnectConfig {
+// Base64 of a small JSON object; anything else isn't a connector token.
+const TOKEN = /^[A-Za-z0-9+/=_-]{32,4096}$/;
+
+/** The service's answer, refused unless the name is exactly m-<16 hex>.runagentos.com. */
+export function hostnameFrom(r: Record<string, unknown>): string {
+  if (typeof r.hostname !== "string" || !MACHINE_HOST.test(r.hostname))
+    throw new Error(
+      "the Connect service sent a hostname that isn't m-<16 hex>.runagentos.com"
+    );
+  return r.hostname;
+}
+
+function tokenFrom(r: Record<string, unknown>): string {
+  if (typeof r.tunnel_token !== "string" || !TOKEN.test(r.tunnel_token))
+    throw new Error("the Connect service sent no usable tunnel token");
+  return r.tunnel_token;
+}
+
+/** What enrolment answered: the machine's id and name (its token is unused). */
+export function enrolled(m: unknown, apiUrl: string): ConnectConfig {
   const r = (m ?? {}) as Record<string, unknown>;
   const id = typeof r.machine_id === "string" ? r.machine_id : "";
   if (!MACHINE_ID.test(id))
     throw new Error("the Connect service sent an invalid machine id");
-  if (r.hostname !== `${id}.${domain}`)
-    throw new Error(`the Connect service sent a hostname outside ${domain}`);
-  if (typeof r.relay_url !== "string" || !r.relay_url.startsWith("wss://"))
-    throw new Error("the Connect service sent a relay URL that isn't wss://");
-  return { machineId: id, hostname: r.hostname, relayUrl: r.relay_url };
+  return { machineId: id, hostname: hostnameFrom(r), apiUrl };
+}
+
+/**
+ * Enrolment with a link code from "Connect a machine" in the web app. A key
+ * the account already has is refused (409, naming its machine): this
+ * machine then links again by signing for that id, keeping its name.
+ */
+export function registerWithCode(
+  apiUrl: string,
+  linkCode: string,
+  name: string,
+  port: number
+): Register {
+  return async ({ publicKey, privateKey }) => {
+    try {
+      const res = await call(`${apiUrl}/api/v1/machines/enrol`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          link_code: linkCode,
+          name,
+          public_key: publicKey,
+          port,
+        }),
+      });
+      return enrolled(await res.json(), apiUrl);
+    } catch (err) {
+      const id = err instanceof ApiError ? err.body.machine_id : undefined;
+      if (
+        !(err instanceof ApiError) ||
+        err.status !== 409 ||
+        typeof id !== "string" ||
+        !MACHINE_ID.test(id)
+      )
+        throw err;
+      const config = { machineId: id, hostname: "", apiUrl };
+      const { hostname } = await requestTunnel(config, privateKey, port);
+      return { ...config, hostname };
+    }
+  };
 }
 
 function signed(config: ConnectConfig, privateKey: string) {
@@ -137,22 +193,25 @@ function signed(config: ConnectConfig, privateKey: string) {
   };
 }
 
-/** The Connect service's DNS broker: it writes only this machine's challenge. */
-export function brokerDns(
+/**
+ * Links (or relinks) this machine's tunnel to `port` and gets a fresh
+ * connector token. Signed, so only the holder of machine.key can ask.
+ */
+export async function requestTunnel(
   config: ConnectConfig,
-  privateKey: string
-): DnsChallenge {
-  const send = signed(config, privateKey);
-  const path = `/api/v1/machines/${config.machineId}/acme-challenge`;
-  return {
-    async set(name, value) {
-      await send("POST", path, { name, value });
-      await new Promise((r) => setTimeout(r, 15_000)); // let DNS catch up
-    },
-    async clear(name, value) {
-      await send("DELETE", path, { name, value });
-    },
-  };
+  privateKey: string,
+  port: number
+): Promise<Tunnel> {
+  const res = await signed(config, privateKey)(
+    "POST",
+    `/api/v1/machines/${config.machineId}/tunnel`,
+    { port }
+  );
+  const r = ((await res.json().catch(() => null)) ?? {}) as Record<
+    string,
+    unknown
+  >;
+  return { hostname: hostnameFrom(r), token: tokenFrom(r) };
 }
 
 export async function heartbeat(

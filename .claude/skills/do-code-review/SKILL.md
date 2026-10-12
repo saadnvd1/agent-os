@@ -80,9 +80,9 @@ Report misses as Medium findings, found by "docs check".
 ### Blocking
 
 **#1: Upgrade path trusts loopback behind a proxy** `server.ts:171`
-A tunnelled WebSocket upgrade carries X-Forwarded-For from the relay, but gateUpgrade() is called before proxied() is checked, so a remote client gets loopback trust.
+A tunnelled WebSocket upgrade arrives from cloudflared on loopback, but gateUpgrade() is called without the tunnel socket's mark, so a remote client gets loopback trust.
 Failure: any client through Connect opens /ws/terminal with no device token.
-Fix: run authorize() with proxied(req.headers) before the upgrade, as gateRequest does.
+Fix: pass `tunnel: isTunnelSocket(req.socket)` to authorize() for upgrades, as gateRequest does.
 _Found by: review-security_
 
 ### High
