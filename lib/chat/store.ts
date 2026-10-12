@@ -176,6 +176,28 @@ export function itemsOfKind<K extends ChatItem["kind"]>(
   ).map((r) => JSON.parse(r.data));
 }
 
+// A chat's background tasks still running, or ended after `since` (ms): what
+// the composer lists, read without parsing the rest of a long conversation.
+export function recentTasks(
+  sessionId: string,
+  since: number
+): Extract<ChatItem, { kind: "task" }>[] {
+  flushItems();
+  return (
+    db
+      .prepare(
+        `SELECT data FROM chat_items WHERE session_id = ? AND kind = 'task'
+         AND (json_extract(data, '$.status') = 'running'
+              OR COALESCE(json_extract(data, '$.endedAt'),
+                          json_extract(data, '$.createdAt')) > ?)
+         ORDER BY seq DESC LIMIT 200`
+      )
+      .all(sessionId, since) as { data: string }[]
+  )
+    .reverse()
+    .map((r) => JSON.parse(r.data));
+}
+
 // Tool calls saved as still running.
 export function runningTools(
   sessionId: string

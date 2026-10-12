@@ -56,7 +56,7 @@ function pendingApproval(
   const row = getDb()
     .prepare(
       `SELECT data FROM chat_items WHERE session_id = ?
-         AND json_extract(data, '$.kind') = 'approval'
+         AND kind = 'approval'
          AND json_extract(data, '$.status') = 'pending'
        ORDER BY seq DESC LIMIT 1`
     )

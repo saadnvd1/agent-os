@@ -13,13 +13,7 @@ export async function GET() {
     // Merged and dropped tasks live in the Tasks panel (a moved one lives on
     // the machine it moved to), archived sessions
     // in the Archived view: neither is in the sidebar.
-    const sessions = (queries.getAllSessions(db).all() as Session[]).filter(
-      (s) =>
-        !s.archived_at &&
-        s.task_status !== "merged" &&
-        s.task_status !== "dropped" &&
-        s.task_status !== "moved"
-    );
+    const sessions = queries.getSidebarSessions(db).all() as Session[];
     const groups = queries.getAllGroups(db).all() as Group[];
 
     // Convert expanded from 0/1 to boolean

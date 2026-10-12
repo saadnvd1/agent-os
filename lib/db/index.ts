@@ -6,7 +6,7 @@ import { runMigrations } from "./migrations";
 
 // Re-export types and queries
 export * from "./types";
-export { queries } from "./queries";
+export { queries, sessionListColumns } from "./queries";
 export * from "./lumifyhub";
 export * from "./lumifyhub-docs";
 export * from "./stacks";

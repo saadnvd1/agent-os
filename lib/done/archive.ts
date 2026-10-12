@@ -44,7 +44,8 @@ export function unarchiveSession(id: string): Session {
 export function listArchived(workspaceId?: string): ArchivedView[] {
   const rows = db
     .prepare(
-      `SELECT s.*, p.name AS project_name, p.workspace_id AS project_workspace
+      `SELECT s.id, s.name, s.project_id, s.view, s.task_status, s.branch_name,
+         s.pr_url, s.worktree_path, s.archived_at, p.name AS project_name, p.workspace_id AS project_workspace
        FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
        WHERE s.archived_at IS NOT NULL
          AND (? IS NULL OR p.workspace_id = ?)

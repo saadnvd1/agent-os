@@ -7,6 +7,7 @@ const {
   listItems,
   lastItems,
   itemsOfKind,
+  recentTasks,
   getItem,
   hasItem,
   queueItem,
@@ -171,5 +172,36 @@ describe("batched writes", () => {
       { flush: true }
     );
     expect(raw(id)).toHaveLength(1);
+  });
+});
+
+describe("recentTasks", () => {
+  const task = (
+    id: string,
+    status: "running" | "done",
+    createdAt: number,
+    endedAt?: number
+  ) =>
+    ({
+      id,
+      kind: "task",
+      taskId: id,
+      status,
+      createdAt,
+      ...(endedAt && { endedAt }),
+    }) as unknown as ChatItem;
+
+  it("returns running tasks and recently ended ones, not old finished ones", () => {
+    const id = randomUUID();
+    saveItem(id, task("old", "done", 1, 100));
+    saveItem(id, task("run", "running", 2));
+    saveItem(id, task("new", "done", 3, 5000));
+    saveItem(id, { id: "a", kind: "assistant", text: "x", createdAt: 9 });
+    expect(recentTasks(id, 1000).map((t) => t.id)).toEqual(["run", "new"]);
+    expect(recentTasks(id, 1000)).toEqual(
+      itemsOfKind(id, "task").filter(
+        (t) => t.status === "running" || (t.endedAt ?? t.createdAt) > 1000
+      )
+    );
   });
 });

@@ -51,6 +51,8 @@ export interface Session {
   setup_ms?: number | null;
   setup_error?: string | null;
   task_brief?: string | null;
+  // Lists carry this instead of the brief itself (0/1).
+  has_brief?: number;
   // How the session is shown: a chat conversation or a terminal.
   view: "chat" | "terminal";
   chat_access: ChatAccess;

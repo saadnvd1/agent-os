@@ -305,7 +305,7 @@ export const Pane = memo(function Pane({
           sessionName={chat.name}
           accessLocked={chat.role === "orchestrator"}
           freshStart={
-            (chat.role === "orchestrator" || !!chat.task_brief) &&
+            (chat.role === "orchestrator" || !!chat.has_brief) &&
             !chat.archived_at
           }
           orchestratorOf={
