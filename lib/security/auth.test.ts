@@ -115,6 +115,57 @@ describe("authorize", () => {
     expect(authorize(r, policy)).toEqual({ ok: false });
   });
 
+  describe("a device token on a trusted network", () => {
+    const tail = (headers: IncomingHttpHeaders = {}) =>
+      req("100.64.0.9", headers);
+    const bearer = (t: string) => ({ authorization: `Bearer ${t}` });
+
+    it("adds the device id and keeps the trusted via", () => {
+      expect(authorize(tail(bearer("aosd_good")), policy)).toEqual({
+        ok: true,
+        via: "tailnet",
+        deviceId: "dev-1",
+      });
+      expect(authorize(req("127.0.0.1", bearer("aosd_good")), policy)).toEqual({
+        ok: true,
+        via: "loopback",
+        deviceId: "dev-1",
+      });
+    });
+
+    it("lets an unknown or revoked token in, without an identity", () => {
+      expect(authorize(tail(bearer("aosd_revoked")), policy)).toEqual({
+        ok: true,
+        via: "tailnet",
+      });
+      expect(authorize(tail(), policy)).toEqual({ ok: true, via: "tailnet" });
+    });
+
+    it("lets the request in when the lookup throws", () => {
+      const broken = {
+        ...policy,
+        lookup: () => {
+          throw new Error("db gone");
+        },
+      };
+      expect(authorize(tail(bearer("aosd_good")), broken)).toEqual({
+        ok: true,
+        via: "tailnet",
+      });
+    });
+
+    it("still refuses an untrusted request with no or a bad token", () => {
+      const off = req("192.168.1.20", {}, "192.168.1.5");
+      expect(authorize(off, policy)).toEqual({ ok: false });
+      expect(
+        authorize(
+          req("192.168.1.20", bearer("aosd_revoked"), "192.168.1.5"),
+          policy
+        )
+      ).toEqual({ ok: false });
+    });
+  });
+
   it("refuses when the lookup itself throws (deny by default)", () => {
     const broken = {
       ...policy,

@@ -162,8 +162,18 @@ export function authorize(req: AuthRequest, policy: AuthPolicy): AuthResult {
 
 function decide(req: AuthRequest, policy: AuthPolicy): AuthResult {
   const trusted = req.tunnel ? null : networkTrust(req, policy);
-  if (trusted) return { ok: true, via: trusted };
   const token = readToken(req.headers);
+  if (trusted) {
+    // Identity only: network trust already decided access, so a token that
+    // is unknown, revoked or fails to resolve never turns this into a refusal.
+    let deviceId: string | undefined;
+    try {
+      deviceId = (token ? policy.lookup(token) : null)?.id;
+    } catch {}
+    return deviceId
+      ? { ok: true, via: trusted, deviceId }
+      : { ok: true, via: trusted };
+  }
   const device = token ? policy.lookup(token) : null;
   if (device) return { ok: true, via: "device", deviceId: device.id };
   // AGENTOS_AUTH=off is for a login proxy on this side of the network.
