@@ -31,7 +31,7 @@ const flatten = (rows: SidebarRow[]): string[] =>
   rows.flatMap((r) => [r.session.id, ...flatten(r.workers)]);
 
 // One flat list of the workspace's sessions, on shelves: Pinned, Needs
-// you, Working, Done.
+// you, Working, In review, Done.
 export function SessionList({
   activeSessionId,
   sessionStatuses,
@@ -62,6 +62,7 @@ export function SessionList({
         ...shelves.pinned,
         ...shelves.needsYou,
         ...shelves.working,
+        ...shelves.inReview,
         ...shelves.done,
         ...data.machines.flatMap((g) => g.rows),
       ]),

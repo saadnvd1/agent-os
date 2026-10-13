@@ -86,7 +86,7 @@ export function MachineShelves({ groups }: { groups: MachineGroup[] }) {
 }
 
 // The pinned orchestrator (or a row to start one), then Pinned, Needs you,
-// Working, Queued and Done: once for the whole list.
+// Working, In review, Queued and Done: once for the whole list.
 export function SessionShelves({
   shelves,
   queued,
@@ -132,6 +132,13 @@ export function SessionShelves({
       {shelves.working.length > 0 && (
         <Shelf label="Working" count={shelves.working.length}>
           {shelves.working.map((r) => (
+            <SessionRow key={r.session.id} row={r} />
+          ))}
+        </Shelf>
+      )}
+      {shelves.inReview.length > 0 && (
+        <Shelf label="In review" count={shelves.inReview.length}>
+          {shelves.inReview.map((r) => (
             <SessionRow key={r.session.id} row={r} />
           ))}
         </Shelf>

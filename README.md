@@ -23,7 +23,7 @@ and check on all of it from your phone.
 - **Project config.** `agentos.json` gives each session its own ports, environment, files and a private Postgres copy. [More](docs/reference/project-config.md)
 - **Schedules and recipes.** Start work on a timer, or save a job that comes up again. [More](docs/guides/schedules.md)
 - **Plans in pieces and stacks.** A plan splits into several PRs only for a real reason; a board can run as stacked PRs. [More](docs/guides/tasks.md#plans-in-pieces)
-- **Machine load and status.** A load gauge, each session's share of CPU and memory, and Needs you, Working and Done as it changes. [More](docs/guides/sessions.md)
+- **Machine load and status.** A load gauge, each session's share of CPU and memory, and Needs you, Working, In review and Done as it changes. [More](docs/guides/sessions.md)
 - **Workspaces.** Group projects, finish work with Done, and get a log of every merged task. [More](docs/reference/workspaces.md)
 - **LumifyHub (optional).** Boards, cards and docs for a workspace, if you want them. [More](docs/lumifyhub.md)
 - **Also:** a ⌘K palette, code search, a file picker, a git panel, dev servers, up to four panes, and dictation.

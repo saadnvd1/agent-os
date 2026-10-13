@@ -80,8 +80,10 @@ and unpinning it from its ⋯ menu (remembered per workspace) drops it among the
 other sessions. Sessions sit on shelves: **Pinned** (pin from a row's ⋯
 menu), **Needs you** (an approval, a question, a terminal waiting for input, a
 message typed and never sent, a failed task, or the orchestrator's open asks,
-each with a badge), **Working**,
-and **Done**. Done is folded to one row, "3 done today · 12 earlier", until you
+each with a badge), **Working** (running, or a task idle between turns),
+**In review** (a task with an open pull request, or a plan waiting for
+approval) and **Done** (finished work: merged, dropped or closed tasks, and
+idle plain sessions). Done is folded to one row, "3 done today · 12 earlier", until you
 tap it (open or folded is remembered per device); open, it lists newest first,
 ten at a time. The orchestrator's row carries small chips for the work it
 started: running, in review, blocked and queued, each left out at zero. Tap
@@ -183,7 +185,7 @@ it has been green for ten minutes. `AGENTOS_LOAD=off` turns it all off.
 ## And the rest
 
 - **Status from the screen and the agent.** Every session moves between
-  Needs you, Working and Done as it changes, including programs that report
+  Needs you, Working, In review and Done as it changes, including programs that report
   their own state (OSC 7501).
 - **Also:** a ⌘K palette for every session and action, code search, a file
   picker with uploads from a phone, a git panel (diffs, commits, PRs), dev

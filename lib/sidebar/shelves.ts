@@ -1,9 +1,9 @@
 // The sidebar's one flat list, sorted onto shelves: the workspace's pinned
-// orchestrator, Pinned, Needs you, Working, then Done. Client-safe: no database.
+// orchestrator, Pinned, Needs you, Working, In review, then Done. Client-safe: no database.
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
 import type { PrStage } from "@/lib/tasks/pr-stage";
-import type { TaskState } from "@/lib/tasks/state";
+import { isFinished, type TaskState } from "@/lib/tasks/state";
 
 // Why a session is blocked on you.
 export type SessionNeed =
@@ -61,6 +61,7 @@ export interface Shelves {
   pinned: SidebarRow[];
   needsYou: SidebarRow[];
   working: SidebarRow[];
+  inReview: SidebarRow[];
   done: SidebarRow[];
 }
 
@@ -68,6 +69,17 @@ export function taskNeed(state: TaskState | undefined): SessionNeed | null {
   if (state === "checks-failing" || state === "exited") return "failed";
   if (state === "blocked") return "answer";
   return null;
+}
+
+// Where a row that needs nothing and isn't running goes: an open PR or a plan
+// waiting on approval is in review, any other unfinished task is mid-job, and
+// only finished work or a plain idle session is done.
+export function quietShelf(
+  task: TaskState | undefined
+): "inReview" | "working" | "done" {
+  if (task === "review" || task === "plan-ready") return "inReview";
+  if (!task || isFinished(task)) return "done";
+  return "working";
 }
 
 // An approval or a question beats what the task says; a terminal waiting
@@ -169,6 +181,7 @@ export function buildShelves(input: ShelfInput): Shelves {
     pinned: [],
     needsYou: [],
     working: [],
+    inReview: [],
     done: [],
   };
   for (const row of top) {
@@ -178,12 +191,13 @@ export function buildShelves(input: ShelfInput): Shelves {
     else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
     else if (row.need) shelves.needsYou.push(row);
     else if (row.working) shelves.working.push(row);
-    else shelves.done.push(row);
+    else shelves[quietShelf(row.task)].push(row);
   }
   shelves.orchestrators.sort(oldestFirst);
   shelves.pinned.sort(oldestFirst);
   shelves.needsYou.sort(newestFirst);
   shelves.working.sort(newestFirst);
+  shelves.inReview.sort(newestFirst);
   shelves.done.sort(newestFirst);
   return shelves;
 }
