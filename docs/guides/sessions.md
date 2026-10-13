@@ -98,8 +98,8 @@ away on purpose: a row's ⋯ menu **Archive** (tasks and plain sessions alike;
 `aos archive` and the orchestrator's `archive` do the same), what **Clean up
 idle sessions** swept, and what sat in Done for 30 days with no activity.
 Open it from the sidebar's ⋯ menu → **Archived**, the workspace switcher or ⌘K; **Unarchive**
-brings one back. Nothing pinned, no orchestrator, and nothing that needs
-you, is running or has an open pull request is archived by itself. A pinned session, one that is
+brings one back. The 30-day sweep skips pinned sessions, orchestrators, and anything that
+needs you, is running or has an open pull request. A pinned session, one that is
 running or has background work, one that needs you, and a task with an open
 pull request never settle by themselves. Done is folded to one row, "3 done
 today · 12 earlier", until you tap it (open or folded is remembered per
