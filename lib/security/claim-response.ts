@@ -11,13 +11,19 @@ export interface ClaimBody {
   token?: string;
 }
 
+// The native app asks for its token and sends no Origin; a browser always
+// sends one on a POST, so a page can't pass for the app.
+export const isNativeClaim = (request: {
+  wantsToken?: unknown;
+  origin: string | null;
+}) => request.wantsToken === true && !request.origin;
+
 export function claimResponseBody(
   device: { id: string; name: string },
   token: string,
   request: { wantsToken?: unknown; origin: string | null }
 ): ClaimBody {
-  const native = request.wantsToken === true && !request.origin;
-  return { device, ...(native ? { token } : {}) };
+  return { device, ...(isNativeClaim(request) ? { token } : {}) };
 }
 
 // Whether the reply also sets the device cookie: only for a browser. A

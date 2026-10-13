@@ -50,6 +50,8 @@ Each code works once and expires after 10 minutes. If you take longer, choose **
 
 A paired device holds its own key. You can remove it from Devices at any time, which cuts off its open terminals straight away. A paired device can use AgentOS but can't add devices or change access settings. Only the computer itself and your tailnet can.
 
+A phone or iPad paired through the AgentOS app also gets **Can approve**, so it can answer asks and turn Away on or off, over Connect too. Pairing from the phone's browser doesn't. Turn it off for a device in Devices if you don't want that; it stays off.
+
 ### HTTPS on your tailnet
 
 If your tailnet has HTTPS

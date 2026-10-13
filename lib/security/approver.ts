@@ -1,6 +1,7 @@
 /**
  * Who may answer the orchestrator's asks or pause it: this machine, the
- * tailnet, or a paired device Saad has let approve (off by default). This
+ * tailnet, or a paired device with Can approve (the native app gets it at
+ * pairing; Saad can turn it off or on in Devices). This
  * is the coarse gate; approvals that matter also need a passkey (presence).
  */
 

@@ -82,6 +82,8 @@ export function claimPairing(
     name: string;
     userAgent?: string | null;
     address: string;
+    // The native app (claimResponseBody's test): it may approve from the start.
+    native?: boolean;
   },
   now = Date.now()
 ): ClaimResult {
@@ -103,7 +105,11 @@ export function claimPairing(
   const p = state.codes.get(normalizeCode(input.code));
   if (!p || p.claimed || p.expiresAt < now)
     return { ok: false, error: "invalid" };
-  const { device, token } = mintDevice(input.name, input.userAgent);
+  const { device, token } = mintDevice(
+    input.name,
+    input.userAgent,
+    input.native === true
+  );
   p.claimed = { deviceId: device.id, name: device.name };
   return { ok: true, device, token };
 }

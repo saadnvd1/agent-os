@@ -21,6 +21,16 @@ removing the device in Devices cuts its open terminals at once. A paired
 device can use AgentOS but can't add devices or change access; only this
 machine and the tailnet can.
 
+"Can approve" lets a paired device answer the orchestrator's asks, pause
+it, and turn Away on or off, including over Connect. A device paired from
+the AgentOS app gets it at pairing: the app asks for its token in the reply
+and sends no Origin header, which a browser page can't do. It held the same
+one-time code a browser would, so this trusts it no further than pairing
+already did. A device paired from a browser starts without it. Devices
+paired from the app before this got it once, on upgrade; devices that
+weren't, or that were removed, didn't. You can turn it off for any device in
+Devices, and it stays off. Approvals that matter still need a passkey.
+
 AgentOS also refuses requests addressed to any other host name (DNS rebinding),
 and API calls or terminal connections made by another website's page. That
 Origin check holds whatever `AGENTOS_BIND` says: a page may write to the API

@@ -20,7 +20,8 @@ export interface Device {
   last_seen_at: string | null;
   last_address: string | null;
   revoked_at: string | null;
-  // Saad let it answer the orchestrator's asks (off by default).
+  // It may answer the orchestrator's asks: on for the native app at
+  // pairing, off for a browser; Saad can flip it either way in Devices.
   can_approve: number;
 }
 
@@ -32,19 +33,22 @@ export const hashToken = (token: string) =>
 
 export function mintDevice(
   name: string,
-  userAgent?: string | null
+  userAgent?: string | null,
+  canApprove = false
 ): { device: Device; token: string } {
   const id = crypto.randomUUID();
   const token = TOKEN_PREFIX + crypto.randomBytes(32).toString("base64url");
   getDb()
     .prepare(
-      `INSERT INTO devices (id, name, token_hash, user_agent) VALUES (?, ?, ?, ?)`
+      `INSERT INTO devices (id, name, token_hash, user_agent, can_approve)
+       VALUES (?, ?, ?, ?, ?)`
     )
     .run(
       id,
       name.trim().slice(0, 80) || "Device",
       hashToken(token),
-      userAgent ?? null
+      userAgent ?? null,
+      canApprove ? 1 : 0
     );
   return { device: getDevice(id)!, token };
 }
