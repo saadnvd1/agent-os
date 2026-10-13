@@ -25,7 +25,7 @@ export function ProjectFilter({
         <button
           type="button"
           className={cn(
-            "bg-card flex min-h-11 max-w-[8.5rem] shrink-0 items-center gap-1 rounded-xl px-3 text-sm shadow-xs md:min-h-9",
+            "bg-card flex min-h-11 max-w-[7.5rem] shrink items-center gap-1 rounded-xl px-3 text-sm shadow-xs md:min-h-9 [@media(hover:none)]:md:min-h-11",
             current && "text-primary"
           )}
         >

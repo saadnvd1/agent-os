@@ -7,7 +7,7 @@ import { sidebarUiActions } from "@/stores/sidebarUi";
 // sessions too.
 export function SidebarSearch({ query }: { query: string }) {
   return (
-    <label className="bg-card text-muted-foreground focus-within:ring-primary/40 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-3 shadow-xs focus-within:ring-2 md:min-h-9">
+    <label className="bg-card text-muted-foreground focus-within:ring-primary/40 flex min-h-11 min-w-[6rem] flex-1 items-center gap-2 rounded-xl px-3 shadow-xs focus-within:ring-2 md:min-h-9 [@media(hover:none)]:md:min-h-11">
       <Search className="h-3.5 w-3.5 shrink-0" />
       <input
         type="search"
@@ -28,7 +28,7 @@ export function SidebarSearch({ query }: { query: string }) {
           type="button"
           aria-label="Clear search"
           onClick={() => sidebarUiActions.setQuery("")}
-          className="-mr-3 flex h-11 w-11 items-center justify-center md:h-7 md:w-7"
+          className="-mr-3 flex h-11 w-11 items-center justify-center md:h-7 md:w-7 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
         >
           <X className="h-3.5 w-3.5" />
         </button>

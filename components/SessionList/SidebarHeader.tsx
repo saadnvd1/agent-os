@@ -62,15 +62,15 @@ export function SidebarHeader(props: SidebarHeaderProps) {
   const workspaceId = props.workspace?.id ?? null;
   const schedules = useSchedulesGlance(workspaceId);
   return (
-    <div className="flex items-center gap-1 px-3 pt-3 pb-2">
-      <div className="flex min-w-0 flex-1 items-center">
+    <div className="flex flex-wrap items-center gap-x-1 px-3 pt-3 pb-2">
+      <div className="flex min-w-[9.5rem] flex-1 items-center">
         <WorkspaceSwitcher
           workspaces={props.workspaces}
           current={props.workspace}
         />
         <LoadGauge />
       </div>
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <AwayToggle />
         <ADropdownMenu
           trigger={
@@ -80,7 +80,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
               aria-label={
                 schedules.failedText ? `More (${schedules.failedText})` : "More"
               }
-              className="relative h-11 w-11 md:h-8 md:w-8"
+              className="relative h-11 w-11 md:h-8 md:w-8 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
             >
               <MoreHorizontal className="h-4 w-4" />
               {schedules.failed > 0 && (
@@ -88,7 +88,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
                   aria-hidden
                   className={cn(
                     failedDot,
-                    "ring-background absolute top-2 right-2 ring-2 md:top-1 md:right-1"
+                    "ring-background absolute top-2 right-2 ring-2 md:top-1 md:right-1 [@media(hover:none)]:md:top-2 [@media(hover:none)]:md:right-2"
                   )}
                 />
               )}
@@ -149,7 +149,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             <Button
               size="icon-sm"
               aria-label="New"
-              className="ml-0.5 h-11 w-11 rounded-[10px] md:h-8 md:w-8"
+              className="ml-0.5 h-11 w-11 rounded-[10px] md:h-8 md:w-8 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
             >
               <Plus className="h-4 w-4" />
             </Button>

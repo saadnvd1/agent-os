@@ -51,7 +51,7 @@ export function AwayToggle() {
           }
           disabled={setAway.isPending}
           className={cn(
-            "relative h-11 w-11 md:h-8 md:w-8",
+            "relative h-11 w-11 md:h-8 md:w-8 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11",
             away &&
               "bg-amber-500/20 text-amber-700 ring-1 ring-amber-500/50 hover:bg-amber-500/30 dark:text-amber-300"
           )}
