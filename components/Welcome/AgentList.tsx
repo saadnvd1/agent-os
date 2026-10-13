@@ -23,7 +23,9 @@ export function AgentList() {
 
   useEffect(() => mutate(), [mutate]);
 
-  const providers = getAllProviderDefinitions().filter((p) => p.cli);
+  const providers = getAllProviderDefinitions().filter(
+    (p) => p.cli && (!p.legacy || agents?.[p.id]?.installed)
+  );
   const shown = providers.filter((p) => all || FEATURED_AGENTS.includes(p.id));
   const hidden = providers.length - shown.length;
 

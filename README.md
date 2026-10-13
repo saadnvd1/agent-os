@@ -134,7 +134,8 @@ Pi,
 [Kilo Code CLI](https://kilo.ai/docs/cli),
 [Gemini CLI](https://github.com/google-gemini/gemini-cli),
 [Aider](https://aider.chat/), [Cursor CLI](https://cursor.com/cli), Amp or
-[GitHub Copilot CLI](https://github.com/github/copilot-cli).
+[GitHub Copilot CLI](https://github.com/github/copilot-cli) or
+[Kiro CLI](https://kiro.dev/docs/cli/).
 
 ```bash
 npm install -g @saadnvd1/agent-os
@@ -250,9 +251,20 @@ CLI) with the fix for anything missing (`/api/doctor`).
 | Amp            | ❌   | ✅     | ❌   | `--dangerously-allow-all`                    |
 | Oh My Pi       | ❌   | ❌     | ❌   | N/A                                          |
 | GitHub Copilot | ✅   | ✅     | ❌   | `--allow-all`                                |
+| Kiro CLI       | ❌   | ❌     | ❌   | `--trust-all-tools`                          |
+| Amazon Q (old) | ❌   | ❌     | ❌   | `--trust-all-tools`                          |
 
 Agents without chat run in the terminal. The new-session picker says when an
 agent isn't installed or needs a sign-in first, and what to run.
+
+Kiro CLI (and the older Amazon Q CLI, `q`, shown only where it is installed)
+signs in on its own: a session first checks `whoami`, and if you're signed out
+runs `login --use-device-flow`. AgentOS reads the link and one-time code off
+the screen and shows them in a card above the terminal, with a push when it's
+waiting, so you can finish on your phone. No credential passes through
+AgentOS. Identity Center sign-in (including Microsoft or Okta federation) works
+this way; a login through an external identity provider doesn't support the
+device flow, so sign in once on the machine itself, or set `KIRO_API_KEY`.
 
 ### CLI
 

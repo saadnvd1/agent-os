@@ -13,6 +13,8 @@ export const AGENT_OPTIONS: { value: AgentType; label: string }[] = [
   { value: "pi", label: "Pi" },
   { value: "omp", label: "Oh My Pi" },
   { value: "copilot", label: "GitHub Copilot" },
+  { value: "kiro", label: "Kiro CLI" },
+  { value: "amazonq", label: "Amazon Q CLI (legacy)" },
 ];
 
 export const agentLabel = (agent: AgentType) =>

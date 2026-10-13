@@ -34,6 +34,15 @@ export const SETUP_COMMANDS: Partial<Record<ProviderId, SetupCommands>> = {
     install: "npm install -g @github/copilot",
     signIn: "copilot login",
   },
+  kiro: {
+    install: "curl -fsSL https://cli.kiro.dev/install | bash",
+    signIn: "kiro-cli login --use-device-flow",
+    docs: "https://kiro.dev/docs/cli/",
+  },
+  amazonq: {
+    signIn: "q login --use-device-flow",
+    docs: "https://kiro.dev/docs/cli/",
+  },
   // No installer line we can vouch for from here; its own site has it.
   opencode: { docs: "https://opencode.ai/docs" },
 };

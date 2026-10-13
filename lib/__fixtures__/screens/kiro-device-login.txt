@@ -1,0 +1,10 @@
+Logging in to Kiro
+
+Confirm the code in your browser:
+
+    ABCD-EFGH
+
+Open this URL to continue:
+https://view.awsapps.com/start/#/device?user_code=ABCD-EFGH
+
+Waiting for authorization...

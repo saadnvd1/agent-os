@@ -87,6 +87,31 @@ function claudeAuth(env: NodeJS.ProcessEnv): AgentAuth {
   return hasJsonKeys(config) ? "needs-login" : "unknown";
 }
 
+// Signed in when `cli args` exits 0. Timing out or failing to start tells
+// nothing; any other exit code is the CLI saying it isn't signed in.
+async function exitAuth(
+  cli: string,
+  env: NodeJS.ProcessEnv,
+  args: string[],
+  signedOut: (code: unknown) => boolean
+): Promise<AgentAuth> {
+  try {
+    await run(cli, args, { timeout: PROBE_MS, env });
+    return "ready";
+  } catch (error) {
+    return signedOut((error as { code?: unknown }).code)
+      ? "needs-login"
+      : "unknown";
+  }
+}
+
+// Kiro's `whoami` is never read, only its exit code: its output names the
+// account.
+const kiroAuth: AuthCheck = (cli, env) =>
+  anyEnv(env, ["KIRO_API_KEY"])
+    ? "ready"
+    : exitAuth(cli, env, ["whoami"], (c) => typeof c === "number" && c !== 0);
+
 const AUTH: Partial<Record<ProviderId, { check: AuthCheck; hint: string }>> = {
   claude: {
     check: (_cli, env) => claudeAuth(env),
@@ -94,16 +119,8 @@ const AUTH: Partial<Record<ProviderId, { check: AuthCheck; hint: string }>> = {
   },
   codex: {
     // Exits 0 signed in, 1 not.
-    check: async (cli, env) => {
-      try {
-        await run(cli, ["login", "status"], { timeout: PROBE_MS, env });
-        return "ready";
-      } catch (error) {
-        return (error as { code?: unknown }).code === 1
-          ? "needs-login"
-          : "unknown";
-      }
-    },
+    check: (cli, env) =>
+      exitAuth(cli, env, ["login", "status"], (c) => c === 1),
     hint: "Run `codex login` in a terminal",
   },
   // OpenCode's own free models need no sign-in.
@@ -152,6 +169,15 @@ const AUTH: Partial<Record<ProviderId, { check: AuthCheck; hint: string }>> = {
         ? "ready"
         : "needs-login",
     hint: "Run `cursor-agent login` in a terminal",
+  },
+  kiro: {
+    check: kiroAuth,
+    hint: "Run `kiro-cli login --use-device-flow` in a terminal, or set KIRO_API_KEY",
+  },
+  amazonq: {
+    check: (cli, env) =>
+      exitAuth(cli, env, ["whoami"], (c) => typeof c === "number" && c !== 0),
+    hint: "Run `q login --use-device-flow` in a terminal",
   },
   amp: {
     check: (_cli, env) =>

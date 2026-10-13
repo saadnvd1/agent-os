@@ -25,6 +25,8 @@ export interface AgentProvider {
   supportsResume: boolean;
   supportsFork: boolean;
   configDir: string;
+  // Shell that signs in first when the CLI isn't, or "".
+  preamble: string;
   // The CLI's arguments, each already quoted for the shell.
   buildFlags(options: BuildFlagsOptions): string[];
 }
@@ -44,7 +46,7 @@ export function buildArgs(
   def: ProviderDefinition,
   options: BuildFlagsOptions
 ): string[] {
-  const args: string[] = [];
+  const args: string[] = [...(def.subcommand ?? [])];
   if (options.sessionId && def.resumeArgs) {
     args.push(...def.resumeArgs(options.sessionId));
   } else if (options.parentSessionId && def.forkArgs) {
@@ -69,6 +71,14 @@ const SAFE_ARG = /^[\w@%+=:,./-]+$/;
 const quoteArg = (arg: string) =>
   SAFE_ARG.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
 
+// Stops at a failed sign-in, so the pane shows why instead of a CLI that waits.
+function signInPreamble(def: ProviderDefinition): string {
+  if (!def.signIn) return "";
+  const cli = quoteArg(def.cli);
+  const run = (args: string[]) => [cli, ...args.map(quoteArg)].join(" ");
+  return `{ ${run(def.signIn.check)} >/dev/null 2>&1 || ${run(def.signIn.login)}; } && `;
+}
+
 function toProvider(def: ProviderDefinition): AgentProvider {
   return {
     id: def.id,
@@ -78,6 +88,7 @@ function toProvider(def: ProviderDefinition): AgentProvider {
     supportsResume: def.supportsResume,
     supportsFork: def.supportsFork,
     configDir: def.configDir,
+    preamble: signInPreamble(def),
     buildFlags: (options) => buildArgs(def, options).map(quoteArg),
   };
 }

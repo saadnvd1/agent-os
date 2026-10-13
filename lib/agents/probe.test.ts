@@ -31,6 +31,7 @@ const KEYS = [
   "CEREBRAS_API_KEY",
   "CURSOR_API_KEY",
   "AMP_API_KEY",
+  "KIRO_API_KEY",
   "ANTHROPIC_AUTH_TOKEN",
   "CLAUDE_CODE_OAUTH_TOKEN",
   "CLAUDE_CODE_USE_BEDROCK",
@@ -66,7 +67,7 @@ afterEach(() => {
 // A fake CLI: prints a version, and exits with `loginExit` for `login status`.
 function cli(
   name: string,
-  opts: { versionExit?: number; loginExit?: number } = {}
+  opts: { versionExit?: number; loginExit?: number; whoamiExit?: number } = {}
 ) {
   const file = path.join(bin, name);
   fs.writeFileSync(
@@ -74,6 +75,7 @@ function cli(
     `#!/bin/sh
 if [ "$1" = "--version" ]; then echo "${name} 1.2.3"; exit ${opts.versionExit ?? 0}; fi
 if [ "$1" = "login" ]; then exit ${opts.loginExit ?? 0}; fi
+if [ "$1" = "whoami" ]; then echo "someone@example.com"; exit ${opts.whoamiExit ?? 0}; fi
 `
   );
   fs.chmodSync(file, 0o755);
@@ -210,6 +212,32 @@ describe("probeAgent", () => {
     write("alt/.claude.json", '{"oauthAccount":{}}');
     expect(await probeAgent("claude", "claude")).toMatchObject({
       auth: "ready",
+    });
+  });
+
+  it("reads Kiro's sign-in from whoami's exit code, or a key", async () => {
+    cli("kiro-cli", { whoamiExit: 1 });
+    expect(await probeAgent("kiro", "kiro-cli")).toMatchObject({
+      installed: true,
+      auth: "needs-login",
+      hint: expect.stringContaining("kiro-cli login --use-device-flow"),
+    });
+    process.env.KIRO_API_KEY = "ksk_test";
+    expect(await probeAgent("kiro", "kiro-cli")).toMatchObject({
+      auth: "ready",
+    });
+    delete process.env.KIRO_API_KEY;
+    cli("kiro-cli", { whoamiExit: 0 });
+    expect(await probeAgent("kiro", "kiro-cli")).toMatchObject({
+      auth: "ready",
+    });
+  });
+
+  it("reads the legacy q the same way, ignoring the Kiro key", async () => {
+    cli("q", { whoamiExit: 1 });
+    process.env.KIRO_API_KEY = "ksk_test";
+    expect(await probeAgent("amazonq", "q")).toMatchObject({
+      auth: "needs-login",
     });
   });
 

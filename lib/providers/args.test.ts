@@ -21,6 +21,23 @@ describe("buildArgs", () => {
     expect(args("codex", { parentSessionId: "t1" })).toEqual(["fork", "t1"]);
   });
 
+  it("starts Kiro in chat, trusting its tools, with the prompt last", () => {
+    expect(
+      args("kiro", { autoApprove: true, model: "m", initialPrompt: "hi" })
+    ).toEqual(["chat", "--trust-all-tools", "--model", "m", "hi"]);
+    expect(args("amazonq", { sessionId: "s1" })).toEqual(["chat"]);
+  });
+
+  it("signs in before Kiro starts, and stops if that fails", () => {
+    expect(getProvider("kiro").preamble).toBe(
+      "{ kiro-cli whoami >/dev/null 2>&1 || kiro-cli login --use-device-flow; } && "
+    );
+    expect(getProvider("amazonq").preamble).toContain(
+      "q login --use-device-flow"
+    );
+    expect(getProvider("claude").preamble).toBe("");
+  });
+
   it("resumes GitHub Copilot by id and asks it for all permissions", () => {
     expect(
       args("copilot", { sessionId: "s1", autoApprove: true, model: "m" })
