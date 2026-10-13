@@ -1774,7 +1774,9 @@ Connect (in development) reaches this machine from anywhere at
 a code from runagentos.com: it makes an Ed25519 key in `~/.agent-os/connect`
 that never leaves the machine, and the Connect service makes the machine a
 Cloudflare tunnel. Running it again on a linked machine links the same tunnel
-again, keeping its address. `agent-os disconnect` (or the switch in Devices)
+again, keeping its address. The first-run setup's Devices step can link too: paste
+the code into the field (same code path, `POST /api/devices/connect`, local or
+tailnet callers only). `agent-os disconnect` (or the switch in Devices)
 turns it off.
 
 While Connect is on, the production server:

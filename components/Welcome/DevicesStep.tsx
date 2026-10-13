@@ -2,37 +2,14 @@
 
 import { useState } from "react";
 import { Bell, Laptop, Smartphone } from "lucide-react";
+import { Block } from "./Block";
+import { ConnectBlock } from "./ConnectBlock";
 import { AddDevicePanel } from "@/components/Devices/AddDevicePanel";
 import {
   NotificationsSection,
   type BrowserNotifications,
 } from "@/components/Settings/NotificationsSection";
 import { Button } from "@/components/ui/button";
-
-function Block({
-  icon: Icon,
-  title,
-  detail,
-  children,
-}: {
-  icon: typeof Bell;
-  title: string;
-  detail: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="bg-muted/40 flex min-w-0 flex-col gap-3 rounded-lg px-3 py-3">
-      <div className="flex items-start gap-3">
-        <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-medium">{title}</h3>
-          <p className="text-muted-foreground text-xs">{detail}</p>
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /**
  * Pair a phone, link another machine, set up notifications. Every part is
@@ -51,7 +28,7 @@ export function DevicesStep({
       <Block
         icon={Smartphone}
         title="Pair your phone"
-        detail="Scan a code to use AgentOS from your phone."
+        detail="Scan a code to use AgentOS from your phone on this network."
       >
         {pairing ? (
           <AddDevicePanel onDone={() => setPairing(false)} />
@@ -65,6 +42,7 @@ export function DevicesStep({
           </Button>
         )}
       </Block>
+      <ConnectBlock />
       <Block
         icon={Laptop}
         title="Link another machine"

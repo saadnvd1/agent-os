@@ -306,6 +306,25 @@ describe("startConnect", () => {
     return started;
   }
 
+  it("still says a linked machine is linked where Connect can't run", async () => {
+    await machine();
+    const g = gated({ tailnet: [], lookup: () => null });
+    const started = startConnect(
+      g.handlers,
+      3011,
+      () => {},
+      {},
+      {
+        NODE_ENV: "development",
+      }
+    );
+    close = started.close;
+    expect(connectStatus()).toMatchObject({
+      state: "refused",
+      enrolled: true,
+    });
+  });
+
   it("runs cloudflared while on, names the machine, and stops it all when turned off", async () => {
     const m = await machine();
     const { dir, asked, children } = m;

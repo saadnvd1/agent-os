@@ -195,7 +195,18 @@ export function startConnect(
       ? "AGENTOS_CONNECT_PORT isn't a usable port"
       : decision.reason;
     if (readConnect(dir).ok) log(`connect: not starting: ${reason}`);
-    base = { state: "refused", reason };
+    // Still says whether the machine is linked, read when asked.
+    g.__agentosConnect = () => {
+      const r = readConnect(dir);
+      return {
+        state: "refused",
+        reason,
+        ...(r.ok && {
+          enrolled: true,
+          hostname: r.files.config.hostname || undefined,
+        }),
+      };
+    };
     return { hostname: () => null as string | null, close: () => {} };
   }
 

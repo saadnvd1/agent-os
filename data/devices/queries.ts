@@ -26,12 +26,32 @@ export function useDevicesQuery(enabled = true) {
   });
 }
 
-export function useNetworkQuery(enabled = true) {
+export function useNetworkQuery(
+  enabled = true,
+  refetchMs: number | false = false
+) {
   return useQuery({
     queryKey: deviceKeys.network(),
     queryFn: async () =>
       json<NetworkState>(await fetch("/api/devices/network")),
     enabled,
+    refetchInterval: refetchMs,
+  });
+}
+
+/** Links this machine to Connect with a code from runagentos.com. */
+export function useLinkConnect() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (code: string) =>
+      json<NetworkState>(
+        await fetch("/api/devices/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        })
+      ),
+    onSuccess: (data) => queryClient.setQueryData(deviceKeys.network(), data),
   });
 }
 

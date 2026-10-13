@@ -3,15 +3,7 @@
 import { Cloud } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import type { ConnectStatus } from "@/lib/connect/serve";
-
-const STATE: Record<ConnectStatus["state"], string> = {
-  up: "Connected",
-  connecting: "Connecting…",
-  denied: "Refused by Connect",
-  off: "Off",
-  refused: "Not running here",
-  error: "Problem",
-};
+import { CONNECT_STATE as STATE, connectView } from "@/lib/connect/view";
 
 export function ConnectCard({
   connect,
@@ -22,12 +14,7 @@ export function ConnectCard({
   canManage: boolean;
   onToggle: (on: boolean) => void;
 }) {
-  const enrolled = !!connect.enrolled || !!connect.hostname;
-  const on =
-    connect.state === "up" ||
-    connect.state === "connecting" ||
-    connect.state === "denied" ||
-    (connect.state === "error" && !!connect.enrolled);
+  const { linked: enrolled, on } = connectView(connect);
   return (
     <div className="bg-muted/40 flex items-start gap-3 rounded-lg px-3 py-2.5">
       <Cloud className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />

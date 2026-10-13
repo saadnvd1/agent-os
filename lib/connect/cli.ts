@@ -21,13 +21,8 @@ import {
   serverPort,
   setConnectEnabled,
 } from "./config";
-import { enrol } from "./enrol";
-import {
-  checkApiUrl,
-  DEFAULT_API,
-  registerWithCode,
-  requestTunnel,
-} from "./control-api";
+import { linkWithCode } from "./link";
+import { checkApiUrl, requestTunnel } from "./control-api";
 
 const arg = (flag: string) => {
   const i = process.argv.indexOf(flag);
@@ -83,23 +78,16 @@ async function main() {
     config = { ...config, hostname };
     saveConnect(config, dir);
   } else {
-    const apiUrl = checkApiUrl(
-      process.env.CONNECT_API_URL || DEFAULT_API,
-      operator
-    );
     const code = await linkCode();
     if (!code)
       throw new Error(
         "get a code from runagentos.com (Connect a machine), then run agent-os connect and paste it"
       );
-    config = await enrol({
+    config = await linkWithCode({
       dir,
-      register: registerWithCode(
-        apiUrl,
-        code,
-        arg("--name") || os.hostname(),
-        port
-      ),
+      code,
+      name: arg("--name") || os.hostname(),
+      port,
     });
   }
   console.log(`\n  Machine ${config.machineId}`);
