@@ -25,6 +25,8 @@ import { sessionMergePolicy } from "../tasks/finish";
 import { releasePorts } from "../ports";
 import { dropSessionDatabase } from "../project-config/database";
 import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
+import { hostLink } from "../hosts/remote-api";
+import { doneHeldTask } from "../tasks/held-remote";
 import { captureMergedTask } from "../session-logs";
 import { pushMerged } from "../notify/push/events";
 
@@ -161,6 +163,19 @@ export async function doneSession(
     await stopAgent(s);
     // The sign-off's cleanup has already settled it; this reads the result.
     worktree = await settleWorktree(s, { prHead: m.sha });
+  } else if (s.started_by && s.task_prompt && hostLink(s.host_id)) {
+    // Moved to a linked machine by its orchestrator: that machine stops the
+    // agent and removes the worktree, which is where they are.
+    await doneHeldTask(s);
+    if (plan.mark) mark(s, plan.mark, plan.pr);
+    else
+      db.prepare(
+        `UPDATE sessions SET task_status = 'done' WHERE id = ? AND task_status = 'running'`
+      ).run(s.id);
+    worktree = {
+      action: "removed",
+      why: `on ${hostLink(s.host_id)?.hostName ?? "its machine"}`,
+    };
   } else {
     if (plan.mark) mark(s, plan.mark, plan.pr);
     if (

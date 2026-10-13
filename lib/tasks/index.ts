@@ -58,11 +58,12 @@ import { remoteTaskViews } from "./remote-views";
 import { chatStateNow } from "../chat/runner";
 import { saidSinceLastMessage } from "../chat/store";
 
+import { lastActiveOf } from "./last-active";
 export * from "./state";
 export { codeReviewGate, codeReviewRefusal } from "./code-review";
 export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
 export { prFor as taskPR } from "./session";
-export { moveTask } from "./move-flow";
+export { assertMovable, moveTask } from "./move-flow";
 
 export interface TaskView {
   id: string;
@@ -106,6 +107,12 @@ export interface TaskView {
   quickOf?: string | null;
   // What it has cost so far in weighted tokens (lib/usage/weights).
   weighted?: number;
+  // Its last sign of life, in ms, for an orchestrator on another machine.
+  lastActiveAt?: number;
+  // Held for another machine's orchestrator (held.ts): which machine, and
+  // the "plan written" line it would have been told.
+  heldFrom?: string | null;
+  planNote?: string | null;
 }
 
 export async function createTask(opts: {
@@ -394,6 +401,9 @@ export async function taskView(session: Session): Promise<TaskView> {
     planning: session.plan_phase === "planning",
     plan: taskPlan(session),
     quickOf: session.quick_of ?? null,
+    lastActiveAt: session.held_by_device ? lastActiveOf(session) : undefined,
+    heldFrom: session.held_by_device ? (session.held_from ?? null) : null,
+    planNote: session.held_by_device ? (session.plan_note ?? null) : null,
   };
 }
 

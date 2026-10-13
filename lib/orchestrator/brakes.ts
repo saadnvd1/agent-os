@@ -74,6 +74,15 @@ export async function runningCount(
             "running";
     if (busy) running.add(s.id);
   }
+  // A task mid-move is out of the list above, but it runs again within
+  // minutes, here or there: it holds its slot.
+  const moving = db
+    .prepare(
+      `SELECT s.id FROM sessions s JOIN projects p ON p.id = s.project_id
+       WHERE p.workspace_id = ? AND s.task_status = 'moving' AND s.peer_mirror = 0`
+    )
+    .all(workspaceId) as { id: string }[];
+  for (const { id } of moving) running.add(id);
   for (const { target } of startsSince(workspaceId, now - WARMUP_MS))
     if (target) running.add(target);
   return running.size;

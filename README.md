@@ -1201,7 +1201,7 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Tools:** `sessions` (every session's status, activity, task, PR, CI and
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
-  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`,
+  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `move`,
   `add_project` (a git repository on the machine becomes a project of the
   workspace, or the project already at that path moves in from no workspace;
   folders that hold secrets and projects of another workspace are refused),
@@ -1222,7 +1222,8 @@ it may do on its own, and the lines that always come back to you as asks.
   naming the tool to use instead: merging, closing or retargeting a PR
   (`gh pr merge`, `gh pr close`, `gh pr edit --base`, and `gh api` or `curl`
   calls that merge a pull request or PATCH or PUT one; use `sign_off`, `arm`,
-  `land` or `drop`), `git push` (`quick_pr` pushes), writing in a project
+  `land` or `drop`), `aos move`, `aos done` and `aos stop` (use `move`, `done` and
+  `stop`, which are scoped to the workspace and held by Pause), `git push` (`quick_pr` pushes), writing in a project
   repository or task worktree other than its own open quick changes (git
   commit, reset, checkout, rebase, merge, stash, clean or rm there, and `rm`,
   `mv`, `cp`, `tee` or a redirect into one), writing AgentOS's state (`sqlite3`
@@ -1574,6 +1575,22 @@ Once linked:
   press Move again to finish it, or **Resume here**, which first asks the
   other machine whether it arrived. Tasks waiting on you (an escalated gate or
   an open ask), card tasks and stacked tasks don't move yet.
+- **An orchestrator's task moves too**, by the orchestrator's `move` tool (`task`,
+  `machine`; `here` brings it back) or the Move button. Its state is re-keyed to
+  the task's new session id in the same step it lands: brief and scope changes,
+  plan file and phase, gate checks and failure counts, asks, wakes, queue
+  order, arm, model and provider. Both machines need an AgentOS that can do
+  it, and the arriving one must have the task's provider. The machine it lands
+  on holds it for the orchestrator's machine alone: only that device can
+  merge, arm, message, stop, done or read it, and the arriving machine's own
+  orchestrator, armed merges and bulk done skip it. The orchestrator keeps
+  judging the PR at its head, reads BLOCKED lines and open approvals from the
+  task's chat there, and gets PR, CI, idle and plan events by polling that
+  machine. Its messages arrive marked as from the orchestrator, never as
+  yours. Guards (write guard, shell deny list, attribution settings) run in
+  the task's worker on either machine, and the task can't merge or push to
+  the default branch. Moving counts toward the brakes and Pause refuses the
+  tool.
 - **A chat task moves the same way**, between turns: a running turn is let
   finish (up to 3 minutes, else the move is refused and it carries on here),
   and one waiting on your answer isn't moved. What's sent to it while its
@@ -1586,7 +1603,7 @@ Once linked:
 Works for any project. Requests to the other machine carry its device token,
 so it can sit behind a proxy that never trusts loopback. Linking needs this
 machine or the tailnet, and only pairs with the ssh target's own host name.
-The orchestrator still starts tasks on its own machine only.
+The orchestrator starts tasks on its own machine and moves them afterwards.
 
 ## Security
 

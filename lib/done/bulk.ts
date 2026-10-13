@@ -54,6 +54,8 @@ function scopeSessions(scope: DoneScope): Session[] {
          AND role IS NULL AND archived_at IS NULL
          -- A linked machine's own sessions are cleaned up there.
          AND peer_mirror = 0
+         -- A task another machine's orchestrator moved here is its to finish.
+         AND held_by_device IS NULL
          AND (task_status IS NULL OR task_status = 'running')
        ORDER BY created_at`
     )
@@ -75,6 +77,12 @@ export async function idleSessions(
 
 // The caller's workspace when its project has one, else its project.
 export function scopeOf(session: Session): DoneScope {
+  // An orchestrator acts through its tools, which Pause holds and which are
+  // logged; aos would reach the same sessions past both.
+  if (session.role === "orchestrator")
+    throw new Error(
+      `${session.name} is an orchestrator: it moves, finishes and stops sessions with its move, done and stop tools, not aos`
+    );
   const project = session.project_id ? getProject(session.project_id) : null;
   if (!project || project.is_uncategorized)
     throw new Error(`${session.name} isn't in a project`);

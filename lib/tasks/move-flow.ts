@@ -11,7 +11,10 @@ import { isRemoteHost } from "../hosts";
 import { requireHostLink, type HostLink } from "../hosts/remote-api";
 import { getTaskSession } from "./session";
 import { exportOrResume, markMoved, resumeTask, type TaskBundle } from "./move";
-import { moveRefusal } from "./move-guard";
+import { isOrchestrated, moveRefusal } from "./move-guard";
+import { holderRefusal } from "./held";
+import { isPaused } from "../orchestrator/pause";
+import { sessionWorkspace } from "../models/resolve";
 import { arrived as arrivedHere, importTask } from "./import";
 import {
   forgetHostTasks,
@@ -34,7 +37,8 @@ const LIVE = new Set(["running", "moving"]);
 const g = globalThis as unknown as { __agentosMovesInFlight?: Set<string> };
 const inFlight = (g.__agentosMovesInFlight ??= new Set());
 
-export async function moveTask(id: string, toHostId: string): Promise<Session> {
+/** Why this task can't move to that machine now, as an error; or nothing. */
+export function assertMovable(id: string, toHostId: string): Session {
   const session = getTaskSession(id);
   if (!LIVE.has(session.task_status ?? ""))
     throw new Error(`Task is already ${session.task_status}`);
@@ -47,9 +51,22 @@ export async function moveTask(id: string, toHostId: string): Promise<Session> {
         : "It's already on this machine"
     );
   }
+  // A person here can't move what another machine's orchestrator holds.
+  const held = holderRefusal(session, null);
+  if (held) throw new Error(held);
   const refusal = moveRefusal(session);
   if (refusal) throw new Error(refusal);
+  // Pause stops the orchestrator's new work, and a move is some.
+  const workspace = sessionWorkspace(session);
+  if (workspace && isOrchestrated(session) && isPaused(workspace))
+    throw new Error("The orchestrator is paused; moves wait for Resume");
   if (inFlight.has(id)) throw new Error("It's already moving");
+  return session;
+}
+
+export async function moveTask(id: string, toHostId: string): Promise<Session> {
+  const session = assertMovable(id, toHostId);
+  const toRemote = isRemoteHost(toHostId);
   inFlight.add(id);
   try {
     const moved = toRemote
@@ -66,18 +83,26 @@ export async function moveTask(id: string, toHostId: string): Promise<Session> {
 }
 
 // A machine on an older AgentOS would take a chat task as a terminal one,
-// or refuse to hand one over.
-async function requireChatMoves(link: HostLink): Promise<void> {
+// or an orchestrator's task as a plain one that anyone there could merge, or
+// refuse to hand one over.
+async function requireCapability(
+  link: HostLink,
+  capability: string,
+  what: string
+): Promise<void> {
   const { capabilities = [] } = await hostTasks(link, true).catch((err) => {
     throw new Error(
-      `Can't ask ${link.hostName} whether it takes chat tasks: ${(err as Error).message}`
+      `Can't ask ${link.hostName} whether it takes ${what}: ${(err as Error).message}`
     );
   });
-  if (!capabilities.includes("chat-move"))
+  if (!capabilities.includes(capability))
     throw new Error(
-      `${link.hostName}'s AgentOS can't move chat tasks yet; update it first`
+      `${link.hostName}'s AgentOS can't move ${what} yet; update it first`
     );
 }
+
+const requireChatMoves = (link: HostLink) =>
+  requireCapability(link, "chat-move", "chat tasks");
 
 const unconfirmed = (where: string, err: unknown) =>
   new Error(
@@ -88,6 +113,8 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
   const link = requireHostLink(hostId);
   const chat = session.view === "chat";
   if (chat) await requireChatMoves(link);
+  if (isOrchestrated(session))
+    await requireCapability(link, "orchestrated-move", "orchestrator tasks");
   startProgress(
     session.id,
     link.hostName,

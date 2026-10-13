@@ -58,7 +58,8 @@ function armedTasks(workspaceId: string): Session[] {
     .prepare(
       `SELECT s.* FROM sessions s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.merge_armed_at IS NOT NULL
-         AND s.task_status = 'running' AND s.peer_mirror = 0`
+         AND s.task_status = 'running' AND s.peer_mirror = 0
+         AND s.held_by_device IS NULL`
     )
     .all(workspaceId) as Session[];
 }
@@ -100,6 +101,10 @@ export function armTask(task: Session): void {
     );
   if (task.peer_mirror)
     throw new Error(`${task.name} runs on a linked machine; arm it there`);
+  if (task.held_by_device)
+    throw new Error(
+      `${task.name} is held for ${task.held_from ?? "another machine"}'s orchestrator; it arms it there`
+    );
   if (!armingWorkspace(task))
     throw new Error(
       `${task.name}'s project isn't in a workspace with an orchestrator, which an armed merge reports to`

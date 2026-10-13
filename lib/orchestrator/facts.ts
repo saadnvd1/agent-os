@@ -7,7 +7,7 @@
 
 import { db, type Session, type StackItemStatus } from "../db";
 import { statusDetector } from "../status-detector";
-import { hostLink } from "../hosts/remote-api";
+import { cleanRemoteText, hostLink } from "../hosts/remote-api";
 import { peerStatus } from "../hosts/peer-sessions";
 import { chatCompacting, chatState } from "../chat/runner";
 import { chatActivityLine, chatStall, type Stall } from "../chat/activity";
@@ -16,11 +16,16 @@ import { needsYou } from "../needs-you";
 import { programSummary } from "../program-status/store";
 import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
-import { storedPR } from "../tasks/session";
+import { prFor, storedPR } from "../tasks/session";
+import { lastActiveOf } from "../tasks/last-active";
+import { hostTasks } from "../tasks/remote";
+import { deriveTaskState } from "../tasks";
+import { waitingState } from "./task-state";
 import { commitTime, repoOf } from "./repo";
 import { CHECKLESS_MS, checklessFor, ciSettleIn } from "./task-state";
 import { repoHasCI } from "./repo-ci";
 import { markStatusDirty } from "../status/dirty";
+import { queueEvent } from "./events";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -68,9 +73,6 @@ export interface SessionFacts {
   } | null;
 }
 
-const sqliteMs = (t: string | null | undefined) =>
-  t ? Date.parse(`${t.replace(" ", "T")}Z`) || 0 : 0;
-
 // Live sessions in the workspace's projects, plus tasks merged in the last
 // hour so their merge still reads. Never an orchestrator or an archived one.
 export function workspaceSessions(
@@ -83,6 +85,8 @@ export function workspaceSessions(
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          -- A linked machine's own sessions are its orchestrator's to run.
          AND s.peer_mirror = 0
+         -- A task another machine's orchestrator moved here is held for it.
+         AND s.held_by_device IS NULL
          AND (s.task_status IS NULL OR s.task_status = 'running'
            OR (s.task_status = 'merged' AND s.updated_at > datetime('now', '-1 hour')))
        ORDER BY s.created_at`
@@ -119,17 +123,6 @@ function stackOf(sessionId: string): SessionFacts["stack"] {
     of: row.total,
     status: row.status,
   };
-}
-
-function latestChatAt(sessionId: string): number {
-  const row = db
-    .prepare(
-      `SELECT data FROM chat_items WHERE session_id = ? ORDER BY seq DESC LIMIT 1`
-    )
-    .get(sessionId) as { data: string } | undefined;
-  return row
-    ? ((JSON.parse(row.data) as { createdAt?: number }).createdAt ?? 0)
-    : 0;
 }
 
 export async function statusOf(s: Session): Promise<{
@@ -251,6 +244,7 @@ async function taskFacts(
     const state = s.task_status === "moved" ? "done" : s.task_status;
     return { state, pr, blocked: null };
   }
+  if (hostLink(s.host_id)) return remoteTaskFacts(workspaceId, s);
   const view = await taskView(s);
   return {
     state: view.state,
@@ -259,6 +253,67 @@ async function taskFacts(
     ciSettleIn: await settleIn(workspaceId, s, view.pr),
     ciSilentMs: await silentFor(s, view.pr),
   };
+}
+
+// A task another machine runs: its state is that machine's word (the same
+// reading the gates use), and the PR is read here, from GitHub, by branch.
+// What it can't say reads as blocked, never as clear.
+async function remoteTaskFacts(
+  workspaceId: string,
+  s: Session
+): Promise<NonNullable<SessionFacts["task"]>> {
+  const [pr, waiting] = await Promise.all([
+    prFor(s).catch(() => null),
+    waitingState(s),
+  ]);
+  await announceRemotePlan(workspaceId, s);
+  const status = peerStatus(s.host_id, s.id) ?? "running";
+  const state = deriveTaskState({
+    taskStatus: "running",
+    sessionStatus: status,
+    pr,
+    blocked: waiting.blocked !== null,
+  });
+  return {
+    state,
+    pr,
+    blocked: waiting.blocked,
+    ciSettleIn: await settleIn(workspaceId, s, pr),
+    ciSilentMs: await silentFor(s, pr),
+  };
+}
+
+// The plan-written line a held task stored on its machine (plan-step.ts),
+// once per distinct plan: the mirror keeps the last one it told about.
+async function announceRemotePlan(
+  workspaceId: string,
+  s: Session
+): Promise<void> {
+  const link = hostLink(s.host_id);
+  if (!link) return;
+  const view = await hostTasks(link)
+    .then(({ tasks }) => tasks.find((t) => t?.id === s.id))
+    .catch(() => undefined);
+  const note =
+    typeof view?.planNote === "string"
+      ? cleanRemoteText(view.planNote).slice(0, 2000)
+      : "";
+  if (!note || note === s.plan_note) return;
+  db.prepare(`UPDATE sessions SET plan_note = ? WHERE id = ?`).run(note, s.id);
+  queueEvent(workspaceId, `plan-done:${s.id}`, s.id, note);
+}
+
+// A task on another machine is as active as that machine says; one it can't
+// reach is taken as active just now, so nothing reads it as abandoned.
+async function lastActiveFor(s: Session): Promise<number> {
+  const link = hostLink(s.host_id);
+  if (!link) return lastActiveOf(s);
+  const view = await hostTasks(link)
+    .then(({ tasks }) => tasks.find((t) => t?.id === s.id))
+    .catch(() => undefined);
+  return typeof view?.lastActiveAt === "number"
+    ? view.lastActiveAt
+    : Date.now();
 }
 
 export async function sessionFacts(
@@ -283,11 +338,7 @@ export async function sessionFacts(
           s.view === "chat" && !hostLink(s.host_id) ? chatStall(s.id) : null,
         compacting:
           s.view === "chat" && !hostLink(s.host_id) && !!chatCompacting(s.id),
-        lastActive: Math.max(
-          sqliteMs(s.updated_at),
-          statusDetector.getTimestamp(s.tmux_name) * 1000,
-          latestChatAt(s.id)
-        ),
+        lastActive: await lastActiveFor(s),
         branch: s.branch_name,
         quick: !!s.quick_of,
         plan:

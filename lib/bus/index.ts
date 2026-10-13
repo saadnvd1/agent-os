@@ -14,6 +14,8 @@ import { previousNames } from "../session-names";
 import { deliverToPane, type Delivery } from "./delivery";
 import { resolveRef, wasNames, type Candidate } from "./resolve";
 import { tmuxPane } from "./tmux-pane";
+import { hostLink } from "../hosts/remote-api";
+import { relayToHeldTask } from "../tasks/held-remote";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
 
 export * from "./format";
@@ -142,11 +144,21 @@ function pairTimestamps(a: string | null, b: string): number[] {
 
 // Hands the message to the recipient: a chat session's worker, or typed
 // into a terminal's pane and checked that it went in.
-async function deliver(
+export async function deliver(
   to: Session,
   line: string,
-  from: { name: string; peer?: PeerMessage; origin?: ChatOrigin }
+  from: {
+    name: string;
+    peer?: PeerMessage;
+    origin?: ChatOrigin;
+    // The stored message's id, which a relayed one is keyed by.
+    messageId?: number;
+  }
 ): Promise<Delivery> {
+  // A task this machine's orchestrator moved to a linked machine: that
+  // machine's AgentOS delivers it, labelled as the orchestrator's (held.ts).
+  if (to.task_prompt && to.started_by && hostLink(to.host_id))
+    return relayToHeldTask(to, line, from.name, from.messageId);
   // A linked machine's own session: an agent's message would reach it as
   // the user's (see runner.ts), so none is relayed yet.
   if (to.peer_mirror && !to.task_prompt)
@@ -228,6 +240,7 @@ export async function sendMessage(opts: {
     opts.line ?? wakeLine({ fromName, fromId: from?.id ?? null, body }),
     {
       name: fromName,
+      messageId: id,
       peer: from ? { sessionId: from.id, body } : undefined,
       origin: from
         ? { kind: "peer", label: from.name, sessionId: from.id }

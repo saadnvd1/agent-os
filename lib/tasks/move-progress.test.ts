@@ -117,13 +117,17 @@ describe("a move's progress", () => {
     expect(row(id).task_status).toBe("running");
   });
 
-  it("refuses an orchestrator's task before touching it", async () => {
+  it("refuses an orchestrator's task for a machine that can't hold it, before touching it", async () => {
     const { id } = await seedTask(f, WT_ROOT, "feature/prog-orch");
     db.prepare(
       `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES ('w', 'task', ?, datetime('now'))`
     ).run(id);
-    await expect(moveTask(id, hostId)).rejects.toThrow(/orchestrator's tasks/);
-    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockResolvedValue(json({ tasks: [], capabilities: ["move"] }));
+    await expect(moveTask(id, hostId)).rejects.toThrow(
+      /can't move orchestrator tasks/
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/tasks$/);
     expect(row(id).task_status).toBe("running");
   });
 });

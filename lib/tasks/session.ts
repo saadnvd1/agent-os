@@ -170,7 +170,7 @@ export async function prFor(
   const branch = renamed ?? session.branch_name;
   if (!branch) return null;
   // A PR older than the task is an earlier use of the branch's name.
-  const since = isoUTC(session.created_at);
+  const since = isoUTC(session.task_since ?? session.created_at);
   let pr: TaskPR | null;
   if (renamed) {
     // Follow a rename only on gh's answer: a failure leaves the row put.

@@ -193,6 +193,17 @@ export const TOOL_SHAPES = {
   stack_status: { id: stackId },
   land: { id: stackId },
   drop: { task, reason: z.string().trim().min(1).max(2000) },
+  move: {
+    task,
+    machine: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .describe(
+        'A linked machine\'s name (see Machines), or "here" to bring the task back'
+      ),
+  },
   stop: { session },
   done: { session },
   add_project: {

@@ -10,6 +10,7 @@ import { hostLink } from "../hosts/remote-api";
 import { peerPane } from "../hosts/peer-sessions";
 import { workspaceSessions } from "./facts";
 import { untrusted } from "./untrusted";
+import { heldChatTail } from "../tasks/held-remote";
 import {
   findExternalSession,
   knownExternalSession,
@@ -104,6 +105,12 @@ export function chatText(items: ChatItem[]): string {
     .join("\n");
 }
 
+// The last lines of a chat task's conversation, unwrapped.
+export function chatTailText(sessionId: string, lines = DEFAULT_LINES): string {
+  const n = Math.max(1, Math.min(Math.floor(lines) || DEFAULT_LINES, 400));
+  return tail(chatText(lastItems(sessionId, n * 2)), n);
+}
+
 export async function readSession(
   workspaceId: string,
   ref: string,
@@ -121,8 +128,13 @@ export async function readSession(
     return readExternal(external, n);
   }
   const link = hostLink(s.host_id);
-  if (s.view === "chat" && link)
-    return `${s.name} (chat on ${link.hostName}): its messages are on that machine; open it to read them.`;
+  if (s.view === "chat" && link) {
+    // Its orchestrator's task is read through the machine that holds it.
+    const text = s.started_by ? await heldChatTail(s, n) : null;
+    return text
+      ? `${s.name} (chat on ${link.hostName}), last ${n} lines:\n${untrusted(s.name, text)}`
+      : `${s.name} (chat on ${link.hostName}): its messages are on that machine; open it to read them.`;
+  }
   if (s.view === "chat") {
     const text = chatText(lastItems(s.id, n * 2));
     const body = text ? untrusted(s.name, tail(text, n)) : "(no messages yet)";
