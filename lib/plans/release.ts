@@ -62,6 +62,7 @@ function syncPieces(pieces: FeaturePiece[]): void {
         setPiece(p.id, "dropped", "removed from the queue");
       else if (q?.status === "failed")
         setPiece(p.id, "blocked", q.error ?? "it couldn't start");
+      else if (!q) setPiece(p.id, "blocked", "its task is gone");
       continue;
     }
     if (s.task_status === "merged") setPiece(p.id, "merged");
@@ -104,6 +105,8 @@ export const realDeps: ReleaseDeps = {
       name: `${feature.name} · ${piece.name}`,
       plan: false,
       planReason: "feature piece",
+      // A retry under the same id clears what a failed attempt left behind.
+      reclaim: true,
       startedBy: plan?.started_by ?? null,
       originWorkspaceId: feature.workspace_id,
     };
@@ -185,7 +188,7 @@ async function releaseOne(
       `UPDATE feature_pieces SET status = 'building', session_id = ?, note = NULL
        WHERE id = ? AND status = 'waiting'`
     )
-    .run((piece.session_id = randomUUID()), piece.id).changes;
+    .run((piece.session_id ??= randomUUID()), piece.id).changes;
   if (!claimed) return;
   const prompt = `[Feature "${feature.name}", piece ${piece.position} of ${all.length}, started by AgentOS from an approved plan]\n${pieceBrief(all.length, { position: piece.position, name: piece.name, slice: piece.slice, owns: piece.owns ? piece.owns.split(", ") : [] }, planPathOf(feature.id), beforeLines(all, piece.position))}`;
   try {
@@ -196,16 +199,23 @@ async function releaseOne(
         piece.id
       );
   } catch (error) {
-    // A brake holds it for the next sweep; anything else is told once.
-    db.prepare(
-      `UPDATE feature_pieces SET status = 'waiting', session_id = NULL WHERE id = ?`
-    ).run(piece.id);
-    if (!(error instanceof BrakeRefused))
-      say(
-        feature,
-        `start-${piece.id}`,
-        `Feature "${feature.name}": piece ${piece.position} ${piece.name} couldn't start: ${error instanceof Error ? error.message : String(error)}`
-      );
+    if (error instanceof BrakeRefused) {
+      // Held for the next sweep: nothing was made.
+      db.prepare(
+        `UPDATE feature_pieces SET status = 'waiting', session_id = NULL WHERE id = ?`
+      ).run(piece.id);
+      return;
+    }
+    // Anything else would fail the same way every sweep: hold it, say so
+    // once. Its id is kept, so "Release anyway" starts it by the same id
+    // and clears what this attempt left.
+    const why = error instanceof Error ? error.message : String(error);
+    setPiece(piece.id, "blocked", `it couldn't start: ${why}`.slice(0, 300));
+    say(
+      feature,
+      `start-${piece.id}`,
+      `Feature "${feature.name}": piece ${piece.position} ${piece.name} couldn't start: ${why}. Release it anyway to try again, or drop it.`
+    );
   }
 }
 

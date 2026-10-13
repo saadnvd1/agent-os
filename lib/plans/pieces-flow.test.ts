@@ -263,6 +263,52 @@ describe("release", () => {
   });
 });
 
+describe("a start that fails", () => {
+  it("is tried once and told once across sweeps, and Release anyway retries by the same id", async () => {
+    const { id, feature } = await build();
+    merge(id);
+    const failing = vi.fn(
+      async (_f: unknown, _p: unknown, _t: string, _sessionId: string) => {
+        throw new Error("the project folder is gone");
+      }
+    );
+    const { d } = deps({ start: failing });
+    for (let i = 0; i < 4; i++) await releasePieces(d);
+    const piece = piecesOf(feature.id)[1];
+    // Other features earlier tests left building are swept too.
+    const mine = () =>
+      failing.mock.calls.filter(
+        ([, p]) => (p as { id: number }).id === piece.id
+      );
+    expect(mine()).toHaveLength(1);
+    expect(piece.status).toBe("blocked");
+    expect(piece.note).toContain("the project folder is gone");
+    const told = pendingEvents(feature.workspace_id).filter(
+      (e) => e.line.includes("couldn't start") && e.line.includes(feature.name)
+    );
+    expect(told).toHaveLength(1);
+
+    expect(releaseAnyway(piece.id)).toBe(true);
+    const retry = deps();
+    await releasePieces(retry.d);
+    expect(retry.started).toHaveLength(1);
+    expect(piecesOf(feature.id)[1].session_id).toBe(mine()[0][3]);
+  });
+
+  it("a building piece whose task is gone, and not queued, is blocked", async () => {
+    const { id, feature } = await build();
+    merge(id);
+    await releasePieces(deps().d);
+    const piece = piecesOf(feature.id)[1];
+    db.prepare(`DELETE FROM sessions WHERE id = ?`).run(piece.session_id);
+    await releasePieces(deps().d);
+    expect(piecesOf(feature.id)[1]).toMatchObject({
+      status: "blocked",
+      note: "its task is gone",
+    });
+  });
+});
+
 describe("release with the real start and deploy check", () => {
   const real = (): ReleaseDeps => ({
     ...realDeps,
