@@ -13,7 +13,7 @@ const flag = (db: Database.Database) =>
 function before() {
   const db = new Database(":memory:");
   createSchema(db);
-  runMigrations(db, 74);
+  runMigrations(db, 75);
   return db;
 }
 
