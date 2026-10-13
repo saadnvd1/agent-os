@@ -34,7 +34,7 @@ Don't edit files. Running a test (`npx vitest run <file>`) or a read-only comman
 
 **Missing test**: search the `*.test.ts(x)` files for the case, including tests of the caller. REJECTED if it's covered anywhere.
 
-**Convention**: the rule has to be written down: in the flagging agent's own rules (`.claude/agents/<agent>.md`), the do-code-review skill, `README.md` or `docs/setup/`. A preference with no rule behind it is REJECTED. Older code breaking the same rule doesn't excuse new code.
+**Convention**: the rule has to be written down: in the flagging agent's own rules (`.claude/agents/<agent>.md`), the do-code-review skill, `README.md`, `docs/guides/`, `docs/reference/` or `docs/setup/`. A preference with no rule behind it is REJECTED. Older code breaking the same rule doesn't excuse new code.
 
 **Spec compliance**: for a missing requirement, search the whole branch and existing code for it. For an unrequested change, check the goal brief and the PR body don't cover it.
 

@@ -50,6 +50,15 @@ Each code works once and expires after 10 minutes. If you take longer, choose **
 
 A paired device holds its own key. You can remove it from Devices at any time, which cuts off its open terminals straight away. A paired device can use AgentOS but can't add devices or change access settings. Only the computer itself and your tailnet can.
 
+### HTTPS on your tailnet
+
+If your tailnet has HTTPS
+certificates turned on, AgentOS also serves `https://<machine>.ts.net:3443`
+with Tailscale's own certificate (renewed daily). Passkeys, the clipboard
+and notifications need that secure address. Plain HTTP on 3011 keeps
+working. `AGENTOS_TAILNET_HTTPS=0` turns it off, and
+`AGENTOS_TAILNET_HTTPS_PORT` moves it.
+
 ## From anywhere with Connect
 
 Connect gives your machine a private address at runagentos.com, like `https://m-0123456789abcdef.runagentos.com`. It works from any network, and you don't open anything on your router or install a VPN. Connect is still in development.
@@ -103,6 +112,62 @@ Pushes need the iPhone app, and they go through Connect, so the machine has to b
 4. To check it works, open **Settings → Notifications**, go to **Your phone** and choose **Send a test**. It reports how many phones it pushed to. You can also press **Send test** on a device's row in Devices to test one phone, or run `aos push test` in a terminal.
 
 A few things that can surprise you: waiting, review, CI and merged notifications are skipped while you've been using the computer in the last 3 minutes. With Away on, everything except asks is folded into one digest every 10 minutes. And a phone gets at most 10 alerting pushes an hour, followed by one summary.
+
+## Notifications from agents and schedules
+
+Two things reach your phone: a schedule run that failed, and whatever an
+agent sends on purpose with `aos notify "<text>"` (the orchestrator's morning
+report, a real milestone). Status changes don't; that's the in-app Needs-you
+list. Each source sends at most one a minute: anything more inside the minute
+waits and goes out as one message (kept in the database, so a restart
+doesn't lose it; past 20 waiting, more are dropped), and the same text twice
+goes once.
+
+Set it up in **Settings → Notifications** (⌘K → Phone notifications, or the
+line at the bottom of Schedules), one of:
+
+- **Command**: `AGENTOS_NOTIFY_CMD` in the server's environment, a shell
+  command that gets the message on stdin. It wins when set. For example, a
+  Telegram sender on another machine:
+  `AGENTOS_NOTIFY_CMD='ssh -o BatchMode=yes me@box "NOTIFY_SOURCE=agentos ~/bin/notify"'`.
+- **Telegram**: a bot token and your chat id. The token is kept in the
+  database and never shown again, returned by the API or logged.
+
+### Push to the phone app
+
+A machine linked to Connect sends to the paired phones that have registered
+for push, instead of Telegram. A push is generic: the title "AgentOS", a
+category word and a link to open, with no session or task text (a plan's or
+feature's name is the one exception, scrubbed to a single line) (the payload is a
+versioned envelope, so an encrypted body can replace it later). It goes
+through the Connect relay, signed with the machine key; AgentOS keeps a
+`push_outbox` that retries with backoff, forgets tokens the relay reports as
+dead, and caps alerting pushes at 10 an hour per device (one summary after).
+
+- **What pushes**: an ask raised, a session waiting on you for a minute,
+  a task ready for review, CI or a review failing, a plan ready to approve,
+  a feature merged, and the Away digest. Merged is off by default. Each device picks its
+  categories (`PATCH /api/devices/me/push`). A task mirrored from another
+  machine never pushes from here.
+- **Quiet rules**: waiting, review, CI and merged don't push while you're at
+  this Mac (keyboard or mouse used in the last 3 minutes). While Away is on,
+  everything except asks folds into the 10-minute digest.
+- **Fallback**: agent messages, the Away digest and machine alerts (load,
+  schedules) go to Telegram when push isn't configured or fails. The newer
+  events are push-only. If Connect says push isn't set up yet, AgentOS
+  stops asking for 10 minutes and uses Telegram meanwhile.
+- **Check it**: `aos push test` sends a real push to each registered phone
+  and prints what came back; Settings → Devices shows each device's push
+  state, categories, last error and a Send test button.
+
+## Sessions on a phone
+
+The whole app works on a phone, not a cut-down view. Every session has its
+own link (`/?session=<id>`) you can bookmark or share between devices, and
+pairing a new device is a QR code. Tailscale gives you an encrypted address
+that works from anywhere.
+
+![AgentOS on a phone: a chat and the session list](https://raw.githubusercontent.com/saadnvd1/agent-os/main/screenshots/mobile.png)
 
 ## Troubleshooting
 

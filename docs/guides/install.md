@@ -10,7 +10,7 @@ AgentOS runs on your own computer and opens in your browser. It starts your codi
 
 ## Requirements
 
-- **macOS or Linux.** On Windows, use WSL 2 (not WSL 1) and follow the Linux steps inside it. The [README](https://github.com/saadnvd1/agent-os#windows-wsl2) has the Windows notes.
+- **macOS or Linux.** On Windows, use WSL 2 (not WSL 1) and follow the Linux steps inside it. The [Windows section](#windows-wsl2) below has the notes.
 - **Node.js 20 or newer.**
 - **git.** Sessions work in git worktrees.
 - **tmux.** Terminal sessions run inside it.
@@ -51,6 +51,75 @@ agent-os start
 
 AgentOS runs in the background on `http://localhost:3011`. `agent-os status` shows its addresses, and `agent-os run` starts it and opens the browser. To use another port, set `AGENT_OS_PORT` before you start it.
 
+Or run it from a source checkout:
+
+```bash
+git clone https://github.com/saadnvd1/agent-os
+cd agent-os
+npm install
+npm run dev  # http://localhost:3011
+```
+
+## Windows (WSL2)
+
+AgentOS runs on Windows inside WSL 2, as a Linux install. WSL 1 isn't
+supported (`wsl --set-version <distro> 2`). In an Ubuntu or Debian distro,
+run the install script above: it installs Node.js, tmux, ripgrep, lsof, a
+compiler for the native modules, and `wslu`, then prints the WSL next steps.
+The installer and the server both detect WSL the same way (the kernel
+release names Microsoft, or `WSL_DISTRO_NAME` is set).
+
+- **Open it from Windows** at `http://localhost:3011`. WSL 2 forwards
+  localhost to the distro by default, and the server's loopback address is
+  what's forwarded. Use `localhost`, not `127.0.0.1`: passkeys only work on
+  localhost or https. With `networkingMode=mirrored` in `.wslconfig`
+  (Windows 11), Windows and the distro share localhost directly. From a
+  phone or another machine, install Tailscale inside the distro and use
+  [Mobile access](phone.md) as on Linux.
+- **Keep projects in the Linux filesystem** (`~/code/...`), not on the
+  Windows drive (`/mnt/c/...`). Git, npm and file watching are many times
+  slower there, and changes made from Windows aren't seen by file watchers
+  (inotify doesn't cross the boundary), so the "/" menu only picks up new
+  skills after its cache expires. The folder picker warns on `/mnt/<drive>`,
+  and the server log lists projects that live there.
+- **Links** open in the Windows browser through `wslview` (from `wslu`), or
+  `explorer.exe` when it isn't installed. The server never touches the
+  clipboard; copy buttons use the browser's.
+- **Approvals with a passkey** use Windows Hello in the Windows browser,
+  registered for `localhost` (a passkey made on the tailnet https address is
+  a separate one).
+- **Start at login**: `agent-os enable` writes a systemd user service, which
+  needs systemd in the distro. Add this to `/etc/wsl.conf`, then run
+  `wsl --shutdown` from Windows and reopen the terminal:
+
+  ```ini
+  [boot]
+  systemd=true
+  ```
+
+  WSL still stops an idle distro, service and all, a few seconds after its
+  last terminal closes. To keep AgentOS up without a terminal open, add this
+  to `%UserProfile%\.wslconfig` (Windows 11) and start the distro at Windows
+  login, for example with a Task Scheduler task running
+  `wsl.exe -d <distro> -- sleep infinity`:
+
+  ```ini
+  [general]
+  instanceIdleTimeout=-1
+  [wsl2]
+  vmIdleTimeout=-1
+  ```
+
+What's been verified: the WSL detection and the installer's WSL paths have
+unit tests that run on any OS, and the manual [WSL workflow](https://github.com/saadnvd1/agent-os/blob/main/.github/workflows/wsl.yml)
+ran on a GitHub-hosted Windows runner (Windows Server 2025, Ubuntu 24.04
+under WSL 2): the installer detected WSL 2 and installed what was missing
+through apt, tmux, lsof and node-pty worked, the server started and logged
+its WSL note, and Windows reached it at both `localhost:3011` and
+`127.0.0.1:3011`. Untested: Windows Hello approvals, links opening through
+`wslview`/`explorer.exe`, mirrored networking, `agent-os enable` under
+systemd, the idle-timeout settings above, and Debian or other distros.
+
 ## First run
 
 On a fresh install the app opens a short setup at `/?welcome`. It appears only when you have no sessions and no projects of your own yet. Every step after the first can be skipped, and the whole thing can be left with **Skip setup**.
@@ -87,6 +156,42 @@ Kiro CLI (and the older Amazon Q CLI, `q`, which is shown only where it's instal
 
 This covers Identity Center sign-in, including Microsoft or Okta federation. A login through an external identity provider doesn't support the device flow. In that case, sign in once on the machine itself, or set `KIRO_API_KEY`.
 
+## Supported agents
+
+| Agent          | Chat | Resume | Fork | Auto-approve                                 |
+| -------------- | ---- | ------ | ---- | -------------------------------------------- |
+| Claude Code    | ✅   | ✅     | ✅   | `--dangerously-skip-permissions`             |
+| Codex          | ✅   | ✅     | ✅   | `--dangerously-bypass-approvals-and-sandbox` |
+| OpenCode       | ✅   | ✅     | ✅   | `--auto`                                     |
+| Pi             | ✅   | ✅     | ✅   | Never asks                                   |
+| Kilo Code      | ❌   | ✅     | ✅   | Config file                                  |
+| Gemini CLI     | ❌   | ❌     | ❌   | `--yolo`                                     |
+| Aider          | ❌   | ❌     | ❌   | `--yes`                                      |
+| Cursor CLI     | ❌   | ✅     | ❌   | `--force`                                    |
+| Amp            | ❌   | ✅     | ❌   | `--dangerously-allow-all`                    |
+| Oh My Pi       | ❌   | ❌     | ❌   | N/A                                          |
+| GitHub Copilot | ✅   | ✅     | ❌   | `--allow-all`                                |
+| Kiro CLI       | ❌   | ❌     | ❌   | `--trust-all-tools`                          |
+| Amazon Q (old) | ❌   | ❌     | ❌   | `--trust-all-tools`                          |
+
+Agents without chat run in the terminal. The new-session picker says when an
+
+## CLI
+
+```bash
+agent-os run              # start and open the browser
+agent-os start            # start in the background
+agent-os stop             # stop the server
+agent-os restart          # stop, then start
+agent-os status           # show its addresses
+agent-os pair             # add a phone, tablet or laptop (prints a QR code)
+agent-os logs             # tail the logs
+agent-os update           # update to the latest version
+agent-os enable           # start at login (disable turns it off)
+agent-os passkeys reset   # when every passkey is lost (see Orchestrator)
+agent-os uninstall
+```
+
 ## Keep it running and up to date
 
 `agent-os start` runs AgentOS until you stop it or restart the computer. To have it start at login:
@@ -95,7 +200,7 @@ This covers Identity Center sign-in, including Microsoft or Okta federation. A l
 agent-os enable
 ```
 
-This writes a launchd service on macOS or a systemd user service on Linux. `agent-os disable` turns it off. Under WSL, `enable` needs systemd, which is set in `/etc/wsl.conf` (see the README for the lines).
+This writes a launchd service on macOS or a systemd user service on Linux. `agent-os disable` turns it off. Under WSL, `enable` needs systemd, which is set in `/etc/wsl.conf` (see [Windows](#windows-wsl2) for the lines).
 
 The everyday commands:
 
