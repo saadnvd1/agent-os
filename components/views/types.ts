@@ -43,6 +43,7 @@ export interface ViewProps {
 
   // Handlers
   attachToSession: (session: Session) => void;
+  selectSession: (session: Session) => void;
   openSessionInNewTab: (session: Session) => void;
   handleNewSessionInProject: (projectId: string) => void;
   handleOpenTerminal: (projectId: string) => void;

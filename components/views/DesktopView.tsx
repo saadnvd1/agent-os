@@ -18,6 +18,7 @@ export function DesktopView({
   setShowQuickSwitcher,
   notificationSettings,
   attachToSession,
+  selectSession,
   openSessionInNewTab,
   handleNewSessionInProject,
   handleOpenTerminal,
@@ -38,7 +39,7 @@ export function DesktopView({
         sessionStatuses={sessionStatuses}
         onSelect={(id) => {
           const session = sessions.find((s) => s.id === id);
-          if (session) attachToSession(session);
+          if (session) selectSession(session);
         }}
         onOpenInTab={(id) => {
           const session = sessions.find((s) => s.id === id);
@@ -82,7 +83,7 @@ export function DesktopView({
         activeSessionWorkingDir={activeSession?.working_directory ?? undefined}
         onSelectSession={(sessionId) => {
           const session = sessions.find((s) => s.id === sessionId);
-          if (session) attachToSession(session);
+          if (session) selectSession(session);
         }}
         onSelectFile={(file, line) => {
           // Convert relative path to absolute by prepending working directory

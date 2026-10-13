@@ -46,6 +46,7 @@ import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
 import { CLAUDE_STATUS_SETTINGS_FLAG } from "@/lib/program-status/claude-flag";
 import { DesktopView } from "@/components/views/DesktopView";
+import { focusComposerInGesture } from "@/components/Chat/composer/autofocus";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
 import { useDraftKeys } from "@/hooks/useDraftKeys";
@@ -533,6 +534,20 @@ function HomeContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Picking a session with a tap, ⌘K or the keyboard: the composer is focused
+  // inside the gesture, which iOS requires. Other ways in (URL, notification,
+  // a session just created) use attachToSession's later focus.
+  const selectSession = useCallback(
+    (session: Session) => {
+      focusComposerInGesture(
+        document.querySelector(`[data-pane-id="${focusedPaneId}"]`),
+        session
+      );
+      void attachToSession(session);
+    },
+    [attachToSession, focusedPaneId]
+  );
+
   // Session selection handler
   const handleSelectSession = useCallback(
     (sessionId: string) => {
@@ -661,7 +676,7 @@ function HomeContent() {
 
   useAppCommands({
     sessions,
-    onSelectSession: attachToSession,
+    onSelectSession: selectSession,
     onSearchCode: () => setShowQuickSwitcher(true),
   });
   useMoveCommands(activeSession);
@@ -683,6 +698,7 @@ function HomeContent() {
     setShowQuickSwitcher,
     notificationSettings,
     attachToSession,
+    selectSession,
     openSessionInNewTab,
     handleNewSessionInProject,
     handleOpenTerminal,
