@@ -14,6 +14,7 @@ export const WAIT_MS = 60_000;
 const PRESENCE_GATED: ReadonlySet<PushCategory> = new Set([
   "needs-you",
   "review",
+  "plan",
   "ci",
   "merged",
 ]);
@@ -21,6 +22,7 @@ const PRESENCE_GATED: ReadonlySet<PushCategory> = new Set([
 const FOLDS_WHEN_AWAY: ReadonlySet<PushCategory> = new Set([
   "needs-you",
   "review",
+  "plan",
   "ci",
   "merged",
   "agents",

@@ -286,7 +286,10 @@ async function rerunReview(
 
 const SHA = /^[0-9a-f]{40}$/;
 
-async function mergeCommit(repo: string, pr: number): Promise<string | null> {
+export async function mergeCommit(
+  repo: string,
+  pr: number
+): Promise<string | null> {
   const out = await run(
     "gh",
     [

@@ -14,7 +14,8 @@ import { shortId } from "./describe";
 import { untrusted } from "./untrusted";
 import { awayDigestLine } from "../away/brief";
 import { formatRunTime } from "../schedules/cron";
-import { listRecipes, listRuns, getTimer } from "../recipes";
+import { listRecipes, listRuns } from "../recipes/store";
+import { getTimer } from "../recipes/timer";
 import { outputsText } from "../recipes/result";
 
 // About four characters a token: close enough to cap a prompt.

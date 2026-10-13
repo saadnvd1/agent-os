@@ -12,6 +12,7 @@ export const PUSH_CATEGORIES = [
   "asks",
   "needs-you",
   "review",
+  "plan",
   "ci",
   "merged",
   "agents",
@@ -36,9 +37,9 @@ export interface PushEnvelopeV1 {
   v: 1;
   /** Category, so the app can group and filter. */
   c: PushCategory;
-  /** Fixed title. */
-  t: typeof PUSH_TITLE;
-  /** Category word from the registry, never event text. */
+  /** The app name, or a short title the sender named (scrubbed). */
+  t: string;
+  /** Category word from the registry, or a short scrubbed line the sender named. */
   b: string;
   /** Deep link, an app path like `/session/abc`. */
   l: string;
@@ -76,4 +77,7 @@ export interface PushEvent {
   key?: string | null;
   /** Events sharing this replace each other on the phone. Defaults to key. */
   collapse?: string | null;
+  /** Named text for the alert, e.g. a plan's or a feature's name. Scrubbed. */
+  title?: string | null;
+  body?: string | null;
 }

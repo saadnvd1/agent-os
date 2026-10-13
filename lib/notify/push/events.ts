@@ -52,8 +52,42 @@ export const pushCiFailed = (taskId: string, sha: string) =>
   forTask("ci", "ci", taskId, sha);
 export const pushReviewBlocked = (taskId: string, sha: string) =>
   forTask("ci", "review-block", taskId, sha);
-export const pushMerged = (taskId: string) =>
-  forTask("merged", "merged", taskId);
+// A piece of a feature is covered by the feature's own push when it closes.
+const isFeaturePiece = (sessionId: string) =>
+  !!db
+    .prepare(`SELECT 1 FROM feature_pieces WHERE session_id = ?`)
+    .get(sessionId);
+
+export const pushMerged = (taskId: string) => {
+  if (!isFeaturePiece(taskId)) forTask("merged", "merged", taskId);
+};
+
+export const pushFeatureMerged = (featureId: string, name: string) =>
+  fire({
+    category: "merged",
+    id: null,
+    key: `feature:${featureId}`,
+    collapse: `group:feature:${featureId}`,
+    title: "Feature merged",
+    body: name,
+  });
+
+export const pushPlanAwaiting = (
+  taskId: string,
+  name: string,
+  pieces: number
+) =>
+  fire(
+    {
+      category: "plan",
+      id: taskId,
+      key: `plan-ready:${taskId}`,
+      collapse: `plan:${taskId}`,
+      title: "Plan ready",
+      body: `${name}, ${pieces} ${pieces === 1 ? "piece" : "pieces"}`,
+    },
+    taskId
+  );
 
 export const pushPlanReady = (sessionId: string, itemId: string) => {
   // Only a task has a screen to open; a plain chat's plan goes to the list.

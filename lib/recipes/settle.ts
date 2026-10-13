@@ -9,6 +9,7 @@ import { chatStateNow } from "../chat/runner";
 import { doneSession } from "../done";
 import { blockedReason } from "../tasks/state";
 import { runClaude, type ClaudeRunner } from "../orchestrator/claude-cli";
+import { releasePieces } from "../plans/release";
 import { queueEvent } from "../orchestrator/events";
 import { untrusted } from "../orchestrator/untrusted";
 import {
@@ -453,9 +454,12 @@ export function startSettling(): void {
   g.__agentosRecipeSettle = setInterval(() => {
     if (busy) return;
     busy = true;
-    void settleRuns().finally(() => {
-      busy = false;
-    });
+    void settleRuns()
+      .then(() => releasePieces())
+      .catch((e) => console.error("[recipes] settle:", e))
+      .finally(() => {
+        busy = false;
+      });
   }, SETTLE_EVERY_MS);
   g.__agentosRecipeSettle.unref?.();
 }
