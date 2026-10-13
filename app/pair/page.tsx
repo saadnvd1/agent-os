@@ -85,8 +85,9 @@ export default function PairPage() {
           <Logo />
           <h1 className="text-xl font-semibold">Pair this device</h1>
           <p className="text-muted-foreground text-sm">
-            On a device that already uses AgentOS, open the menu, choose{" "}
-            <span className="text-foreground">Devices</span>, then{" "}
+            On a device that already uses AgentOS, open{" "}
+            <span className="text-foreground">Settings</span>, choose{" "}
+            <span className="text-foreground">Devices &amp; access</span>, then{" "}
             <span className="text-foreground">Add a device</span>.
           </p>
         </div>
