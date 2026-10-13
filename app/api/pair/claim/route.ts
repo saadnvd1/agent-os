@@ -7,10 +7,12 @@ import { MAX_CLAIM_BYTES, readCapped } from "@/lib/security/read-capped";
 import {
   claimResponseBody,
   claimSetsCookie,
+  isNativeClaim,
 } from "@/lib/security/claim-response";
 
 // POST /api/pair/claim - reachable without a token; trades a code for one.
-// A client that isn't a browser sends `token: true` to get it in the body too.
+// A client that isn't a browser sends `token: true` to get it in the body too,
+// and starts with Can approve: it held a one-time code, as a browser does.
 export async function POST(request: NextRequest) {
   const raw = await readCapped(request, MAX_CLAIM_BYTES);
   if (raw === null)
@@ -23,6 +25,10 @@ export async function POST(request: NextRequest) {
   }
   if (!body.code)
     return NextResponse.json({ error: "code required" }, { status: 400 });
+  const native = isNativeClaim({
+    wantsToken: body.token,
+    origin: request.headers.get("origin"),
+  });
   const result = claimPairing({
     code: body.code,
     name: body.name ?? "",
@@ -31,6 +37,7 @@ export async function POST(request: NextRequest) {
       request.headers.get(REMOTE_HEADER),
       request.headers.get("x-forwarded-for")
     ),
+    native,
   });
   if (!result.ok) {
     const status = result.error === "rate_limited" ? 429 : 400;

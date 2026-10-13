@@ -258,8 +258,9 @@ approved`). An approval covers that one item only: a held task's approval
   hides it on all your devices and resolves nothing: an ask stays open on
   its list and in the counts. Questions about a task clear when it is merged
   or dropped.
-- **Proof it's you:** only this machine, the tailnet, or a paired device you
-  switched to "Can approve" in Devices may answer asks or pause. Approving a
+- **Proof it's you:** only this machine, the tailnet, or a paired device with
+  "Can approve" in Devices (on from pairing for the AgentOS app, off for a
+  browser) may answer asks or pause. Approving a
   hard line, a gate, a brake or a new passkey, Resume, changing the
   orchestrator's standing rules, and switching merge approvals off, also
   need a
