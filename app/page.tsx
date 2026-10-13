@@ -302,7 +302,7 @@ function HomeContent() {
         isLocal && provider.id === "claude"
           ? ` --append-system-prompt-file "$HOME/.agent-os/bus-brief.md" ${CLAUDE_STATUS_SETTINGS_FLAG}`
           : "";
-      const agentCmd = `${provider.command} ${flagsStr}${busBrief}`;
+      const agentCmd = `${provider.preamble}${provider.command} ${flagsStr}${busBrief}`;
       // The init script is a file on this machine, so remote sessions run the
       // agent directly and drop to a shell when it exits.
       const command =

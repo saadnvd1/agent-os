@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SIGN_IN_END, SIGN_IN_START } from "@/lib/agents/signin-screen";
 import { getDb } from "@/lib/db";
 import {
   applyProgramReport,
@@ -53,6 +54,10 @@ vi.mock("@/lib/status-detector", async (importOriginal) => ({
     listedAt: () => Date.now() + 1000,
   },
 }));
+const noteWaiting = vi.fn((_id: string, _waiting: boolean) => {});
+vi.mock("@/lib/notify/push/waiting", () => ({
+  noteWaiting: (id: string, waiting: boolean) => noteWaiting(id, waiting),
+}));
 vi.mock("@/lib/hosts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hosts")>()),
   hostExecFile: async () => ({ stdout: "", stderr: "" }),
@@ -75,6 +80,79 @@ beforeEach(() => {
     `INSERT INTO sessions (id, name, tmux_name, working_directory, updated_at, last_seen_at)
      VALUES (?, 'osc', ?, '/tmp', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`
   ).run(SID, NAME);
+});
+
+const KIRO_SID = "1c6a5d2f-2222-4333-8444-a55556666777";
+const KIRO_NAME = `kiro-${KIRO_SID}`;
+const LOGIN = `${SIGN_IN_START}\n${fixture("kiro-device-login.txt")}`;
+
+describe("a Kiro sign-in", () => {
+  beforeEach(() => {
+    noteWaiting.mockClear();
+    extra = [{ name: KIRO_NAME, hostId: "local" }];
+    getDb().prepare(`DELETE FROM sessions WHERE id = ?`).run(KIRO_SID);
+    getDb()
+      .prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, agent_type, updated_at, last_seen_at)
+         VALUES (?, 'kiro', ?, '/tmp', 'kiro', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`
+      )
+      .run(KIRO_SID, KIRO_NAME);
+  });
+  afterEach(async () => {
+    // Ends any wait the test began.
+    pane = "";
+    await collectStatuses({ full: true });
+    extra = [];
+  });
+
+  it("is waiting on a sign-in with the link and code, and buzzes once", async () => {
+    pane = LOGIN;
+    const first = await collectStatuses({ full: true });
+    expect(first.statuses[KIRO_SID]).toMatchObject({
+      status: "waiting",
+      need: "signin",
+      signIn: {
+        url: "https://view.awsapps.com/start/#/device?user_code=ABCD-EFGH",
+        code: "ABCD-EFGH",
+      },
+    });
+    await collectStatuses({ full: true });
+    expect(noteWaiting.mock.calls).toEqual([[KIRO_SID, true]]);
+  });
+
+  it("stops waiting, and cancels the buzz, when the sign-in ends", async () => {
+    pane = LOGIN;
+    await collectStatuses({ full: true });
+    pane = `${LOGIN}\n${SIGN_IN_END}\n$ `;
+    const { statuses } = await collectStatuses({ full: true });
+    expect(statuses[KIRO_SID]?.need).not.toBe("signin");
+    expect(noteWaiting.mock.calls).toEqual([
+      [KIRO_SID, true],
+      [KIRO_SID, false],
+    ]);
+  });
+
+  it("cancels the buzz of a session killed mid-login", async () => {
+    pane = LOGIN;
+    await collectStatuses({ full: true });
+    extra = [];
+    getDb().prepare(`DELETE FROM sessions WHERE id = ?`).run(KIRO_SID);
+    await collectStatuses({ full: true });
+    expect(noteWaiting).toHaveBeenLastCalledWith(KIRO_SID, false);
+  });
+
+  it("leaves a real question alone outside the sign-in", async () => {
+    pane = "I updated the code, see https://nodejs.org/en/download to verify.";
+    screen.mockResolvedValue("idle");
+    screenNeed.mockReturnValue({ need: "answer", detail: "Which one?" });
+    const { statuses } = await collectStatuses({ full: true });
+    expect(statuses[KIRO_SID]).toMatchObject({
+      need: "answer",
+      detail: "Which one?",
+    });
+    expect(statuses[KIRO_SID]?.signIn).toBeUndefined();
+    expect(noteWaiting).not.toHaveBeenCalled();
+  });
 });
 
 describe("collectStatuses", () => {

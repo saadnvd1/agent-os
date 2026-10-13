@@ -198,3 +198,9 @@
   source (`includeCoAuthoredBy` is a user setting, so only the commit-msg hook
   and the PR-body check stop it today); undo; fork; `/` commands from
   `available_commands_update`.
+- Kiro CLI, next: a chat driver over `kiro-cli chat --no-interactive
+--output-format stream-json` once its event schema is documented; a resume
+  finder (`--resume-id`) once its session store is read from a real install
+  (`lib/providers/resume-ids.ts`) and flip Resume on; pre-fill an Identity
+  Center start URL and region per project for `login`; the sign-in card for
+  the Welcome terminal.

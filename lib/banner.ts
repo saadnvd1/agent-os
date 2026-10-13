@@ -8,7 +8,10 @@ import * as path from "path";
 /**
  * Generate an init script that shows the AgentOS banner and configures tmux
  */
-function generateInitScript(agentCommand: string): string {
+export function generateInitScript(
+  agentCommand: string,
+  preamble = ""
+): string {
   return `#!/bin/bash
 # AgentOS Session Init Script
 # Auto-generated - do not edit manually
@@ -47,15 +50,15 @@ printf "\\n"
 sleep 0.8
 
 # Start the agent
-exec ${agentCommand}
+${preamble}exec ${agentCommand}
 `;
 }
 
 /**
  * Write init script to temp file and return the command to run it
  */
-export function wrapWithBanner(agentCommand: string): string {
-  const scriptContent = generateInitScript(agentCommand);
+export function wrapWithBanner(agentCommand: string, preamble = ""): string {
+  const scriptContent = generateInitScript(agentCommand, preamble);
   const scriptPath = path.join(os.tmpdir(), `agent-os-init-${Date.now()}.sh`);
 
   fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });

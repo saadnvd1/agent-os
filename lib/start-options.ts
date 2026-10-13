@@ -6,6 +6,7 @@
  */
 
 import { AGENT_OPTIONS } from "./agent-options";
+import { getProviderDefinition } from "./providers/registry";
 import { probeAgents } from "./agents/probe";
 import { gitCheck } from "./git";
 import { listHosts } from "./hosts";
@@ -64,7 +65,10 @@ export async function startOptions(
           hostId: project.host_id || "local",
         }
       : null,
-    agents: AGENT_OPTIONS.map((a) => ({
+    agents: AGENT_OPTIONS.filter(
+      (a) =>
+        !getProviderDefinition(a.value)?.legacy || probes?.[a.value]?.installed
+    ).map((a) => ({
       value: a.value,
       label: a.label,
       installed: probes?.[a.value]?.installed ?? null,

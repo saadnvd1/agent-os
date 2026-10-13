@@ -2,6 +2,8 @@
 
 import { useTaskLogQuery } from "@/data/session-logs";
 import { SetupCard } from "@/components/Chat/SetupCard";
+import { SignInCard } from "@/components/Terminal/SignInCard";
+import { getProviderDefinition } from "@/lib/providers/registry";
 import type { TabData } from "@/lib/panes";
 import { useRef, useCallback, useEffect, memo, useMemo } from "react";
 import dynamic from "next/dynamic";
@@ -322,28 +324,34 @@ export const Pane = memo(function Pane({
         </div>
       );
     const savedState = sessionRegistry.getTerminalState(paneId, tab.id);
+    const signInAgent = own ? getProviderDefinition(own.agent_type) : undefined;
     return (
-      <Terminal
-        ref={getTerminalRef(tab.id)}
-        onConnected={getTerminalConnectedHandler(tab)}
-        onBeforeUnmount={(scrollState) => {
-          sessionRegistry.saveTerminalState(paneId, tab.id, {
-            scrollTop: scrollState.scrollTop,
-            scrollHeight: 0,
-            lastActivity: Date.now(),
-            cursorY: scrollState.cursorY,
-          });
-        }}
-        initialScrollState={
-          savedState
-            ? {
-                scrollTop: savedState.scrollTop,
-                cursorY: savedState.cursorY,
-                baseY: 0,
-              }
-            : undefined
-        }
-      />
+      <div className="relative h-full w-full">
+        {signInAgent?.signIn && own && (
+          <SignInCard sessionId={own.id} agent={signInAgent.name} />
+        )}
+        <Terminal
+          ref={getTerminalRef(tab.id)}
+          onConnected={getTerminalConnectedHandler(tab)}
+          onBeforeUnmount={(scrollState) => {
+            sessionRegistry.saveTerminalState(paneId, tab.id, {
+              scrollTop: scrollState.scrollTop,
+              scrollHeight: 0,
+              lastActivity: Date.now(),
+              cursorY: scrollState.cursorY,
+            });
+          }}
+          initialScrollState={
+            savedState
+              ? {
+                  scrollTop: savedState.scrollTop,
+                  cursorY: savedState.cursorY,
+                  baseY: 0,
+                }
+              : undefined
+          }
+        />
+      </div>
     );
   };
 

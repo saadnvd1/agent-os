@@ -16,6 +16,8 @@ export const PROVIDER_IDS = [
   "pi",
   "omp",
   "copilot",
+  "kiro",
+  "amazonq",
   "shell",
 ] as const;
 
@@ -53,6 +55,17 @@ export interface ProviderDefinition {
 
   // Default arguments
   defaultArgs?: string[]; // Always passed to CLI
+
+  // A subcommand that comes before every other argument (`kiro-cli chat`).
+  subcommand?: string[];
+
+  // How to sign in from a terminal: `check` exits 0 when signed in, `login`
+  // prints a link and a code to finish on another device. A session runs
+  // them first, so it never waits on a prompt nobody can see.
+  signIn?: { check: string[]; login: string[] };
+
+  // A superseded CLI, offered only where it is installed.
+  legacy?: boolean;
 }
 
 // The model value that means "whatever the agent itself defaults to".
@@ -62,6 +75,34 @@ export const AGENT_DEFAULT_MODEL = "default";
 // leading dash (it would read as a flag), bounded.
 export const isAgentModelName = (v: unknown): v is string =>
   typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$/.test(v);
+
+const KIRO: ProviderDefinition = {
+  id: "kiro",
+  name: "Kiro CLI",
+  description: "AWS's Kiro CLI (formerly Amazon Q Developer CLI)",
+  cli: "kiro-cli",
+  configDir: "~/.kiro",
+  subcommand: ["chat"],
+  autoApproveFlag: "--trust-all-tools",
+  // `--resume-id` exists, but where Kiro keeps its sessions isn't something
+  // we read yet (lib/providers/resume-ids.ts), so no id ever reaches it.
+  supportsResume: false,
+  supportsFork: false,
+  modelFlag: "--model",
+  initialPromptFlag: "", // Positional argument
+  signIn: { check: ["whoami"], login: ["login", "--use-device-flow"] },
+};
+
+// The same CLI under its old name, with fewer flags.
+const AMAZON_Q: ProviderDefinition = {
+  ...KIRO,
+  id: "amazonq",
+  name: "Amazon Q CLI (legacy)",
+  description: "Amazon Q Developer CLI, replaced by Kiro CLI",
+  cli: "q",
+  configDir: "~/.aws/amazonq",
+  legacy: true,
+};
 
 /**
  * Provider Registry
@@ -211,6 +252,8 @@ export const PROVIDERS: ProviderDefinition[] = [
     modelFlag: "--model",
     initialPromptFlag: "-i",
   },
+  KIRO,
+  AMAZON_Q,
   {
     id: "shell",
     name: "Terminal",

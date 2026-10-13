@@ -9,6 +9,7 @@ import {
   findQuestion,
   plainText,
   readInputBox,
+  screenText,
   statusDetector,
   sessionKey,
   type SessionStatus,
@@ -16,9 +17,12 @@ import {
 import type { AgentType } from "../providers";
 import {
   getManagedSessionPattern,
+  getProviderDefinition,
   getProviderIdFromSessionName,
   getSessionIdFromName,
 } from "../providers/registry";
+import { findSignIn } from "../agents/signin-screen";
+import { noteWaiting } from "../notify/push/waiting";
 import { getDb } from "../db";
 import { beginPass, chatMemo } from "./incremental";
 import { chatCompacting, chatState } from "../chat/runner";
@@ -72,6 +76,8 @@ export interface SessionStatusResponse {
   prStage?: PrStage;
   // A program's own message (OSC 7501): untrusted, plain text only.
   detail?: string | null;
+  // The link and code a sign-in is waiting on (lib/agents/signin-screen).
+  signIn?: { url: string | null; code: string | null } | null;
   progress?: number | null;
 }
 
@@ -244,6 +250,9 @@ function getAgentTypeFromSessionName(sessionName: string): AgentType {
   return getProviderIdFromSessionName(sessionName) || "claude";
 }
 
+// Sessions whose sign-in has started the wait for you, until it is over.
+const signingIn = new Set<string>();
+
 async function collect(full = false): Promise<StatusSnapshot> {
   const sessions = await getTmuxSessions();
 
@@ -308,6 +317,10 @@ async function collect(full = false): Promise<StatusSnapshot> {
           hostId,
         });
     const id = pane.id;
+    // A CLI that signs in with a link and a code shows them while it works.
+    const signIn = getProviderDefinition(agentType)?.signIn
+      ? findSignIn(screenText(screen))
+      : null;
 
     return {
       sessionName,
@@ -316,6 +329,7 @@ async function collect(full = false): Promise<StatusSnapshot> {
       status,
       program,
       screenNeed,
+      signIn,
       claudeSessionId,
       lastLine: lastLineOf(screen),
       agentType,
@@ -323,6 +337,13 @@ async function collect(full = false): Promise<StatusSnapshot> {
   });
 
   const results = await Promise.all(sessionPromises);
+  // A session killed mid-login can't clear its own wait.
+  const alive = new Set(results.map((r) => r.id));
+  for (const id of signingIn)
+    if (!alive.has(id)) {
+      signingIn.delete(id);
+      noteWaiting(id, false);
+    }
   heuristicBusy = results.some((r) => r.status === "running");
 
   for (const {
@@ -332,6 +353,7 @@ async function collect(full = false): Promise<StatusSnapshot> {
     status,
     program,
     screenNeed,
+    signIn,
     claudeSessionId,
     lastLine,
     agentType,
@@ -344,6 +366,20 @@ async function collect(full = false): Promise<StatusSnapshot> {
       agentType,
       title: statusDetector.titleFor(sessionName, hostId),
     };
+    // Waiting on a sign-in is waiting on you, buzzed after the usual minute.
+    if (signIn) {
+      if (!signingIn.has(id)) noteWaiting(id, true);
+      signingIn.add(id);
+      statusMap[id] = {
+        ...shared,
+        status: "waiting",
+        need: "signin",
+        unread: false,
+        signIn: { url: signIn.url, code: signIn.code },
+      };
+      continue;
+    }
+    if (signingIn.delete(id)) noteWaiting(id, false);
     // A question on screen, or a message typed and never sent: it needs you
     // whether or not you've seen it, like a blocked program.
     const needKey = screenNeed ? `${screenNeed.need}:${screenNeed.detail}` : "";

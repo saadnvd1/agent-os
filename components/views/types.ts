@@ -20,6 +20,8 @@ export interface SessionStatus {
   claudeSessionId?: string | null;
   // From a program's OSC 7501 report: untrusted, rendered as plain text.
   detail?: string | null;
+  // The link and code a CLI's sign-in is waiting on (untrusted text).
+  signIn?: { url: string | null; code: string | null } | null;
   progress?: number | null;
 }
 

@@ -6,6 +6,7 @@
  * into a command line.
  */
 
+import { SIGN_IN_END, SIGN_IN_START } from "./agents/signin-screen";
 import {
   AGENT_DEFAULT_MODEL,
   type ProviderDefinition,
@@ -25,6 +26,8 @@ export interface AgentProvider {
   supportsResume: boolean;
   supportsFork: boolean;
   configDir: string;
+  // Shell that signs in first when the CLI isn't, or "".
+  preamble: string;
   // The CLI's arguments, each already quoted for the shell.
   buildFlags(options: BuildFlagsOptions): string[];
 }
@@ -44,7 +47,7 @@ export function buildArgs(
   def: ProviderDefinition,
   options: BuildFlagsOptions
 ): string[] {
-  const args: string[] = [];
+  const args: string[] = [...(def.subcommand ?? [])];
   if (options.sessionId && def.resumeArgs) {
     args.push(...def.resumeArgs(options.sessionId));
   } else if (options.parentSessionId && def.forkArgs) {
@@ -69,6 +72,20 @@ const SAFE_ARG = /^[\w@%+=:,./-]+$/;
 const quoteArg = (arg: string) =>
   SAFE_ARG.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
 
+// Signs in when the CLI isn't, between two marker lines the screen reader
+// looks for (lib/agents/signin-screen.ts), and stops if that fails, so the
+// pane shows why instead of a CLI that waits.
+function signInPreamble(def: ProviderDefinition): string {
+  if (!def.signIn) return "";
+  const cli = quoteArg(def.cli);
+  const run = (args: string[]) => [cli, ...args.map(quoteArg)].join(" ");
+  return (
+    `{ ${run(def.signIn.check)} >/dev/null 2>&1 || ` +
+    `{ echo '${SIGN_IN_START}'; ${run(def.signIn.login)}; s=$?; ` +
+    `echo '${SIGN_IN_END}'; [ $s -eq 0 ]; }; } && `
+  );
+}
+
 function toProvider(def: ProviderDefinition): AgentProvider {
   return {
     id: def.id,
@@ -78,6 +95,7 @@ function toProvider(def: ProviderDefinition): AgentProvider {
     supportsResume: def.supportsResume,
     supportsFork: def.supportsFork,
     configDir: def.configDir,
+    preamble: signInPreamble(def),
     buildFlags: (options) => buildArgs(def, options).map(quoteArg),
   };
 }
