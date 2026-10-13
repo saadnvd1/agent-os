@@ -1,17 +1,23 @@
 /**
  * The sign-in a CLI is waiting on, read from its screen: the link to open
- * and the one-time code to type there (a device flow), so a phone can finish
- * it. Only a screen from a CLI that signs in this way is read. What's on it
- * is the CLI's own output, so nothing here is trusted: a link is only
- * offered to open when its host is one of the sign-in pages.
+ * and the one-time code to type there (a device flow), so a device can
+ * finish it. Only the stretch of screen between the two lines a session
+ * prints around its login is read, so the agent's own output (links and the
+ * word "code" are everywhere in it) is never taken for a sign-in. What's
+ * there is the CLI's own output, so nothing is trusted: a link is only
+ * offered to open when its host is a sign-in page.
  */
+
+// Printed by the session before the login and after it, whatever it did.
+export const SIGN_IN_START = "AgentOS: signing in";
+export const SIGN_IN_END = "AgentOS: sign-in finished";
 
 export interface SignInScreen {
   url: string | null;
   code: string | null;
 }
 
-const CUE = /sign.?in|log.?in|verif|device|authori[sz]|one.?time|code/i;
+const CUE = /verif|authori[sz]|one.?time|confirm|enter|code|open/i;
 const DONE = /logged in|signed in|success/i;
 const URL_LINE = /https:\/\/\S+/;
 const CODE_IN_URL = /user_code=([A-Z0-9-]{6,12})/;
@@ -23,11 +29,14 @@ const WRAPPED_AT = 30;
 const LOOKBACK = 30;
 const NEAR = 3;
 
+// Where a device flow sends you: AWS's device-authorization page, the
+// Builder ID and Identity Center portals, and Kiro's own login. Not every
+// AWS host: S3 buckets and API gateways are anyone's.
 const TRUSTED_HOSTS = [
-  /(^|\.)awsapps\.com$/,
-  /(^|\.)amazonaws\.com$/,
-  /(^|\.)aws\.amazon\.com$/,
-  /(^|\.)kiro\.dev$/,
+  /^device\.sso\.[a-z0-9-]+\.amazonaws\.com$/,
+  /^view\.awsapps\.com$/,
+  /^d-[a-z0-9]+\.awsapps\.com$/,
+  /^([a-z0-9-]+\.)?kiro\.dev$/,
 ];
 
 export function trustedSignInUrl(url: string): boolean {
@@ -71,7 +80,12 @@ function joined(lines: string[]): string[] {
 }
 
 export function findSignIn(text: string): SignInScreen | null {
-  const lines = joined(text.split("\n").slice(-LOOKBACK));
+  const all = text.split("\n");
+  const start = all.findLastIndex((l) => l.includes(SIGN_IN_START));
+  if (start < 0) return null;
+  const during = all.slice(start + 1);
+  if (during.some((l) => l.includes(SIGN_IN_END))) return null;
+  const lines = joined(during.slice(-LOOKBACK));
   let found: { at: number; url: string } | null = null;
   lines.forEach((line, at) => {
     const url = line.match(URL_LINE)?.[0].replace(/[).,;]+$/, "");

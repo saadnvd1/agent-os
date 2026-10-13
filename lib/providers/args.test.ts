@@ -30,7 +30,7 @@ describe("buildArgs", () => {
 
   it("signs in before Kiro starts, and stops if that fails", () => {
     expect(getProvider("kiro").preamble).toBe(
-      "{ kiro-cli whoami >/dev/null 2>&1 || kiro-cli login --use-device-flow; } && "
+      "{ kiro-cli whoami >/dev/null 2>&1 || { echo 'AgentOS: signing in'; kiro-cli login --use-device-flow; s=$?; echo 'AgentOS: sign-in finished'; [ $s -eq 0 ]; }; } && "
     );
     expect(getProvider("amazonq").preamble).toContain(
       "q login --use-device-flow"
@@ -88,17 +88,20 @@ describe("buildFlags", () => {
 
 describe("browser safety", () => {
   // The new-session dialog and the terminal launcher import these.
-  it.each(["../providers.ts", "./registry.ts", "../model-catalog.ts"])(
-    "%s imports nothing Node-only",
-    (file) => {
-      const source = readFileSync(join(__dirname, file), "utf8");
-      const imports = [...source.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
-      const allowed = new Set([
-        "./providers/registry",
-        "./registry",
-        "./providers",
-      ]);
-      expect(imports.filter((i) => !allowed.has(i))).toEqual([]);
-    }
-  );
+  it.each([
+    "../providers.ts",
+    "./registry.ts",
+    "../model-catalog.ts",
+    "../agents/signin-screen.ts",
+  ])("%s imports nothing Node-only", (file) => {
+    const source = readFileSync(join(__dirname, file), "utf8");
+    const imports = [...source.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
+    const allowed = new Set([
+      "./providers/registry",
+      "./registry",
+      "./providers",
+      "./agents/signin-screen",
+    ]);
+    expect(imports.filter((i) => !allowed.has(i))).toEqual([]);
+  });
 });

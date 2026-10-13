@@ -337,6 +337,13 @@ async function collect(full = false): Promise<StatusSnapshot> {
   });
 
   const results = await Promise.all(sessionPromises);
+  // A session killed mid-login can't clear its own wait.
+  const alive = new Set(results.map((r) => r.id));
+  for (const id of signingIn)
+    if (!alive.has(id)) {
+      signingIn.delete(id);
+      noteWaiting(id, false);
+    }
   heuristicBusy = results.some((r) => r.status === "running");
 
   for (const {

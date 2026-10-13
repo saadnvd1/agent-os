@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, X } from "lucide-react";
 import { useSignIn } from "@/data/statuses/useSignIn";
 import { trustedSignInUrl } from "@/lib/agents/signin-screen";
 import { CopyButton } from "@/components/Chat/CopyButton";
@@ -16,17 +17,31 @@ export function SignInCard({
   agent: string;
 }) {
   const signIn = useSignIn(sessionId);
+  // Hidden until the sign-in shows something new.
+  const [hidden, setHidden] = useState("");
   if (!signIn) return null;
   const { url, code } = signIn;
+  const key = `${url}|${code}`;
+  if (hidden === key) return null;
   return (
     <div
       role="status"
       className="bg-card hairline absolute inset-x-2 top-2 z-10 flex flex-col gap-3 rounded-lg p-3 shadow-lg"
     >
       <div>
-        <p className="text-sm font-medium">Sign in to {agent}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">Sign in to {agent}</p>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setHidden(key)}
+            className="text-muted-foreground hover:text-foreground -m-2 flex h-11 w-11 items-center justify-center"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
         <p className="text-muted-foreground text-xs">
-          Finish on this phone; the session carries on by itself.
+          Finish signing in on any device; the session carries on by itself.
         </p>
       </div>
       {code && (

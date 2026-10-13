@@ -6,6 +6,7 @@
  * into a command line.
  */
 
+import { SIGN_IN_END, SIGN_IN_START } from "./agents/signin-screen";
 import {
   AGENT_DEFAULT_MODEL,
   type ProviderDefinition,
@@ -71,12 +72,18 @@ const SAFE_ARG = /^[\w@%+=:,./-]+$/;
 const quoteArg = (arg: string) =>
   SAFE_ARG.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
 
-// Stops at a failed sign-in, so the pane shows why instead of a CLI that waits.
+// Signs in when the CLI isn't, between two marker lines the screen reader
+// looks for (lib/agents/signin-screen.ts), and stops if that fails, so the
+// pane shows why instead of a CLI that waits.
 function signInPreamble(def: ProviderDefinition): string {
   if (!def.signIn) return "";
   const cli = quoteArg(def.cli);
   const run = (args: string[]) => [cli, ...args.map(quoteArg)].join(" ");
-  return `{ ${run(def.signIn.check)} >/dev/null 2>&1 || ${run(def.signIn.login)}; } && `;
+  return (
+    `{ ${run(def.signIn.check)} >/dev/null 2>&1 || ` +
+    `{ echo '${SIGN_IN_START}'; ${run(def.signIn.login)}; s=$?; ` +
+    `echo '${SIGN_IN_END}'; [ $s -eq 0 ]; }; } && `
+  );
 }
 
 function toProvider(def: ProviderDefinition): AgentProvider {
