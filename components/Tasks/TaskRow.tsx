@@ -20,6 +20,7 @@ import { Markdown } from "@/components/Chat/Markdown";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { cn } from "@/lib/utils";
+import { SimulatorIndicator } from "@/components/Simulator";
 import { MoveTaskButton } from "./MoveTaskButton";
 import { ResumeOnModel } from "./ResumeOnModel";
 import { TASK_STATE as STATE } from "./task-state-labels";
@@ -118,6 +119,7 @@ export function TaskRow({ task }: { task: TaskView }) {
               </a>
             </Button>
           )}
+          {!task.hostId && <SimulatorIndicator sessionId={task.id} />}
           <MoveTaskButton task={task} onError={setMoveError} />
           {!task.hostId && <ResumeOnModel task={task} />}
           <span className="flex-1" />
