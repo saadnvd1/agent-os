@@ -12,6 +12,8 @@ import { orchestratorKeys } from "../orchestrators";
 import { ruleKeys } from "../orchestrators/rules";
 import { workspaceKeys } from "../workspaces";
 import { scheduleKeys } from "../schedules";
+import { recipeKeys } from "../recipes";
+import { featureKeys } from "../features";
 import { archivedKeys } from "../done";
 import { awayKeys } from "../away";
 
@@ -54,6 +56,12 @@ function keysFor(topic: string): QueryKey[] {
     case "schedules":
     case "schedule_runs":
       return [scheduleKeys.all];
+    case "recipes":
+    case "recipe_runs":
+      return [recipeKeys.all];
+    case "features":
+    case "feature_pieces":
+      return [featureKeys.all, taskKeys.all, sessionKeys.all];
     case "orchestrator_asks":
     case "orchestrator_questions":
     case "needs_you_dismissed":

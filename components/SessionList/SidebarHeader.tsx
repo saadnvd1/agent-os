@@ -3,6 +3,7 @@
 import {
   Archive,
   BookOpen,
+  ChefHat,
   Clock,
   FolderGit2,
   FolderPlus,
@@ -31,6 +32,7 @@ import { archivedUiActions } from "@/stores/archivedUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { newDraft } from "@/stores/drafts";
 import { schedulesUiActions } from "@/stores/schedulesUi";
+import { recipesUiActions } from "@/stores/recipesUi";
 import { busUiActions } from "@/stores/busUi";
 import { settingsUiActions } from "@/stores/settingsUi";
 import { usageUiActions } from "@/stores/usageUi";
@@ -105,6 +107,9 @@ export function SidebarHeader(props: SidebarHeaderProps) {
                   <span className="sr-only">{schedules.failedText}</span>
                 </span>
               ),
+            }),
+            menuItem("Recipes", () => recipesUiActions.open(workspaceId), {
+              icon: ChefHat,
             }),
             menuItem("Messages", busUiActions.open, { icon: MessagesSquare }),
             ...(props.onOpenDocs

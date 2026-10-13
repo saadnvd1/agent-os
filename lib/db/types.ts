@@ -57,6 +57,10 @@ export interface Session {
   task_brief?: string | null;
   // Lists carry this instead of the brief itself (0/1).
   has_brief?: number;
+  // JSON, in lists: the recipe run this session is ({id, name, seq}), and the
+  // feature piece it builds ({feature, name, position, total}).
+  recipe_run?: string | null;
+  feature_piece?: string | null;
   // How the session is shown: a chat conversation or a terminal.
   view: "chat" | "terminal";
   chat_access: ChatAccess;

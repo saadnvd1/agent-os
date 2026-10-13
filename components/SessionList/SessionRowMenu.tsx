@@ -14,6 +14,9 @@ import {
   Loader2,
   Pencil,
   Pin,
+  Play,
+  Repeat,
+  ChefHat,
   PinOff,
   RotateCcw,
   Sparkles,
@@ -24,6 +27,8 @@ import * as CM from "@/components/ui/context-menu";
 import type { Session } from "@/lib/db";
 import { selectionActions } from "@/stores/sessionSelection";
 import { schedulesUiActions } from "@/stores/schedulesUi";
+import { recipesUiActions } from "@/stores/recipesUi";
+import { rowGroup } from "@/lib/recipes/chip";
 import { useDoneAction } from "./useDoneAction";
 import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
@@ -95,6 +100,8 @@ export function SessionRowMenu({
   const others = ctx.projects.filter(
     (p) => p.id !== session.project_id && !p.is_uncategorized
   );
+  const group = rowGroup(session);
+  const recipeRun = group?.kind === "recipe" ? { id: group.id } : null;
   const workspaceId =
     session.workspace_id ??
     ctx.projects.find((p) => p.id === session.project_id)?.workspace_id ??
@@ -251,6 +258,28 @@ export function SessionRowMenu({
             Schedule check-ins
           </Item>
         )}
+      {recipeRun && (
+        <>
+          <Item onClick={() => recipesUiActions.openRecipe(recipeRun.id)}>
+            <Repeat className={icon} />
+            Open recipe
+          </Item>
+          <Item onClick={() => recipesUiActions.openRecipe(recipeRun.id, true)}>
+            <Play className={icon} />
+            Run again
+          </Item>
+        </>
+      )}
+      {!recipeRun && !session.role && !session.quick_of && (
+        <Item
+          onClick={() =>
+            recipesUiActions.saveSessionAs(session.id, workspaceId)
+          }
+        >
+          <ChefHat className={icon} />
+          Save as recipe
+        </Item>
+      )}
       <Item
         onClick={() =>
           selectionActions.toggle(session.id, false, ctx.orderedIds())

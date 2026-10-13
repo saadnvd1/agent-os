@@ -20,6 +20,8 @@ import {
   implementPrompt,
   preparePlanDir,
 } from "../models/plan-step";
+import { sessionListColumns } from "../db/queries";
+import { rowGroup } from "../recipes/chip";
 import { recordTurn } from "../usage/turns";
 import {
   featureOfPlan,
@@ -294,5 +296,21 @@ describe("plan_pieces", () => {
     expect(planPiecesText(session, undefined, [2])).toContain(
       "Nothing changed"
     );
+  });
+});
+
+describe("session list", () => {
+  it("carries the piece a task builds, for its row's chip", async () => {
+    const { id } = await build();
+    const row = db
+      .prepare(
+        `SELECT ${sessionListColumns(db, "s")} FROM sessions s WHERE s.id = ?`
+      )
+      .get(id) as { recipe_run: string | null; feature_piece: string | null };
+    expect(row.recipe_run).toBeNull();
+    expect(rowGroup(row)).toMatchObject({
+      kind: "feature",
+      text: expect.stringContaining("Piece 1/2"),
+    });
   });
 });

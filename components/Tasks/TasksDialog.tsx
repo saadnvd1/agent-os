@@ -16,6 +16,7 @@ import { newDraft } from "@/stores/drafts";
 import { TaskRow } from "./TaskRow";
 import { BoardTodoSection } from "@/components/LumifyHub";
 import { StacksSection } from "@/components/Stacks";
+import { FeaturesSection } from "@/components/Features";
 
 export function TasksDialog() {
   const { panelOpen } = useSnapshot(tasksUi);
@@ -57,6 +58,7 @@ export function TasksDialog() {
             <TaskRow key={t.id} task={t} />
           ))}
         </div>
+        <FeaturesSection />
         <StacksSection />
         <BoardTodoSection />
         {done.length > 0 && (

@@ -4,6 +4,7 @@ import { useSnapshot } from "valtio";
 import { useTheme } from "next-themes";
 import {
   Archive,
+  ChefHat,
   Code,
   FolderGit2,
   FolderPlus,
@@ -22,6 +23,8 @@ import {
 import type { Session } from "@/lib/db";
 import type { PaletteCommand } from "@/lib/palette/registry";
 import { useWorkspacesQuery } from "@/data/workspaces";
+import { useRecipesQuery } from "@/data/recipes";
+import { recipesUiActions } from "@/stores/recipesUi";
 import { usePaletteCommands } from "@/hooks/usePaletteCommands";
 import { archivedUiActions } from "@/stores/archivedUi";
 import { busUiActions } from "@/stores/busUi";
@@ -67,6 +70,7 @@ export function useAppCommands({
   const { workspaceId } = useSnapshot(sidebarUi);
   const current = workspaces.find((w) => w.id === workspaceId) ?? null;
   const dark = resolvedTheme?.startsWith("dark") ?? false;
+  const { data: recipes = [] } = useRecipesQuery(workspaceId ?? null);
   const addProject = useAddProject();
   const addExisting = useAddExistingProject();
 
@@ -134,6 +138,22 @@ export function useAppCommands({
           },
         ]
       : []),
+    {
+      id: "app.recipes",
+      title: "Recipes",
+      group: "Go to",
+      keywords: ["saved", "jobs", "repeat", "testflight"],
+      icon: ChefHat,
+      run: () => recipesUiActions.open(workspaceId ?? null),
+    },
+    ...recipes.map((r) => ({
+      id: `app.recipe.${r.id}`,
+      title: `Run recipe: ${r.name}`,
+      group: "Actions",
+      keywords: ["recipe", "run", r.projectName ?? ""],
+      icon: ChefHat,
+      run: () => recipesUiActions.openRecipe(r.id, true),
+    })),
     {
       id: "app.search-code",
       title: "Search code",
