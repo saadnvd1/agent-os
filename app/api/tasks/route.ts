@@ -6,6 +6,8 @@ import { TASK_CAPABILITIES } from "@/lib/tasks/remote";
 import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
 import { isSessionId, statusFor } from "@/lib/tasks/move-bundle";
 import { startView } from "@/lib/sessions/launch";
+import { isValidAgentType } from "@/lib/providers";
+import { isAgentModelName } from "@/lib/providers/registry";
 
 // moved and capabilities are for another machine that mirrors these tasks.
 export async function GET() {
@@ -34,6 +36,7 @@ export async function POST(request: NextRequest) {
       baseBranch,
       after,
       view,
+      agent,
       plan,
       plan_reason,
       plan_only,
@@ -43,11 +46,20 @@ export async function POST(request: NextRequest) {
       project && typeof project === "object"
         ? (await ensureProject(project as ProjectRef)).id
         : projectId;
+    if (agent !== undefined && !isValidAgentType(agent))
+      throw new Error("Unknown agent");
+    if (agent && agent !== "claude" && model != null && model !== "")
+      if (!isAgentModelName(model)) throw new Error("Bad model name");
     const opts = {
       projectId: pid,
       prompt: String(prompt ?? ""),
-      // Checked now, so a queued task can't fail on it later.
-      model: parseOverride(model) ?? undefined,
+      agent: agent && agent !== "claude" ? agent : undefined,
+      // Checked now, so a queued task can't fail on it later. Another
+      // agent's model is its own name for one.
+      model:
+        agent && agent !== "claude" && typeof model === "string"
+          ? model
+          : (parseOverride(model) ?? undefined),
       plan: typeof plan === "boolean" ? plan : undefined,
       planOnly: plan_only === true ? true : undefined,
       planReason:

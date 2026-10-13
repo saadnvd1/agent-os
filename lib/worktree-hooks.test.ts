@@ -195,6 +195,7 @@ describe("the attribution rule", () => {
     ["Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>", true],
     ["co-authored-by: Claude <claude@anthropic.com>", true],
     ["Co-Authored-By: Someone <x@anthropic.com>", true],
+    ["Co-authored-by: Copilot <noreply@github.com>", true],
     ["  Co-Authored-By: Claude", true],
     ["Claude-Session: https://claude.ai/code/abc", true],
     ["🤖 Generated with [Claude Code](https://claude.com/claude-code)", true],

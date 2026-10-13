@@ -1819,6 +1819,17 @@ const migrations: Migration[] = [
       installChangeTriggers(db, TABLES_WATCHED_78);
     },
   },
+  {
+    id: 79,
+    name: "task_queue_agent",
+    up: (db) => {
+      // The agent CLI a queued task runs with; null is Claude Code.
+      const has = (
+        db.prepare(`PRAGMA table_info(task_queue)`).all() as { name: string }[]
+      ).some((c) => c.name === "agent_type");
+      if (!has) db.exec(`ALTER TABLE task_queue ADD COLUMN agent_type TEXT`);
+    },
+  },
 ];
 
 // `upTo`: stop after this id (tests that start from an older database).

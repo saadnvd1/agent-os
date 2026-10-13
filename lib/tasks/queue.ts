@@ -12,6 +12,7 @@
  */
 
 import type { ModelOverride } from "../models/resolve";
+import type { AgentType } from "../providers";
 import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
@@ -51,6 +52,7 @@ export interface QueueRow {
   plan_only: number | null;
   started_by: string | null;
   view: "chat" | "terminal" | null;
+  agent_type: string | null;
   base_branch: string | null;
   host_id: string | null;
   // A task (or queued task) it waits on, by id.
@@ -226,6 +228,7 @@ export interface QueueRequest {
   planOnly?: boolean;
   startedBy?: string | null;
   view?: "chat" | "terminal";
+  agent?: AgentType;
   baseBranch?: string;
   hostId?: string;
   // A task's id or name, or "any" for whichever running task finishes first.
@@ -279,9 +282,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, view, base_branch,
+    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, view, agent_type, base_branch,
        host_id, after_task, after_any, origin_workspace_id, position)
-     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @view, @base_branch,
+     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @view, @agent_type, @base_branch,
        @host_id, @after_task, @after_any, @origin,
        (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
   ).run({
@@ -299,6 +302,7 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
     plan_only: req.planOnly ? 1 : null,
     started_by: req.startedBy ?? null,
     view: req.view ?? null,
+    agent_type: req.agent ?? null,
     base_branch: req.baseBranch || null,
     host_id: req.hostId || null,
     after_task: afterTask,
@@ -478,6 +482,7 @@ async function startRow(
     planOnly: !!r.plan_only,
     startedBy: r.started_by,
     view: r.view ?? undefined,
+    agent: (r.agent_type as AgentType | null) ?? undefined,
     baseBranch: r.base_branch ?? undefined,
     hostId: r.host_id ?? undefined,
     reclaim: true,

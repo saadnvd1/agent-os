@@ -15,6 +15,7 @@ export const PROVIDER_IDS = [
   "amp",
   "pi",
   "omp",
+  "copilot",
   "shell",
 ] as const;
 
@@ -56,6 +57,11 @@ export interface ProviderDefinition {
 
 // The model value that means "whatever the agent itself defaults to".
 export const AGENT_DEFAULT_MODEL = "default";
+
+// A model name handed to another agent's CLI as an argument: printable, no
+// leading dash (it would read as a flag), bounded.
+export const isAgentModelName = (v: unknown): v is string =>
+  typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$/.test(v);
 
 /**
  * Provider Registry
@@ -191,6 +197,19 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsFork: false,
     modelFlag: "--model",
     initialPromptFlag: "", // Positional argument
+  },
+  {
+    id: "copilot",
+    name: "GitHub Copilot",
+    description: "GitHub's Copilot CLI",
+    cli: "copilot",
+    configDir: "~/.copilot",
+    autoApproveFlag: "--allow-all",
+    supportsResume: true,
+    supportsFork: false,
+    resumeArgs: (id) => [`--resume=${id}`],
+    modelFlag: "--model",
+    initialPromptFlag: "-i",
   },
   {
     id: "shell",

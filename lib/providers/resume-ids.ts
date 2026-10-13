@@ -154,6 +154,35 @@ export function opencodeResumeId(cwd: string, now = Date.now()): string | null {
   }
 }
 
+// ~/.copilot/session-state/<id>/workspace.yaml, whose `cwd:` line names the
+// folder the conversation ran in.
+export function copilotResumeId(cwd: string, now = Date.now()): string | null {
+  const root = path.join(
+    process.env.COPILOT_HOME || path.join(os.homedir(), ".copilot"),
+    "session-state"
+  );
+  let ids: string[];
+  try {
+    ids = fs.readdirSync(root);
+  } catch {
+    return null;
+  }
+  let best: { id: string; mtimeMs: number } | null = null;
+  for (const id of ids) {
+    if (!/^[0-9a-f-]{36}$/.test(id)) continue;
+    const file = path.join(root, id, "workspace.yaml");
+    try {
+      const { mtimeMs } = fs.statSync(file);
+      if (!recent(mtimeMs, now) || (best && best.mtimeMs >= mtimeMs)) continue;
+      const folder = fs.readFileSync(file, "utf8").match(/^cwd: (.+)$/m)?.[1];
+      if (folder?.trim() === cwd) best = { id, mtimeMs };
+    } catch {
+      // Gone since the listing.
+    }
+  }
+  return best?.id ?? null;
+}
+
 const FINDERS: Partial<
   Record<ProviderId, (cwd: string, now?: number) => string | null>
 > = {
@@ -161,6 +190,7 @@ const FINDERS: Partial<
   codex: codexResumeId,
   pi: piResumeId,
   opencode: opencodeResumeId,
+  copilot: copilotResumeId,
 };
 
 export function findResumeId(agent: ProviderId, cwd: string): string | null {

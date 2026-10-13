@@ -4,6 +4,7 @@ import { claudeDriver } from "./claude";
 import { codexDriver } from "./codex";
 import { openCodeDriver } from "./opencode";
 import { piDriver } from "./pi";
+import { copilotDriver } from "./copilot";
 import { demoDriver } from "./demo";
 import { demoMode } from "../../security/demo";
 
@@ -14,6 +15,7 @@ const DRIVERS: Record<(typeof CHAT_AGENT_TYPES)[number], ChatDriver> = {
   codex: codexDriver,
   pi: piDriver,
   opencode: openCodeDriver,
+  copilot: copilotDriver,
 };
 
 export function chatDriverFor(agentType: string): ChatDriver | null {

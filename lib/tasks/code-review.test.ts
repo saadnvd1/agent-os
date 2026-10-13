@@ -108,6 +108,10 @@ describe("AI attribution in the PR body", () => {
         "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
         "a Co-Authored-By trailer naming Claude",
       ],
+      [
+        "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+        "a Co-Authored-By trailer naming GitHub Copilot",
+      ],
       ["Claude-Session: https://claude.ai/code/x", "a Claude-Session link"],
       ["🤖 Generated with Codex", 'a "Generated with" AI footer'],
     ] as const)
