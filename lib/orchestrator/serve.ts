@@ -32,6 +32,7 @@ import { land } from "./signoff";
 import { arm, disarm } from "./armed";
 import { quickChange, quickPR } from "./quick";
 import { review } from "./review";
+import { planPiecesText } from "./plan-pieces";
 import {
   recipesText,
   runRecipe,
@@ -60,6 +61,7 @@ const ACTING = new Set<ToolName>([
   "drop",
   "move",
   "approve_plan",
+  "plan_pieces",
   "stop",
   "done",
   "review",
@@ -134,6 +136,10 @@ export async function runTool(
       const a = p(tool, raw);
       const task = workspaceTask(w, a.task);
       return approveTaskPlan(task, a.message);
+    }
+    case "plan_pieces": {
+      const a = p(tool, raw);
+      return planPiecesText(workspaceTask(w, a.task), a.merge, a.drop);
     }
     case "set_task_model": {
       const a = p(tool, raw);

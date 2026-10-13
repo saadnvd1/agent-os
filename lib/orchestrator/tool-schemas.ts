@@ -210,6 +210,17 @@ export const TOOL_SHAPES = {
         "Amends the plan: recorded on the task's brief as a scope change, so its review judges the PR against it. Only for a change Saad made"
       ),
   },
+  plan_pieces: {
+    task,
+    merge: z
+      .array(z.number().int().min(2).max(6))
+      .optional()
+      .describe("Waiting pieces to fold into the piece before them"),
+    drop: z
+      .array(z.number().int().min(2).max(6))
+      .optional()
+      .describe("Waiting pieces to leave out; pieces after them are held"),
+  },
   drop: { task, reason: z.string().trim().min(1).max(2000) },
   move: {
     task,

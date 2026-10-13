@@ -277,3 +277,22 @@ describe("editWaiting", () => {
     expect(piecesOf(feature.id)[1].status).toBe("dropped");
   });
 });
+
+describe("plan_pieces", () => {
+  it("lists the pieces and applies a drop to waiting ones only", async () => {
+    const { id } = await build();
+    const { planPiecesText } = await import("../orchestrator/plan-pieces");
+    const session = db
+      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .get(id) as never;
+    expect(planPiecesText(session)).toContain(
+      "2. Hooks [waiting] after 1 is merged"
+    );
+    expect(planPiecesText(session, undefined, [2])).toContain(
+      "Edited: 2 dropped"
+    );
+    expect(planPiecesText(session, undefined, [2])).toContain(
+      "Nothing changed"
+    );
+  });
+});
