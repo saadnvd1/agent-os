@@ -3,6 +3,7 @@ import { stopChat } from "../chat/runner";
 import { waitForExit } from "../chat/worker/client";
 import { endTmuxSession } from "../tmux/end";
 import { releaseOnEnd } from "../simulator";
+import { forgetPlanWait } from "../models/plan-step";
 
 type Agent = Pick<Session, "id" | "host_id" | "tmux_name">;
 
@@ -10,6 +11,7 @@ type Agent = Pick<Session, "id" | "host_id" | "tmux_name">;
 // chat session can still own one). The one call that delete, done, drop and
 // finish share.
 export async function endSessionAgent(s: Agent): Promise<void> {
+  forgetPlanWait(s.id);
   stopChat(s.id);
   // The task's simulator goes with it; no row, no work.
   releaseOnEnd(s.id, { remove: true });

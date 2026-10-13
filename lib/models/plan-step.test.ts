@@ -151,6 +151,8 @@ describe("plan then implement", () => {
       null,
       () => null
     );
+    // The first idle asks once more for the plan; the second gives up.
+    await handoffAfterPlan(id, async () => {});
     await handoffAfterPlan(id, async () => {});
     const queued = listQueue(id).find((m) => m.id === implementMessageId(id));
     expect(queued?.text).toContain("No plan was written");
@@ -170,6 +172,7 @@ describe("plan then implement", () => {
       if (text !== undefined)
         fs.writeFileSync(path.join(worktree, PLAN_FILE), text);
       await handoffAfterPlan(id, async () => {});
+      if (text === undefined) await handoffAfterPlan(id, async () => {});
     };
     const startedBy = (id: string, by: string | null) =>
       db.prepare(`UPDATE sessions SET started_by = ? WHERE id = ?`).run(by, id);
@@ -207,6 +210,7 @@ describe("plan then implement", () => {
       startedBy(id, "orch-1");
       await finishPlan(id, worktree);
       expect(eventsFor(id)[0].line).toContain("no plan file was written");
+      expect(eventsFor(id)[0].line).toContain("asked once more");
     });
 
     it("stays quiet for a task Saad started", async () => {

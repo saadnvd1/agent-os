@@ -6,7 +6,12 @@
  */
 
 import { pushPlanReady } from "../notify/push/events";
-import { handoffAfterPlan } from "../models/plan-step";
+import {
+  handoffAfterPlan,
+  planTurnStarted,
+  recheckPlanning,
+  type PlanHandoffEnv,
+} from "../models/plan-step";
 import { randomUUID } from "crypto";
 import os from "os";
 import { db, type Session } from "../db";
@@ -149,6 +154,18 @@ function retireIfStale(sessionId: string, live: Live): void {
     );
 }
 
+// What the plan step needs to know of a chat, read when it asks.
+function planEnv(sessionId: string): PlanHandoffEnv {
+  return {
+    backgroundRunning: () =>
+      (registry.live.get(sessionId)?.activity.tasks.size ?? 0) > 0,
+    turnRunning: () => {
+      const state = registry.live.get(sessionId)?.state;
+      return state === "running" || state === "waiting";
+    },
+  };
+}
+
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   track(live, e);
   if (e.type === "item" && e.item.kind === "task")
@@ -169,6 +186,7 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     emit(sessionId, e);
   } else if (e.type === "state") {
     live.state = e.state;
+    if (e.state === "running") planTurnStarted(sessionId);
     // Whatever ended the turn ended the compaction too.
     if (e.state === "idle" || e.state === "error")
       setCompacting(sessionId, live, null);
@@ -177,8 +195,12 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     live.retiring = undefined;
     retireIfStale(sessionId, live);
     if (e.state === "idle")
-      void handoffAfterPlan(sessionId, (id, m) => sendQueuedNow(id, m)).catch(
-        (err) => console.error(`Plan handoff for ${sessionId} failed:`, err)
+      void handoffAfterPlan(
+        sessionId,
+        (id, m) => sendQueuedNow(id, m),
+        planEnv(sessionId)
+      ).catch((err) =>
+        console.error(`Plan handoff for ${sessionId} failed:`, err)
       );
   } else if (e.type === "suggestion") {
     emit(sessionId, e);
@@ -940,6 +962,7 @@ export async function reattachChats(): Promise<void> {
     if (!live.has(id)) await resumeInterrupted(id);
   for (const id of queuedSessions(Date.now() - RESUME_WITHIN_MS))
     if (!live.has(id)) await resumeQueue(id);
+  await recheckPlanning((id, m) => sendQueuedNow(id, m), planEnv);
 }
 
 // Asks a chat's worker to end at its next turn boundary, so the next message

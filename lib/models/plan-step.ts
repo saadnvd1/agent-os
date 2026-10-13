@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { db, type Session } from "../db";
-import { enqueue } from "../chat/queued";
+import { deleteQueued, enqueue } from "../chat/queued";
 import { applySessionModel } from "./session-model";
 import {
   resolveRole,
@@ -31,8 +31,16 @@ export function planPrompt(task: string, only = false): string {
   return `${task}
 
 ---
-Plan first. This turn, only read and plan: write the implementation plan for the task above to \`${PLAN_FILE}\` in this worktree (what to change, file by file; the tests; how you'll verify it; anything ambiguous and the call you'd make). Change no other file, and don't commit, push or open a PR. End the turn once the plan is written: ${after}.`;
+Plan first. This turn, only read and plan: write the implementation plan for the task above to \`${PLAN_FILE}\` in this worktree (what to change, file by file; the tests; how you'll verify it; anything ambiguous and the call you'd make). Change no other file, and don't commit, push or open a PR. Don't end your turn while subagents or background commands you started are still running; wait for their results and write the plan in the same turn. End the turn once the plan is written: ${after}.`;
 }
+
+export const PLAN_RETRY_PROMPT = `Write the plan to \`${PLAN_FILE}\` now, plan only.`;
+export const planRetryMessageId = (sessionId: string) =>
+  `plan-retry-${sessionId}`;
+
+// How long a planning turn may sit ended on background work before it's
+// treated as having nothing running and re-prompted.
+export const PLAN_BACKGROUND_WAIT_MS = 20 * 60 * 1000;
 
 export function implementPrompt(planned: boolean, amendment?: string): string {
   const base = planned
@@ -80,7 +88,7 @@ export function planSummary(text: string, max = 5): string[] {
 }
 
 // Tells the orchestrator that started a task its plan is written, once.
-function announcePlan(s: Session, ref: string | null): void {
+function announcePlan(s: Session, ref: string | null, retried = false): void {
   if (!s.started_by && !s.held_by_device) return;
   const workspaceId = sessionWorkspace(s);
   // A task held for another machine's orchestrator can't reach it: the line
@@ -91,7 +99,8 @@ function announcePlan(s: Session, ref: string | null): void {
   const next = ref
     ? `implementing on ${ref}`
     : "waiting for approval, not implementing (approve_plan to go ahead, drop to reject)";
-  let head = `Task "${s.name}": no plan file was written; ${next}${ref ? " anyway" : ""}.`;
+  const again = retried ? " (asked once more for it first)" : "";
+  let head = `Task "${s.name}": no plan file was written${again}; ${next}${ref ? " anyway" : ""}.`;
   try {
     const summary = planSummary(fs.readFileSync(file, "utf8"));
     head = `Task "${s.name}": plan written to ${file}; ${next}.`;
@@ -128,7 +137,8 @@ async function startImplementing(
   s: Session,
   from: "planning" | "awaiting",
   send: Send,
-  amendment?: string
+  amendment?: string,
+  retried = false
 ): Promise<string | null> {
   const sessionId = s.id;
   const routed = resolveRole("implement", {
@@ -158,7 +168,7 @@ async function startImplementing(
   if (!claimed) return null;
   if (from === "planning") {
     try {
-      announcePlan(s, routed.ref);
+      announcePlan(s, routed.ref, retried);
     } catch (e) {
       console.error("plan-done event failed:", e);
     }
@@ -168,12 +178,57 @@ async function startImplementing(
   return routed.ref;
 }
 
+// Per planning task, kept in memory: when its turn first ended on background
+// work, and whether it has been asked once more for the plan. A restart
+// forgets both, which costs at most one more re-prompt.
+const waiting = new Map<
+  string,
+  { since: number; retried: boolean; timer?: ReturnType<typeof setTimeout> }
+>();
+
+export interface PlanHandoffEnv {
+  // Whether the session's agent still runs subagents or background shells.
+  backgroundRunning?: () => boolean;
+  // Whether the chat is in the middle of a turn right now.
+  turnRunning?: () => boolean;
+  waitMs?: number;
+  now?: () => number;
+}
+
+function stateOf(sessionId: string) {
+  let w = waiting.get(sessionId);
+  if (!w) waiting.set(sessionId, (w = { since: 0, retried: false }));
+  return w;
+}
+
+function forget(sessionId: string): void {
+  clearTimeout(waiting.get(sessionId)?.timer);
+  waiting.delete(sessionId);
+}
+
+// A task dropped, stopped or done: nothing left to wait for.
+export const forgetPlanWait = forget;
+
+// A new turn began (the agent resumed with its background results): whatever
+// the wait was counting is stale, and the deadline restarts at the next idle.
+export function planTurnStarted(sessionId: string): void {
+  const w = waiting.get(sessionId);
+  if (!w) return;
+  clearTimeout(w.timer);
+  w.timer = undefined;
+  w.since = 0;
+}
+
 // Called when a chat goes idle. A task whose plan turn has ended (it has a
 // recorded plan turn) moves to implementing, once; a plan-only task instead
-// waits for approval (approvePlan), holding no agent process.
+// waits for approval (approvePlan), holding no agent process. A turn that
+// ended with no plan file isn't the end of planning while its background
+// work runs (the agent resumes with the results): it waits, up to a limit,
+// then asks once for the plan before falling back to today's behaviour.
 export async function handoffAfterPlan(
   sessionId: string,
-  send: Send
+  send: Send,
+  env: PlanHandoffEnv = {}
 ): Promise<boolean> {
   const planned = db
     .prepare(
@@ -182,18 +237,74 @@ export async function handoffAfterPlan(
     .get(sessionId);
   if (!planned) return false;
   const s = getSession(sessionId);
-  if (s?.plan_phase !== "planning" || !s.worktree_path) return false;
+  if (s?.plan_phase !== "planning" || !s.worktree_path) {
+    forget(sessionId);
+    return false;
+  }
+  if (s.task_status !== "running" || s.archived_at) {
+    forget(sessionId);
+    return false;
+  }
+  // Mid-turn, the turn's own end decides.
+  if (env.turnRunning?.()) return false;
+  if (!fs.existsSync(path.join(s.worktree_path, PLAN_FILE))) {
+    const w = stateOf(sessionId);
+    const now = (env.now ?? Date.now)();
+    const limit = env.waitMs ?? PLAN_BACKGROUND_WAIT_MS;
+    if (env.backgroundRunning?.()) {
+      if (!w.since) w.since = now;
+      if (now - w.since < limit) {
+        clearTimeout(w.timer);
+        // No further turn may come to re-check this; the timer does.
+        w.timer = setTimeout(
+          () =>
+            void handoffAfterPlan(sessionId, send, env).catch((e) =>
+              console.error(`Plan handoff for ${sessionId} failed:`, e)
+            ),
+          Math.max(limit - (now - w.since), 1) + 1
+        );
+        w.timer.unref?.();
+        return false;
+      }
+    }
+    if (!w.retried) {
+      w.retried = true;
+      w.since = 0;
+      clearTimeout(w.timer);
+      const id = planRetryMessageId(sessionId);
+      enqueue(sessionId, {
+        id,
+        text: PLAN_RETRY_PROMPT,
+        origin: { kind: "decision", label: "Plan step" },
+      });
+      try {
+        await send(sessionId, id);
+      } catch (e) {
+        // Not left queued behind a turn that may write the plan itself.
+        deleteQueued(sessionId, id);
+        throw e;
+      }
+      return false;
+    }
+  }
+  // A re-prompt still queued is stale now.
+  deleteQueued(sessionId, planRetryMessageId(sessionId));
+  const retried = waiting.get(sessionId)?.retried ?? false;
+  forget(sessionId);
   if (!s.plan_only)
-    return (await startImplementing(s, "planning", send)) !== null;
-  const waiting = db
+    return (
+      (await startImplementing(s, "planning", send, undefined, retried)) !==
+      null
+    );
+  const awaiting = db
     .prepare(
       `UPDATE sessions SET plan_phase = 'awaiting'
        WHERE id = ? AND plan_phase = 'planning' AND task_status = 'running'`
     )
     .run(sessionId).changes;
-  if (!waiting) return false;
+  if (!awaiting) return false;
   try {
-    announcePlan(s, null);
+    announcePlan(s, null, retried);
   } catch (e) {
     console.error("plan-done event failed:", e);
   }
@@ -205,6 +316,26 @@ export async function handoffAfterPlan(
     console.error(`Releasing the worker of ${sessionId} failed:`, e);
   }
   return true;
+}
+
+// On server start: tasks still planning get the same check an idle chat
+// does, since the idle that would have run it may have come and gone while
+// the server was down. `envFor` reads the live chat's state.
+export async function recheckPlanning(
+  send: Send,
+  envFor: (sessionId: string) => PlanHandoffEnv
+): Promise<void> {
+  const rows = db
+    .prepare(
+      `SELECT id FROM sessions
+       WHERE plan_phase = 'planning' AND task_status = 'running'
+         AND archived_at IS NULL AND worktree_path IS NOT NULL`
+    )
+    .all() as { id: string }[];
+  for (const { id } of rows)
+    await handoffAfterPlan(id, send, envFor(id)).catch((e) =>
+      console.error(`Plan re-check for ${id} failed:`, e)
+    );
 }
 
 // approvePlan, sending through the chat runner (imported when needed: it
