@@ -1590,8 +1590,11 @@ approved`). An approval covers that one item only: a held task's approval
   pass, by giving `ask_saad` the task and its head sha: the ask is pinned to
   that commit, opens with what AgentOS knows about it (files changed,
   sensitive files, the review's verdict) and links the PR, and your approval
-  lets `sign_off` merge it once, at that commit, with a code review of it in
-  the PR body. It never rewrites an ask the gates raised.
+  lets `sign_off` merge it once, at that commit. It never rewrites an ask the
+  gates raised. An approved merge (either kind, and an armed task's) needs no
+  review or other gate of that commit: only an AI-attributed PR body, failing
+  CI (running CI waits), a head that moved off the commit, and on the
+  orchestrator's own ask a stack parent not merged yet, still stop it.
   An ask closes itself when its task is merged or dropped, or the brakes
   lift. At most 10 are open per workspace, titles that say the same thing
   fold into one, a declined subject isn't asked again for 6 hours, and a

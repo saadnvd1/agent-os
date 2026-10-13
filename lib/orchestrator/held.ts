@@ -1,5 +1,5 @@
 // A task that's with Saad merges only on his approval of its exact head
-// commit, once. A new commit since he approved goes back to him.
+// commit, once (signoff.ts). A new commit since he approved goes back to him.
 
 import { AskRefused, raiseAsk, workSubject } from "./asks";
 import { latestApproval } from "./ask-approvals";
@@ -17,10 +17,8 @@ export function heldVerdict(
   pr: number,
   moved?: string
 ): Verdict {
-  // One the orchestrator raised was judged before this (signoff.ts).
+  // An approval of this head was judged before this (signoff.ts).
   const approval = latestApproval(workspaceId, workSubject(task.id));
-  if (approval?.sha === sha)
-    return { ok: true, sha, pr, approval: approval.id };
   if (approval) {
     const why = `Saad approved ${approval.sha ? short(approval.sha) : "an earlier commit"}, but PR #${pr}'s head is now ${short(sha)}${moved ? ` and ${moved}` : ""}`;
     try {
