@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/Logo";
+import { appPairLink, isPhoneOrTablet } from "@/lib/security/pair-link";
 import { safeNextPath } from "@/lib/session-url";
 
 // Where to go once this device can use AgentOS: the page the gate turned
@@ -31,6 +32,7 @@ export default function PairPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
+  const [appLink, setAppLink] = useState<string | null>(null);
 
   useEffect(() => {
     // Client-only: the server has no user agent to guess from.
@@ -38,6 +40,11 @@ export default function PairPage() {
     const fromLink = () => {
       const code = decodeURIComponent(window.location.hash.slice(1));
       if (code) setCode(code);
+      setAppLink(
+        code && isPhoneOrTablet(navigator.userAgent, navigator.maxTouchPoints)
+          ? appPairLink(window.location.origin, code)
+          : null
+      );
     };
     fromLink();
     window.addEventListener("hashchange", fromLink);
@@ -123,6 +130,12 @@ export default function PairPage() {
               Pair
             </Button>
           </form>
+        )}
+
+        {appLink && (
+          <Button asChild variant="outline" className="h-11 w-full">
+            <a href={appLink}>Open in the AgentOS app</a>
+          </Button>
         )}
       </div>
     </main>

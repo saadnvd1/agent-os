@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import { formatCode, startPairing } from "./pairing";
+import { pairPageLink } from "./pair-link";
 import { reachableAt, type Reach } from "./reach";
 
 export interface PairingLink {
@@ -26,7 +27,7 @@ export async function pairingOffer(): Promise<PairingOffer> {
   );
   const links = await Promise.all(
     firstOfKind.map(async (r) => {
-      const link = `${r.url}/pair#${display}`;
+      const link = pairPageLink(r.url, display);
       const svg = await QRCode.toString(link, {
         type: "svg",
         margin: 1,
