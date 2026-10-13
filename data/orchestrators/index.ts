@@ -162,3 +162,62 @@ export function usePauseOrchestrator(workspaceId: string) {
       queryClient.invalidateQueries({ queryKey: orchestratorKeys.all }),
   });
 }
+
+function patchOverview(
+  queryClient: ReturnType<typeof useQueryClient>,
+  workspaceId: string,
+  change: (o: OrchestratorOverview) => OrchestratorOverview
+) {
+  queryClient.setQueryData<OrchestratorOverview[]>(
+    orchestratorKeys.all,
+    (prev) => prev?.map((o) => (o.workspaceId === workspaceId ? change(o) : o))
+  );
+}
+
+// Hiding an item from the Needs-you strip (and showing it again). It never
+// answers an ask or a question; it is shared by his devices.
+export function useDismissNeedsYou(workspaceId: string) {
+  const queryClient = useQueryClient();
+  const url = `/api/workspaces/${workspaceId}/orchestrator/needs-you/dismiss`;
+  return useMutation({
+    mutationFn: async ({ key, undo }: { key: string; undo?: boolean }) => {
+      if (!undo) return post(url, { key });
+      return json(
+        await fetch(url, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key }),
+        })
+      );
+    },
+    onMutate: async ({ key, undo }) => {
+      await queryClient.cancelQueries({ queryKey: orchestratorKeys.all });
+      patchOverview(queryClient, workspaceId, (o) => ({
+        ...o,
+        dismissed: undo
+          ? o.dismissed.filter((k) => k !== key)
+          : [...o.dismissed, key],
+      }));
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: orchestratorKeys.all }),
+  });
+}
+
+// Saad answered a question the orchestrator put to him.
+export function useResolveQuestion(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      post(`/api/workspaces/${workspaceId}/orchestrator/questions/${id}`, {}),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: orchestratorKeys.all });
+      patchOverview(queryClient, workspaceId, (o) => ({
+        ...o,
+        questions: o.questions.filter((q) => q.id !== id),
+      }));
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: orchestratorKeys.all }),
+  });
+}

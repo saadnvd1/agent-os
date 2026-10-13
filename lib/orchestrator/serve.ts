@@ -23,6 +23,7 @@ import { addNote } from "./notes";
 import { addProject } from "./add-project";
 import { addRule, removeRule } from "./rules";
 import { askSaad } from "./ask-tool";
+import { askQuestion, resolveQuestion } from "./questions";
 import { listOrchestratorPeers, messageOrchestrator } from "./cross";
 import { PAUSED_REFUSAL } from "./pause";
 import { readSession } from "./read";
@@ -211,5 +212,15 @@ export async function runTool(
       return disarm(w, p(tool, raw).task);
     case "ask_saad":
       return askSaad(w, p(tool, raw));
+    case "question": {
+      const a = p(tool, raw);
+      return askQuestion(w, a.text, a.task);
+    }
+    case "resolve_question": {
+      const id = p(tool, raw).id;
+      return resolveQuestion(w, id, "orchestrator")
+        ? `Question ${id} cleared.`
+        : `No open question ${id}.`;
+    }
   }
 }

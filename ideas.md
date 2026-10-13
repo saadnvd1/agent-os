@@ -181,3 +181,6 @@
 - [ ] A Release build with the bundle embedded, for checks without Metro
 - [ ] Record a check as a replayable script
 - [ ] Android emulator through the same lease
+
+- Resolve an open orchestrator question from a freeform chat reply, without the strip's Reply or the orchestrator clearing it.
+- Fold event turns in task chats the way the orchestrator's chat does.

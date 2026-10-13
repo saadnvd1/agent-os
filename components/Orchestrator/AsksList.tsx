@@ -27,18 +27,23 @@ export function AsksList({
   return (
     <div className="space-y-2">
       {shown.map((ask) => (
-        <AskCard
+        <div
           key={ask.id}
-          ask={ask}
-          dense={dense}
-          pending={answer.isPending && answer.variables?.ask.id === ask.id}
-          onAnswer={(a) =>
-            answer.mutate(
-              { ask, ...a },
-              { onError: (e) => toast.error(e.message) }
-            )
-          }
-        />
+          id={`ask-${ask.id}`}
+          className="scroll-mt-2 rounded-xl"
+        >
+          <AskCard
+            ask={ask}
+            dense={dense}
+            pending={answer.isPending && answer.variables?.ask.id === ask.id}
+            onAnswer={(a) =>
+              answer.mutate(
+                { ask, ...a },
+                { onError: (e) => toast.error(e.message) }
+              )
+            }
+          />
+        </div>
       ))}
       {more > 0 && onMore && (
         <button

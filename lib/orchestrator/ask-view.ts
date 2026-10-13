@@ -30,10 +30,23 @@ export interface AskView {
   createdAt: string;
 }
 
+// A question the orchestrator put to Saad in chat, open until answered.
+export interface QuestionView {
+  id: number;
+  text: string;
+  // The task it is about, when it names one.
+  task: string | null;
+  taskName: string | null;
+  createdAt: string;
+}
+
 export interface OrchestratorOverview {
   workspaceId: string;
   sessionId: string | null;
   paused: boolean;
   inReview: number;
   asks: AskView[];
+  questions: QuestionView[];
+  // Keys (ask:<id>, question:<id>) he hid from the Needs-you strip.
+  dismissed: string[];
 }

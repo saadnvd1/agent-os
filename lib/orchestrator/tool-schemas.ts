@@ -239,6 +239,18 @@ export const TOOL_SHAPES = {
       .describe("A new project's name (default: the folder's)"),
   },
   note: { text: z.string().trim().min(1).max(2000) },
+  question: {
+    text: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .describe("The question as you asked it in chat, one or two sentences"),
+    task: ref("The task it is about, when it names one").optional(),
+  },
+  resolve_question: {
+    id: z.number().int().positive().describe("The question's id"),
+  },
   rule_add: {
     text: z
       .string()

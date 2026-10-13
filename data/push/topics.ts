@@ -55,6 +55,8 @@ function keysFor(topic: string): QueryKey[] {
     case "schedule_runs":
       return [scheduleKeys.all];
     case "orchestrator_asks":
+    case "orchestrator_questions":
+    case "needs_you_dismissed":
       return [orchestratorKeys.all];
     case "orchestrator_rules":
       return [ruleKeys.all];

@@ -7,7 +7,12 @@
 
 import type { ChatItem } from "./events";
 import { lineDiff } from "./diff";
-import { groupTimeline, STANDALONE_TOOLS, type ToolItem } from "./group";
+import {
+  groupTimeline,
+  STANDALONE_TOOLS,
+  type GroupOptions,
+  type ToolItem,
+} from "./group";
 import { eventParts, originOf } from "./origin";
 
 export const MIN_QUERY = 2;
@@ -170,7 +175,11 @@ function rowKeys(item: ChatItem): string[] {
  * so it's on screen: a step inside its folded run, a message inside an undo.
  * Null when it isn't loaded (or the timeline never shows it).
  */
-export function locate(items: ChatItem[], id: string): Located | null {
+export function locate(
+  items: ChatItem[],
+  id: string,
+  opts: GroupOptions = {}
+): Located | null {
   const at = items.findIndex((i) => i.id === id);
   if (at === -1) return null;
   const inside = (
@@ -182,16 +191,28 @@ export function locate(items: ChatItem[], id: string): Located | null {
         return { open: [...open, ...rowKeys(b.item)] };
       if (b.type === "tools" && b.tools.some((t) => t.id === id))
         return { open: [...open, `steps:${b.id}`, `tool:${id}`] };
+      if (b.type === "events") {
+        const turn = b.turns.find(
+          (t) => t.id === id || t.replies.some((i) => i.id === id)
+        );
+        if (!turn) continue;
+        const opened = [...open, `events:${b.id}`, `eventturn:${turn.id}`];
+        if (turn.id === id) return { open: [...opened, ...rowKeys(turn.user)] };
+        return inside(groupTimeline(turn.replies), opened) ?? { open: opened };
+      }
       if (b.type === "undone" && b.items.some((i) => i.id === id))
         return (
-          inside(groupTimeline(b.items), [...open, `undone:${b.undo.id}`]) ?? {
+          inside(groupTimeline(b.items, opts), [
+            ...open,
+            `undone:${b.undo.id}`,
+          ]) ?? {
             open: [...open, `undone:${b.undo.id}`],
           }
         );
     }
     return null;
   };
-  const blocks = groupTimeline(items);
+  const blocks = groupTimeline(items, opts);
   const blockOf = (b: (typeof blocks)[number]) =>
     b.type === "item" ? b.item.id : b.id;
   for (const b of blocks) {

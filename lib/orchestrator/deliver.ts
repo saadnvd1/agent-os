@@ -10,6 +10,7 @@ import {
   logSuppressed,
   markDelivered,
   pendingEvents,
+  subjectNames,
   suppressedSince,
   unlogDeliveries,
 } from "./events";
@@ -130,9 +131,11 @@ export async function deliverEvents(opts: {
   const text = lines.join("\n");
   // Saad's answers to asks, shown in chat as his decisions.
   const decided = [...new Set(pending.filter(isAnswer).map((e) => e.line))];
+  const subjects = subjectNames(pending.map((e) => e.subject));
   const origin: ChatOrigin = {
     kind: "event",
     label: "AgentOS",
+    ...(subjects.length ? { subjects } : {}),
     ...(decided.length ? { decided } : {}),
     ...(pending.every((e) => isAwayEvent(e)) ? { away: true as const } : {}),
   };
