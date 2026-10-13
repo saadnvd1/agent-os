@@ -167,8 +167,8 @@ export async function spawnWorker(
   const flagsStr = flags.join(" ");
 
   // Create tmux session with the agent and banner
-  const agentCmd = `${provider.preamble}${provider.command} ${flagsStr}`;
-  const newSessionCmd = wrapWithBanner(agentCmd);
+  const agentCmd = `${provider.command} ${flagsStr}`;
+  const newSessionCmd = wrapWithBanner(agentCmd, provider.preamble);
   try {
     await tmux(["set", "-g", "mouse", "on"]).catch(() => {});
     // The last argument is the agent's command line, which tmux runs.
