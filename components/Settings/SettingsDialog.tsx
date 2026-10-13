@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   ListChecks,
   ShieldOff,
+  RefreshCw,
   Smartphone,
   X,
   type LucideIcon,
@@ -31,6 +32,7 @@ import { DevicesPanel } from "@/components/Devices";
 import { GlobalMergeSection } from "@/components/Merge/GlobalMergeSection";
 import { ModelsSection } from "@/components/Models/ModelsSection";
 import { SchedulesPanel } from "@/components/Schedules";
+import { UpdatesSection } from "@/components/Updates/UpdatesSection";
 import { WorkspaceSettings } from "@/components/Workspaces";
 import { useSettingsUrl } from "@/hooks/useSettingsUrl";
 import { SETTINGS_SECTIONS, type SettingsSection } from "@/lib/settings-url";
@@ -99,6 +101,11 @@ export const SECTION_INFO: Record<
     hint: "What this machine has, agents, first-run setup",
     icon: ListChecks,
   },
+  updates: {
+    label: "Updates",
+    hint: "Version, check for updates, the update banner",
+    icon: RefreshCw,
+  },
 };
 
 function SectionBody({
@@ -129,6 +136,8 @@ function SectionBody({
       return <AuditsPanel />;
     case "setup":
       return <SetupSection />;
+    case "updates":
+      return <UpdatesSection />;
   }
 }
 

@@ -20,7 +20,9 @@ acquire_build_lock
 if [ "${1:-}" = "--rollback" ]; then
   rollback_build
 else
+  echo "::phase pulling"
   git pull --ff-only
+  echo "::phase installing"
   # The build needs dev dependencies even when the shell runs with
   # NODE_ENV=production (as sessions started by AgentOS do).
   npm install --include=dev --no-audit --no-fund
@@ -28,11 +30,13 @@ else
   # deploy never changes it, and a dirty lockfile would block the next pull.
   git checkout -- package-lock.json 2>/dev/null || true
   node scripts/ensure-native.mjs
+  echo "::phase building"
   build_beside
   swap_build
 fi
 
 if [ -n "${AGENTOS_RESTART:-}" ]; then
+  echo "::phase restarting"
   eval "$AGENTOS_RESTART"
   port="${PORT:-3011}"
   for _ in $(seq 1 40); do

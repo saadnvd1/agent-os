@@ -78,3 +78,7 @@ progress.md
 # Local-only skills: they hold private prompts and plan templates
 .claude/skills/session-audit/
 .claude/skills/code-health-audit/
+
+# update runner state and log (beside the database)
+agent-os-update.json
+agent-os-update.log
