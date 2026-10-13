@@ -41,10 +41,7 @@ export function ProjectStep() {
   const own = projects.filter((p) => !p.is_uncategorized);
 
   const add = (kind: AddProjectKind) =>
-    addProjectActions.show(kind, "local", (id) => {
-      welcomeUiActions.setProject(id);
-      welcomeUiActions.go("finish");
-    });
+    addProjectActions.show(kind, "local", welcomeUiActions.chooseProject);
 
   return (
     <div className="flex flex-col gap-3">
@@ -54,10 +51,7 @@ export function ProjectStep() {
             <li key={p.id}>
               <button
                 type="button"
-                onClick={() => {
-                  welcomeUiActions.setProject(p.id);
-                  welcomeUiActions.go("finish");
-                }}
+                onClick={() => welcomeUiActions.chooseProject(p.id)}
                 className={cn(
                   "bg-muted/40 hover:bg-accent flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left",
                   projectId === p.id && "ring-primary/40 ring-2"

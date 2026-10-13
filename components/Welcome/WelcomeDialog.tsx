@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { useSnapshot } from "valtio";
 import { Check } from "lucide-react";
 import {
@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
 import { WELCOME_STEPS, type WelcomeStep } from "@/lib/welcome-url";
 import { welcomeUi, welcomeUiActions } from "@/stores/welcomeUi";
 import { AgentList } from "./AgentList";
+import type { BrowserNotifications } from "@/components/Settings/NotificationsSection";
+import { HostsDialog } from "@/components/Hosts";
+import { DevicesStep } from "./DevicesStep";
 import { ProjectStep } from "./ProjectStep";
 
 const STEPS: Record<
@@ -31,6 +34,11 @@ const STEPS: Record<
     label: "Project",
     title: "Add your first project",
     hint: "A folder or repo for the first session to work in.",
+  },
+  devices: {
+    label: "Devices",
+    title: "Use it from your phone",
+    hint: "All optional. Each can be done later from Settings.",
   },
   finish: {
     label: "Start",
@@ -61,8 +69,14 @@ function FinishStep() {
  * First-run setup: agents, then a first project, then a session. It stays
  * open until finished or skipped, and every step after the first can be skipped.
  */
-export const WelcomeDialog = memo(function WelcomeDialog() {
+export const WelcomeDialog = memo(function WelcomeDialog({
+  notifications,
+}: {
+  notifications: BrowserNotifications;
+}) {
   useWelcomeUrl();
+  // Held here so the machines dialog outlives a step change.
+  const [hostsOpen, setHostsOpen] = useState(false);
   const { open, step, projectId } = useSnapshot(welcomeUi);
   const end = useEndWelcome();
   const at = WELCOME_STEPS.indexOf(step);
@@ -77,7 +91,10 @@ export const WelcomeDialog = memo(function WelcomeDialog() {
         onEscapeKeyDown={(e) => e.preventDefault()}
         className="max-h-[100dvh] overflow-y-auto max-sm:h-[100dvh] max-sm:max-w-full max-sm:rounded-none sm:max-h-[90dvh] sm:max-w-xl"
       >
-        <nav aria-label="Setup steps" className="flex items-center gap-1">
+        <nav
+          aria-label="Setup steps"
+          className="flex min-w-0 items-center gap-1"
+        >
           {WELCOME_STEPS.map((s, i) => (
             <button
               key={s}
@@ -86,7 +103,7 @@ export const WelcomeDialog = memo(function WelcomeDialog() {
               onClick={() => welcomeUiActions.go(s)}
               aria-current={i === at ? "step" : undefined}
               className={cn(
-                "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium sm:min-h-8",
+                "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium sm:min-h-8 sm:gap-1.5 sm:px-2",
                 i === at
                   ? "bg-foreground/[0.08] text-foreground"
                   : "text-muted-foreground hover:bg-foreground/[0.06]"
@@ -99,7 +116,7 @@ export const WelcomeDialog = memo(function WelcomeDialog() {
           <Button
             variant="ghost"
             size="sm"
-            className="min-h-11 sm:min-h-8"
+            className="min-h-11 shrink-0 px-2 sm:min-h-8"
             onClick={() => end()}
           >
             Skip setup
@@ -111,6 +128,12 @@ export const WelcomeDialog = memo(function WelcomeDialog() {
         </div>
         {step === "agents" && <AgentList />}
         {step === "project" && <ProjectStep />}
+        {step === "devices" && (
+          <DevicesStep
+            notifications={notifications}
+            onLinkMachine={() => setHostsOpen(true)}
+          />
+        )}
         {step === "finish" && <FinishStep />}
         <div className="flex items-center justify-between gap-2">
           <Button
@@ -122,11 +145,11 @@ export const WelcomeDialog = memo(function WelcomeDialog() {
             Back
           </Button>
           <div className="flex items-center gap-2">
-            {step === "project" && (
+            {(step === "project" || step === "devices") && (
               <Button
                 variant="ghost"
                 className="min-h-11 sm:min-h-9"
-                onClick={() => welcomeUiActions.go("finish")}
+                onClick={() => welcomeUiActions.go(WELCOME_STEPS[at + 1])}
               >
                 Skip
               </Button>
@@ -148,6 +171,7 @@ export const WelcomeDialog = memo(function WelcomeDialog() {
           </div>
         </div>
       </DialogContent>
+      <HostsDialog open={hostsOpen} onClose={() => setHostsOpen(false)} />
     </Dialog>
   );
 });

@@ -1,11 +1,12 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { HealthList } from "@/components/Welcome/HealthList";
 import { AgentList } from "@/components/Welcome/AgentList";
 import { settingsUiActions } from "@/stores/settingsUi";
 import { welcomeUiActions } from "@/stores/welcomeUi";
 
-// What this machine has for running agents, and the first-run setup again.
+// What this machine has for running AgentOS and agents, and the first-run setup again.
 export function SetupSection() {
   return (
     <div className="flex flex-col gap-4">
@@ -27,6 +28,10 @@ export function SetupSection() {
         >
           Run setup again
         </Button>
+      </div>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">Health</h3>
+        <HealthList />
       </div>
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">Agents on this machine</h3>

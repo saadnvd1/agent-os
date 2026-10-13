@@ -33,6 +33,7 @@ if (typeof window !== "undefined") {
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { Pane } from "@/components/Pane";
 import { AwayReport } from "@/components/Away/AwayReport";
+import type { BrowserNotifications } from "@/components/Settings/NotificationsSection";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewport } from "@/hooks/useViewport";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
@@ -123,11 +124,15 @@ const CommandPalette = dynamic(
 );
 
 // Held apart from HomeContent, which re-renders on every status push.
-const AppDialogs = memo(function AppDialogs() {
+const AppDialogs = memo(function AppDialogs({
+  notifications,
+}: {
+  notifications: BrowserNotifications;
+}) {
   return (
     <>
       <TasksDialog />
-      <WelcomeDialog />
+      <WelcomeDialog notifications={notifications} />
       <AddProjectDialog />
       <MessagesDialog />
       <ArchivedDialog />
@@ -695,7 +700,7 @@ function HomeContent() {
       ) : (
         <DesktopView {...viewProps} />
       )}
-      <AppDialogs />
+      <AppDialogs notifications={browserNotifications} />
       <SettingsDialog notifications={browserNotifications} />
     </>
   );
