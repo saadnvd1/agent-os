@@ -3,7 +3,13 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Editor } from "@tiptap/react";
-import { DIALOG_WAIT_MS, focusVerdict, useFocusOnShow } from "./autofocus";
+import {
+  DIALOG_WAIT_MS,
+  focusComposerInGesture,
+  focusVerdict,
+  useFocusOnShow,
+} from "./autofocus";
+import { isPhoneLayout } from "./layout";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -35,6 +41,92 @@ beforeEach(() => {
   document.getSelection()?.removeAllRanges();
 });
 
+function stubMedia(matches: Record<string, boolean>) {
+  window.matchMedia = ((q: string) => ({
+    matches: matches[q] ?? false,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })) as never;
+}
+
+afterEach(() => {
+  delete (window as { matchMedia?: unknown }).matchMedia;
+  document.querySelectorAll("[data-composer-proxy]").forEach((e) => e.remove());
+});
+
+describe("focusComposerInGesture", () => {
+  const phone = { "(max-width: 767px)": true };
+
+  it("focuses a mounted composer synchronously, on a coarse pointer", () => {
+    stubMedia({ "(pointer: coarse)": true });
+    editorDom.parentElement!.classList.add("chat-composer");
+    sidebarRow.focus();
+    focusComposerInGesture();
+    expect(document.activeElement).toBe(editorDom);
+  });
+
+  it("focuses a hidden proxy when none is mounted", () => {
+    stubMedia({});
+    editorDom.parentElement!.remove();
+    sidebarRow.focus();
+    focusComposerInGesture();
+    expect(document.activeElement?.hasAttribute("data-composer-proxy")).toBe(
+      true
+    );
+    // The editor mounting takes it over.
+    expect(focusVerdict(document.body, false)).toBe("take");
+  });
+
+  it("does nothing in the phone layout", () => {
+    stubMedia(phone);
+    editorDom.parentElement!.classList.add("chat-composer");
+    sidebarRow.focus();
+    focusComposerInGesture();
+    expect(document.activeElement).toBe(sidebarRow);
+    editorDom.parentElement!.remove();
+    focusComposerInGesture();
+    expect(document.querySelector("[data-composer-proxy]")).toBeNull();
+  });
+
+  it("leaves someone typing elsewhere alone", () => {
+    stubMedia({});
+    editorDom.parentElement!.classList.add("chat-composer");
+    search.focus();
+    focusComposerInGesture();
+    expect(document.activeElement).toBe(search);
+  });
+
+  it("the hook hands the proxy's focus to the editor and drops the proxy", async () => {
+    stubMedia({});
+    sidebarRow.focus();
+    editorDom.parentElement!.remove();
+    focusComposerInGesture();
+    const proxy = document.querySelector("[data-composer-proxy]")!;
+    const root = createRoot(document.createElement("div"));
+    const host = document.createElement("div");
+    host.innerHTML =
+      '<div data-composer-scope><div id="e2" contenteditable="true"></div></div>';
+    document.body.append(host);
+    const dom = host.querySelector<HTMLElement>("#e2")!;
+    const editor = {
+      view: { dom },
+      commands: { focus: () => dom.focus() },
+      isEditable: true,
+      on: () => {},
+      off: () => {},
+    } as never;
+    function Probe() {
+      useFocusOnShow(editor, "a", false);
+      return null;
+    }
+    await act(() => root.render(createElement(Probe)));
+    expect(document.activeElement).toBe(dom);
+    expect(proxy.isConnected).toBe(false);
+    await act(() => root.unmount());
+    host.remove();
+  });
+});
+
 describe("focusVerdict", () => {
   it("takes the caret from nothing, a sidebar row, or itself", () => {
     (document.activeElement as HTMLElement | null)?.blur();
@@ -45,9 +137,15 @@ describe("focusVerdict", () => {
     expect(focusVerdict(editorDom, false)).toBe("take");
   });
 
-  it("never on a touch screen, where it raises the keyboard", () => {
+  it("never in the phone layout, where it raises the keyboard", () => {
     sidebarRow.focus();
     expect(focusVerdict(editorDom, true)).toBe("leave");
+  });
+
+  it("does in the desktop layout on a coarse pointer (iPad)", () => {
+    stubMedia({ "(pointer: coarse)": true, "(max-width: 767px)": false });
+    sidebarRow.focus();
+    expect(focusVerdict(editorDom, isPhoneLayout())).toBe("take");
   });
 
   it("leaves someone typing in another field (search, rename) alone", () => {

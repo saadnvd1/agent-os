@@ -46,6 +46,7 @@ import type { TerminalHandle } from "@/components/Terminal";
 import { getProvider } from "@/lib/providers";
 import { CLAUDE_STATUS_SETTINGS_FLAG } from "@/lib/program-status/claude-flag";
 import { DesktopView } from "@/components/views/DesktopView";
+import { focusComposerInGesture } from "@/components/Chat/composer/autofocus";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
 import { useDraftKeys } from "@/hooks/useDraftKeys";
@@ -333,6 +334,8 @@ function HomeContent() {
   // Attach session to terminal
   const attachToSession = useCallback(
     async (session: Session) => {
+      // Inside the tap or key press that picked the session, before any await.
+      focusComposerInGesture();
       // A chat tab, or a tab whose terminal isn't mounted yet: point the tab
       // at the session and its terminal attaches as it connects
       // (onAttachSession), resuming the agent.

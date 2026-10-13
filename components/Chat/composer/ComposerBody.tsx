@@ -30,6 +30,7 @@ import { useImageDrop } from "./useImageDrop";
 import type { MenuKey } from "./keys";
 import { useComposerEditor, type ComposerHandlers } from "./useComposerEditor";
 import { useFocusOnShow } from "./autofocus";
+import { usePhoneLayout } from "./layout";
 
 // Handled here rather than sent: picking it opens the model picker.
 const MODEL_COMMAND: ChatCommand = {
@@ -108,6 +109,7 @@ export function ComposerBody({
   const [modelOpen, setModelOpen] = useState(false);
   const handlers = useRef<ComposerHandlers | null>(null);
   const coarse = useCoarsePointer();
+  const phone = usePhoneLayout();
   const [historyIndex, setHistoryIndex] = useState(-1);
   // The editor shows it only while it's empty, as its placeholder.
   const { editor, text, setText, caret, plain, setPlain } = useComposerEditor({
@@ -138,7 +140,7 @@ export function ComposerBody({
     setImages(saved?.images ?? []);
     setFiles(saved?.files ?? []);
   }, [draftKey, editor, setText]);
-  useFocusOnShow(editor, focusKey, coarse, disabled);
+  useFocusOnShow(editor, focusKey, phone, disabled);
 
   const prefilled = useRef<number | null>(null);
   const inserted = useRef<number | null>(null);
