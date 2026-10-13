@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { markRunning } from "../statuses/stream";
 import type {
   ApprovalDecision,
@@ -21,6 +22,7 @@ import type {
 } from "@/lib/chat/events";
 import type { SearchResult } from "@/lib/chat/find";
 import { addBody, touchBody } from "@/lib/chat/bodyCache";
+import { backgroundFailure } from "@/lib/chat/background";
 
 // The index of the item with `id`, searched from the end: what changes is
 // almost always the latest.
@@ -164,6 +166,12 @@ export function useChat(
   const [taskOutputs, setTaskOutputs] = useState<Record<string, string | null>>(
     {}
   );
+  const [canBackground, setCanBackground] = useState(false);
+  // The calls asked to move to the background and not yet answered
+  // ("all" for the shortcut).
+  const [movingToBackground, setMovingToBackground] = useState<
+    ReadonlySet<string>
+  >(new Set());
   const onUndoneRef = useRef(onUndone);
   useEffect(() => {
     onUndoneRef.current = onUndone;
@@ -245,8 +253,28 @@ export function useChat(
           setModelState(m.model);
           setAccessState(m.access);
           setPlanState(m.plan);
+          setCanBackground(!!m.background);
         } else if (m.type === "context") {
           setContext(m.context);
+        } else if (m.type === "background_result") {
+          const key = m.toolUseId ?? "all";
+          setMovingToBackground((prev) => {
+            if (!prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+          const all = itemsRef.current;
+          const tool = all.find((i) => i.id === m.toolUseId);
+          const task = all.find(
+            (i) => i.kind === "task" && i.toolUseId === m.toolUseId
+          );
+          const message = backgroundFailure(
+            m,
+            tool?.kind === "tool" ? tool : undefined,
+            task?.kind === "task" ? task : undefined
+          );
+          if (message) toast(message, { duration: 2500 });
         } else if (m.type === "task_output") {
           setTaskOutputs((prev) => ({ ...prev, [m.taskId]: m.text }));
         } else if (m.type === "undo_preview") {
@@ -389,6 +417,15 @@ export function useChat(
     wsRef.current?.send(JSON.stringify({ type: "stop_task", taskId }));
   }, []);
 
+  // One call (or, with none given, every call that blocks the turn) goes to
+  // the background; the answer comes back as a toast only if it failed.
+  const backgroundTask = useCallback((toolUseId?: string) => {
+    const key = toolUseId ?? "all";
+    if (!wsRef.current) return;
+    setMovingToBackground((prev) => new Set(prev).add(key));
+    wsRef.current.send(JSON.stringify({ type: "background_task", toolUseId }));
+  }, []);
+
   const queueEdit = useCallback((id: string, text: string) => {
     wsRef.current?.send(JSON.stringify({ type: "queue_edit", id, text }));
   }, []);
@@ -496,6 +533,9 @@ export function useChat(
     undoPreview,
     clearUndo: () => setUndoPreview(null),
     stopTask,
+    canBackground,
+    backgroundTask,
+    movingToBackground,
     loadTaskOutput,
     taskOutputs,
     queue,

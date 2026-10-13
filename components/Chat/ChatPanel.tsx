@@ -42,6 +42,8 @@ import { useFreshStartQuery } from "@/data/fresh-start";
 import { QuoteButton } from "./QuoteButton";
 import { ToolBodies, ToolGroup } from "./Tools";
 import { RowState, RowStore } from "./rowState";
+import { Background, type BackgroundValue } from "./background";
+import { backgroundKey } from "@/lib/chat/background";
 import { FindBar } from "./FindBar";
 import { FIND_EVENT, isFindKey, useFind } from "./useFind";
 import { McpServers } from "./McpServers";
@@ -253,6 +255,9 @@ export function ChatPanel({
     undoPreview,
     clearUndo,
     stopTask,
+    canBackground,
+    backgroundTask,
+    movingToBackground,
     loadTaskOutput,
     taskOutputs,
     queue,
@@ -380,6 +385,54 @@ export function ChatPanel({
     }),
     [toolBodies, requestToolBody, pinToolBody, connected]
   );
+  // The calls that block the turn and can be moved to the background.
+  const [reveal, setReveal] = useState<{ taskId: string; at: number } | null>(
+    null
+  );
+  const foregroundTasks = useMemo(() => {
+    const byTool = new Map<string, Extract<ChatItem, { kind: "task" }>>();
+    const byId = new Map<string, Extract<ChatItem, { kind: "task" }>>();
+    for (const i of tasks)
+      if (i.kind === "task") {
+        byId.set(i.taskId, i);
+        if (i.toolUseId) byTool.set(i.toolUseId, i);
+      }
+    return { byTool, byId };
+  }, [tasks]);
+  const background = useMemo<BackgroundValue>(
+    () => ({
+      supported: canBackground,
+      taskOfTool: (id) => foregroundTasks.byTool.get(id),
+      taskById: (id) => foregroundTasks.byId.get(id),
+      moving: movingToBackground,
+      send: backgroundTask,
+      reveal: (taskId) => setReveal({ taskId, at: Date.now() }),
+    }),
+    [canBackground, foregroundTasks, movingToBackground, backgroundTask]
+  );
+  // Ctrl+B moves every call that blocks the turn, from anywhere in this panel.
+  const canMove = useMemo(
+    () =>
+      canBackground &&
+      [...foregroundTasks.byId.values()].some(
+        (t) => t.status === "running" && t.backgrounded === false
+      ),
+    [canBackground, foregroundTasks]
+  );
+  const moveRef = useRef({ canMove, backgroundTask });
+  useEffect(() => {
+    moveRef.current = { canMove, backgroundTask };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) return;
+      if (!backgroundKey(e, moveRef.current.canMove)) return;
+      e.preventDefault();
+      moveRef.current.backgroundTask();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   const itemsById = useMemo(
     () => new Map(items.map((i) => [i.id, i])),
     [items]
@@ -482,41 +535,43 @@ export function ChatPanel({
       {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
       <div ref={scrollRef} className="relative min-h-0 flex-1">
         <RowState.Provider value={rowState}>
-          <ToolBodies.Provider value={bodies}>
-            <div
-              // A new conversation starts over, scrolled to the end.
-              key={sessionId}
-              ref={listRef}
-              onScroll={onListScroll}
-              onCopy={onCopy}
-              className="h-full overflow-y-auto overscroll-y-contain"
-            >
-              <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
-                {hasMore && (
-                  <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
-                    {loadingOlder ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={loadOlder}
-                        className="hover:text-foreground min-h-11 px-3"
-                      >
-                        Show earlier messages
-                      </button>
-                    )}
-                  </div>
-                )}
-                <SetupCard sessionId={sessionId} />
-                {blocks.length === 0 && !queue.length && (
-                  <p className="text-muted-foreground py-16 text-center text-sm">
-                    Ask anything to start.
-                  </p>
-                )}
+          <Background.Provider value={background}>
+            <ToolBodies.Provider value={bodies}>
+              <div
+                // A new conversation starts over, scrolled to the end.
+                key={sessionId}
+                ref={listRef}
+                onScroll={onListScroll}
+                onCopy={onCopy}
+                className="h-full overflow-y-auto overscroll-y-contain"
+              >
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
+                  {hasMore && (
+                    <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
+                      {loadingOlder ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={loadOlder}
+                          className="hover:text-foreground min-h-11 px-3"
+                        >
+                          Show earlier messages
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <SetupCard sessionId={sessionId} />
+                  {blocks.length === 0 && !queue.length && (
+                    <p className="text-muted-foreground py-16 text-center text-sm">
+                      Ask anything to start.
+                    </p>
+                  )}
+                </div>
+                <TimelineRows blocks={blocks} actions={actions} />
               </div>
-              <TimelineRows blocks={blocks} actions={actions} />
-            </div>
-          </ToolBodies.Provider>
+            </ToolBodies.Provider>
+          </Background.Provider>
         </RowState.Provider>
         {find.open && (
           <FindBar
@@ -551,6 +606,7 @@ export function ChatPanel({
         />
         <BackgroundTasks
           items={tasks}
+          reveal={reveal}
           outputs={taskOutputs}
           onStop={stopTask}
           onLoadOutput={loadTaskOutput}

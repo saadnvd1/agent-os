@@ -55,6 +55,7 @@ export type WorkerCommand =
   | ({ type: "respond"; id: string } & ApprovalDecision)
   | { type: "undo"; reqId: string; checkpoint: string; dryRun: boolean }
   | { type: "stop_task"; taskId: string }
+  | { type: "background_task"; reqId: string; toolUseId?: string }
   // It runs an older build: it takes no new message into its agent (they
   // wait in the queue) and closes at its next turn boundary, so a current
   // worker resumes the conversation with today's tools.
@@ -99,6 +100,7 @@ export type WorkerEvent =
   // The agent's guess at the next message, or null once it's stale.
   | { type: "suggestion"; text: string | null }
   | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string }
+  | { type: "background_result"; reqId: string; ok?: boolean; error?: string }
   | {
       type: "files_result";
       reqId: string;

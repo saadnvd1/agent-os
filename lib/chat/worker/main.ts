@@ -76,7 +76,7 @@ async function main(sessionId: string) {
         state: host.state,
         compacting: host.compactingNow,
         streaming: [...host.streaming.values()],
-        caps: ["plan", "queue", "retire", "fresh"],
+        caps: ["plan", "queue", "retire", "fresh", "background"],
       } satisfies WorkerEvent)}\n`
     );
     client.on(

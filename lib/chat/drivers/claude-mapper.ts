@@ -72,6 +72,9 @@ export type ClaudeMessage = {
   usage?: { tool_uses?: number };
   skip_transcript?: boolean;
   ambient?: boolean;
+  is_backgrounded?: boolean;
+  // task_updated.
+  patch?: { is_backgrounded?: boolean };
   // prompt_suggestion: the agent's guess at the next message.
   suggestion?: string;
   // session_state_changed.
@@ -97,6 +100,10 @@ export function toCommand(c: SdkCommand): ChatCommand {
 }
 
 const now = () => Date.now();
+
+// "Command was manually backgrounded by user with ID: abc. Output is being
+// written to: ..." (also "running in background with ID: abc").
+const BACKGROUND_NOTICE = /^[^\n]*background(?:ed)?[^\n]*? with ID: (\w+)/;
 
 const INTERRUPT_NOTICE =
   /doesn't want to proceed with this tool use|Request interrupted by user/i;
@@ -220,6 +227,8 @@ export class ClaudeMapper {
               },
             ]
           : [];
+      case "task_updated":
+        return this.taskMoved(m);
       case "task_started":
       case "task_progress":
       case "task_notification":
@@ -264,6 +273,7 @@ export class ClaudeMapper {
       taskType: m.task_type ?? prev?.taskType,
       subagentType: m.subagent_type ?? prev?.subagentType,
       status: done ? (m.status ?? "completed") : "running",
+      backgrounded: m.is_backgrounded ?? prev?.backgrounded,
       endedAt: done ? now() : undefined,
       summary: m.summary ?? prev?.summary,
       outputFile: m.output_file ?? prev?.outputFile,
@@ -273,6 +283,16 @@ export class ClaudeMapper {
     };
     if (done) this.tasks.delete(m.task_id);
     else this.tasks.set(m.task_id, item);
+    return [{ type: "item", item }];
+  }
+
+  // A foreground task moved to the background (or back).
+  private taskMoved(m: ClaudeMessage): DriverEvent[] {
+    const prev = m.task_id ? this.tasks.get(m.task_id) : undefined;
+    const to = m.patch?.is_backgrounded;
+    if (!prev || to === undefined || prev.backgrounded === to) return [];
+    const item: TaskItem = { ...prev, backgrounded: to };
+    this.tasks.set(prev.taskId, item);
     return [{ type: "item", item }];
   }
 
@@ -401,18 +421,36 @@ export class ClaudeMapper {
       // An interrupt answers the running tool with a notice meant for the
       // model, not the reader.
       const stopped = b.is_error && INTERRUPT_NOTICE.test(text);
+      const moved = stopped ? undefined : this.movedTask(b.tool_use_id, text);
       const done = stopped
         ? { ...tool, status: "stopped" as const, output: undefined }
-        : {
-            ...tool,
-            status: b.is_error ? ("error" as const) : ("done" as const),
-            output: clipOutput(text),
-            endedAt: now(),
-          };
+        : moved
+          ? {
+              ...tool,
+              status: "done" as const,
+              // The notice is for the model; the task has the output.
+              output: undefined,
+              endedAt: now(),
+              backgroundTaskId: moved,
+            }
+          : {
+              ...tool,
+              status: b.is_error ? ("error" as const) : ("done" as const),
+              output: clipOutput(text),
+              endedAt: now(),
+            };
       this.tools.delete(b.tool_use_id);
       out.push({ type: "item", item: done });
     }
     return out;
+  }
+
+  // The task a tool call became when it went to the background, from the
+  // task it started or, failing that, the notice it was answered with.
+  private movedTask(toolUseId: string, text: string): string | undefined {
+    for (const t of this.tasks.values())
+      if (t.toolUseId === toolUseId && t.backgrounded === true) return t.taskId;
+    return BACKGROUND_NOTICE.exec(text)?.[1];
   }
 
   private result(m: ClaudeMessage): DriverEvent[] {

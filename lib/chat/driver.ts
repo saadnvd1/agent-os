@@ -82,6 +82,10 @@ export interface ChatConversation {
   setPlan(plan: boolean): Promise<void>;
   respond(id: string, answer: ApprovalDecision): void;
   stopTask(taskId: string): Promise<void>;
+  // Moves a blocking call (a Bash command or a subagent) to the background,
+  // the one with that tool_use id or every one when none is given. False
+  // when there was nothing to move.
+  backgroundTask?(toolUseId?: string): Promise<boolean>;
   // Puts files back as they were before a message (dryRun: only say what).
   undo(checkpoint: string, dryRun: boolean): Promise<UndoResult>;
   close(): void;
@@ -99,6 +103,8 @@ export interface ChatDriver {
   // as Claude does. Without it, a turn's end is that point: a message sent
   // mid-turn joins the turn or is run before it ends.
   atRest?: boolean;
+  // Can move a blocking call to the background (backgroundTask).
+  backgroundTasks?: boolean;
   start(options: ChatStartOptions): ChatConversation;
   // What the agent offers in a folder (its commands, skills and models),
   // without starting a conversation. Ends whatever it started once `signal`

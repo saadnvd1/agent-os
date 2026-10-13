@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
+import { outputTail } from "@/lib/chat/background";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { cn } from "@/lib/utils";
 import { useNow } from "./useNow";
@@ -22,6 +23,8 @@ type Task = Extract<ChatItem, { kind: "task" }>;
 // Finished tasks stay listed this long, then the chip clears.
 const RECENT_MS = 5 * 60 * 1000;
 const POLL_MS = 2000;
+// Running tasks whose last line of output is followed while the tray is open.
+const TAILED = 5;
 
 function TaskIcon({ task }: { task: Task }) {
   if (task.status === "running")
@@ -49,16 +52,23 @@ function TaskRow({
   task,
   now,
   output,
+  tail,
+  highlight,
   onStop,
   onLoadOutput,
 }: {
   task: Task;
   now: number;
   output: string | null | undefined;
+  // Follows its output for the line under its name.
+  tail: boolean;
+  // Brought here from the call it came from.
+  highlight: boolean;
   onStop: () => void;
   onLoadOutput: (taskId: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(highlight);
+  const rowRef = useRef<HTMLDivElement>(null);
   const running = task.status === "running";
   const { taskId } = task;
   const outputRef = useRef<HTMLPreElement>(null);
@@ -69,18 +79,32 @@ function TaskRow({
     if (el) el.scrollTop = el.scrollHeight;
   }, [output]);
 
-  // While open, keep the output fresh for as long as the task runs.
   useEffect(() => {
-    if (!open) return;
+    if (!highlight) return;
+    setOpen(true);
+    rowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [highlight]);
+
+  // While open (or tailed), keep the output fresh for as long as it runs.
+  useEffect(() => {
+    if (!open && !(tail && running)) return;
     onLoadOutput(taskId);
     if (!running) return;
     const t = setInterval(() => onLoadOutput(taskId), POLL_MS);
     return () => clearInterval(t);
-  }, [open, running, taskId, onLoadOutput]);
+  }, [open, tail, running, taskId, onLoadOutput]);
 
   const took = formatElapsed((task.endedAt ?? now) - task.createdAt);
+  const line =
+    running && !open ? (outputTail(output) ?? task.lastToolName) : null;
   return (
-    <div className="rounded-lg">
+    <div
+      ref={rowRef}
+      className={cn(
+        "rounded-lg transition-colors duration-700",
+        highlight && "bg-foreground/[0.05]"
+      )}
+    >
       <div className="flex min-h-11 items-center gap-2 px-1.5 md:min-h-9">
         <button
           type="button"
@@ -113,6 +137,11 @@ function TaskRow({
           </button>
         )}
       </div>
+      {line && (
+        <p className="text-muted-foreground truncate pr-2 pb-1.5 pl-9 font-mono text-[11px]">
+          {line}
+        </p>
+      )}
       {open && (
         <div className="space-y-1 pb-2 pl-7">
           {task.summary && task.summary !== task.description && (
@@ -143,16 +172,24 @@ function TaskRow({
 export function BackgroundTasks({
   items,
   outputs,
+  reveal,
   onStop,
   onLoadOutput,
 }: {
   items: ChatItem[];
+  // A task to open the tray on, from the call that became it.
+  reveal?: { taskId: string; at: number } | null;
   outputs: Record<string, string | null>;
   onStop: (taskId: string) => void;
   onLoadOutput: (taskId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const tasks = items.filter((i): i is Task => i.kind === "task");
+  const [pulse, setPulse] = useState(false);
+  const [lit, setLit] = useState<string | null>(null);
+  // One still blocking its call isn't in the background yet.
+  const tasks = items.filter(
+    (i): i is Task => i.kind === "task" && i.backgrounded !== false
+  );
   const running = tasks.filter((t) => t.status === "running" && !t.ambient);
   const now = useNow(running.length > 0);
   const shown = tasks
@@ -162,6 +199,29 @@ export function BackgroundTasks({
         Number(b.status === "running") - Number(a.status === "running") ||
         b.createdAt - a.createdAt
     );
+  const failed = shown.filter((t) => t.status === "failed").length;
+
+  // A task arriving gives the chip one soft pulse.
+  const count = running.length;
+  const seen = useRef(count);
+  useEffect(() => {
+    const more = count > seen.current;
+    seen.current = count;
+    if (!more) return;
+    setPulse(true);
+    const t = setTimeout(() => setPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [count]);
+
+  // Asked to show a task: open the tray on it for a moment.
+  useEffect(() => {
+    if (!reveal) return;
+    setOpen(true);
+    setLit(reveal.taskId);
+    const t = setTimeout(() => setLit(null), 1200);
+    return () => clearTimeout(t);
+  }, [reveal]);
+
   if (!shown.length) return null;
 
   return (
@@ -170,24 +230,30 @@ export function BackgroundTasks({
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] flex h-9 items-center gap-1.5 rounded-lg px-2 text-xs md:h-7",
-          running.length && "text-primary"
+          "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] flex h-9 items-center gap-1.5 rounded-lg px-2 text-xs transition-colors duration-500 md:h-7",
+          running.length && "text-primary",
+          !running.length && failed > 0 && "text-destructive",
+          pulse && "bg-foreground/[0.08]"
         )}
       >
         <Layers className="h-3.5 w-3.5" />
         {running.length
           ? `${running.length} running in background`
-          : `${shown.length} background task${shown.length === 1 ? "" : "s"}`}
+          : failed
+            ? `${failed} failed in background`
+            : `${shown.length} finished in background`}
         <ChevronRight
           className={cn("h-3 w-3 transition-transform", open && "rotate-90")}
         />
       </button>
       {open && (
         <div className="bg-foreground/[0.025] mt-1 max-h-80 overflow-y-auto rounded-xl px-1 py-1">
-          {shown.map((t) => (
+          {shown.map((t, i) => (
             <TaskRow
               key={t.id}
               task={t}
+              tail={i < TAILED}
+              highlight={lit === t.taskId}
               now={now}
               output={outputs[t.taskId]}
               onStop={() => onStop(t.taskId)}

@@ -380,6 +380,122 @@ describe("ClaudeMapper background tasks", () => {
     expect((done as { endedAt?: number }).endedAt).toBeTypeOf("number");
   });
 
+  describe("a call moved to the background", () => {
+    const toolUse = (m: ClaudeMapper) =>
+      m.map({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "t9",
+              name: "Bash",
+              input: { command: "x" },
+            },
+          ],
+        },
+      });
+    const result = (m: ClaudeMapper, text: string) =>
+      items(
+        m.map({
+          type: "user",
+          message: {
+            content: [
+              { type: "tool_result", tool_use_id: "t9", content: text },
+            ],
+          },
+        })
+      );
+
+    it("keeps the task foreground until it is moved, then settles the call", () => {
+      const m = new ClaudeMapper();
+      toolUse(m);
+      const [started] = items(
+        m.map({
+          type: "system",
+          subtype: "task_started",
+          task_id: "b9",
+          tool_use_id: "t9",
+          description: "Run x",
+          is_backgrounded: false,
+        })
+      );
+      expect(started).toMatchObject({ kind: "task", backgrounded: false });
+      const [moved] = items(
+        m.map({
+          type: "system",
+          subtype: "task_updated",
+          task_id: "b9",
+          patch: { is_backgrounded: true },
+        })
+      );
+      expect(moved).toMatchObject({
+        taskId: "b9",
+        status: "running",
+        backgrounded: true,
+        createdAt: started.createdAt,
+      });
+      const [tool] = result(
+        m,
+        "Command was manually backgrounded by user with ID: b9. Output is being written to: /tmp/b9.output."
+      );
+      expect(tool).toMatchObject({
+        kind: "tool",
+        status: "done",
+        backgroundTaskId: "b9",
+        output: undefined,
+      });
+    });
+
+    it("ignores an update that moves nothing or a task it doesn't know", () => {
+      const m = new ClaudeMapper();
+      expect(
+        m.map({
+          type: "system",
+          subtype: "task_updated",
+          task_id: "nope",
+          patch: { is_backgrounded: true },
+        })
+      ).toEqual([]);
+      m.map({
+        type: "system",
+        subtype: "task_started",
+        task_id: "b9",
+        description: "Run x",
+        is_backgrounded: true,
+      });
+      expect(
+        m.map({
+          type: "system",
+          subtype: "task_updated",
+          task_id: "b9",
+          patch: { is_backgrounded: true },
+        })
+      ).toEqual([]);
+    });
+
+    it("knows a call the agent started in the background by its notice", () => {
+      const m = new ClaudeMapper();
+      toolUse(m);
+      const [tool] = result(
+        m,
+        "Command running in background with ID: zz1. Output is being written to: /tmp/zz1.output"
+      );
+      expect(tool).toMatchObject({ status: "done", backgroundTaskId: "zz1" });
+    });
+
+    it("leaves an ordinary result alone, whatever it prints", () => {
+      const m = new ClaudeMapper();
+      toolUse(m);
+      const [tool] = result(m, "ok\nbackgrounded with ID: 5");
+      expect(tool).toMatchObject({
+        status: "done",
+        output: "ok\nbackgrounded with ID: 5",
+      });
+      expect(tool).not.toHaveProperty("backgroundTaskId");
+    });
+  });
+
   it("titles a command by the agent's own description", () => {
     const [tool] = items(
       new ClaudeMapper().map({

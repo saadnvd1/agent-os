@@ -41,6 +41,11 @@ export class WorkerClient {
 
   private files = new Map<string, (r: FileSuggestion[] | null) => void>();
 
+  private backgrounds = new Map<
+    string,
+    (r: { ok?: boolean; error?: string }) => void
+  >();
+
   private constructor(
     private socket: net.Socket,
     private handlers: WorkerHandlers
@@ -55,6 +60,9 @@ export class WorkerClient {
       this.undos.clear();
       for (const f of this.files.values()) f(null);
       this.files.clear();
+      for (const b of this.backgrounds.values())
+        b({ error: "The chat worker went away" });
+      this.backgrounds.clear();
       handlers.onClose(this.detached);
     });
     socket.on("error", () => socket.destroy());
@@ -101,6 +109,11 @@ export class WorkerClient {
       else u?.reject(new Error(e.error ?? "Undo failed"));
       return;
     }
+    if (e.type === "background_result") {
+      this.backgrounds.get(e.reqId)?.({ ok: e.ok, error: e.error });
+      this.backgrounds.delete(e.reqId);
+      return;
+    }
     if (e.type === "files_result") {
       this.files.get(e.reqId)?.(e.files ?? null);
       this.files.delete(e.reqId);
@@ -118,6 +131,26 @@ export class WorkerClient {
     return new Promise((resolve, reject) => {
       this.undos.set(reqId, { resolve, reject });
       this.command({ type: "undo", reqId, checkpoint, dryRun });
+    });
+  }
+
+  // Moves a blocking call (or all of them) to the background: whether
+  // anything moved, or why not (an error, or no answer in time).
+  background(
+    toolUseId?: string,
+    timeoutMs = 5000
+  ): Promise<{ ok?: boolean; error?: string }> {
+    const reqId = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.backgrounds.delete(reqId);
+        resolve({ error: "timeout" });
+      }, timeoutMs);
+      this.backgrounds.set(reqId, (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      });
+      this.command({ type: "background_task", reqId, toolUseId });
     });
   }
 
