@@ -1292,7 +1292,7 @@ it may do on its own, and the lines that always come back to you as asks.
   workspace, or the project already at that path moves in from no workspace;
   folders that hold secrets and projects of another workspace are refused),
   `note`,
-  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder` and `ask_saad`. All are served in-process to its chat, refuse
+  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder`, `ask_saad`, `question` and `resolve_question`. All are served in-process to its chat, refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and
   whether it has one, and `message_orchestrator` messages another workspace's
@@ -1502,6 +1502,25 @@ approved`). An approval covers that one item only: a held task's approval
   fold into one, a declined subject isn't asked again for 6 hours, and a
   "decision" that reads as money, outbound, irreversible or credentials is
   filed as that hard line.
+- **Readable when busy:** in the orchestrator's chat, anything AgentOS
+  sent it (a PR opened, CI green, a task woken, a schedule, a task's message)
+  and the orchestrator's reply fold into one line: an icon, the task, how the
+  reply starts, the time. Tap to read the whole reply; runs of them group as
+  "5 updates". What you typed, and the replies to it, stay whole, and so do
+  your own decisions and any turn waiting on an approval or showing a plan or
+  an error. Where a message came from is recorded when it is delivered;
+  older messages are told apart by their opening text only.
+  A **Needs you** strip above the composer lists everything waiting on you
+  until it is resolved: open asks (escalated gates and brakes too), questions
+  the orchestrator put to you in chat, its chat waiting on an approval, and
+  tasks that need you. Each is one line that jumps to the ask, the message or
+  the session, with a count when collapsed. The orchestrator marks a chat
+  question with `question` (the same words while open are the same
+  question) and clears it with `resolve_question`; the strip's Reply quotes
+  it into the composer and resolves it when you send. Dismissing an item
+  hides it on all your devices and resolves nothing: an ask stays open on
+  its list and in the counts. Questions about a task clear when it is merged
+  or dropped.
 - **Proof it's you:** only this machine, the tailnet, or a paired device you
   switched to "Can approve" in Devices may answer asks or pause. Approving a
   hard line, a gate, a brake or a new passkey, Resume, changing the

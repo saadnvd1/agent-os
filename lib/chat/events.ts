@@ -81,6 +81,8 @@ export interface ChatOrigin {
   body?: string;
   // Lines of an event batch that are the reader's answers to asks.
   decided?: string[];
+  // The tasks it is about, by name, set where the event is delivered.
+  subjects?: { id: string; name: string }[];
   // Only Away mode's own lines: the turn it starts isn't anyone's activity
   // (lib/away/activity).
   away?: true;

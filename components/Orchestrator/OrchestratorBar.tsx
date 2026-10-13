@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useState, useSyncExternalStore } from "react";
+import { useSnapshot } from "valtio";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { headerParts } from "@/lib/orchestrator/header-line";
 import { cn } from "@/lib/utils";
 import { useSchedulesGlance } from "@/components/SessionList/useSchedulesGlance";
 import { schedulesUiActions } from "@/stores/schedulesUi";
+import { needsYouFocus } from "@/stores/needsYouFocus";
 import { NO_PASSKEYS_HERE, passkeysHere } from "@/data/presence";
 import { AsksList } from "./AsksList";
 
@@ -24,7 +26,30 @@ export const OrchestratorBar = memo(function OrchestratorBar({
   const { overview, counts } = useOrchestratorHeader(workspaceId);
   const pause = usePauseOrchestrator(workspaceId);
   const { upcomingText } = useSchedulesGlance(workspaceId);
-  const [open, setOpen] = useState(true);
+  // Closed: the Needs-you strip above the composer lists them.
+  const [open, setOpen] = useState(false);
+  const { ask: focus } = useSnapshot(needsYouFocus);
+  useEffect(() => {
+    if (!focus) return;
+    // Open the list, then find the card once it is there.
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      setOpen(true);
+      second = requestAnimationFrame(() => {
+        const card = document.getElementById(`ask-${focus.id}`);
+        card?.scrollIntoView({ block: "center", behavior: "smooth" });
+        card?.classList.add("ring-2", "ring-amber-500/60");
+        setTimeout(
+          () => card?.classList.remove("ring-2", "ring-amber-500/60"),
+          1600
+        );
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [focus]);
   const canProve = useSyncExternalStore(
     () => () => {},
     passkeysHere,

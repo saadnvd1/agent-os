@@ -29,12 +29,18 @@ export const TABLES_WATCHED_56 = ["orchestrator_rules"] as const;
 
 export const TABLES_WATCHED_58 = ["away_periods"] as const;
 
+export const TABLES_WATCHED_78 = [
+  "orchestrator_questions",
+  "needs_you_dismissed",
+] as const;
+
 // Every table any migration watches, for the browser's topic map to cover.
 export const WATCHED_TABLES: readonly string[] = [
   ...TABLES_WATCHED_45,
   ...TABLES_WATCHED_50,
   ...TABLES_WATCHED_56,
   ...TABLES_WATCHED_58,
+  ...TABLES_WATCHED_78,
 ];
 
 export function installChangeTriggers(

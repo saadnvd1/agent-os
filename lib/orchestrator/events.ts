@@ -299,3 +299,22 @@ export function deliveriesSince(
       .get(workspaceId, subject, iso(since)) as { n: number }
   ).n;
 }
+
+// The sessions an event batch is about, by name, for chat to say what each
+// update was.
+export function subjectNames(
+  subjects: (string | null)[]
+): { id: string; name: string }[] {
+  const ids = [...new Set(subjects.filter((s): s is string => !!s))];
+  if (!ids.length) return [];
+  const rows = db
+    .prepare(
+      `SELECT id, name FROM sessions WHERE id IN (${ids.map(() => "?").join(",")})`
+    )
+    .all(...ids) as { id: string; name: string }[];
+  const byId = new Map(rows.map((r) => [r.id, r.name]));
+  return ids.flatMap((id) => {
+    const name = byId.get(id);
+    return name ? [{ id, name }] : [];
+  });
+}

@@ -1,4 +1,5 @@
 import type { ChatItem } from "./events";
+import { eventTurnAt, type EventTurn } from "./turns";
 
 export type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 export type UndoItem = Extract<ChatItem, { kind: "undo" }>;
@@ -6,7 +7,14 @@ export type UndoItem = Extract<ChatItem, { kind: "undo" }>;
 export type TimelineBlock =
   | { type: "item"; item: ChatItem }
   | { type: "tools"; id: string; tools: ToolItem[] }
-  | { type: "undone"; id: string; undo: UndoItem; items: ChatItem[] };
+  | { type: "undone"; id: string; undo: UndoItem; items: ChatItem[] }
+  // Consecutive turns an event started, with the reply to each.
+  | { type: "events"; id: string; turns: EventTurn[] };
+
+export interface GroupOptions {
+  // Fold events and the replies to them (the orchestrator's chat).
+  foldEvents?: boolean;
+}
 
 // Tools worth seeing on their own rather than as one step among many.
 export const STANDALONE_TOOLS = new Set(["Skill", "Task", "Agent"]);
@@ -14,17 +22,45 @@ export const STANDALONE_TOOLS = new Set(["Skill", "Task", "Agent"]);
 // Consecutive tool calls (and the reasoning between them) fold into one
 // collapsible block, so a long turn reads as what was said, not every step.
 // Undone messages fold into one block behind the undo that took them back.
-export function groupTimeline(items: ChatItem[]): TimelineBlock[] {
+export function groupTimeline(
+  items: ChatItem[],
+  opts: GroupOptions = {}
+): TimelineBlock[] {
   const blocks: TimelineBlock[] = [];
   let tools: ToolItem[] = [];
   const flush = () => {
     if (tools.length) blocks.push({ type: "tools", id: tools[0].id, tools });
     tools = [];
   };
+  let turns: EventTurn[] = [];
+  const flushTurns = () => {
+    if (turns.length)
+      blocks.push({ type: "events", id: `ev-${turns[0].id}`, turns });
+    turns = [];
+  };
   const ends = undoneRanges(items);
+  // Where the next undone range starts: a turn stops short of it.
+  const starts = [...ends.keys()].sort((a, b) => a - b);
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const end = ends.get(i);
+    if (opts.foldEvents && end === undefined && item.kind === "user") {
+      const limit = starts.find((s) => s > i) ?? items.length;
+      const found = eventTurnAt(items, i, limit);
+      if (found) {
+        flush();
+        turns.push(found.turn);
+        i = found.end - 1;
+        continue;
+      }
+    }
+    // What the timeline never shows doesn't break a run of events.
+    const hidden =
+      item.kind === "task" ||
+      (item.kind === "approval" &&
+        item.status !== "pending" &&
+        !(item.status === "answered" && item.questions));
+    if (!hidden) flushTurns();
     if (end !== undefined) {
       flush();
       blocks.push({
@@ -57,6 +93,7 @@ export function groupTimeline(items: ChatItem[]): TimelineBlock[] {
     }
   }
   flush();
+  flushTurns();
   return blocks;
 }
 
@@ -89,6 +126,17 @@ export function sameBlock(a: TimelineBlock, b: TimelineBlock): boolean {
     return sameItems(a.tools, b.tools);
   if (a.type === "undone" && b.type === "undone")
     return a.undo === b.undo && sameItems(a.items, b.items);
+  if (a.type === "events" && b.type === "events")
+    return (
+      a.id === b.id &&
+      a.turns.length === b.turns.length &&
+      a.turns.every(
+        (t, i) =>
+          t.user === b.turns[i].user &&
+          t.live === b.turns[i].live &&
+          sameItems(t.replies, b.turns[i].replies)
+      )
+    );
   return false;
 }
 

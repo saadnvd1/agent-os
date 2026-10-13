@@ -101,6 +101,10 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   arm: "Arm a task's PR to merge: AgentOS merges it, through the same gates as sign_off, the moment they all pass at its head, and tells you with one event. A gate failure comes as one event and it stays armed for the fix; one that goes to Saad disarms it. Survives restarts. Use it instead of calling sign_off until it passes.",
   disarm:
     "Disarm a task armed to merge: it merges only through sign_off again.",
+  question:
+    "Mark a question you asked Saad in chat as open: it stays pinned on his Needs-you strip until he answers or you clear it. Use it for anything you need from him that isn't an ask_saad item. The same text while open is the same question.",
+  resolve_question:
+    "Clear an open question once Saad has answered it in chat, or it no longer matters.",
   ask_saad:
     "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event. To ask whether to merge a PR the gates refuse, give task and sha (its head): his approval lets sign_off merge it once, at that commit.",
 };

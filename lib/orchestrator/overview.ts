@@ -11,6 +11,7 @@ import { askBinding, openAsks, PRESENCE_KINDS } from "./asks";
 import type { OrchestratorOverview } from "./ask-view";
 import { getOrchestrator } from "./home";
 import { resolveStaleAsks } from "./ask-settle";
+import { dismissedKeys, openQuestions } from "./questions";
 
 export type { AskView, OrchestratorOverview } from "./ask-view";
 
@@ -57,6 +58,8 @@ export function orchestratorOverview(): OrchestratorOverview[] {
           createdAt: a.created_at,
         };
       }),
+      questions: openQuestions(w.id),
+      dismissed: dismissedKeys(w.id),
     };
   });
 }

@@ -52,6 +52,13 @@ import { PlanCard } from "./PlanCard";
 import { ContextMeter } from "./ContextMeter";
 import { SetupCard } from "./SetupCard";
 import { UserTurn } from "./EventRow";
+import { EventGroup } from "./EventTurns";
+import { useGoToItem } from "./useGoToItem";
+import { NeedsYouStrip } from "@/components/Orchestrator/NeedsYouStrip";
+import { useResolveQuestion } from "@/data/orchestrators";
+import { needsYouFocusActions } from "@/stores/needsYouFocus";
+import { hrefWithSession } from "@/lib/session-url";
+import { isQuestionTool } from "@/lib/chat/turns";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
 import { copySelection } from "./copy-selection";
@@ -167,6 +174,14 @@ const Block = memo(
     const undoneActions = useMemo(() => ({ respond }), [respond]);
     return b.type === "tools" ? (
       <ToolGroup tools={b.tools} />
+    ) : b.type === "events" ? (
+      <EventGroup
+        id={b.id}
+        turns={b.turns}
+        renderReplies={(items) => (
+          <Timeline blocks={groupTimeline(items)} actions={undoneActions} />
+        )}
+      />
     ) : b.type === "undone" ? (
       <UndoneBlock
         undo={b.undo}
@@ -367,7 +382,10 @@ export function ChatPanel({
     focusComposer,
   });
 
-  const blocks = useMemo(() => groupTimeline(items), [items]);
+  const blocks = useMemo(
+    () => groupTimeline(items, { foldEvents: !!orchestratorOf }),
+    [items, orchestratorOf]
+  );
   const tasks = useMemo(() => {
     if (!earlierTasks.length) return items;
     const loaded = new Set(items.map((i) => i.id));
@@ -461,7 +479,30 @@ export function ChatPanel({
     if (el && o.hasMore && !o.loadingOlder && el.scrollTop < el.clientHeight)
       o.loadOlder();
   }, []);
+  const scrollToBlock = useCallback(async (key: string) => {
+    // The row may only just have been added.
+    await new Promise((r) => requestAnimationFrame(r));
+    listRef.current
+      ?.querySelector(`[data-block="${CSS.escape(key)}"]`)
+      ?.scrollIntoView({ block: "center" });
+  }, []);
+  const goTo = useGoToItem({
+    items,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    rows: rowState,
+    release,
+    scrollToBlock,
+    foldEvents: !!orchestratorOf,
+  });
+  const resolveQuestion = useResolveQuestion(orchestratorOf ?? "");
+  // The question the next message answers, resolved when it is sent.
+  const [replyTo, setReplyTo] = useState<{ id: number; text: string } | null>(
+    null
+  );
   const find = useFind({
+    foldEvents: !!orchestratorOf,
     search,
     items,
     hasMore,
@@ -469,13 +510,7 @@ export function ChatPanel({
     loadOlder,
     rows: rowState,
     release,
-    scrollToBlock: useCallback(async (key: string) => {
-      // The row may only just have been added.
-      await new Promise((r) => requestAnimationFrame(r));
-      listRef.current
-        ?.querySelector(`[data-block="${CSS.escape(key)}"]`)
-        ?.scrollIntoView({ block: "center" });
-    }, []),
+    scrollToBlock,
     scroller: useCallback(() => listRef.current, []),
   });
   const activeRef = useRef(active);
@@ -598,6 +633,55 @@ export function ChatPanel({
         )}
       </div>
       <div className="mx-auto w-full max-w-3xl px-3 pb-3">
+        {orchestratorOf && (
+          <NeedsYouStrip
+            workspaceId={orchestratorOf}
+            chatWaiting={state === "waiting"}
+            onGo={(item) => {
+              if (item.kind === "ask") needsYouFocusActions.ask(item.ask.id);
+              else if (item.kind === "chat") toEnd();
+              else if (item.kind === "task") {
+                window.history.pushState(
+                  null,
+                  "",
+                  hrefWithSession(location.href, item.sessionId)
+                );
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              } else
+                goTo((all) => {
+                  const asked = all.findLast(
+                    (i) =>
+                      isQuestionTool(i) &&
+                      (i as { input?: { text?: string } }).input?.text ===
+                        item.question.text
+                  );
+                  return asked?.id ?? null;
+                });
+            }}
+            onReply={(item) => {
+              setReplyTo({ id: item.question.id, text: item.question.text });
+              setInsert({
+                text: quoteMarkdown(item.question.text),
+                at: Date.now(),
+              });
+            }}
+          />
+        )}
+        {replyTo && (
+          <div className="text-muted-foreground mb-2 flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs">
+            <span className="min-w-0 flex-1 truncate">
+              Answering: {replyTo.text}
+            </span>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              aria-label="Stop answering"
+              className="hover:text-foreground flex size-11 shrink-0 items-center justify-center"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <ActivityLine
           items={items}
           state={state}
@@ -660,6 +744,10 @@ export function ChatPanel({
             });
             setAsIs(false);
             send(text, images.length ? images : undefined, compact);
+            if (replyTo) {
+              resolveQuestion.mutate(replyTo.id);
+              setReplyTo(null);
+            }
           }}
           onStop={interrupt}
           commands={freshStart ? withFresh(commands) : commands}

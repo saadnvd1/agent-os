@@ -49,6 +49,8 @@ type Pinned = FindTarget & { block: string };
 export type FindStatus = "idle" | "searching" | "done" | "unavailable";
 
 export interface FindDeps {
+  // The orchestrator's chat folds events into rows that find has to open.
+  foldEvents?: boolean;
   search: (query: string, before?: number) => Promise<SearchResult | null>;
   items: ChatItem[];
   hasMore: boolean;
@@ -147,11 +149,11 @@ export function useFind(deps: FindDeps) {
   // pull the reader back to it.
   const shown = useRef<FindTarget | null>(null);
   const [pinned, setPinned] = useState<Pinned | null>(null);
-  const { items, hasMore, loadingOlder } = deps;
+  const { items, hasMore, loadingOlder, foldEvents } = deps;
   useEffect(() => {
     if (!open || !target || shown.current === target) return;
     const { loadOlder, rows, release, scrollToBlock } = d.current;
-    const where = locate(items, target.id);
+    const where = locate(items, target.id, { foldEvents });
     if (!where) {
       if (!hasMore) shown.current = target;
       else if (!loadingOlder) loadOlder();
@@ -163,7 +165,7 @@ export function useFind(deps: FindDeps) {
     const pin = () =>
       shown.current === target && setPinned({ ...target, block: where.block });
     scrollToBlock(where.block).then(pin, pin);
-  }, [open, target, items, hasMore, loadingOlder]);
+  }, [open, target, items, hasMore, loadingOlder, foldEvents]);
 
   // Paints every match on screen, and the current one apart; the current one
   // is scrolled to once its row (and a tool's loaded output) shows it.

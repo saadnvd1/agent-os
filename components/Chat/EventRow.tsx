@@ -19,7 +19,7 @@ import { useRowState } from "./rowState";
 
 type UserItem = Extract<ChatItem, { kind: "user" }>;
 
-const ICON: Record<ChatOriginKind, LucideIcon> = {
+export const ICON: Record<ChatOriginKind, LucideIcon> = {
   event: Zap,
   peer: Bot,
   schedule: CalendarClock,
@@ -31,7 +31,7 @@ const ICON: Record<ChatOriginKind, LucideIcon> = {
 // and it opens on a tap.
 const SHORT = 32;
 
-const clock = (at: number) =>
+export const clock = (at: number) =>
   new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 // Opens the session through its address, the way a shared link does.
