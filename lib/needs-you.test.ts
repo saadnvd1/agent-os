@@ -22,6 +22,16 @@ describe("needsYou", () => {
     expect(needsYou(finishedUnseen(null), "idle")).toBe(true);
   });
 
+  it("never counts a finished task's chat, unread turn or not", () => {
+    for (const task_status of ["merged", "done", "dropped"] as const)
+      expect(needsYou({ ...finishedUnseen(null), task_status }, "idle")).toBe(
+        false
+      );
+    expect(
+      needsYou({ ...finishedUnseen(null), task_status: "running" }, "idle")
+    ).toBe(true);
+  });
+
   it("counts only a waiting card for an orchestrator", () => {
     const orchestrator = finishedUnseen("orchestrator");
     expect(needsYou(orchestrator, "idle")).toBe(false);

@@ -33,11 +33,13 @@ function latestChatItem(sessionId: string): ChatItem | null {
 // is routine for it.
 export function needsYou(
   session: Pick<Session, "id" | "view" | "updated_at" | "last_seen_at"> &
-    Partial<Pick<Session, "role" | "workspace_id">>,
+    Partial<Pick<Session, "role" | "workspace_id" | "task_status">>,
   chatState: ChatState | null
 ): boolean {
   const seen = sqliteMs(session.last_seen_at);
   if (session.view === "chat") {
+    // A finished task's agent is stopped: its last turn is history, not news.
+    if (session.task_status && session.task_status !== "running") return false;
     if (chatState === "waiting") return true;
     if (session.role === "orchestrator")
       return openAskCount(session.workspace_id) > 0;

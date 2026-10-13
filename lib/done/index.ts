@@ -10,6 +10,7 @@
 
 import { db, queries, type Session } from "../db";
 import { endSessionAgent } from "../sessions/end";
+import { clearQueue } from "../chat/queued";
 import { getProject } from "../projects";
 import { mergeSettled, type TaskPR } from "../tasks";
 import { syncTaskCardInBackground } from "../lumifyhub/task-cards";
@@ -61,6 +62,8 @@ export function getDoneTarget(id: string): Session {
 
 async function stopAgent(s: Session): Promise<void> {
   await endSessionAgent(s);
+  // Nothing is left to send them to; they'd only sit unread on a stopped agent.
+  clearQueue(s.id);
   releasePorts(s.id);
   // Never waited on: the row is read now, and Postgres can't hold this up.
   void dropSessionDatabase(s.id);

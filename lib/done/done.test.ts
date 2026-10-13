@@ -116,6 +116,7 @@ const { putCheck } = await import("@/lib/orchestrator/checks");
 const { failureOf } = await import("@/lib/orchestrator/gates");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { doneSession } = await import("./index");
+const { enqueue, listQueue } = await import("@/lib/chat/queued");
 const { signOffTask } = await import("@/lib/tasks");
 const { deleteWorktree } = await import("@/lib/worktrees");
 const { worktreeFate } = await import("./worktree");
@@ -325,6 +326,19 @@ describe("done, by state", () => {
     // Origin's branch was exactly what merged, so it goes too.
     expect(out.text).toContain("its merged branch deleted on origin");
     expect(git(t.repo, "ls-remote", "--heads", "origin", s.branch)).toBe("");
+  });
+
+  it("discards messages still queued for the agent it stops", async () => {
+    const t = setup();
+    const s = t.session("queued", {
+      task: true,
+      commits: { "src/q.ts": "export const q = 1;\n" },
+    });
+    t.openPR(s, { state: "MERGED" });
+    enqueue(s.id, { id: "m1", text: "please rebase" });
+    enqueue(s.id, { id: "m2", text: "and rerun the checks" });
+    await doneSession(s.id, { by: "direct" });
+    expect(listQueue(s.id)).toEqual([]);
   });
 
   it("(b) keeps origin's branch when it moved past what merged", async () => {
