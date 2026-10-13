@@ -1,5 +1,6 @@
 "use client";
 
+import { useApprovalsModeQuery } from "@/data/approvals";
 import {
   Check,
   ChevronDown,
@@ -44,8 +45,19 @@ export function AccessPicker({
   access: ChatAccess;
   onPick: (access: ChatAccess) => void;
 }) {
-  const current = LEVELS[access] ?? LEVELS.full;
+  const noApprovals = !!useApprovalsModeQuery().data?.on;
+  const current = LEVELS[noApprovals ? "full" : access] ?? LEVELS.full;
   const Icon = current.icon;
+  if (noApprovals)
+    return (
+      <span
+        title="No approvals mode is on: every agent runs with full access"
+        className="text-muted-foreground flex h-10 shrink-0 items-center gap-1 px-2 text-xs"
+      >
+        <Icon className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{current.label}</span>
+      </span>
+    );
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

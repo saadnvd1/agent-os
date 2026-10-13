@@ -25,7 +25,11 @@ import { diffParts } from "./diff-parts";
 import { countFailure, escalate } from "./escalate";
 import { checkGate, holdingEscalations } from "./gates";
 import { reviewWanted } from "./held-review";
-import { mergeApprovalsOn } from "./merge-approvals";
+import { mergeApprovalsOn, mergeApprovalsSetting } from "./merge-approvals";
+import {
+  noApprovalsOn,
+  recordAutoApprovalOnce,
+} from "../approvals/no-approvals";
 import {
   baseReviewSkill,
   checkout,
@@ -99,6 +103,13 @@ async function reviewJob(
   const judged = target.refs.base_branch;
   const base = await fetchRefs(repo, target.refs);
   const diff = await fullDiff(repo, base, sha);
+  if (diff.length > DIFF_CAP && mergeApprovalsSetting() && noApprovalsOn())
+    recordAutoApprovalOnce({
+      source: "merge-approval",
+      workspaceId,
+      subject: `PR #${pr.number} at ${short(sha)} is reviewed in parts`,
+      detail: `its diff is ${diff.length} characters`,
+    });
   const parts =
     diff.length <= DIFF_CAP
       ? [diff]

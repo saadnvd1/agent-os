@@ -26,6 +26,7 @@ and check on all of it from your phone.
 - **Machine load and status.** A load gauge, each session's share of CPU and memory, and Needs you, Working, In review and Done as it changes. [More](docs/guides/sessions.md)
 - **Workspaces.** Group projects, finish work with Done, and get a log of every merged task. [More](docs/reference/workspaces.md)
 - **LumifyHub (optional).** Boards, cards and docs for a workspace, if you want them. [More](docs/lumifyhub.md)
+- **No approvals mode.** One switch in Settings that approves every ask, lets brakes and plan-only tasks through, and starts every agent with its permission prompts off; each approval it makes is logged. Off by default. [More](docs/reference/orchestrator.md#no-approvals-mode)
 - **Also:** a ⌘K palette, code search, a file picker, a git panel, dev servers, up to four panes, and dictation.
 
 ## Documentation

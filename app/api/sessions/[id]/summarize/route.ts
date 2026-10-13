@@ -1,3 +1,4 @@
+import { effectiveAutoApprove } from "@/lib/approvals/no-approvals";
 import { routedRun } from "@/lib/models/launch";
 import { NextRequest, NextResponse } from "next/server";
 import { isRemoteHost } from "@/lib/hosts";
@@ -309,7 +310,7 @@ export async function POST(
       // Start new tmux session with Claude directly
       const isRoot = process.getuid?.() === 0;
       const envPrefix = isRoot ? "IS_SANDBOX=1 " : "";
-      const claudeCmd = session.auto_approve
+      const claudeCmd = effectiveAutoApprove(session.auto_approve)
         ? `${envPrefix}claude --dangerously-skip-permissions`
         : "claude";
 

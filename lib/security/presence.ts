@@ -42,6 +42,7 @@ export type PresencePurpose =
   | "enroll"
   | "revoke"
   | "approvals-off"
+  | "no-approvals-on"
   | "rules";
 
 export class PresenceError extends Error {

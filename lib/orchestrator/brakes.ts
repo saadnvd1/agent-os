@@ -20,6 +20,7 @@ import { workspaceSessions } from "./facts";
 import { addNote } from "./notes";
 import { AskRefused, BRAKE_SUBJECT, raiseAsk, resolveAsks } from "./asks";
 import { spendApproval, unspentApproval, voidApprovals } from "./ask-approvals";
+import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { isPaused } from "./pause";
 import { readUsage, windowRefusal, type UsageState } from "./usage";
 
@@ -159,6 +160,16 @@ async function refusal(
   }
   const key = on.map((b) => b.name).join("+");
   const reason = on.map((b) => b.reason).join("; ");
+  // No approvals mode lets the start through: no brake ask, no wait.
+  if (noApprovalsOn()) {
+    recordAutoApproval({
+      source: "brake",
+      workspaceId,
+      subject: `one start past the brakes (${key})`,
+      detail: reason,
+    });
+    return null;
+  }
   // An approval is for the brake it was asked about, not whichever holds now.
   const approval = unspentApproval(
     workspaceId,

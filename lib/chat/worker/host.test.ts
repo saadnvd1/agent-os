@@ -9,6 +9,7 @@ import { enqueue, listQueue } from "../queued";
 import type { WorkerEvent } from "./protocol";
 import type { RoleExtras } from "./extras";
 import { COMPACT_INSTRUCTIONS } from "../working-state";
+import { setNoApprovals } from "@/lib/approvals/no-approvals";
 
 const COMPACT_CMD = `/compact ${COMPACT_INSTRUCTIONS}`;
 
@@ -130,6 +131,110 @@ describe("ChatHost", () => {
     expect(started?.mcpServers?.visuals).toBeUndefined();
     expect(started?.systemAppend ?? "").not.toMatch(/Showing visuals/);
     host.close();
+  });
+
+  describe("No approvals mode", () => {
+    const card = (id: string, extra: object = {}) =>
+      ({
+        id,
+        kind: "approval",
+        toolName: "Bash",
+        title: "Run ls",
+        input: {},
+        canAlways: false,
+        status: "pending",
+        createdAt: 1,
+        ...extra,
+      }) as ChatItem;
+    const askAccess = (id: string) =>
+      getDb()
+        .prepare(`UPDATE sessions SET chat_access = 'ask' WHERE id = ?`)
+        .run(id);
+
+    it("starts every chat at full access, and leaves the stored choice", async () => {
+      setNoApprovals(true);
+      try {
+        const { id, host } = await startHost("agent", undefined, askAccess);
+        expect(started?.access).toBe("full");
+        expect(
+          (
+            getDb()
+              .prepare(`SELECT chat_access FROM sessions WHERE id = ?`)
+              .get(id) as { chat_access: string }
+          ).chat_access
+        ).toBe("ask");
+        host.close();
+      } finally {
+        setNoApprovals(false);
+      }
+      const off = await startHost("agent", undefined, askAccess);
+      expect(started?.access).toBe("ask");
+      off.host.close();
+    });
+
+    it("allows a tool card as it appears, and marks it", async () => {
+      setNoApprovals(true);
+      try {
+        const { host, conversation, emitted } = await startHost();
+        conversation.events.push({ type: "item", item: card("ap-1") });
+        await tick();
+        expect(conversation.respond).toHaveBeenCalledWith("ap-1", {
+          decision: "allow",
+        });
+        conversation.events.push({
+          type: "item",
+          item: card("ap-1", { status: "allowed" }),
+        });
+        await tick();
+        const settled = emitted
+          .filter((e) => e.type === "item")
+          .map((e) => (e as { item: ChatItem }).item)
+          .filter((i) => i.id === "ap-1" && i.kind === "approval")
+          .at(-1);
+        expect(settled).toMatchObject({ status: "allowed", auto: true });
+        host.close();
+      } finally {
+        setNoApprovals(false);
+      }
+    });
+
+    it("leaves a question for the reader, and waits for everything when off", async () => {
+      const { host, conversation } = await startHost();
+      conversation.events.push({ type: "item", item: card("ap-off") });
+      await tick();
+      expect(conversation.respond).not.toHaveBeenCalled();
+      setNoApprovals(true);
+      try {
+        conversation.events.push({
+          type: "item",
+          item: card("ap-q", {
+            toolName: "AskUserQuestion",
+            questions: [
+              {
+                question: "Which?",
+                header: "h",
+                multiSelect: false,
+                options: [],
+              },
+            ],
+          }),
+        });
+        await tick();
+        expect(conversation.respond).not.toHaveBeenCalledWith(
+          "ap-q",
+          expect.anything()
+        );
+        // Switching it on allows what was already waiting.
+        await host.handle({ type: "set_access", access: "ask" });
+        expect(conversation.setAccess).toHaveBeenCalledWith("full");
+        expect(conversation.respond).toHaveBeenCalledWith("ap-off", {
+          decision: "allow",
+        });
+        host.close();
+      } finally {
+        setNoApprovals(false);
+      }
+    });
   });
 
   it("passes an interrupt to the conversation", async () => {

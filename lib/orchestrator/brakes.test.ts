@@ -46,6 +46,8 @@ const { listNotes } = await import("./notes");
 const { usageWindow, windowRefusal } = await import("./usage");
 const { answerAsk, openAsks } = await import("./asks");
 const { setPaused } = await import("./pause");
+const { listAutoApprovals, setNoApprovals } =
+  await import("@/lib/approvals/no-approvals");
 // The real reader, under the mock the brakes use.
 const { readUsage } =
   await vi.importActual<typeof import("./usage")>("./usage");
@@ -116,6 +118,42 @@ describe("the running brake", () => {
     await ws.start("a");
     await ws.start("b");
     await expect(ws.start("c")).rejects.toThrow(/2 sessions are running/);
+  });
+});
+
+describe("No approvals mode", () => {
+  it("lets a start through a brake with no ask, and records it", async () => {
+    const ws = workspace();
+    for (let i = 0; i < 4; i++) {
+      const id = seedSession({ projectId: ws.api.id, name: `busy-${i}` });
+      busy.add(`claude-${id}`);
+    }
+    setNoApprovals(true);
+    try {
+      await expect(ws.start("past the brake")).resolves.toMatch(
+        /Started session/
+      );
+    } finally {
+      setNoApprovals(false);
+    }
+    expect(openAsks(ws.workspace.id)).toHaveLength(0);
+    const audit = listAutoApprovals(10).find((a) => a.source === "brake");
+    expect(audit).toMatchObject({ workspace_id: ws.workspace.id });
+    expect(audit?.detail).toMatch(/4 sessions are running/);
+    // Off again: the brake holds.
+    await expect(ws.start("held again")).rejects.toThrow(/Brake/);
+  });
+
+  it("still honours a pause, which is Saad's own stop", async () => {
+    const ws = workspace();
+    setPaused(ws.workspace.id, true);
+    setNoApprovals(true);
+    try {
+      await expect(ws.start("while paused")).rejects.toThrow(/Paused by Saad/);
+    } finally {
+      setNoApprovals(false);
+      setPaused(ws.workspace.id, false);
+    }
   });
 });
 

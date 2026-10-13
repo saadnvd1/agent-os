@@ -19,6 +19,7 @@ import {
 } from "./resolve";
 import { ANTHROPIC } from "./roles";
 import { queueEvent } from "../orchestrator/events";
+import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { addNote } from "../orchestrator/notes";
 import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
 import { PIECES_PROMPT, pieceBrief } from "../plans/pieces";
@@ -341,11 +342,26 @@ export async function handoffAfterPlan(
   deleteQueued(sessionId, planRetryMessageId(sessionId));
   const retried = waiting.get(sessionId)?.retried ?? false;
   forget(sessionId);
-  if (!s.plan_only)
-    return (
-      (await startImplementing(s, "planning", send, undefined, retried)) !==
-      null
+  // No approvals mode doesn't stop at the plan to wait for one.
+  const auto = !!s.plan_only && noApprovalsOn();
+  if (!s.plan_only || auto) {
+    const ref = await startImplementing(
+      s,
+      "planning",
+      send,
+      undefined,
+      retried
     );
+    if (ref && auto)
+      recordAutoApproval({
+        source: "plan",
+        workspaceId: sessionWorkspace(s),
+        sessionId,
+        subject: `plan for ${s.name}`,
+        detail: "implementing without waiting for approve_plan",
+      });
+    return ref !== null;
+  }
   const awaiting = db
     .prepare(
       `UPDATE sessions SET plan_phase = 'awaiting'
@@ -401,9 +417,13 @@ export async function recheckPlanning(
 
 // approvePlan, sending through the chat runner (imported when needed: it
 // imports this file).
-export async function approvePlanNow(sessionId: string, message?: string) {
+export async function approvePlanNow(
+  sessionId: string,
+  message?: string,
+  by: "saad" | "no-approvals" = "saad"
+) {
   const { sendQueuedNow } = await import("../chat/runner");
-  return approvePlan(sessionId, message, (id, m) => sendQueuedNow(id, m));
+  return approvePlan(sessionId, message, (id, m) => sendQueuedNow(id, m), by);
 }
 
 // Approves a waiting plan-only task: implementation starts on the
@@ -413,7 +433,8 @@ export async function approvePlanNow(sessionId: string, message?: string) {
 export async function approvePlan(
   sessionId: string,
   message: string | undefined,
-  send: Send
+  send: Send,
+  by: "saad" | "no-approvals" = "saad"
 ): Promise<{ ref: string; amendments: number }> {
   const s = getSession(sessionId);
   if (!s || s.plan_phase !== "awaiting" || s.task_status !== "running")
@@ -428,5 +449,13 @@ export async function approvePlan(
   }
   const ref = await startImplementing(s, "awaiting", send, text);
   if (!ref) throw new Error(`${s.name} isn't waiting for plan approval`);
+  if (by === "no-approvals")
+    recordAutoApproval({
+      source: "plan",
+      workspaceId,
+      sessionId,
+      subject: `plan for ${s.name}`,
+      detail: "already waiting when the mode was turned on",
+    });
   return { ref, amendments: amendmentsOf(s.id).length };
 }
