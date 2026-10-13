@@ -48,7 +48,10 @@ function ShelfLabel({
       type="button"
       onClick={onToggle}
       aria-expanded={!collapsed}
-      className={cn(cls, "hover:text-foreground min-h-11 w-full md:min-h-8")}
+      className={cn(
+        cls,
+        "hover:text-foreground min-h-11 w-full md:min-h-8 [@media(hover:none)]:md:min-h-11"
+      )}
     >
       {text}
     </button>

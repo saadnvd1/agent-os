@@ -59,12 +59,11 @@ export function WorkspaceSwitcher({
           <button
             type="button"
             title={name}
-            className="hover:bg-foreground/[0.04] -ml-1.5 flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 md:min-h-9"
+            className="hover:bg-foreground/[0.04] -ml-1.5 flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 md:min-h-9 [@media(hover:none)]:md:min-h-11"
           >
-            <MiddleTruncate
-              text={name}
-              className="text-[15px] font-semibold tracking-tight"
-            />
+            <span className="truncate text-[15px] font-semibold tracking-tight">
+              {name}
+            </span>
             <ChevronDown className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
           </button>
         </DM.DropdownMenuTrigger>
@@ -188,33 +187,5 @@ export function WorkspaceSwitcher({
         onClose={() => setDialog(null)}
       />
     </>
-  );
-}
-
-const TAIL = 4;
-
-// Cuts a name that doesn't fit in the middle ("All wo…aces"), so the end
-// that tells similar names apart stays: the head truncates, the tail doesn't.
-function MiddleTruncate({
-  text,
-  className,
-}: {
-  text: string;
-  className?: string;
-}) {
-  if (text.length <= TAIL * 2) {
-    return <span className={`truncate ${className}`}>{text}</span>;
-  }
-  // Screen readers get the name whole, not as two words.
-  return (
-    <span className={`flex min-w-0 ${className}`}>
-      <span className="sr-only">{text}</span>
-      <span aria-hidden className="truncate whitespace-pre">
-        {text.slice(0, -TAIL)}
-      </span>
-      <span aria-hidden className="shrink-0 whitespace-pre">
-        {text.slice(-TAIL)}
-      </span>
-    </span>
   );
 }

@@ -37,7 +37,7 @@ export function LoadGauge() {
           size="icon-sm"
           aria-label={`Machine load ${load.level}. ${summary}`}
           title={summary}
-          className="-ml-1.5 h-11 w-11 shrink-0 md:ml-0 md:h-8 md:w-6"
+          className="-ml-1.5 h-11 w-11 shrink-0 md:ml-0 md:h-8 md:w-6 [@media(hover:none)]:md:-ml-1.5 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
         >
           <span className={cn("h-2 w-2 rounded-full", DOT[load.level])} />
         </Button>

@@ -30,7 +30,11 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
+        >
           <Palette className="h-4 w-4" />
           <span className="sr-only">Change theme</span>
         </Button>

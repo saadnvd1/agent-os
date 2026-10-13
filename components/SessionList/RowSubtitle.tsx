@@ -61,7 +61,7 @@ export function RowSubtitle({
       <LiveLine {...live} />
       {group && (
         <span
-          className="text-muted-foreground/70 flex min-w-0 shrink-0 items-center gap-1 truncate text-xs"
+          className="text-muted-foreground/70 hidden min-w-0 shrink items-center gap-1 truncate text-xs @[14rem]:flex"
           title={group.kind === "recipe" ? "A recipe run" : "A piece of a plan"}
         >
           {group.kind === "recipe" ? (
@@ -73,7 +73,7 @@ export function RowSubtitle({
         </span>
       )}
       {(project || detail || usage) && (
-        <span className="text-muted-foreground/70 truncate text-xs">
+        <span className="text-muted-foreground/70 min-w-0 truncate text-xs">
           {[usage && usageLabel(usage), detail?.slice(0, 200), project]
             .filter(Boolean)
             .join(" · ")}
