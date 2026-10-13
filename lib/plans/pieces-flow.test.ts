@@ -7,6 +7,13 @@ const { retireChat } = vi.hoisted(() => ({
   retireChat: vi.fn(async () => {}),
 }));
 vi.mock("../chat/runner", () => ({ retireChat, sendQueuedNow: vi.fn() }));
+const { createTask } = vi.hoisted(() => ({
+  createTask: vi.fn(async (o: { id?: string }) => ({ id: o.id })),
+}));
+vi.mock("../tasks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../tasks")>()),
+  createTask,
+}));
 
 import { db } from "../db";
 import { listQueue } from "../chat/queued";
@@ -29,7 +36,7 @@ import {
   piecesOf,
   reviewGoal,
 } from "./features";
-import { editWaiting, releaseAnyway, releasePieces } from "./release";
+import { editWaiting, realDeps, releaseAnyway, releasePieces } from "./release";
 import type { ReleaseDeps } from "./release";
 
 process.env.AGENTOS_PLANS_DIR = fs.mkdtempSync(
@@ -149,6 +156,7 @@ const deps = (over: Partial<ReleaseDeps> = {}) => {
     start: async (_f, piece, prompt, sessionId) => {
       started.push({ piece: piece.position, prompt });
       seedPieceSession(sessionId);
+      return sessionId;
     },
     pushFeatureMerged: vi.fn(),
     ...over,
@@ -252,6 +260,84 @@ describe("release", () => {
       status: "waiting",
       session_id: null,
     });
+  });
+});
+
+describe("release with the real start and deploy check", () => {
+  const real = (): ReleaseDeps => ({
+    ...realDeps,
+    deployed: async () => "ok",
+    pushFeatureMerged: vi.fn(),
+  });
+  const queueRow = (id: string) =>
+    db.prepare(`SELECT status FROM task_queue WHERE id = ?`).get(id) as
+      | { status: string }
+      | undefined;
+
+  // Zero running tasks allowed in the workspace of the piece's project.
+  const limitTasks = (featureId: string) =>
+    db
+      .prepare(
+        `UPDATE workspaces SET max_running_tasks = 0 WHERE id = (SELECT workspace_id FROM projects WHERE id = ?)`
+      )
+      .run(piecesOf(featureId)[1].project_id);
+
+  it("follows a piece the workspace's task limit queued, under the queue's id", async () => {
+    const { id, feature } = await build();
+    merge(id);
+    limitTasks(feature.id);
+    await releasePieces(real());
+    const piece = piecesOf(feature.id)[1];
+    // Other features left building by earlier tests release too.
+    expect(createTask).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: piece.session_id })
+    );
+    expect(piece.status).toBe("building");
+    expect(queueRow(piece.session_id!)).toEqual({ status: "queued" });
+    // Still waiting in the queue: nothing to settle, and no second start.
+    await releasePieces(real());
+    expect(piecesOf(feature.id)[1].status).toBe("building");
+
+    // The queue starts it under that same id, and it merges.
+    seedPieceSession(piece.session_id!);
+    merge(piece.session_id!, 2);
+    await releasePieces(real());
+    expect(piecesOf(feature.id)[1].status).toBe("merged");
+    expect(featureOfPlan(id)).toBeTruthy();
+  });
+
+  it("a piece the queue drops or can't start stops building", async () => {
+    const { id, feature } = await build();
+    merge(id);
+    limitTasks(feature.id);
+    await releasePieces(real());
+    const queued = piecesOf(feature.id)[1].session_id!;
+    db.prepare(
+      `UPDATE task_queue SET status = 'failed', error = 'no worktree' WHERE id = ?`
+    ).run(queued);
+    await releasePieces(real());
+    expect(piecesOf(feature.id)[1]).toMatchObject({
+      status: "blocked",
+      note: "no worktree",
+    });
+  });
+
+  it("a deploy dependency fails closed without a project, PR or merge time", async () => {
+    const { id, feature } = await build();
+    merge(id);
+    const dep = piecesOf(feature.id)[0];
+    const session = (_x: string) =>
+      db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as never;
+    expect(await realDeps.deployed(dep, session(""))).not.toBe("ok");
+    expect(
+      await realDeps.deployed({ ...dep, project_id: "gone" }, session(""))
+    ).toBe("failed");
+    db.prepare(`UPDATE sessions SET pr_number = NULL WHERE id = ?`).run(id);
+    expect(await realDeps.deployed(dep, session(""))).toBe("failed");
+    db.prepare(
+      `UPDATE sessions SET pr_number = 5, merged_at = NULL WHERE id = ?`
+    ).run(id);
+    expect(await realDeps.deployed(dep, session(""))).toBe("failed");
   });
 });
 

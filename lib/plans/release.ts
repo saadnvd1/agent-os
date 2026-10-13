@@ -30,7 +30,7 @@ export interface ReleaseDeps {
     piece: FeaturePiece,
     prompt: string,
     sessionId: string
-  ) => Promise<void>;
+  ) => Promise<string>;
   pushFeatureMerged: (feature: Feature) => void;
 }
 
@@ -51,7 +51,19 @@ function syncPieces(pieces: FeaturePiece[]): void {
   for (const p of pieces) {
     if (p.status !== "building") continue;
     const s = sessionOf(p.session_id);
-    if (!s) continue;
+    if (!s) {
+      // Still in the queue, or the queue gave up on it.
+      const q = db
+        .prepare(`SELECT status, error FROM task_queue WHERE id = ?`)
+        .get(p.session_id) as
+        | { status: string; error: string | null }
+        | undefined;
+      if (q?.status === "removed")
+        setPiece(p.id, "dropped", "removed from the queue");
+      else if (q?.status === "failed")
+        setPiece(p.id, "blocked", q.error ?? "it couldn't start");
+      continue;
+    }
     if (s.task_status === "merged") setPiece(p.id, "merged");
     else if (s.task_status === "dropped" || s.task_status === "done")
       setPiece(p.id, "dropped", `its task was ${s.task_status}`);
@@ -59,9 +71,11 @@ function syncPieces(pieces: FeaturePiece[]): void {
 }
 
 export const realDeps: ReleaseDeps = {
+  // Only a confirmed deploy releases the next piece: anything that can't be
+  // checked blocks it (a missing project or PR) or keeps it waiting.
   deployed: async (dep, session) => {
     const project = getProject(dep.project_id);
-    if (!project || !session.pr_number) return "ok";
+    if (!project || !session.pr_number || !session.merged_at) return "failed";
     const repo = project.working_directory.replace(
       /^~/,
       process.env.HOME ?? "~"
@@ -73,14 +87,14 @@ export const realDeps: ReleaseDeps = {
       repo,
       config,
       mergeSha: config ? await mergeCommit(repo, session.pr_number) : null,
-      mergedAt: Date.now(),
+      mergedAt: Date.parse(`${session.merged_at}Z`),
       now: Date.now(),
     });
-    return verdict.state === "failed"
-      ? "failed"
-      : verdict.state === "pending"
-        ? "pending"
-        : "ok";
+    return verdict.state === "ok"
+      ? "ok"
+      : verdict.state === "failed"
+        ? "failed"
+        : "pending";
   },
   start: async (feature, piece, prompt, sessionId) => {
     const plan = sessionOf(feature.plan_session_id);
@@ -93,7 +107,8 @@ export const realDeps: ReleaseDeps = {
       startedBy: plan?.started_by ?? null,
       originWorkspaceId: feature.workspace_id,
     };
-    await startOrQueue(req, () =>
+    // A queued task keeps its queue id as its session id once it starts.
+    const out = await startOrQueue(req, () =>
       braked(
         feature.workspace_id,
         "task",
@@ -102,6 +117,7 @@ export const realDeps: ReleaseDeps = {
         { spendApproval: false }
       )
     );
+    return "queued" in out ? out.queued.id : sessionId;
   },
   pushFeatureMerged: (feature) =>
     void import("../notify/push/events").then((m) =>
@@ -150,10 +166,10 @@ async function releaseOne(
     if (dep.status !== "merged") return;
     if (piece.after_kind === "deployed") {
       const session = sessionOf(dep.session_id);
-      const state = session ? await deps.deployed(dep, session) : "ok";
+      const state = session ? await deps.deployed(dep, session) : "failed";
       if (state === "pending") return;
       if (state === "failed") {
-        const note = `${dep.position} ${dep.name} merged but its deploy failed`;
+        const note = `${dep.position} ${dep.name} merged but its deploy failed or couldn't be confirmed`;
         setPiece(piece.id, "blocked", note);
         say(
           feature,
@@ -173,7 +189,12 @@ async function releaseOne(
   if (!claimed) return;
   const prompt = `[Feature "${feature.name}", piece ${piece.position} of ${all.length}, started by AgentOS from an approved plan]\n${pieceBrief(all.length, { position: piece.position, name: piece.name, slice: piece.slice, owns: piece.owns ? piece.owns.split(", ") : [] }, planPathOf(feature.id), beforeLines(all, piece.position))}`;
   try {
-    await deps.start(feature, piece, prompt, piece.session_id);
+    const id = await deps.start(feature, piece, prompt, piece.session_id);
+    if (id !== piece.session_id)
+      db.prepare(`UPDATE feature_pieces SET session_id = ? WHERE id = ?`).run(
+        id,
+        piece.id
+      );
   } catch (error) {
     // A brake holds it for the next sweep; anything else is told once.
     db.prepare(
