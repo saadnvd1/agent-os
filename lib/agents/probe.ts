@@ -116,6 +116,27 @@ const AUTH: Partial<Record<ProviderId, { check: AuthCheck; hint: string }>> = {
         : "needs-login",
     hint: "Run `pi` in a terminal and use /login, or set a provider API key",
   },
+  // The CLI also signs in through the GitHub CLI's login, which no file of
+  // its own shows: without a trace of a sign-in, it's not known to need one.
+  copilot: {
+    check: (_cli, env) => {
+      if (anyEnv(env, ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]))
+        return "ready";
+      try {
+        const config = fs.readFileSync(
+          path.join(
+            env.COPILOT_HOME?.trim() || home(".copilot"),
+            "config.json"
+          ),
+          "utf8"
+        );
+        return /logged.?in.?user/i.test(config) ? "ready" : "unknown";
+      } catch {
+        return "unknown";
+      }
+    },
+    hint: "Run `copilot login` in a terminal",
+  },
   gemini: {
     check: (_cli, env) =>
       fs.existsSync(home(".gemini", "oauth_creds.json")) ||

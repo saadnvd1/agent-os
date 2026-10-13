@@ -30,6 +30,10 @@ export const SETUP_COMMANDS: Partial<Record<ProviderId, SetupCommands>> = {
   cursor: { signIn: "cursor-agent login", docs: "https://cursor.com/cli" },
   amp: { signIn: "amp login", docs: "https://ampcode.com" },
   pi: { signIn: "pi" },
+  copilot: {
+    install: "npm install -g @github/copilot",
+    signIn: "copilot login",
+  },
   // No installer line we can vouch for from here; its own site has it.
   opencode: { docs: "https://opencode.ai/docs" },
 };

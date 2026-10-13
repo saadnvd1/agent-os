@@ -36,6 +36,10 @@ const KEYS = [
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
   "CLAUDE_CONFIG_DIR",
+  "COPILOT_HOME",
+  "COPILOT_GITHUB_TOKEN",
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
 ];
 const saved = { ...process.env };
 let home: string;
@@ -120,6 +124,27 @@ describe("probeAgent", () => {
     write(".pi/agent/auth.json", "{}");
     process.env.GEMINI_API_KEY = "k";
     expect(await probeAgent("pi", "pi")).toMatchObject({ auth: "ready" });
+  });
+
+  it("takes GitHub Copilot as signed in on a token or a recorded login, else not known to need one", async () => {
+    cli("copilot");
+    expect(await probeAgent("copilot", "copilot")).toMatchObject({
+      installed: true,
+      auth: "unknown",
+    });
+    write(".copilot/config.json", '{"firstLaunchAt":"2026-10-13"}');
+    expect(await probeAgent("copilot", "copilot")).toMatchObject({
+      auth: "unknown",
+    });
+    write(".copilot/config.json", '{"loggedInUsers":[{"login":"a"}]}');
+    expect(await probeAgent("copilot", "copilot")).toMatchObject({
+      auth: "ready",
+    });
+    write(".copilot/config.json", "{}");
+    process.env.GH_TOKEN = "t";
+    expect(await probeAgent("copilot", "copilot")).toMatchObject({
+      auth: "ready",
+    });
   });
 
   it("reads Cursor's, Amp's and Gemini's own credential files", async () => {

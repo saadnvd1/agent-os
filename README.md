@@ -126,7 +126,8 @@ You need Node.js 20+, tmux, and at least one agent CLI:
 Pi,
 [Kilo Code CLI](https://kilo.ai/docs/cli),
 [Gemini CLI](https://github.com/google-gemini/gemini-cli),
-[Aider](https://aider.chat/), [Cursor CLI](https://cursor.com/cli) or Amp.
+[Aider](https://aider.chat/), [Cursor CLI](https://cursor.com/cli), Amp or
+[GitHub Copilot CLI](https://github.com/github/copilot-cli).
 
 ```bash
 npm install -g @saadnvd1/agent-os
@@ -229,18 +230,19 @@ CLI) with the fix for anything missing (`/api/doctor`).
 
 ### Supported agents
 
-| Agent       | Chat | Resume | Fork | Auto-approve                                 |
-| ----------- | ---- | ------ | ---- | -------------------------------------------- |
-| Claude Code | ✅   | ✅     | ✅   | `--dangerously-skip-permissions`             |
-| Codex       | ✅   | ✅     | ✅   | `--dangerously-bypass-approvals-and-sandbox` |
-| OpenCode    | ✅   | ✅     | ✅   | `--auto`                                     |
-| Pi          | ✅   | ✅     | ✅   | Never asks                                   |
-| Kilo Code   | ❌   | ✅     | ✅   | Config file                                  |
-| Gemini CLI  | ❌   | ❌     | ❌   | `--yolo`                                     |
-| Aider       | ❌   | ❌     | ❌   | `--yes`                                      |
-| Cursor CLI  | ❌   | ✅     | ❌   | `--force`                                    |
-| Amp         | ❌   | ✅     | ❌   | `--dangerously-allow-all`                    |
-| Oh My Pi    | ❌   | ❌     | ❌   | N/A                                          |
+| Agent          | Chat | Resume | Fork | Auto-approve                                 |
+| -------------- | ---- | ------ | ---- | -------------------------------------------- |
+| Claude Code    | ✅   | ✅     | ✅   | `--dangerously-skip-permissions`             |
+| Codex          | ✅   | ✅     | ✅   | `--dangerously-bypass-approvals-and-sandbox` |
+| OpenCode       | ✅   | ✅     | ✅   | `--auto`                                     |
+| Pi             | ✅   | ✅     | ✅   | Never asks                                   |
+| Kilo Code      | ❌   | ✅     | ✅   | Config file                                  |
+| Gemini CLI     | ❌   | ❌     | ❌   | `--yolo`                                     |
+| Aider          | ❌   | ❌     | ❌   | `--yes`                                      |
+| Cursor CLI     | ❌   | ✅     | ❌   | `--force`                                    |
+| Amp            | ❌   | ✅     | ❌   | `--dangerously-allow-all`                    |
+| Oh My Pi       | ❌   | ❌     | ❌   | N/A                                          |
+| GitHub Copilot | ✅   | ✅     | ❌   | `--allow-all`                                |
 
 Agents without chat run in the terminal. The new-session picker says when an
 agent isn't installed or needs a sign-in first, and what to run.
@@ -275,10 +277,16 @@ agent as the terminal, with your own logins: Claude Code through the Agent
 SDK, Codex through `codex app-server`, OpenCode through its own `opencode
 serve` (loopback only, behind a per-conversation password) and Pi through its
 RPC mode. Pi never asks before a tool, so AgentOS loads a small Pi extension
-that asks the chat as the access setting says. The **Chat /
+that asks the chat as the access setting says. GitHub Copilot runs through
+`copilot --acp` (the Agent Client Protocol): its permission prompts become
+approval cards under the same access setting, and a conversation resumes with
+`session/load` after a restart. It signs in with `copilot login` or a
+`COPILOT_GITHUB_TOKEN`, `GH_TOKEN` or `GITHUB_TOKEN`; it has no plan mode,
+undo or in-chat model list yet, so it runs on its own default model unless one
+is named. The **Chat /
 Terminal** switch in the tab bar hands the same conversation between the two:
 the terminal resumes it (`claude --resume`, `codex resume`, `opencode
---session`, `pi --session`), and switching back closes the
+--session`, `pi --session`, `copilot --resume`), and switching back closes the
 terminal so only one side drives it. Each chat conversation runs in its own
 worker process (in tmux, like terminal sessions), so restarting or updating
 AgentOS never cuts off a turn: the server reconnects to running workers when
@@ -491,7 +499,10 @@ orchestrator's `start_task` with `after`) holds a task until a named task
 finishes, or until any task still working now does (a running task whose PR
 was closed or merged doesn't count; with none, it starts at once). The
 orchestrator's `drop` removes a queued task by its id. Pause stops automatic starts,
-and the orchestrator's brakes still apply when its queued tasks start. The
+and the orchestrator's brakes still apply when its queued tasks start. A task runs on Claude Code unless
+`POST /api/tasks` names another `agent` (`"copilot"`): that one runs as a chat on
+this machine, with no plan-first step or role models, and is never picked for
+you. The
 line is kept in the database across restarts (`GET /api/tasks/queue`; start
 now, move up or down, or remove with `/api/tasks/queue/<id>`). The sidebar
 shows them under **Queued** with their place in line or what they wait on,

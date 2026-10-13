@@ -28,7 +28,10 @@ import {
   isBranchName,
   slugify,
 } from "../git";
-import { getProvider } from "../providers";
+import { getProvider, type AgentType } from "../providers";
+import { agentLabel } from "../agent-options";
+import { supportsChat } from "../chat/capabilities";
+import { AGENT_DEFAULT_MODEL } from "../providers/registry";
 import { statusDetector } from "../status-detector";
 import { buildTaskBrief, type StackedOn } from "./brief";
 import {
@@ -140,6 +143,11 @@ export async function createTask(opts: {
   base?: { branch: string; tip: string; stack: StackedOn };
   // Cut from this branch instead of the default one.
   baseBranch?: string;
+  // The agent CLI that does the work (Claude Code unless a person picks
+  // another). Another agent runs as a chat on this machine, on its own
+  // default model unless `model` names one, without plan-first or role
+  // models: those are Claude Code's.
+  agent?: AgentType;
   // Called once the session row exists, before the agent launches.
   onCreated?: (sessionId: string) => void;
   // Run it on this machine (another one's own AgentOS); default: the project's.
@@ -201,6 +209,17 @@ async function startTask(
   if (!project || project.is_uncategorized) throw new Error("Pick a project");
   const hostId = opts.hostId ?? project.host_id;
   const view = opts.view ?? DEFAULT_START_VIEW;
+  const agent = opts.agent ?? "claude";
+  if (agent !== "claude") {
+    if (!supportsChat(agent))
+      throw new Error(`${agentLabel(agent)} can't run a task yet`);
+    if (view !== "chat")
+      throw new Error(`${agentLabel(agent)} runs a task as a chat`);
+    if (opts.plan || opts.planOnly)
+      throw new Error(`${agentLabel(agent)} doesn't plan first yet`);
+    if (isRemoteHost(hostId))
+      throw new Error(`${agentLabel(agent)} tasks run on this machine for now`);
+  }
   if (isRemoteHost(hostId)) {
     if (opts.planOnly)
       throw new Error("A plan-only task runs on this machine for now");
@@ -228,13 +247,16 @@ async function startTask(
     );
   if (opts.planOnly && view !== "chat")
     throw new Error("A plan-only task needs a chat, not a terminal");
-  const routing = taskRouting(
-    project.workspace_id,
-    view,
-    opts.model,
-    opts.plan,
-    opts.planOnly
-  );
+  const routing =
+    agent === "claude"
+      ? taskRouting(
+          project.workspace_id,
+          view,
+          opts.model,
+          opts.plan,
+          opts.planOnly
+        )
+      : otherAgentRouting(opts.model);
   const projectPath = expandHome(project.working_directory);
   const naming = await nameFor(prompt, projectPath, opts.name);
   const feature = `${slugify(naming.name.split(/\s+/).slice(0, 6).join(" "))}-${id.slice(0, 4)}`;
@@ -253,7 +275,7 @@ async function startTask(
     startPoint: opts.base?.tip,
   });
 
-  const provider = getProvider("claude");
+  const provider = getProvider(agent);
   const model = routing.first.model;
   const tmuxName = `${provider.id}-${id}`;
 
@@ -268,7 +290,7 @@ async function startTask(
       model,
       null,
       "sessions",
-      "claude",
+      agent,
       1,
       project.id,
       "local"
@@ -451,6 +473,19 @@ export async function listTasks(): Promise<TaskView[]> {
   return [...local, ...remote].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt)
   );
+}
+
+// Another agent's task: its own model (or its default), never planned first.
+function otherAgentRouting(model: unknown) {
+  return {
+    override: null,
+    plan: false,
+    planOnly: false,
+    first: {
+      model: typeof model === "string" && model ? model : AGENT_DEFAULT_MODEL,
+      provider: { id: ANTHROPIC },
+    },
+  };
 }
 
 // The model a task starts on, and whether it plans first: only as a chat,

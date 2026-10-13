@@ -19,7 +19,7 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 // prose that quotes the footer ("the 'Generated with Claude Code' footer")
 // isn't one.
 export const ATTRIBUTION =
-  /^(?:co-authored-by:.*(?:claude|anthropic)|claude-session:|🤖 generated with)|(?:^|[^\p{L}\p{N}"'`])generated (?:with|by) \[?claude code/iu;
+  /^(?:co-authored-by:.*(?:claude|anthropic|copilot)|claude-session:|🤖 generated with)|(?:^|[^\p{L}\p{N}"'`])generated (?:with|by) \[?claude code/iu;
 export type AttributionKind =
   | "a Co-Authored-By trailer naming Claude"
   | "a Claude-Session link"

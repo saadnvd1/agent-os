@@ -21,6 +21,13 @@ describe("buildArgs", () => {
     expect(args("codex", { parentSessionId: "t1" })).toEqual(["fork", "t1"]);
   });
 
+  it("resumes GitHub Copilot by id and asks it for all permissions", () => {
+    expect(
+      args("copilot", { sessionId: "s1", autoApprove: true, model: "m" })
+    ).toEqual(["--resume=s1", "--allow-all", "--model", "m"]);
+    expect(args("copilot", { initialPrompt: "hi" })).toEqual(["-i", "hi"]);
+  });
+
   it("resumes and forks OpenCode by session, with its own auto-approve", () => {
     expect(args("opencode", { sessionId: "ses_1", autoApprove: true })).toEqual(
       ["--session", "ses_1", "--auto"]

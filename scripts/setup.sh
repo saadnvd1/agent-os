@@ -29,7 +29,7 @@ echo "tmux: $(tmux -V)"
 
 # Check AI coding CLI
 AI_CLI_FOUND=""
-for cli in claude codex opencode kilo gemini aider cursor-agent amp pi omp; do
+for cli in claude codex opencode kilo gemini aider cursor-agent amp pi omp copilot; do
     if command -v "$cli" &> /dev/null; then
         AI_CLI_FOUND="$AI_CLI_FOUND $cli"
     fi

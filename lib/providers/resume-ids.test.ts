@@ -3,7 +3,12 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import Database from "better-sqlite3";
-import { codexResumeId, opencodeResumeId, piResumeId } from "./resume-ids";
+import {
+  codexResumeId,
+  copilotResumeId,
+  opencodeResumeId,
+  piResumeId,
+} from "./resume-ids";
 
 let home: string;
 const saved = { ...process.env };
@@ -12,6 +17,7 @@ beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), "resume-ids-"));
   process.env.CODEX_HOME = path.join(home, "codex");
   process.env.PI_CODING_AGENT_DIR = path.join(home, "pi");
+  process.env.COPILOT_HOME = path.join(home, "copilot");
   delete process.env.PI_CODING_AGENT_SESSION_DIR;
 });
 
@@ -97,5 +103,29 @@ describe("opencodeResumeId", () => {
     expect(opencodeResumeId("/nowhere", now)).toBeNull();
     // Last written 11 minutes before: some earlier conversation's.
     expect(opencodeResumeId("/w", now + 10 * 60 * 1000)).toBeNull();
+  });
+});
+
+describe("copilotResumeId", () => {
+  const session = (id: string, cwd: string) => {
+    const dir = path.join(home, "copilot", "session-state", id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "workspace.yaml"),
+      `id: ${id}\ncwd: ${cwd}\nname: x\n`
+    );
+    return dir;
+  };
+
+  it("finds the recent conversation that ran in the folder", () => {
+    session(ID, "/w");
+    session(OTHER, "/elsewhere");
+    expect(copilotResumeId("/w")).toBe(ID);
+    expect(copilotResumeId("/nowhere")).toBeNull();
+  });
+
+  it("ignores one that hasn't been written to lately", () => {
+    session(ID, "/w");
+    expect(copilotResumeId("/w", Date.now() + 10 * 60 * 1000)).toBeNull();
   });
 });

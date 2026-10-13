@@ -15,6 +15,7 @@ export const PROVIDER_IDS = [
   "amp",
   "pi",
   "omp",
+  "copilot",
   "shell",
 ] as const;
 
@@ -191,6 +192,19 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsFork: false,
     modelFlag: "--model",
     initialPromptFlag: "", // Positional argument
+  },
+  {
+    id: "copilot",
+    name: "GitHub Copilot",
+    description: "GitHub's Copilot CLI",
+    cli: "copilot",
+    configDir: "~/.copilot",
+    autoApproveFlag: "--allow-all",
+    supportsResume: true,
+    supportsFork: false,
+    resumeArgs: (id) => [`--resume=${id}`],
+    modelFlag: "--model",
+    initialPromptFlag: "-i",
   },
   {
     id: "shell",
