@@ -371,10 +371,18 @@ app.prepare().then(async () => {
       console.error("Sweeping orphaned tmux sessions failed:", error)
     );
   // Simulators of tasks that ended or crashed, now and every few minutes.
-  const sweepSims = () =>
-    sweepSimulators().catch((error) =>
-      console.error("Sweeping simulators failed:", error)
-    );
+  let sweepingSims = false;
+  const sweepSims = async () => {
+    if (sweepingSims) return;
+    sweepingSims = true;
+    try {
+      await sweepSimulators();
+    } catch (error) {
+      console.error("Sweeping simulators failed:", error);
+    } finally {
+      sweepingSims = false;
+    }
+  };
   void sweepSims();
   setInterval(sweepSims, 5 * 60_000);
   // Chat turns that kept running through a restart.

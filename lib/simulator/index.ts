@@ -6,7 +6,7 @@
  * Optional: nothing in the merge, review or release paths reads any of this.
  */
 
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import fs from "fs";
 import path from "path";
 import { db, type Session } from "../db";
@@ -139,6 +139,19 @@ const tail = (file: string, lines = 15) => {
   }
 };
 
+// The start command of each task bringing its simulator up, so closing the
+// simulator can stop it.
+const starts = new Map<string, ChildProcess>();
+
+// The whole group: the project's build and Metro are children of the shell.
+export function killGroup(child: ChildProcess, signal: NodeJS.Signals) {
+  try {
+    if (child.pid) process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
 function runStart(
   sessionId: string,
   command: string,
@@ -153,6 +166,7 @@ function runStart(
     const child = spawn(withPorts(command, ports), {
       cwd,
       shell: true,
+      detached: true,
       stdio: ["ignore", log, log],
       env: {
         ...process.env,
@@ -160,10 +174,20 @@ function runStart(
         SIMULATOR_UDID: udid,
       },
     });
-    const timer = setTimeout(() => child.kill("SIGTERM"), START_TIMEOUT_MS);
-    child.on("error", reject);
+    starts.set(sessionId, child);
+    const timer = setTimeout(() => {
+      killGroup(child, "SIGTERM");
+      setTimeout(() => killGroup(child, "SIGKILL"), 10_000).unref();
+    }, START_TIMEOUT_MS);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      starts.delete(sessionId);
+      fs.closeSync(log);
+      reject(error);
+    });
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (starts.get(sessionId) === child) starts.delete(sessionId);
       fs.closeSync(log);
       if (code === 0) resolve();
       else reject(new Error(`start exited ${code}:\n${tail(logFile)}`.trim()));
@@ -171,20 +195,39 @@ function runStart(
   });
 }
 
+// Bring-ups running in this process. A lease still 'creating' or 'starting'
+// without one was cut off by a restart. The token tells a bring-up whether
+// it was closed (or replaced) while it ran.
+const attempts = new Map<string, symbol>();
+
+class Cancelled extends Error {}
+
 async function bringUp(
   sessionId: string,
+  token: symbol,
   config: NonNullable<ProjectConfig["simulator"]>,
   ports: Record<string, number>,
   cwd: string
 ): Promise<void> {
   const name = deviceNameFor(sessionId);
+  let made: string | undefined;
+  // Every step is followed by this: closed meanwhile, it stops and tidies up.
+  const live = () => {
+    if (attempts.get(sessionId) !== token) throw new Cancelled();
+  };
   try {
     await ensureInstalled();
+    live();
     const base = await ensureBase(config.device ?? DEFAULT_MODEL);
+    live();
     const existing = (await listDevices()).find((d) => d.name === name);
-    const udid = existing?.udid ?? (await cloneDevice(base, name));
+    live();
+    made = existing?.udid ?? (await cloneDevice(base, name));
+    const udid = made;
+    live();
     putLease(sessionId, { name, udid, state: "starting" });
     await bootDevice(udid);
+    live();
     // The XCTest runner builds once per Xcode version, then is cached; it
     // runs alongside the project's own build.
     const runner = callTool(
@@ -201,20 +244,37 @@ async function bringUp(
       15 * 60_000
     );
     await runStart(sessionId, config.start, cwd, udid, ports);
+    live();
     const prepared = await runner;
+    live();
     if (prepared.code !== 0)
       throw new Error(`the XCTest runner didn't start: ${prepared.stderr}`);
     if (config.app) {
       const opened = await callTool(
         openArgs({ udid, sessionId, app: config.app })
       );
+      live();
       if (opened.code !== 0)
         throw new Error(`couldn't attach to ${config.app}: ${opened.stderr}`);
     }
     putLease(sessionId, { name, udid, state: "ready" });
+    attempts.delete(sessionId);
   } catch (error) {
+    if (error instanceof Cancelled || attempts.get(sessionId) !== token) {
+      // Closed while coming up: a device made after the close is not kept
+      // unless the close only shut the task's simulator down.
+      if (made) {
+        const device = { udid: made, name };
+        const kept = getLease(sessionId);
+        await (kept ? shutdownDevice(device) : deleteDevice(device)).catch(
+          () => {}
+        );
+      }
+      return;
+    }
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[simulator] ${sessionId}: ${message}`);
+    attempts.delete(sessionId);
     putLease(sessionId, { name, state: "failed", error: message });
   }
 }
@@ -234,7 +294,9 @@ export function openSimulator(sessionId: string): SimulatorStatus {
       `${maxBooted()} simulators are already booted for other tasks; try again in a few minutes.`
     );
   putLease(sessionId, { name: deviceNameFor(sessionId), state: "creating" });
-  void bringUp(sessionId, config, ports, cwd);
+  const token = Symbol(sessionId);
+  attempts.set(sessionId, token);
+  void bringUp(sessionId, token, config, ports, cwd);
   return simulatorStatus(sessionId);
 }
 
@@ -253,7 +315,7 @@ export async function runSimulator(
   sessionId: string,
   args: string[]
 ): Promise<CallResult & { screenshot: string | null }> {
-  const { config } = declared(sessionId);
+  const { config, cwd } = declared(sessionId);
   let lease = getLease(sessionId);
   if (!lease || lease.state === "failed")
     throw new SimulatorError("No simulator is open. Run `aos sim open`.");
@@ -271,6 +333,7 @@ export async function runSimulator(
       udid: lease.udid!,
       sessionId,
       app: config.app,
+      cwd,
     });
   } catch (error) {
     throw new SimulatorError((error as Error).message, 400);
@@ -305,6 +368,10 @@ export async function releaseSimulator(
 ): Promise<void> {
   const lease = getLease(sessionId);
   if (!lease) return;
+  // A bring-up still running stops at its next step; so does its build.
+  attempts.delete(sessionId);
+  const start = starts.get(sessionId);
+  if (start) killGroup(start, "SIGTERM");
   try {
     if (lease.udid) {
       await callTool([
@@ -342,8 +409,8 @@ const ENDED = new Set(["merged", "dropped", "done", "moved"]);
 // are deleted.
 export async function sweepSimulators(): Promise<void> {
   if (!simulatorAvailable()) return;
-  const leases = allLeases();
   const devices = await listDevices();
+  const leases = allLeases();
   const sessions = new Map<string, SessionFacts>();
   for (const l of leases) {
     const s = session(l.session_id);
@@ -351,7 +418,26 @@ export async function sweepSimulators(): Promise<void> {
       ended: !s || !!s.archived_at || ENDED.has(s.task_status ?? ""),
     });
   }
-  const plan = planSweep(leases, devices, sessions, Date.now());
+  const plan = planSweep(
+    leases,
+    devices,
+    sessions,
+    Date.now(),
+    undefined,
+    new Set(attempts.keys())
+  );
+  // Bring-ups a restart cut off: their device is shut down and the slot freed.
+  for (const i of plan.interrupted) {
+    if (i.device)
+      await shutdownDevice(i.device).catch((e) =>
+        console.error("[simulator] sweep shutdown:", e)
+      );
+    putLease(i.sessionId, {
+      name: i.name,
+      state: "failed",
+      error: "interrupted by a restart; run `aos sim open` again",
+    });
+  }
   for (const r of plan.remove) {
     await deleteDevice(r.device).catch((e) =>
       console.error("[simulator] sweep delete:", e)

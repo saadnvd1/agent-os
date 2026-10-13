@@ -1,3 +1,6 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { describe, expect, it } from "vitest";
 import {
   agentSession,
@@ -5,6 +8,8 @@ import {
   openArgs,
   screenshotPath,
   shotsDir,
+  stateDir,
+  toolEnv,
 } from "./agent-device";
 
 const target = {
@@ -71,9 +76,48 @@ describe("buildArgs", () => {
   it("puts a screenshot under the session's shots dir unless given a path", () => {
     const argv = buildArgs(["screenshot"], target, () => 42);
     expect(screenshotPath(argv)).toBe(`${shotsDir(target.sessionId)}/42.png`);
-    const own = buildArgs(["screenshot", "/tmp/x.png"], target);
-    expect(screenshotPath(own)).toBe("/tmp/x.png");
+    const own = buildArgs(
+      ["screenshot", `${shotsDir(target.sessionId)}/x.png`],
+      target
+    );
+    expect(screenshotPath(own)).toBe(`${shotsDir(target.sessionId)}/x.png`);
     expect(screenshotPath(buildArgs(["snapshot"], target))).toBeNull();
+  });
+
+  it("keeps a screenshot inside the shots dir or the worktree, as a png", () => {
+    const wt = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "aos-wt-"))
+    );
+    const t = { ...target, cwd: wt };
+    const shot = (...a: string[]) =>
+      screenshotPath(buildArgs(["screenshot", ...a], t));
+    expect(shot("out.png")).toBe(path.join(wt, "out.png"));
+    expect(shot("--out", "sub/x.png")).toBe(path.join(wt, "sub/x.png"));
+    expect(shot("--out=x.png")).toBe(path.join(wt, "x.png"));
+    expect(shot(`${shotsDir(target.sessionId)}/a.png`)).toBe(
+      path.join(shotsDir(target.sessionId), "a.png")
+    );
+    expect(shot("--scale", "0.5")).toMatch(/shots\/\d+\.png$/);
+    for (const bad of ["/etc/passwd.png", "../x.png", "x.txt", wt]) {
+      expect(() => shot(bad), bad).toThrow(/\.png under this task's worktree/);
+      expect(() => shot("--out", bad), bad).toThrow(/\.png/);
+      expect(() => shot(`--out=${bad}`), bad).toThrow(/\.png/);
+    }
+    fs.symlinkSync(os.tmpdir(), path.join(wt, "link"));
+    expect(() => shot("link/x.png")).toThrow(/\.png under/);
+    fs.rmSync(wt, { recursive: true, force: true });
+  });
+
+  it("gives the tool a small environment, not the server's", () => {
+    process.env.SECRET_TOKEN_FOR_TEST = "x";
+    try {
+      const env = toolEnv();
+      expect(env.SECRET_TOKEN_FOR_TEST).toBeUndefined();
+      expect(env.PATH).toBe(process.env.PATH);
+      expect(env.AGENT_DEVICE_STATE_DIR).toBe(stateDir());
+    } finally {
+      delete process.env.SECRET_TOKEN_FOR_TEST;
+    }
   });
 
   it("relaunches the project's app, and attaches the session at bring-up", () => {

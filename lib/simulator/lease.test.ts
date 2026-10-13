@@ -110,9 +110,63 @@ describe("planSweep", () => {
     const a = lease("live", { state: "ready" });
     expect(planSweep([a], [], live, NOW).dropLeases).toEqual(["live"]);
     const making = lease("live", { state: "creating" });
-    expect(planSweep([making], [], live, NOW).dropLeases).toEqual([]);
+    const here = new Set(["live"]);
+    const plan = planSweep([making], [], live, NOW, undefined, here);
+    expect(plan.dropLeases).toEqual([]);
+    expect(plan.interrupted).toEqual([]);
     const orphaned = lease("gone", { state: "creating" });
     expect(planSweep([orphaned], [], live, NOW).dropLeases).toEqual(["gone"]);
+  });
+
+  it("marks a bring-up a restart cut off as interrupted, shutting its device down", () => {
+    for (const state of ["creating", "starting"] as const) {
+      const a = lease("live", { state });
+      const withDevice = planSweep([a], [device(a)], live, NOW);
+      expect(withDevice.interrupted).toEqual([
+        {
+          sessionId: "live",
+          name: a.name,
+          device: { udid: a.udid, name: a.name },
+        },
+      ]);
+      expect(withDevice.remove).toEqual([]);
+      expect(withDevice.dropLeases).toEqual([]);
+      expect(planSweep([a], [], live, NOW).interrupted[0].device).toBeNull();
+    }
+  });
+
+  it("leaves a bring-up running in this process, and its fresh device, alone", () => {
+    const a = lease("live", { state: "starting" });
+    const here = new Set(["live"]);
+    const plan = planSweep([a], [device(a)], live, NOW, undefined, here);
+    expect(plan).toMatchObject({ interrupted: [], remove: [], shutdown: [] });
+    // Its device is made before its lease row is recorded.
+    const fresh: SimDevice = {
+      ...device(a),
+      name: deviceNameFor("new".padEnd(8, "0")),
+    };
+    expect(
+      planSweep(
+        [],
+        [fresh],
+        new Map(),
+        NOW,
+        undefined,
+        new Set(["new".padEnd(8, "0")])
+      ).remove
+    ).toEqual([]);
+  });
+
+  it("deletes the device of an interrupted bring-up whose task ended", () => {
+    const a = lease("done", { state: "starting" });
+    const plan = planSweep(
+      [a],
+      [device(a)],
+      new Map([["done", { ended: true }]]),
+      NOW
+    );
+    expect(plan.remove).toHaveLength(1);
+    expect(plan.interrupted).toEqual([]);
   });
 
   it("deletes this instance's unclaimed devices, never the base or others'", () => {

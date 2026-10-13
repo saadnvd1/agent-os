@@ -5,7 +5,7 @@
  */
 
 import { db } from "../db";
-import { ownsDevice, baseName, type SimDevice } from "./simctl";
+import { baseName, deviceNameFor, ownsDevice, type SimDevice } from "./simctl";
 
 export type LeaseState =
   | "creating"
@@ -106,6 +106,13 @@ export interface SweepPlan {
     sessionId: string | null;
   }[];
   shutdown: { udid: string; name: string; sessionId: string }[];
+  // Leases left 'creating' or 'starting' by a bring-up that is no longer
+  // running (a restart): to be marked failed, their device shut down.
+  interrupted: {
+    sessionId: string;
+    name: string;
+    device: { udid: string; name: string } | null;
+  }[];
   // Leases whose device is gone.
   dropLeases: string[];
 }
@@ -115,17 +122,33 @@ export function planSweep(
   devices: SimDevice[],
   sessions: Map<string, SessionFacts>,
   now: number,
-  idleMs = IDLE_MS
+  idleMs = IDLE_MS,
+  // Tasks whose bring-up is running in this process right now.
+  bringingUp: ReadonlySet<string> = new Set()
 ): SweepPlan {
-  const plan: SweepPlan = { remove: [], shutdown: [], dropLeases: [] };
+  const plan: SweepPlan = {
+    remove: [],
+    shutdown: [],
+    interrupted: [],
+    dropLeases: [],
+  };
   const byName = new Map(devices.map((d) => [d.name, d]));
   const leased = new Set(leases.map((l) => l.name));
+  for (const id of bringingUp) leased.add(deviceNameFor(id));
   for (const lease of leases) {
     const device = byName.get(lease.name);
     const ended = sessions.get(lease.session_id)?.ended ?? true;
+    const coming = lease.state === "creating" || lease.state === "starting";
+    if (!ended && coming) {
+      if (!bringingUp.has(lease.session_id))
+        plan.interrupted.push({
+          sessionId: lease.session_id,
+          name: lease.name,
+          device: device ? { udid: device.udid, name: device.name } : null,
+        });
+      continue;
+    }
     if (!device) {
-      // Still being made: its row is ahead of its device.
-      if (!ended && lease.state === "creating") continue;
       plan.dropLeases.push(lease.session_id);
     } else if (ended || lease.state === "failed") {
       plan.remove.push({ device, sessionId: lease.session_id });

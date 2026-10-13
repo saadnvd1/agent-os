@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { spawn } from "child_process";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -6,13 +7,15 @@ import { db } from "../db";
 import { createProject } from "../projects";
 import { seedSession } from "../orchestrator/testing";
 import {
+  killGroup,
   openSimulator,
   releaseOnEnd,
   releaseSimulator,
   runSimulator,
   simulatorStatus,
+  sweepSimulators,
 } from "./index";
-import { putLease, getLease } from "./lease";
+import { bootedCount, getLease, putLease } from "./lease";
 import { setSimctlRunner } from "./simctl";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-sim-"));
@@ -64,10 +67,11 @@ describe("a declared simulator", () => {
   const declare = () =>
     fs.writeFileSync(config, JSON.stringify({ simulator: { start: "true" } }));
 
-  it("needs to be opened before it is driven", async () => {
+  const mac = it.skipIf(process.platform !== "darwin");
+
+  mac("needs to be opened before it is driven", async () => {
     declare();
     const id = seedSession({ projectId, name: "t", task: true });
-    if (process.platform !== "darwin") return;
     await expect(runSimulator(id, ["snapshot"])).rejects.toThrow(
       /aos sim open/
     );
@@ -77,8 +81,7 @@ describe("a declared simulator", () => {
     );
   });
 
-  it("refuses to open past the cap", () => {
-    if (process.platform !== "darwin") return;
+  mac("refuses to open past the cap", () => {
     declare();
     process.env.AGENTOS_SIMULATOR_MAX = "1";
     try {
@@ -89,6 +92,42 @@ describe("a declared simulator", () => {
     } finally {
       delete process.env.AGENTOS_SIMULATOR_MAX;
     }
+  });
+});
+
+describe("the sweep after a restart", () => {
+  it.skipIf(process.platform !== "darwin")(
+    "fails a bring-up nothing is running and frees its slot",
+    async () => {
+      const id = seedSession({ projectId, name: "t", task: true });
+      putLease(id, { name: "n", state: "starting" });
+      setSimctlRunner(async () => '{"devices":{}}');
+      await sweepSimulators();
+      expect(getLease(id)).toMatchObject({
+        state: "failed",
+        error: expect.stringMatching(/interrupted by a restart/),
+      });
+      expect(bootedCount()).toBe(0);
+    }
+  );
+});
+
+describe("killGroup", () => {
+  it("stops the shell's children too, not only the shell", async () => {
+    const child = spawn("sleep 60 & echo $!; wait", {
+      shell: true,
+      detached: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const grandchild = Number(
+      await new Promise<string>((r) =>
+        child.stdout!.once("data", (d) => r(String(d)))
+      )
+    );
+    expect(() => process.kill(grandchild, 0)).not.toThrow();
+    killGroup(child, "SIGTERM");
+    await new Promise((r) => child.once("close", r));
+    await vi.waitFor(() => expect(() => process.kill(grandchild, 0)).toThrow());
   });
 });
 

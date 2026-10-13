@@ -63,6 +63,9 @@ export interface Target {
   udid: string;
   sessionId: string;
   app?: string | null;
+  // The task's worktree: with the shots dir, the only place a screenshot may
+  // be written. Relative paths are taken from here.
+  cwd?: string | null;
 }
 
 // The tool's session on the task's device, attached to the app.
@@ -106,8 +109,13 @@ export function buildArgs(
     sub === "relaunch"
       ? ["open", ...(target.app ? [target.app] : []), "--relaunch", ...rest]
       : [sub, ...rest];
-  if (sub === "screenshot" && !rest.some((a) => !a.startsWith("-")))
-    out.push(path.join(shotsDir(target.sessionId), `${now()}.png`));
+  if (sub === "screenshot") {
+    const at = shotArg(out);
+    if (!at) out.push(path.join(shotsDir(target.sessionId), `${now()}.png`));
+    else
+      out[at.index] =
+        at.prefix + safeShotPath(out[at.index].slice(at.prefix.length), target);
+  }
   return [
     ...out,
     "--platform",
@@ -119,16 +127,75 @@ export function buildArgs(
   ];
 }
 
-// The screenshot path a built argv will write, if it is one.
-export const screenshotPath = (argv: string[]): string | null =>
-  argv[0] === "screenshot"
-    ? (argv.slice(1).find((a) => !a.startsWith("-")) ?? null)
-    : null;
+const within = (dir: string, file: string) => {
+  const rel = path.relative(dir, file);
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+};
 
-export const toolEnv = (): NodeJS.ProcessEnv => ({
-  ...process.env,
-  AGENT_DEVICE_STATE_DIR: stateDir(),
-});
+// Resolves through symlinks as far as the path exists, so a link inside the
+// worktree can't lead the write elsewhere.
+function realish(file: string): string {
+  const rest: string[] = [];
+  let dir = file;
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(dir), ...rest.reverse());
+    } catch {
+      const up = path.dirname(dir);
+      if (up === dir) return file;
+      rest.push(path.basename(dir));
+      dir = up;
+    }
+  }
+}
+
+// A screenshot goes under the session's shots dir or the task's worktree, as
+// a .png; anything else is refused.
+function safeShotPath(given: string, target: Target): string {
+  const base = target.cwd ?? shotsDir(target.sessionId);
+  const full = realish(path.resolve(base, given));
+  const roots = [shotsDir(target.sessionId), target.cwd].flatMap((r) =>
+    r ? [realish(r)] : []
+  );
+  if (!full.endsWith(".png") || !roots.some((r) => within(r, full)))
+    throw new Error(
+      "screenshot: the path must be a .png under this task's worktree or its simulator shots folder"
+    );
+  return full;
+}
+
+const VALUE_FLAGS = new Set(["--crop-on", "--pixel-density", "--scale"]);
+
+// Where a screenshot argv names its file: a positional path or --out.
+function shotArg(argv: string[]): { index: number; prefix: string } | null {
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--out")
+      return argv[i + 1] === undefined ? null : { index: i + 1, prefix: "" };
+    if (a.startsWith("--out=")) return { index: i, prefix: "--out=" };
+    if (VALUE_FLAGS.has(a)) i++;
+    else if (!a.startsWith("-")) return { index: i, prefix: "" };
+  }
+  return null;
+}
+
+// The screenshot path a built argv will write, if it is one.
+export const screenshotPath = (argv: string[]): string | null => {
+  if (argv[0] !== "screenshot") return null;
+  const at = shotArg(argv);
+  return at ? argv[at.index].slice(at.prefix.length) : null;
+};
+
+// What the tool and its install get: no tokens or project secrets from the
+// server's environment, only what it needs to find Xcode and a home.
+const ENV_KEYS = ["PATH", "HOME", "TMPDIR", "LANG", "DEVELOPER_DIR"];
+export const toolEnv = (): NodeJS.ProcessEnv =>
+  ({
+    ...Object.fromEntries(
+      ENV_KEYS.filter((k) => process.env[k]).map((k) => [k, process.env[k]])
+    ),
+    AGENT_DEVICE_STATE_DIR: stateDir(),
+  }) as unknown as NodeJS.ProcessEnv;
 
 let installing: Promise<void> | null = null;
 
@@ -144,9 +211,11 @@ export function ensureInstalled(): Promise<void> {
         toolDir(),
         "--no-audit",
         "--no-fund",
+        // agent-device has no install scripts; none are run for it or its deps.
+        "--ignore-scripts",
         `agent-device@${AGENT_DEVICE_VERSION}`,
       ],
-      { timeout: 300_000 }
+      { timeout: 300_000, env: toolEnv() }
     );
   })().finally(() => {
     installing = null;
