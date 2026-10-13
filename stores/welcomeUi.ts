@@ -1,5 +1,5 @@
 import { proxy } from "valtio";
-import type { WelcomeStep } from "@/lib/welcome-url";
+import { WELCOME_STEPS, type WelcomeStep } from "@/lib/welcome-url";
 
 // The first-run welcome: whether it is on show, the step, and the project
 // the user made (or picked) to start in.
@@ -19,6 +19,11 @@ export const welcomeUiActions = {
   },
   setProject: (projectId: string | null) => {
     welcomeUi.projectId = projectId;
+  },
+  // A project picked or added: remember it and move to the step after "project".
+  chooseProject: (projectId: string) => {
+    welcomeUi.projectId = projectId;
+    welcomeUi.step = WELCOME_STEPS[WELCOME_STEPS.indexOf("project") + 1];
   },
   close: () => {
     welcomeUi.open = false;

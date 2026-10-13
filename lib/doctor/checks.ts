@@ -204,7 +204,18 @@ export function runDoctor(
   const checks = Promise.all([
     Promise.resolve(checkNode(d.nodeVersion)),
     ...TOOLS.map((t) => checkTool(t, d.exec)),
-    d.probe(fresh).then(checkAgents),
+    d
+      .probe(fresh)
+      .then(checkAgents)
+      .catch(
+        (): DoctorCheck => ({
+          id: "agents",
+          label: "Agent CLI",
+          status: "warn",
+          detail: "Couldn't check the agent CLIs",
+          fix: "Check again",
+        })
+      ),
   ]);
   if (!custom) cache = { at: Date.now(), checks };
   return checks;

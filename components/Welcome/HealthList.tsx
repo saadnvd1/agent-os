@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 
 const ICON = { ok: Check, warn: AlertTriangle, fail: X } as const;
 const TONE: Record<CheckStatus, string> = {
-  ok: "text-emerald-600 dark:text-emerald-400",
-  warn: "text-amber-600 dark:text-amber-400",
+  ok: "text-primary",
+  warn: "text-muted-foreground",
   fail: "text-destructive",
 };
 

@@ -75,6 +75,20 @@ describe("runDoctor", () => {
     expect(c.agents.status).toBe("fail");
   });
 
+  it("turns a failing agent probe into a warning instead of rejecting", async () => {
+    const c = byId(
+      await runDoctor(true, {
+        exec: execWith(all),
+        probe: async () => {
+          throw new Error("probe blew up");
+        },
+        nodeVersion: "22.0.0",
+      })
+    );
+    expect(c.agents.status).toBe("warn");
+    expect(c.node.status).toBe("ok");
+  });
+
   it("treats a tool that times out as not answering", async () => {
     const exec: ExecFn = async () => {
       throw Object.assign(new Error("timed out"), { killed: true });
