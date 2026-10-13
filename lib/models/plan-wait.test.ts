@@ -20,7 +20,9 @@ import {
   implementMessageId,
   planPrompt,
   planRetryMessageId,
+  planTurnStarted,
   preparePlanDir,
+  recheckPlanning,
 } from "./plan-step";
 
 const turn = {
@@ -164,6 +166,91 @@ describe.each([
     expect(send).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1100);
     expect(send).toHaveBeenCalledWith(id, planRetryMessageId(id));
+  });
+});
+
+describe.each([
+  ["plan:true", false],
+  ["plan_only", true],
+])("%s task's planning wait", (_name, planOnly) => {
+  it("does nothing when the fallback timer fires mid-turn", async () => {
+    vi.useFakeTimers();
+    const { id } = task(planOnly);
+    const send = vi.fn(async () => {});
+    let turn = false;
+    const env = {
+      backgroundRunning: () => true,
+      turnRunning: () => turn,
+      waitMs: 1000,
+    };
+    await handoffAfterPlan(id, send, env);
+    turn = true;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(send).not.toHaveBeenCalled();
+    expect(phase(id)).toBe("planning");
+    expect(listQueue(id)).toEqual([]);
+  });
+
+  it("counts the deadline from the latest idle, not the first", async () => {
+    vi.useFakeTimers();
+    const { id } = task(planOnly);
+    const send = vi.fn(async () => {});
+    const env = { backgroundRunning: () => true, waitMs: 1000 };
+    await handoffAfterPlan(id, send, env);
+    await vi.advanceTimersByTimeAsync(800);
+    planTurnStarted(id);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(send).not.toHaveBeenCalled();
+    await handoffAfterPlan(id, send, env);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(send).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(send).toHaveBeenCalledWith(id, planRetryMessageId(id));
+  });
+
+  it("leaves no stale re-prompt queued when sending it fails", async () => {
+    const { id } = task(planOnly);
+    const send = vi.fn(async () => {
+      throw new Error("busy");
+    });
+    await expect(handoffAfterPlan(id, send)).rejects.toThrow("busy");
+    expect(listQueue(id)).toEqual([]);
+  });
+
+  it("ignores a task that is no longer running", async () => {
+    vi.useFakeTimers();
+    const { id } = task(planOnly);
+    const send = vi.fn(async () => {});
+    await handoffAfterPlan(id, send, {
+      backgroundRunning: () => true,
+      waitMs: 1000,
+    });
+    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
+      id
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(send).not.toHaveBeenCalled();
+    expect(phase(id)).toBe("planning");
+  });
+
+  it("re-checks planning tasks on server start", async () => {
+    const written = task(planOnly);
+    writePlan(written.worktree);
+    const bare = task(planOnly);
+    const running = task(planOnly);
+    const send = vi.fn(async () => {});
+    await recheckPlanning(send, (sid) => ({
+      turnRunning: () => sid === running.id,
+    }));
+    expect(phase(written.id)).toBe(planOnly ? "awaiting" : "implementing");
+    expect(phase(bare.id)).toBe("planning");
+    expect(send).toHaveBeenCalledWith(bare.id, planRetryMessageId(bare.id));
+    expect(send).not.toHaveBeenCalledWith(
+      running.id,
+      planRetryMessageId(running.id)
+    );
+    await recheckPlanning(send, () => ({}));
+    expect(phase(bare.id)).toBe(planOnly ? "awaiting" : "implementing");
   });
 });
 

@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { db, type Session } from "../db";
-import { enqueue } from "../chat/queued";
+import { deleteQueued, enqueue } from "../chat/queued";
 import { applySessionModel } from "./session-model";
 import {
   resolveRole,
@@ -189,6 +189,8 @@ const waiting = new Map<
 export interface PlanHandoffEnv {
   // Whether the session's agent still runs subagents or background shells.
   backgroundRunning?: () => boolean;
+  // Whether the chat is in the middle of a turn right now.
+  turnRunning?: () => boolean;
   waitMs?: number;
   now?: () => number;
 }
@@ -202,6 +204,19 @@ function stateOf(sessionId: string) {
 function forget(sessionId: string): void {
   clearTimeout(waiting.get(sessionId)?.timer);
   waiting.delete(sessionId);
+}
+
+// A task dropped, stopped or done: nothing left to wait for.
+export const forgetPlanWait = forget;
+
+// A new turn began (the agent resumed with its background results): whatever
+// the wait was counting is stale, and the deadline restarts at the next idle.
+export function planTurnStarted(sessionId: string): void {
+  const w = waiting.get(sessionId);
+  if (!w) return;
+  clearTimeout(w.timer);
+  w.timer = undefined;
+  w.since = 0;
 }
 
 // Called when a chat goes idle. A task whose plan turn has ended (it has a
@@ -222,7 +237,16 @@ export async function handoffAfterPlan(
     .get(sessionId);
   if (!planned) return false;
   const s = getSession(sessionId);
-  if (s?.plan_phase !== "planning" || !s.worktree_path) return false;
+  if (s?.plan_phase !== "planning" || !s.worktree_path) {
+    forget(sessionId);
+    return false;
+  }
+  if (s.task_status !== "running" || s.archived_at) {
+    forget(sessionId);
+    return false;
+  }
+  // Mid-turn, the turn's own end decides.
+  if (env.turnRunning?.()) return false;
   if (!fs.existsSync(path.join(s.worktree_path, PLAN_FILE))) {
     const w = stateOf(sessionId);
     const now = (env.now ?? Date.now)();
@@ -253,10 +277,18 @@ export async function handoffAfterPlan(
         text: PLAN_RETRY_PROMPT,
         origin: { kind: "decision", label: "Plan step" },
       });
-      await send(sessionId, id);
+      try {
+        await send(sessionId, id);
+      } catch (e) {
+        // Not left queued behind a turn that may write the plan itself.
+        deleteQueued(sessionId, id);
+        throw e;
+      }
       return false;
     }
   }
+  // A re-prompt still queued is stale now.
+  deleteQueued(sessionId, planRetryMessageId(sessionId));
   const retried = waiting.get(sessionId)?.retried ?? false;
   forget(sessionId);
   if (!s.plan_only)
@@ -284,6 +316,26 @@ export async function handoffAfterPlan(
     console.error(`Releasing the worker of ${sessionId} failed:`, e);
   }
   return true;
+}
+
+// On server start: tasks still planning get the same check an idle chat
+// does, since the idle that would have run it may have come and gone while
+// the server was down. `envFor` reads the live chat's state.
+export async function recheckPlanning(
+  send: Send,
+  envFor: (sessionId: string) => PlanHandoffEnv
+): Promise<void> {
+  const rows = db
+    .prepare(
+      `SELECT id FROM sessions
+       WHERE plan_phase = 'planning' AND task_status = 'running'
+         AND archived_at IS NULL AND worktree_path IS NOT NULL`
+    )
+    .all() as { id: string }[];
+  for (const { id } of rows)
+    await handoffAfterPlan(id, send, envFor(id)).catch((e) =>
+      console.error(`Plan re-check for ${id} failed:`, e)
+    );
 }
 
 // approvePlan, sending through the chat runner (imported when needed: it

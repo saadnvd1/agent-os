@@ -4,6 +4,7 @@ import { stopChatTurn } from "../chat/stop";
 import type { Session } from "../db";
 import { stopHeldTask } from "../tasks/held-remote";
 import { releaseOnEnd } from "../simulator";
+import { forgetPlanWait } from "../models/plan-step";
 
 // Stops a session's agent and keeps everything else, the same for every
 // caller (the orchestrator's stop tool, `aos stop`): a chat's turn ends
@@ -31,6 +32,7 @@ export async function stopSession(
       throw new Error(
         `Couldn't stop ${s.name}: it runs on another machine; stop it there.`
       );
+    forgetPlanWait(s.id);
     const out = await stopChatTurn(s.id);
     if (!out.stopped)
       throw new Error(`Couldn't stop ${s.name}: ${out.reason}.`);
