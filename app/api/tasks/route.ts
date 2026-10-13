@@ -7,6 +7,7 @@ import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
 import { isSessionId, statusFor } from "@/lib/tasks/move-bundle";
 import { startView } from "@/lib/sessions/launch";
 import { isValidAgentType } from "@/lib/providers";
+import { isAgentModelName } from "@/lib/providers/registry";
 
 // moved and capabilities are for another machine that mirrors these tasks.
 export async function GET() {
@@ -47,6 +48,8 @@ export async function POST(request: NextRequest) {
         : projectId;
     if (agent !== undefined && !isValidAgentType(agent))
       throw new Error("Unknown agent");
+    if (agent && agent !== "claude" && model != null && model !== "")
+      if (!isAgentModelName(model)) throw new Error("Bad model name");
     const opts = {
       projectId: pid,
       prompt: String(prompt ?? ""),

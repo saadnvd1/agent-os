@@ -22,12 +22,15 @@ export const ATTRIBUTION =
   /^(?:co-authored-by:.*(?:claude|anthropic|copilot)|claude-session:|🤖 generated with)|(?:^|[^\p{L}\p{N}"'`])generated (?:with|by) \[?claude code/iu;
 export type AttributionKind =
   | "a Co-Authored-By trailer naming Claude"
+  | "a Co-Authored-By trailer naming GitHub Copilot"
   | "a Claude-Session link"
   | 'a "Generated with" AI footer';
 function attributionKind(line: string): AttributionKind | undefined {
   if (!ATTRIBUTION.test(line)) return;
   if (/^co-authored-by:/i.test(line))
-    return "a Co-Authored-By trailer naming Claude";
+    return /^co-authored-by:.*(?:claude|anthropic)/i.test(line)
+      ? "a Co-Authored-By trailer naming Claude"
+      : "a Co-Authored-By trailer naming GitHub Copilot";
   if (/^claude-session:/i.test(line)) return "a Claude-Session link";
   return 'a "Generated with" AI footer';
 }

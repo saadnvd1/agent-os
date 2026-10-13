@@ -182,10 +182,8 @@
 - [ ] Record a check as a replayable script
 - [ ] Android emulator through the same lease
 
-<<<<<<< HEAD
-
 - Resolve an open orchestrator question from a freeform chat reply, without the strip's Reply or the orchestrator clearing it.
-- # Fold event turns in task chats the way the orchestrator's chat does.
+- Fold event turns in task chats the way the orchestrator's chat does.
 - GitHub Copilot, next: its model list in the chat picker (ACP lists none on
   some plans; read `copilot --help`'s catalog or `session/set_model` when it
   appears) and switching model mid-chat; plan mode (`--plan`/`--mode plan`);
@@ -200,4 +198,3 @@
   source (`includeCoAuthoredBy` is a user setting, so only the commit-msg hook
   and the PR-body check stop it today); undo; fork; `/` commands from
   `available_commands_update`.
-  > > > > > > > 20fd2f7 (feat(agents): run sessions and tasks with the GitHub Copilot CLI)

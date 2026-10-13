@@ -58,6 +58,11 @@ export interface ProviderDefinition {
 // The model value that means "whatever the agent itself defaults to".
 export const AGENT_DEFAULT_MODEL = "default";
 
+// A model name handed to another agent's CLI as an argument: printable, no
+// leading dash (it would read as a flag), bounded.
+export const isAgentModelName = (v: unknown): v is string =>
+  typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$/.test(v);
+
 /**
  * Provider Registry
  * All supported agent providers with their configurations
