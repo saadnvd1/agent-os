@@ -81,8 +81,8 @@ export const SECTION_INFO: Record<
     icon: ClipboardList,
   },
   setup: {
-    label: "Setup",
-    hint: "Agents on this machine, first-run setup",
+    label: "Setup & health",
+    hint: "What this machine has, agents, first-run setup",
     icon: ListChecks,
   },
 };

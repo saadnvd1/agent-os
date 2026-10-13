@@ -3,7 +3,12 @@
 
 export const WELCOME_PARAM = "welcome";
 
-export const WELCOME_STEPS = ["agents", "project", "finish"] as const;
+export const WELCOME_STEPS = [
+  "agents",
+  "project",
+  "devices",
+  "finish",
+] as const;
 
 export type WelcomeStep = (typeof WELCOME_STEPS)[number];
 
