@@ -2,6 +2,7 @@ import { endTmuxSession } from "../tmux/end";
 import { hostLink } from "../hosts/remote-api";
 import { stopChatTurn } from "../chat/stop";
 import type { Session } from "../db";
+import { stopHeldTask } from "../tasks/held-remote";
 
 // Stops a session's agent and keeps everything else, the same for every
 // caller (the orchestrator's stop tool, `aos stop`): a chat's turn ends
@@ -9,8 +10,21 @@ import type { Session } from "../db";
 // and conversation stay, and the next message runs as the next turn. Throws
 // when the chat can't be shown to have stopped.
 export async function stopSession(
-  s: Pick<Session, "id" | "name" | "view" | "host_id" | "tmux_name">
+  s: Pick<
+    Session,
+    | "id"
+    | "name"
+    | "view"
+    | "host_id"
+    | "tmux_name"
+    | "started_by"
+    | "task_prompt"
+  >
 ): Promise<string> {
+  // A task its orchestrator moved to a linked machine stops through that
+  // machine's AgentOS, chat or terminal.
+  if (s.started_by && s.task_prompt && hostLink(s.host_id))
+    return stopHeldTask(s);
   if (s.view === "chat") {
     if (hostLink(s.host_id))
       throw new Error(

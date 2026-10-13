@@ -12,6 +12,7 @@ import { hostApi, hostLink, type HostLink } from "../hosts/remote-api";
 import { getTaskSession } from "./session";
 import { markMoved, resumeTask } from "./move";
 import { forgetHostTasks, mirrorTask, unknownOutcome } from "./remote";
+import { carryTaskState } from "./move-carry";
 
 /** POST, repeated when the outcome is unknown (the calls are idempotent). */
 export async function tell(
@@ -50,6 +51,7 @@ export function settleMovedOut(
   db.transaction(() => {
     markMoved(session.id, hostName);
     mirrorTask(hostId, session.project_id, there);
+    carryTaskState(session.id, there.id);
   })();
   forgetHostTasks(hostId);
   return db

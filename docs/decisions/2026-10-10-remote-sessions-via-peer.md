@@ -150,3 +150,7 @@ A new session started from here on a linked machine is started by that
 machine's AgentOS, in the project at the same folder, and opens in chat like
 a local one (`DEFAULT_START_VIEW` in `lib/sessions/launch.ts`, which the
 orchestrator's starts use too).
+
+## Later (2026-10-12)
+
+An orchestrator's messages to a task it moved to a linked machine are relayed to that machine's holder-only message route with an agent origin (`kind: peer`), so they never arrive as the user's own words. See 2026-10-12-orchestrator-task-moves.md.

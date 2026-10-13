@@ -73,9 +73,12 @@ export function planSummary(text: string, max = 5): string[] {
 
 // Tells the orchestrator that started a task its plan is written, once.
 function announcePlan(s: Session, ref: string): void {
-  if (!s.started_by) return;
+  if (!s.started_by && !s.held_by_device) return;
   const workspaceId = sessionWorkspace(s);
-  if (!workspaceId || !s.worktree_path) return;
+  // A task held for another machine's orchestrator can't reach it: the line
+  // waits on the task for that orchestrator to read (orchestrator/facts).
+  if (!s.held_by_device && !workspaceId) return;
+  if (!s.worktree_path) return;
   const file = path.join(s.worktree_path, PLAN_FILE);
   let head = `Task "${s.name}": no plan file was written; implementing on ${ref} anyway.`;
   try {
@@ -85,7 +88,14 @@ function announcePlan(s: Session, ref: string): void {
   } catch {
     // No plan file: the line says so.
   }
-  queueEvent(workspaceId, `plan-done:${s.id}`, s.id, head);
+  if (s.held_by_device) {
+    db.prepare(`UPDATE sessions SET plan_note = ? WHERE id = ?`).run(
+      head,
+      s.id
+    );
+    return;
+  }
+  queueEvent(workspaceId!, `plan-done:${s.id}`, s.id, head);
 }
 
 export const implementMessageId = (sessionId: string) =>

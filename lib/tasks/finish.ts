@@ -9,6 +9,7 @@ import {
 import { republishAfterMerge } from "../lumifyhub/publish";
 import { restackAfterMerge } from "../stacks/restack";
 import { itemName, liveChildren, signOffRefusal } from "../stacks/guard";
+import { holderRefusal } from "./held";
 import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
 import { endSessionAgent } from "../sessions/end";
 import { run } from "./gh";
@@ -111,11 +112,14 @@ async function finishMerge(
 // machine merged it and didn't say).
 export async function signOffTask(
   id: string,
-  opts: { wait?: boolean; head?: string } = {}
+  opts: { wait?: boolean; head?: string; device?: string | null } = {}
 ): Promise<MergeMethod | null> {
   const session = getTaskSession(id);
   if (session.task_status !== "running")
     throw new Error(`Task is already ${session.task_status}`);
+  // A task another machine's orchestrator moved here merges only from there.
+  const held = holderRefusal(session, opts.device);
+  if (held) throw new Error(held);
   // Its own machine checks the gates and merges.
   // That machine's settings chose the method; null if it didn't say.
   if (isMirror(session)) return remoteTaskAction(session, "merge", opts.head);

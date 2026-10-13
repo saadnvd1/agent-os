@@ -211,6 +211,20 @@ const PULL_MERGE = /(^|\/)pulls\/[^/?\s]+\/merge\/?(\?|$)/;
 
 const MERGE_MSG = `Refused: a PR merges only through the gates: ${T.sign_off} (or ${T.arm}) for a task's or an external PR, ${T.land} for a stack. Nothing merges, closes or retargets a PR from the shell.`;
 
+// aos move, done, stop and drop reach a session by name, past the tools'
+// Pause check and logging; the tools do the same work.
+function aosRefusal(args: string[]): string | null {
+  const [sub] = positionals(args);
+  const tool: Record<string, string> = {
+    move: T.move,
+    done: T.done,
+    stop: T.stop,
+  };
+  if (sub && tool[sub])
+    return `Refused: \`aos ${sub}\` isn't for you; use ${tool[sub]}, which is scoped to this workspace and held by Pause.`;
+  return null;
+}
+
 // gh: pr merge, close and edit --base, and api calls that merge or change a
 // pull request.
 function ghRefusal(args: string[]): string | null {
@@ -522,6 +536,7 @@ export async function shellRefusal(
         secretRefusal(inv, cwd) ??
         (inv.name === "gh" ? ghRefusal(inv.args) : null) ??
         (inv.name === "curl" ? curlRefusal(inv.args) : null) ??
+        (inv.name === "aos" ? aosRefusal(inv.args) : null) ??
         (inv.name === "git" ? await gitRefusal(inv.args, ctx, cwd) : null) ??
         (inv.name === "sqlite3"
           ? await sqliteRefusal(inv, ctx, cwd, command)

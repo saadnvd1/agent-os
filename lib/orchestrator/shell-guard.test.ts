@@ -106,6 +106,14 @@ describe("the orchestrator's shell", () => {
     ]);
   });
 
+  it("refuses aos move, done and stop, naming the tool that is scoped and paused", async () => {
+    await expectRefused(
+      ["aos move some-task box", "aos done some-task", "aos stop some-task"],
+      /isn't for you; use .*Pause/
+    );
+    await expectAllowed(["aos peers", "aos inbox"]);
+  });
+
   it("refuses git push, however it's wrapped", async () => {
     await expectRefused(
       [

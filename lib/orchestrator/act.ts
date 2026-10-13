@@ -19,7 +19,9 @@ import {
   launchSession,
   type StartView,
 } from "../sessions/launch";
-import { createTask, dropTask } from "../tasks";
+import { assertMovable, createTask, dropTask, moveTask } from "../tasks";
+import { getHost, hostIdNamed } from "../hosts";
+import { queueEvent } from "./events";
 import {
   findQueued,
   queuedLabel,
@@ -280,3 +282,41 @@ export async function done(workspaceId: string, ref: string): Promise<string> {
 export async function stop(workspaceId: string, ref: string): Promise<string> {
   return stopSession(findWorkspaceSession(workspaceId, ref));
 }
+
+// Carries a task to a linked machine, or back ("here"): heavy test or build
+// work can run on the box. The move takes minutes, so it runs in the
+// background; the orchestrator is told when the task lands or doesn't.
+// Everything about the task (gates, events, read/send/stop/drop) is the same
+// wherever it runs; the machine it lands on holds it for this one.
+export async function moveTaskTo(
+  workspaceId: string,
+  ref: string,
+  machine: string
+): Promise<string> {
+  const task = workspaceTask(workspaceId, ref);
+  const hostId = hostIdNamed(machine);
+  assertMovable(task.id, hostId);
+  const where = hostId === "local" ? "this machine" : machineName(hostId);
+  void moveTask(task.id, hostId).then(
+    (moved) => {
+      addNote(workspaceId, `Moved task ${task.name} to ${where}.`);
+      queueEvent(
+        workspaceId,
+        `move:${moved.id}:${Date.now()}`,
+        moved.id,
+        `Task ${task.name} now runs on ${where}.`
+      );
+    },
+    (error) =>
+      queueEvent(
+        workspaceId,
+        `move-failed:${task.id}:${Date.now()}`,
+        task.id,
+        `Moving task ${task.name} to ${where} failed: ${error instanceof Error ? error.message : String(error)}. It carries on where it was unless it says it's paused as "moving".`
+      )
+  );
+  return `Moving ${task.name} to ${where}. It takes a few minutes; an event tells you when it runs there.`;
+}
+
+const machineName = (hostId: string) =>
+  getHost(hostId)?.name ?? "the other machine";

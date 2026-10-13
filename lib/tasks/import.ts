@@ -5,7 +5,9 @@
  * again returns the task it made the first time.
  */
 
+import fs from "fs";
 import os from "os";
+import path from "path";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import { setupWorktree } from "../env-setup";
@@ -18,6 +20,9 @@ import {
 import { runInBackground } from "../async-operations";
 import { launchClaude } from "../agents/launch";
 import { resolveModelForAgent } from "../model-catalog";
+import { providerFor } from "../models/resolve";
+import { preparePlanDir, PLAN_FILE } from "../models/plan-step";
+import { carryTaskState } from "./move-carry";
 import { buildTaskBrief } from "./brief";
 import { expandHome } from "./session";
 import { ensureProject } from "./project-ref";
@@ -57,7 +62,16 @@ function refuseBusyBranch(projectId: string, branch: string): void {
   if (busy) throw new Error(`${branch} already has a task running here`);
 }
 
-export async function importTask(input: TaskBundle): Promise<Session> {
+export interface ImportOptions {
+  // The paired device that sent an orchestrator's task: it holds the task
+  // here (held.ts). Absent for this machine taking its own task back.
+  holder?: string | null;
+}
+
+export async function importTask(
+  input: TaskBundle,
+  opts: ImportOptions = {}
+): Promise<Session> {
   const bundle = validateBundle(input);
   const done = arrived(bundle.moveId);
   if (done) return done;
@@ -65,13 +79,16 @@ export async function importTask(input: TaskBundle): Promise<Session> {
     throw new InProgressError("It's arriving already");
   importing.add(bundle.moveId);
   try {
-    return await arrive(bundle);
+    return await arrive(bundle, opts);
   } finally {
     importing.delete(bundle.moveId);
   }
 }
 
-async function arrive(bundle: TaskBundle): Promise<Session> {
+async function arrive(
+  bundle: TaskBundle,
+  opts: ImportOptions
+): Promise<Session> {
   const project = await ensureProject(bundle.project);
   const projectPath = expandHome(project.working_directory);
   refuseBusyBranch(project.id, bundle.branch);
@@ -81,12 +98,29 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
     projectPath,
     bundle.branch
   );
+  const orch = bundle.orchestrated;
+  const holder = orch ? (opts.holder ?? null) : null;
+  // Its provider as it was, or this machine says no and the source resumes
+  // it: a task never silently changes provider.
+  const provider = holder
+    ? (orch?.modelProvider ?? null)
+    : ((
+        db
+          .prepare(`SELECT model_provider FROM sessions WHERE id = ?`)
+          .get(bundle.moveId) as { model_provider: string | null } | undefined
+      )?.model_provider ?? null);
+  if (provider) providerFor(provider);
   const claude = bundle.claude;
   const paths = claude && {
     from: { cwd: claude.cwd, home: claude.home },
     to: { cwd: worktreePath, home: os.homedir() },
   };
   stepProgress(bundle.moveId, "conversation");
+  // The plan is never in git: it comes in the bundle.
+  if (orch?.planFile != null) {
+    preparePlanDir(worktreePath);
+    fs.writeFileSync(path.join(worktreePath, PLAN_FILE), orch.planFile);
+  }
   if (claude && paths) {
     await writeTranscript(
       worktreePath,
@@ -97,10 +131,9 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
 
   const id = randomUUID();
   const tmuxName = `claude-${id}`;
-  const model = resolveModelForAgent(
-    "claude",
-    bundle.model || project.default_model
-  );
+  const model = provider
+    ? bundle.model
+    : resolveModelForAgent("claude", bundle.model || project.default_model);
   const baseBranch = bundle.baseBranch ?? "main";
   const brief = buildTaskBrief({ branch: bundle.branch, baseBranch });
   // Checked and written with no await between, so two can't both pass.
@@ -131,6 +164,26 @@ async function arrive(bundle: TaskBundle): Promise<Session> {
          claude_session_id = ?, moved_from = ? WHERE id = ?`
     ).run(bundle.prompt, brief, claude?.sessionId ?? null, bundle.moveId, id);
     if (bundle.chat) unpackChat(id, bundle.chat, paths);
+    if (orch) {
+      db.prepare(
+        `UPDATE sessions SET plan_phase = ?, task_since = ? WHERE id = ?`
+      ).run(orch.planPhase, orch.since, id);
+      // Held for the orchestrator's device. The orchestrator's own state
+      // (started_by, its gates) never comes from the bundle: it stays on its
+      // machine, and a task coming back takes it from the mirror's record.
+      if (holder)
+        db.prepare(
+          `UPDATE sessions SET held_by_device = ?, held_from = ?,
+             model_provider = ?, model_overrides = ? WHERE id = ?`
+        ).run(
+          holder,
+          orch.heldFrom,
+          orch.modelProvider,
+          orch.modelOverrides,
+          id
+        );
+    }
+    carryTaskState(bundle.moveId, id);
   })();
 
   stepProgress(bundle.moveId, "resume");

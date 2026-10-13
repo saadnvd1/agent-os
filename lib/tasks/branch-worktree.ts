@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { getRepoName, slugify } from "../git";
 import { WORKTREES_DIR } from "../worktrees";
+import { installWorktreeHooks } from "../worktree-hooks";
 import { git as runGit } from "../git-exec";
 import { pushedRef } from "./move";
 
@@ -39,7 +40,21 @@ export function worktreeDirFor(
   return dir;
 }
 
-export async function checkoutBranchWorktree(
+// The hook that strips attribution from commit messages, as every worktree
+// AgentOS makes has (best effort: a worktree without it still works).
+const withHooks = async (r: { worktreePath: string; reused: boolean }) => {
+  await installWorktreeHooks(r.worktreePath).catch((err) =>
+    console.error(`[worktrees] hooks not installed in ${r.worktreePath}:`, err)
+  );
+  return r;
+};
+
+export const checkoutBranchWorktree = async (
+  projectPath: string,
+  branch: string
+) => withHooks(await checkoutBranch(projectPath, branch));
+
+async function checkoutBranch(
   projectPath: string,
   branch: string
 ): Promise<{ worktreePath: string; reused: boolean }> {

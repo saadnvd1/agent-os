@@ -23,6 +23,7 @@ export const TOOL_NAMES = {
   stack_status: name("stack_status"),
   land: name("land"),
   drop: name("drop"),
+  move: name("move"),
   stop: name("stop"),
   done: name("done"),
   add_project: name("add_project"),

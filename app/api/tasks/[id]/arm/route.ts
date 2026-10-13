@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, type Session } from "@/lib/db";
 import { armTask, setArmed } from "@/lib/orchestrator/armed";
+import { callingDevice } from "@/lib/security/device-me";
+import { heldRefusal } from "@/lib/tasks/held";
 
 // { armed: true } merges the task's PR by itself once every gate passes;
 // false takes that back.
@@ -8,6 +10,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const id = (await params).id;
+  const held = heldRefusal(id, callingDevice(request));
+  if (held) return NextResponse.json({ error: held }, { status: 403 });
   const { armed } = await request.json().catch(() => ({}));
   if (typeof armed !== "boolean")
     return NextResponse.json(

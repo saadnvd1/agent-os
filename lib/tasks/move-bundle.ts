@@ -14,8 +14,10 @@ export const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
 // whole bundle stays under what a linked machine reads of an answer
 // (lib/hosts/remote-api), since a move back here reads it as one.
 export const MAX_CHAT_BYTES = 12 * 1024 * 1024;
+// A task's plan file is a page or two; this is far past that.
+export const MAX_PLAN_BYTES = 1024 * 1024;
 export const MAX_BUNDLE_BYTES =
-  MAX_TRANSCRIPT_BYTES + MAX_CHAT_BYTES + 1024 * 1024;
+  MAX_TRANSCRIPT_BYTES + MAX_CHAT_BYTES + MAX_PLAN_BYTES + 1024 * 1024;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const isSessionId = (id: unknown): id is string =>
@@ -50,6 +52,25 @@ export interface TaskBundle {
   // A chat task's own state; absent for a terminal task, or from a machine
   // that predates chat moves.
   chat?: ChatBundle;
+  // What a task started by an orchestrator carries besides its work; absent
+  // for any other task, or from a machine that predates these moves.
+  orchestrated?: OrchestratedBundle;
+}
+
+export interface OrchestratedBundle {
+  // The machine whose orchestrator holds the task, for the other machine's
+  // screens and refusals.
+  heldFrom: string;
+  // When the task first started (an ISO time), so a PR opened before the
+  // move still counts as the task's.
+  since: string | null;
+  // The model's provider and a task's own models, as they were; an arriving
+  // machine without that provider refuses the task rather than change it.
+  modelProvider: string | null;
+  modelOverrides: string | null;
+  planPhase: "planning" | "implementing" | null;
+  // .agentos/plan.md, which is never in git.
+  planFile: string | null;
 }
 
 export interface ChatBundle {
@@ -101,6 +122,34 @@ function validateChat(c: ChatBundle): ChatBundle {
   return { ...c, plan: !!c.plan };
 }
 
+const PHASES = ["planning", "implementing"];
+
+function validateOrchestrated(o: OrchestratedBundle): OrchestratedBundle {
+  if (!o || typeof o !== "object") throw new Error("Bad orchestrated task");
+  if (
+    !isStrOrNull(o.since) ||
+    !isStrOrNull(o.modelProvider) ||
+    !isStrOrNull(o.modelOverrides) ||
+    !isStrOrNull(o.planFile) ||
+    !(o.planPhase === null || PHASES.includes(o.planPhase as string))
+  )
+    throw new Error("Bad orchestrated task");
+  if (o.since !== null && Number.isNaN(Date.parse(o.since)))
+    throw new Error("Bad start time");
+  if ((o.planFile?.length ?? 0) > MAX_PLAN_BYTES)
+    throw new Error("The plan is too large to move");
+  return {
+    heldFrom: String(o.heldFrom || "another machine")
+      .replace(/[^\w.@ -]/g, "")
+      .slice(0, 100),
+    since: o.since,
+    modelProvider: o.modelProvider,
+    modelOverrides: o.modelOverrides,
+    planPhase: o.planPhase,
+    planFile: o.planFile,
+  };
+}
+
 export function validateBundle(b: TaskBundle): TaskBundle {
   if (!b || typeof b !== "object") throw new Error("No task to import");
   if (!isSessionId(b.moveId)) throw new Error("Bad move id");
@@ -130,6 +179,9 @@ export function validateBundle(b: TaskBundle): TaskBundle {
   }
   return {
     ...b,
+    orchestrated: b.orchestrated
+      ? validateOrchestrated(b.orchestrated)
+      : undefined,
     chat: b.chat ? validateChat(b.chat) : undefined,
     name: b.name.slice(0, 200),
     from: String(b.from || "another machine")

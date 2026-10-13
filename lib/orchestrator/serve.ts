@@ -4,6 +4,7 @@ import { getWorkspace } from "../workspaces";
 import {
   done,
   drop,
+  moveTaskTo,
   send,
   stack,
   stackStatus,
@@ -46,6 +47,7 @@ const ACTING = new Set<ToolName>([
   "stack",
   "land",
   "drop",
+  "move",
   "stop",
   "done",
   "review",
@@ -155,6 +157,10 @@ export async function runTool(
     case "drop": {
       const a = p(tool, raw);
       return drop(w, a.task, a.reason);
+    }
+    case "move": {
+      const a = p(tool, raw);
+      return moveTaskTo(w, a.task, a.machine);
     }
     case "stop":
       return stop(w, p(tool, raw).session);

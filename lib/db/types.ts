@@ -119,6 +119,13 @@ export interface Session {
   rebase_asked_head?: string | null;
   // When its PR's reviews and comments started being watched (pr-wake.ts).
   pr_wake_since?: string | null;
+  // When the task first started, kept across moves (null: created_at).
+  task_since?: string | null;
+  // The device and machine of the orchestrator that moved this task here.
+  held_by_device?: string | null;
+  held_from?: string | null;
+  // A held task's "plan written" line, for its orchestrator to read.
+  plan_note?: string | null;
   // Orchestration fields
   conductor_session_id: string | null;
   worker_task: string | null;

@@ -161,3 +161,5 @@
 
 - Push: quiet hours (iOS Focus covers it per device for now), push-only enrolment so a tailnet-only
   machine can send without a tunnel, and an encrypted v2 body decrypted on the phone.
+
+- Orchestrator task moves: a pre-push guard for the default branch on the machine that holds a task; moving card and stacked tasks; releasing a hold whose device was revoked; showing the plan view of a held task by proxying it, and disabling Merge, Move and Arm for held rows in the arriving machine's UI ("run by <machine>").

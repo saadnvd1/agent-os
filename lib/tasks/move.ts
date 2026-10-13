@@ -6,18 +6,26 @@
  * it off and a second move of it is refused.
  */
 
+import fs from "fs";
 import os from "os";
+import path from "path";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { endTmuxSession } from "../tmux/end";
 import { launchClaude } from "../agents/launch";
 import { buildTaskBrief } from "./brief";
 import { git as runGit } from "../git-exec";
-import { getTaskSession } from "./session";
+import { getTaskSession, isoUTC } from "./session";
 import { projectRef } from "./project-ref";
-import { moveRefusal } from "./move-guard";
-import { MAX_TRANSCRIPT_BYTES, type TaskBundle } from "./move-bundle";
+import { isOrchestrated, moveRefusal } from "./move-guard";
+import {
+  MAX_PLAN_BYTES,
+  MAX_TRANSCRIPT_BYTES,
+  type OrchestratedBundle,
+  type TaskBundle,
+} from "./move-bundle";
 import { stepProgress } from "./move-progress";
+import { PLAN_FILE } from "../models/plan-step";
 import { dropSessionDatabase } from "../project-config/database";
 import { releaseChat } from "../chat/runner";
 import { collectWhileMoving } from "../chat/hold";
@@ -98,6 +106,28 @@ function claimMoving(id: string, to: string): { fresh: boolean } {
 // Set by exportTask: did this call stop a running agent, or retry a move?
 const freshClaims = new Set<string>();
 
+const readPlanFile = (cwd: string): string | null => {
+  try {
+    const text = fs.readFileSync(path.join(cwd, PLAN_FILE), "utf8");
+    return text.length > MAX_PLAN_BYTES ? null : text;
+  } catch {
+    return null;
+  }
+};
+
+// What an orchestrator's task carries besides its work (the orchestrator's
+// own state is re-keyed here; see move-carry).
+function orchestratedBundle(session: Session): OrchestratedBundle {
+  return {
+    heldFrom: session.held_from || os.hostname(),
+    since: isoUTC(session.task_since ?? session.created_at),
+    modelProvider: session.model_provider ?? null,
+    modelOverrides: session.model_overrides ?? null,
+    planPhase: session.plan_phase ?? null,
+    planFile: readPlanFile(session.working_directory),
+  };
+}
+
 /**
  * Stops the agent and pushes everything. On failure the task stays moving;
  * the caller resumes it (exportOrResume) when it knows nothing arrived.
@@ -163,6 +193,7 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
           ? { sessionId: claudeId, cwd, home: os.homedir(), transcript }
           : null,
       chat: chatBundle,
+      orchestrated: isOrchestrated(now) ? orchestratedBundle(now) : undefined,
     };
   } finally {
     packed();

@@ -120,6 +120,16 @@ describe("the running brake", () => {
 });
 
 describe("the starts-per-hour brake", () => {
+  it("counts a task mid-move as running, so a move can't free a slot", async () => {
+    const w = workspace();
+    const id = seedSession({ projectId: w.app.id, name: "moving-one" });
+    db.prepare(
+      `UPDATE sessions SET task_status = 'moving', task_prompt = 'x' WHERE id = ?`
+    ).run(id);
+    const { runningCount } = await import("./brakes");
+    expect(await runningCount(w.workspace.id)).toBe(1);
+  });
+
   it("allows 6 starts an hour by default, then refuses", async () => {
     const ws = workspace();
     const insert = db.prepare(
