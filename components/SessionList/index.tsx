@@ -63,6 +63,8 @@ export function SessionList({
         ...shelves.needsYou,
         ...shelves.working,
         ...shelves.inReview,
+        ...shelves.ongoing,
+        ...shelves.snoozed,
         ...shelves.done,
         ...data.machines.flatMap((g) => g.rows),
       ]),

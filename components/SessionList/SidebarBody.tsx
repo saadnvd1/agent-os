@@ -66,6 +66,8 @@ export function SidebarBody({
     shelves.needsYou.length +
     shelves.working.length +
     shelves.inReview.length +
+    shelves.ongoing.length +
+    shelves.snoozed.length +
     data.queued.length +
     shelves.done.length +
     data.machines.length;
@@ -121,6 +123,7 @@ export function SidebarBody({
         queued={data.queued}
         toStart={data.toStart}
         doneCollapsed={ui.doneCollapsed}
+        snoozedCollapsed={ui.snoozedCollapsed}
         donePages={ui.donePages}
       />
       <MachineShelves groups={data.machines} />

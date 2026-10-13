@@ -549,7 +549,7 @@ export class ChatHost {
     // A new turn makes the last guess stale.
     if (this.suggestion !== null) this.setSuggestion(null);
     db.prepare(
-      `UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`
+      `UPDATE sessions SET updated_at = datetime('now'), active_at = datetime('now') WHERE id = ?`
     ).run(this.session.id);
   }
 

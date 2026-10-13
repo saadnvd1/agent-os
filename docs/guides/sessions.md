@@ -82,10 +82,23 @@ menu), **Needs you** (an approval, a question, a terminal waiting for input, a
 message typed and never sent, a failed task, or the orchestrator's open asks,
 each with a badge), **Working** (running, or a task idle between turns),
 **In review** (a task with an open pull request, or a plan waiting for
-approval) and **Done** (finished work: merged, dropped or closed tasks, and
-idle plain sessions). Done is folded to one row, "3 done today · 12 earlier", until you
-tap it (open or folded is remembered per device); open, it lists newest first,
-ten at a time. The orchestrator's row carries small chips for the work it
+approval), **Ongoing**, **Snoozed** and **Done**. A plain session that goes
+quiet isn't finished: it sits in **Ongoing**, newest activity first, with the
+time it last did something ("2d"). **Snoozed** (folded) holds sessions you
+set aside: a row's ⋯ menu has **Snooze** with _Tomorrow_ (9 AM your time the
+next day) and _Next week_ (9 AM next Monday), and **Unsnooze**. A snoozed
+session shows when it wakes, and wakes at that time, or early when it needs
+you, fails, or finishes a run; a session woken by its timer carries the purple
+dot. **Done** is finished work: merged or dropped tasks, sessions you
+finished with the menu's **Archive** (which hides them for good) or **Mark
+done**, and sessions with no activity for 3 days. Mark done doesn't archive:
+the session stays in Done until it does something again (a message, a run, a
+need), and **Reopen** brings it back by hand. A pinned session, one that is
+running or has background work, one that needs you, and a task with an open
+pull request never settle by themselves. Done is folded to one row, "3 done
+today · 12 earlier", until you tap it (open or folded is remembered per
+device, and the same for Snoozed); open, it lists newest first, ten at a
+time. The orchestrator's row carries small chips for the work it
 started: running, in review, blocked and queued, each left out at zero. Tap
 them to show only that orchestrator's work on the same shelves; the "Showing
 … work ×" chip at the top clears it (it resets on reload). A session an

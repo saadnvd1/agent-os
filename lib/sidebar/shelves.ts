@@ -1,5 +1,6 @@
 // The sidebar's one flat list, sorted onto shelves: the workspace's pinned
-// orchestrator, Pinned, Needs you, Working, In review, then Done. Client-safe: no database.
+// orchestrator, Pinned, Needs you, Working, In review, Ongoing, Snoozed, then
+// Done. Client-safe: no database.
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
 import type { PrStage } from "@/lib/tasks/pr-stage";
@@ -22,6 +23,9 @@ export const NEED_LABEL: Record<SessionNeed, string> = {
   unsent: "Unsent",
   failed: "Failed",
 };
+
+// A plain session quiet this long has settled by itself.
+export const SETTLE_AFTER_MS = 3 * 24 * 3600_000;
 
 export const DONE_FIRST_PAGE = 10;
 export const DONE_PAGE = 25;
@@ -55,6 +59,12 @@ export interface SidebarRow {
   task?: TaskState;
   // An orchestrator's quick changes (orchestrator/quick.ts), nested under it.
   quick?: SidebarRow[];
+  // Last real activity (ms): sorts Ongoing and is the "2d" on a row.
+  activeAt: number;
+  // While snoozed: when it wakes (ms).
+  wakesAt?: number;
+  // A plain session in Done: marked by hand, or settled by itself.
+  settled?: "manual" | "auto";
 }
 
 export interface Shelves {
@@ -64,6 +74,8 @@ export interface Shelves {
   needsYou: SidebarRow[];
   working: SidebarRow[];
   inReview: SidebarRow[];
+  ongoing: SidebarRow[];
+  snoozed: SidebarRow[];
   done: SidebarRow[];
 }
 
@@ -125,12 +137,81 @@ export interface ShelfInput {
   currentOrchestrators?: ReadonlySet<string>;
   // Only the sessions this orchestrator session started.
   startedBy?: string | null;
+  // The clock (ms): wakes and 3-day settles are read from it.
+  now?: number;
 }
 
 const newestFirst = (a: SidebarRow, b: SidebarRow) =>
   b.session.updated_at.localeCompare(a.session.updated_at);
 const oldestFirst = (a: SidebarRow, b: SidebarRow) =>
   a.session.created_at.localeCompare(b.session.created_at);
+
+const ms = (t: string | null | undefined) =>
+  t ? fromSqliteTime(t).getTime() : 0;
+
+// When it last did something: a mirrored session only has its machine's
+// updated_at; a snooze that ran out counts as activity at its wake time.
+export function activeMs(
+  session: Pick<
+    Session,
+    "active_at" | "updated_at" | "peer_mirror" | "snoozed_until" | "snoozed_at"
+  >,
+  now: number
+): number {
+  const base = ms(
+    session.peer_mirror
+      ? session.updated_at
+      : (session.active_at ?? session.updated_at)
+  );
+  const wake = ms(session.snoozed_until);
+  if (wake && wake <= now && base <= ms(session.snoozed_at))
+    return Math.max(base, wake);
+  return base;
+}
+
+// When a snooze still holds, until when: any activity since ends it early.
+export function snoozedUntil(
+  session: Parameters<typeof activeMs>[0],
+  now: number
+): number | null {
+  const until = ms(session.snoozed_until);
+  return until > now && activeMs(session, now) <= ms(session.snoozed_at)
+    ? until
+    : null;
+}
+
+export function settledHow(
+  session: Parameters<typeof activeMs>[0] & Pick<Session, "settled_at">,
+  now: number
+): "manual" | "auto" | null {
+  const active = activeMs(session, now);
+  if (session.settled_at && active <= ms(session.settled_at)) return "manual";
+  return now - active >= SETTLE_AFTER_MS ? "auto" : null;
+}
+
+// Woken by its timer and not opened since.
+function wokeUnread(
+  session: Parameters<typeof activeMs>[0] & Pick<Session, "last_seen_at">,
+  now: number
+): boolean {
+  const wake = ms(session.snoozed_until);
+  return (
+    wake > 0 &&
+    wake <= now &&
+    activeMs(session, now) <= wake &&
+    ms(session.last_seen_at) < wake
+  );
+}
+
+// When a row went to Done: marked by hand, quiet for 3 days, or (a task)
+// last changed.
+export function doneAtMs(row: SidebarRow): number {
+  return row.settled === "manual"
+    ? ms(row.session.settled_at)
+    : row.settled === "auto"
+      ? row.activeAt
+      : ms(row.session.updated_at);
+}
 
 const OPEN_RUN = ["queued", "starting", "running"];
 
@@ -146,13 +227,16 @@ export function recipeRunOpen(session: Pick<Session, "recipe_run">): boolean {
   }
 }
 
-function toRow(input: ShelfInput, session: Session): SidebarRow {
+function toRow(input: ShelfInput, session: Session, now: number): SidebarRow {
   const status = input.statuses[session.id];
+  const wakesAt = snoozedUntil(session, now);
   return {
     session,
     status,
     need: needOf(session, status, input.tasks[session.id]),
-    unread: !!status?.unread,
+    unread: !!status?.unread || wokeUnread(session, now),
+    activeAt: activeMs(session, now),
+    ...(wakesAt && { wakesAt }),
     working:
       status?.status === "running" ||
       (status?.background ?? 0) > 0 ||
@@ -165,6 +249,7 @@ function toRow(input: ShelfInput, session: Session): SidebarRow {
 }
 
 export function buildShelves(input: ShelfInput): Shelves {
+  const now = input.now ?? Date.now();
   const rows = input.sessions
     .filter(
       (s) =>
@@ -173,7 +258,7 @@ export function buildShelves(input: ShelfInput): Shelves {
         (!input.startedBy || s.started_by === input.startedBy) &&
         matchesQuery(s, input.projectName(s), input.query ?? "")
     )
-    .map((s) => toRow(input, s));
+    .map((s) => toRow(input, s, now));
   const byId = new Map(rows.map((r) => [r.session.id, r]));
 
   const top: SidebarRow[] = [];
@@ -201,6 +286,8 @@ export function buildShelves(input: ShelfInput): Shelves {
     needsYou: [],
     working: [],
     inReview: [],
+    ongoing: [],
+    snoozed: [],
     done: [],
   };
   for (const row of top) {
@@ -210,14 +297,25 @@ export function buildShelves(input: ShelfInput): Shelves {
     else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
     else if (row.need) shelves.needsYou.push(row);
     else if (row.working) shelves.working.push(row);
-    else shelves[quietShelf(row.task)].push(row);
+    else if (row.wakesAt) shelves.snoozed.push(row);
+    else if (row.task || row.session.task_status)
+      shelves[quietShelf(row.task)].push(row);
+    else {
+      const settled = settledHow(row.session, now);
+      if (settled) {
+        row.settled = settled;
+        shelves.done.push(row);
+      } else shelves.ongoing.push(row);
+    }
   }
   shelves.orchestrators.sort(oldestFirst);
   shelves.pinned.sort(oldestFirst);
   shelves.needsYou.sort(newestFirst);
   shelves.working.sort(newestFirst);
   shelves.inReview.sort(newestFirst);
-  shelves.done.sort(newestFirst);
+  shelves.ongoing.sort((a, b) => b.activeAt - a.activeAt);
+  shelves.snoozed.sort((a, b) => a.wakesAt! - b.wakesAt!);
+  shelves.done.sort((a, b) => doneAtMs(b) - doneAtMs(a));
   return shelves;
 }
 
@@ -233,7 +331,7 @@ export function doneSummary(
 ): { today: number; earlier: number; text: string } {
   const day = now.toDateString();
   const today = done.filter(
-    (r) => fromSqliteTime(r.session.updated_at).toDateString() === day
+    (r) => new Date(doneAtMs(r)).toDateString() === day
   ).length;
   const earlier = done.length - today;
   const text = [
@@ -281,6 +379,9 @@ export function sameRow(a: SidebarRow, b: SidebarRow): boolean {
     a.working === b.working &&
     sameStatus(a.status, b.status) &&
     a.task === b.task &&
+    a.activeAt === b.activeAt &&
+    a.wakesAt === b.wakesAt &&
+    a.settled === b.settled &&
     a.workers.length === b.workers.length &&
     a.workers.every((w, i) => sameRow(w, b.workers[i])) &&
     (a.quick?.length ?? 0) === (b.quick?.length ?? 0) &&

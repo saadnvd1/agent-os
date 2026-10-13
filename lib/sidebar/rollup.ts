@@ -31,6 +31,8 @@ export function rollups(
     ...shelves.needsYou,
     ...shelves.working,
     ...shelves.inReview,
+    ...shelves.ongoing,
+    ...shelves.snoozed,
     ...shelves.done,
   ]);
   for (const row of rows) {

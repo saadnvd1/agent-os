@@ -204,3 +204,8 @@
   (`lib/providers/resume-ids.ts`) and flip Resume on; pre-fill an Identity
   Center start URL and region per project for `login`; the sign-in card for
   the Welcome terminal.
+- Ongoing and Snoozed, next: a custom snooze time ("Pick a time…"); a push to
+  the phone when a snooze wakes (today a woken session only carries the dot);
+  a snooze that waits for a task's PR or checks rather than a clock; the
+  desktop sidebar's keyboard row navigation (there is none yet) in the new
+  shelf order.

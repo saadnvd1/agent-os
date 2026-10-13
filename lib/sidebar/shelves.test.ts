@@ -12,6 +12,12 @@ import {
   type ShelfInput,
 } from "./shelves";
 
+// Two weeks after the fixtures' activity: plain idle sessions have settled.
+const NOW = Date.parse("2026-10-20T12:00:00Z");
+const DAY = 86400_000;
+const utc = (ms: number) =>
+  new Date(ms).toISOString().slice(0, 19).replace("T", " ");
+
 function session(id: string, over: Partial<Session> = {}): Session {
   return {
     id,
@@ -39,6 +45,7 @@ function shelves(
     statuses,
     tasks: {},
     projectName: (s) => (s.project_id === "p1" ? "agent-os" : "poise"),
+    now: NOW,
     ...extra,
   });
   const ids = (rows: { session: Session }[]) => rows.map((r) => r.session.id);
@@ -48,6 +55,8 @@ function shelves(
     needsYou: ids(out.needsYou),
     working: ids(out.working),
     inReview: ids(out.inReview),
+    ongoing: ids(out.ongoing),
+    snoozed: ids(out.snoozed),
     done: ids(out.done),
     raw: out,
   };
@@ -401,5 +410,190 @@ describe("a compacting chat", () => {
       out.raw.working.find((r) => r.session.id === id)!;
     expect(row("a")).toMatchObject({ working: true, compacting: true });
     expect(row("b")).toMatchObject({ working: true, compacting: false });
+  });
+});
+
+describe("Ongoing, Snoozed and settled", () => {
+  const ago = (ms: number) => utc(NOW - ms);
+  const quiet = (id: string, ms: number, over: Partial<Session> = {}) =>
+    session(id, { active_at: ago(ms), updated_at: ago(ms), ...over });
+
+  it("a plain idle session is ongoing for three days, newest activity first", () => {
+    const s = shelves([
+      quiet("old", 2 * DAY + 23 * 3600_000),
+      quiet("new", 3600_000),
+      quiet("mid", DAY),
+    ]);
+    expect(s.ongoing).toEqual(["new", "mid", "old"]);
+    expect(s.done).toEqual([]);
+    expect(s.raw.ongoing[0].activeAt).toBe(NOW - 3600_000);
+  });
+
+  it("settles by itself after three days of quiet", () => {
+    const s = shelves([quiet("a", 3 * DAY + 60_000)]);
+    expect(s.done).toEqual(["a"]);
+    expect(s.raw.done[0].settled).toBe("auto");
+  });
+
+  it("reads activity from active_at, not updated_at, and falls back to it", () => {
+    const s = shelves([
+      session("renamed", { active_at: ago(5 * DAY), updated_at: ago(60_000) }),
+      session("legacy", { active_at: null, updated_at: ago(60_000) }),
+    ]);
+    expect(s.done).toEqual(["renamed"]);
+    expect(s.ongoing).toEqual(["legacy"]);
+  });
+
+  it("Mark done puts it in Done until it does something", () => {
+    const settled = quiet("a", DAY, { settled_at: ago(3600_000) });
+    const s = shelves([
+      settled,
+      quiet("b", DAY, { settled_at: ago(3600_000), active_at: ago(60_000) }),
+    ]);
+    expect(s.done).toEqual(["a"]);
+    expect(s.raw.done[0].settled).toBe("manual");
+    expect(s.ongoing).toEqual(["b"]);
+  });
+
+  it("new activity brings an auto-settled session back", () => {
+    const s = shelves([quiet("a", 10 * DAY, { active_at: ago(1000) })]);
+    expect(s.ongoing).toEqual(["a"]);
+  });
+
+  it("never auto-settles pinned, running, background, needing or open-PR rows", () => {
+    const old = (id: string, over: Partial<Session> = {}) =>
+      quiet(id, 10 * DAY, over);
+    const s = shelves(
+      [
+        old("pin", { pinned: true }),
+        old("run"),
+        old("bg"),
+        old("need"),
+        old("pr", { task_status: "running" }),
+        old("idleTask", { task_status: "running" }),
+        old("merged", { task_status: "merged" }),
+      ],
+      {
+        run: { status: "running" },
+        bg: { background: 2 },
+        need: { need: "approve" },
+      },
+      {
+        tasks: {
+          pr: "review",
+          idleTask: "working",
+          merged: "merged",
+        },
+      }
+    );
+    expect(s.pinned).toEqual(["pin"]);
+    expect(s.working.sort()).toEqual(["bg", "idleTask", "run"]);
+    expect(s.needsYou).toEqual(["need"]);
+    expect(s.inReview).toEqual(["pr"]);
+    expect(s.done).toEqual(["merged"]);
+    expect(s.ongoing).toEqual([]);
+  });
+
+  it("a settled session that needs you or runs is not in Done", () => {
+    const s = shelves(
+      [
+        quiet("n", DAY, { settled_at: ago(1000) }),
+        quiet("r", DAY, { settled_at: ago(1000) }),
+      ],
+      { n: { need: "answer" }, r: { status: "running" } }
+    );
+    expect(s.needsYou).toEqual(["n"]);
+    expect(s.working).toEqual(["r"]);
+  });
+
+  describe("snoozed", () => {
+    const snooze = (id: string, untilMs: number, over: Partial<Session> = {}) =>
+      quiet(id, DAY, {
+        snoozed_at: ago(3600_000),
+        snoozed_until: utc(NOW + untilMs),
+        ...over,
+      });
+
+    it("sits in Snoozed, soonest wake first, with its wake time", () => {
+      const s = shelves([snooze("late", 3 * DAY), snooze("soon", 3600_000)]);
+      expect(s.snoozed).toEqual(["soon", "late"]);
+      expect(s.raw.snoozed[0].wakesAt).toBe(NOW + 3600_000);
+      expect(s.ongoing).toEqual([]);
+    });
+
+    it("wakes early on any activity since", () => {
+      const s = shelves(
+        [
+          snooze("replied", DAY, { active_at: ago(60_000) }),
+          snooze("needs", DAY),
+          snooze("runs", DAY),
+          snooze("fails", DAY, { worker_status: "failed" }),
+        ],
+        {
+          needs: { need: "approve" },
+          runs: { status: "running" },
+        }
+      );
+      expect(s.ongoing).toEqual(["replied"]);
+      expect(s.needsYou.sort()).toEqual(["fails", "needs"]);
+      expect(s.working).toEqual(["runs"]);
+      expect(s.snoozed).toEqual([]);
+    });
+
+    it("wakes at its time into Ongoing, unread until opened", () => {
+      const woke = snooze("a", -60_000, {
+        active_at: ago(20 * DAY),
+        updated_at: ago(20 * DAY),
+      });
+      let s = shelves([woke]);
+      expect(s.ongoing).toEqual(["a"]);
+      expect(s.raw.ongoing[0].unread).toBe(true);
+      expect(s.raw.ongoing[0].activeAt).toBe(NOW - 60_000);
+
+      s = shelves([{ ...woke, last_seen_at: utc(NOW - 1000) }]);
+      expect(s.raw.ongoing[0].unread).toBe(false);
+    });
+
+    it("a woken session settles three days after the wake, not at once", () => {
+      const woke = snooze("a", -2 * DAY, { active_at: ago(30 * DAY) });
+      expect(shelves([woke]).ongoing).toEqual(["a"]);
+      expect(shelves([woke], {}, { now: NOW + 2 * DAY }).done).toEqual(["a"]);
+    });
+
+    it("pinned stays pinned; a snoozed task leaves In review", () => {
+      const s = shelves(
+        [
+          snooze("pin", DAY, { pinned: true }),
+          snooze("pr", DAY, { task_status: "running" }),
+        ],
+        {},
+        { tasks: { pr: "review" } }
+      );
+      expect(s.pinned).toEqual(["pin"]);
+      expect(s.snoozed).toEqual(["pr"]);
+    });
+
+    it("a mirrored session goes by its machine's updated_at", () => {
+      const s = shelves([
+        session("m", {
+          peer_mirror: 1,
+          active_at: ago(10 * DAY),
+          updated_at: ago(1000),
+        }),
+      ]);
+      expect(s.ongoing).toEqual(["m"]);
+    });
+  });
+
+  it("Done orders by when it was marked, and sameRow sees the new fields", () => {
+    const s = shelves([
+      quiet("a", 5 * DAY),
+      quiet("b", DAY, { settled_at: ago(1000) }),
+    ]);
+    expect(s.done).toEqual(["b", "a"]);
+    const [row] = s.raw.done;
+    expect(sameRow(row, { ...row, activeAt: row.activeAt + 1 })).toBe(false);
+    expect(sameRow(row, { ...row, wakesAt: 5 })).toBe(false);
+    expect(sameRow(row, { ...row, settled: "auto" })).toBe(false);
   });
 });

@@ -2,8 +2,15 @@
 
 import { memo, useState } from "react";
 import { useSnapshot } from "valtio";
-import { CheckSquare, GitFork, Square, Workflow } from "lucide-react";
-import { compactTimeAgo, fromSqliteTime } from "@/lib/session-meta";
+import {
+  AlarmClock,
+  CheckSquare,
+  GitFork,
+  Square,
+  Workflow,
+} from "lucide-react";
+import { compactTimeAgo } from "@/lib/session-meta";
+import { wakeLabel } from "@/lib/sidebar/snooze";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { useMinuteTick } from "@/hooks/useMinuteTick";
 import { selectionStore, selectionActions } from "@/stores/sessionSelection";
@@ -55,6 +62,7 @@ export const SessionRow = memo(function SessionRow({
   const menu = (kind: RowMenuKind) => (
     <SessionRowMenu
       session={session}
+      row={row}
       kind={kind}
       onRename={() => setRenaming(true)}
     />
@@ -96,7 +104,7 @@ export const SessionRow = memo(function SessionRow({
         trailing={
           <>
             <RowBadge row={row} />
-            {!row.need && <TimeAgo at={session.updated_at} />}
+            {!row.need && <RowTime row={row} />}
           </>
         }
         menu={menu}
@@ -152,11 +160,19 @@ function sameRowProps(
   return a.muted === b.muted && a.nested === b.nested && sameRow(a.row, b.row);
 }
 
-function TimeAgo({ at }: { at: string }) {
+// Snoozed: when it wakes. Otherwise when it last did something.
+function RowTime({ row }: { row: SidebarRow }) {
   useMinuteTick();
   return (
-    <span className="text-muted-foreground/70 text-xs tabular-nums">
-      {compactTimeAgo(fromSqliteTime(at))}
+    <span className="text-muted-foreground/70 flex items-center gap-1 text-xs tabular-nums">
+      {row.wakesAt ? (
+        <>
+          <AlarmClock aria-hidden className="h-3 w-3" />
+          {wakeLabel(row.wakesAt)}
+        </>
+      ) : (
+        compactTimeAgo(new Date(row.activeAt))
+      )}
     </span>
   );
 }

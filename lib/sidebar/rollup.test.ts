@@ -61,6 +61,7 @@ function build(
     tasks,
     projectName: () => "A",
     startedBy,
+    now: Date.parse("2026-10-11T13:00:00Z"),
   });
 }
 
@@ -134,7 +135,7 @@ describe("rollups", () => {
       ],
       { w: { status: "running" } }
     );
-    expect(shelves.done[0].workers).toHaveLength(1);
+    expect(shelves.ongoing[0].workers).toHaveLength(1);
     expect(rollups(shelves, noQueue).get("o1")?.running).toBe(1);
   });
 
@@ -168,7 +169,7 @@ describe("orchestrator filter", () => {
 
   it("shows everything with no filter", () => {
     const s = build(sessions);
-    expect(s.done).toHaveLength(4);
+    expect(s.ongoing).toHaveLength(4);
   });
 
   it("filters the queued shelf the same way", () => {

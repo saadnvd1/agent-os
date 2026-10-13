@@ -4,12 +4,15 @@ import { useSyncExternalStore } from "react";
 // so they stay current without their lists redrawing for it.
 const listeners = new Set<() => void>();
 let tick = 0;
+let now = Date.now();
 let timer: ReturnType<typeof setInterval> | undefined;
 
 function subscribe(listener: () => void) {
+  now = Date.now();
   listeners.add(listener);
   timer ??= setInterval(() => {
     tick++;
+    now = Date.now();
     listeners.forEach((l) => l());
   }, 30_000);
   return () => {
@@ -26,5 +29,15 @@ export function useMinuteTick(): number {
     subscribe,
     () => tick,
     () => tick
+  );
+}
+
+// The clock itself (ms), moving with the same tick: for code that reads wakes
+// and settles from the time.
+export function useClock(): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => now,
+    () => now
   );
 }

@@ -129,13 +129,15 @@ const READS = [
 
 // The only writes, each a database write and nothing more in demo mode:
 // pairing a device (start is loopback-only in its route), marking a session
-// seen or pinned, done (archives only: no merge, no clean-up), answering an
+// seen, pinned, snoozed or settled, done (archives only: no merge, no clean-up), answering an
 // ask, and removing the caller's own device.
 const WRITES: [string, RegExp][] = [
   ["POST", "pair/start"],
   ["POST", "pair/claim"],
   ["POST", "sessions/[id]/seen"],
   ["POST", "sessions/[id]/pin"],
+  ["POST", "sessions/[id]/snooze"],
+  ["POST", "sessions/[id]/settle"],
   ["POST", "sessions/[id]/done"],
   ["POST", "workspaces/[id]/orchestrator/asks/[id]"],
   ["DELETE", "devices/[id]"],

@@ -89,18 +89,20 @@ export function MachineShelves({ groups }: { groups: MachineGroup[] }) {
 }
 
 // The pinned orchestrator (or a row to start one), then Pinned, Needs you,
-// Working, In review, Queued and Done: once for the whole list.
+// Working, In review, Queued, Ongoing, Snoozed and Done: once for the whole list.
 export function SessionShelves({
   shelves,
   queued,
   toStart,
   doneCollapsed,
+  snoozedCollapsed,
   donePages,
 }: {
   shelves: Shelves;
   queued: QueuedRowData[];
   toStart: { workspaceId: string; name: string }[];
   doneCollapsed: boolean;
+  snoozedCollapsed: boolean;
   donePages: number;
 }) {
   const shown = shelves.done.slice(0, doneLimit(donePages));
@@ -152,6 +154,27 @@ export function SessionShelves({
             <QueuedRow key={r.item.id} row={r} />
           ))}
         </Shelf>
+      )}
+      {shelves.ongoing.length > 0 && (
+        <Shelf label="Ongoing" count={shelves.ongoing.length}>
+          {shelves.ongoing.map((r) => (
+            <SessionRow key={r.session.id} row={r} />
+          ))}
+        </Shelf>
+      )}
+      {shelves.snoozed.length > 0 && (
+        <section aria-label="Snoozed">
+          <ShelfLabel
+            label="Snoozed"
+            count={shelves.snoozed.length}
+            collapsed={snoozedCollapsed}
+            onToggle={sidebarUiActions.toggleSnoozed}
+          />
+          {!snoozedCollapsed &&
+            shelves.snoozed.map((r) => (
+              <SessionRow key={r.session.id} row={r} muted />
+            ))}
+        </section>
       )}
       {shelves.done.length > 0 && (
         <section aria-label="Done">

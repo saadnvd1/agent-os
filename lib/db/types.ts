@@ -79,6 +79,13 @@ export interface Session {
   chat_context: string | null;
   chat_usage: string | null;
   last_seen_at: string | null;
+  // Last real activity: a message, a run starting, a need (null: updated_at).
+  active_at?: string | null;
+  // Marked done by hand: Done until new activity (not archived).
+  settled_at?: string | null;
+  // Snoozed until this time, from snoozed_at; activity since wakes it early.
+  snoozed_until?: string | null;
+  snoozed_at?: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;
   // On the sidebar's Pinned shelf (0/1 from SQLite).
