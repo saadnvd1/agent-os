@@ -177,8 +177,11 @@ function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
     live.retiring = undefined;
     retireIfStale(sessionId, live);
     if (e.state === "idle")
-      void handoffAfterPlan(sessionId, (id, m) => sendQueuedNow(id, m)).catch(
-        (err) => console.error(`Plan handoff for ${sessionId} failed:`, err)
+      void handoffAfterPlan(sessionId, (id, m) => sendQueuedNow(id, m), {
+        backgroundRunning: () =>
+          (registry.live.get(sessionId)?.activity.tasks.size ?? 0) > 0,
+      }).catch((err) =>
+        console.error(`Plan handoff for ${sessionId} failed:`, err)
       );
   } else if (e.type === "suggestion") {
     emit(sessionId, e);
