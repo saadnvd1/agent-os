@@ -78,6 +78,11 @@ const SettingsDialog = dynamic(
     ),
   { ssr: false }
 );
+const WelcomeDialog = dynamic(
+  () =>
+    import("@/components/Welcome/WelcomeDialog").then((m) => m.WelcomeDialog),
+  { ssr: false }
+);
 const MessagesDialog = dynamic(
   () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
   { ssr: false }
@@ -122,6 +127,7 @@ const AppDialogs = memo(function AppDialogs() {
   return (
     <>
       <TasksDialog />
+      <WelcomeDialog />
       <AddProjectDialog />
       <MessagesDialog />
       <ArchivedDialog />

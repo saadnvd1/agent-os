@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AgentProbe } from "@/lib/agents/probe";
 
 export const agentKeys = {
@@ -18,5 +18,20 @@ export function useAgentStatusQuery() {
     // Checked again each time the picker opens.
     staleTime: 30_000,
     refetchOnMount: "always",
+  });
+}
+
+// Asks the server to probe again now, not from its minute-old answer, and
+// puts the result where the status query reads it.
+export function useRecheckAgents() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/agents/status?fresh");
+      if (!res.ok) throw new Error("Couldn't check the agents");
+      return ((await res.json()) as { agents: Record<string, AgentProbe> })
+        .agents;
+    },
+    onSuccess: (agents) => client.setQueryData(agentKeys.status(), agents),
   });
 }

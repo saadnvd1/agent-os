@@ -1754,6 +1754,20 @@ const migrations: Migration[] = [
           db.exec(`ALTER TABLE ${table} ADD COLUMN plan_only INTEGER`);
     },
   },
+  {
+    id: 76,
+    name: "welcome_backfill",
+    up: (db) => {
+      // An install that already has a session or a project of its own has
+      // been set up; mark it so the first-run welcome never shows there.
+      db.exec(
+        `INSERT OR IGNORE INTO settings (key, value)
+         SELECT 'welcome.completed_at', 'existing-install'
+         WHERE EXISTS (SELECT 1 FROM sessions)
+            OR EXISTS (SELECT 1 FROM projects WHERE is_uncategorized = 0)`
+      );
+    },
+  },
 ];
 
 // `upTo`: stop after this id (tests that start from an older database).

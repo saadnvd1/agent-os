@@ -213,6 +213,17 @@ its WSL note, and Windows reached it at both `localhost:3011` and
 `wslview`/`explorer.exe`, mirrored networking, `agent-os enable` under
 systemd, the idle-timeout settings above, and Debian or other distros.
 
+### First run
+
+On a fresh install (no sessions, no projects of your own) the web app opens a
+short setup at `/?welcome`: it shows each agent CLI as ready, needing a
+sign-in, or missing, installs or signs one in from an embedded terminal, adds
+a first project (a folder, a clone or an empty one), then opens a session in
+it. Every step after the first can be skipped. It is remembered on the server,
+so a phone you pair later doesn't see it, and an install that already has work
+never does. Reopen it from Settings → Setup (**Run setup again**) or at
+`/welcome`; `AGENTOS_SKIP_WELCOME=1` turns it off.
+
 ### Supported agents
 
 | Agent       | Chat | Resume | Fork | Auto-approve                                 |

@@ -11,6 +11,7 @@ import {
   Cpu,
   GitMerge,
   LayoutGrid,
+  ListChecks,
   Smartphone,
   X,
   type LucideIcon,
@@ -34,6 +35,7 @@ import { SETTINGS_SECTIONS, type SettingsSection } from "@/lib/settings-url";
 import { cn } from "@/lib/utils";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { settingsUi, settingsUiActions } from "@/stores/settingsUi";
+import { SetupSection } from "./SetupSection";
 import {
   NotificationsSection,
   type BrowserNotifications,
@@ -78,6 +80,11 @@ export const SECTION_INFO: Record<
     hint: "Where sessions spent tokens and repeated work",
     icon: ClipboardList,
   },
+  setup: {
+    label: "Setup",
+    hint: "Agents on this machine, first-run setup",
+    icon: ListChecks,
+  },
 };
 
 function SectionBody({
@@ -102,6 +109,8 @@ function SectionBody({
       return <SchedulesPanel />;
     case "audits":
       return <AuditsPanel />;
+    case "setup":
+      return <SetupSection />;
   }
 }
 
