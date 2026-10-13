@@ -7,6 +7,7 @@ import {
   useNotifySettings,
   useSaveTelegram,
   useTestNotify,
+  type TestNotifyResult,
 } from "@/data/notify";
 
 // Where failed schedule runs and `aos notify` messages go. The bot token is
@@ -121,7 +122,7 @@ export function PhoneNotifyForm() {
             type="button"
             variant="outline"
             className="h-11 md:h-9"
-            disabled={!settings.active || test.isPending}
+            disabled={test.isPending}
             onClick={() => test.mutate()}
           >
             {test.isPending ? "Sending..." : "Send a test"}
@@ -132,16 +133,30 @@ export function PhoneNotifyForm() {
         )}
         {test.data && (
           <p className="text-muted-foreground text-sm">
-            {test.data.state === "sent"
-              ? "Sent."
-              : test.data.state === "held"
-                ? "Held: one went out under a minute ago; this follows it."
-                : test.data.state === "duplicate"
-                  ? "Already sent in the last minute."
-                  : null}
+            {testSummary(test.data)}
           </p>
         )}
       </form>
     </div>
   );
+}
+
+function testSummary({ push, telegram }: TestNotifyResult): string {
+  const phones =
+    push.state === "queued"
+      ? `Pushed to ${push.devices} ${push.devices === 1 ? "phone" : "phones"}.`
+      : push.state === "failed"
+        ? `Push failed: ${push.why}.`
+        : "Phone push not set up.";
+  const tg =
+    telegram.state === "not-set-up"
+      ? "Telegram not set up."
+      : telegram.state === "failed"
+        ? `Telegram failed: ${telegram.why}.`
+        : telegram.state === "held"
+          ? "Telegram held: one went out under a minute ago; this follows it."
+          : telegram.state === "duplicate"
+            ? "Telegram already sent in the last minute."
+            : "Sent to Telegram.";
+  return `${phones} ${tg}`;
 }

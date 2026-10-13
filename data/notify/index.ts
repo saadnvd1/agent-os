@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { NotifySettingsView, Outcome } from "@/lib/notify";
+import type { NotifySettingsView } from "@/lib/notify";
+import type {
+  PushTestResult,
+  TelegramTestResult,
+} from "@/app/api/notify/test/route";
+
+export interface TestNotifyResult {
+  push: PushTestResult;
+  telegram: TelegramTestResult;
+}
 
 export const notifyKeys = { settings: ["notify", "settings"] as const };
 
@@ -44,6 +53,6 @@ export function useSaveTelegram() {
 
 export function useTestNotify() {
   return useMutation({
-    mutationFn: () => call<Outcome>("/api/notify/test", "POST", {}),
+    mutationFn: () => call<TestNotifyResult>("/api/notify/test", "POST", {}),
   });
 }

@@ -155,6 +155,26 @@ describe("pushEvent", () => {
     expect(relaySend.mock.calls.length).toBe(13);
   });
 
+  it("a bypass (the Settings test) ignores presence, Away, the cap and muted categories, while the same event unbypassed is still held", async () => {
+    const id = pairPhone(["asks"]);
+    atMac.mockResolvedValue(true);
+    activeAway.mockReturnValue({ id: 1 });
+    for (let i = 0; i < 12; i++)
+      await pushEvent({ category: "system", key: `t${i}` }, { bypass: true });
+    expect(
+      outboxRows().filter((r) => r.device_id === id && r.state !== "capped")
+    ).toHaveLength(12);
+    expect(outboxRows().some((r) => r.state === "capped")).toBe(false);
+    // Without it the same event is muted, or folds while Away.
+    expect(await pushEvent({ category: "system", key: "x" })).toBe("muted");
+    pairPhone(["system", "review"]);
+    expect(await pushEvent({ category: "system", key: "y" })).toBe("folded");
+    activeAway.mockReturnValue(null);
+    expect(await pushEvent({ category: "review", id: "t", key: "z" })).toBe(
+      "dropped"
+    );
+  });
+
   it("never pushes for a session mirrored from another machine", async () => {
     pairPhone();
     db.prepare(
