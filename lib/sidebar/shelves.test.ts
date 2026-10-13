@@ -201,6 +201,34 @@ describe("finished vs open work", () => {
     expect(place("review", idle, { pinned: true })).toBe("pinned");
   });
 
+  it("keeps an idle session with background work running under Working", () => {
+    expect(place(undefined, { status: "idle", background: 1 })).toBe("working");
+    expect(place("review", { status: "idle", background: 2 })).toBe("working");
+    expect(place(undefined, { status: "idle", background: 0 })).toBe("done");
+    expect(
+      place(undefined, { status: "idle", background: 1, need: "approve" })
+    ).toBe("needsYou");
+  });
+
+  it("keeps a recipe run that hasn't reported its result under Working", () => {
+    const run = (status: string) => ({
+      recipe_run: JSON.stringify({
+        id: "r",
+        name: "TestFlight build",
+        seq: 2,
+        status,
+      }),
+    });
+    for (const open of ["queued", "starting", "running"])
+      expect(place(undefined, idle, run(open))).toBe("working");
+    for (const ended of ["succeeded", "failed", "cancelled", "timed_out"])
+      expect(place(undefined, idle, run(ended))).toBe("done");
+    expect(place(undefined, idle, { recipe_run: "not json" })).toBe("done");
+    expect(place(undefined, { need: "approve" }, run("running"))).toBe(
+      "needsYou"
+    );
+  });
+
   it("sorts In review newest first", () => {
     const out = shelves(
       [
@@ -255,8 +283,16 @@ describe("sameRow", () => {
       ...out.raw.pinned,
       ...out.raw.needsYou,
       ...out.raw.working,
+      ...out.raw.inReview,
       ...out.raw.done,
     ].find((r) => r.session.id === id)!;
+
+  it("sees background work start and stop", () => {
+    const at = (background?: number) =>
+      rowOf(shelves(sessions, { a: { status: "idle", background } }), "a");
+    expect(sameRow(at(), at(1))).toBe(false);
+    expect(sameRow(at(), at(0))).toBe(true);
+  });
 
   it("treats a rebuilt row with the same status as unchanged", () => {
     const before = shelves(sessions, { a: { status: "idle", detail: "x" } });

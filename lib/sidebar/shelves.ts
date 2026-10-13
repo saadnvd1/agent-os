@@ -33,6 +33,8 @@ export interface RowStatus {
   stalled?: boolean;
   // A chat summarising its context (status stays "running").
   compacting?: { since: number; before?: number };
+  // Background commands, subagents and monitors still running.
+  background?: number;
   asks?: number;
   prStage?: PrStage;
   // A program's own message (OSC 7501): untrusted, plain text only.
@@ -130,6 +132,20 @@ const newestFirst = (a: SidebarRow, b: SidebarRow) =>
 const oldestFirst = (a: SidebarRow, b: SidebarRow) =>
   a.session.created_at.localeCompare(b.session.created_at);
 
+const OPEN_RUN = ["queued", "starting", "running"];
+
+// A recipe run that hasn't reported its result yet: its session going quiet
+// between turns (an EAS build running in the background, say) isn't it ending.
+// The list query carries the run as JSON.
+export function recipeRunOpen(session: Pick<Session, "recipe_run">): boolean {
+  if (!session.recipe_run) return false;
+  try {
+    return OPEN_RUN.includes(JSON.parse(session.recipe_run)?.status);
+  } catch {
+    return false;
+  }
+}
+
 function toRow(input: ShelfInput, session: Session): SidebarRow {
   const status = input.statuses[session.id];
   return {
@@ -137,7 +153,10 @@ function toRow(input: ShelfInput, session: Session): SidebarRow {
     status,
     need: needOf(session, status, input.tasks[session.id]),
     unread: !!status?.unread,
-    working: status?.status === "running",
+    working:
+      status?.status === "running" ||
+      (status?.background ?? 0) > 0 ||
+      recipeRunOpen(session),
     compacting: !!status?.compacting,
     workers: [],
     task: input.tasks[session.id],
@@ -279,6 +298,7 @@ function sameStatus(a: RowStatus | undefined, b: RowStatus | undefined) {
     !!a.stalled === !!b.stalled &&
     (a.compacting?.since ?? null) === (b.compacting?.since ?? null) &&
     (a.compacting?.before ?? null) === (b.compacting?.before ?? null) &&
+    (a.background ?? 0) === (b.background ?? 0) &&
     a.asks === b.asks &&
     (a.prStage?.stage ?? null) === (b.prStage?.stage ?? null) &&
     (a.prStage?.number ?? null) === (b.prStage?.number ?? null) &&

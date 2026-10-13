@@ -33,7 +33,7 @@ export function sessionListColumns(db: Database.Database, alias = ""): string {
     .map((c) => `${prefix}${c}`)
     .join(", ");
   // The recipe run or feature piece a session is, as JSON, for its row's chip.
-  const recipe = `(SELECT json_object('id', r.id, 'name', r.name, 'seq', rr.seq) FROM recipe_runs rr JOIN recipes r ON r.id = rr.recipe_id WHERE rr.session_id = ${alias || "sessions"}.id)`;
+  const recipe = `(SELECT json_object('id', r.id, 'name', r.name, 'seq', rr.seq, 'status', rr.status) FROM recipe_runs rr JOIN recipes r ON r.id = rr.recipe_id WHERE rr.session_id = ${alias || "sessions"}.id)`;
   const piece = `(SELECT json_object('feature', f.id, 'name', f.name, 'position', fp.position, 'total', (SELECT COUNT(*) FROM feature_pieces WHERE feature_id = f.id AND status != 'dropped')) FROM feature_pieces fp JOIN features f ON f.id = fp.feature_id WHERE fp.session_id = ${alias || "sessions"}.id)`;
   return `${list}, (${prefix}task_brief IS NOT NULL AND ${prefix}task_brief != '') AS has_brief, ${recipe} AS recipe_run, ${piece} AS feature_piece`;
 }
