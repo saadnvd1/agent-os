@@ -245,7 +245,7 @@ describe("arriving", () => {
     });
     const launch = vi.mocked(launchClaude).mock.calls[0][0];
     expect(launch.resume).toBe(CLAUDE_ID);
-    expect(launch.prompt).toContain("moved here");
+    expect(launch.prompt).toMatch(/moved from .+ to .+\. It now runs on/);
     // Its setup runs with the slot it took here, the ones its agent is told.
     const ports = sessionPorts(arrived.id);
     expect(ports).toMatchObject({ PORT: expect.any(Number) });

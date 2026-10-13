@@ -154,3 +154,5 @@ orchestrator's starts use too).
 ## Later (2026-10-12)
 
 An orchestrator's messages to a task it moved to a linked machine are relayed to that machine's holder-only message route with an agent origin (`kind: peer`), so they never arrive as the user's own words. See 2026-10-12-orchestrator-task-moves.md.
+
+A held task's messages to its orchestrator are not relayed through the peer's chat either: the holding machine only stores them, and the orchestrator's machine pulls and delivers them as the task's own (see 2026-10-12-orchestrator-task-moves.md), so nothing is attributed to the user.

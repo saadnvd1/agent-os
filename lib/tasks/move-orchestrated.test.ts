@@ -125,6 +125,38 @@ beforeEach(() => {
 });
 
 describe("an orchestrator's task moving to a linked machine", () => {
+  it("names its orchestrator to the machine it lands on, which keeps it for replies", async () => {
+    const orch = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, role) VALUES (?, 'The Boss', ?, '/tmp', 'orchestrator')`
+    ).run(orch, `claude-${orch}`);
+    const { id } = await orchestratedTask("feature/o-reply");
+    db.prepare(`UPDATE sessions SET started_by = ? WHERE id = ?`).run(orch, id);
+    const bundle = await exportTask(id, "box");
+    expect(bundle.orchestrated?.orchestrator).toEqual({
+      id: orch,
+      name: "The Boss",
+    });
+    markMoved(id, "box");
+    db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+    const task = await importTask(bundle, { holder: "dev-1" });
+    expect(task).toMatchObject({ held_for: orch, held_for_name: "The Boss" });
+    // Taken onward, it still names the same orchestrator.
+    expect(
+      (await exportTask(task.id, "mac")).orchestrated?.orchestrator
+    ).toEqual({ id: orch, name: "The Boss" });
+  });
+
+  it("drops an orchestrator that isn't a session id", async () => {
+    const bundle = await exportTask(
+      (await orchestratedTask("feature/o-badorch")).id,
+      "box"
+    );
+    bundle.orchestrated!.orchestrator = { id: "../x", name: "x" };
+    const { validateBundle } = await import("./move-bundle");
+    expect(validateBundle(bundle).orchestrated?.orchestrator).toBeUndefined();
+  });
+
   it("moves, carrying its plan and settings, and keeps the orchestrator's records on the new id", async () => {
     const { id } = await orchestratedTask("feature/o-out");
     const there = boxAnswers("feature/o-out", TASK_CAPABILITIES);
@@ -215,8 +247,17 @@ describe("an orchestrator's task moving to a linked machine", () => {
         ? json({ bundle })
         : json({ success: true })
     );
+    // While it comes back the mirror is moving, not a task to judge.
+    const states: unknown[] = [];
+    fetchMock.mockImplementation(async (url: string) => {
+      states.push(row(there.id)?.task_status);
+      return String(url).endsWith("/export")
+        ? json({ bundle })
+        : json({ success: true });
+    });
     const z = await moveTask(there.id, "local");
-    expect(row(there.id).task_status).toBe("moved");
+    expect(states[0]).toBe("moving");
+    expect(row(there.id)).toBeUndefined();
     expect(z).toMatchObject({
       host_id: "local",
       task_status: "running",

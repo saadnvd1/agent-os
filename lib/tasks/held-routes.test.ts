@@ -37,6 +37,8 @@ const { POST: done_ } = await import("@/app/api/tasks/[id]/done/route");
 const { POST: message } = await import("@/app/api/tasks/[id]/message/route");
 const { POST: merge } = await import("@/app/api/tasks/[id]/merge/route");
 const { POST: arm } = await import("@/app/api/tasks/[id]/arm/route");
+const { GET: chatFacts } =
+  await import("@/app/api/tasks/[id]/chat-facts/route");
 
 function held(view: "chat" | "terminal" = "chat") {
   const id = randomUUID();
@@ -104,5 +106,21 @@ describe("a held task's routes", () => {
     expect((await call(merge, id, "dev-other")).status).toBe(403);
     expect((await call(arm, id, "dev-other")).status).toBe(403);
     expect((await call(merge, id, null)).status).toBe(403);
+  });
+
+  it("say what the chat says about being blocked, to the holder only", async () => {
+    const id = held();
+    const get = (device: string | null) =>
+      chatFacts(
+        new NextRequest(`http://x/api/tasks/${id}/chat-facts`, {
+          headers: device ? { [DEVICE_HEADER]: device } : {},
+        }),
+        { params: Promise.resolve({ id }) }
+      ) as Promise<Response>;
+    expect((await get("dev-other")).status).toBe(403);
+    expect((await get(null)).status).toBe(403);
+    const ok = await get("dev-mac");
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ blocked: null, turn: null });
   });
 });

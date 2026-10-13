@@ -110,3 +110,53 @@ describe("a task running on a linked machine", () => {
     expect(plans[0].line).toBe("Plan written: 3 steps");
   });
 });
+
+describe("a task its orchestrator moved to a linked machine", () => {
+  const chat = (turns: number) =>
+    Array.from(
+      { length: turns },
+      (_, i) => `[assistant] turn ${i} ${"x".repeat(180)}\n[turn ended]`
+    ).join("\n");
+
+  it("is read whole: every recent turn, with its lines, not the first 300 characters", async () => {
+    const { readSession } = await import("./read");
+    const m = mirror("peer_mirror = 0");
+    peer.routes[`/api/tasks/${m.id}/chat-tail`] = () => ({ text: chat(5) });
+    const out = await readSession(m.ws.workspace.id, m.id, 60);
+    expect(out).toContain("chat on");
+    for (let i = 0; i < 5; i++) expect(out).toContain(`turn ${i} `);
+    expect(out.split("\n").length).toBeGreaterThan(8);
+    expect(out.length).toBeGreaterThan(900);
+  });
+
+  it("asks its chat facts directly, so a slow task list can't block it", async () => {
+    const m = mirror();
+    view = { id: m.id }; // the list can't say anything useful
+    forgetHostTasks(host.hostId);
+    peer.routes[`/api/tasks/${m.id}/chat-facts`] = () => ({
+      blocked: null,
+      turn: "idle",
+    });
+    expect(await waitingState(m.session)).toEqual({
+      blocked: null,
+      waitingOn: null,
+    });
+    peer.routes[`/api/tasks/${m.id}/chat-facts`] = () => ({
+      blocked: "BLOCKED: need the key\nsecond line",
+      turn: "waiting",
+    });
+    const w = await waitingState(m.session);
+    expect(w.blocked).toMatch(/need the key\nsecond line/);
+    expect(w.waitingOn).toMatch(/approval or question/);
+  });
+
+  it("is still not cleared when neither the facts nor the list can be read", async () => {
+    const m = mirror();
+    view = { id: m.id };
+    forgetHostTasks(host.hostId);
+    delete peer.routes[`/api/tasks/${m.id}/chat-facts`];
+    expect((await waitingState(m.session)).blocked).toMatch(
+      /can't be ruled out/
+    );
+  });
+});

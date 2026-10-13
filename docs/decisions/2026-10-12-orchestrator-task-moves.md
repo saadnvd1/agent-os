@@ -14,6 +14,10 @@ An orchestrator's state (gate checks, failure counts, asks, wakes, scope changes
 - The orchestrator asks for a move with an MCP tool, `move`, not `aos move`. Its tools are workspace-scoped, held by Pause and logged; widening `aos` for it would open `aos done` and `aos stop` past Pause. The shell deny list refuses `aos move|done|stop` for it.
 - Messages to a held task go to the box's holder-only message route with an agent origin, not as the user's own words.
 - The ask query now matches `task:<id>` subjects too, so an open ask blocks a move.
+- A held task's `aos send` to its orchestrator (its name, an id prefix or `orchestrator`) is only stored on the holding machine (`bus_messages.relay_state = 'pending'`, migration 74). The orchestrator's machine pulls it with the link's device token (`GET /api/tasks/held-replies`, then an ack), and delivers it with `sendMessage` from the mirror, so the orchestrator gets the usual peer-origin line. The recipient is the mirror's own `started_by`, never anything the other machine names; a pulled message's key (`relay_key`) makes a repeat pull a no-op. The holding machine never reaches back.
+- The orchestrator reads a held task's chat through `chat-tail` (whole lines, not the one-line 300-character cleaner) and its blocked and question state through the cheap `chat-facts` route, not the machine's whole task list, which is slow and, when it misses, read as "couldn't be read". The gate still fails closed when neither answers.
+- Moving back is `moving` on the mirror while it runs, and the mirror is deleted once the other machine confirms: it was only how the task was shown here. The machine it leaves stops the agent, releases ports and removes the worktree only if nothing is uncommitted and every commit is on a remote, then archives the row.
+- The arrival note names both machines, the one it left and the one it now runs on.
 
 ## Consequences
 

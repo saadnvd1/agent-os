@@ -71,6 +71,18 @@ export const cleanRemoteText = (s: unknown): string =>
     .slice(0, 300);
 
 /**
+ * Another machine's multi-line text (a chat's tail): control characters
+ * other than newline and tab become spaces, and the end is kept within `cap`.
+ */
+export const cleanRemoteBlock = (s: unknown, cap: number): string => {
+  const text = String(s ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, " ")
+    .replace(/\s+$/, "");
+  return text.length > cap ? `…${text.slice(text.length - cap + 1)}` : text;
+};
+
+/**
  * Why a call failed. `refused`: that AgentOS answered and said no, so nothing
  * happened there. Otherwise the outcome is unknown (unreachable, timed out,
  * cut off, a proxy error): it may have happened.

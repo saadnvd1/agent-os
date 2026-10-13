@@ -115,6 +115,20 @@ const readPlanFile = (cwd: string): string | null => {
   }
 };
 
+// The orchestrator that holds the task: its own, or the one on the machine
+// that moved it here.
+function orchestratorOf(
+  session: Session
+): { id: string; name: string } | undefined {
+  if (session.held_for && session.held_for_name)
+    return { id: session.held_for, name: session.held_for_name };
+  if (!session.started_by) return undefined;
+  const o = db
+    .prepare(`SELECT name FROM sessions WHERE id = ?`)
+    .get(session.started_by) as { name: string } | undefined;
+  return o ? { id: session.started_by, name: o.name } : undefined;
+}
+
 // What an orchestrator's task carries besides its work (the orchestrator's
 // own state is re-keyed here; see move-carry).
 function orchestratedBundle(session: Session): OrchestratedBundle {
@@ -125,6 +139,7 @@ function orchestratedBundle(session: Session): OrchestratedBundle {
     modelOverrides: session.model_overrides ?? null,
     planPhase: session.plan_phase ?? null,
     planFile: readPlanFile(session.working_directory),
+    orchestrator: orchestratorOf(session),
   };
 }
 

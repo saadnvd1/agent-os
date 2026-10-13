@@ -174,10 +174,13 @@ async function arrive(
       if (holder)
         db.prepare(
           `UPDATE sessions SET held_by_device = ?, held_from = ?,
+             held_for = ?, held_for_name = ?,
              model_provider = ?, model_overrides = ? WHERE id = ?`
         ).run(
           holder,
           orch.heldFrom,
+          orch.orchestrator?.id ?? null,
+          orch.orchestrator?.name ?? null,
           orch.modelProvider,
           orch.modelOverrides,
           id
@@ -203,9 +206,8 @@ async function arrive(
         });
       }, `setup-moved-${bundle.branch}`);
     }
-    const prompt = claude
-      ? arrivalNote(bundle, worktreePath)
-      : `${bundle.prompt}\n\n${arrivalNote(bundle, worktreePath)}`;
+    const note = arrivalNote(bundle, worktreePath, os.hostname());
+    const prompt = claude ? note : `${bundle.prompt}\n\n${note}`;
     if (bundle.chat) {
       // Its worker starts on the carried conversation, takes the note
       // first, then what was queued.
