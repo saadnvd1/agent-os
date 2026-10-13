@@ -4,6 +4,20 @@ AgentOS works fully without a LumifyHub account. Connecting one gives a
 workspace's docs and boards a home in LumifyHub, where they can be opened
 anywhere and shared with anyone.
 
+## In the app
+
+- A workspace links to a LumifyHub workspace, and a project to a board in it.
+  Tasks get a card on the project's board that moves as the task runs, and a
+  card in To Do can be started as a task.
+- **Docs** lists the linked workspace's pages and reads them; editing happens
+  in LumifyHub.
+- A markdown file open in the file explorer can be published as a page marked
+  as coming from the repo. Publishing again updates the same page, and so does
+  merging a task that changed the file. It goes one way: edits made in
+  LumifyHub are overwritten.
+- Agents can list, read and create those pages with `aos docs`, `aos doc <id>`
+  and `aos doc new "<title>" --file <path>`. The token stays in AgentOS.
+
 ## What maps to what
 
 | AgentOS | LumifyHub | Direction |
@@ -104,5 +118,5 @@ one, or a development server); it defaults to `https://lumifyhub.io`.
 Everything after connecting is the existing token API under `/api/cli/*`
 (`Authorization: Bearer lhcli_...`): workspaces (list, create), boards, lists
 and cards (CRUD, comments, and `blocked_by` dependencies for
-[stacks](stacks.md)), and pages (list, show, create, update; markdown in
+[stacks](guides/tasks.md#stacks)), and pages (list, show, create, update; markdown in
 `content`). Members and invites stay in LumifyHub; AgentOS links to them.

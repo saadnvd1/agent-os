@@ -54,7 +54,7 @@ const TAILSCALE_V4 = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
 const LOOPBACK = new Set(["127.0.0.1", "::1"]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 // A proxy must send one of these, or it looks like this machine itself.
-// Proxies that send none need AGENTOS_AUTH, see README "Security".
+// Proxies that send none need AGENTOS_AUTH, see docs/reference/security.md.
 const FORWARDING = new Set([
   "forwarded",
   "via",

@@ -54,7 +54,7 @@ Keep CONFIRMED findings and drop REJECTED ones. Apply a severity change only whe
 `.claude/skills/README.md` says a convention change updates its doc, the skill that writes it and the agent that reviews it together. Check the diff for:
 
 - A rule added or changed in a review agent without the brief, CLAUDE.md "Standards" or README that states it, or the reverse.
-- A new user-visible capability, setting, env var or CLI flag missing from `README.md` (or `docs/setup/`).
+- A new user-visible capability, setting, env var or CLI flag missing from its doc in `docs/guides/`, `docs/reference/` or `docs/setup/` (and from the README feature list if it is a headline feature).
 - A command, route, file or env var the docs name that was renamed or deleted, with the docs left pointing at it.
 - UI changes with no "checked at 390 and 1440px, light and dark" line in the PR body (or a line saying why it couldn't be checked).
 
