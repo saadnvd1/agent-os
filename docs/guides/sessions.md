@@ -90,8 +90,11 @@ next day) and _Next week_ (9 AM next Monday), and **Unsnooze**. A snoozed
 session shows when it wakes, and wakes at that time, or early when it needs
 you, fails, or finishes a run; a session woken by its timer carries the purple
 dot. **Done** is finished work: merged or dropped tasks, sessions you
-finished with the menu's **Archive** (which hides them for good) or **Mark
-done**, and sessions with no activity for 3 days. Mark done doesn't archive:
+finished with **Mark done**, and sessions with no activity for 3 days.
+Archived sessions (the menu's **Archive**, `aos done`, or the orchestrator's
+done) leave the sidebar altogether: find them under **Archived** in the
+sidebar's ⋯ menu, the workspace switcher or ⌘K, where **Unarchive** brings one
+back. Mark done doesn't archive:
 the session stays in Done until it does something again (a message, a run, a
 need), and **Reopen** brings it back by hand. A pinned session, one that is
 running or has background work, one that needs you, and a task with an open
