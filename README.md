@@ -122,9 +122,11 @@ conversation in **Messages** and can join in. [More](#agent-network)
 
 ![A session in terminal view, with the agent asking before it runs a command](screenshots/terminal.png)
 
-**Guides:** step-by-step how-tos are in [`docs/guides/`](docs/guides/), starting with [using AgentOS from your phone](docs/guides/phone.md).
+**Guides:** step-by-step how-tos are in [`docs/guides/`](docs/guides/), starting with [installing AgentOS](docs/guides/install.md) and [using it from your phone](docs/guides/phone.md).
 
 ## Install
+
+The [install guide](docs/guides/install.md) walks through this step by step.
 
 You need Node.js 20+, tmux, and at least one agent CLI:
 [Claude Code](https://github.com/anthropics/claude-code),

@@ -10,7 +10,7 @@ AgentOS runs on your computer. Your phone is a window into it: you can read chat
 
 There are two ways to use it:
 
-- **The iPhone app.** Install AgentOS from the App Store (or TestFlight if you were sent an invite). It is the only way to get push notifications.
+- **The iPhone app.** Join the TestFlight beta with an invite link; the App Store release is coming soon. It is the only way to get push notifications.
 - **A phone browser.** The whole web UI works on a phone. Open the address of your machine in Safari or Chrome. Browsers can't receive pushes from AgentOS.
 
 Either way, the phone has to be able to reach the machine and has to be paired with it. Pick the route that fits:
