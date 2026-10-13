@@ -58,8 +58,8 @@ export function AddDevicePanel({ onDone }: { onDone: () => void }) {
       {shown ? (
         <>
           <p className="text-sm">
-            Scan with the phone or tablet&apos;s camera. On a laptop, open the
-            link and type the code.
+            On a phone or tablet, open the AgentOS app and tap Scan QR code. The
+            camera app works too. On a laptop, open the link and type the code.
           </p>
           {offer.links.length > 1 && (
             <div className="bg-background/60 mx-auto flex w-fit gap-1 rounded-lg p-1">
@@ -69,9 +69,7 @@ export function AddDevicePanel({ onDone }: { onDone: () => void }) {
                   onClick={() => setKindIndex(i)}
                   className={`h-11 rounded-md px-3 text-xs sm:h-8 ${i === kindIndex ? "bg-muted text-foreground" : "text-muted-foreground"}`}
                 >
-                  {l.kind === "lan"
-                    ? "Phone on this Wi-Fi"
-                    : "Phone on Tailscale"}
+                  {CHOICE[l.kind]}
                 </button>
               ))}
             </div>
