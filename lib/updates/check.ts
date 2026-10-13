@@ -177,16 +177,17 @@ export function cachedCheck(deps: CheckDeps = realDeps()): CheckResult | null {
 
 /**
  * The cached answer, or a fresh one when it's older than six hours. `force`
- * asks now, at most once a minute (`throttled`: the seconds left). A failed
+ * asks now, at most once a minute (`throttled`: the seconds left); `always`
+ * skips that floor, for a check owed after an update. A failed
  * fetch keeps the last good answer and notes the error.
  */
 export async function checkForUpdate(
-  { force = false }: { force?: boolean } = {},
+  { force = false, always = false }: { force?: boolean; always?: boolean } = {},
   deps: CheckDeps = realDeps()
 ): Promise<{ result: CheckResult; throttled?: number }> {
   const last = cachedCheck(deps);
   const age = last ? deps.now() - last.checkedAt : Infinity;
-  if (last && force && age < FORCE_FLOOR_MS)
+  if (last && force && !always && age < FORCE_FLOOR_MS)
     return {
       result: last,
       throttled: Math.ceil((FORCE_FLOOR_MS - age) / 1000),

@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
@@ -7,10 +9,11 @@ import type { CheckResult } from "@/lib/updates/check";
 
 let check: CheckResult | null;
 let throttled: number | undefined;
+let refreshed: CheckResult | null = null;
 vi.mock("@/lib/updates/check", async (orig) => ({
   ...(await orig<typeof import("@/lib/updates/check")>()),
   cachedCheck: () => check,
-  checkForUpdate: async () => ({ result: check, throttled }),
+  checkForUpdate: async () => ({ result: refreshed ?? check, throttled }),
 }));
 vi.mock("@/lib/busy", () => ({ inFlight: () => ({ reviews: 0, setups: 0 }) }));
 vi.mock("@/lib/status/collect", () => ({
@@ -58,6 +61,7 @@ const available = (): CheckResult => ({
 beforeEach(() => {
   check = available();
   throttled = undefined;
+  refreshed = null;
   delete process.env.AGENTOS_UPDATE_BANNER;
   process.env.AGENTOS_DEV = "1";
   db.prepare(`DELETE FROM settings WHERE key LIKE 'updates.%'`).run();
@@ -87,6 +91,35 @@ describe("GET /api/updates", () => {
       req("/run", "POST", headers, { when: "now" })
     );
     expect(res.status).toBe(403);
+  });
+});
+
+describe("after an update", () => {
+  it("asks again instead of offering the version that was just installed", async () => {
+    const file = path.join(
+      path.dirname(process.env.DB_PATH!),
+      "agent-os-update.json"
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        id: "r",
+        phase: "done",
+        from: "a",
+        fromVersion: "0.3.1",
+        toVersion: "0.3.5",
+        startedAt: 5,
+        finishedAt: 10,
+      })
+    );
+    refreshed = { ...available(), available: false, behind: 0, checkedAt: 20 };
+    try {
+      const view = await (await root.GET(req("", "GET", loopback))).json();
+      expect(view.available).toBe(false);
+      expect(view.run.phase).toBe("done");
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
   });
 });
 

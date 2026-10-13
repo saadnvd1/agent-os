@@ -2,7 +2,7 @@
 // whether the caller may start an update.
 
 import { isActivePhase, type UpdateView } from "./banner";
-import { cachedCheck } from "./check";
+import { cachedCheck, checkForUpdate } from "./check";
 import {
   preflight,
   readLog,
@@ -20,8 +20,18 @@ export async function updateView(
   { mayUpdate }: { mayUpdate: boolean },
   deps: RunDeps = realRunDeps()
 ): Promise<UpdateView> {
-  const check = cachedCheck(deps.check);
   const stored = readRun(deps);
+  let check = cachedCheck(deps.check);
+  // An answer from before the update that just finished says the new version
+  // is still available; ask again once.
+  if (
+    check &&
+    stored?.finishedAt &&
+    (stored.phase === "done" || stored.phase === "built") &&
+    check.checkedAt < stored.finishedAt
+  )
+    check = (await checkForUpdate({ force: true, always: true }, deps.check))
+      .result;
   const run =
     stored && (stored.phase === "failed" || stored.phase === "built")
       ? { ...stored, log: stored.log?.length ? stored.log : readLog(deps) }
