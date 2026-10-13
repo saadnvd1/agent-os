@@ -107,6 +107,9 @@ export function needOf(
 ): SessionNeed | null {
   const live = status?.need ?? null;
   if (live === "approve" || live === "answer" || live === "signin") return live;
+  // Finished work has no agent left to wait on you: text typed or queued
+  // for one that's been stopped is stale, not a reason to need you.
+  if (task && isFinished(task)) return null;
   return (
     taskNeed(task) ??
     live ??

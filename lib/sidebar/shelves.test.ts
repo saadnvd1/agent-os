@@ -85,6 +85,14 @@ describe("needOf", () => {
     expect(needOf(session("a"), { status: "idle" }, "review")).toBeNull();
   });
 
+  it("never lets a finished task need you over text left in a stopped agent", () => {
+    for (const task of ["merged", "done", "dropped"] as const) {
+      expect(needOf(session("a"), { need: "unsent" }, task)).toBeNull();
+      expect(needOf(session("a"), { need: "input" }, task)).toBeNull();
+    }
+    expect(needOf(session("a"), { need: "unsent" }, "review")).toBe("unsent");
+  });
+
   it("maps task states", () => {
     expect(taskNeed("exited")).toBe("failed");
     expect(taskNeed("merged")).toBeNull();
@@ -180,6 +188,13 @@ describe("finished vs open work", () => {
       .map(String);
     return at.length === 1 ? at[0] : at;
   };
+
+  it("keeps a finished task with a stale unsent or queued message in Done", () => {
+    for (const task of ["merged", "done", "dropped"] as const) {
+      expect(place(task, { status: "waiting", need: "unsent" })).toBe("done");
+      expect(place(task, { status: "waiting", need: "input" })).toBe("done");
+    }
+  });
 
   it("files a task with an open PR (in review, armed or not) under In review", () => {
     expect(place("review")).toBe("inReview");
