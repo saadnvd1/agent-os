@@ -2,6 +2,7 @@ import { resumeOnModel } from "../models/resume";
 import { workspaceTask } from "./targets";
 import { getWorkspace } from "../workspaces";
 import {
+  approveTaskPlan,
   done,
   drop,
   moveTaskTo,
@@ -48,6 +49,7 @@ const ACTING = new Set<ToolName>([
   "land",
   "drop",
   "move",
+  "approve_plan",
   "stop",
   "done",
   "review",
@@ -114,8 +116,14 @@ export async function runTool(
         after: a.after,
         model: a.model,
         plan: a.plan,
+        planOnly: a.plan_only,
         planReason: a.plan_reason,
       });
+    }
+    case "approve_plan": {
+      const a = p(tool, raw);
+      const task = workspaceTask(w, a.task);
+      return approveTaskPlan(task, a.message);
     }
     case "set_task_model": {
       const a = p(tool, raw);

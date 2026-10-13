@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       view,
       plan,
       plan_reason,
+      plan_only,
     } = await request.json();
     if (id !== undefined && !isSessionId(id)) throw new Error("Bad task id");
     const pid =
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
       // Checked now, so a queued task can't fail on it later.
       model: parseOverride(model) ?? undefined,
       plan: typeof plan === "boolean" ? plan : undefined,
+      planOnly: plan_only === true ? true : undefined,
       planReason:
         typeof plan_reason === "string" && plan_reason.trim()
           ? plan_reason.trim().slice(0, 200)

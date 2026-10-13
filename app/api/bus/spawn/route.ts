@@ -29,12 +29,15 @@ export async function POST(request: NextRequest) {
       on,
       after,
       view,
+      planOnly,
       from,
     } = await request.json();
     const startedBy = orchestratorFrom(from);
     const given = typeof name === "string" ? name : undefined;
     if (after !== undefined && mode !== "task")
       throw new Error("--after works for tasks only");
+    if (planOnly !== undefined && mode !== "task")
+      throw new Error("--plan-only works for tasks only");
     if (mode === "task") {
       const task = {
         projectId: findProject(String(project ?? "")).id,
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
         model,
         hostId: on ? hostIdNamed(String(on)) : undefined,
         view: startView(view),
+        planOnly: planOnly === true ? true : undefined,
         startedBy,
       };
       const out = await startOrQueue(

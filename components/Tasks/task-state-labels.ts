@@ -8,6 +8,7 @@ export const TASK_STATE: Record<TaskState, { label: string; tone: string }> = {
     tone: "text-amber-600 dark:text-amber-400",
   },
   blocked: { label: "Blocked", tone: "text-amber-600 dark:text-amber-400" },
+  "plan-ready": { label: "Plan ready", tone: "text-primary" },
   review: { label: "Ready for review", tone: "text-primary" },
   "checks-failing": { label: "Checks failing", tone: "text-destructive" },
   exited: { label: "Agent exited", tone: "text-amber-600 dark:text-amber-400" },

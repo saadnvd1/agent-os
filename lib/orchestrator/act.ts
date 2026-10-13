@@ -33,6 +33,8 @@ import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
 import { doneSession } from "../done";
 import { amendBrief, amendmentsOf } from "./amendments";
+import type { Session } from "../db";
+import { approvePlanNow } from "../models/plan-step";
 import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
 import { addNote } from "./notes";
@@ -99,9 +101,12 @@ export async function startTask(
     after?: string;
     model?: ModelOverride;
     plan?: boolean;
+    planOnly?: boolean;
     planReason?: string;
   } = {}
 ): Promise<string> {
+  if (opts.planOnly && opts.plan === false)
+    throw new Error("plan_only implies plan; pass plan true");
   const project = workspaceProject(workspaceId, projectRef);
   const model = parseOverride(opts.model) ?? undefined;
   const startedBy = orchestratorId(workspaceId);
@@ -121,6 +126,7 @@ export async function startTask(
       view,
       model,
       plan: opts.plan,
+      planOnly: opts.planOnly,
       planReason: opts.planReason,
       startedBy,
       baseBranch: opts.base || undefined,
@@ -140,6 +146,7 @@ export async function startTask(
             view,
             model,
             plan: opts.plan,
+            planOnly: opts.planOnly,
             planReason: opts.planReason,
             startedBy,
           }),
@@ -151,11 +158,26 @@ export async function startTask(
     return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}. It starts by itself; you'll get an event when it does.`;
   }
   const task = out.started;
+  const planOnlyNote = opts.planOnly
+    ? " Plan only: it stops after the plan and waits; approve_plan continues it, drop rejects it."
+    : "";
   const skipped =
-    opts.plan && task.plan_phase !== "planning"
+    opts.plan && !opts.planOnly && task.plan_phase !== "planning"
       ? ` Plan step skipped: ${view === "terminal" ? "a terminal task has none" : "planning and implementation use the same model"}.`
       : "";
-  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${skipped}`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${skipped}${planOnlyNote}`;
+}
+
+// The orchestrator approves a plan-only task's plan; a message amends it.
+export async function approveTaskPlan(
+  task: Session,
+  message?: string
+): Promise<string> {
+  const out = await approvePlanNow(task.id, message);
+  const amended = message
+    ? ` Recorded as scope change ${out.amendments} on its brief: its review judges against it.`
+    : "";
+  return `Approved the plan of ${task.name}: implementing on ${out.ref}.${amended}`;
 }
 
 export async function startSession(

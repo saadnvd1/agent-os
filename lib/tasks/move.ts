@@ -137,7 +137,11 @@ function orchestratedBundle(session: Session): OrchestratedBundle {
     since: isoUTC(session.task_since ?? session.created_at),
     modelProvider: session.model_provider ?? null,
     modelOverrides: session.model_overrides ?? null,
-    planPhase: session.plan_phase ?? null,
+    // moveRefusal keeps an unapproved plan-only task here.
+    planPhase: (session.plan_phase ?? null) as
+      | "planning"
+      | "implementing"
+      | null,
     planFile: readPlanFile(session.working_directory),
     orchestrator: orchestratorOf(session),
   };

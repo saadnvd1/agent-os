@@ -10,7 +10,13 @@ import {
 import { Button } from "@/components/ui/button";
 import type { TaskView } from "@/lib/tasks";
 import { isFinished } from "@/lib/tasks/state";
-import { useArmTask, useDropTask, useSignOffTask } from "@/data/tasks";
+import {
+  useApprovePlan,
+  useArmTask,
+  useDropTask,
+  useSignOffTask,
+} from "@/data/tasks";
+import { Markdown } from "@/components/Chat/Markdown";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { cn } from "@/lib/utils";
@@ -23,6 +29,8 @@ export function TaskRow({ task }: { task: TaskView }) {
   const signOff = useSignOffTask();
   const drop = useDropTask();
   const arm = useArmTask();
+  const approve = useApprovePlan();
+  const [showPlan, setShowPlan] = useState(false);
   const [confirmDrop, setConfirmDrop] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const live = !isFinished(task.state);
@@ -30,6 +38,7 @@ export function TaskRow({ task }: { task: TaskView }) {
     signOff.error?.message ||
     drop.error?.message ||
     arm.error?.message ||
+    approve.error?.message ||
     moveError ||
     task.hostError;
   const settingUp = live && task.setup?.status === "running";
@@ -148,6 +157,26 @@ export function TaskRow({ task }: { task: TaskView }) {
               {task.armed ? "Armed" : "Arm merge"}
             </Button>
           )}
+          {task.state === "plan-ready" && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-expanded={showPlan}
+                onClick={() => setShowPlan((v) => !v)}
+              >
+                {showPlan ? "Hide plan" : "View plan"}
+              </Button>
+              <Button
+                size="sm"
+                className="h-11 md:h-8"
+                disabled={approve.isPending}
+                onClick={() => approve.mutate({ id: task.id })}
+              >
+                {approve.isPending ? "Approving..." : "Approve"}
+              </Button>
+            </>
+          )}
           {task.state === "review" && (
             <Button
               size="sm"
@@ -156,6 +185,22 @@ export function TaskRow({ task }: { task: TaskView }) {
             >
               {signOff.isPending ? "Merging..." : "Sign off & merge"}
             </Button>
+          )}
+        </div>
+      )}
+      {live && task.state === "plan-ready" && showPlan && (
+        <div className="bg-foreground/[0.04] max-h-80 overflow-y-auto rounded-lg p-3 text-sm">
+          {task.plan?.text ? (
+            <Markdown text={task.plan.text} />
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              No plan file was written.
+            </p>
+          )}
+          {task.plan?.truncated && (
+            <p className="text-muted-foreground mt-2 font-mono text-[11px]">
+              Shortened; the whole plan is {task.plan.path} in the worktree.
+            </p>
           )}
         </div>
       )}

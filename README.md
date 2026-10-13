@@ -539,6 +539,21 @@ and **Usage → Compare** splits cost into planned and not. When the plan step
 finishes, the orchestrator gets one event with the plan file's path and a
 3-5 line summary; the handoff to implementation stays automatic.
 
+**Plan only.** A task started with `plan_only` (`start_task`'s `plan_only`,
+`aos task --plan-only`, or `plan_only: true` on `POST /api/tasks`) writes its
+plan on the planning model and then stops: no model switch, no implement
+prompt, even when one model does every role. It sits in a **Plan ready**
+state (`plan_phase` `awaiting`, stored on the task, so it survives a restart)
+that isn't blocked, doesn't count as needing you, and holds no agent process
+(its worker is released; the conversation resumes on approval). The
+orchestrator gets one event with the plan's path, a summary and that the task
+is waiting. **Approve** on the task row (plan viewable there), `POST
+/api/tasks/<id>/approve-plan`, or the orchestrator's `approve_plan(task,
+message?)` continues it on the implementation model, once; a message amends
+the plan and is recorded on the task's brief as a scope change, so the review
+judges against it. Reject with **Drop**. A chat task on this machine only; it
+can't move until approved.
+
 **Per task.** The task draft has a **Model** chip ("Routed by role", or one
 model); `POST /api/tasks` and the orchestrator's `start_task` take `model`, as
 `"provider/model"` for the task's own roles or a map such as

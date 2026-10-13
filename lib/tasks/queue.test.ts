@@ -88,6 +88,18 @@ describe("the task queue", () => {
     expect(queueIfNeeded({ projectId: t.app.id, prompt: "go" })).toBeNull();
   });
 
+  it("keeps plan only while a task waits", () => {
+    const t = setup(1);
+    const q = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "plan it",
+      planOnly: true,
+    })!;
+    expect(
+      db.prepare(`SELECT plan_only FROM task_queue WHERE id = ?`).get(q.id)
+    ).toEqual({ plan_only: 1 });
+  });
+
   it("keeps the plan decision and who started it while a task waits", () => {
     const t = setup(1);
     const q = queueIfNeeded({

@@ -50,7 +50,12 @@ export interface SessionFacts {
   // A quick change the orchestrator makes itself (quick.ts): no agent.
   quick?: boolean;
   // The orchestrator's call on a plan step, with its reason, when stated.
-  plan?: { planned: boolean; reason: string | null } | null;
+  plan?: {
+    planned: boolean;
+    reason: string | null;
+    // A plan-only task's plan is written; it waits for approve_plan.
+    awaiting?: boolean;
+  } | null;
   task: {
     state: TaskState;
     pr: TaskPR | null;
@@ -344,7 +349,11 @@ export async function sessionFacts(
         plan:
           s.plan_decided == null
             ? null
-            : { planned: !!s.plan_decided, reason: s.plan_reason ?? null },
+            : {
+                planned: !!s.plan_decided,
+                reason: s.plan_reason ?? null,
+                awaiting: s.plan_phase === "awaiting",
+              },
         task,
         stack: stackOf(s.id),
       };

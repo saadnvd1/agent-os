@@ -25,6 +25,8 @@ export function moveRefusal(session: Session): string | null {
     return "It's a quick change its orchestrator makes on this machine, so it stays here";
   if (escalations(session.id).length)
     return "It's waiting on you (an escalated gate), so it stays here";
+  if (session.plan_only && session.plan_phase !== "implementing")
+    return "It's a plan-only task that hasn't been approved, so it stays here";
   const ask = db
     .prepare(
       `SELECT 1 FROM orchestrator_asks WHERE subject IN (?, ?) AND status = 'open' LIMIT 1`

@@ -141,7 +141,7 @@ export async function finishTaskStart(
   const task = (session.task_prompt ?? "") + setupNote(setup);
   const planning = session.plan_phase === "planning";
   if (planning) preparePlanDir(session.worktree_path);
-  const prompt = planning ? planPrompt(task) : task;
+  const prompt = planning ? planPrompt(task, !!session.plan_only) : task;
   try {
     if (session.view === "chat") await launchChat(sessionId, prompt);
     else {

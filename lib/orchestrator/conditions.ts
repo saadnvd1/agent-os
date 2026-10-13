@@ -135,6 +135,7 @@ function sessionConditions(
     shouldPR &&
     !pr &&
     !finished &&
+    !f.plan?.awaiting &&
     f.status !== "running" &&
     idleFor >= IDLE_NO_PR_MS
   )

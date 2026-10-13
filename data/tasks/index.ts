@@ -85,6 +85,18 @@ export function useDropTask() {
   );
 }
 
+export function useApprovePlan() {
+  return useTaskMutation(async (input: { id: string; message?: string }) =>
+    json(
+      await fetch(`/api/tasks/${input.id}/approve-plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: input.message }),
+      })
+    )
+  );
+}
+
 export function useResumeTask() {
   return useTaskMutation(async (input: { id: string; force?: boolean }) =>
     json(

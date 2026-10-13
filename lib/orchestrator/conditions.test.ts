@@ -63,6 +63,18 @@ describe("conditionsFor", () => {
     expect(lines([blocked], [], new Set(["s"]))).toEqual([]);
   });
 
+  it("doesn't read a task waiting for plan approval as idle", () => {
+    expect(
+      lines([
+        facts("s", {
+          status: "idle",
+          lastActive: NOW - IDLE_NO_PR_MS - 60000,
+          plan: { planned: true, reason: null, awaiting: true },
+        }),
+      ])
+    ).toEqual([]);
+  });
+
   it("reads idle-with-no-PR as a low-value event", () => {
     const idle = facts("s", {
       status: "idle",
