@@ -10,11 +10,12 @@ import { SessionRowMenu } from "./SessionRowMenu";
 
 // Radix's focus handling needs a real browser; plain elements show what the
 // menu offers.
-vi.mock("@/components/ui/dropdown-menu", async () => {
+vi.mock("@/components/ui/dropdown-menu", async (importOriginal) => {
   const { createElement: h } = await import("react");
   const part = (props: { children?: unknown; onClick?: () => void }) =>
     h("div", { onClick: props.onClick }, props.children as never);
   return {
+    ...(await importOriginal<object>()),
     DropdownMenuItem: part,
     DropdownMenuSeparator: part,
     DropdownMenuSub: part,
