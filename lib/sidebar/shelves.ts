@@ -1,9 +1,9 @@
 // The sidebar's one flat list, sorted onto shelves: the workspace's pinned
-// orchestrator, Pinned, Needs you, Working, then Done. Client-safe: no database.
+// orchestrator, Pinned, Needs you, Working, In review, then Done. Client-safe: no database.
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
 import type { PrStage } from "@/lib/tasks/pr-stage";
-import type { TaskState } from "@/lib/tasks/state";
+import { isFinished, type TaskState } from "@/lib/tasks/state";
 
 // Why a session is blocked on you.
 export type SessionNeed =
@@ -33,6 +33,8 @@ export interface RowStatus {
   stalled?: boolean;
   // A chat summarising its context (status stays "running").
   compacting?: { since: number; before?: number };
+  // Background commands, subagents and monitors still running.
+  background?: number;
   asks?: number;
   prStage?: PrStage;
   // A program's own message (OSC 7501): untrusted, plain text only.
@@ -61,6 +63,7 @@ export interface Shelves {
   pinned: SidebarRow[];
   needsYou: SidebarRow[];
   working: SidebarRow[];
+  inReview: SidebarRow[];
   done: SidebarRow[];
 }
 
@@ -68,6 +71,17 @@ export function taskNeed(state: TaskState | undefined): SessionNeed | null {
   if (state === "checks-failing" || state === "exited") return "failed";
   if (state === "blocked") return "answer";
   return null;
+}
+
+// Where a row that needs nothing and isn't running goes: an open PR or a plan
+// waiting on approval is in review, any other unfinished task is mid-job, and
+// only finished work or a plain idle session is done.
+export function quietShelf(
+  task: TaskState | undefined
+): "inReview" | "working" | "done" {
+  if (task === "review" || task === "plan-ready") return "inReview";
+  if (!task || isFinished(task)) return "done";
+  return "working";
 }
 
 // An approval or a question beats what the task says; a terminal waiting
@@ -118,6 +132,20 @@ const newestFirst = (a: SidebarRow, b: SidebarRow) =>
 const oldestFirst = (a: SidebarRow, b: SidebarRow) =>
   a.session.created_at.localeCompare(b.session.created_at);
 
+const OPEN_RUN = ["queued", "starting", "running"];
+
+// A recipe run that hasn't reported its result yet: its session going quiet
+// between turns (an EAS build running in the background, say) isn't it ending.
+// The list query carries the run as JSON.
+export function recipeRunOpen(session: Pick<Session, "recipe_run">): boolean {
+  if (!session.recipe_run) return false;
+  try {
+    return OPEN_RUN.includes(JSON.parse(session.recipe_run)?.status);
+  } catch {
+    return false;
+  }
+}
+
 function toRow(input: ShelfInput, session: Session): SidebarRow {
   const status = input.statuses[session.id];
   return {
@@ -125,7 +153,10 @@ function toRow(input: ShelfInput, session: Session): SidebarRow {
     status,
     need: needOf(session, status, input.tasks[session.id]),
     unread: !!status?.unread,
-    working: status?.status === "running",
+    working:
+      status?.status === "running" ||
+      (status?.background ?? 0) > 0 ||
+      recipeRunOpen(session),
     compacting: !!status?.compacting,
     workers: [],
     task: input.tasks[session.id],
@@ -169,6 +200,7 @@ export function buildShelves(input: ShelfInput): Shelves {
     pinned: [],
     needsYou: [],
     working: [],
+    inReview: [],
     done: [],
   };
   for (const row of top) {
@@ -178,12 +210,13 @@ export function buildShelves(input: ShelfInput): Shelves {
     else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
     else if (row.need) shelves.needsYou.push(row);
     else if (row.working) shelves.working.push(row);
-    else shelves.done.push(row);
+    else shelves[quietShelf(row.task)].push(row);
   }
   shelves.orchestrators.sort(oldestFirst);
   shelves.pinned.sort(oldestFirst);
   shelves.needsYou.sort(newestFirst);
   shelves.working.sort(newestFirst);
+  shelves.inReview.sort(newestFirst);
   shelves.done.sort(newestFirst);
   return shelves;
 }
@@ -265,6 +298,7 @@ function sameStatus(a: RowStatus | undefined, b: RowStatus | undefined) {
     !!a.stalled === !!b.stalled &&
     (a.compacting?.since ?? null) === (b.compacting?.since ?? null) &&
     (a.compacting?.before ?? null) === (b.compacting?.before ?? null) &&
+    (a.background ?? 0) === (b.background ?? 0) &&
     a.asks === b.asks &&
     (a.prStage?.stage ?? null) === (b.prStage?.stage ?? null) &&
     (a.prStage?.number ?? null) === (b.prStage?.number ?? null) &&

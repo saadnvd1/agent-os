@@ -12,6 +12,7 @@ export interface SessionStatus {
   unread?: boolean;
   stalled?: boolean;
   compacting?: { since: number; before?: number };
+  background?: number;
   prStage?: PrStage;
 }
 

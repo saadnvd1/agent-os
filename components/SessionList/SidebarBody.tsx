@@ -65,6 +65,7 @@ export function SidebarBody({
     shelves.pinned.length +
     shelves.needsYou.length +
     shelves.working.length +
+    shelves.inReview.length +
     data.queued.length +
     shelves.done.length +
     data.machines.length;

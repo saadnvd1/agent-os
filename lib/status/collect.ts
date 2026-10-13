@@ -26,7 +26,7 @@ import { noteWaiting } from "../notify/push/waiting";
 import { getDb } from "../db";
 import { beginPass, chatMemo } from "./incremental";
 import { chatCompacting, chatState } from "../chat/runner";
-import { chatActivityLine, chatStall } from "../chat/activity";
+import { chatActivity, chatActivityLine, chatStall } from "../chat/activity";
 import {
   chatNeed,
   isUnread,
@@ -72,6 +72,8 @@ export interface SessionStatusResponse {
   stalled?: boolean;
   // A chat whose agent is summarising its context ("status" stays running).
   compacting?: Compacting;
+  // Background commands, subagents and monitors a chat still has running.
+  background?: number;
   // Where a task's PR is in the gates (lib/tasks/pr-stage.ts).
   prStage?: PrStage;
   // A program's own message (OSC 7501): untrusted, plain text only.
@@ -474,6 +476,7 @@ async function collect(full = false): Promise<StatusSnapshot> {
     (s) => s.view === "chat" && (!s.host_id || s.host_id === "local")
   )) {
     const state = chatState(session.id);
+    const background = chatActivity(session.id)?.background;
     const orchestrator = session.role === "orchestrator";
     // What the database says; the rest below moves with time or the process.
     const base = chatMemo(pass, session.id, orchestrator, state ?? "", () => {
@@ -498,6 +501,7 @@ async function collect(full = false): Promise<StatusSnapshot> {
       ...(chatCompacting(session.id) && {
         compacting: chatCompacting(session.id)!,
       }),
+      ...(background && { background }),
       ...(orchestrator && { asks: base.asks }),
     };
   }

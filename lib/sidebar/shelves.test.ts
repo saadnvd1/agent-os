@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/lib/db/types";
+import type { TaskState } from "@/lib/tasks/state";
 import {
   buildShelves,
   doneLimit,
@@ -46,6 +47,7 @@ function shelves(
     pinned: ids(out.pinned),
     needsYou: ids(out.needsYou),
     working: ids(out.working),
+    inReview: ids(out.inReview),
     done: ids(out.done),
     raw: out,
   };
@@ -152,6 +154,94 @@ describe("buildShelves", () => {
   });
 });
 
+describe("finished vs open work", () => {
+  const idle = { status: "idle" } as RowStatus;
+  const place = (
+    task: TaskState | undefined,
+    status: RowStatus = idle,
+    extra: Partial<Session> = {}
+  ) => {
+    const out = shelves(
+      [session("t", extra)],
+      { t: status },
+      { tasks: task ? { t: task } : {} }
+    );
+    const at = (["pinned", "needsYou", "working", "inReview", "done"] as const)
+      .filter((k) => out[k].length)
+      .map(String);
+    return at.length === 1 ? at[0] : at;
+  };
+
+  it("files a task with an open PR (in review, armed or not) under In review", () => {
+    expect(place("review")).toBe("inReview");
+  });
+
+  it("files a task idle mid-job with no PR under Working", () => {
+    expect(place("needs-input")).toBe("working");
+    expect(place("working")).toBe("working");
+    expect(place("moving")).toBe("working");
+  });
+
+  it("files a plan waiting for approval under In review", () => {
+    expect(place("plan-ready")).toBe("inReview");
+  });
+
+  it("keeps merged, dropped and closed tasks, and idle plain sessions, in Done", () => {
+    expect(place("merged")).toBe("done");
+    expect(place("dropped")).toBe("done");
+    expect(place("done")).toBe("done");
+    expect(place(undefined)).toBe("done");
+  });
+
+  it("keeps Needs you and Working ahead of In review", () => {
+    expect(place("review", { status: "running" })).toBe("working");
+    expect(place("review", { need: "approve" })).toBe("needsYou");
+    expect(place("checks-failing")).toBe("needsYou");
+    expect(place("exited")).toBe("needsYou");
+    expect(place("review", idle, { pinned: true })).toBe("pinned");
+  });
+
+  it("keeps an idle session with background work running under Working", () => {
+    expect(place(undefined, { status: "idle", background: 1 })).toBe("working");
+    expect(place("review", { status: "idle", background: 2 })).toBe("working");
+    expect(place(undefined, { status: "idle", background: 0 })).toBe("done");
+    expect(
+      place(undefined, { status: "idle", background: 1, need: "approve" })
+    ).toBe("needsYou");
+  });
+
+  it("keeps a recipe run that hasn't reported its result under Working", () => {
+    const run = (status: string) => ({
+      recipe_run: JSON.stringify({
+        id: "r",
+        name: "TestFlight build",
+        seq: 2,
+        status,
+      }),
+    });
+    for (const open of ["queued", "starting", "running"])
+      expect(place(undefined, idle, run(open))).toBe("working");
+    for (const ended of ["succeeded", "failed", "cancelled", "timed_out"])
+      expect(place(undefined, idle, run(ended))).toBe("done");
+    expect(place(undefined, idle, { recipe_run: "not json" })).toBe("done");
+    expect(place(undefined, { need: "approve" }, run("running"))).toBe(
+      "needsYou"
+    );
+  });
+
+  it("sorts In review newest first", () => {
+    const out = shelves(
+      [
+        session("old", { updated_at: "2026-10-01 12:00:00" }),
+        session("new", { updated_at: "2026-10-05 12:00:00" }),
+      ],
+      {},
+      { tasks: { old: "review", new: "review" } }
+    );
+    expect(out.inReview).toEqual(["new", "old"]);
+  });
+});
+
 describe("doneLimit", () => {
   it("shows 10, then 25 more per page", () => {
     expect(doneLimit(0)).toBe(10);
@@ -193,8 +283,16 @@ describe("sameRow", () => {
       ...out.raw.pinned,
       ...out.raw.needsYou,
       ...out.raw.working,
+      ...out.raw.inReview,
       ...out.raw.done,
     ].find((r) => r.session.id === id)!;
+
+  it("sees background work start and stop", () => {
+    const at = (background?: number) =>
+      rowOf(shelves(sessions, { a: { status: "idle", background } }), "a");
+    expect(sameRow(at(), at(1))).toBe(false);
+    expect(sameRow(at(), at(0))).toBe(true);
+  });
 
   it("treats a rebuilt row with the same status as unchanged", () => {
     const before = shelves(sessions, { a: { status: "idle", detail: "x" } });

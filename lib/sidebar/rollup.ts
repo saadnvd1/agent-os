@@ -30,6 +30,7 @@ export function rollups(
     ...shelves.pinned,
     ...shelves.needsYou,
     ...shelves.working,
+    ...shelves.inReview,
     ...shelves.done,
   ]);
   for (const row of rows) {

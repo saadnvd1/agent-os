@@ -40,7 +40,13 @@ export function machineGroups(
       return {
         hostId,
         name,
-        rows: [...s.pinned, ...s.needsYou, ...s.working, ...s.done],
+        rows: [
+          ...s.pinned,
+          ...s.needsYou,
+          ...s.working,
+          ...s.inReview,
+          ...s.done,
+        ],
       };
     })
     .filter((g) => g.rows.length > 0)
