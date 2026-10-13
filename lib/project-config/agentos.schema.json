@@ -132,6 +132,25 @@
       },
       "additionalProperties": false
     },
+    "simulator": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["start"],
+      "additionalProperties": false
+    },
     "database": {
       "type": "object",
       "properties": {

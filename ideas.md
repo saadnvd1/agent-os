@@ -172,3 +172,12 @@
   agree on the minimum node and the install commands, and web-push opt-in.
 
 - Send to background, next: a toolbar button in the terminal view that sends the agent's own background key straight to the pane (send-keys, not the attached client, so tmux's prefix doesn't swallow it; through the host for a linked machine), shown only while the screen says a tool is running; mapping `background_tasks_changed` as a reconcile for a missed task_notification; a push for a background task that fails while the reader is away.
+
+## iOS simulator for tasks (after V1)
+
+- [ ] Task row indicator and a strip of the task's latest simulator screenshots
+- [ ] An MCP server (agent-device's, or an in-process chat tool) if `aos sim` proves clumsy
+- [ ] Settings for the booted cap and idle timeout (env var only for now)
+- [ ] A Release build with the bundle embedded, for checks without Metro
+- [ ] Record a check as a replayable script
+- [ ] Android emulator through the same lease

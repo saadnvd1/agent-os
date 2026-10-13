@@ -71,6 +71,7 @@ import { claimAgentosEnv } from "./lib/agents/self-env";
 import { wslNotes, wslVersion } from "./lib/wsl";
 import { getAllProjects } from "./lib/projects";
 import { isRemoteHost } from "./lib/hosts";
+import { sweepSimulators } from "./lib/simulator";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -369,6 +370,13 @@ app.prepare().then(async () => {
     sweepOrphanTmux().catch((error) =>
       console.error("Sweeping orphaned tmux sessions failed:", error)
     );
+  // Simulators of tasks that ended or crashed, now and every few minutes.
+  const sweepSims = () =>
+    sweepSimulators().catch((error) =>
+      console.error("Sweeping simulators failed:", error)
+    );
+  void sweepSims();
+  setInterval(sweepSims, 5 * 60_000);
   // Chat turns that kept running through a restart.
   void reattachChats();
   // Reviews this restart cut off run again and deliver their verdicts.
