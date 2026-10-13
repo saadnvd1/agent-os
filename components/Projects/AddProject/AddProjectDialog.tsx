@@ -29,8 +29,8 @@ export function AddProjectDialog() {
   const { open } = useSnapshot(addProjectUi);
   const hostNames = useHostNames();
   const done = (projectId: string) => {
-    addProjectActions.close();
-    newDraft({ kind: "project", projectId });
+    if (!addProjectActions.finish(projectId))
+      newDraft({ kind: "project", projectId });
   };
 
   return (

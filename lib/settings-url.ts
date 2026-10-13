@@ -12,6 +12,7 @@ export const SETTINGS_SECTIONS = [
   "notifications",
   "schedules",
   "audits",
+  "setup",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];

@@ -64,7 +64,34 @@ type AuthCheck = (
   env: NodeJS.ProcessEnv
 ) => Promise<AgentAuth> | AgentAuth;
 
+// Claude Code keeps who is signed in under `oauthAccount` in its config, at
+// $CLAUDE_CONFIG_DIR/.claude.json, or ~/.claude.json without that variable.
+function claudeAuth(env: NodeJS.ProcessEnv): AgentAuth {
+  const dir = env.CLAUDE_CONFIG_DIR?.trim();
+  const configDir = dir || home(".claude");
+  const config = dir ? path.join(dir, ".claude.json") : home(".claude.json");
+  if (
+    anyEnv(env, [
+      "ANTHROPIC_API_KEY",
+      "ANTHROPIC_AUTH_TOKEN",
+      "CLAUDE_CODE_OAUTH_TOKEN",
+      "CLAUDE_CODE_USE_BEDROCK",
+      "CLAUDE_CODE_USE_VERTEX",
+    ]) ||
+    hasJsonKeys(path.join(configDir, "settings.json"), "apiKeyHelper")
+  )
+    return "ready";
+  if (hasJsonKeys(config, "oauthAccount")) return "ready";
+  // A config without an account is a CLI that has never signed in; no config
+  // at all tells nothing.
+  return hasJsonKeys(config) ? "needs-login" : "unknown";
+}
+
 const AUTH: Partial<Record<ProviderId, { check: AuthCheck; hint: string }>> = {
+  claude: {
+    check: (_cli, env) => claudeAuth(env),
+    hint: "Run `claude auth login` in a terminal",
+  },
   codex: {
     // Exits 0 signed in, 1 not.
     check: async (cli, env) => {

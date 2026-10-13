@@ -31,6 +31,11 @@ const KEYS = [
   "CEREBRAS_API_KEY",
   "CURSOR_API_KEY",
   "AMP_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+  "CLAUDE_CONFIG_DIR",
 ];
 const saved = { ...process.env };
 let home: string;
@@ -137,6 +142,48 @@ describe("probeAgent", () => {
     });
     write(".gemini/oauth_creds.json", "{}");
     expect(await probeAgent("gemini", "gemini")).toMatchObject({
+      auth: "ready",
+    });
+  });
+
+  it("reads Claude's sign-in from its config, never calling a signed-in user out", async () => {
+    cli("claude");
+    // Never signed in or nothing to read: no verdict, not a sign-in prompt.
+    expect(await probeAgent("claude", "claude")).toMatchObject({
+      installed: true,
+      auth: "unknown",
+    });
+    write(".claude.json", '{"numStartups":3}');
+    expect(await probeAgent("claude", "claude")).toMatchObject({
+      auth: "needs-login",
+      hint: "Run `claude auth login` in a terminal",
+    });
+    write(".claude.json", '{"oauthAccount":{"emailAddress":"x"}}');
+    expect(await probeAgent("claude", "claude")).toMatchObject({
+      auth: "ready",
+    });
+    write(".claude.json", '{"numStartups":3}');
+    process.env.ANTHROPIC_API_KEY = "k";
+    expect(await probeAgent("claude", "claude")).toMatchObject({
+      auth: "ready",
+    });
+    delete process.env.ANTHROPIC_API_KEY;
+    write(".claude/settings.json", '{"apiKeyHelper":"./key.sh"}');
+    expect(await probeAgent("claude", "claude")).toMatchObject({
+      auth: "ready",
+    });
+  });
+
+  it("reads Claude's config from CLAUDE_CONFIG_DIR when it is set", async () => {
+    cli("claude");
+    write(".claude.json", '{"oauthAccount":{"emailAddress":"x"}}');
+    process.env.CLAUDE_CONFIG_DIR = path.join(home, "alt");
+    write("alt/.claude.json", '{"numStartups":1}');
+    expect(await probeAgent("claude", "claude")).toMatchObject({
+      auth: "needs-login",
+    });
+    write("alt/.claude.json", '{"oauthAccount":{}}');
+    expect(await probeAgent("claude", "claude")).toMatchObject({
       auth: "ready",
     });
   });
