@@ -3,6 +3,7 @@ import { workspaceTask } from "./targets";
 import { getWorkspace } from "../workspaces";
 import {
   approveTaskPlan,
+  archive,
   done,
   drop,
   moveTaskTo,
@@ -190,6 +191,8 @@ export async function runTool(
       return stop(w, p(tool, raw).session);
     case "done":
       return done(w, p(tool, raw).session);
+    case "archive":
+      return archive(w, p(tool, raw).session);
     case "add_project": {
       const a = p(tool, raw);
       return addProject(w, a.path, a.name);

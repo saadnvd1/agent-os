@@ -4,7 +4,8 @@
  * gates at the judged head (refused, naming the gate, otherwise); one
  * already merged, or a session with no PR, just cleans up. Cleanup stops
  * the agent, removes the worktree only when nothing in it would be lost,
- * and archives the session. What it will do is decided first (plan.ts).
+ * and marks the session finished so it sits on the Done shelf (archiving is
+ * its own action, archive.ts). What it will do is decided first (plan.ts).
  */
 
 import { db, queries, type Session } from "../db";
@@ -17,6 +18,7 @@ import { judge, mergeJudged } from "../orchestrator/signoff";
 import { isPaused } from "../orchestrator/pause";
 import { plain } from "../orchestrator/overview";
 import { archiveSession } from "./archive";
+import { settleSession } from "../sidebar/shelf-state";
 import { demoMode } from "../security/demo";
 import { planDone } from "./plan";
 import { deleteMergedRemote } from "./remote";
@@ -187,7 +189,7 @@ export async function doneSession(
     await stopAgent(s);
     worktree = await settleWorktree(s, plan.merged);
   }
-  archiveSession(s.id);
+  settleSession(s.id);
   const head = merged ?? `Done: ${s.name}.`;
   const extra = notes.length ? `, ${notes.join(", ")}` : "";
   return {
@@ -195,6 +197,6 @@ export async function doneSession(
     name: s.name,
     merged,
     worktree,
-    text: `${head} Agent stopped, ${worktreeLine(worktree)}${extra}; archived.`,
+    text: `${head} Agent stopped, ${worktreeLine(worktree)}${extra}.`,
   };
 }

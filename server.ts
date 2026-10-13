@@ -14,6 +14,7 @@ import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
 import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
 import { startSettling } from "./lib/recipes";
+import { startAutoArchive } from "./lib/done/auto-archive";
 import { startUsageRollup, usageRollupEnabled } from "./lib/usage/nightly";
 import { resumePhoneOutbox } from "./lib/notify";
 import { resumePushOutbox } from "./lib/notify/push";
@@ -413,6 +414,8 @@ app.prepare().then(async () => {
   // Schedules tick here, once a minute, and nowhere else.
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
   startSettling();
+  // Sessions that sat in Done for 30 days are archived.
+  startAutoArchive();
   resumePhoneOutbox();
   resumePushOutbox();
   // The usage ledger's daily rollup and its ratchet alerts.

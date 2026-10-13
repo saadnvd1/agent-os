@@ -235,6 +235,7 @@ export const TOOL_SHAPES = {
   },
   stop: { session },
   done: { session },
+  archive: { session },
   add_project: {
     path: z
       .string()

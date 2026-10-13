@@ -32,6 +32,7 @@ import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
 import { doneSession } from "../done";
+import { archiveChecked } from "../done/archive";
 import { amendBrief, amendmentsOf } from "./amendments";
 import type { Session } from "../db";
 import { approvePlanNow } from "../models/plan-step";
@@ -291,12 +292,23 @@ export async function drop(
 }
 
 // Finished work: merged through the gates if its PR is open, then
-// stopped, cleaned up and archived (lib/done).
+// stopped and cleaned up, then left on the Done shelf (lib/done).
 export async function done(workspaceId: string, ref: string): Promise<string> {
   const s = findWorkspaceSession(workspaceId, ref);
   const out = await doneSession(s.id, { by: "orchestrator" });
   if (!out.merged) addNote(workspaceId, `Done: ${s.name}.`);
   return out.text;
+}
+
+// Puts a session away, out of the sidebar; nothing else changes.
+export async function archive(
+  workspaceId: string,
+  ref: string
+): Promise<string> {
+  const s = findWorkspaceSession(workspaceId, ref);
+  await archiveChecked(s.id);
+  addNote(workspaceId, `Archived: ${s.name}.`);
+  return `Archived ${s.name}: out of the sidebar, in Archived.`;
 }
 
 // Stops the agent and keeps everything else: a chat's turn is interrupted,

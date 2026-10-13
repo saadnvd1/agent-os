@@ -46,6 +46,12 @@ export function useDoneSession() {
   );
 }
 
+export function useArchiveSession() {
+  return useDoneMutation(async (id: string) =>
+    json(await post(`/api/sessions/${id}/archive`))
+  );
+}
+
 export function useDoneIdle() {
   return useDoneMutation(async (workspaceId: string) =>
     json<BulkResult>(await post("/api/sessions/done-idle", { workspaceId }))
