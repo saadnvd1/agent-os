@@ -19,7 +19,9 @@ export interface Session {
   // A task's own models: "provider/model", or JSON of role to one.
   model_overrides?: string | null;
   // A task's plan step: planning on the planning model, then implementing.
-  plan_phase?: "planning" | "implementing" | null;
+  // 'awaiting': a plan-only task's plan is written; it waits for approval.
+  plan_phase?: "planning" | "awaiting" | "implementing" | null;
+  plan_only?: number | null;
   // The orchestrator session that started this one; null for a person.
   started_by?: string | null;
   // 1 planned, 0 no plan, null not stated; why, in the starter's words.

@@ -102,7 +102,12 @@ export function taskPlan(session: Session): TaskPlan | null {
       return {
         ...base,
         planned: true,
-        status: phase === "planning" ? "writing" : "approved",
+        status:
+          phase === "planning"
+            ? "writing"
+            : phase === "awaiting"
+              ? "ready"
+              : "approved",
         source: "step",
         title: planTitle(body),
         path: text !== null ? PLAN_FILE : null,

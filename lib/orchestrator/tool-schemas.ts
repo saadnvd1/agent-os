@@ -121,6 +121,12 @@ export const TOOL_SHAPES = {
       .describe(
         "Your decision for this job: true to plan first on the planning model, then implement on the implementation model; false to skip the plan and put the steps in the prompt yourself"
       ),
+    plan_only: z
+      .boolean()
+      .optional()
+      .describe(
+        "true: write the plan on the planning model, then stop and wait; implementation starts only when you approve_plan it (drop rejects it). Implies plan true"
+      ),
     plan_reason: z
       .string()
       .trim()
@@ -192,6 +198,18 @@ export const TOOL_SHAPES = {
   },
   stack_status: { id: stackId },
   land: { id: stackId },
+  approve_plan: {
+    task,
+    message: z
+      .string()
+      .trim()
+      .min(1)
+      .max(8000)
+      .optional()
+      .describe(
+        "Amends the plan: recorded on the task's brief as a scope change, so its review judges the PR against it. Only for a change Saad made"
+      ),
+  },
   drop: { task, reason: z.string().trim().min(1).max(2000) },
   move: {
     task,

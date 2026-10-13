@@ -100,6 +100,8 @@ export interface TaskView {
   // plan step (lib/models).
   model?: string;
   planning?: boolean;
+  // A plan-only task's plan is written and waits for approval.
+  planReady?: boolean;
   // What its starter decided about a plan step, and why; null if unstated.
   // Its plan: ready to read or approve, with a title and capped text.
   plan?: TaskPlan | null;
@@ -128,6 +130,8 @@ export async function createTask(opts: {
   plan?: boolean;
   // Why the starter chose to plan or not: shown on the task's card.
   planReason?: string | null;
+  // Stop after the plan and wait for approval (implies plan).
+  planOnly?: boolean;
   // The orchestrator session that started it (null: a person).
   startedBy?: string | null;
   // Started from this LumifyHub card, which the task then moves.
@@ -198,6 +202,8 @@ async function startTask(
   const hostId = opts.hostId ?? project.host_id;
   const view = opts.view ?? DEFAULT_START_VIEW;
   if (isRemoteHost(hostId)) {
+    if (opts.planOnly)
+      throw new Error("A plan-only task runs on this machine for now");
     if (opts.base || opts.cardId)
       throw new Error(
         "Stacked and card tasks run on this machine only for now"
@@ -216,11 +222,18 @@ async function startTask(
 
   if (opts.baseBranch !== undefined && !isBranchName(opts.baseBranch))
     throw new Error(`"${opts.baseBranch}" isn't a branch name`);
+  if (opts.planOnly && opts.plan === false)
+    throw new Error(
+      "planOnly implies plan; it can't be combined with plan false"
+    );
+  if (opts.planOnly && view !== "chat")
+    throw new Error("A plan-only task needs a chat, not a terminal");
   const routing = taskRouting(
     project.workspace_id,
     view,
     opts.model,
-    opts.plan
+    opts.plan,
+    opts.planOnly
   );
   const projectPath = expandHome(project.working_directory);
   const naming = await nameFor(prompt, projectPath, opts.name);
@@ -266,7 +279,7 @@ async function startTask(
   // Everything the launch needs is on the row, so a restart can resume it.
   db.prepare(
     `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ?,
-       model_provider = ?, model_overrides = ?, plan_phase = ?,
+       model_provider = ?, model_overrides = ?, plan_phase = ?, plan_only = ?,
        plan_decided = ?, plan_reason = ?, started_by = ? WHERE id = ?`
   ).run(
     prompt,
@@ -280,7 +293,8 @@ async function startTask(
     routing.first.provider.id === ANTHROPIC ? null : routing.first.provider.id,
     routing.override ? JSON.stringify(routing.override) : null,
     routing.plan ? "planning" : null,
-    opts.plan === undefined ? null : opts.plan ? 1 : 0,
+    routing.planOnly ? 1 : null,
+    routing.planOnly ? 1 : opts.plan === undefined ? null : opts.plan ? 1 : 0,
     opts.planReason?.trim() || null,
     opts.startedBy ?? null,
     id
@@ -356,8 +370,10 @@ export async function taskView(session: Session): Promise<TaskView> {
     sessionStatus !== undefined
       ? await shellOnly(session.tmux_name)
       : false;
+  const planReady = live && session.plan_phase === "awaiting";
+  // A plan waiting for approval isn't a question the agent asked.
   const blocked =
-    live && sessionStatus === "waiting"
+    live && sessionStatus === "waiting" && !planReady
       ? blockedReason(
           chat
             ? saidSinceLastMessage(session.id)
@@ -373,6 +389,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     sessionStatus: agentGone ? "dead" : sessionStatus,
     pr,
     blocked: blocked !== null,
+    planReady,
     settingUp: setup?.status === "running" || setup?.status === "held",
   });
   syncTaskCardInBackground(session, state, pr);
@@ -399,6 +416,7 @@ export async function taskView(session: Session): Promise<TaskView> {
     armed: !!session.merge_armed_at,
     model: sessionModelRef(session),
     planning: session.plan_phase === "planning",
+    planReady,
     plan: taskPlan(session),
     quickOf: session.quick_of ?? null,
     lastActiveAt: session.held_by_device ? lastActiveOf(session) : undefined,
@@ -443,20 +461,23 @@ export function taskRouting(
   workspaceId: string | null,
   view: StartView,
   model: unknown,
-  plan?: boolean
+  plan?: boolean,
+  planOnly?: boolean
 ) {
   const override = parseOverride(model);
   const models = effectiveModels();
   const opts = { workspaceId, override };
   const implement = resolveRole("implement", opts, models);
   const planning = resolveRole("plan", opts, models);
+  // Plan only plans even on one model: the stop is the point, not a switch.
   const planStep =
     view === "chat" &&
-    (plan ?? models.planStep) &&
-    planning.ref !== implement.ref;
+    (!!planOnly ||
+      ((plan ?? models.planStep) && planning.ref !== implement.ref));
   return {
     override,
     plan: planStep,
+    planOnly: planStep && !!planOnly,
     first: planStep ? planning : implement,
   };
 }

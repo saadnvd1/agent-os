@@ -48,6 +48,7 @@ export interface QueueRow {
   // orchestrator session that started it.
   plan: number | null;
   plan_reason: string | null;
+  plan_only: number | null;
   started_by: string | null;
   view: "chat" | "terminal" | null;
   base_branch: string | null;
@@ -222,6 +223,7 @@ export interface QueueRequest {
   model?: ModelOverride;
   plan?: boolean;
   planReason?: string | null;
+  planOnly?: boolean;
   startedBy?: string | null;
   view?: "chat" | "terminal";
   baseBranch?: string;
@@ -277,9 +279,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, started_by, view, base_branch,
+    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, view, base_branch,
        host_id, after_task, after_any, origin_workspace_id, position)
-     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @started_by, @view, @base_branch,
+     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @view, @base_branch,
        @host_id, @after_task, @after_any, @origin,
        (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
   ).run({
@@ -294,6 +296,7 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
         : null,
     plan: req.plan === undefined ? null : req.plan ? 1 : 0,
     plan_reason: req.planReason?.trim() || null,
+    plan_only: req.planOnly ? 1 : null,
     started_by: req.startedBy ?? null,
     view: req.view ?? null,
     base_branch: req.baseBranch || null,
@@ -472,6 +475,7 @@ async function startRow(
       : (r.model ?? undefined),
     plan: r.plan == null ? undefined : !!r.plan,
     planReason: r.plan_reason,
+    planOnly: !!r.plan_only,
     startedBy: r.started_by,
     view: r.view ?? undefined,
     baseBranch: r.base_branch ?? undefined,

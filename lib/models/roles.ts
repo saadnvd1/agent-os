@@ -97,5 +97,7 @@ export function sessionRole(session: {
   // Work an orchestrator started is implementation, not a person's session.
   if (!session.task_status)
     return session.started_by ? "implement" : "interactive";
-  return session.plan_phase === "planning" ? "plan" : "implement";
+  return session.plan_phase === "planning" || session.plan_phase === "awaiting"
+    ? "plan"
+    : "implement";
 }

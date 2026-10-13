@@ -62,7 +62,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   message_orchestrator:
     "Message another workspace's orchestrator, by workspace name; never any other session there. It arrives as its next prompt, marked as from you and fenced as untrusted.",
   start_task:
-    "Start a task: an agent in its own worktree that ends in a PR. It runs as a chat unless view is terminal (only for a job that needs a TUI). With after (a task's id or name, or \"any\"), or over the workspace's running task limit, it's queued and starts by itself; the result says Queued (position N). Its models follow the role settings (planning, implementation, review, scope); give model only when Saad asks for one. Always state plan (true or false) and plan_reason: plan true for a big, unclear or cross-cutting job, false for a small, clear one whose steps you write into the prompt. Refused while a brake holds.",
+    "Start a task: an agent in its own worktree that ends in a PR. It runs as a chat unless view is terminal (only for a job that needs a TUI). With after (a task's id or name, or \"any\"), or over the workspace's running task limit, it's queued and starts by itself; the result says Queued (position N). Its models follow the role settings (planning, implementation, review, scope); give model only when Saad asks for one. Always state plan (true or false) and plan_reason (plan_only true plans, then stops and waits for approve_plan instead of implementing): plan true for a big, unclear or cross-cutting job, false for a small, clear one whose steps you write into the prompt. Refused while a brake holds.",
   set_task_model:
     'Resume a paused task on another model ("provider/model", or a map of role to one), keeping its conversation and worktree; it\'s told to carry on (or message). Refused mid-turn.',
   start_session:
@@ -75,6 +75,8 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Run a LumifyHub board's open cards as stacked tasks (each start braked), or with plan_only just show the plan.",
   stack_status: "One stack's items, PRs and progress.",
   land: "Merge a whole stack bottom-up, each PR through the sign-off gates at its current head.",
+  approve_plan:
+    'Approve the plan of a plan_only task that is waiting ("plan ready"): it continues on the implementation model, once. An optional message amends the plan and is recorded on the task\'s brief as a scope change. Reject a plan with drop.',
   drop: "Reject a task: close its PR and remove its worktree. A task still waiting in the queue is removed by its id. Logged with the reason.",
   move: 'Carry a running task to a linked machine, or back with "here": for heavy test or build work. It keeps its branch, conversation and plan; the gates, events, read, send, stop, done and drop work the same wherever it runs, and the machine it lands on can\'t merge it. Takes a few minutes and runs in the background; an event says when it lands. Refused while paused, for a task waiting on Saad (an escalation or open ask), and for card and stacked tasks.',
   stop: "Stop a session's agent mid-turn, even while it's thinking, keeping its conversation, worktree and branch; your next message runs as its next turn.",

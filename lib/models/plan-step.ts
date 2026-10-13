@@ -19,20 +19,28 @@ import {
 } from "./resolve";
 import { ANTHROPIC } from "./roles";
 import { queueEvent } from "../orchestrator/events";
+import { addNote } from "../orchestrator/notes";
+import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
 
 export const PLAN_FILE = ".agentos/plan.md";
 
-export function planPrompt(task: string): string {
+export function planPrompt(task: string, only = false): string {
+  const after = only
+    ? "it waits for approval before anything is implemented, so don't ask for it"
+    : "the implementation model takes over this conversation next and follows it";
   return `${task}
 
 ---
-Plan first. This turn, only read and plan: write the implementation plan for the task above to \`${PLAN_FILE}\` in this worktree (what to change, file by file; the tests; how you'll verify it; anything ambiguous and the call you'd make). Change no other file, and don't commit, push or open a PR. End the turn once the plan is written: the implementation model takes over this conversation next and follows it.`;
+Plan first. This turn, only read and plan: write the implementation plan for the task above to \`${PLAN_FILE}\` in this worktree (what to change, file by file; the tests; how you'll verify it; anything ambiguous and the call you'd make). Change no other file, and don't commit, push or open a PR. End the turn once the plan is written: ${after}.`;
 }
 
-export function implementPrompt(planned: boolean): string {
-  return planned
+export function implementPrompt(planned: boolean, amendment?: string): string {
+  const base = planned
     ? `The plan is in \`${PLAN_FILE}\`. Implement it now, finishing the task as its instructions above say. Where the plan turns out wrong, do what's right and say so.`
     : `No plan was written to \`${PLAN_FILE}\`. Plan briefly, then implement the task, finishing it as its instructions above say.`;
+  return amendment
+    ? `${base}\n\nThe plan was approved with this change, which is now part of the task's scope:\n${amendment}`
+    : base;
 }
 
 // The worktree's plan folder, kept out of git by its own .gitignore.
@@ -72,7 +80,7 @@ export function planSummary(text: string, max = 5): string[] {
 }
 
 // Tells the orchestrator that started a task its plan is written, once.
-function announcePlan(s: Session, ref: string): void {
+function announcePlan(s: Session, ref: string | null): void {
   if (!s.started_by && !s.held_by_device) return;
   const workspaceId = sessionWorkspace(s);
   // A task held for another machine's orchestrator can't reach it: the line
@@ -80,10 +88,13 @@ function announcePlan(s: Session, ref: string): void {
   if (!s.held_by_device && !workspaceId) return;
   if (!s.worktree_path) return;
   const file = path.join(s.worktree_path, PLAN_FILE);
-  let head = `Task "${s.name}": no plan file was written; implementing on ${ref} anyway.`;
+  const next = ref
+    ? `implementing on ${ref}`
+    : "waiting for approval, not implementing (approve_plan to go ahead, drop to reject)";
+  let head = `Task "${s.name}": no plan file was written; ${next}${ref ? " anyway" : ""}.`;
   try {
     const summary = planSummary(fs.readFileSync(file, "utf8"));
-    head = `Task "${s.name}": plan written to ${file}; implementing on ${ref}.`;
+    head = `Task "${s.name}": plan written to ${file}; ${next}.`;
     if (summary.length) head += `\n${summary.map((l) => `- ${l}`).join("\n")}`;
   } catch {
     // No plan file: the line says so.
@@ -101,13 +112,68 @@ function announcePlan(s: Session, ref: string): void {
 export const implementMessageId = (sessionId: string) =>
   `implement-${sessionId}`;
 
+type Send = (sessionId: string, id: string) => Promise<void>;
+
+function getSession(sessionId: string): Session | undefined {
+  return db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
+    | Session
+    | undefined;
+}
+
+// Planning (or, once approved, awaiting) becomes implementing, once: the
+// phase, the model and the message in one go, so a restart part-way finds
+// either none of them or all, and sends the message on the new model. The
+// message goes under a fixed id, which a restart sends rather than repeats.
+async function startImplementing(
+  s: Session,
+  from: "planning" | "awaiting",
+  send: Send,
+  amendment?: string
+): Promise<string | null> {
+  const sessionId = s.id;
+  const routed = resolveRole("implement", {
+    workspaceId: sessionWorkspace(s),
+    override: taskOverride(s),
+  });
+  const id = implementMessageId(sessionId);
+  const claimed = db.transaction(() => {
+    const changed = db
+      .prepare(
+        `UPDATE sessions SET plan_phase = 'implementing'
+         WHERE id = ? AND plan_phase = ? AND task_status = 'running'`
+      )
+      .run(sessionId, from).changes;
+    if (!changed) return false;
+    setSessionModel(sessionId, routed);
+    enqueue(sessionId, {
+      id,
+      text: implementPrompt(
+        fs.existsSync(path.join(s.worktree_path!, PLAN_FILE)),
+        amendment
+      ),
+      origin: { kind: "decision", label: "Plan step" },
+    });
+    return true;
+  })();
+  if (!claimed) return null;
+  if (from === "planning") {
+    try {
+      announcePlan(s, routed.ref);
+    } catch (e) {
+      console.error("plan-done event failed:", e);
+    }
+  }
+  await applySessionModel(sessionId, s.model_provider ?? ANTHROPIC, routed);
+  await send(sessionId, id);
+  return routed.ref;
+}
+
 // Called when a chat goes idle. A task whose plan turn has ended (it has a
-// recorded plan turn) moves to implementing, once, and the implementation
-// message is queued under a fixed id, which a restart sends rather than
-// repeats.
+// recorded plan turn) moves to implementing, once; a plan-only task instead
+// waits for approval (approvePlan), holding no agent process.
 export async function handoffAfterPlan(
   sessionId: string,
-  send: (sessionId: string, id: string) => Promise<void>
+  send: Send
 ): Promise<boolean> {
   const planned = db
     .prepare(
@@ -115,42 +181,60 @@ export async function handoffAfterPlan(
     )
     .get(sessionId);
   if (!planned) return false;
-  const s = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
-    | Session
-    | undefined;
+  const s = getSession(sessionId);
   if (s?.plan_phase !== "planning" || !s.worktree_path) return false;
-  const routed = resolveRole("implement", {
-    workspaceId: sessionWorkspace(s),
-    override: taskOverride(s),
-  });
-  const id = implementMessageId(sessionId);
-  // The phase, the model and the message in one go: a restart part-way
-  // finds either none of them or all, and sends the message on the new model.
-  const claimed = db.transaction(() => {
-    const changed = db
-      .prepare(
-        `UPDATE sessions SET plan_phase = 'implementing'
-         WHERE id = ? AND plan_phase = 'planning' AND task_status = 'running'`
-      )
-      .run(sessionId).changes;
-    if (!changed) return false;
-    setSessionModel(sessionId, routed);
-    enqueue(sessionId, {
-      id,
-      text: implementPrompt(
-        fs.existsSync(path.join(s.worktree_path!, PLAN_FILE))
-      ),
-      origin: { kind: "decision", label: "Plan step" },
-    });
-    return true;
-  })();
-  if (!claimed) return false;
+  if (!s.plan_only)
+    return (await startImplementing(s, "planning", send)) !== null;
+  const waiting = db
+    .prepare(
+      `UPDATE sessions SET plan_phase = 'awaiting'
+       WHERE id = ? AND plan_phase = 'planning' AND task_status = 'running'`
+    )
+    .run(sessionId).changes;
+  if (!waiting) return false;
   try {
-    announcePlan(s, routed.ref);
+    announcePlan(s, null);
   } catch (e) {
     console.error("plan-done event failed:", e);
   }
-  await applySessionModel(sessionId, s.model_provider ?? ANTHROPIC, routed);
-  await send(sessionId, id);
+  // The worker has nothing left to do: it ends at this turn boundary, and
+  // the next message (an approval, or a revision) starts one that resumes.
+  try {
+    await (await import("../chat/runner")).retireChat(sessionId);
+  } catch (e) {
+    console.error(`Releasing the worker of ${sessionId} failed:`, e);
+  }
   return true;
+}
+
+// approvePlan, sending through the chat runner (imported when needed: it
+// imports this file).
+export async function approvePlanNow(sessionId: string, message?: string) {
+  const { sendQueuedNow } = await import("../chat/runner");
+  return approvePlan(sessionId, message, (id, m) => sendQueuedNow(id, m));
+}
+
+// Approves a waiting plan-only task: implementation starts on the
+// implementation model, once. A message amends the plan and is recorded on
+// the task's brief as a scope change, before implementing, so its review
+// judges against it.
+export async function approvePlan(
+  sessionId: string,
+  message: string | undefined,
+  send: Send
+): Promise<{ ref: string; amendments: number }> {
+  const s = getSession(sessionId);
+  if (!s || s.plan_phase !== "awaiting" || s.task_status !== "running")
+    throw new Error(
+      `${s?.name ?? "That task"} isn't waiting for plan approval`
+    );
+  const text = message?.trim() || undefined;
+  const workspaceId = sessionWorkspace(s);
+  if (text && workspaceId) {
+    amendBrief(workspaceId, s.id, text);
+    addNote(workspaceId, `Plan approved with a change for ${s.name}: ${text}`);
+  }
+  const ref = await startImplementing(s, "awaiting", send, text);
+  if (!ref) throw new Error(`${s.name} isn't waiting for plan approval`);
+  return { ref, amendments: amendmentsOf(s.id).length };
 }

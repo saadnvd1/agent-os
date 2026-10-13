@@ -340,7 +340,11 @@ describe("a new passkey", () => {
 
 describe("agents have no way to approve", () => {
   it("gives the orchestrator no tool to answer an ask or resume", () => {
-    expect(Object.keys(TOOL_NAMES)).not.toEqual(
+    // approve_plan continues a plan-only task the orchestrator started; it
+    // answers no ask and unlocks no gate, so it's the one approve* tool.
+    expect(
+      Object.keys(TOOL_NAMES).filter((n) => n !== "approve_plan")
+    ).not.toEqual(
       expect.arrayContaining([
         expect.stringMatching(/approve|answer|resume|pause/),
       ])

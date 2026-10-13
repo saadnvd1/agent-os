@@ -53,6 +53,26 @@ describe("orchestrator tool schemas", () => {
     ).toBe(true);
   });
 
+  it("takes plan_only as an optional boolean, and approve_plan's message as optional text", () => {
+    const task = z.object(TOOL_SHAPES.start_task);
+    const base = {
+      project: "app",
+      prompt: "do it",
+      plan: true,
+      plan_reason: "touches 6 files",
+    };
+    expect(task.safeParse({ ...base, plan_only: true }).success).toBe(true);
+    expect(task.safeParse(base).success).toBe(true);
+    expect(task.safeParse({ ...base, plan_only: "yes" }).success).toBe(false);
+    const approve = z.object(TOOL_SHAPES.approve_plan);
+    expect(approve.safeParse({ task: "t" }).success).toBe(true);
+    expect(approve.safeParse({ task: "t", message: "add X" }).success).toBe(
+      true
+    );
+    expect(approve.safeParse({ task: "t", message: " " }).success).toBe(false);
+    expect(approve.safeParse({}).success).toBe(false);
+  });
+
   it("takes one ref as a session's model, and nothing else", () => {
     const model = z.object(TOOL_SHAPES.start_session).shape.model;
     expect(model.safeParse(undefined).success).toBe(true);

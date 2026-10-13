@@ -16,7 +16,8 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos history <session>              your conversation with a session
   aos spawn <project> <prompt...>    start a new agent session in a project
   aos task <project> <prompt...>     start a background task that ends in a PR
-                                     (--after <task|any>: queue it until that task finishes)
+                                     (--after <task|any>: queue it until that task finishes;
+                                      --plan-only: stop after the plan and wait for approval)
                                      (--on <machine>: on a linked machine's AgentOS)
                                      (--name "<name>": name it; otherwise it's
                                      named from the prompt)
@@ -105,6 +106,7 @@ function parseSpawnArgs(words) {
   let on;
   let after;
   let terminal = false;
+  let planOnly = false;
   let project;
   let i = 0;
   for (; i < words.length; i++) {
@@ -122,6 +124,7 @@ function parseSpawnArgs(words) {
       if (after === undefined) fail('--after needs a task or "any"');
     } else if (w.startsWith("--after=")) after = w.slice(8);
     else if (w === "--terminal") terminal = true;
+    else if (w === "--plan-only") planOnly = true;
     else if (project === undefined) project = w;
     else break;
   }
@@ -130,6 +133,7 @@ function parseSpawnArgs(words) {
     on: on?.trim() || undefined,
     after: after?.trim() || undefined,
     terminal,
+    planOnly,
     project,
     prompt: words.slice(i),
   };
@@ -342,16 +346,20 @@ async function main() {
         on,
         after,
         terminal,
+        planOnly,
         project,
         prompt: words,
       } = parseSpawnArgs(args);
       if (!project || !words.length)
         fail(
-          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal]" : ""} <prompt...>`
+          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only]" : ""} <prompt...>`
         );
       if (on && cmd !== "task") fail("--on works for tasks only");
       if (after && cmd !== "task") fail("--after works for tasks only");
       if (terminal && cmd !== "task") fail("--terminal works for tasks only");
+      if (planOnly && cmd !== "task") fail("--plan-only works for tasks only");
+      if (planOnly && terminal)
+        fail("--plan-only needs a chat task, not --terminal");
       const { session, queued } = await post("/api/bus/spawn", {
         project,
         prompt: words.join(" "),
@@ -361,6 +369,7 @@ async function main() {
         ...(on && { on }),
         ...(after && { after }),
         ...(terminal && { view: "terminal" }),
+        ...(planOnly && { planOnly: true }),
       });
       if (queued) {
         console.log(

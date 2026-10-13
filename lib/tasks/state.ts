@@ -41,6 +41,8 @@ export type TaskState =
   | "blocked"
   | "review"
   | "checks-failing"
+  // A plan-only task's plan is written; it waits for approval.
+  | "plan-ready"
   | "exited"
   | "merged"
   | "dropped"
@@ -56,11 +58,14 @@ export interface TaskStateInput {
   blocked: boolean;
   // Its worktree is still being set up; the agent hasn't started yet.
   settingUp?: boolean;
+  // plan_phase "awaiting": no agent runs, and none is needed.
+  planReady?: boolean;
 }
 
 // Ordered by what needs the human first.
 export function deriveTaskState(input: TaskStateInput): TaskState {
-  const { taskStatus, sessionStatus, pr, blocked, settingUp } = input;
+  const { taskStatus, sessionStatus, pr, blocked, settingUp, planReady } =
+    input;
   if (taskStatus === "merged" || pr?.state === "MERGED") return "merged";
   if (taskStatus === "dropped") return "dropped";
   if (taskStatus === "done" || taskStatus === "moved") return "done";
@@ -70,6 +75,7 @@ export function deriveTaskState(input: TaskStateInput): TaskState {
   if (pr?.state === "OPEN") {
     return pr.checks === "fail" ? "checks-failing" : "review";
   }
+  if (planReady && sessionStatus !== "running") return "plan-ready";
   if (!sessionStatus || sessionStatus === "dead") return "exited";
   if (sessionStatus === "running") return "working";
   return "needs-input";
