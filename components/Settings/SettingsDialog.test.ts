@@ -28,6 +28,9 @@ const stub = (name: string) =>
 vi.mock("@/components/Merge/GlobalMergeSection", () => ({
   GlobalMergeSection: stub("merging"),
 }));
+vi.mock("./NoApprovalsSection", () => ({
+  NoApprovalsSection: stub("approvals"),
+}));
 vi.mock("@/components/Workspaces", () => ({
   WorkspaceSettings: stub("workspaces"),
 }));

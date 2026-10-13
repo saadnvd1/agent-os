@@ -5,12 +5,18 @@ import { TOOL_NAMES } from "./tool-names";
 import { UNTRUSTED_RULE } from "./untrusted";
 import { brakesEnabled } from "./brakes";
 import { mergeApprovalsOn } from "./merge-approvals";
+import { noApprovalsOn } from "../approvals/no-approvals";
 import { buildDigest } from "./digest";
 
 const BRAKES_ON = `Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets, or can't be read at all. Each card of a stack you start counts as a start of its own; a braked card waits in the stack. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.`;
 
 const BRAKES_OFF = `Starting work has no limits right now: no cap on running sessions or starts, and no usage-window check. Saad's Pause still stops new starts; the start tools say so when it's on.`;
 
+const NO_APPROVALS = `## No approvals mode is ON
+
+Saad turned it on: nothing waits for him. Every \`ask_saad\` is approved the moment you raise it (the event says so), and so are escalated gates and brakes. That is his decision, not a reason to skip care: the hard lines still describe what is risky, so say in your chat what you are about to do before you do it, and keep to the PR's scope.
+
+`;
 const APPROVALS_ON = `Merge approvals are on: anything touching CI config, deploy scripts or secrets handling (and build and hook scripts like package.json, agent config like .claude/, or AgentOS's own security code) goes to Saad the same way, whatever the gates say, as does a diff too big to review whole.`;
 
 const APPROVALS_OFF = `Merge approvals are off: a PR touching CI config, deploy scripts, secrets handling, build and hook scripts, agent config or AgentOS's own security code merges through the gates like any other. Don't park those PRs as asks with \`ask_saad\`; sign them off when the gates pass. A diff too big to review whole is reviewed in parts, each against the task, and the review passes only if every part does; one too big even in parts goes to Saad.`;
@@ -74,7 +80,7 @@ Tasks are woken by AgentOS itself when a check fails on their PR's head (with th
 
 "Not yet" (CI running or settling, no review of this commit yet) is not a failure: wait for the event and try again. A failure counts against the task once per commit, whichever path judges that commit and however often (a review that blocks counts when its verdict arrives); the same gate failing again on a different commit goes to Saad, with a note in your chat, and from then on only he merges or drops that task. Don't retry it; say so in your chat and move on. ${mergeApprovalsOn() ? APPROVALS_ON : APPROVALS_OFF} \`land\` merges a whole stack only if every open item passes the same gates, and judges each one again at its own head right before merging it.
 
-## Brakes
+${noApprovalsOn() ? NO_APPROVALS : ""}## Brakes
 
 ${brakesEnabled() ? BRAKES_ON : BRAKES_OFF}
 

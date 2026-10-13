@@ -5,7 +5,7 @@ import { requireLocalTrust } from "@/lib/security/route-guard";
 import { setConnectEnabled } from "@/lib/connect/config";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import {
-  mergeApprovalsOn,
+  mergeApprovalsSetting,
   setMergeApprovals,
 } from "@/lib/orchestrator/merge-approvals";
 import { APPROVALS_OFF_PRESENCE } from "@/lib/orchestrator/presence-binding";
@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest) {
   };
   // Switching Saad's merge approvals off lets sensitive PRs merge without
   // him, so it needs his passkey: anything on this machine could ask.
-  if (body.mergeApprovals === false && mergeApprovalsOn()) {
+  if (body.mergeApprovals === false && mergeApprovalsSetting()) {
     try {
       await verifyPresence(
         relyingParty(request.headers),

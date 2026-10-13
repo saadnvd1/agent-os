@@ -226,6 +226,8 @@ export type ChatItem =
       // Whether "always allow" is on offer.
       canAlways: boolean;
       status: "pending" | "allowed" | "denied" | "answered" | "expired";
+      // Allowed by No approvals mode, not by the reader.
+      auto?: boolean;
     })
   | (Base & {
       // Work the agent runs alongside the turn: a background shell, a

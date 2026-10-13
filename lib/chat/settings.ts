@@ -3,6 +3,7 @@
  * per-session settings that go with them: the model and the access level.
  */
 
+import { effectiveChatAccess, noApprovalsOn } from "../approvals/no-approvals";
 import os from "os";
 import { db, type Session } from "../db";
 import { agentEnv } from "../agents/launch";
@@ -73,8 +74,8 @@ export function emitCapabilities(session: Session, listener?: Listener): void {
     commands: visibleCommands(caps),
     models: caps.models,
     model: chatModel(session),
-    access: session.chat_access,
-    plan: canPlan(session) ? !!session.chat_plan : null,
+    access: effectiveChatAccess(session.chat_access),
+    plan: canPlan(session) ? !!session.chat_plan && !noApprovalsOn() : null,
     background: chatDriverFor(session.agent_type)?.backgroundTasks === true,
   };
   if (listener) listener(m);
@@ -351,4 +352,18 @@ export async function setChatPlan(
   );
   registry.live.get(sessionId)?.worker.command({ type: "set_plan", plan });
   emitCapabilities(getSession(sessionId));
+}
+
+// No approvals mode was switched: every live worker takes its access and plan
+// settings again, now read through the mode, and waiting tool cards are
+// allowed (or, switched off, the stored choices return).
+export function reapplyChatModes(): void {
+  for (const [id, live] of registry.live) {
+    const session = getSession(id);
+    if (!session) continue;
+    live.worker.command({ type: "set_access", access: session.chat_access });
+    if (live.canPlan)
+      live.worker.command({ type: "set_plan", plan: !!session.chat_plan });
+    emitCapabilities(session);
+  }
 }

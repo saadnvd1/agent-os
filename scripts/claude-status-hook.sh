@@ -82,6 +82,25 @@ EOF
   case "$out" in '{"hookSpecificOutput"'*) printf '%s\n' "$out" ;; esac
 }
 
+# No approvals mode: AgentOS answers a permission request with Claude's own
+# allow decision, and says nothing when the mode is off. Prints the decision
+# and returns 0 only when it was given.
+autoallow() {
+  where="${AGENTOS_URL:-http://127.0.0.1:3011}/api/approvals/hook?session=$AGENTOS_SESSION_ID"
+  auth=
+  [ -z "$AGENTOS_TOKEN" ] ||
+    auth="header = \"Authorization: Bearer $AGENTOS_TOKEN\""
+  out=$(printf '%s' "$input" | curl -s --max-time 2 -K /dev/fd/3 \
+    -H 'Content-Type: application/json' --data-binary @- "$where" 2>/dev/null 3<<EOF
+$auth
+EOF
+)
+  case "$out" in
+    '{"hookSpecificOutput"'*) printf '%s\n' "$out"; return 0 ;;
+  esac
+  return 1
+}
+
 # Commands that take down every session on the machine, the agent's own
 # included. Inside tmux, $TMUX names the real server and wins over
 # TMUX_TMPDIR, so `tmux kill-server` there kills it; only an explicit -S or -L
@@ -126,7 +145,12 @@ case "$event" in
     esac
     ;;
   # Claude asks permission for its own questions too: still a question.
-  PermissionRequest) asking ;;
+  PermissionRequest)
+    case "$(field tool_name)" in
+      AskUserQuestion) asking ;;
+      *) autoallow && report "state=working" || asking ;;
+    esac
+    ;;
   Notification)
     message=$(field message)
     # PermissionRequest already said which tool; older Claude Code versions

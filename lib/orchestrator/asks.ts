@@ -8,6 +8,11 @@
 
 import { pushAskRaised } from "../notify/push/events";
 import { db } from "../db";
+import {
+  AUTO_LABEL,
+  noApprovalsOn,
+  recordAutoApproval,
+} from "../approvals/no-approvals";
 import { answerKey, queueEvent } from "./events";
 import { addNote } from "./notes";
 import { cleanTitle, classifyKind, titleSubject } from "./ask-text";
@@ -210,9 +215,34 @@ export function raiseAsk(input: {
       created: true,
     };
   })();
+  // No approvals mode answers it at once, so nothing waits and the phone
+  // isn't buzzed for it.
+  if (noApprovalsOn()) {
+    const ask = autoApproveAsk(input.workspaceId, result.ask);
+    return { ask, created: result.created };
+  }
   // A new ask buzzes the phone; a refresh of an open one doesn't.
   if (result.created) pushAskRaised(result.ask.id, input.workspaceId);
   return result;
+}
+
+// Approves an open ask on No approvals mode's behalf, bound to the ask as it
+// is now, and records it.
+export function autoApproveAsk(workspaceId: string, ask: AskRow): AskRow {
+  const answered = answerAsk(
+    workspaceId,
+    ask.id,
+    { action: "approve" },
+    askBinding(ask),
+    "no-approvals"
+  );
+  recordAutoApproval({
+    source: "ask",
+    workspaceId,
+    subject: `${ask.kind} ask "${ask.title}"`,
+    detail: ask.sha ? `at ${short(ask.sha)}` : undefined,
+  });
+  return answered;
 }
 
 export function openAsks(workspaceId: string): AskRow[] {
@@ -247,10 +277,14 @@ function approvalScope(ask: AskRow): string {
   return "";
 }
 
-export function answerLine(ask: AskRow, answer: AskAnswer): string {
+export function answerLine(
+  ask: AskRow,
+  answer: AskAnswer,
+  by: "saad" | "no-approvals" = "saad"
+): string {
   const head = `ask "${ask.title}"`;
   if (answer.action === "approve")
-    return `${head}: approved${approvalScope(ask)}`;
+    return `${head}: approved${approvalScope(ask)}${by === "no-approvals" ? ` (${AUTO_LABEL})` : ""}`;
   if (answer.action === "decline") return `${head}: declined`;
   return `${head}: reply: ${answer.text}`;
 }
@@ -269,7 +303,8 @@ export function answerAsk(
   workspaceId: string,
   id: number,
   answer: AskAnswer,
-  binding?: string
+  binding?: string,
+  by: "saad" | "no-approvals" = "saad"
 ): AskRow {
   const ask = getAsk(workspaceId, id);
   if (!ask) throw new Error("No such ask");
@@ -286,7 +321,8 @@ export function answerAsk(
   if (answer.action === "reply" && !text) throw new Error("The reply is empty");
   const line = answerLine(
     ask,
-    answer.action === "reply" ? { action: "reply", text } : answer
+    answer.action === "reply" ? { action: "reply", text } : answer,
+    by
   );
   db.transaction(() => {
     db.prepare(
@@ -295,7 +331,8 @@ export function answerAsk(
     if (ask.kind === "passkey") settlePasskeyAsk(ask, answer.action);
     else queueEvent(workspaceId, answerKey(id), null, line);
   })();
-  addNote(workspaceId, `Saad answered ${line}`, "ask");
+  // An auto-approval is noted once, by recordAutoApproval.
+  if (by === "saad") addNote(workspaceId, `Saad answered ${line}`, "ask");
   return getAsk(workspaceId, id)!;
 }
 

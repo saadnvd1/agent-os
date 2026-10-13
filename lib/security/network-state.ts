@@ -2,7 +2,7 @@ import { tailscaleStatus, type TailscaleState } from "@/lib/tailscale";
 import { networkSetting, networkSettingLocked } from "./network-settings";
 import { reachableAt, type Reach } from "./reach";
 import { connectStatus, type ConnectStatus } from "@/lib/connect/serve";
-import { mergeApprovalsOn } from "@/lib/orchestrator/merge-approvals";
+import { mergeApprovalsSetting } from "@/lib/orchestrator/merge-approvals";
 
 export interface NetworkState {
   lan: { on: boolean; locked: boolean };
@@ -24,7 +24,7 @@ export async function networkState(): Promise<NetworkState> {
     tailscale: await tailscaleStatus(),
     reach: await reachableAt(),
     connect: connectStatus(),
-    mergeApprovals: { on: mergeApprovalsOn(), locked: false },
+    mergeApprovals: { on: mergeApprovalsSetting(), locked: false },
   };
 }
 

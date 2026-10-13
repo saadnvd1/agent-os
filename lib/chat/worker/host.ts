@@ -55,6 +55,11 @@ import { compactContext } from "../compact-context";
 import { COMPACT_BRIEF, COMPACT_INSTRUCTIONS } from "../working-state";
 import { compactionDue, staleLabel, type Staleness } from "../stale";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
+import {
+  effectiveChatAccess,
+  noApprovalsOn,
+  recordAutoApproval,
+} from "../../approvals/no-approvals";
 
 // How soon after a stopped turn ends a turn the agent starts on its own
 // still counts as part of the stop: the agent starts what it queued the
@@ -131,6 +136,10 @@ export class ChatHost {
   private restTimer?: NodeJS.Timeout;
   // Background tasks seen running: one that ends is a notice the agent runs.
   private runningTasks = new Set<string>();
+  // Tool-permission cards waiting on the reader (questions are not: they
+  // need words), and the ones No approvals mode allowed.
+  private waitingCards = new Map<string, string>();
+  private autoAllowed = new Set<string>();
   // Whether its driver says when that is (lib/chat/driver atRest).
   private atRest = true;
   private restartedNote = false;
@@ -210,8 +219,9 @@ export class ChatHost {
         session.model?.trim() || resolveModelForAgent(session.agent_type, null),
       resumeId: session.claude_session_id,
       resumeAt: session.chat_resume_at,
-      access: session.chat_access ?? "full",
-      plan: !!session.chat_plan,
+      access: effectiveChatAccess(session.chat_access ?? "full"),
+      // A plan waits for a person to carry it out, so it isn't entered.
+      plan: !!session.chat_plan && !noApprovalsOn(),
       systemAppend: [
         extras.systemAppend,
         sessionRunningBrief(session.id),
@@ -273,6 +283,33 @@ export class ChatHost {
     this.done = this.pump();
   }
 
+  // No approvals mode: a tool-permission card is allowed as it appears, and
+  // marks itself so the transcript shows who allowed it.
+  private markAuto(item: ChatItem): ChatItem {
+    if (item.kind !== "approval" || item.questions) return item;
+    if (item.status === "pending") {
+      this.waitingCards.set(item.id, item.title);
+      return item;
+    }
+    this.waitingCards.delete(item.id);
+    if (!this.autoAllowed.delete(item.id)) return item;
+    return { ...item, auto: true };
+  }
+
+  private allowWaiting(): void {
+    if (!noApprovalsOn()) return;
+    for (const [id, title] of [...this.waitingCards]) {
+      this.waitingCards.delete(id);
+      this.autoAllowed.add(id);
+      recordAutoApproval({
+        source: "chat",
+        sessionId: this.session.id,
+        subject: title,
+      });
+      this.conversation.respond(id, { decision: "allow" });
+    }
+  }
+
   private record(item: ChatItem): void {
     // Streaming updates are written in batches; anything else right away.
     queueItem(this.session.id, item, {
@@ -325,7 +362,9 @@ export class ChatHost {
           if ("streaming" in e.item && e.item.streaming)
             this.streaming.set(e.item.id, e.item);
           else this.streaming.delete(e.item.id);
+          e.item = this.markAuto(e.item);
           this.record(e.item);
+          if (e.item.kind === "approval") this.allowWaiting();
           if (e.item.kind === "task" && !e.item.ambient) {
             if (e.item.status === "running")
               this.runningTasks.add(e.item.taskId);
@@ -705,9 +744,15 @@ export class ChatHost {
       case "set_model":
         return this.conversation.setModel(cmd.model);
       case "set_access":
-        return (this.modeChange = this.conversation.setAccess(cmd.access));
+        this.modeChange = this.conversation.setAccess(
+          effectiveChatAccess(cmd.access)
+        );
+        this.allowWaiting();
+        return this.modeChange;
       case "set_plan":
-        return (this.modeChange = this.conversation.setPlan(cmd.plan));
+        return (this.modeChange = this.conversation.setPlan(
+          cmd.plan && !noApprovalsOn()
+        ));
       case "respond":
         return this.conversation.respond(cmd.id, cmd);
       case "stop_task":

@@ -59,6 +59,8 @@ import { useMoveCommands } from "@/components/Tasks/useMoveCommands";
 import dynamic from "next/dynamic";
 import { chatMetaActions } from "@/stores/chatMeta";
 import { useDemoMode } from "@/data/demo";
+import { useQueryClient } from "@tanstack/react-query";
+import { approvalsModeQuery } from "@/data/approvals";
 
 // The app's dialogs open from their stores, so none is needed for the first
 // paint: their code loads right after it.
@@ -159,6 +161,7 @@ function HomeContent() {
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const { isMobile, isHydrated } = useViewport();
   const demo = useDemoMode();
+  const queryClient = useQueryClient();
 
   // Data hooks
   const {
@@ -288,10 +291,16 @@ function HomeContent() {
         clearPendingPrompt(session.id);
       }
 
+      // No approvals mode launches every agent with its permission prompts
+      // off; a failed read launches as the session was set.
+      const noApprovals = await queryClient
+        .fetchQuery(approvalsModeQuery)
+        .then((m) => m.on)
+        .catch(() => false);
       const flags = provider.buildFlags({
         sessionId: session.claude_session_id,
         parentSessionId,
-        autoApprove: session.auto_approve,
+        autoApprove: session.auto_approve || noApprovals,
         model: session.model,
         initialPrompt: initialPrompt || undefined,
       });
@@ -313,7 +322,7 @@ function HomeContent() {
 
       return { sessionName, cwd, command, hostId, sessionId };
     },
-    [sessions, getInitScriptCommand]
+    [sessions, getInitScriptCommand, queryClient]
   );
 
   // Attach a session to a terminal

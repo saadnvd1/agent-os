@@ -314,3 +314,35 @@ reset` yourself in a terminal on the machine: it refuses inside an
   or was escalated, and what waits on you (an explicit "none"). It opens on
   whichever device is open until you dismiss it, a short summary goes to
   your phone, and the report stays in Settings → Audits (`away/`).
+
+## No approvals mode
+
+One app-wide switch in Settings → No approvals, off by default. Turning it on
+shows what it disables and needs a passkey; turning it off doesn't. While it is
+on, an amber "No approvals" pill shows in the sidebar header.
+
+- **Asks** are approved the moment they're raised, hard lines included. The
+  orchestrator's event says the approval was made by the mode. Asks open when
+  it's switched on are approved too. A subject Saad already declined stays
+  declined for its 6 hours.
+- **Gates.** An escalated gate is approved like any ask, so the next
+  `sign_off` merges that commit once. CI still has to be green, and a code
+  review refusal still stops it. Merge approvals for sensitive or large PRs
+  read as off, so those PRs go through the gates, review included.
+- **Brakes** let the start through with no ask. Pause is Saad's own stop and
+  still holds.
+- **Plan-only tasks** go on to implement when their plan is done, and one
+  already waiting is approved. Chat plan mode isn't entered.
+- **Agents** run with permission prompts off: chats at full access whatever
+  their picker says, terminals launched with the agent's skip flag, and tool
+  cards already waiting are allowed. A terminal Claude already running is
+  answered through its status hook. A running terminal of another agent keeps
+  asking until it restarts. Questions are never answered for you.
+- **Left as they are.** The orchestrator and the reviewer keep their
+  restricted `dontAsk` tool lists (they never prompt, and the lists are their
+  sandbox), device "Can approve" (who may act, not a wait) and Pause.
+
+Every approval the mode makes is a row in `approval_audit` (newest 20 under the
+switch in Settings) and, when it belongs to a workspace, a note in that
+orchestrator's chat. The helper is `lib/approvals/no-approvals.ts`; every point
+that honours the mode reads it there.

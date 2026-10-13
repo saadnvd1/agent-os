@@ -36,7 +36,11 @@ import { latestApproval, refundApproval, spendApproval } from "./ask-approvals";
 import { workSubject } from "./asks";
 import { carryApproval } from "./approval-carry";
 import { heldVerdict } from "./held";
-import { mergeApprovalsOn } from "./merge-approvals";
+import { mergeApprovalsOn, mergeApprovalsSetting } from "./merge-approvals";
+import {
+  noApprovalsOn,
+  recordAutoApprovalOnce,
+} from "../approvals/no-approvals";
 import { isPaused } from "./pause";
 import { commitTime, fetchRefs, repoOf } from "./repo";
 import { repoHasCI } from "./repo-ci";
@@ -214,6 +218,16 @@ export async function gateVerdict(
   const base = await fetchRefs(repo, work.refs);
   const files = await changedFiles(repo, base, sha);
   const sensitive = mergeApprovalsOn() ? sensitiveFiles(files) : [];
+  if (mergeApprovalsSetting() && noApprovalsOn()) {
+    const held = sensitiveFiles(files);
+    if (held.length)
+      recordAutoApprovalOnce({
+        source: "merge-approval",
+        workspaceId,
+        subject: `PR #${pr.number} at ${short(sha)} goes through the gates`,
+        detail: `touches ${held.map((s) => s.path).join(", ")}`,
+      });
+  }
   if (sensitive.length) {
     const what = sensitive.map((s) => `${s.path} (${s.why})`).join(", ");
     const why = `PR #${pr.number} at ${short(sha)} touches ${what}`;

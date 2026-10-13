@@ -13,6 +13,7 @@ import {
   GitMerge,
   LayoutGrid,
   ListChecks,
+  ShieldOff,
   Smartphone,
   X,
   type LucideIcon,
@@ -38,6 +39,7 @@ import { schedulesUiActions } from "@/stores/schedulesUi";
 import { RecipesPanel } from "@/components/Recipes";
 import { settingsUi, settingsUiActions } from "@/stores/settingsUi";
 import { SetupSection } from "./SetupSection";
+import { NoApprovalsSection } from "./NoApprovalsSection";
 import {
   NotificationsSection,
   type BrowserNotifications,
@@ -51,6 +53,11 @@ export const SECTION_INFO: Record<
     label: "Merging",
     hint: "Approval, merge method, branch clean-up",
     icon: GitMerge,
+  },
+  approvals: {
+    label: "No approvals",
+    hint: "Switch off every approval and permission prompt",
+    icon: ShieldOff,
   },
   workspaces: {
     label: "Workspaces",
@@ -104,6 +111,8 @@ function SectionBody({
   switch (section) {
     case "merging":
       return <GlobalMergeSection />;
+    case "approvals":
+      return <NoApprovalsSection />;
     case "workspaces":
       return <WorkspaceSettings />;
     case "models":

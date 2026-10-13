@@ -48,12 +48,16 @@ const registerOptionsRoute =
 const networkRoute = await import("@/app/api/devices/network/route");
 const { mergeApprovalsOn, setMergeApprovals } =
   await import("./merge-approvals");
+const approvalsRoute = await import("@/app/api/approvals/route");
+const { noApprovalsOn, setNoApprovals } =
+  await import("@/lib/approvals/no-approvals");
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-approve-"));
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {
+  setNoApprovals(false);
   db.exec(`DELETE FROM passkeys; DELETE FROM presence_challenges;
     DELETE FROM settings WHERE key = 'passkeys_bootstrapped_at';`);
 });
@@ -354,5 +358,53 @@ describe("agents have no way to approve", () => {
   it("has no aos command that reaches the ask, pause or passkey routes", () => {
     const aos = fs.readFileSync(path.join(process.cwd(), "bin/aos"), "utf8");
     expect(aos).not.toMatch(/orchestrator\/(asks|pause)|\/api\/presence/);
+  });
+});
+
+describe("No approvals mode", () => {
+  const put = (body: object, who: Who = LOOPBACK) =>
+    approvalsRoute.PUT(request("/api/approvals", body, who, "PUT"));
+
+  it("is off by default, and turning it on needs a passkey", async () => {
+    setup();
+    const key = softAuthenticator();
+    key.register();
+    expect(noApprovalsOn()).toBe(false);
+    expect((await put({ on: true })).status).toBe(403);
+    expect(noApprovalsOn()).toBe(false);
+    const assertion = await proof(key, { purpose: "no-approvals-on" });
+    const res = await put({ on: true, assertion });
+    expect(res.status).toBe(200);
+    expect(noApprovalsOn()).toBe(true);
+    const body = (await res.json()) as { on: boolean; audit: unknown[] };
+    expect(body.on).toBe(true);
+    expect(body.audit.length).toBeGreaterThan(0);
+  });
+
+  it("turns off without a passkey, from a place that may approve", async () => {
+    setup();
+    setNoApprovals(true);
+    const device = mintDevice("phone").device.id;
+    // A device without Can approve can't.
+    expect((await put({ on: false }, { via: "device", device })).status).toBe(
+      403
+    );
+    expect(noApprovalsOn()).toBe(true);
+    expect((await put({ on: false })).status).toBe(200);
+    expect(noApprovalsOn()).toBe(false);
+  });
+
+  it("can't be turned on from a paired device off the tailnet", async () => {
+    setup();
+    const device = mintDevice("phone").device.id;
+    setDeviceCanApprove(device, true);
+    expect((await put({ on: true }, { via: "device", device })).status).toBe(
+      403
+    );
+    expect(noApprovalsOn()).toBe(false);
+  });
+
+  it("rejects a body that isn't on or off", async () => {
+    expect((await put({ on: "yes" })).status).toBe(400);
   });
 });

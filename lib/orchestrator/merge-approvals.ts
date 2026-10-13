@@ -8,6 +8,7 @@
 
 import { db } from "../db";
 import { markAllStatusDirty } from "../status/dirty";
+import { noApprovalsOn } from "../approvals/no-approvals";
 
 const KEY = "orchestrator.merge_approvals";
 
@@ -15,11 +16,19 @@ const KEY = "orchestrator.merge_approvals";
 // no CI, goes to Saad either way.
 export const APPROVAL_GATES: readonly string[] = ["sensitive", "size"];
 
-export function mergeApprovalsOn(): boolean {
+// The switch as Saad set it, whatever No approvals mode is doing.
+export function mergeApprovalsSetting(): boolean {
   const row = db
     .prepare(`SELECT value FROM settings WHERE key = ?`)
     .get(KEY) as { value: string } | undefined;
   return row?.value === "1";
+}
+
+// What the gates act on. No approvals mode reads it as off, so sensitive and
+// large PRs go through the gates, review included, rather than waiting for
+// a person (or being waved through unreviewed by an auto-approval).
+export function mergeApprovalsOn(): boolean {
+  return mergeApprovalsSetting() && !noApprovalsOn();
 }
 
 export function setMergeApprovals(on: boolean): void {
