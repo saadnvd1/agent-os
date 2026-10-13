@@ -13,6 +13,9 @@ import { listRules } from "./rules";
 import { shortId } from "./describe";
 import { untrusted } from "./untrusted";
 import { awayDigestLine } from "../away/brief";
+import { formatRunTime } from "../schedules/cron";
+import { listRecipes, listRuns, getTimer } from "../recipes";
+import { outputsText } from "../recipes/result";
 
 // About four characters a token: close enough to cap a prompt.
 export const CHARS_PER_TOKEN = 4;
@@ -238,11 +241,32 @@ function queueSection(workspaceId: string): Section {
   };
 }
 
+function recipesSection(workspaceId: string): Section {
+  const recipes = listRecipes(workspaceId);
+  return {
+    title: "Recipes",
+    lines: recipes.map((r) => {
+      const [last] = listRuns(r.id, { limit: 1 });
+      const timer = getTimer(r.id);
+      const facts = last ? outputsText(last.outputs) : "";
+      const lastText = last
+        ? `last #${last.seq} ${last.status}${facts ? ` ${untrusted(r.name, facts)}` : ""}`
+        : "never run";
+      const next =
+        timer?.enabled && timer.nextRunAt
+          ? `, next ${formatRunTime(timer.nextRunAt, timer.timezone)}`
+          : "";
+      return `- "${clip(r.name, 60)}" (${r.kind}; ${lastText}${next}): ${clip(r.brief, 120)}`;
+    }),
+    more: "the recipes tool",
+  };
+}
+
 function schedulesSection(workspaceId: string): Section {
   const rows = db
     .prepare(
       `SELECT name, cron, timezone, prompt, enabled FROM schedules
-       WHERE workspace_id = ? AND archived_at IS NULL ORDER BY created_at, id`
+       WHERE workspace_id = ? AND archived_at IS NULL AND kind != 'recipe' ORDER BY created_at, id`
     )
     .all(workspaceId) as {
     name: string;
@@ -331,6 +355,7 @@ export function buildDigest(
       rulesSection(workspaceId),
       asksSection(workspaceId),
       tasksSection(workspaceId, checks, failures),
+      recipesSection(workspaceId),
       externalSection(workspaceId, checks, failures),
       queueSection(workspaceId),
       schedulesSection(workspaceId),

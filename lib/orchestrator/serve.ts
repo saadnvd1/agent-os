@@ -32,6 +32,12 @@ import { land } from "./signoff";
 import { arm, disarm } from "./armed";
 import { quickChange, quickPR } from "./quick";
 import { review } from "./review";
+import {
+  recipesText,
+  runRecipe,
+  saveRecipe,
+  updateRecipeTool,
+} from "./recipe-tools";
 import { cancelReminder, listReminders, remindMe } from "./reminders";
 import { parseArgs as p, type ToolName } from "./tool-schemas";
 
@@ -44,6 +50,9 @@ const ACTING = new Set<ToolName>([
   "start_task",
   "set_task_model",
   "start_session",
+  "run_recipe",
+  "recipe_save",
+  "recipe_update",
   "quick_change",
   "quick_pr",
   "stack",
@@ -196,6 +205,16 @@ export async function runTool(
       const a = p(tool, raw);
       return remindMe(w, a.at, a.prompt, a.name);
     }
+    case "recipes":
+      return recipesText(w, p(tool, raw).name);
+    case "run_recipe": {
+      const a = p(tool, raw);
+      return runRecipe(w, a.name, a.note);
+    }
+    case "recipe_save":
+      return saveRecipe(w, p(tool, raw));
+    case "recipe_update":
+      return updateRecipeTool(w, p(tool, raw));
     case "reminders":
       return listReminders(w);
     case "cancel_reminder":

@@ -27,7 +27,8 @@ const sends: {
   compact?: string;
   settle: (ok: boolean) => void;
 }[] = [];
-vi.mock("../chat/runner", () => ({
+vi.mock("../chat/runner", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../chat/runner")>()),
   // As after a restart: known only by asking the worker.
   chatStateNow: async (id: string) => chatStates.get(id) ?? null,
   sendChatConfirmed: (

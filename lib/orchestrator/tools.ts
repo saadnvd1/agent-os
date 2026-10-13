@@ -90,6 +90,14 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Remove a standing rule you kept, by its id, only when Saad says so or it no longer applies (the PR it names merged or closed). Saad's rules are his to remove.",
   remind_me:
     "Set a one-off reminder for yourself in this workspace: at the time given it reaches you once as a scheduled prompt (not an approval), even if AgentOS was off then. At least 10 minutes ahead; a few at a time at most.",
+  recipes:
+    "This workspace's recipes: saved briefs for jobs that come up again (a TestFlight build, an audit, a report), each with its last run and next timer. With a name, one recipe in full: its brief and recent runs.",
+  run_recipe:
+    "Run a recipe now: a fresh task or session starts from its saved brief, plus the last run's reported facts and an optional one-off note. Braked, queued and gated like start_task and start_session. A recipe is never an approval. One run at a time; while it is going this says so. You get an event when it finishes.",
+  recipe_save:
+    "Save a recipe when a job comes up a second time. A short brief (the steps belong in a script in the repo), a kind (task: ends in a PR; session: no PR) and a project. It sets no timer: Saad does.",
+  recipe_update:
+    "Change a recipe's brief or settings (never its timer). Earlier versions are kept and Saad sees the change.",
   reminders:
     "List this workspace's upcoming reminders and the last few that ran.",
   cancel_reminder:

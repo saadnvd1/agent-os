@@ -10,6 +10,7 @@ import { doneSession } from "../done";
 import { blockedReason } from "../tasks/state";
 import { runClaude, type ClaudeRunner } from "../orchestrator/claude-cli";
 import { queueEvent } from "../orchestrator/events";
+import { untrusted } from "../orchestrator/untrusted";
 import {
   cleanOutputs,
   cleanSummary,
@@ -170,7 +171,8 @@ function finish(
       run.id
     ).changes;
   idleSince.delete(run.id);
-  if (changed) tell(run, status, summary, result);
+  if (changed)
+    tell(run, status, summary, result, session?.pr_number ?? run.pr_number);
   return changed === 1;
 }
 
@@ -180,20 +182,19 @@ function tell(
   run: Live,
   status: RunStatus,
   summary: string,
-  result: RunResult | null
+  result: RunResult | null,
+  pr_number: number | null
 ) {
   const bad = status !== "succeeded";
   if (!bad && run.trigger !== "tool") return;
   const facts = outputsText(result?.outputs ?? null);
-  const pr = run.pr_number ? ` PR #${run.pr_number}.` : "";
+  const reported = [facts, summary].filter(Boolean).join(". ");
+  const pr = pr_number ? ` PR #${pr_number}.` : "";
   queueEvent(
     run.recipe.workspace_id,
     `recipe:${run.id}:${status}`,
     run.recipe.name,
-    `Recipe "${run.recipe.name}" run #${run.seq} ${bad ? status.replace("_", " ") : "finished ok"}${facts ? `: ${facts}` : ""}${summary ? `. ${summary}` : ""}.${pr} (recipes shows the history.)`.replace(
-      /\.\.+/g,
-      "."
-    )
+    `Recipe "${run.recipe.name}" run #${run.seq} ${bad ? status.replace("_", " ") : "finished ok"}${reported ? `: ${untrusted(run.recipe.name, reported)}` : "."}${pr}`
   );
 }
 
