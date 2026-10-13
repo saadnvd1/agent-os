@@ -148,6 +148,7 @@ export function recordConditions(
     db.prepare(
       `DELETE FROM orchestrator_events WHERE workspace_id = ? AND (
          (subject IS NOT NULL
+           AND NOT (key LIKE '${ONCE}%' AND delivered_at IS NULL)
            AND subject NOT IN (SELECT id FROM sessions)
            AND subject NOT IN (SELECT id FROM stack_items)
            AND subject NOT IN (SELECT id FROM stacks))
