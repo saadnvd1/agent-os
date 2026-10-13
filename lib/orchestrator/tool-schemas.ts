@@ -210,6 +210,17 @@ export const TOOL_SHAPES = {
         "Amends the plan: recorded on the task's brief as a scope change, so its review judges the PR against it. Only for a change Saad made"
       ),
   },
+  plan_pieces: {
+    task,
+    merge: z
+      .array(z.number().int().min(2).max(6))
+      .optional()
+      .describe("Waiting pieces to fold into the piece before them"),
+    drop: z
+      .array(z.number().int().min(2).max(6))
+      .optional()
+      .describe("Waiting pieces to leave out; pieces after them are held"),
+  },
   drop: { task, reason: z.string().trim().min(1).max(2000) },
   move: {
     task,
@@ -274,6 +285,49 @@ export const TOOL_SHAPES = {
       .max(2000)
       .describe("What to remind yourself of, in words you'll understand later"),
     name: z.string().trim().min(1).max(80).optional(),
+  },
+  recipes: {
+    name: ref("A recipe's name or id; leave out to list them all").optional(),
+  },
+  run_recipe: {
+    name: ref("The recipe's name or id, from recipes"),
+    note: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe(
+        'A one-off line for this run only ("Includes #87"); the brief stays as saved'
+      ),
+  },
+  recipe_save: {
+    name: z.string().trim().min(1).max(80).describe("2-6 words, no quotes"),
+    project,
+    kind: z
+      .enum(["task", "session"])
+      .describe(
+        "task ends in a PR through the gates; session changes no code and has no PR"
+      ),
+    brief: z
+      .string()
+      .trim()
+      .min(1)
+      .max(4000)
+      .describe(
+        "Short: what to run and how to judge it. The steps belong in a script in the repo"
+      ),
+    model: modelRef.optional(),
+    view,
+  },
+  recipe_update: {
+    name: ref("The recipe's name or id"),
+    brief: z.string().trim().min(1).max(4000).optional(),
+    new_name: z.string().trim().min(1).max(80).optional(),
+    model: modelRef.optional(),
+    view,
+    auto_done: z.boolean().optional(),
+    max_minutes: z.number().int().min(1).max(1440).optional(),
   },
   reminders: {},
   cancel_reminder: { id: ref("The reminder's id, from reminders") },

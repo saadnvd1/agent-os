@@ -34,6 +34,13 @@ export const TABLES_WATCHED_78 = [
   "needs_you_dismissed",
 ] as const;
 
+export const TABLES_WATCHED_80 = [
+  "recipes",
+  "recipe_runs",
+  "features",
+  "feature_pieces",
+] as const;
+
 // Every table any migration watches, for the browser's topic map to cover.
 export const WATCHED_TABLES: readonly string[] = [
   ...TABLES_WATCHED_45,
@@ -41,6 +48,7 @@ export const WATCHED_TABLES: readonly string[] = [
   ...TABLES_WATCHED_56,
   ...TABLES_WATCHED_58,
   ...TABLES_WATCHED_78,
+  ...TABLES_WATCHED_80,
 ];
 
 export function installChangeTriggers(

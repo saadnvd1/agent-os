@@ -17,6 +17,8 @@ import { notifyStatusChanged } from "../status/hub";
 import { formatRunTime } from "./cron";
 import { Braked, fromLabel, type RunDeps, type Started } from "./run";
 import { braked, BrakeRefused } from "../orchestrator/brakes";
+import { startRun } from "../recipes/run";
+import { hasLiveRun } from "../recipes/store";
 import { startedSessions, type Schedule, type ScheduleRun } from "./store";
 
 function projectOf(schedule: Schedule) {
@@ -220,6 +222,8 @@ export async function stillRunning(
       return schedule.target_session_id
         ? sessionBusy(schedule.target_session_id)
         : false;
+    case "recipe":
+      return schedule.recipe_id ? hasLiveRun(schedule.recipe_id) : false;
     case "orchestrator": {
       // A message: done once it's delivered. An agent's check-in, like one
       // to any session, waits while the orchestrator is still working.
@@ -279,17 +283,37 @@ async function throughBrakes(
   }
 }
 
+// A recipe's timer starts a run; the recipe's own checks (one live run,
+// brakes) decide the rest.
+async function startRecipe(
+  schedule: Schedule,
+  onSession: OnSession,
+  trigger: "timer" | "catch-up"
+): Promise<string> {
+  if (!schedule.recipe_id) throw new Error("Its recipe is gone");
+  try {
+    const { run } = await startRun(schedule.recipe_id, { trigger });
+    if (run.session_id) onSession(run.session_id);
+    return run.session_id ?? "";
+  } catch (error) {
+    if (error instanceof BrakeRefused) throw new Braked(error.reason);
+    throw error;
+  }
+}
+
 export const realDeps: RunDeps = {
   start: (schedule, onSession) =>
-    schedule.kind === "task"
-      ? throughBrakes(schedule, "task", () => startTask(schedule, onSession))
-      : schedule.kind === "session"
-        ? throughBrakes(schedule, "session", () =>
-            startSession(schedule, onSession)
-          )
-        : schedule.kind === "message"
-          ? messageSession(schedule, onSession)
-          : postToOrchestrator(schedule, onSession),
+    schedule.kind === "recipe"
+      ? startRecipe(schedule, onSession, "timer")
+      : schedule.kind === "task"
+        ? throughBrakes(schedule, "task", () => startTask(schedule, onSession))
+        : schedule.kind === "session"
+          ? throughBrakes(schedule, "session", () =>
+              startSession(schedule, onSession)
+            )
+          : schedule.kind === "message"
+            ? messageSession(schedule, onSession)
+            : postToOrchestrator(schedule, onSession),
   stillRunning,
   notify,
 };

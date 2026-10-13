@@ -99,6 +99,11 @@ conversation in **Messages** and can join in. [More](#agent-network)
   section in the agent's brief. [More](#project-config-agentosjson)
 - **Schedules.** Start tasks, chats or orchestrator prompts on a timer, or
   check in on a session, with run history. [More](#schedules)
+- **Recipes.** Save a job that comes up again (a build, an audit, a report);
+  each run is a fresh task or session that is told what the last run
+  reported. [More](#recipes)
+- **Plans in pieces.** A plan splits into several PRs only for a real reason,
+  checked by AgentOS; later pieces start by themselves. [More](#plans-in-pieces)
 - **Stacks.** Run a board's cards as stacked PRs that merge bottom-up.
   [More](#stacks)
 - **Machine load.** A gauge in the sidebar, each session's share of CPU and
@@ -896,6 +901,66 @@ for a running turn, and refuses, naming the card, if it doesn't end), and
 what it's sent during the land waits in its queue. A conflict stops on
 that card with the exact command to fix it.
 
+### Recipes
+
+A recipe is a saved brief: a project, a kind (a **task**, which ends in a PR
+and goes through the merge gates, or a **session**, which has no PR), and a
+short brief that says what to run and how to judge it. The steps belong in a
+script in the repo; the recipe says "run this, judge the result". Every run
+is a fresh task or session, so nothing piles up in one long conversation.
+
+Open **Settings → Recipes** (the sidebar's **⋯** menu, the workspace menu, or
+⌘K → Recipes or "Run recipe: …"). **Run** takes an optional one-off note and
+shows exactly what will be sent. **Save as recipe** on a session's menu or a
+finished task prefills the form from what it did, with a suggested brief to
+use or ignore.
+
+- **Carried between runs.** A run ends with one line,
+  `RESULT: ok|fail key=value … | one sentence`. The next run's brief gets a
+  short block (at most 600 characters) with the last run's outcome and
+  those values, such as a build number; after a failure it also carries the
+  last good run. With no line, a cheap model summarises the run, and with
+  that unavailable the state alone is recorded. **Start the next run fresh**
+  drops the block.
+- **One run at a time.** A run while another is going is refused, and a
+  double tap starts one run.
+- **Timers.** A recipe can run hourly, daily, on weekdays, weekly or on a
+  cron expression, never more than once an hour; a timer that fires while a
+  run is going is skipped. Only you set timers: the orchestrator can't.
+- **Orchestrator.** `recipes`, `run_recipe`, `recipe_save` and `recipe_update`
+  tools, and the workspace's recipes in its brief and digest. A run goes
+  through the same brakes, Pause and task queue as a task it started
+  itself, and a recipe is never an approval: it can't pass a gate. The
+  orchestrator gets an event when a run it started finishes, and for any
+  failure.
+- **History.** Each recipe lists its runs: when, how triggered and by whom,
+  outcome, the reported values, cost, duration, and links to the session and
+  PR, with totals.
+
+### Plans in pieces
+
+A plan ends with a `## Pieces` block, one piece by default. AgentOS accepts
+more only for one of four reasons, written on the piece: (a) it spans
+repositories, (b) one part must be live (merged and deployed) before the
+other can merge, (c) one part needs you mid-way, (d) one part must be
+revertible on its own (a migration that rewrites rows, or an auth change
+mixed with other work). Diff size is never a reason. A piece without a
+standing reason is folded into the one before it, and a repository with no
+deploy check can't claim (b); this is a deterministic check, not the model's
+word.
+
+A one-piece plan behaves as always. With several, piece 1 continues in the
+planning task with only its slice, and the rest wait as rows (no worktree,
+port or queue slot) until what they wait on has merged or deployed, then start
+as tasks through the usual brakes and queue. A plan waiting for approval
+shows its pieces: **Merge into ①** or **Drop** a piece (undoable until you
+approve), **Approve with note…**, or **Reject**. Each piece's review judges
+its slice; the last also checks the whole plan was built. **Tasks** shows
+the feature's pieces and what each waits on, with **Release anyway** for one
+held by a dropped or failed predecessor. A plan-only task that reaches
+approval sends a "Plan ready: name, N pieces" push, and a finished feature
+sends one "Feature merged" push naming it.
+
 ### Schedules
 
 A schedule starts agent work at set times without you opening AgentOS:
@@ -1017,7 +1082,8 @@ line at the bottom of Schedules), one of:
 
 A machine linked to Connect sends to the paired phones that have registered
 for push, instead of Telegram. A push is generic: the title "AgentOS", a
-category word and a link to open, no session or task text (the payload is a
+category word and a link to open, with no session or task text (a plan's or
+feature's name is the one exception, scrubbed to a single line) (the payload is a
 versioned envelope, so an encrypted body can replace it later). It goes
 through the Connect relay, signed with the machine key; AgentOS keeps a
 `push_outbox` that retries with backoff, forgets tokens the relay reports as
@@ -1025,7 +1091,7 @@ dead, and caps alerting pushes at 10 an hour per device (one summary after).
 
 - **What pushes**: an ask raised, a session waiting on you for a minute,
   a task ready for review, CI or a review failing, a plan ready to approve,
-  and the Away digest. Merged is off by default. Each device picks its
+  a feature merged, and the Away digest. Merged is off by default. Each device picks its
   categories (`PATCH /api/devices/me/push`). A task mirrored from another
   machine never pushes from here.
 - **Quiet rules**: waiting, review, CI and merged don't push while you're at

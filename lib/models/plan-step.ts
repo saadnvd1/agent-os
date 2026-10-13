@@ -21,6 +21,8 @@ import { ANTHROPIC } from "./roles";
 import { queueEvent } from "../orchestrator/events";
 import { addNote } from "../orchestrator/notes";
 import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
+import { PIECES_PROMPT, pieceBrief } from "../plans/pieces";
+import { createFeature, planFor, planPathOf, splitOf } from "../plans/features";
 
 export const PLAN_FILE = ".agentos/plan.md";
 
@@ -31,7 +33,9 @@ export function planPrompt(task: string, only = false): string {
   return `${task}
 
 ---
-Plan first. This turn, only read and plan: write the implementation plan for the task above to \`${PLAN_FILE}\` in this worktree (what to change, file by file; the tests; how you'll verify it; anything ambiguous and the call you'd make). Change no other file, and don't commit, push or open a PR. Don't end your turn while subagents or background commands you started are still running; wait for their results and write the plan in the same turn. End the turn once the plan is written: ${after}.`;
+Plan first. This turn, only read and plan: write the implementation plan for the task above to \`${PLAN_FILE}\` in this worktree (what to change, file by file; the tests; how you'll verify it; anything ambiguous and the call you'd make). Change no other file, and don't commit, push or open a PR. Don't end your turn while subagents or background commands you started are still running; wait for their results and write the plan in the same turn. End the turn once the plan is written: ${after}.
+
+${PIECES_PROMPT}`;
 }
 
 export const PLAN_RETRY_PROMPT = `Write the plan to \`${PLAN_FILE}\` now, plan only.`;
@@ -42,10 +46,16 @@ export const planRetryMessageId = (sessionId: string) =>
 // treated as having nothing running and re-prompted.
 export const PLAN_BACKGROUND_WAIT_MS = 20 * 60 * 1000;
 
-export function implementPrompt(planned: boolean, amendment?: string): string {
-  const base = planned
-    ? `The plan is in \`${PLAN_FILE}\`. Implement it now, finishing the task as its instructions above say. Where the plan turns out wrong, do what's right and say so.`
-    : `No plan was written to \`${PLAN_FILE}\`. Plan briefly, then implement the task, finishing it as its instructions above say.`;
+export function implementPrompt(
+  planned: boolean,
+  amendment?: string,
+  piece?: string
+): string {
+  const base = piece
+    ? `The plan is in \`${PLAN_FILE}\`. ${piece}\nFinish it as the task's instructions above say. Where the plan turns out wrong, do what's right and say so.`
+    : planned
+      ? `The plan is in \`${PLAN_FILE}\`. Implement it now, finishing the task as its instructions above say. Where the plan turns out wrong, do what's right and say so.`
+      : `No plan was written to \`${PLAN_FILE}\`. Plan briefly, then implement the task, finishing it as its instructions above say.`;
   return amendment
     ? `${base}\n\nThe plan was approved with this change, which is now part of the task's scope:\n${amendment}`
     : base;
@@ -87,6 +97,18 @@ export function planSummary(text: string, max = 5): string[] {
   return picked.map((l) => trim(l.text));
 }
 
+function piecesLine(r: NonNullable<ReturnType<typeof planFor>>): string {
+  const parts = r.pieces.map((p) => {
+    const after = p.afterPosition
+      ? ` after ${p.afterPosition} is ${p.afterKind}`
+      : "";
+    const why = p.reasons.length ? ` (${p.reasons.join("+")})` : "";
+    return `${p.position} ${p.name}${after}${why}`;
+  });
+  const folded = r.folded.length ? `, ${r.folded.length} folded` : "";
+  return `${r.pieces.length} pieces${folded}: ${parts.join("; ")}`;
+}
+
 // Tells the orchestrator that started a task its plan is written, once.
 function announcePlan(s: Session, ref: string | null, retried = false): void {
   if (!s.started_by && !s.held_by_device) return;
@@ -105,6 +127,8 @@ function announcePlan(s: Session, ref: string | null, retried = false): void {
     const summary = planSummary(fs.readFileSync(file, "utf8"));
     head = `Task "${s.name}": plan written to ${file}; ${next}.`;
     if (summary.length) head += `\n${summary.map((l) => `- ${l}`).join("\n")}`;
+    const pieces = planFor(s, fs.readFileSync(file, "utf8"));
+    if (pieces && pieces.pieces.length > 1) head += `\n${piecesLine(pieces)}`;
   } catch {
     // No plan file: the line says so.
   }
@@ -116,6 +140,14 @@ function announcePlan(s: Session, ref: string | null, retried = false): void {
     return;
   }
   queueEvent(workspaceId!, `plan-done:${s.id}`, s.id, head);
+}
+
+function readPlan(s: Session): string | null {
+  try {
+    return fs.readFileSync(path.join(s.worktree_path!, PLAN_FILE), "utf8");
+  } catch {
+    return null;
+  }
 }
 
 export const implementMessageId = (sessionId: string) =>
@@ -146,6 +178,9 @@ async function startImplementing(
     override: taskOverride(s),
   });
   const id = implementMessageId(sessionId);
+  const planText = readPlan(s);
+  const split = planText ? splitOf(s, planText) : null;
+  const workspaceId = sessionWorkspace(s);
   const claimed = db.transaction(() => {
     const changed = db
       .prepare(
@@ -155,11 +190,26 @@ async function startImplementing(
       .run(sessionId, from).changes;
     if (!changed) return false;
     setSessionModel(sessionId, routed);
+    let piece: string | undefined;
+    let note = amendment;
+    if (split?.notBuilding.length)
+      note = [amendment, `Not building: ${split.notBuilding.join("; ")}`]
+        .filter(Boolean)
+        .join("\n");
+    if (split && split.pieces.length > 1 && planText && workspaceId) {
+      const feature = createFeature(s, planText, split.pieces, workspaceId);
+      piece = pieceBrief(
+        split.pieces.length,
+        split.pieces[0],
+        planPathOf(feature.id)
+      );
+    }
     enqueue(sessionId, {
       id,
       text: implementPrompt(
         fs.existsSync(path.join(s.worktree_path!, PLAN_FILE)),
-        amendment
+        note,
+        piece
       ),
       origin: { kind: "decision", label: "Plan step" },
     });
@@ -307,6 +357,17 @@ export async function handoffAfterPlan(
     announcePlan(s, null, retried);
   } catch (e) {
     console.error("plan-done event failed:", e);
+  }
+  try {
+    const text = readPlan(s);
+    const planned = text ? planFor(s, text) : null;
+    (await import("../notify/push/events")).pushPlanAwaiting(
+      s.id,
+      s.name,
+      planned?.pieces.length ?? 1
+    );
+  } catch (e) {
+    console.error("plan push failed:", e);
   }
   // The worker has nothing left to do: it ends at this turn boundary, and
   // the next message (an approval, or a revision) starts one that resumes.

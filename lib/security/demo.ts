@@ -57,6 +57,7 @@ export const STATIC_SIBLINGS = [
   "connect",
   "detect",
   "done-idle",
+  "draft",
   "held-replies",
   "import",
   "init",

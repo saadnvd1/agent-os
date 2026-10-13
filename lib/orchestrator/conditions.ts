@@ -7,6 +7,7 @@
  * when). Text another session wrote is fenced as untrusted.
  */
 
+import { runForSession } from "../recipes/store";
 import { db, type StackItemStatus, type StackStatus } from "../db";
 import { isFinished, type TaskPR } from "../tasks/state";
 import { ciWord } from "./describe";
@@ -128,7 +129,8 @@ function sessionConditions(
     );
 
   // A quick change is the orchestrator's own: nothing to tell it.
-  const shouldPR = (!!f.task || !!f.branch) && !f.quick;
+  // A recipe's session run reports through its settle event, not an alert.
+  const shouldPR = (!!f.task || !!f.branch) && !f.quick && !runForSession(f.id);
   const finished = !!f.task && isFinished(f.task.state);
   const idleFor = now - f.lastActive;
   if (

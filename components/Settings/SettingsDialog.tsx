@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Bell,
   ChevronRight,
+  ChefHat,
   ClipboardList,
   Clock,
   Cpu,
@@ -34,6 +35,7 @@ import { useSettingsUrl } from "@/hooks/useSettingsUrl";
 import { SETTINGS_SECTIONS, type SettingsSection } from "@/lib/settings-url";
 import { cn } from "@/lib/utils";
 import { schedulesUiActions } from "@/stores/schedulesUi";
+import { RecipesPanel } from "@/components/Recipes";
 import { settingsUi, settingsUiActions } from "@/stores/settingsUi";
 import { SetupSection } from "./SetupSection";
 import {
@@ -70,6 +72,11 @@ export const SECTION_INFO: Record<
     hint: "Sound, browser alerts, your phone",
     icon: Bell,
   },
+  recipes: {
+    label: "Recipes",
+    hint: "Saved jobs you run again, by hand or on a timer",
+    icon: ChefHat,
+  },
   schedules: {
     label: "Schedules",
     hint: "Work that starts at set times",
@@ -105,6 +112,8 @@ function SectionBody({
       return <DevicesPanel />;
     case "notifications":
       return <NotificationsSection browser={browser} />;
+    case "recipes":
+      return <RecipesPanel />;
     case "schedules":
       return <SchedulesPanel />;
     case "audits":

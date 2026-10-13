@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Archive,
   Check,
+  ChefHat,
   ChevronDown,
   CircleCheck,
   Clock,
@@ -30,6 +31,7 @@ import { archivedUiActions, cleanupUiActions } from "@/stores/archivedUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { schedulesUiActions } from "@/stores/schedulesUi";
+import { recipesUiActions } from "@/stores/recipesUi";
 import { useAddExistingProject } from "@/components/Projects/AddProject/useAddExistingProject";
 
 const icon = "mr-2 h-3.5 w-3.5";
@@ -89,10 +91,18 @@ export function WorkspaceSwitcher({
             New workspace
           </DM.DropdownMenuItem>
           {!current && (
-            <DM.DropdownMenuItem onClick={() => schedulesUiActions.open(null)}>
-              <Clock className={icon} />
-              Schedules
-            </DM.DropdownMenuItem>
+            <>
+              <DM.DropdownMenuItem onClick={() => recipesUiActions.open(null)}>
+                <ChefHat className={icon} />
+                Recipes
+              </DM.DropdownMenuItem>
+              <DM.DropdownMenuItem
+                onClick={() => schedulesUiActions.open(null)}
+              >
+                <Clock className={icon} />
+                Schedules
+              </DM.DropdownMenuItem>
+            </>
           )}
           {current && (
             <>
@@ -109,6 +119,12 @@ export function WorkspaceSwitcher({
               >
                 <Workflow className={icon} />
                 Orchestrator
+              </DM.DropdownMenuItem>
+              <DM.DropdownMenuItem
+                onClick={() => recipesUiActions.open(current.id)}
+              >
+                <ChefHat className={icon} />
+                Recipes
               </DM.DropdownMenuItem>
               <DM.DropdownMenuItem
                 onClick={() => schedulesUiActions.open(current.id)}

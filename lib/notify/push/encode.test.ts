@@ -53,6 +53,7 @@ describe("quiet rules per category", () => {
     expect(PUSH_CATEGORIES.filter(presenceGated)).toEqual([
       "needs-you",
       "review",
+      "plan",
       "ci",
       "merged",
     ]);

@@ -40,6 +40,7 @@ const KIND_LABEL = {
   session: "Session",
   orchestrator: "Orchestrator",
   message: "Message",
+  recipe: "Recipe",
 } as const;
 
 // "Task · api", "Message → orchestrator".

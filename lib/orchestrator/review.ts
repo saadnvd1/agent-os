@@ -10,6 +10,7 @@
  * the orchestrator hears the verdict as an event.
  */
 
+import { reviewGoal } from "../plans/features";
 import { pushReviewBlocked, pushReviewReady } from "../notify/push/events";
 import { db, type Session } from "../db";
 import { amendmentsOf } from "./amendments";
@@ -319,7 +320,7 @@ export function taskReviewTarget(task: Session, pr: TaskPR): ReviewTarget {
     id: task.id,
     name: task.name,
     label: `task ${task.name}`,
-    goal: task.task_prompt ?? task.name,
+    goal: reviewGoal(task.id) ?? task.task_prompt ?? task.name,
     repo: repoOf(task),
     refs: task,
     pr,

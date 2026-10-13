@@ -77,6 +77,8 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   land: "Merge a whole stack bottom-up, each PR through the sign-off gates at its current head.",
   approve_plan:
     'Approve the plan of a plan_only task that is waiting ("plan ready"): it continues on the implementation model, once. An optional message amends the plan and is recorded on the task\'s brief as a scope change. Reject a plan with drop.',
+  plan_pieces:
+    "A task whose plan split into pieces: each piece, its repo, what it waits on and its state. With merge or drop (position numbers) it edits the pieces still waiting: a merged piece's slice goes to the piece before it, a dropped one is left out and anything waiting on it is held. It can't add pieces or change reasons.",
   drop: "Reject a task: close its PR and remove its worktree. A task still waiting in the queue is removed by its id. Logged with the reason.",
   move: 'Carry a running task to a linked machine, or back with "here": for heavy test or build work. It keeps its branch, conversation and plan; the gates, events, read, send, stop, done and drop work the same wherever it runs, and the machine it lands on can\'t merge it. Takes a few minutes and runs in the background; an event says when it lands. Refused while paused, for a task waiting on Saad (an escalation or open ask), and for card and stacked tasks.',
   stop: "Stop a session's agent mid-turn, even while it's thinking, keeping its conversation, worktree and branch; your next message runs as its next turn.",
@@ -90,6 +92,14 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Remove a standing rule you kept, by its id, only when Saad says so or it no longer applies (the PR it names merged or closed). Saad's rules are his to remove.",
   remind_me:
     "Set a one-off reminder for yourself in this workspace: at the time given it reaches you once as a scheduled prompt (not an approval), even if AgentOS was off then. At least 10 minutes ahead; a few at a time at most.",
+  recipes:
+    "This workspace's recipes: saved briefs for jobs that come up again (a TestFlight build, an audit, a report), each with its last run and next timer. With a name, one recipe in full: its brief and recent runs.",
+  run_recipe:
+    "Run a recipe now: a fresh task or session starts from its saved brief, plus the last run's reported facts and an optional one-off note. Braked, queued and gated like start_task and start_session. A recipe is never an approval. One run at a time; while it is going this says so. You get an event when it finishes.",
+  recipe_save:
+    "Save a recipe when a job comes up a second time. A short brief (the steps belong in a script in the repo), a kind (task: ends in a PR; session: no PR) and a project. It sets no timer: Saad does.",
+  recipe_update:
+    "Change a recipe's brief or settings (never its timer). Earlier versions are kept and Saad sees the change.",
   reminders:
     "List this workspace's upcoming reminders and the last few that ran.",
   cancel_reminder:

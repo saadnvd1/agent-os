@@ -107,8 +107,13 @@ describe("isGenericPayload", () => {
   it("rejects extra fields, custom text, odd links and other versions", () => {
     expect(isGenericPayload(ok())).toBe(true);
     expect(isGenericPayload({ ...ok(), extra: "x" })).toBe(false);
-    expect(isGenericPayload({ ...ok(), b: "Fix the login bug" })).toBe(false);
-    expect(isGenericPayload({ ...ok(), t: "my-project" })).toBe(false);
+    // A named line passes only when scrubbed: one line, no secret shapes.
+    expect(isGenericPayload({ ...ok(), b: "Fix the login bug" })).toBe(true);
+    expect(isGenericPayload({ ...ok(), b: "line one\nline two" })).toBe(false);
+    expect(
+      isGenericPayload({ ...ok(), b: "s" + "k-" + "abcdefgh12345678" })
+    ).toBe(false);
+    expect(isGenericPayload({ ...ok(), t: "x".repeat(200) })).toBe(false);
     expect(isGenericPayload({ ...ok(), l: "https://evil.example" })).toBe(
       false
     );
@@ -172,5 +177,29 @@ describe("redact", () => {
     expect(safeKey("review:t1:abc123")).toBe("review:t1:abc123");
     expect(safeKey("has space")).toBeNull();
     expect(safeKey("k".repeat(129))).toBeNull();
+  });
+});
+
+describe("named text", () => {
+  it("a sender's title and body replace the fixed ones, scrubbed", () => {
+    const p = buildPushPayload({
+      category: "plan",
+      id: "abc",
+      title: "Plan ready",
+      body: "Recipes, 2 pieces\nsecond line",
+    });
+    expect(p).toMatchObject({
+      c: "plan",
+      t: "Plan ready",
+      b: "Recipes, 2 pieces",
+    });
+    expect(isGenericPayload(p)).toBe(true);
+  });
+  it("secret-shaped text falls back to the fixed copy", () => {
+    const p = buildPushPayload({
+      category: "merged",
+      body: "gh" + "p_" + "a".repeat(24),
+    });
+    expect(p.b).not.toContain("ghp_");
   });
 });

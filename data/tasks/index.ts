@@ -97,6 +97,20 @@ export function useApprovePlan() {
   );
 }
 
+// Which waiting pieces of a plan to fold into the one before, or leave out.
+export function usePlanEdits() {
+  return useTaskMutation(
+    async (input: { id: string; merge: number[]; drop: number[] }) =>
+      json(
+        await fetch(`/api/tasks/${input.id}/plan-edits`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ merge: input.merge, drop: input.drop }),
+        })
+      )
+  );
+}
+
 export function useResumeTask() {
   return useTaskMutation(async (input: { id: string; force?: boolean }) =>
     json(

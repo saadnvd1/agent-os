@@ -9,7 +9,13 @@ import fs from "fs";
 import path from "path";
 import { db, type Session } from "../db";
 import { PLAN_FILE, planSummary } from "../models/plan-step";
-import { PLAN_TEXT_MAX, type TaskPlan } from "./loop-types";
+import { planFor } from "../plans/features";
+import { parseEdits } from "../plans/pieces";
+import {
+  PLAN_TEXT_MAX,
+  type PlanPiecesView,
+  type TaskPlan,
+} from "./loop-types";
 import { expandHome } from "./session";
 
 const TITLE_MAX = 120;
@@ -59,6 +65,36 @@ function readHead(file: string, max: number): string | null {
 function capped(text: string) {
   const over = text.length > PLAN_TEXT_MAX;
   return { text: over ? text.slice(0, PLAN_TEXT_MAX) : text, truncated: over };
+}
+
+const PIECES_READ_MAX = 400_000;
+
+// How the plan splits, read from the whole file (the block is at its end).
+function piecesView(session: Session, file: string): PlanPiecesView | null {
+  const text = readHead(file, PIECES_READ_MAX);
+  const result = text ? planFor(session, text) : null;
+  if (!result) return null;
+  const edits = parseEdits(session.plan_edits);
+  return {
+    pieces: result.pieces.map((p) => ({
+      position: p.position,
+      name: p.name,
+      slice: p.slice,
+      project: p.project.name,
+      afterPosition: p.afterPosition,
+      afterKind: p.afterKind,
+      reasons: p.reasons,
+      owns: p.owns,
+      forced: p.reasons.includes("a"),
+      edit: edits.drop?.includes(p.position)
+        ? "drop"
+        : edits.merge?.includes(p.position)
+          ? "merge"
+          : null,
+    })),
+    folded: result.folded,
+    warnings: result.warnings,
+  };
 }
 
 export function taskPlan(session: Session): TaskPlan | null {
@@ -111,6 +147,7 @@ export function taskPlan(session: Session): TaskPlan | null {
         source: "step",
         title: planTitle(body),
         path: text !== null ? PLAN_FILE : null,
+        pieces: phase === "awaiting" ? piecesView(session, file) : null,
         ...capped(body),
       };
     }

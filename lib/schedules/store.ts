@@ -25,7 +25,9 @@ export const SCHEDULE_KINDS = [
   "orchestrator",
   "message",
 ] as const;
-export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
+// "recipe" is a recipe's timer (lib/recipes/timer): it runs a recipe, and is
+// made and edited through the recipe, never through the Schedules form.
+export type ScheduleKind = (typeof SCHEDULE_KINDS)[number] | "recipe";
 
 export type RunTrigger = "schedule" | "catch-up" | "manual";
 // "claimed" only between taking a slot and starting its work.
@@ -44,6 +46,8 @@ export interface Schedule {
   // A "message" schedule's session. Its id is the address; its name is
   // only looked up to show.
   target_session_id: string | null;
+  // A recipe timer's recipe.
+  recipe_id?: string | null;
   // The agent session that made it (aos schedule add), or null for Saad.
   created_by_session_id: string | null;
   enabled: boolean;
@@ -223,7 +227,7 @@ function validate(
     throw new Error("A schedule name can't use quotes or [ ]");
   const prompt = input.prompt?.trim();
   if (!prompt) throw new Error("Write the prompt it runs");
-  if (!SCHEDULE_KINDS.includes(input.kind))
+  if (!(SCHEDULE_KINDS as readonly string[]).includes(input.kind))
     throw new Error("Pick task, session, orchestrator or message");
   const timezone = input.timezone?.trim() || DEFAULT_TIMEZONE;
   if (!isTimezone(timezone)) throw new Error(`Unknown time zone "${timezone}"`);

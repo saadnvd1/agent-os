@@ -13,14 +13,14 @@ import {
   type PushEvent,
   type PushLevel,
 } from "./push-types";
-import { safeId, safeKey } from "./redact";
+import { safeId, safeKey, scrubText } from "./redact";
 
 export interface CategoryDef {
   level: PushLevel;
   defaultOn: boolean;
   /** Settings label. */
   label: string;
-  /** The one word or phrase shown as the body. Fixed text, no event data. */
+  /** The word or phrase shown as the body unless the sender names one. */
   word: string;
   /** App path for an id, or the fallback when the id is missing or unsafe. */
   link: (id: string | null) => string;
@@ -49,6 +49,13 @@ export const CATEGORIES: Record<PushCategory, CategoryDef> = {
     defaultOn: true,
     label: "Ready for review",
     word: "Ready for review",
+    link: (id) => (id ? `/task/${id}` : FALLBACK_LINK),
+  },
+  plan: {
+    level: "active",
+    defaultOn: true,
+    label: "Plan ready",
+    word: "Plan ready",
     link: (id) => (id ? `/task/${id}` : FALLBACK_LINK),
   },
   ci: {
@@ -108,9 +115,18 @@ export function enabledCategories(
     : defaultCategories();
 }
 
+const NAMED_MAX = 80;
+
+/** Text a sender named for the alert: one scrubbed line, or null. */
+function named(text: string | null | undefined): string | null {
+  const clean = scrubText(text, NAMED_MAX);
+  return clean || null;
+}
+
 /**
- * The v1 payload for an event. Built only from the registry and a vetted id
- * and key, so it carries no event text whatever the caller passes.
+ * The v1 payload for an event. Built from the registry, a vetted id and key,
+ * and at most a title and body the sender named (a plan's or feature's name),
+ * each scrubbed to one short line with no secret-shaped runs.
  */
 export function buildPushPayload(event: PushEvent): PushEnvelopeV1 {
   const def = CATEGORIES[event.category];
@@ -118,8 +134,8 @@ export function buildPushPayload(event: PushEvent): PushEnvelopeV1 {
   return {
     v: 1,
     c: event.category,
-    t: PUSH_TITLE,
-    b: def.word,
+    t: named(event.title) ?? PUSH_TITLE,
+    b: named(event.body) ?? def.word,
     l: def.link(id),
     k: safeKey(event.key) ?? `${event.category}:${id ?? "-"}`,
     p: def.level,
@@ -169,8 +185,8 @@ export function isAppLink(link: string): boolean {
 }
 
 /**
- * True only for a payload the registry could have built: fixed title, the
- * category's own word, a known link shape, a plain key. A sender checks this
+ * True only for a payload the registry could have built: a scrubbed title
+ * and body, a known link shape, a plain key. A sender checks this
  * before it sends, so nothing else can leave the machine.
  */
 export function isGenericPayload(p: unknown): p is PushEnvelopeV1 {
@@ -180,8 +196,10 @@ export function isGenericPayload(p: unknown): p is PushEnvelopeV1 {
   const def = CATEGORIES[o.c];
   return (
     Object.keys(o).sort().join() === "b,c,k,l,p,t,v" &&
-    o.t === PUSH_TITLE &&
-    o.b === def.word &&
+    typeof o.t === "string" &&
+    named(o.t) === o.t &&
+    typeof o.b === "string" &&
+    named(o.b) === o.b &&
     o.p === def.level &&
     typeof o.l === "string" &&
     isAppLink(o.l) &&

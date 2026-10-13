@@ -149,7 +149,30 @@ export interface TaskChecks {
 
 // -- A task's plan ---------------------------------------------------------
 
+export interface PlanPieceView {
+  position: number;
+  name: string;
+  slice: string;
+  project: string;
+  afterPosition: number | null;
+  afterKind: "merged" | "deployed" | null;
+  reasons: string[];
+  owns: string[];
+  // Merging into the piece before would break why it was split (a).
+  forced: boolean;
+  // Saad's pending edit, applied at approval.
+  edit: "merge" | "drop" | null;
+}
+
+export interface PlanPiecesView {
+  pieces: PlanPieceView[];
+  folded: { name: string; into: number; why: string }[];
+  warnings: string[];
+}
+
 export interface TaskPlan {
+  // Set once a plan waits for approval: how the checker split it.
+  pieces?: PlanPiecesView | null;
   // As the starter decided (null reason when unstated).
   planned: boolean;
   reason: string | null;

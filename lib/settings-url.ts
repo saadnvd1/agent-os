@@ -10,6 +10,7 @@ export const SETTINGS_SECTIONS = [
   "models",
   "devices",
   "notifications",
+  "recipes",
   "schedules",
   "audits",
   "setup",

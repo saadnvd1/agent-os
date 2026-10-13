@@ -78,7 +78,10 @@ export function scheduleView(s: Schedule, now = Date.now()): ScheduleView {
 }
 
 export function listScheduleViews(workspaceId?: string | null): ScheduleView[] {
-  return listSchedules(workspaceId).map((s) => scheduleView(s));
+  // A recipe's timer shows on the recipe, not in this list.
+  return listSchedules(workspaceId)
+    .filter((s) => s.kind !== "recipe")
+    .map((s) => scheduleView(s));
 }
 
 // `aos schedule add --session <ref> --every 30m "<prompt>"`: the session by
