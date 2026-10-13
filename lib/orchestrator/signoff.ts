@@ -25,7 +25,12 @@ import {
   sensitiveFiles,
 } from "./diff";
 import { countFailure, escalate } from "./escalate";
-import { evaluateGates, holdingEscalations, type GateInput } from "./gates";
+import {
+  ciGate,
+  evaluateGates,
+  holdingEscalations,
+  type GateInput,
+} from "./gates";
 import { addNote } from "./notes";
 import { latestApproval, refundApproval, spendApproval } from "./ask-approvals";
 import { workSubject } from "./asks";
@@ -96,7 +101,11 @@ export async function judge(
         restackedOf(task)?.to === sha
       )
     : null;
-  if (quick?.wait)
+  // Saad's approval of this head stands in for that review (gateVerdict).
+  if (
+    quick?.wait &&
+    latestApproval(workspaceId, workSubject(task.id))?.sha !== sha
+  )
     return {
       ok: false,
       wait: true,
@@ -164,13 +173,12 @@ export async function gateVerdict(
   });
   const { pr, sha, repo } = work;
   const held = holdingEscalations(work.id);
-  // Saad approved merging this exact commit. On an ask the orchestrator
-  // raised (ask_saad with its task and sha), held or not, it merges once
-  // whatever the gates say, but only once an independent review of that
-  // commit finished (its findings are his to override, not that it ran) and
-  // its stack parent merged: the orchestrator wrote that ask, and no answer
-  // to it stands in for those. An approval of the gates' own ask on a held
-  // task merges as it always has (heldVerdict).
+  // Saad approved merging this exact commit: held or not, it merges once,
+  // without a review or any other gate approval stands in for. Approval
+  // doesn't cover what's left: an AI-attributed body, failing CI (running
+  // CI is a wait), and, on an ask the orchestrator raised or a task the
+  // gates don't hold, a stack parent not merged yet. On a held task, an
+  // approval of an earlier commit goes back to him (heldVerdict).
   let approval = latestApproval(workspaceId, workSubject(work.id));
   // The head moved since he approved: his approval follows it when the PR's
   // own patch is unchanged (a rebase), else the re-ask says what changed.
@@ -185,19 +193,19 @@ export async function gateVerdict(
     if (carried.approval) approval = carried.approval;
     else moved = carried.note;
   }
-  if (
-    approval?.sha === sha &&
-    (approval.raised_by === "orchestrator" || !held.length)
-  ) {
+  if (approval?.sha === sha) {
     const i = await inputs();
-    const refusal =
-      i.codeReview.refusal ??
-      (i.codeReview.ran ? null : i.codeReview.wait) ??
-      i.stackRefusal;
-    if (refusal)
-      return no(
-        `${work.name} (PR #${pr.number} at ${short(sha)}): Saad approved this commit, but ${refusal}`
-      );
+    const approved = `${work.name} (PR #${pr.number} at ${short(sha)}): Saad approved this commit, but`;
+    const stack =
+      approval.raised_by === "orchestrator" || !held.length
+        ? i.stackRefusal
+        : null;
+    const refusal = i.codeReview.refusal ?? stack;
+    if (refusal) return no(`${approved} ${refusal}`);
+    const ci = ciGate({ sha, ...i, repoCI: await repoCIFor(repo, work, i) });
+    if (ci.state === "fail") return no(`${approved} ${ci.reason}`);
+    if (ci.state === "wait") return no(`${approved} ${ci.reason}`, true);
+    // "escalate" is a repository with no CI: Saad is who that goes to.
     return { ok: true, sha, pr: pr.number, approval: approval.id };
   }
   if (held.length)
@@ -223,14 +231,7 @@ export async function gateVerdict(
 
   const ruled = ruleBreaks(files, await addedLines(repo, base, sha));
   const live = await inputs();
-  // Asked only when it can change the answer: a head with no checks that
-  // isn't settling or conflicting.
-  const repoCI =
-    live.checks === "none" &&
-    live.settleIn === 0 &&
-    live.mergeable !== "CONFLICTING"
-      ? await repoHasCI(repo, base)
-      : undefined;
+  const repoCI = await repoCIFor(repo, base, live);
   const outcomes = evaluateGates({ sha, ruleBreaks: ruled, ...live, repoCI });
   const head = `${work.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
   const toSaad = outcomes.find((o) => o.state === "escalate");
@@ -251,6 +252,25 @@ export async function gateVerdict(
     ...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`),
   ];
   return no(`${head}\n${lines.join("\n")}`, !failed.length);
+}
+
+// Asked only when it can change the answer: a head with no checks that
+// isn't settling or conflicting.
+async function repoCIFor(
+  repo: string,
+  base: string | GateWork,
+  i: Pick<GateInput, "checks" | "settleIn" | "mergeable">
+) {
+  if (i.checks !== "none" || i.settleIn !== 0 || i.mergeable === "CONFLICTING")
+    return undefined;
+  if (typeof base !== "string") {
+    try {
+      base = await fetchRefs(repo, base.refs);
+    } catch {
+      return undefined;
+    }
+  }
+  return repoHasCI(repo, base);
 }
 
 export async function signOff(

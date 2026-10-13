@@ -65,7 +65,18 @@ export interface GateInput {
 
 const short = (sha: string) => sha.slice(0, 7);
 
-function ciGate(i: GateInput): GateOutcome {
+export function ciGate(
+  i: Pick<
+    GateInput,
+    | "sha"
+    | "checks"
+    | "failing"
+    | "settleIn"
+    | "mergeable"
+    | "baseName"
+    | "repoCI"
+  >
+): GateOutcome {
   const gate = "ci";
   const at = short(i.sha);
   if (i.checks === "pending")
@@ -88,7 +99,7 @@ function ciGate(i: GateInput): GateOutcome {
 
 // A head with no checks. Only a repository with no CI at all has nothing to
 // gate on; in one with CI the head is not yet, whatever the reason.
-function noChecks(i: GateInput, at: string): GateOutcome {
+function noChecks(i: Parameters<typeof ciGate>[0], at: string): GateOutcome {
   const gate = "ci";
   const wait = (reason: string): GateOutcome => ({
     gate,

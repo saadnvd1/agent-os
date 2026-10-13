@@ -116,7 +116,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   resolve_question:
     "Clear an open question once Saad has answered it in chat, or it no longer matters.",
   ask_saad:
-    "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event. To ask whether to merge a PR the gates refuse, give task and sha (its head): his approval lets sign_off merge it once, at that commit.",
+    "Park an item on Saad's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event. To ask whether to merge a PR the gates refuse, give task and sha (its head): his approval lets sign_off merge it once, at that commit, without a review (an AI-attributed body or failing CI still refuses).",
 };
 
 export function orchestratorTools(

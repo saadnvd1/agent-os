@@ -8,7 +8,8 @@
  * The orchestrator hears one event: merged, or a failure. A failure is
  * counted against the task once per head, as sign_off would count it, and
  * reported once; the task stays armed for its fix. One that goes to Saad
- * disarms it, since only he merges it from then on. The flag is in the
+ * disarms it, since only he merges it from then on, or approves its head
+ * for it to merge on that approval. The flag is in the
  * database, so it survives a restart.
  */
 
@@ -85,17 +86,19 @@ export function arm(workspaceId: string, ref: string): string {
 }
 
 // Arms a task, or says why it can't be: only a running task, in a
-// workspace whose orchestrator hears how it went, that isn't with Saad.
+// workspace whose orchestrator hears how it went, that isn't with Saad
+// (or that he approved a commit of: it merges on that, at that commit only).
 export function armTask(task: Session): void {
   if (task.task_status !== "running")
     throw new Error(`${task.name} is already ${task.task_status}`);
-  const held = holdingEscalations(task.id);
+  const w = armingWorkspace(task);
+  const approved = !!w && !!latestApproval(w, workSubject(task.id))?.sha;
+  const held = approved ? [] : holdingEscalations(task.id);
   if (held.length)
     throw new Error(
       `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); only he merges it`
     );
-  const w = armingWorkspace(task);
-  if (w && openBySubject(w, workSubject(task.id)))
+  if (w && !approved && openBySubject(w, workSubject(task.id)))
     throw new Error(
       `${task.name} has an open ask with Saad; it merges on his answer`
     );
@@ -209,9 +212,16 @@ async function mergeOne(
     return;
   }
   // With Saad, on a gate or on a question about it: he decides, so it
-  // doesn't merge by itself meanwhile.
-  const held = holdingEscalations(task.id).map((h) => h.gate);
-  if (!held.length && openBySubject(workspaceId, workSubject(task.id)))
+  // doesn't merge by itself meanwhile, unless he approved this head.
+  const approved =
+    !!pr.head &&
+    latestApproval(workspaceId, workSubject(task.id))?.sha === pr.head;
+  const held = approved ? [] : holdingEscalations(task.id).map((h) => h.gate);
+  if (
+    !approved &&
+    !held.length &&
+    openBySubject(workspaceId, workSubject(task.id))
+  )
     held.push("an open ask");
   if (held.length) {
     setArmed(task.id, false);

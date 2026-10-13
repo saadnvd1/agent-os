@@ -122,7 +122,7 @@ export async function askSaad(
   }
   const { ask, created } = raised;
   const once = merge
-    ? ` If he approves, sign_off merges it once, at ${merge.sha.slice(0, 7)} only.`
+    ? ` If he approves, sign_off merges it once, at ${merge.sha.slice(0, 7)} only, without waiting on a review.`
     : "";
   if (!created)
     return `Already on Saad's list as ask ${ask.id}; updated it.${once} Carry on with everything else.`;

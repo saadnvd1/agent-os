@@ -67,7 +67,9 @@ const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
-const { landDeps, refundIfRefused } = await import("./signoff");
+const { judge, landDeps, mergeJudged, refundIfRefused } =
+  await import("./signoff");
+const { armTask, mergeArmed } = await import("./armed");
 const { resumeReviews, review } = await import("./review");
 const { getCheck, putCheck } = await import("./checks");
 const { failureOf, recordFailure } = await import("./gates");
@@ -1595,19 +1597,129 @@ describe("a merge decision from Saad", () => {
     });
   });
 
-  it("still needs a finished review of the commit Saad approved, whatever it found", async () => {
-    const t = setup();
-    await ask(t, { task: "add-a", sha: t.sha });
+  // An orchestrator's merge ask at the head, approved, with no review run.
+  async function approved(t: ReturnType<typeof setup>, sha = t.sha) {
+    await ask(t, { task: "add-a", sha });
     const [raised] = openAsks(t.w);
-    answerAsk(t.w, raised.id, { action: "approve" });
+    answerAsk(t.w, raised.id, { action: "approve" }, sha);
+    return raised;
+  }
+
+  // CI has looked settled on the head for a while.
+  const settle = (t: ReturnType<typeof setup>) =>
+    putCheck({
+      workspaceId: t.w,
+      sessionId: t.task,
+      sha: pr!.head!,
+      kind: "ci",
+      status: "pass",
+      detail: JSON.stringify({ count: pr!.checkCount, at: 0 }),
+    });
+
+  it("merges the commit Saad approved without a review of it", async () => {
+    const t = setup();
+    const raised = await approved(t);
+    expect(getCheck(t.task, t.sha, "review")).toBeNull();
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", t.sha],
+    ]);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
+    expect(listNotes(t.w).at(-1)?.text).toMatch(/on Saad's approval/);
+  });
+
+  it("merges an approved commit whose review blocks", async () => {
+    const t = setup();
+    await reviewNow(t.w, "block");
+    await approved(t);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+  });
+
+  it("merges a held task on an approval at its head, without a review", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const gate = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, gate.id, { action: "approve" }, pr!.head!);
+    expect(getCheck(t.task, pr!.head!, "review")).toBeNull();
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(getAsk(t.w, gate.id)?.used_at).toBeTruthy();
+  });
+
+  it("refuses an approval of an older commit", async () => {
+    const t = setup();
+    const raised = await approved(t);
+    t.push("src/b.ts", "export const b = 2;\n");
+    await expect(t.signOff()).rejects.toThrow(/review: not yet/);
+    expect(merges).toEqual([]);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
+  });
+
+  it("still refuses an approved commit whose PR body carries AI attribution", async () => {
+    const t = setup();
+    const raised = await approved(t);
+    pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved this commit, but no passing independent review of \w+: call review/
+      /Saad approved this commit, but the PR body carries AI attribution/
     );
     expect(merges).toEqual([]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
-    // A review that blocks is his to override.
-    await reviewNow(t.w, "block");
+  });
+
+  it("refuses an approved commit whose CI failed, and waits on CI still running", async () => {
+    const t = setup();
+    const raised = await approved(t);
+    settle(t);
+    pr = { ...pr!, checks: "fail", failing: "test" };
+    const failed = await judge(t.w, getTaskSession(t.task)!);
+    expect(failed).toMatchObject({ ok: false, wait: false });
+    expect(!failed.ok && failed.text).toMatch(
+      /Saad approved this commit, but CI failed on/
+    );
+    pr = { ...pr!, checks: "pending", failing: null };
+    const running = await judge(t.w, getTaskSession(t.task)!);
+    expect(running).toMatchObject({ ok: false, wait: true });
+    expect(!running.ok && running.text).toMatch(
+      /Saad approved this commit, but CI is still running/
+    );
+    expect(merges).toEqual([]);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
+    pr = { ...pr!, checks: "pass" };
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+  });
+
+  it("uses the approval once", async () => {
+    const t = setup();
+    const raised = await approved(t);
+    settle(t);
+    const task = getTaskSession(t.task)!;
+    const first = await judge(t.w, task);
+    const second = await judge(t.w, task);
+    expect(first).toMatchObject({ ok: true, approval: raised.id });
+    expect(second).toMatchObject({ ok: true, approval: raised.id });
+    await mergeJudged(t.w, task, first as Extract<typeof first, { ok: true }>);
+    await expect(
+      mergeJudged(t.w, task, second as Extract<typeof second, { ok: true }>)
+    ).rejects.toThrow(/approval for add-a was already used/);
+    expect(merges).toHaveLength(1);
+  });
+
+  it("merges an armed held task on Saad's approval of its head", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const gate = oneGateAsk(t.w, t.task, pr!.head!);
+    expect(() => armTask(getTaskSession(t.task)!)).toThrow(/is with Saad/);
+    answerAsk(t.w, gate.id, { action: "approve" }, pr!.head!);
+    armTask(getTaskSession(t.task)!);
+    settle(t);
+    await mergeArmed(t.w, [
+      { id: t.task, task: { pr } },
+    ] as unknown as SessionFacts[]);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", pr!.head!],
+    ]);
+    expect(getAsk(t.w, gate.id)?.used_at).toBeTruthy();
   });
 
   it("never lets its approval skip the code review of a held task", async () => {
