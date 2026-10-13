@@ -24,6 +24,7 @@ import { changedFiles, fullDiff } from "./diff";
 import { diffParts } from "./diff-parts";
 import { countFailure, escalate } from "./escalate";
 import { checkGate, holdingEscalations } from "./gates";
+import { reviewWanted } from "./held-review";
 import { mergeApprovalsOn } from "./merge-approvals";
 import {
   baseReviewSkill,
@@ -210,6 +211,8 @@ function countVerdicts(
   target: ReviewTarget,
   sha: string
 ): string {
+  // Held already: the verdict is only stored, for sign_off to read.
+  if (holdingEscalations(target.id).length) return "";
   const escalated: string[] = [];
   for (const gate of ["review", "scope"] as const) {
     if (gate === "scope" && !target.task?.lh_card_id) continue;
@@ -308,11 +311,12 @@ export async function review(
   if (task.task_status !== "running")
     throw new Error(`${task.name} is already ${task.task_status}`);
   const held = holdingEscalations(task.id);
-  if (held.length)
+  const pr = held.length ? await prFor(task, true) : null;
+  if (held.length && !(pr?.head && reviewWanted(workspaceId, task.id, pr.head)))
     return `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
-  const pr = await prFor(task, true);
-  if (!pr?.head) throw new Error(`${task.name} has no PR to review yet`);
-  return reviewAt(workspaceId, taskReviewTarget(task, pr), pr.head, opts);
+  const there = pr ?? (await prFor(task, true));
+  if (!there?.head) throw new Error(`${task.name} has no PR to review yet`);
+  return reviewAt(workspaceId, taskReviewTarget(task, there), there.head, opts);
 }
 
 export function taskReviewTarget(task: Session, pr: TaskPR): ReviewTarget {

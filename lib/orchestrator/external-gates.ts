@@ -19,6 +19,7 @@ import { resolveAsks } from "./asks";
 import { clearStaleRunning, getCheck } from "./checks";
 import { gateTarget, type ExternalPR } from "./external-pr";
 import { holdingEscalations } from "./gates";
+import { reviewWanted } from "./held-review";
 import { addNote } from "./notes";
 import { commitTime } from "./repo";
 import { review, reviewAt, type ReviewOpts } from "./review";
@@ -154,7 +155,10 @@ export async function reviewExternal(
 ): Promise<string> {
   clearStaleRunning();
   const held = holdingEscalations(ext.id);
-  if (held.length)
+  if (
+    held.length &&
+    !(ext.pr.head && reviewWanted(workspaceId, ext.id, ext.pr.head))
+  )
     return `${ext.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
   if (!ext.pr.head) throw new Error(`${ext.name}'s head commit is unknown`);
   return reviewAt(
