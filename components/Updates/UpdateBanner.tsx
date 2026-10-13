@@ -46,7 +46,7 @@ function Log({ lines }: { lines: string[] }) {
         {open ? "Hide log" : "Show log"}
       </button>
       {open && (
-        <pre className="bg-background/60 mt-1 max-h-48 w-full overflow-auto rounded-md p-2 text-xs whitespace-pre-wrap">
+        <pre className="bg-background/60 order-last mt-1 max-h-48 w-full overflow-auto rounded-md p-2 text-xs whitespace-pre-wrap">
           {lines.join("\n")}
         </pre>
       )}
@@ -146,7 +146,7 @@ export function UpdateBannerView({
         </Button>
       )}
       {state === "available" && !view.canUpdate.ok && view.canUpdate.reason && (
-        <p className="text-muted-foreground w-full text-xs">
+        <p className="text-muted-foreground order-last w-full text-xs">
           {view.canUpdate.reason}
         </p>
       )}
@@ -165,7 +165,7 @@ export function UpdateBannerView({
         </Button>
       )}
       {notesOpen && latest && (
-        <ul className="text-muted-foreground w-full list-disc space-y-0.5 pl-9 text-xs">
+        <ul className="text-muted-foreground order-last w-full list-disc space-y-0.5 pl-9 text-xs">
           {latest.notes.map((n, i) => (
             <li key={i}>{n}</li>
           ))}
