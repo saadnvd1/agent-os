@@ -55,59 +55,98 @@ afterEach(() => {
 });
 
 describe("focusComposerInGesture", () => {
-  const phone = { "(max-width: 767px)": true };
+  const chat = { view: "chat" };
+  let paneA: HTMLElement;
+  let paneB: HTMLElement;
+  let hostEl: HTMLElement;
+  const panelOf = (pane: HTMLElement) =>
+    pane.querySelector("[data-composer-scope]")!;
 
-  it("focuses a mounted composer synchronously, on a coarse pointer", () => {
-    stubMedia({ "(pointer: coarse)": true });
-    editorDom.parentElement!.classList.add("chat-composer");
-    sidebarRow.focus();
-    focusComposerInGesture();
-    expect(document.activeElement).toBe(editorDom);
+  // Two panes, each with a chat panel and composer. jsdom has no layout, so
+  // a hidden tab is a panel marked data-hidden that reports no client rects.
+  beforeEach(() => {
+    hostEl = document.createElement("div");
+    hostEl.innerHTML = ["a", "b"]
+      .map(
+        (id) =>
+          `<div data-pane-id="${id}"><div data-composer-scope tabindex="-1"><div class="chat-composer"><div id="ed-${id}" contenteditable="true"></div></div></div></div>`
+      )
+      .join("");
+    document.body.append(hostEl);
+    paneA = hostEl.querySelector('[data-pane-id="a"]')!;
+    paneB = hostEl.querySelector('[data-pane-id="b"]')!;
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(
+      function (this: HTMLElement) {
+        return this.closest("[data-hidden]") ? ([] as never) : ([{}] as never);
+      } as never
+    );
+    // The page's own composer is gone: only the panes have one.
+    editorDom.parentElement!.remove();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    hostEl.remove();
   });
 
-  it("focuses a hidden proxy when none is mounted", () => {
-    stubMedia({});
-    editorDom.parentElement!.remove();
+  it("focuses the composer in the target pane, not another pane's", () => {
+    stubMedia({ "(pointer: coarse)": true });
     sidebarRow.focus();
-    focusComposerInGesture();
+    focusComposerInGesture(paneB, chat);
+    expect(document.activeElement?.id).toBe("ed-b");
+    sidebarRow.focus();
+    focusComposerInGesture(paneA, chat);
+    expect(document.activeElement?.id).toBe("ed-a");
+  });
+
+  it("skips a hidden tab's composer and falls back to the proxy", () => {
+    stubMedia({});
+    panelOf(paneB).setAttribute("data-hidden", "");
+    sidebarRow.focus();
+    focusComposerInGesture(paneB, chat);
     expect(document.activeElement?.hasAttribute("data-composer-proxy")).toBe(
       true
     );
-    // The editor mounting takes it over.
-    expect(focusVerdict(document.body, false)).toBe("take");
+    expect(document.activeElement?.id).not.toBe("ed-b");
   });
 
-  it("does nothing in the phone layout", () => {
-    stubMedia(phone);
-    editorDom.parentElement!.classList.add("chat-composer");
+  it("never for a terminal session", () => {
+    stubMedia({});
     sidebarRow.focus();
-    focusComposerInGesture();
+    focusComposerInGesture(paneB, { view: "terminal" });
     expect(document.activeElement).toBe(sidebarRow);
-    editorDom.parentElement!.remove();
-    focusComposerInGesture();
     expect(document.querySelector("[data-composer-proxy]")).toBeNull();
   });
 
-  it("leaves someone typing elsewhere alone", () => {
+  it("does nothing in the phone layout", () => {
+    stubMedia({ "(max-width: 767px)": true });
+    sidebarRow.focus();
+    focusComposerInGesture(paneB, chat);
+    expect(document.activeElement).toBe(sidebarRow);
+    expect(document.querySelector("[data-composer-proxy]")).toBeNull();
+  });
+
+  it("leaves someone typing elsewhere, or working in the panel, alone", () => {
     stubMedia({});
-    editorDom.parentElement!.classList.add("chat-composer");
     search.focus();
-    focusComposerInGesture();
+    focusComposerInGesture(paneB, chat);
     expect(document.activeElement).toBe(search);
+    // Focus inside a panel with no composer showing keeps the proxy away too.
+    const inPanel = document.createElement("button");
+    panelOf(paneB).append(inPanel);
+    panelOf(paneB).querySelector(".chat-composer")!.remove();
+    inPanel.focus();
+    focusComposerInGesture(paneB, chat);
+    expect(document.activeElement).toBe(inPanel);
+    expect(document.querySelector("[data-composer-proxy]")).toBeNull();
   });
 
   it("the hook hands the proxy's focus to the editor and drops the proxy", async () => {
     stubMedia({});
+    panelOf(paneB).setAttribute("data-hidden", "");
     sidebarRow.focus();
-    editorDom.parentElement!.remove();
-    focusComposerInGesture();
+    focusComposerInGesture(paneB, chat);
     const proxy = document.querySelector("[data-composer-proxy]")!;
-    const root = createRoot(document.createElement("div"));
-    const host = document.createElement("div");
-    host.innerHTML =
-      '<div data-composer-scope><div id="e2" contenteditable="true"></div></div>';
-    document.body.append(host);
-    const dom = host.querySelector<HTMLElement>("#e2")!;
+    const dom = hostEl.querySelector<HTMLElement>("#ed-a")!;
     const editor = {
       view: { dom },
       commands: { focus: () => dom.focus() },
@@ -119,11 +158,11 @@ describe("focusComposerInGesture", () => {
       useFocusOnShow(editor, "a", false);
       return null;
     }
+    const root = createRoot(document.createElement("div"));
     await act(() => root.render(createElement(Probe)));
     expect(document.activeElement).toBe(dom);
     expect(proxy.isConnected).toBe(false);
     await act(() => root.unmount());
-    host.remove();
   });
 });
 

@@ -415,6 +415,7 @@ export const Pane = memo(function Pane({
           "bg-card rounded-xl shadow-(--elevation) ring-1 transition-shadow duration-200",
         !isMobile && (isFocused ? "ring-primary/40" : "ring-foreground/[0.07]")
       )}
+      data-pane-id={paneId}
       onClick={handleFocus}
     >
       {/* Tab Bar - Mobile vs Desktop */}

@@ -334,8 +334,6 @@ function HomeContent() {
   // Attach session to terminal
   const attachToSession = useCallback(
     async (session: Session) => {
-      // Inside the tap or key press that picked the session, before any await.
-      focusComposerInGesture();
       // A chat tab, or a tab whose terminal isn't mounted yet: point the tab
       // at the session and its terminal attaches as it connects
       // (onAttachSession), resuming the agent.
@@ -536,6 +534,20 @@ function HomeContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Picking a session with a tap, ⌘K or the keyboard: the composer is focused
+  // inside the gesture, which iOS requires. Other ways in (URL, notification,
+  // a session just created) use attachToSession's later focus.
+  const selectSession = useCallback(
+    (session: Session) => {
+      focusComposerInGesture(
+        document.querySelector(`[data-pane-id="${focusedPaneId}"]`),
+        session
+      );
+      void attachToSession(session);
+    },
+    [attachToSession, focusedPaneId]
+  );
+
   // Session selection handler
   const handleSelectSession = useCallback(
     (sessionId: string) => {
@@ -664,7 +676,7 @@ function HomeContent() {
 
   useAppCommands({
     sessions,
-    onSelectSession: attachToSession,
+    onSelectSession: selectSession,
     onSearchCode: () => setShowQuickSwitcher(true),
   });
   useMoveCommands(activeSession);
@@ -686,6 +698,7 @@ function HomeContent() {
     setShowQuickSwitcher,
     notificationSettings,
     attachToSession,
+    selectSession,
     openSessionInNewTab,
     handleNewSessionInProject,
     handleOpenTerminal,

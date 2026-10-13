@@ -42,7 +42,11 @@ export function focusVerdict(
   return verdictFor(editor.ownerDocument, editor);
 }
 
-function verdictFor(doc: Document, editor: HTMLElement | null): FocusVerdict {
+function verdictFor(
+  doc: Document,
+  editor: HTMLElement | null,
+  panel: Element | null = editor?.closest("[data-composer-scope]") ?? null
+): FocusVerdict {
   if (doc.querySelector(OPEN_ON_TOP)) return "wait";
   const selection = doc.getSelection();
   if (
@@ -59,24 +63,37 @@ function verdictFor(doc: Document, editor: HTMLElement | null): FocusVerdict {
   if (active.closest(EDITABLE)) return "leave";
   // The panel it belongs to (a chat, a draft): focus already inside it stays
   // where the user put it.
-  const scope = editor?.closest("[data-composer-scope]");
-  return scope && scope !== active && scope.contains(active) ? "leave" : "take";
+  return panel && panel !== active && panel.contains(active) ? "leave" : "take";
 }
 
-const COMPOSER =
-  '[data-composer-scope] .chat-composer [contenteditable="true"]';
+const PANEL = "[data-composer-scope]";
+const COMPOSER = '.chat-composer [contenteditable="true"]';
 const PROXY_MS = 3000;
+
+// Hidden tabs are display:none, and every tab of every pane stays mounted.
+const visible = (el: Element) => el.getClientRects().length > 0;
 
 // iOS WebKit only honours focus() inside the tap or key press that asked for
 // it, and a session's composer is focused later (after it reconnects). So the
-// handler that selects a session calls this, synchronously: it focuses the
-// composer if one is mounted, else a hidden field that useFocusOnShow hands
-// over to the editor when it mounts (focus moving on from a focused element
-// is allowed). Other browsers don't need it; the late focus works there.
-export function focusComposerInGesture(doc: Document = document) {
-  if (isPhoneLayout()) return;
-  const editor = doc.querySelector<HTMLElement>(COMPOSER);
-  if (verdictFor(doc, editor) !== "take") return;
+// handler that selects a chat session from a real gesture (a sidebar tap, ⌘K,
+// the keyboard switch) calls this, synchronously: it focuses the composer
+// showing in `pane` (the one the session opens into) if there is one, else a
+// hidden field that useFocusOnShow hands over to the editor when it mounts
+// (focus moving on from a focused element is allowed). Never for a terminal
+// session, whose keystrokes the hidden field would take. Other browsers don't
+// need it; the late focus works there.
+export function focusComposerInGesture(
+  pane: Element | null,
+  session: { view?: string },
+  doc: Document = document
+) {
+  if (session.view !== "chat" || isPhoneLayout()) return;
+  const panel =
+    [...(pane?.querySelectorAll(PANEL) ?? [])].find(visible) ?? null;
+  const editor =
+    [...(panel?.querySelectorAll<HTMLElement>(COMPOSER) ?? [])].find(visible) ??
+    null;
+  if (verdictFor(doc, editor, panel) !== "take") return;
   if (editor) {
     editor.focus({ preventScroll: true });
     return;
