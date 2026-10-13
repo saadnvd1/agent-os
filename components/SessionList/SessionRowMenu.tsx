@@ -148,6 +148,28 @@ export function SessionRowMenu({
     ctx.projects.find((p) => p.id === session.project_id)?.workspace_id ??
     null;
 
+  // A quick change has no agent: no fork, fresh start, snooze or move, just
+  // its PR and the ways to finish it.
+  if (session.quick_of)
+    return (
+      <>
+        {session.pr_url && (
+          <Item onClick={() => window.open(session.pr_url!, "_blank")}>
+            <GitPullRequest className={icon} />
+            Open PR #{session.pr_number}
+          </Item>
+        )}
+        <FinishItems session={session} plain={plain} Item={Item} />
+        <Item
+          onClick={() => ctx.onDelete(session.id)}
+          className="text-red-500 focus:text-red-500"
+        >
+          <Trash2 className={icon} />
+          Delete session
+        </Item>
+      </>
+    );
+
   return (
     <>
       {session.branch_name && (
