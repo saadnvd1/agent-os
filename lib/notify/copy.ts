@@ -55,21 +55,21 @@ export const CATEGORIES: Record<PushCategory, CategoryDef> = {
     level: "active",
     defaultOn: true,
     label: "CI and review problems",
-    word: "Update",
+    word: "CI or review failed",
     link: (id) => (id ? `/task/${id}` : FALLBACK_LINK),
   },
   merged: {
     level: "passive",
     defaultOn: false,
     label: "Merged",
-    word: "Update",
+    word: "Merged",
     link: (id) => (id ? `/task/${id}` : FALLBACK_LINK),
   },
   agents: {
     level: "active",
     defaultOn: true,
     label: "Messages from agents",
-    word: "Update",
+    word: "Agent message",
     link: (id) => (id ? `/session/${id}` : FALLBACK_LINK),
   },
   digest: {
@@ -83,7 +83,7 @@ export const CATEGORIES: Record<PushCategory, CategoryDef> = {
     level: "active",
     defaultOn: true,
     label: "Machine alerts",
-    word: "Update",
+    word: "Machine alert",
     link: () => "/machines",
   },
 };
