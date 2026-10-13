@@ -40,13 +40,13 @@ function Log({ lines }: { lines: string[] }) {
     <>
       <button
         type="button"
-        className="text-muted-foreground hover:text-foreground min-h-11 text-xs underline md:min-h-0"
+        className="text-muted-foreground hover:text-foreground min-h-9 text-xs underline md:min-h-0"
         onClick={() => setOpen(!open)}
       >
         {open ? "Hide log" : "Show log"}
       </button>
       {open && (
-        <pre className="bg-background/60 order-last mt-1 max-h-48 w-full overflow-auto rounded-md p-2 text-xs whitespace-pre-wrap">
+        <pre className="bg-background/60 mt-1 max-h-48 w-full overflow-auto rounded-md p-2 text-xs whitespace-pre-wrap">
           {lines.join("\n")}
         </pre>
       )}
@@ -92,65 +92,82 @@ export function UpdateBannerView({
       );
   }
 
+  const extra = (
+    <>
+      {state === "available" && !view.canUpdate.ok && view.canUpdate.reason && (
+        <p className="text-muted-foreground text-xs">{view.canUpdate.reason}</p>
+      )}
+      {failed && <Log lines={run?.log ?? []} />}
+      {notesOpen && latest && (
+        <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
+          {latest.notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+
   return (
     <div
       role={failed ? "alert" : "status"}
       className={cn(
-        "flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-2 text-sm",
+        "flex items-start gap-2 border-b px-3 py-2 text-sm",
         failed ? "bg-destructive/10 text-foreground" : "bg-muted/60"
       )}
     >
-      {state === "running" ? (
-        <Loader2 className="text-muted-foreground h-4 w-4 shrink-0 animate-spin" />
-      ) : (
-        <ArrowUpCircle
-          className={cn(
-            "h-4 w-4 shrink-0",
-            failed ? "text-destructive" : "text-primary"
-          )}
-        />
-      )}
-      <p className="min-w-0 flex-1 basis-48">{text}</p>
-      {state === "available" && latest && latest.notes.length > 0 && (
-        <button
-          type="button"
-          aria-expanded={notesOpen}
-          className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs md:min-h-0"
-          onClick={() => setNotesOpen(!notesOpen)}
-        >
-          What&apos;s new
-          <ChevronDown
+      <span className="flex h-6 shrink-0 items-center md:h-8">
+        {state === "running" ? (
+          <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+        ) : (
+          <ArrowUpCircle
             className={cn(
-              "h-3 w-3 transition-transform",
-              notesOpen && "rotate-180"
+              "h-4 w-4",
+              failed ? "text-destructive" : "text-primary"
             )}
           />
-        </button>
-      )}
-      {state === "available" && latest?.url && (
-        <a
-          href={latest.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="text-primary inline-flex min-h-11 items-center text-xs underline md:min-h-0"
-        >
-          Release notes
-        </a>
-      )}
-      {(state === "available" || state === "pending") && (
-        <UpdateActions view={view} />
-      )}
-      {state === "running" && elapsed > SLOW_MS && (
-        <Button size="sm" onClick={() => window.location.reload()}>
-          Reload
-        </Button>
-      )}
-      {state === "available" && !view.canUpdate.ok && view.canUpdate.reason && (
-        <p className="text-muted-foreground order-last w-full text-xs">
-          {view.canUpdate.reason}
-        </p>
-      )}
-      {failed && <Log lines={run?.log ?? []} />}
+        )}
+      </span>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 md:min-h-8">
+          <p className="min-w-0 flex-1 basis-40">{text}</p>
+          {state === "available" && latest && latest.notes.length > 0 && (
+            <button
+              type="button"
+              aria-expanded={notesOpen}
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-9 items-center gap-1 text-xs md:min-h-0"
+              onClick={() => setNotesOpen(!notesOpen)}
+            >
+              What&apos;s new
+              <ChevronDown
+                className={cn(
+                  "h-3 w-3 transition-transform",
+                  notesOpen && "rotate-180"
+                )}
+              />
+            </button>
+          )}
+          {state === "available" && latest?.url && (
+            <a
+              href={latest.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-primary inline-flex min-h-9 items-center text-xs underline md:min-h-0"
+            >
+              Release notes
+            </a>
+          )}
+          {(state === "available" || state === "pending") && (
+            <UpdateActions view={view} />
+          )}
+          {state === "running" && elapsed > SLOW_MS && (
+            <Button size="sm" onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          )}
+        </div>
+        {extra}
+      </div>
       {state !== "running" && state !== "pending" && (
         <Button
           variant="ghost"
@@ -158,18 +175,11 @@ export function UpdateBannerView({
           aria-label={
             state === "available" ? "Dismiss until the next version" : "Dismiss"
           }
-          className="-mr-1 ml-auto h-11 w-11 shrink-0 md:h-8 md:w-8"
+          className="-my-1 -mr-1 h-11 w-11 shrink-0 md:h-8 md:w-8"
           onClick={onDismiss}
         >
           <X className="h-4 w-4" />
         </Button>
-      )}
-      {notesOpen && latest && (
-        <ul className="text-muted-foreground order-last w-full list-disc space-y-0.5 pl-9 text-xs">
-          {latest.notes.map((n, i) => (
-            <li key={i}>{n}</li>
-          ))}
-        </ul>
       )}
     </div>
   );
