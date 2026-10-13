@@ -97,7 +97,7 @@ describe("the move tool", () => {
   it("keeps aos's own move, done and stop closed to an orchestrator", () => {
     const t = setup();
     expect(() =>
-      scopeOf({ id: t.orch.id, role: "orchestrator" } as never, undefined)
+      scopeOf({ id: t.orch.id, role: "orchestrator" } as never)
     ).toThrow(/move|done|stop/);
   });
 });
