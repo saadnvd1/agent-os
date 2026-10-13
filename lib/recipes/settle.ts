@@ -194,7 +194,7 @@ function tell(
   queueEvent(
     run.recipe.workspace_id,
     `recipe:${run.id}:${status}`,
-    run.recipe.name,
+    run.session_id,
     `Recipe "${run.recipe.name}" run #${run.seq} ${bad ? status.replace("_", " ") : "finished ok"}${reported ? `: ${untrusted(run.recipe.name, reported)}` : "."}${pr}`
   );
 }

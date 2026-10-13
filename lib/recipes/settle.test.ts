@@ -129,6 +129,20 @@ describe("settleRuns: session recipes", () => {
     expect(events(loud.workspace_id)[0].line).toContain("build=9");
   });
 
+  it("queues the orchestrator's line so a diff pass keeps it", async () => {
+    const r = makeRecipe({ name: "Parity audit" });
+    const s = makeSession();
+    finals.set(s, "RESULT: ok — fine");
+    liveRun(r.id, s, { trigger: "tool" });
+    await settleRuns(Date.now(), noModel);
+    const { recordConditions } = await import("../orchestrator/events");
+    recordConditions(r.workspace_id, [], [s]);
+    recordConditions(r.workspace_id, [], [s]);
+    expect(events(r.workspace_id)[0].key).toMatch(
+      /^once:recipe:\d+:succeeded$/
+    );
+  });
+
   it("settles by the model after the idle wait when there is no line", async () => {
     const r = makeRecipe();
     const s = makeSession();

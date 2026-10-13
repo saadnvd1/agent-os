@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { db } from "@/lib/db";
 import { createWorkspace } from "@/lib/workspaces";
 import { createProject } from "@/lib/projects";
 import { conditionsFor, type Condition } from "./conditions";
@@ -144,6 +145,40 @@ describe("recordConditions", () => {
     restarted.recordConditions(w.id, c, subjects, NOW + 5000);
     restarted.recordConditions(w.id, c, subjects, NOW + 10000);
     expect(restarted.pendingEvents(w.id)).toEqual([]);
+  });
+});
+
+describe("one-off events", () => {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const keys = (w: string) =>
+    (
+      db
+        .prepare(
+          `SELECT key FROM orchestrator_events WHERE workspace_id = ? AND key LIKE 'once:%'`
+        )
+        .all(w) as {
+        key: string;
+      }[]
+    ).map((r) => r.key);
+
+  it("keeps an undelivered one with a subject that is no session, through a diff pass, then delivers it", () => {
+    const { w, record, pending, deliverAll } = setup();
+    queueEvent(w.id, "recipe:2:succeeded", "Parity audit", "Recipe done", NOW);
+    record([], NOW + 1000);
+    record([], NOW + 2000);
+    expect(pending()).toEqual(["Recipe done"]);
+    deliverAll(NOW + 3000);
+    expect(pending()).toEqual([]);
+  });
+
+  it("removes a delivered one a day after it was delivered", () => {
+    const { w, subjects, record, deliverAll } = setup();
+    queueEvent(w.id, "recipe:3:succeeded", subjects[0], "Recipe done", NOW);
+    deliverAll(NOW);
+    record([], NOW + dayMs - 1000);
+    expect(keys(w.id)).toEqual(["once:recipe:3:succeeded"]);
+    record([], NOW + dayMs + 1000);
+    expect(keys(w.id)).toEqual([]);
   });
 });
 
