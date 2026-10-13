@@ -969,8 +969,12 @@ name, a time (presets for hourly, daily, weekdays and weekly, or any
 five-field cron expression, in America/Chicago unless you pick another zone),
 a project and a prompt, and starts one of:
 
-- **Task**: a background task that ends in a pull request, as above.
-- **Session**: a chat session in the project that runs the prompt and stays.
+- **Task** and **Session**: now recipes (Settings > Recipes) with a timer.
+  Migration 81 turned each existing recurring task or session schedule into a
+  recipe, with its run history; the Schedules form no longer offers them. A
+  one-off that still has one of these kinds is left as it was. To undo the
+  move, stop AgentOS and run
+  `npx tsx scripts/revert-schedules-move.ts --db <path to agent-os.db>`.
 - **Orchestrator**: the prompt, posted to the workspace's orchestrator as a
   message from "Schedule <name>", marked as a scheduled prompt so it never
   counts as an approval.

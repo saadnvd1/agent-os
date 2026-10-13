@@ -34,6 +34,7 @@ import {
   wall,
   type PresetKind,
 } from "@/lib/schedules/cron";
+import { recipesUiActions } from "@/stores/recipesUi";
 import { parseWhen, relativeTime } from "@/lib/schedules/when";
 
 const KINDS: { value: ScheduleKind; label: string; hint: string }[] = [
@@ -58,6 +59,10 @@ const KINDS: { value: ScheduleKind; label: string; hint: string }[] = [
     hint: "Sends the prompt to a session you pick, waking it if its chat has stopped. Skips a run while it's still working.",
   },
 ];
+
+// New jobs of these shapes are recipes; the kinds stay only to edit a
+// schedule that still has one (a one-off, say).
+const LEGACY_KINDS: ScheduleKind[] = ["task", "session"];
 
 type Preset = PresetKind | "custom" | "once";
 
@@ -171,7 +176,7 @@ export function ScheduleForm({
   );
   const [name, setName] = useState(existing?.name ?? draft?.name ?? "");
   const [kind, setKind] = useState<ScheduleKind>(
-    existing?.kind ?? draft?.kind ?? "task"
+    existing?.kind ?? draft?.kind ?? "orchestrator"
   );
   const [targetId, setTargetId] = useState(
     existing?.target_session_id ?? draft?.targetSessionId ?? ""
@@ -329,7 +334,9 @@ export function ScheduleForm({
         <Segmented
           label="What it starts"
           value={kind}
-          options={KINDS}
+          options={KINDS.filter(
+            (k) => !LEGACY_KINDS.includes(k.value) || existing?.kind === k.value
+          )}
           onChange={(k) => {
             setKind(k);
             if (preset === "every" && !frequent(k)) setPreset("daily");
@@ -337,6 +344,17 @@ export function ScheduleForm({
         />
         <p className="text-muted-foreground text-xs">
           {KINDS.find((k) => k.value === kind)?.hint}
+        </p>
+        <p className="text-muted-foreground text-xs">
+          To start a task or session on a timer, use a{" "}
+          <button
+            type="button"
+            className="text-foreground underline underline-offset-2"
+            onClick={() => recipesUiActions.open(workspaceId ?? null)}
+          >
+            recipe
+          </button>
+          .
         </p>
       </Field>
 
