@@ -48,7 +48,9 @@ export function track(live: Live, e: WorkerEvent): void {
       a.tools.set(e.item.id, { label: e.item.title, since: e.item.createdAt });
     else a.tools.delete(e.item.id);
   } else if (e.type === "item" && e.item.kind === "task" && !e.item.ambient) {
-    if (e.item.status === "running") a.tasks.add(e.item.taskId);
+    // One still blocking its tool call is counted as that tool.
+    if (e.item.status === "running" && e.item.backgrounded !== false)
+      a.tasks.add(e.item.taskId);
     else a.tasks.delete(e.item.taskId);
   }
 }
@@ -65,7 +67,7 @@ export function restoreActivity(sessionId: string, state: ChatState) {
       activity.tools.set(i.id, { label: i.title, since: i.createdAt });
   }
   for (const i of runningItems(sessionId, "task"))
-    if (!i.ambient) activity.tasks.add(i.taskId);
+    if (!i.ambient && i.backgrounded !== false) activity.tasks.add(i.taskId);
   return activity;
 }
 

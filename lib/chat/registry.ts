@@ -35,6 +35,8 @@ export interface Live {
   canQueue?: boolean;
   // Whether it takes "fresh" (a fresh start the reader asked for).
   canFresh?: boolean;
+  // Whether it takes "background_task" (an older worker drops it).
+  canBackground?: boolean;
   // From an older build and idle: retired once its guess at the next
   // message is in, or this fires.
   retiring?: NodeJS.Timeout;

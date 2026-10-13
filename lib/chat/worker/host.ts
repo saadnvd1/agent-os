@@ -712,6 +712,19 @@ export class ChatHost {
         return this.conversation.respond(cmd.id, cmd);
       case "stop_task":
         return this.conversation.stopTask(cmd.taskId);
+      case "background_task":
+        try {
+          if (!this.conversation.backgroundTask) throw new Error("unsupported");
+          const ok = await this.conversation.backgroundTask(cmd.toolUseId);
+          this.emit({ type: "background_result", reqId: cmd.reqId, ok });
+        } catch (error) {
+          this.emit({
+            type: "background_result",
+            reqId: cmd.reqId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
       case "undo":
         try {
           const result = await this.conversation.undo(

@@ -12,6 +12,7 @@ import {
   carryOutPlan,
   chatFileSuggestions,
   chatHistory,
+  backgroundChatTask,
   chatTaskOutput,
   chatToolBody,
   deleteQueuedChat,
@@ -183,6 +184,14 @@ function onChatMessage(
     run(carryOutPlan(sessionId, String(msg.id)));
   else if (msg.type === "respond") respondChat(sessionId, msg.id, msg);
   else if (msg.type === "stop_task") stopChatTask(sessionId, msg.taskId);
+  else if (msg.type === "background_task")
+    run(
+      backgroundChatTask(
+        sessionId,
+        typeof msg.toolUseId === "string" ? msg.toolUseId : undefined,
+        reply
+      )
+    );
   else if (msg.type === "task_output")
     reply({
       type: "task_output",

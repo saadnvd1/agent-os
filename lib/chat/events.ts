@@ -165,6 +165,8 @@ export type ChatItem =
       deferred?: boolean;
       hasOutput?: boolean;
       hasDiff?: boolean;
+      // The task this call became when it was moved to the background.
+      backgroundTaskId?: string;
     })
   | (Base & {
       kind: "todos";
@@ -233,6 +235,9 @@ export type ChatItem =
       taskType?: string;
       subagentType?: string;
       status: "running" | "completed" | "failed" | "stopped";
+      // False while it still blocks the tool call that started it; unset
+      // means it runs in the background.
+      backgrounded?: boolean;
       endedAt?: number;
       summary?: string;
       outputFile?: string;
@@ -353,10 +358,18 @@ export type ChatServerMessage =
       access: ChatAccess;
       // Plan mode: on, or null when the session can't use it.
       plan: boolean | null;
+      // Whether a blocking call can be moved to the background.
+      background?: boolean;
     }
   | { type: "context"; context: ChatContext | null }
   | { type: "undo_preview"; from: string; preview: UndoPreview }
   | { type: "task_output"; taskId: string; text: string | null }
+  | {
+      type: "background_result";
+      toolUseId?: string;
+      ok: boolean;
+      error?: string;
+    }
   | { type: "undone"; from: string; text: string };
 
 // What a browser sends.
@@ -379,6 +392,7 @@ export type ChatClientMessage =
   | ({ type: "respond"; id: string } & ApprovalDecision)
   | { type: "undo"; from: string; dryRun?: boolean }
   | { type: "stop_task"; taskId: string }
+  | { type: "background_task"; toolUseId?: string }
   | { type: "task_output"; taskId: string }
   // Older items, from before a page's cursor.
   | { type: "history"; before: number }

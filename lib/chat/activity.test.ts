@@ -98,3 +98,27 @@ describe("a compacting chat", () => {
     expect(stallOf(l, Date.now() + 60 * MIN, 8 * MIN)).toBeNull();
   });
 });
+
+describe("background tasks in the activity", () => {
+  const task = (status: string, backgrounded?: boolean) =>
+    ev({
+      type: "item",
+      item: { kind: "task", taskId: "b1", status, backgrounded },
+    });
+
+  it("counts a task only once it is in the background", () => {
+    const l = live();
+    track(l, task("running", false));
+    expect(l.activity.tasks.size).toBe(0);
+    track(l, task("running", true));
+    expect(l.activity.tasks.size).toBe(1);
+    track(l, task("completed", true));
+    expect(l.activity.tasks.size).toBe(0);
+  });
+
+  it("counts one saved before the flag existed", () => {
+    const l = live();
+    track(l, task("running"));
+    expect(l.activity.tasks.size).toBe(1);
+  });
+});

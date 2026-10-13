@@ -15,6 +15,7 @@ import type {
   ApprovalDecision,
   ChatContext,
   ChatImage,
+  ChatServerMessage,
   ChatState,
   Compacting,
   SentBy,
@@ -304,6 +305,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       canPlan: !!hello.caps?.includes("plan"),
       canQueue: !!hello.caps?.includes("queue"),
       canFresh: !!hello.caps?.includes("fresh"),
+      canBackground: !!hello.caps?.includes("background"),
     };
     // From an older build and busy, or running background work: it goes at
     // its next turn boundary, by itself if it can. Messages meanwhile wait
@@ -834,6 +836,24 @@ export async function chatStateNow(
 
 export function stopChatTask(sessionId: string, taskId: string): void {
   registry.live.get(sessionId)?.worker.command({ type: "stop_task", taskId });
+}
+
+// Moves a blocking call to the background and says how that went.
+export async function backgroundChatTask(
+  sessionId: string,
+  toolUseId: string | undefined,
+  reply: (m: ChatServerMessage) => void
+): Promise<void> {
+  const live = registry.live.get(sessionId);
+  const r = live?.canBackground
+    ? await live.worker.background(toolUseId)
+    : { error: "unavailable" };
+  reply({
+    type: "background_result",
+    toolUseId,
+    ok: !!r.ok,
+    ...(r.error && { error: r.error }),
+  });
 }
 
 export function chatTaskOutput(

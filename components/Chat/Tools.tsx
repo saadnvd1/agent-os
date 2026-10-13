@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect } from "react";
-import { Check, ChevronRight, Loader2, Square, X } from "lucide-react";
+import { Check, ChevronRight, Layers, Loader2, Square, X } from "lucide-react";
 import type { FileDiff, ToolBody } from "@/lib/chat/events";
 import type { ToolItem } from "@/lib/chat/group";
 import { lineDiff, shortPath, type DiffLine } from "@/lib/chat/diff";
@@ -9,6 +9,7 @@ import { needsBody } from "@/lib/chat/bodyCache";
 import { cn } from "@/lib/utils";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { Highlighted } from "./Code";
+import { BackgroundButton, BackgroundState, useBackground } from "./background";
 import { useNow } from "./useNow";
 import { useRowState } from "./rowState";
 
@@ -46,6 +47,18 @@ export function StatusIcon({ status }: { status: ToolItem["status"] }) {
   if (status === "stopped")
     return <Square className="text-muted-foreground/60 h-3 w-3 shrink-0" />;
   return <Check className="text-muted-foreground/70 h-3.5 w-3.5 shrink-0" />;
+}
+
+// The status of a call; one moved to the background and still running there
+// shows as handed off instead of done.
+export function ToolIcon({ tool }: { tool: ToolItem }) {
+  const bg = useBackground();
+  const task = tool.backgroundTaskId
+    ? bg.taskById(tool.backgroundTaskId)
+    : undefined;
+  if (tool.backgroundTaskId && (!task || task.status === "running"))
+    return <Layers className="text-muted-foreground h-3.5 w-3.5 shrink-0" />;
+  return <StatusIcon status={tool.status} />;
 }
 
 const TONE: Record<DiffLine["op"], string> = {
@@ -139,17 +152,24 @@ function ToolRow({ tool }: { tool: ToolItem }) {
   );
   return (
     <div data-item={tool.id}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="hover:bg-foreground/[0.04] flex min-h-9 w-full items-center gap-2 rounded-lg px-1.5 text-left md:min-h-7"
-      >
-        <StatusIcon status={tool.status} />
-        <span className="min-w-0 flex-1 truncate font-mono text-xs">
-          {tool.title}
-        </span>
-        <Elapsed tool={tool} />
-      </button>
+      <div className="hover:bg-foreground/[0.04] flex items-center gap-1 rounded-lg pr-1">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="flex min-h-9 min-w-0 flex-1 items-center gap-2 px-1.5 text-left md:min-h-7"
+        >
+          <ToolIcon tool={tool} />
+          <span className="min-w-0 flex-1 truncate font-mono text-xs">
+            {tool.title}
+          </span>
+          {tool.backgroundTaskId ? (
+            <BackgroundState tool={tool} />
+          ) : (
+            <Elapsed tool={tool} />
+          )}
+        </button>
+        <BackgroundButton tool={tool} />
+      </div>
       {open && <ToolDetail tool={tool} />}
     </div>
   );
@@ -161,39 +181,50 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
   const failed = tools.filter((t) => t.status === "error").length;
   const stopped = tools.filter((t) => t.status === "stopped").length;
   const edits = tools.filter((t) => t.diff || t.hasDiff).length;
+  const moved = tools.filter((t) => t.backgroundTaskId).length;
   const [open, setOpen] = useRowState(`steps:${tools[0].id}`, false);
   const latest =
     tools.findLast((t) => t.status === "running") ?? tools[tools.length - 1];
   return (
     <div className="bg-foreground/[0.025] rounded-xl px-2 py-1">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="text-muted-foreground hover:text-foreground flex min-h-10 w-full items-center gap-2 px-1.5 text-left text-xs md:min-h-8"
-      >
-        <ChevronRight
-          className={cn(
-            "h-3 w-3 shrink-0 transition-transform",
-            open && "rotate-90"
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="text-muted-foreground hover:text-foreground flex min-h-10 min-w-0 flex-1 items-center gap-2 px-1.5 text-left text-xs md:min-h-8"
+        >
+          <ChevronRight
+            className={cn(
+              "h-3 w-3 shrink-0 transition-transform",
+              open && "rotate-90"
+            )}
+          />
+          {running ? (
+            <Loader2 className="text-primary h-3.5 w-3.5 shrink-0 animate-spin" />
+          ) : null}
+          <span className="min-w-0 flex-1 truncate">
+            {running
+              ? latest.title
+              : `${tools.length} step${tools.length === 1 ? "" : "s"}`}
+            {!running &&
+              edits > 0 &&
+              ` · ${edits} edit${edits === 1 ? "" : "s"}`}
+          </span>
+          {running && <Elapsed tool={latest} />}
+          {failed > 0 && (
+            <span className="text-destructive">{failed} failed</span>
           )}
-        />
-        {running ? (
-          <Loader2 className="text-primary h-3.5 w-3.5 shrink-0 animate-spin" />
-        ) : null}
-        <span className="min-w-0 flex-1 truncate">
-          {running
-            ? latest.title
-            : `${tools.length} step${tools.length === 1 ? "" : "s"}`}
-          {!running && edits > 0 && ` · ${edits} edit${edits === 1 ? "" : "s"}`}
-        </span>
-        {running && <Elapsed tool={latest} />}
-        {failed > 0 && (
-          <span className="text-destructive">{failed} failed</span>
-        )}
-        {stopped > 0 && failed === 0 && (
-          <span className="text-muted-foreground/70">stopped</span>
-        )}
-      </button>
+          {stopped > 0 && failed === 0 && (
+            <span className="text-muted-foreground/70">stopped</span>
+          )}
+          {!running && moved > 0 && (
+            <span className="text-muted-foreground/70">
+              {moved} in background
+            </span>
+          )}
+        </button>
+        {running && <BackgroundButton tool={latest} />}
+      </div>
       {open && (
         <div className="pb-1">
           {tools.map((t) => (

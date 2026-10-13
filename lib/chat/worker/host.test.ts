@@ -37,6 +37,10 @@ function fakeConversation() {
     setPlan: vi.fn(async (_plan: boolean) => {}),
     respond: vi.fn(),
     stopTask: vi.fn(async () => {}),
+    backgroundTask: vi.fn(async (id?: string) => {
+      if (id === "boom") throw new Error("background tasks are off");
+      return id !== "gone";
+    }),
     fileSuggestions: vi.fn(async (query: string) =>
       query === "boom"
         ? Promise.reject(new Error("index failed"))
@@ -898,6 +902,61 @@ describe("ChatHost files", () => {
       type: "files_result",
       reqId: "r2",
       error: "index failed",
+    });
+    host.close();
+  });
+});
+
+describe("ChatHost background_task", () => {
+  it("answers with whether anything moved", async () => {
+    const { host, emitted } = await startHost();
+    await host.handle({
+      type: "background_task",
+      reqId: "b1",
+      toolUseId: "t1",
+    });
+    await host.handle({
+      type: "background_task",
+      reqId: "b2",
+      toolUseId: "gone",
+    });
+    expect(current.backgroundTask).toHaveBeenCalledWith("t1");
+    expect(emitted).toContainEqual({
+      type: "background_result",
+      reqId: "b1",
+      ok: true,
+    });
+    expect(emitted).toContainEqual({
+      type: "background_result",
+      reqId: "b2",
+      ok: false,
+    });
+    host.close();
+  });
+
+  it("reports a refusal instead of dropping the request", async () => {
+    const { host, emitted } = await startHost();
+    await host.handle({
+      type: "background_task",
+      reqId: "b3",
+      toolUseId: "boom",
+    });
+    expect(emitted).toContainEqual({
+      type: "background_result",
+      reqId: "b3",
+      error: "background tasks are off",
+    });
+    host.close();
+  });
+
+  it("says so when the agent can't", async () => {
+    const { host, emitted } = await startHost();
+    delete (current as { backgroundTask?: unknown }).backgroundTask;
+    await host.handle({ type: "background_task", reqId: "b4" });
+    expect(emitted).toContainEqual({
+      type: "background_result",
+      reqId: "b4",
+      error: "unsupported",
     });
     host.close();
   });

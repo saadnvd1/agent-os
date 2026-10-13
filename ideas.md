@@ -170,3 +170,5 @@
   machines, a machines/phone/notifications step, an in-app health view
   (node, git, tmux, CLIs) with a test that the shell installer and the app
   agree on the minimum node and the install commands, and web-push opt-in.
+
+- Send to background, next: a toolbar button in the terminal view that sends the agent's own background key straight to the pane (send-keys, not the attached client, so tmux's prefix doesn't swallow it; through the host for a linked machine), shown only while the screen says a tool is running; mapping `background_tasks_changed` as a reconcile for a missed task_notification; a push for a background task that fails while the reader is away.

@@ -75,6 +75,7 @@ export function emitCapabilities(session: Session, listener?: Listener): void {
     model: chatModel(session),
     access: session.chat_access,
     plan: canPlan(session) ? !!session.chat_plan : null,
+    background: chatDriverFor(session.agent_type)?.backgroundTasks === true,
   };
   if (listener) listener(m);
   else emit(session.id, m);

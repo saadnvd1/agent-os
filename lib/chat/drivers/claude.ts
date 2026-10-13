@@ -129,6 +129,7 @@ export function writtenPlanFile(m: ClaudeMessage): string | undefined {
 
 export const claudeDriver: ChatDriver = {
   id: "claude",
+  backgroundTasks: true,
 
   // Claude Code reports its commands, skills and models while starting up,
   // before any message, so a short-lived start tells the composer what's
@@ -348,6 +349,9 @@ export const claudeDriver: ChatDriver = {
       },
       async stopTask(taskId) {
         await q.stopTask(taskId);
+      },
+      backgroundTask(toolUseId) {
+        return q.backgroundTasks(toolUseId);
       },
       async undo(checkpoint, dryRun) {
         const r = await q.rewindFiles(checkpoint, { dryRun });
