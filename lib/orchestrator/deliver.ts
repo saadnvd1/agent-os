@@ -39,6 +39,7 @@ const UNCAPPED = [
   "once:ask:",
   "once:conflict:",
   "once:plan-done:",
+  "once:recipe:",
 ];
 export const bypassesCap = (e: Pick<EventRow, "key">) =>
   UNCAPPED.some((p) => e.key.startsWith(p));

@@ -26,6 +26,8 @@ export interface Session {
   started_by?: string | null;
   // 1 planned, 0 no plan, null not stated; why, in the starter's words.
   plan_decided?: number | null;
+  // JSON: the pieces Saad merged or dropped before approving the plan.
+  plan_edits?: string | null;
   plan_reason?: string | null;
   system_prompt: string | null;
   group_path: string; // Deprecated - use project_id
