@@ -1640,6 +1640,62 @@ describe("a merge decision from Saad", () => {
     expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
   });
 
+  async function heldTask() {
+    const t = setup();
+    await reviewNow(t.w);
+    recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
+    pr = { ...pr!, attribution: ATTRIBUTED };
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    answerAsk(t.w, oneGateAsk(t.w, t.task, t.sha).id, {
+      action: "reply",
+      text: "fix it",
+    });
+    pr = { ...pr!, attribution: null };
+    return t;
+  }
+  const WITH_SAAD = /is with Saad \(code-review\); no review needed from you/;
+
+  it("reviews the approved head of a held task, counts nothing, and merges once", async () => {
+    const t = await heldTask();
+    const next = t.push("src/b.ts", "export const b = 1;\n");
+    await expect(reviewNow(t.w)).resolves.toMatchObject({
+      text: expect.stringMatching(WITH_SAAD),
+    });
+    await ask(t, { task: "add-a", sha: next });
+    const [raised] = openAsks(t.w);
+    // An open ask of the orchestrator's at the head is enough to review it.
+    const failures = failureOf(t.task, "review");
+    const codeReview = failureOf(t.task, "code-review");
+    const blocked = await reviewNow(t.w, "block");
+    expect(blocked.text).toMatch(/blocking findings/);
+    expect(failureOf(t.task, "review")).toEqual(failures);
+    expect(failureOf(t.task, "code-review")).toEqual(codeReview);
+    expect(openAsks(t.w).map((a) => a.id)).toEqual([raised.id]);
+    answerAsk(t.w, raised.id, { action: "approve" }, next);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toHaveLength(1);
+    expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
+  });
+
+  it("still refuses to review a held task whose approval is for an older commit", async () => {
+    const t = await heldTask();
+    await ask(t, { task: "add-a", sha: t.sha });
+    const [raised] = openAsks(t.w);
+    answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
+    t.push("src/b.ts", "export const b = 1;\n");
+    const r = await reviewNow(t.w);
+    expect(r.text).toMatch(WITH_SAAD);
+    expect(r.runs).toEqual([]);
+  });
+
+  it("still refuses to review a held task with no ask at its head", async () => {
+    const t = await heldTask();
+    t.push("src/b.ts", "export const b = 1;\n");
+    const r = await reviewNow(t.w);
+    expect(r.text).toMatch(WITH_SAAD);
+    expect(r.runs).toEqual([]);
+  });
+
   it("keeps its ask the orchestrator's when the gates escalate onto it", async () => {
     const t = setup();
     await reviewNow(t.w);
