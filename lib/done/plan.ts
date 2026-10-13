@@ -92,7 +92,7 @@ export async function planDone(
 ): Promise<DonePlan> {
   if (s.role === "orchestrator")
     return refuse(`${s.name} is a workspace's orchestrator; it can't be done`);
-  if (s.archived_at) return refuse(`${s.name} is already done`);
+  if (s.archived_at) return refuse(`${s.name} is already archived`);
   if (callerId && callerId === s.id)
     return refuse("A session can't mark itself done");
   if ((await statusOf(s)).status === "running")
@@ -104,7 +104,7 @@ export async function planDone(
 }
 
 // One line for the preview: what done will do with it.
-export function planLine(p: DonePlan): string {
+export function planLine(p: DonePlan, archives = false): string {
   if (p.action === "refuse") return p.reason;
   if (p.action === "merge")
     return `has an open PR #${p.pr.number}: Done it on its own to merge it through the gates`;
@@ -117,5 +117,5 @@ export function planLine(p: DonePlan): string {
         : w.action === "gone"
           ? `its worktree is ${w.why}`
           : "no worktree";
-  return `stop it, ${tree}, archive it`;
+  return `stop it, ${tree}, ${archives ? "archive it" : "mark it done"}`;
 }

@@ -26,6 +26,8 @@ export const NEED_LABEL: Record<SessionNeed, string> = {
 
 // A plain session quiet this long has settled by itself.
 export const SETTLE_AFTER_MS = 3 * 24 * 3600_000;
+// A session that has sat in Done this long is archived by the server.
+export const ARCHIVE_AFTER_MS = 30 * 24 * 3600_000;
 
 export const DONE_FIRST_PAGE = 10;
 export const DONE_PAGE = 25;

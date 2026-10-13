@@ -90,13 +90,16 @@ next day) and _Next week_ (9 AM next Monday), and **Unsnooze**. A snoozed
 session shows when it wakes, and wakes at that time, or early when it needs
 you, fails, or finishes a run; a session woken by its timer carries the purple
 dot. **Done** is finished work: merged or dropped tasks, sessions you
-finished with **Mark done**, and sessions with no activity for 3 days.
-Archived sessions (the menu's **Archive**, `aos done`, or the orchestrator's
-done) leave the sidebar altogether: find them under **Archived** in the
-sidebar's ⋯ menu, the workspace switcher or ⌘K, where **Unarchive** brings one
-back. Mark done doesn't archive:
-the session stays in Done until it does something again (a message, a run, a
-need), and **Reopen** brings it back by hand. A pinned session, one that is
+finished with a task's **Done** or a plain session's **Mark done**, and
+sessions with no activity for 3 days. Done doesn't archive: the session stays
+there until it does something again (a message, a run, a need), and **Reopen**
+brings it back by hand. **Archived** is a separate place for what you put
+away on purpose: a row's ⋯ menu **Archive** (tasks and plain sessions alike;
+`aos archive` and the orchestrator's `archive` do the same), what **Clean up
+idle sessions** swept, and what sat in Done for 30 days with no activity.
+Open it from the sidebar's ⋯ menu → **Archived**, the workspace switcher or ⌘K; **Unarchive**
+brings one back. The 30-day sweep skips pinned sessions, orchestrators, and anything that
+needs you, is running or has an open pull request. A pinned session, one that is
 running or has background work, one that needs you, and a task with an open
 pull request never settle by themselves. Done is folded to one row, "3 done
 today · 12 earlier", until you tap it (open or folded is remembered per

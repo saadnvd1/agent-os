@@ -211,13 +211,14 @@ const PULL_MERGE = /(^|\/)pulls\/[^/?\s]+\/merge\/?(\?|$)/;
 
 const MERGE_MSG = `Refused: a PR merges only through the gates: ${T.sign_off} (or ${T.arm}) for a task's or an external PR, ${T.land} for a stack. Nothing merges, closes or retargets a PR from the shell.`;
 
-// aos move, done, stop and drop reach a session by name, past the tools'
+// aos move, done, archive, stop and drop reach a session by name, past the tools'
 // Pause check and logging; the tools do the same work.
 function aosRefusal(args: string[]): string | null {
   const [sub] = positionals(args);
   const tool: Record<string, string> = {
     move: T.move,
     done: T.done,
+    archive: T.archive,
     stop: T.stop,
   };
   if (sub && tool[sub])

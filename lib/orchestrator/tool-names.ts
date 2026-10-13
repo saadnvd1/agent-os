@@ -28,6 +28,7 @@ export const TOOL_NAMES = {
   move: name("move"),
   stop: name("stop"),
   done: name("done"),
+  archive: name("archive"),
   add_project: name("add_project"),
   note: name("note"),
   question: name("question"),

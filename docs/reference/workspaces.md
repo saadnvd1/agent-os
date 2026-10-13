@@ -16,7 +16,10 @@ failing gate refuses with its name and nothing merges. A task already
 merged, or a session with no PR, just cleans up. If GitHub can't be read, or
 a task that had a PR has none now, done refuses rather than guess.
 
-Cleanup stops the agent and archives the session. The worktree goes only if
+Cleanup stops the agent and marks the session done: it sits on the sidebar's
+Done shelf, not in Archived (`aos archive`, the ⋯ menu's **Archive** and the
+orchestrator's `archive` tool put a session away; 30 days in Done does it by
+itself). The worktree goes only if
 nothing in it would be lost: never with uncommitted changes; after a merge,
 only when every commit on it is in the merged PR or on a remote; otherwise
 only when its branch has no commits of its own. Anything else is kept and the
@@ -31,11 +34,12 @@ Archived sessions leave the sidebar, the needs-you count, session statuses
 and the orchestrator's view, but are never deleted; the **Archived** view
 (the workspace switcher for one workspace, or ⋯ in the sidebar header for
 all of them) lists
-them with Unarchive, which only puts the entry back.
+them with Unarchive, which only puts the entry back. What lands there: what
+you archived, what Clean up swept, and what sat in Done for 30 days.
 
 **Clean up idle sessions** (the workspace switcher) first shows what will happen
 to each idle or stopped session, and `aos done --all-idle` does the same
-sweep. A clean-up never merges: open PRs are listed for their own done.
+sweep. A clean-up archives what it finishes, and never merges: open PRs are listed for their own done.
 `aos done` reaches only sessions in the caller's workspace (or project).
 
 ## Session logs

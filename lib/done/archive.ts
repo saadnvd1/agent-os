@@ -2,7 +2,9 @@
 // orchestrator's view, but kept with their history and chat items.
 
 import fs from "fs";
-import { db, type Session } from "../db";
+import { db, queries, type Session } from "../db";
+import { statusOf } from "../orchestrator/facts";
+import { peerSessionLink } from "../hosts/peer-actions";
 
 export interface ArchivedView {
   id: string;
@@ -72,4 +74,28 @@ export function listArchived(workspaceId?: string): ArchivedView[] {
     worktreeRemoved: !!s.worktree_path && !fs.existsSync(s.worktree_path),
     archivedAt: s.archived_at!,
   }));
+}
+
+// Puts a session away on purpose. Nothing is merged or stopped here: an
+// agent still working, a task with an open PR and an orchestrator stay.
+export async function archiveChecked(id: string): Promise<Session> {
+  const s = queries.getSession(db).get(id) as Session | undefined;
+  if (!s) throw new Error("Session not found");
+  if (s.archived_at) throw new Error(`${s.name} is already archived`);
+  if (s.role === "orchestrator")
+    throw new Error(
+      `${s.name} is a workspace's orchestrator; it can't be archived`
+    );
+  if (peerSessionLink(s))
+    throw new Error(`${s.name} runs on another machine: archive it there`);
+  if (s.task_status === "running" && s.pr_status === "open")
+    throw new Error(
+      `${s.name} has an open PR: Done it first, which merges it through the gates`
+    );
+  if ((await statusOf(s)).status === "running")
+    throw new Error(
+      `${s.name} is still working: wait for it, or stop it first`
+    );
+  archiveSession(s.id);
+  return queries.getSession(db).get(id) as Session;
 }

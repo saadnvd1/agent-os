@@ -44,10 +44,15 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos push test [--device <id>]      send a real test push to the paired phones
                                      and say what came back
   aos done <session>                 finished: merge its open PR through the
-                                     gates, stop it, archive it (not a rejection);
+                                     gates, stop it, and leave it on the sidebar's
+                                     Done shelf (not archived, not a rejection);
                                      only sessions in your workspace or project
-  aos done --all-idle                clean up every idle or stopped session there;
-                                     never merges, lists open PRs instead
+  aos done --all-idle                clean up (done, then archive) every idle or
+                                     stopped session there; never merges, lists
+                                     open PRs instead
+  aos archive <session>              put a session away, out of the sidebar (still
+                                     in Archived, and Unarchive brings it back);
+                                     refused while it works or has an open PR
   aos stop <session>                 end its turn in progress, even mid-thought;
                                      its conversation and worktree are kept and
                                      your next message runs as its next turn
@@ -622,6 +627,14 @@ async function main() {
         session,
         allIdle,
       });
+      console.log(summary);
+      return;
+    }
+    case "archive": {
+      const session = args.join(" ");
+      if (!session) fail("usage: aos archive <session>");
+      needMe();
+      const { summary } = await post("/api/bus/archive", { from: me, session });
       console.log(summary);
       return;
     }

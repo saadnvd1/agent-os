@@ -31,7 +31,8 @@ import { selectionActions } from "@/stores/sessionSelection";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { recipesUiActions } from "@/stores/recipesUi";
 import { rowGroup } from "@/lib/recipes/chip";
-import { useDoneAction } from "./useDoneAction";
+import { finishActions } from "@/lib/sidebar/row-actions";
+import { useArchiveAction, useDoneAction } from "./useDoneAction";
 import { useShelfActions } from "./useShelfActions";
 import { SNOOZE_PRESETS, snoozePreset, wakeLabel } from "@/lib/sidebar/snooze";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
@@ -84,6 +85,37 @@ function BlockedItem({ kind, icon: Icon, label, why }: BlockedProps) {
   );
 }
 
+// Done and Archive, as the session's kind allows.
+function FinishItems({
+  session,
+  plain,
+  Item,
+}: {
+  session: Session;
+  plain: boolean;
+  Item: (typeof PARTS)[keyof typeof PARTS]["Item"];
+}) {
+  const markDone = useDoneAction();
+  const archive = useArchiveAction();
+  const actions = finishActions(session, plain);
+  return (
+    <>
+      {actions.includes("done") && (
+        <Item onClick={() => markDone(session)}>
+          <CircleCheck className={icon} />
+          Done
+        </Item>
+      )}
+      {actions.includes("archive") && (
+        <Item onClick={() => archive(session)}>
+          <Archive className={icon} />
+          Archive
+        </Item>
+      )}
+    </>
+  );
+}
+
 // The row's ⋯ menu (and right-click menu): everything a session can do.
 export function SessionRowMenu({
   session,
@@ -98,7 +130,6 @@ export function SessionRowMenu({
   onRename: () => void;
 }) {
   const ctx = useRowContext();
-  const markDone = useDoneAction();
   const shelf = useShelfActions();
   const plain = !!row && !row.task && !session.task_status;
   const { Item, Separator, Sub, SubTrigger, SubContent } = PARTS[kind];
@@ -342,14 +373,7 @@ export function SessionRowMenu({
                 Mark done
               </Item>
             ))}
-          <Item onClick={() => markDone(session)}>
-            {plain ? (
-              <Archive className={icon} />
-            ) : (
-              <CircleCheck className={icon} />
-            )}
-            {plain ? "Archive" : "Done"}
-          </Item>
+          <FinishItems session={session} plain={plain} Item={Item} />
           <Item
             onClick={() => ctx.onDelete(session.id)}
             className="text-red-500 focus:text-red-500"

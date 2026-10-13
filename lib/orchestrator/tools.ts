@@ -82,7 +82,9 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   drop: "Reject a task: close its PR and remove its worktree. A task still waiting in the queue is removed by its id. Logged with the reason.",
   move: 'Carry a running task to a linked machine, or back with "here": for heavy test or build work. It keeps its branch, conversation and plan; the gates, events, read, send, stop, done and drop work the same wherever it runs, and the machine it lands on can\'t merge it. Takes a few minutes and runs in the background; an event says when it lands. Refused while paused, for a task waiting on Saad (an escalation or open ask), and for card and stacked tasks.',
   stop: "Stop a session's agent mid-turn, even while it's thinking, keeping its conversation, worktree and branch; your next message runs as its next turn.",
-  done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it's archived. Not a rejection.",
+  done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it lands on the sidebar's Done shelf; it no longer archives (use archive for that). Not a rejection.",
+  archive:
+    "Put a finished session away, out of the sidebar (it stays in Archived, and Saad can unarchive it). Nothing is merged or cleaned up: refused while the session is working or has an open PR; done first for finished work.",
   add_project:
     "Make a git repository on this machine a project of this workspace, by its absolute path, or move the project already at that path into this workspace when it's in no workspace. Says its default branch, detected from git. Refuses a folder that isn't a git repository or that holds secrets, and a project another workspace has.",
   note: "Add a line to this workspace's decision log; it shows in your chat.",

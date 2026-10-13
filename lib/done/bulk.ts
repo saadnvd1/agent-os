@@ -1,6 +1,6 @@
 /**
- * Clean-up: done for every idle or stopped session in a project or a
- * workspace, each judged on its own. It never merges: a session with an
+ * Clean-up: done, then archived, for every idle or stopped session in a
+ * project or a workspace, each judged on its own. It never merges: a session with an
  * open PR is listed for its own done, which merges through the gates.
  * The preview says what will happen to each before anything does.
  */
@@ -11,6 +11,7 @@ import { workspaceProjects } from "../orchestrator/brief";
 import { statusOf } from "../orchestrator/facts";
 import { statusDetector } from "../status-detector";
 import { doneSession, type DoneOptions, type DoneOutcome } from "./index";
+import { archiveSession } from "./archive";
 import { planDone, planLine } from "./plan";
 
 export type DoneScope = { workspaceId: string } | { projectId: string };
@@ -105,7 +106,7 @@ export async function previewIdle(
       action: plan.action,
       removesWorktree:
         plan.action === "cleanup" && plan.worktree.action === "remove",
-      line: planLine(plan),
+      line: planLine(plan, true),
     });
   }
   return rows;
@@ -144,7 +145,10 @@ export async function doneIdle(
         result.mergeable.push({ id: s.id, name: s.name, pr: plan.pr.number });
         continue;
       }
-      result.done.push(await doneSession(s.id, { ...opts, noMerge: true }));
+      const outcome = await doneSession(s.id, { ...opts, noMerge: true });
+      // A clean-up is a deliberate sweep: it puts the sessions away.
+      archiveSession(s.id);
+      result.done.push({ ...outcome, text: `${outcome.text} Archived.` });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       result.refused.push({ id: s.id, name: s.name, reason });

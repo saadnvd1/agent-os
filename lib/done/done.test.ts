@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Session } from "@/lib/db";
 import type { TaskPR, TaskState } from "@/lib/tasks/state";
 import { recordPlaced } from "@/lib/worktree-placed";
 import { commitFile, git, makeRepo, WORKTREE_MARK } from "./testing";
@@ -143,6 +144,7 @@ const row = (id: string) =>
   db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as {
     task_status: string | null;
     archived_at: string | null;
+    settled_at: string | null;
     name: string;
     tmux_name: string;
   };
@@ -259,7 +261,8 @@ describe("done, by state", () => {
     });
     expect(fs.existsSync(s.dir!)).toBe(false);
     expect(row(s.id)).toMatchObject({ task_status: "merged" });
-    expect(row(s.id).archived_at).not.toBeNull();
+    expect(row(s.id).archived_at).toBeNull();
+    expect(row(s.id).settled_at).not.toBeNull();
     expect(cards).toContainEqual([s.id, "merged"]);
     // Its private database goes with it.
     expect(droppedDatabases).toContain(s.id);
@@ -316,7 +319,8 @@ describe("done, by state", () => {
       why: "its branch is merged",
     });
     expect(row(s.id)).toMatchObject({ task_status: "merged" });
-    expect(row(s.id).archived_at).not.toBeNull();
+    expect(row(s.id).archived_at).toBeNull();
+    expect(row(s.id).settled_at).not.toBeNull();
     expect(killed.some((k) => k.includes("tmux kill-session"))).toBe(true);
     // Origin's branch was exactly what merged, so it goes too.
     expect(out.text).toContain("its merged branch deleted on origin");
@@ -421,7 +425,8 @@ describe("done, by state", () => {
     expect(fs.existsSync(s.dir!)).toBe(false);
     expect(killed).toContain(`chat ${s.id}`);
     expect(row(s.id).task_status).toBeNull();
-    expect(row(s.id).archived_at).not.toBeNull();
+    expect(row(s.id).archived_at).toBeNull();
+    expect(row(s.id).settled_at).not.toBeNull();
   });
 
   it("(c) keeps a worktree with unmerged commits or uncommitted changes, and says so", async () => {
@@ -434,7 +439,8 @@ describe("done, by state", () => {
     });
     expect(outA.text).toContain(`worktree kept at ${a.dir}`);
     expect(fs.existsSync(a.dir!)).toBe(true);
-    expect(row(a.id).archived_at).not.toBeNull();
+    expect(row(a.id).archived_at).toBeNull();
+    expect(row(a.id).settled_at).not.toBeNull();
 
     const b = t.session("dirty");
     fs.writeFileSync(path.join(b.dir!, "notes.txt"), "unsaved\n");
@@ -517,7 +523,11 @@ const { sessionFacts } = await import("@/lib/orchestrator/facts");
 const { runTool } = await import("@/lib/orchestrator/serve");
 const { setPaused } = await import("@/lib/orchestrator/pause");
 const { listPeers, resolveSession } = await import("@/lib/bus");
-const { listArchived, unarchiveSession } = await import("./archive");
+const { archiveChecked, listArchived, unarchiveSession } =
+  await import("./archive");
+const { archiveStaleDone } = await import("./auto-archive");
+const { ARCHIVE_AFTER_MS, buildShelves } =
+  await import("@/lib/sidebar/shelves");
 const { doneIdle, previewIdle, scopeOf } = await import("./bulk");
 const { POST: busDone } = await import("@/app/api/bus/done/route");
 const { GET: statusGET } = await import("@/app/api/sessions/status/route");
@@ -835,7 +845,7 @@ describe("archived sessions", () => {
     saveItem(s.id, { id: "u1", kind: "user", text: "hi", createdAt: 1 });
     expect(await sidebarIds()).toContain(s.id);
 
-    await doneSession(s.id, { by: "direct" });
+    await archiveChecked(s.id);
     // The needs-you pill counts the sidebar's sessions.
     expect(await sidebarIds()).not.toContain(s.id);
     expect((await sessionFacts(t.w)).map((f) => f.id)).not.toContain(s.id);
@@ -908,6 +918,9 @@ describe("done --all-idle", () => {
       expect(row(id).archived_at).toBeNull();
     expect(fs.existsSync(stopped.dir!)).toBe(true);
     expect(fs.existsSync(idle.dir!)).toBe(false);
+    // A clean-up is a deliberate sweep: it archives what it finishes.
+    for (const id of [idle.id, stopped.id])
+      expect(row(id).archived_at).not.toBeNull();
   });
 });
 
@@ -937,7 +950,8 @@ describe("aos done", () => {
     );
     const ok = await call({ from: me.id, session: mine.id });
     expect(ok.status).toBe(200);
-    expect(row(mine.id).archived_at).not.toBeNull();
+    expect(row(mine.id).archived_at).toBeNull();
+    expect(row(mine.id).settled_at).not.toBeNull();
   });
 });
 
@@ -951,7 +965,7 @@ describe("status", () => {
         ((await (await statusGET()).json()) as { statuses: object }).statuses
       );
     expect(await ids()).toContain(chat.id);
-    await doneSession(chat.id, { by: "direct" });
+    await archiveChecked(chat.id);
     expect(await ids()).not.toContain(chat.id);
   });
 });
@@ -984,7 +998,7 @@ describe("the orchestrator's done tool", () => {
     );
     setPaused(t.w, false);
     expect(await runTool(t.w, "done", { session: "mine" })).toMatch(
-      /^Done: mine\. Agent stopped, no worktree; archived\.$/
+      /^Done: mine\. Agent stopped, no worktree\.$/
     );
   });
 });
@@ -1045,7 +1059,8 @@ describe("merge settings", () => {
     expect(git(t.repo, "ls-remote", "--heads", "origin", s.branch)).not.toBe(
       ""
     );
-    expect(row(s.id).archived_at).not.toBeNull();
+    expect(row(s.id).archived_at).toBeNull();
+    expect(row(s.id).settled_at).not.toBeNull();
   });
 
   it("toggles each deletion on its own for a PR merged on GitHub", async () => {
@@ -1121,5 +1136,114 @@ describe("merge settings", () => {
     const out = await doneSession(s.id, { by: "direct" });
     expect(out.worktree).toMatchObject({ action: "kept" });
     expect(fs.existsSync(s.dir!)).toBe(true);
+  });
+});
+
+describe("done is not archive", () => {
+  const shelvesOf = (id: string) => {
+    const session = db
+      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .get(id) as Session;
+    return buildShelves({
+      sessions: [session],
+      statuses: {},
+      tasks: {},
+      projectName: () => "",
+    });
+  };
+
+  it("leaves a finished plain session unarchived, on the Done shelf", async () => {
+    const t = setup();
+    const s = t.session("finished-plain", { worktree: false });
+    await doneSession(s.id, { by: "direct" });
+    expect(row(s.id).archived_at).toBeNull();
+    expect(row(s.id).settled_at).not.toBeNull();
+    expect(shelvesOf(s.id).done.map((r) => r.session.id)).toEqual([s.id]);
+  });
+
+  it("puts a finished task on the Done shelf, not archived", async () => {
+    const t = setup();
+    const s = t.session("finished-task", { task: true, worktree: false });
+    await doneSession(s.id, { by: "direct" });
+    expect(row(s.id)).toMatchObject({ task_status: "done", archived_at: null });
+    const shelves = shelvesOf(s.id);
+    expect(shelves.done.map((r) => r.session.id)).toEqual([s.id]);
+    expect(shelves.ongoing).toEqual([]);
+  });
+
+  it("archive sets archived_at and takes it off the shelves", async () => {
+    const t = setup();
+    const s = t.session("put-away", { worktree: false });
+    await archiveChecked(s.id);
+    expect(row(s.id).archived_at).not.toBeNull();
+    const shelves = shelvesOf(s.id);
+    expect(Object.values(shelves).flat()).toEqual([]);
+  });
+
+  it("archive refuses an orchestrator, a working session and an open PR", async () => {
+    const t = setup();
+    const orch = ensureOrchestrator(t.w);
+    await expect(archiveChecked(orch.id)).rejects.toThrow(/orchestrator/);
+    const busy = t.session("busy-arch", { worktree: false, live: "running" });
+    await expect(archiveChecked(busy.id)).rejects.toThrow(/still working/);
+    const pr = t.session("pr-arch", { task: true, worktree: false });
+    db.prepare(`UPDATE sessions SET pr_status = 'open' WHERE id = ?`).run(
+      pr.id
+    );
+    await expect(archiveChecked(pr.id)).rejects.toThrow(/open PR/);
+    for (const id of [orch.id, busy.id, pr.id])
+      expect(row(id).archived_at).toBeNull();
+  });
+});
+
+describe("the 30-day auto-archive", () => {
+  const now = Date.now();
+  const old = new Date(now - ARCHIVE_AFTER_MS - 3600_000)
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 19);
+  const age = (id: string, extra = "") =>
+    db
+      .prepare(
+        `UPDATE sessions SET active_at = ?, updated_at = ?${extra} WHERE id = ?`
+      )
+      .run(old, old, id);
+
+  it("archives one that sat in Done 30 days, and skips pinned, orchestrator, running, open-PR and recent ones", async () => {
+    const t = setup();
+    const stale = t.session("stale", { worktree: false });
+    const staleTask = t.session("stale-task", { task: true, worktree: false });
+    db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(
+      staleTask.id
+    );
+    const pinned = t.session("stale-pinned", { worktree: false });
+    const running = t.session("stale-running", {
+      worktree: false,
+      live: "running",
+    });
+    const withPR = t.session("stale-pr", { worktree: false });
+    const recent = t.session("recent", { worktree: false });
+    const orch = ensureOrchestrator(t.w);
+    for (const s of [stale, staleTask, pinned, running, withPR]) age(s.id);
+    age(orch.id);
+    db.prepare(`UPDATE sessions SET pinned = 1 WHERE id = ?`).run(pinned.id);
+    db.prepare(`UPDATE sessions SET pr_status = 'open' WHERE id = ?`).run(
+      withPR.id
+    );
+
+    const archived = await archiveStaleDone(now);
+    expect(archived.sort()).toEqual([stale.id, staleTask.id].sort());
+    for (const id of [stale.id, staleTask.id])
+      expect(row(id).archived_at).not.toBeNull();
+    for (const id of [pinned.id, running.id, withPR.id, recent.id, orch.id])
+      expect(row(id).archived_at).toBeNull();
+  });
+
+  it("counts a manual Mark done from when it was marked, not from old activity", async () => {
+    const t = setup();
+    const s = t.session("just-marked", { worktree: false });
+    age(s.id, `, settled_at = datetime('now')`);
+    expect(await archiveStaleDone(now)).not.toContain(s.id);
+    expect(row(s.id).archived_at).toBeNull();
   });
 });
