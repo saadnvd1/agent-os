@@ -30,6 +30,9 @@ export const TASK_CAPABILITIES = [
   // Holds an orchestrator's task for the machine that sent it, and answers
   // its messages, reads, stops and done (lib/tasks/held.ts).
   "orchestrated-move",
+  // A held task's chat facts and its messages for its orchestrator.
+  "held-chat-facts",
+  "held-replies",
 ] as const;
 
 export interface HostTasks {

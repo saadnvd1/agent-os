@@ -227,7 +227,8 @@ describe("moving a task back from a linked machine", () => {
       task_status: "running",
       moved_from: mirrorId,
     });
-    expect(row(mirrorId).task_status).toBe("moved");
+    // The mirror was only how it was shown here: the task is the new row.
+    expect(row(mirrorId)).toBeUndefined();
   });
 
   it("asks that machine to resume it when it can't start here", async () => {
@@ -254,7 +255,7 @@ describe("moving a task back from a linked machine", () => {
     await expect(moveTask(mirrorId, "local")).rejects.toThrow(
       /running here now/
     );
-    expect(row(mirrorId).task_status).toBe("running");
+    expect(row(mirrorId).task_status).toBe("moving");
     expect(launchClaude).toHaveBeenCalledTimes(1);
 
     fetchMock.mockReset();
@@ -262,7 +263,8 @@ describe("moving a task back from a linked machine", () => {
     await moveTask(mirrorId, "local");
     // It had arrived: no second export, only the confirmation.
     expect(urls()).toEqual([`http://box:3011/api/tasks/${mirrorId}/moved`]);
-    expect(row(mirrorId).task_status).toBe("moved");
+    // The mirror was only how it was shown here: the task is the new row.
+    expect(row(mirrorId)).toBeUndefined();
     expect(launchClaude).toHaveBeenCalledTimes(1);
   });
 

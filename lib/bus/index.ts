@@ -16,6 +16,7 @@ import { resolveRef, wasNames, type Candidate } from "./resolve";
 import { tmuxPane } from "./tmux-pane";
 import { hostLink } from "../hosts/remote-api";
 import { relayToHeldTask } from "../tasks/held-remote";
+import { heldOrchestrator, heldTarget } from "./held-reply";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
 
 export * from "./format";
@@ -54,11 +55,21 @@ function candidates(sessions: Session[]): Candidate[] {
   }));
 }
 
-export async function listPeers(): Promise<Peer[]> {
+const sessionById = (id: string | null | undefined) =>
+  id
+    ? (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+        | Session
+        | undefined)
+    : undefined;
+
+// `callerId`: the asking session. A task its orchestrator moved here also
+// sees that orchestrator, which it can message though it runs elsewhere.
+export async function listPeers(callerId?: string): Promise<Peer[]> {
   await statusDetector.refreshCache();
   const sessions = liveSessions();
   const named = candidates(sessions);
-  return Promise.all(
+  const orchestrator = heldOrchestrator(sessionById(callerId));
+  const listed = await Promise.all(
     sessions.map(async (s, i) => {
       const status = statusDetector.sessionExists(s.tmux_name)
         ? await statusDetector.getStatus(s.tmux_name)
@@ -76,6 +87,25 @@ export async function listPeers(): Promise<Peer[]> {
       };
     })
   );
+  if (!orchestrator) return listed;
+  return [
+    ...listed,
+    {
+      id: orchestrator.id,
+      name: orchestrator.name,
+      was: [],
+      projectName: null,
+      tmuxName: "",
+      hostId: "remote",
+      running: true,
+      doing: `your orchestrator, on ${orchestrator.heldFrom}`,
+    },
+  ];
+}
+
+// The orchestrator a held caller's ref names, if it names it.
+export function resolveHeldOrchestrator(callerId: string, ref: string) {
+  return heldTarget(sessionById(callerId), ref);
 }
 
 // A live session by name, old name, project/name, id or id prefix. The note
@@ -208,16 +238,18 @@ export async function sendMessage(opts: {
   // It's never left unread for `aos inbox` to show in another form; a
   // failed one is the sender's to retry.
   line?: string;
+  // A message pulled from a linked machine, by its key there: one already
+  // stored is not stored or delivered again.
+  relayKey?: string;
 }): Promise<{ message: BusMessageView; delivery: Delivery; note?: string }> {
   const body = opts.body.trim();
   if (!body) throw new Error("Message is empty");
-  const { session: to, note } = resolveTarget(opts.to);
-  const from = opts.fromId
-    ? (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(opts.fromId) as
-        | Session
-        | undefined)
-    : undefined;
+  const from = sessionById(opts.fromId);
   if (opts.fromId && !from) throw new Error("Unknown sender session");
+  // A held task's message to its orchestrator is kept for the holder to pull.
+  const held = heldTarget(from, opts.to);
+  if (from && held) return storeForHolder(from, held, body);
+  const { session: to, note } = resolveTarget(opts.to);
   if (from && from.id === to.id)
     throw new Error("A session can't message itself");
   if (from && overRateLimit(pairTimestamps(from.id, to.id))) {
@@ -225,13 +257,32 @@ export async function sendMessage(opts: {
       `Too many messages between ${from.name} and ${to.name}; wait a few minutes`
     );
   }
+  if (opts.relayKey) {
+    const seen = db
+      .prepare(`SELECT id FROM bus_messages WHERE relay_key = ?`)
+      .get(opts.relayKey) as { id: number } | undefined;
+    if (seen)
+      return {
+        message: toView(
+          db.prepare(`${SELECT} WHERE m.id = ?`).get(seen.id) as Row
+        ),
+        delivery: { state: "delivered" },
+      };
+  }
 
   const fromName = from?.name ?? opts.fromLabel ?? HUMAN;
   const { lastInsertRowid } = db
     .prepare(
-      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body) VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, relay_key) VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .run(from?.id ?? null, fromName, to.id, to.name, body);
+    .run(
+      from?.id ?? null,
+      fromName,
+      to.id,
+      to.name,
+      body,
+      opts.relayKey ?? null
+    );
   const id = Number(lastInsertRowid);
 
   await statusDetector.refreshCache();
@@ -258,6 +309,31 @@ export async function sendMessage(opts: {
     ).run(id);
   const message = toView(db.prepare(`${SELECT} WHERE m.id = ?`).get(id) as Row);
   return { message, delivery, note };
+}
+
+function storeForHolder(
+  from: Session,
+  to: { id: string; name: string; heldFrom: string },
+  body: string
+) {
+  if (overRateLimit(pairTimestamps(from.id, to.id)))
+    throw new Error(
+      `Too many messages between ${from.name} and ${to.name}; wait a few minutes`
+    );
+  const { lastInsertRowid } = db
+    .prepare(
+      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, relay_state)
+       VALUES (?, ?, ?, ?, ?, 'pending')`
+    )
+    .run(from.id, from.name, to.id, to.name, body);
+  const message = toView(
+    db.prepare(`${SELECT} WHERE m.id = ?`).get(Number(lastInsertRowid)) as Row
+  );
+  return {
+    message,
+    delivery: { state: "queued" as const },
+    note: `${to.name} runs on ${to.heldFrom}: it gets this when that machine next checks in, within a few seconds`,
+  };
 }
 
 // Unread messages for a session, marked read as they're returned.

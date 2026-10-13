@@ -5,7 +5,12 @@
  */
 
 import type { Session } from "../db";
-import { cleanRemoteText, hostApi, requireHostLink } from "../hosts/remote-api";
+import {
+  cleanRemoteBlock,
+  cleanRemoteText,
+  hostApi,
+  requireHostLink,
+} from "../hosts/remote-api";
 import type { Delivery } from "../bus/delivery";
 
 const path = (id: string, leaf: string) =>
@@ -54,7 +59,31 @@ export async function heldChatTail(
     `${path(task.id, "chat-tail")}?lines=${lines}`,
     { timeout: 10000 }
   ).catch(() => ({ text: undefined }));
-  return typeof text === "string" ? cleanRemoteText(text) : null;
+  // Whole lines, as a local read has them (read.ts caps and trims them).
+  return typeof text === "string" ? cleanRemoteBlock(text, 16000) : null;
+}
+
+/**
+ * What its chat says about being blocked or asking, as that machine reads it
+ * (the same reading a local chat task gets). Null when it can't be asked,
+ * which callers treat as unread, never as clear.
+ */
+export async function heldChatFacts(
+  task: Pick<Session, "id" | "host_id">
+): Promise<{ blocked: string | null; turn: string | null } | null> {
+  const link = requireHostLink(task.host_id);
+  const res = await hostApi<{ blocked?: unknown; turn?: unknown }>(
+    link,
+    path(task.id, "chat-facts"),
+    { timeout: 10000 }
+  ).catch(() => null);
+  if (!res || (res.blocked !== null && typeof res.blocked !== "string"))
+    return null;
+  if (res.turn !== null && typeof res.turn !== "string") return null;
+  return {
+    blocked: res.blocked ? cleanRemoteBlock(res.blocked, 2000) : null,
+    turn: res.turn,
+  };
 }
 
 /** Stops its agent there; its conversation and worktree are kept. */

@@ -268,7 +268,9 @@ async function main() {
     case "heavy":
       return heavy(args);
     case "peers": {
-      const { peers } = await call("/api/bus/peers");
+      const { peers } = await call(
+        `/api/bus/peers${me ? `?from=${encodeURIComponent(me)}` : ""}`
+      );
       for (const p of peers) {
         if (p.id === me) continue;
         const where = p.projectName ? `${p.projectName}/` : "";
@@ -297,9 +299,11 @@ async function main() {
         process.exit(2);
       }
       console.log(
-        delivery.state === "queued"
-          ? `queued for ${message.toName}: it's busy and will see it after this turn`
-          : `delivered to ${message.toName}`
+        delivery.state === "queued" && note
+          ? `queued for ${message.toName}`
+          : delivery.state === "queued"
+            ? `queued for ${message.toName}: it's busy and will see it after this turn`
+            : `delivered to ${message.toName}`
       );
       return;
     }
@@ -318,7 +322,7 @@ async function main() {
       const [other] = args;
       if (!other) fail("usage: aos history <session>");
       const { peer } = await call(
-        `/api/bus/peers?ref=${encodeURIComponent(other)}`
+        `/api/bus/peers?ref=${encodeURIComponent(other)}&from=${encodeURIComponent(me)}`
       );
       const { messages } = await call(
         `/api/bus/messages?session=${encodeURIComponent(me)}`

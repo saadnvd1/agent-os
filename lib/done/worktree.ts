@@ -114,14 +114,15 @@ const gone = (merged: MergedAs | null, still = false) => ({
 export async function worktreeFate(
   session: Judged,
   merged: MergedAs | null,
-  waitMs = 60_000
+  waitMs = 60_000,
+  movedAway = false
 ): Promise<FatePreview> {
   const path = session.worktree_path;
   if (!path) return { action: "none" };
   for (;;) {
     if (!(await removalSettled(path, waitMs))) return gone(merged, true);
     if (!fs.existsSync(path)) return gone(merged);
-    const fate = await judge(session, merged);
+    const fate = await judge(session, merged, movedAway);
     // A removal that started while it read: read what it leaves.
     if (!removalRunning(path) && fs.existsSync(path)) return fate;
   }
@@ -133,8 +134,17 @@ async function commitsKeep(
   path: string,
   repo: string,
   session: Judged,
-  merged: MergedAs | null
+  merged: MergedAs | null,
+  movedAway = false
 ): Promise<string | null> {
+  // The task went on elsewhere: only commits no remote has would be lost.
+  if (movedAway) {
+    const stray = await strayCommits(path, {}).catch(() => null);
+    if (stray === null) return "its commits can't be checked";
+    return stray > 0
+      ? `${stray} commit${stray === 1 ? " is" : "s are"} on it that no remote has`
+      : null;
+  }
   if (merged) {
     const stray = await strayCommits(path, merged).catch(() => null);
     if (stray === null) return "its commits can't be checked";
@@ -163,7 +173,8 @@ async function commitsKeep(
 // kept one names every reason, the commits as well as the changes.
 async function judge(
   session: Judged,
-  merged: MergedAs | null
+  merged: MergedAs | null,
+  movedAway = false
 ): Promise<FatePreview> {
   const path = session.worktree_path!;
   const keep = (why: string) => ({ action: "kept" as const, why, path });
@@ -183,14 +194,16 @@ async function judge(
     unsaved.length
       ? `it has uncommitted changes (${describeChanges(unsaved)})`
       : null,
-    await commitsKeep(path, repo, session, merged),
+    await commitsKeep(path, repo, session, merged, movedAway),
   ].filter((w) => w !== null);
   if (why.length) return keep(why.join(", and "));
   return {
     action: "remove",
-    why: merged
-      ? "its branch is merged"
-      : "its branch has no commits of its own",
+    why: movedAway
+      ? "its work moved to another machine"
+      : merged
+        ? "its branch is merged"
+        : "its branch has no commits of its own",
     repo,
   };
 }
@@ -199,9 +212,10 @@ async function judge(
 // and says so only once it's really gone.
 export async function settleWorktree(
   session: Judged,
-  merged: MergedAs | null
+  merged: MergedAs | null,
+  movedAway = false
 ): Promise<WorktreeFate> {
-  const fate = await worktreeFate(session, merged);
+  const fate = await worktreeFate(session, merged, undefined, movedAway);
   if (fate.action !== "remove") return fate;
   const path = session.worktree_path!;
   await deleteWorktree(path, fate.repo, true).catch(() => {});

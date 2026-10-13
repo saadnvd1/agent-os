@@ -71,6 +71,9 @@ export interface OrchestratedBundle {
   planPhase: "planning" | "implementing" | null;
   // .agentos/plan.md, which is never in git.
   planFile: string | null;
+  // The orchestrator that holds the task (its id and name on the machine
+  // that runs it), so the task can message it from where it runs.
+  orchestrator?: { id: string; name: string };
 }
 
 export interface ChatBundle {
@@ -147,6 +150,19 @@ function validateOrchestrated(o: OrchestratedBundle): OrchestratedBundle {
     modelOverrides: o.modelOverrides,
     planPhase: o.planPhase,
     planFile: o.planFile,
+    orchestrator:
+      o.orchestrator &&
+      isSessionId(o.orchestrator.id) &&
+      typeof o.orchestrator.name === "string" &&
+      o.orchestrator.name.trim()
+        ? {
+            id: o.orchestrator.id,
+            name: o.orchestrator.name
+              .replace(/[\u0000-\u001f]/g, " ")
+              .trim()
+              .slice(0, 200),
+          }
+        : undefined,
   };
 }
 
@@ -192,10 +208,11 @@ export function validateBundle(b: TaskBundle): TaskBundle {
 
 export function arrivalNote(
   b: { from: string; branch: string },
-  cwd: string
+  cwd: string,
+  here: string
 ): string {
   return [
-    `This task just moved here from ${b.from}. Your worktree is now ${cwd}, on branch ${b.branch}.`,
+    `This task just moved from ${b.from} to ${here}. It now runs on ${here}: every command you run executes there, not on ${b.from}, so name ${here} when you report where something ran. Your worktree is now ${cwd}, on branch ${b.branch}.`,
     `Anything that was uncommitted came over as a commit starting "wip: moving to"; fold it into your own commits as you see fit.`,
     `Continue the task where you left off.`,
   ].join(" ");

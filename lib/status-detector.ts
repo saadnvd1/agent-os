@@ -537,6 +537,10 @@ class SessionStatusDetector {
     if (this.peersAsked.has(hostId)) return;
     this.peersAsked.add(hostId);
     this.hostListedAt.set(hostId, Date.now());
+    // What its held tasks have said to their orchestrators here.
+    void import("./tasks/held-replies")
+      .then((m) => m.pullHeldReplies(link))
+      .catch(() => undefined);
     void peerTmuxSessions(link)
       .then(
         (list) => {

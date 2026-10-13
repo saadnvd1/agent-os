@@ -201,7 +201,7 @@ describe("moving a chat task", () => {
     expect(launchClaude).not.toHaveBeenCalled();
     const [to, message] = vi.mocked(sendChat).mock.calls[0];
     expect(to).toBe(arrived.id);
-    expect(message.text).toContain("moved here");
+    expect(message.text).toMatch(/moved from .+ to .+\. It now runs on/);
     expect(message.origin).toMatchObject({ kind: "system" });
   });
 

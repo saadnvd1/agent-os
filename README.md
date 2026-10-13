@@ -1587,7 +1587,10 @@ Once linked:
   judging the PR at its head, reads BLOCKED lines and open approvals from the
   task's chat there, and gets PR, CI, idle and plan events by polling that
   machine. Its messages arrive marked as from the orchestrator, never as
-  yours. Guards (write guard, shell deny list, attribution settings) run in
+  yours. The task can `aos send` its orchestrator back: the machine it runs
+  on only stores the message, and the orchestrator's machine pulls it and
+  delivers it as that task's own. Moving it back stops its agent there and
+  removes its worktree when nothing in it would be lost. Guards (write guard, shell deny list, attribution settings) run in
   the task's worker on either machine, and the task can't merge or push to
   the default branch. Moving counts toward the brakes and Pause refuses the
   tool.

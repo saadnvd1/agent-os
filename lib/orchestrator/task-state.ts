@@ -9,6 +9,7 @@ import { blockedReason } from "../tasks/state";
 import { checkWaitingPatterns, statusDetector } from "../status-detector";
 import { getCheck, putCheck } from "./checks";
 import { cleanRemoteText, hostLink, type HostLink } from "../hosts/remote-api";
+import { heldChatFacts } from "../tasks/held-remote";
 import { hostTasks } from "../tasks/remote";
 import { peerPane } from "../hosts/peer-sessions";
 import { untrusted } from "./untrusted";
@@ -24,21 +25,7 @@ export async function waitingState(
   // its own reading of the task is asked for, fresh.
   const link = hostLink(task.host_id);
   if (link && task.view === "chat") return peerChatWaiting(link, task);
-  if (task.view === "chat") {
-    const reason = blockedReason(saidSinceLastMessage(task.id));
-    // Asked of a worker still running from before a restart, too; one
-    // that can't be reached can't be cleared.
-    const state = await chatStateNow(task.id).catch(() => "unknown");
-    return {
-      blocked: reason === null ? null : untrusted(task.name, reason),
-      waitingOn:
-        state === "waiting"
-          ? "an approval or question in its chat"
-          : state === "unknown"
-            ? "its chat worker couldn't be reached, so an open approval or question can't be ruled out"
-            : null,
-    };
-  }
+  if (task.view === "chat") return localChatWaiting(task);
   // A linked machine reads its own screens: asked, and an answer it can't
   // give is a screen that can't be cleared.
   let tail: string;
@@ -71,6 +58,26 @@ export async function waitingState(
   };
 }
 
+// A chat task whose conversation is in this machine's store (or, for a held
+// task, the one the holder asks about).
+export async function localChatWaiting(
+  task: Pick<Session, "id" | "name">
+): Promise<{ blocked: string | null; waitingOn: string | null }> {
+  const reason = blockedReason(saidSinceLastMessage(task.id));
+  // Asked of a worker still running from before a restart, too; one
+  // that can't be reached can't be cleared.
+  const state = await chatStateNow(task.id).catch(() => "unknown");
+  return {
+    blocked: reason === null ? null : untrusted(task.name, reason),
+    waitingOn:
+      state === "waiting"
+        ? "an approval or question in its chat"
+        : state === "unknown"
+          ? "its chat worker couldn't be reached, so an open approval or question can't be ruled out"
+          : null,
+  };
+}
+
 async function peerChatWaiting(
   link: HostLink,
   task: Session
@@ -79,6 +86,24 @@ async function peerChatWaiting(
     blocked: `its chat on ${link.hostName} couldn't be read, so a BLOCKED: line or open question can't be ruled out`,
     waitingOn: null,
   };
+  // A task its orchestrator moved is asked about directly: the whole task
+  // list is slow, and a miss there reads as unread.
+  const facts = task.started_by ? await heldChatFacts(task) : null;
+  if (facts) {
+    const { turn } = facts;
+    return {
+      blocked: facts.blocked ? untrusted(task.name, facts.blocked) : null,
+      waitingOn:
+        turn === "waiting"
+          ? `an approval or question in its chat on ${link.hostName}`
+          : turn === null ||
+              turn === "running" ||
+              turn === "idle" ||
+              turn === "error"
+            ? null
+            : `its chat on ${link.hostName} couldn't say whether a question is open`,
+    };
+  }
   const view = await hostTasks(link, true)
     .then(({ tasks, capabilities }) =>
       // One that can't say its chat's turn can't rule out an open question.
