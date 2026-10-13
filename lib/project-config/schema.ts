@@ -60,6 +60,15 @@ const browse = z.strictObject({
   port: envName.optional(),
 });
 
+// An iOS simulator tasks may drive on a Mac (lib/simulator). `start` runs in
+// the task's worktree with SIMULATOR_UDID set, builds and installs the app
+// on that device and exits 0 once it is up.
+const simulator = z.strictObject({
+  start: z.string().min(1),
+  app: z.string().min(1).optional(),
+  device: z.string().min(1).optional(),
+});
+
 const database = z.strictObject({
   from: z.string().min(1),
   env: projectEnvName.optional(),
@@ -109,6 +118,7 @@ const shape = {
   test: z.string().min(1).optional(),
   notes: notes.optional(),
   browse: browse.optional(),
+  simulator: simulator.optional(),
   database: database.optional(),
   mcp: z.array(z.string().min(1)).optional(),
   model: z.string().min(1).optional(),

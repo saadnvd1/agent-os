@@ -801,6 +801,63 @@ schema, including the fields later releases implement (MCP servers, apps,
 recipes), is in
 [docs/decisions/2026-10-10-agentos-json.md](docs/decisions/2026-10-10-agentos-json.md).
 
+### iOS simulator for tasks
+
+On a Mac, a task on an iOS app can boot a simulator of its own, put a debug
+build of its worktree on it, tap through screens, read the accessibility tree
+and take screenshots, to check a UI fix before anyone installs a release
+build. A project opts in with a `simulator` block in `agentos.json`:
+
+```json
+{
+  "ports": { "METRO_PORT": 8100 },
+  "simulator": {
+    "start": "npm run sim",
+    "app": "com.example.app",
+    "device": "iPhone 17"
+  }
+}
+```
+
+`start` runs in the task's worktree with `SIMULATOR_UDID` (and the task's
+ports) in its environment. It builds if needed, installs the app on that
+device and exits 0 once the app is up; AgentOS builds nothing itself, because
+the project knows its native fingerprint and what to cache. `app` is the
+bundle id, and `device` the model (default `iPhone 17`).
+
+A project without the block gets nothing: no brief lines and no tools. A task
+declares nothing and chooses nothing; it runs:
+
+```bash
+aos sim open [--no-wait]   # make its simulator, run start; waits until it is up
+aos sim status | close
+aos sim snapshot -i        # accessibility tree with @e1, @e2... refs
+aos sim click @e3 | fill @e5 "text" | scroll | swipe | back | home | find | wait
+aos sim screenshot [path]  # prints a PNG path under ~/.agent-os/simulators/<task>/shots
+aos sim logs --last 2m     # the app's recent log
+```
+
+- **Driving** is [agent-device](https://github.com/callstack/agent-device) (MIT),
+  pinned and installed on first use into `~/.agent-os/tools`, with its own
+  state dir. Only the commands above are accepted; the device and session are
+  filled in by the server, so a task can only reach its own simulator.
+- **One simulator per task**, cloned from a base device AgentOS makes once on
+  the newest iOS runtime. At most two are booted at once across all tasks
+  (`AGENTOS_SIMULATOR_MAX`); one idle for 15 minutes is shut down and boots
+  again on its next command. The XCTest runner builds the first time per Xcode
+  version (minutes), then is cached.
+- **Cleanup**: a task's simulator is deleted when it is done, signed off,
+  dropped, deleted or moved away, and shut down when stopped. A sweep at start
+  and every 5 minutes also removes those of tasks that ended or crashed.
+  Devices are named with a per-database prefix and only those are ever
+  touched, so a dev instance and the real one never reap each other's.
+- **Mac only.** On any other machine, including a linked one a task was moved
+  to, the brief says the simulator is unavailable and `aos sim` says the same;
+  nothing is forwarded between machines.
+- **Optional.** No merge, review or release check reads simulator state.
+  Screenshots are written outside the worktree, and the brief tells the task
+  not to put them in commits or PR bodies unless they belong there.
+
 ### Stacks
 
 A project whose board is linked to LumifyHub can run the whole board as

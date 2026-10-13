@@ -13,6 +13,7 @@ import {
   type ProjectConfig,
 } from "./index";
 import { databaseBrief, type SessionDatabase } from "./database";
+import { simulatorBrief } from "../simulator/brief";
 
 export function runningBrief(
   config: ProjectConfig,
@@ -49,6 +50,8 @@ export function runningBrief(
     lines.push(
       `- \`${browse.map}\` maps every page to its URL: navigate by URL, don't explore.`
     );
+  const sim = simulatorBrief(config.simulator);
+  if (sim) lines.push(sim);
   for (const note of notesOf(config.notes))
     lines.push(`- ${withPorts(note, ports)}`);
   return lines.length ? `## Running this project\n\n${lines.join("\n")}` : "";

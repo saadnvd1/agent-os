@@ -3,6 +3,7 @@ import { hostLink } from "../hosts/remote-api";
 import { stopChatTurn } from "../chat/stop";
 import type { Session } from "../db";
 import { stopHeldTask } from "../tasks/held-remote";
+import { releaseOnEnd } from "../simulator";
 
 // Stops a session's agent and keeps everything else, the same for every
 // caller (the orchestrator's stop tool, `aos stop`): a chat's turn ends
@@ -33,10 +34,12 @@ export async function stopSession(
     const out = await stopChatTurn(s.id);
     if (!out.stopped)
       throw new Error(`Couldn't stop ${s.name}: ${out.reason}.`);
+    releaseOnEnd(s.id, { remove: false });
     return out.killed
       ? `Stopped ${s.name}: its agent didn't answer the interrupt, so it was ended. Its conversation and worktree are kept; your next message runs as its next turn.`
       : `Stopped ${s.name}'s turn. Your next message runs as its next turn.`;
   }
   await endTmuxSession(s.host_id, s.tmux_name);
+  releaseOnEnd(s.id, { remove: false });
   return `Stopped ${s.name}: its agent is ended, its worktree and branch are kept.`;
 }
