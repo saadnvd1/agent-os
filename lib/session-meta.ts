@@ -17,6 +17,10 @@ export function fromSqliteTime(value: string): Date {
   return new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
 }
 
+export function toSqliteTime(date: Date): string {
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
+
 const STATUS: Record<SessionStatus, { label: string; tone: string }> = {
   idle: { label: "", tone: "text-muted-foreground/60" },
   running: { label: "Working", tone: "text-muted-foreground" },

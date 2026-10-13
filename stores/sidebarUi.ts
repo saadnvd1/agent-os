@@ -8,6 +8,7 @@ interface Remembered {
   workspaceId: string | null;
   projectId: string | null;
   doneCollapsed: boolean;
+  snoozedCollapsed: boolean;
 }
 
 export const sidebarUi = proxy<
@@ -22,6 +23,7 @@ export const sidebarUi = proxy<
   workspaceId: null,
   projectId: null,
   doneCollapsed: true,
+  snoozedCollapsed: true,
   query: "",
   orchestratorId: null,
   donePages: 0,
@@ -43,13 +45,20 @@ export const sidebarUiActions = {
     sidebarUi.workspaceId = saved.workspaceId ?? null;
     sidebarUi.projectId = saved.projectId ?? null;
     sidebarUi.doneCollapsed = saved.doneCollapsed ?? true;
+    sidebarUi.snoozedCollapsed = saved.snoozedCollapsed ?? true;
     sidebarUi.hydrated = true;
     subscribe(sidebarUi, () => {
       try {
-        const { workspaceId, projectId, doneCollapsed } = sidebarUi;
+        const { workspaceId, projectId, doneCollapsed, snoozedCollapsed } =
+          sidebarUi;
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ workspaceId, projectId, doneCollapsed })
+          JSON.stringify({
+            workspaceId,
+            projectId,
+            doneCollapsed,
+            snoozedCollapsed,
+          })
         );
       } catch {
         // Storage can be unavailable (private mode); the view still works.
@@ -75,6 +84,9 @@ export const sidebarUiActions = {
   },
   toggleDone: () => {
     sidebarUi.doneCollapsed = !sidebarUi.doneCollapsed;
+  },
+  toggleSnoozed: () => {
+    sidebarUi.snoozedCollapsed = !sidebarUi.snoozedCollapsed;
   },
   showMoreDone: () => {
     sidebarUi.donePages += 1;

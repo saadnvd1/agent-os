@@ -421,7 +421,7 @@ async function collect(full = false): Promise<StatusSnapshot> {
 
   // Batch update sessions and claude_session_id in a single transaction
   const updateStatusStmt = db.prepare(
-    "UPDATE sessions SET updated_at = datetime('now') WHERE id = ?"
+    "UPDATE sessions SET updated_at = datetime('now'), active_at = datetime('now') WHERE id = ?"
   );
   const updateClaudeIdStmt = db.prepare(
     "UPDATE sessions SET claude_session_id = ? WHERE id = ? AND (claude_session_id IS NULL OR claude_session_id != ?)"

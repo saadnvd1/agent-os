@@ -103,6 +103,7 @@ describe("OrchestratorPinRow", () => {
               need: null,
               unread,
               working: false,
+              activeAt: 0,
               workers: [],
             },
           })

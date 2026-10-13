@@ -2,6 +2,8 @@
 
 import {
   CheckSquare,
+  AlarmClock,
+  Archive,
   CircleCheck,
   Clock,
   Copy,
@@ -30,6 +32,9 @@ import { schedulesUiActions } from "@/stores/schedulesUi";
 import { recipesUiActions } from "@/stores/recipesUi";
 import { rowGroup } from "@/lib/recipes/chip";
 import { useDoneAction } from "./useDoneAction";
+import { useShelfActions } from "./useShelfActions";
+import { SNOOZE_PRESETS, snoozePreset, wakeLabel } from "@/lib/sidebar/snooze";
+import type { SidebarRow } from "@/lib/sidebar/shelves";
 import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { copySessionLink } from "@/hooks/useCopyToClipboard";
@@ -82,15 +87,20 @@ function BlockedItem({ kind, icon: Icon, label, why }: BlockedProps) {
 // The row's ⋯ menu (and right-click menu): everything a session can do.
 export function SessionRowMenu({
   session,
+  row,
   kind,
   onRename,
 }: {
   session: Session;
+  // Where it sits, for Snooze, Mark done and Reopen (not on an orchestrator).
+  row?: SidebarRow;
   kind: keyof typeof PARTS;
   onRename: () => void;
 }) {
   const ctx = useRowContext();
   const markDone = useDoneAction();
+  const shelf = useShelfActions();
+  const plain = !!row && !row.task && !session.task_status;
   const { Item, Separator, Sub, SubTrigger, SubContent } = PARTS[kind];
   const linked = useLinkedHostNames();
   // A linked machine's session: what can't reach it yet shows why.
@@ -291,9 +301,54 @@ export function SessionRowMenu({
       {!session.role && (
         <>
           <Separator />
+          {row?.wakesAt ? (
+            <Item onClick={() => shelf.unsnooze(session)}>
+              <AlarmClock className={icon} />
+              Unsnooze
+            </Item>
+          ) : (
+            !session.pinned &&
+            row && (
+              <Sub>
+                <SubTrigger>
+                  <AlarmClock className={icon} />
+                  Snooze
+                </SubTrigger>
+                <SubContent>
+                  {SNOOZE_PRESETS.map((p) => (
+                    <Item
+                      key={p.key}
+                      onClick={() => shelf.snooze(session, p.key)}
+                    >
+                      {p.label}
+                      <span className="text-muted-foreground ml-3 text-xs">
+                        {wakeLabel(snoozePreset(p.key).getTime())}
+                      </span>
+                    </Item>
+                  ))}
+                </SubContent>
+              </Sub>
+            )
+          )}
+          {plain &&
+            (row.settled ? (
+              <Item onClick={() => shelf.reopen(session)}>
+                <RotateCcw className={icon} />
+                Reopen
+              </Item>
+            ) : (
+              <Item onClick={() => shelf.settle(session)}>
+                <CircleCheck className={icon} />
+                Mark done
+              </Item>
+            ))}
           <Item onClick={() => markDone(session)}>
-            <CircleCheck className={icon} />
-            Done
+            {plain ? (
+              <Archive className={icon} />
+            ) : (
+              <CircleCheck className={icon} />
+            )}
+            {plain ? "Archive" : "Done"}
           </Item>
           <Item
             onClick={() => ctx.onDelete(session.id)}

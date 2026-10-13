@@ -1,3 +1,4 @@
+import { touchActive } from "../session-activity";
 import { noteWaiting } from "../notify/push/waiting";
 import { db, type Session } from "../db";
 import type { WorkerClient } from "./worker/client";
@@ -94,6 +95,11 @@ export function emit(sessionId: string, m: ChatServerMessage): void {
   if (m.type === "state" || m.type === "compacting" || m.type === "item")
     markStatusDirty(sessionId, EMIT_SETTLE_MS);
   if (m.type === "state") noteWaiting(sessionId, m.state === "waiting");
+  if (
+    (m.type === "state" && m.state !== "idle") ||
+    (m.type === "item" && m.item.kind === "turn_end")
+  )
+    touchActive(sessionId);
   registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
   // Idle, running, waiting and back, and a finished turn (unread): the
   // sidebar hears at once.

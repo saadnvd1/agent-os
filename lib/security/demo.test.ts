@@ -290,6 +290,8 @@ describe("demo gate: every write route in app/api", () => {
     "POST /api/pair/claim",
     "POST /api/sessions/x1/seen",
     "POST /api/sessions/x1/pin",
+    "POST /api/sessions/x1/snooze",
+    "POST /api/sessions/x1/settle",
     "POST /api/sessions/x1/done",
     "POST /api/workspaces/x1/orchestrator/asks/x1",
     "DELETE /api/devices/x1",

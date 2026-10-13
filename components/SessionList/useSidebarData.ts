@@ -19,6 +19,7 @@ import { rollups, type Rollup } from "@/lib/sidebar/rollup";
 import { queuedRows } from "@/lib/sidebar/queued";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useOrchestratorsQuery } from "@/data/orchestrators";
+import { useClock } from "@/hooks/useMinuteTick";
 import { sidebarUi } from "@/stores/sidebarUi";
 import type { SessionStatus } from "./SessionList.types";
 
@@ -31,6 +32,8 @@ export function useSidebarData(
   sessionStatuses: Record<string, SessionStatus> | undefined
 ) {
   const ui = useSnapshot(sidebarUi);
+  // Wakes and 3-day settles are read from the clock.
+  const now = useClock();
 
   const sessionsQuery = useSessionsQuery();
   const projectsQuery = useProjectsQuery();
@@ -84,6 +87,7 @@ export function useSidebarData(
       tasks: taskStates,
       projectName,
       query: ui.query,
+      now,
     };
     const input = {
       ...common,
@@ -113,6 +117,7 @@ export function useSidebarData(
           : machineGroups({ ...common, sessions }, linked),
     };
   }, [
+    now,
     linked,
     sessions,
     projects,

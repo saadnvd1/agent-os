@@ -45,6 +45,8 @@ export function machineGroups(
           ...s.needsYou,
           ...s.working,
           ...s.inReview,
+          ...s.ongoing,
+          ...s.snoozed,
           ...s.done,
         ],
       };
