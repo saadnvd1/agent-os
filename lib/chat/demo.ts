@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { clientSend } from "./client-send";
 import type { ChatConversation } from "./driver";
 import type { ChatClientMessage, ChatServerMessage } from "./events";
 import { demoConversation } from "./drivers/demo";
@@ -37,7 +38,11 @@ function conversation(sessionId: string): ChatConversation {
   return c;
 }
 
-export function sendDemoChat(sessionId: string, text: string): void {
+export function sendDemoChat(
+  sessionId: string,
+  text: string,
+  id = `user-${Date.now()}-${randomUUID().slice(0, 5)}`
+): void {
   const trimmed = text.trim();
   if (!trimmed) return;
   getSession(sessionId);
@@ -45,7 +50,7 @@ export function sendDemoChat(sessionId: string, text: string): void {
   if (count >= MAX_SENDS) throw new Error(DEMO_REFUSAL);
   sends.set(sessionId, count + 1);
   const item = {
-    id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
+    id,
     kind: "user" as const,
     text: DEMO_VISITOR_TEXT,
     tagged: true as const,
@@ -84,7 +89,21 @@ export function handleDemoChat(
   msg: ChatClientMessage,
   reply: (m: ChatServerMessage) => void
 ): void {
-  if (msg.type === "send") return sendDemoChat(sessionId, String(msg.text));
+  if (msg.type === "send") {
+    const { id } = clientSend(msg);
+    if (!id) return sendDemoChat(sessionId, String(msg.text));
+    reply({ type: "accepted", id });
+    try {
+      return sendDemoChat(sessionId, String(msg.text), id);
+    } catch (err) {
+      reply({
+        type: "send_failed",
+        id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+  }
   if (msg.type === "interrupt") {
     void conversations.get(sessionId)?.interrupt();
     return;

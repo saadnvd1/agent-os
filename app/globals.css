@@ -131,6 +131,17 @@
   animation: status-pulse 1.6s ease-in-out infinite;
 }
 
+/* Shown only once something has taken a moment: a quick send never flashes it. */
+@keyframes status-late {
+  from {
+    opacity: 0;
+  }
+}
+
+@utility status-late {
+  animation: status-late 0.2s ease-out 0.6s both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .status-live {
     animation: none;

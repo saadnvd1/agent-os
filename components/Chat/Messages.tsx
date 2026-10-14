@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   Check,
   ChevronRight,
@@ -9,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
+import type { PendingSend } from "@/lib/chat/pending";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
 import { compactedLine } from "@/lib/chat/stale";
@@ -68,7 +70,9 @@ function Prose({ text }: { text: string }) {
   );
 }
 
-function UserText({ text }: { text: string }) {
+// Memoized: a chat full of pasted articles re-renders its rows when a turn
+// starts and ends, and splitting and linking each one again is the cost.
+const UserText = memo(function UserText({ text }: { text: string }) {
   return (
     <>
       {splitUserText(text).map((part, i) => {
@@ -89,45 +93,111 @@ function UserText({ text }: { text: string }) {
       })}
     </>
   );
+});
+
+// A sent message not in the chat yet (lib/chat/pending).
+export interface PendingStatus {
+  status: PendingSend["status"];
+  error?: string;
+  onRetry: () => void;
+  onEdit: () => void;
+}
+
+function StatusButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-foreground hover:bg-foreground/[0.06] min-h-11 rounded-md px-2 underline underline-offset-2 md:min-h-7"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SendStatus({ pending }: { pending: PendingStatus }) {
+  if (pending.status === "failed")
+    return (
+      <div
+        data-copy-skip
+        role="alert"
+        className="text-destructive flex items-center gap-1 font-mono text-[11px]"
+      >
+        <span>Not sent · {pending.error}</span>
+        <StatusButton onClick={pending.onRetry}>Retry</StatusButton>
+        <StatusButton onClick={pending.onEdit}>Edit</StatusButton>
+      </div>
+    );
+  return (
+    <div
+      data-copy-skip
+      aria-live="polite"
+      className="text-muted-foreground status-late flex items-center gap-1.5 font-mono text-[11px]"
+    >
+      <span className="status-live bg-muted-foreground h-1.5 w-1.5 rounded-full" />
+      {pending.status === "accepted" ? "Starting the agent" : "Sending"}
+    </div>
+  );
 }
 
 export function UserMessage({
   item,
   onUndo,
+  pending,
 }: {
   item: Of<"user">;
   onUndo?: () => void;
+  pending?: PendingStatus;
 }) {
-  return (
-    <BookmarkPress itemId={item.id}>
-      <div className="group flex flex-col items-end gap-1">
-        {item.from && (
-          <span data-copy-skip className="label-mono text-muted-foreground">
-            from {item.from}
-          </span>
-        )}
-        {item.images?.length ? (
-          <div data-copy-skip className="flex flex-wrap justify-end gap-1.5">
-            {item.images.map((img, i) => (
-              <ImageThumb
-                key={i}
-                src={`data:${img.mediaType};base64,${img.data}`}
-              />
-            ))}
-          </div>
-        ) : null}
-        {item.text && (
-          <div className="bg-foreground/[0.07] max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm whitespace-pre-wrap">
-            <UserText text={item.text} />
-          </div>
-        )}
+  const message = (
+    <div className="group flex flex-col items-end gap-1">
+      {item.from && (
+        <span data-copy-skip className="label-mono text-muted-foreground">
+          from {item.from}
+        </span>
+      )}
+      {item.images?.length ? (
+        <div data-copy-skip className="flex flex-wrap justify-end gap-1.5">
+          {item.images.map((img, i) => (
+            <ImageThumb
+              key={i}
+              src={`data:${img.mediaType};base64,${img.data}`}
+            />
+          ))}
+        </div>
+      ) : null}
+      {item.text && (
+        <div
+          className={cn(
+            "bg-foreground/[0.07] max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm whitespace-pre-wrap",
+            pending &&
+              (pending.status === "failed"
+                ? "ring-destructive ring-1 ring-inset"
+                : "opacity-60")
+          )}
+        >
+          <UserText text={item.text} />
+        </div>
+      )}
+      {pending ? (
+        <SendStatus pending={pending} />
+      ) : (
         <div className="-mr-1.5 flex items-center">
           {onUndo && <UndoButton onClick={onUndo} />}
           <BookmarkButton itemId={item.id} />
         </div>
-      </div>
-    </BookmarkPress>
+      )}
+    </div>
   );
+  // Not in the chat yet: nothing to star.
+  if (pending) return message;
+  return <BookmarkPress itemId={item.id}>{message}</BookmarkPress>;
 }
 
 export function AssistantMessage({

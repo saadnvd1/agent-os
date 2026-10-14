@@ -209,6 +209,7 @@ export const openCodeDriver: ChatDriver = {
         model = openCodeModel(next);
       },
       async setAccess(next) {
+        if (next === access) return;
         access = next;
         await ready;
         await setRules();

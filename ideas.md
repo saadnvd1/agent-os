@@ -76,6 +76,13 @@
       retried send is never run twice. (Done 2026-10-06, no flag.)
 - [ ] Resume a turn when its worker itself crashed (the worker, not the
       server): record the in-flight send and re-send it on the next start
+- [ ] Start a chat's worker on the first composer keystroke, to hide the
+      0.5–2.6 s a cold send still waits (costs a CLI process per chat opened)
+- [ ] Show the message the moment the worker is up even when the access or
+      plan setting changed while it was down (it still waits for the CLI)
+- [ ] Collapse very long user messages behind "Show all"
+- [ ] Pending and failed send bubbles in the native app (agentos-mobile),
+      with the `clientId`, `accepted` and `send_failed` the server now has
 
 ## Tooling
 

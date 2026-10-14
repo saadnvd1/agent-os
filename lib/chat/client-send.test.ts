@@ -38,4 +38,21 @@ describe("clientSend", () => {
     });
     expect(clientSend(null)).toEqual({ text: "", images: undefined });
   });
+
+  it("keeps the client's own id only in its own shape", () => {
+    expect(clientSend({ text: "hi", clientId: "user-c-1a2b3c4d" })).toEqual({
+      text: "hi",
+      images: undefined,
+      id: "user-c-1a2b3c4d",
+    });
+    for (const clientId of [
+      "user-1712-abcde",
+      "user-c-short",
+      "user-c-../../x1234",
+      "error-c-12345678",
+      `user-c-${"a".repeat(65)}`,
+      42,
+    ])
+      expect(clientSend({ text: "hi", clientId })).not.toHaveProperty("id");
+  });
 });

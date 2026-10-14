@@ -311,3 +311,64 @@ describe("/ws/chat for a linked machine's session", () => {
     remove(id);
   });
 });
+
+describe("/ws/chat send with a client id", () => {
+  const clientId = "user-c-0123abcd-ef";
+
+  it("says it took the message in before anything else, and why it failed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const id = session();
+    const { ws, sent } = open(id);
+    const opened = sent.length;
+    ws.message({ type: "send", text: "hello", clientId });
+    expect(sent[opened]).toEqual({ type: "accepted", id: clientId });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(sent).toContainEqual({
+      type: "send_failed",
+      id: clientId,
+      message: expect.stringContaining("isn't linked"),
+    });
+    remove(id);
+    vi.restoreAllMocks();
+  });
+
+  it("ignores an id in a shape the server doesn't hand out", () => {
+    const id = session();
+    const { ws, sent } = open(id);
+    ws.message({ type: "send", text: "hello", clientId: "user-1-abc" });
+    expect(sent.some((m) => m.type === "accepted")).toBe(false);
+    remove(id);
+  });
+
+  it("a resend of a message already in the chat delivers nothing", async () => {
+    const { saveItem } = await import("./store");
+    const { sendChat } = await import("./runner");
+    const id = session();
+    saveItem(id, {
+      id: clientId,
+      kind: "user",
+      text: "hello",
+      createdAt: Date.now(),
+    });
+    // The session's machine isn't linked: anything past the check throws.
+    await expect(
+      sendChat(id, { text: "hello", id: clientId })
+    ).resolves.toBeUndefined();
+    remove(id);
+  });
+
+  it("the demo takes the client's id for the message", () => {
+    const id = session();
+    const { ws, sent } = open(id, true);
+    const opened = sent.length;
+    ws.message({ type: "send", text: "hi", clientId });
+    expect(sent[opened]).toEqual({ type: "accepted", id: clientId });
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        type: "item",
+        item: expect.objectContaining({ id: clientId, kind: "user" }),
+      })
+    );
+    remove(id);
+  });
+});

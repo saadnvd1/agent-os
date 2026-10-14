@@ -23,6 +23,26 @@ import type {
 import type { SearchResult } from "@/lib/chat/find";
 import { addBody, touchBody } from "@/lib/chat/bodyCache";
 import { backgroundFailure, type TaskOutput } from "@/lib/chat/background";
+import {
+  NOT_SENT,
+  clientId,
+  overSends,
+  toResend,
+  type PendingSend,
+} from "@/lib/chat/pending";
+import { usePending } from "./usePending";
+
+// A pending send as the socket's `send`, under its own id.
+const sendFrame = (
+  p: Pick<PendingSend, "id" | "text" | "images" | "compact">
+) =>
+  JSON.stringify({
+    type: "send",
+    text: p.text,
+    images: p.images,
+    clientId: p.id,
+    ...(p.compact && { compact: true }),
+  });
 
 // The index of the item with `id`, searched from the end: what changes is
 // almost always the latest.
@@ -180,6 +200,12 @@ export function useChat(
     onUndoneRef.current = onUndone;
   });
   const wsRef = useRef<WebSocket | null>(null);
+  const {
+    pending,
+    pendingRef,
+    dispatch: pend,
+    restore: restorePending,
+  } = usePending(sessionId, connected);
 
   useEffect(() => {
     let closed = false;
@@ -214,7 +240,18 @@ export function useChat(
         `${protocol}//${window.location.host}/ws/chat?session=${encodeURIComponent(sessionId)}&paged=1`
       );
       wsRef.current = ws;
-      ws.onopen = () => setConnected(true);
+      ws.onopen = () => {
+        setConnected(true);
+        restorePending();
+        // Sends the last socket took and may have lost: the server drops
+        // any it already has.
+        for (const p of overSends(pendingRef.current))
+          pend({ type: "failed", id: p.id, error: NOT_SENT });
+        for (const p of toResend(pendingRef.current)) {
+          ws.send(sendFrame(p));
+          pend({ type: "resent", id: p.id, now: Date.now() });
+        }
+      };
       ws.onmessage = (event) => {
         const m = JSON.parse(event.data) as ChatServerMessage;
         if (m.type === "snapshot") {
@@ -235,8 +272,17 @@ export function useChat(
           setQueue(m.queue ?? []);
           setSuggestion(m.suggestion ?? null);
           setLoadedFor(sessionId);
+          pend({
+            type: "resolved",
+            ids: [...m.items, ...(m.queue ?? [])].map((i) => i.id),
+          });
         } else if (m.type === "queue") {
           setQueue(m.queue);
+          pend({ type: "resolved", ids: m.queue.map((q) => q.id) });
+        } else if (m.type === "accepted") {
+          pend({ type: "accepted", id: m.id, now: Date.now() });
+        } else if (m.type === "send_failed") {
+          pend({ type: "failed", id: m.id, error: m.message });
         } else if (m.type === "suggestion") {
           setSuggestion(m.text);
         } else if (m.type === "files") {
@@ -303,6 +349,8 @@ export function useChat(
             addBody(prev, m.id, m.body, visibleBodies.current)
           );
         } else if (m.type === "item") {
+          if (m.item.kind === "user")
+            pend({ type: "resolved", ids: [m.item.id] });
           withDeltas(() => {
             const routed = routeItem(
               itemsRef.current,
@@ -346,25 +394,44 @@ export function useChat(
       document.removeEventListener("visibilitychange", onVisible);
       wsRef.current?.close();
     };
-  }, [sessionId, setItems, setEarlierTasks]);
+  }, [sessionId, setItems, setEarlierTasks, pend, pendingRef, restorePending]);
 
   const queryClient = useQueryClient();
   const send = useCallback(
     // `compact`: the reader let a stale chat compact first (lib/chat/stale).
+    // It shows as a pending bubble at once, until it's in the chat.
     (text: string, images?: ChatImage[], compact?: boolean) => {
+      const p = { id: clientId(), text, images, compact };
+      pend({ type: "add", send: p, now: Date.now() });
       const ws = wsRef.current;
-      if (!ws) return;
-      ws.send(
-        JSON.stringify({
-          type: "send",
-          text,
-          images,
-          ...(compact && { compact: true }),
-        })
-      );
-      if (ws.readyState === WebSocket.OPEN) markRunning(queryClient, sessionId);
+      if (ws?.readyState !== WebSocket.OPEN) {
+        pend({ type: "failed", id: p.id, error: NOT_SENT });
+        return;
+      }
+      ws.send(sendFrame(p));
+      markRunning(queryClient, sessionId);
     },
-    [queryClient, sessionId]
+    [queryClient, sessionId, pend]
+  );
+
+  const retrySend = useCallback(
+    (id: string) => {
+      const p = pendingRef.current.find((s) => s.id === id);
+      const ws = wsRef.current;
+      if (!p) return;
+      if (ws?.readyState !== WebSocket.OPEN) {
+        pend({ type: "failed", id, error: NOT_SENT });
+        return;
+      }
+      ws.send(sendFrame(p));
+      pend({ type: "resent", id, now: Date.now() });
+    },
+    [pend, pendingRef]
+  );
+
+  const dropSend = useCallback(
+    (id: string) => pend({ type: "drop", id }),
+    [pend]
   );
 
   const interrupt = useCallback(() => {
@@ -549,6 +616,9 @@ export function useChat(
     loadTaskOutput,
     taskOutputs,
     queue,
+    pending,
+    retrySend,
+    dropSend,
     queueEdit,
     queueMove,
     queueDelete,

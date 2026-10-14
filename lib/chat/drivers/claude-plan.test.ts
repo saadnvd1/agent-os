@@ -58,6 +58,19 @@ describe("plan mode in the driver", () => {
     c.close();
   });
 
+  // A new worker is told the saved access and plan at once; asking the CLI
+  // for the mode it started in would hold the first message until it's up.
+  it("doesn't ask the CLI for the mode it's already in", async () => {
+    const c = start({ access: "edits" });
+    await c.setAccess("edits");
+    await c.setPlan(false);
+    expect(calls.modes).toEqual([]);
+    await c.setAccess("full");
+    await c.setAccess("full");
+    expect(calls.modes).toEqual(["bypassPermissions"]);
+    c.close();
+  });
+
   it("never moves a fixed permission mode (an orchestrator's)", async () => {
     const c = start({ plan: true, permissionMode: "dontAsk" });
     expect(calls.options[0].permissionMode).toBe("dontAsk");
