@@ -40,7 +40,11 @@ interface Caller {
 
 // The session making the call: `from` when it names a real session, else the
 // one whose worktree holds `cwd`. A project folder is shared by many
-// sessions, so only a worktree identifies one.
+// sessions, so only a worktree identifies one, and only a task's: a cwd
+// outside every known task worktree names nobody. Remaining trust: any local
+// process can still name a task by its id or its worktree path, exactly as
+// it could name one in `from`; this records who asked, it grants nothing
+// (a piece it claims is that task's own plan's).
 export function callerSession(input: {
   from?: unknown;
   cwd?: unknown;
@@ -57,6 +61,7 @@ export function callerSession(input: {
     .prepare(
       `SELECT id, role, worktree_path FROM sessions
        WHERE worktree_path IS NOT NULL AND archived_at IS NULL
+         AND task_status IS NOT NULL
          AND (host_id IS NULL OR host_id = 'local')`
     )
     .all() as (Caller & { worktree_path: string })[];
@@ -85,7 +90,9 @@ export function starterOf(
 }
 
 // The orchestrator that owns a session's work: follows started_by up to the
-// first orchestrator, null when the chain ends at a person.
+// first orchestrator, null when the chain ends at a person. It gives up after
+// 6 hops (a deeper chain, or a cycle, counts as no orchestrator), so a bad
+// row can never loop it.
 export function orchestratorOf(startedBy: string | null | undefined) {
   const seen = new Set<string>();
   let id = startedBy ?? null;

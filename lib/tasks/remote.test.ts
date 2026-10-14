@@ -317,3 +317,32 @@ it("refuses another id that names a session that isn't a task", async () => {
     })
   ).rejects.toThrow(/taken/);
 });
+
+it("a remote start from inside a plain task keeps the mirror unheld: no relay, parent recorded", async () => {
+  const { seedSession } = await import("../orchestrator/testing");
+  const { isHeldRemote } = await import("./held-remote");
+  const caller = seedSession({
+    projectId: f.projectId,
+    name: "caller",
+    task: true,
+  });
+  const r = remoteSession();
+  fetchMock.mockResolvedValueOnce(json({ session: r }, 201));
+  await createTask({
+    projectId: f.projectId,
+    prompt: "do x",
+    hostId,
+    startedBy: caller,
+    parentSessionId: caller,
+    startedVia: "session",
+  });
+  const mirror = db
+    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .get(r.id!) as Session;
+  expect(mirror).toMatchObject({
+    started_by: null,
+    parent_session_id: caller,
+    started_via: "session",
+  });
+  expect(isHeldRemote(mirror)).toBe(false);
+});

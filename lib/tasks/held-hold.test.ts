@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { seedOrchestrator } from "../orchestrator/testing";
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import Database from "better-sqlite3";
@@ -12,6 +13,7 @@ const { orchestratedStart } = await import("./held");
 const { createTask } = await import("./index");
 
 function running(over = "") {
+  seedOrchestrator("orch-1");
   const id = randomUUID();
   db.prepare(
     `INSERT INTO sessions (id, name, tmux_name, working_directory, view, task_status, task_prompt)
@@ -43,6 +45,14 @@ describe("holding a task that started unheld", () => {
     const id = running("started_by_device = 'dev-mac'");
     expect((await call(id, "dev-mac")).status).toBe(200);
     expect(heldBy(id)).toBe("dev-mac");
+    expect((await call(id, "dev-mac")).status).toBe(200);
+  });
+
+  it("a task another plain task started is holdable: only an orchestrator owns", async () => {
+    const parent = running();
+    const id = running(
+      `started_by = '${parent}', started_by_device = 'dev-mac'`
+    );
     expect((await call(id, "dev-mac")).status).toBe(200);
   });
 

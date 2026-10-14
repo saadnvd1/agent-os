@@ -1,3 +1,4 @@
+import { orchestratorOf } from "../tasks/starter";
 /**
  * The kinds of work AgentOS launches agents for, and the model each runs on
  * unless Settings, a workspace or the task says otherwise. A model is named
@@ -96,7 +97,7 @@ export function sessionRole(session: {
   if (session.role === "orchestrator") return "orchestrator";
   // Work an orchestrator started is implementation, not a person's session.
   if (!session.task_status)
-    return session.started_by ? "implement" : "interactive";
+    return orchestratorOf(session.started_by) ? "implement" : "interactive";
   return session.plan_phase === "planning" || session.plan_phase === "awaiting"
     ? "plan"
     : "implement";

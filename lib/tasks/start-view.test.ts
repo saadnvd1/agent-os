@@ -61,7 +61,6 @@ describe("who started a task", () => {
   };
 
   it("a session that starts it is the starter and the parent", async () => {
-    const { db } = await import("../db");
     const { seedSession } = await import("../orchestrator/testing");
     const caller = seedSession({ projectId, name: "caller", task: true });
     const task = await createTask({
@@ -77,7 +76,6 @@ describe("who started a task", () => {
       started_via: "session",
       started_by_device: null,
     });
-    expect(db.prepare(`SELECT 1`).get()).toBeTruthy();
   });
 
   it("a person on a device", async () => {

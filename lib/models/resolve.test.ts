@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
-import { seedWorkspace } from "../orchestrator/testing";
+import {
+  seedOrchestrator,
+  seedSession,
+  seedWorkspace,
+} from "../orchestrator/testing";
 import { setModelSettings, setWorkspaceModels } from "./config";
 import { PROVIDER_PRESETS } from "./providers";
 import { parseOverride, providerShellEnv, resolveRole } from "./resolve";
@@ -129,7 +133,15 @@ describe("role resolution", () => {
     expect(sessionRole({ role: "orchestrator" })).toBe("orchestrator");
     expect(sessionRole({})).toBe("interactive");
     // Work an orchestrator started is implementation; Saad's own is not.
+    seedOrchestrator("orch-1");
     expect(sessionRole({ started_by: "orch-1" })).toBe("implement");
+    // A plain task's own spawn is not orchestrator work.
+    const { app } = seedWorkspace();
+    expect(
+      sessionRole({
+        started_by: seedSession({ projectId: app.id, name: "t", task: true }),
+      })
+    ).toBe("interactive");
     expect(sessionRole({ started_by: null })).toBe("interactive");
     expect(
       sessionRole({ task_status: "running", plan_phase: "planning" })

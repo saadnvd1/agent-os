@@ -422,47 +422,43 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   if (!waits && !full && !loaded) return null;
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, parent_session_id, started_by_device, started_via, view, agent_type, base_branch,
-       host_id, after_task, after_any, origin_workspace_id, priority, machine_needs, position)
-     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @parent_session_id, @started_by_device, @started_via, @view, @agent_type, @base_branch,
-       @host_id, @after_task, @after_any, @origin, @priority, @machine_needs,
-       (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
-  ).run({
-    id,
-    project_id: project.id,
-    prompt: req.prompt.trim(),
-    name: req.name?.trim() || null,
-    model: typeof req.model === "string" ? req.model || null : null,
-    model_overrides:
-      req.model && typeof req.model === "object"
-        ? JSON.stringify(req.model)
-        : null,
-    plan: req.plan === undefined ? null : req.plan ? 1 : 0,
-    plan_reason: req.planReason?.trim() || null,
-    plan_only: req.planOnly ? 1 : null,
-    started_by: req.startedBy ?? null,
-    parent_session_id: req.parentSessionId ?? null,
-    started_by_device: req.startedByDevice ?? null,
-    started_via: req.startedVia,
-    view: req.view ?? null,
-    agent_type: req.agent ?? null,
-    base_branch: req.baseBranch || null,
-    host_id: req.hostId || null,
-    after_task: afterTask,
-    after_any: afterAny ? JSON.stringify(afterAny) : null,
-    origin: req.originWorkspaceId ?? null,
-    priority: req.priority ?? DEFAULT_PRIORITY,
-    machine_needs: setting ? JSON.stringify(setting) : null,
-  });
-  if (req.pieceId) {
-    try {
-      claimPiece(req.pieceId, id);
-    } catch (error) {
-      db.prepare(`DELETE FROM task_queue WHERE id = ?`).run(id);
-      throw error;
-    }
-  }
+  // The row and the piece claim stand or fall together.
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, parent_session_id, started_by_device, started_via, view, agent_type, base_branch,
+         host_id, after_task, after_any, origin_workspace_id, priority, machine_needs, position)
+       VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @parent_session_id, @started_by_device, @started_via, @view, @agent_type, @base_branch,
+         @host_id, @after_task, @after_any, @origin, @priority, @machine_needs,
+         (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
+    ).run({
+      id,
+      project_id: project.id,
+      prompt: req.prompt.trim(),
+      name: req.name?.trim() || null,
+      model: typeof req.model === "string" ? req.model || null : null,
+      model_overrides:
+        req.model && typeof req.model === "object"
+          ? JSON.stringify(req.model)
+          : null,
+      plan: req.plan === undefined ? null : req.plan ? 1 : 0,
+      plan_reason: req.planReason?.trim() || null,
+      plan_only: req.planOnly ? 1 : null,
+      started_by: req.startedBy ?? null,
+      parent_session_id: req.parentSessionId ?? null,
+      started_by_device: req.startedByDevice ?? null,
+      started_via: req.startedVia,
+      view: req.view ?? null,
+      agent_type: req.agent ?? null,
+      base_branch: req.baseBranch || null,
+      host_id: req.hostId || null,
+      after_task: afterTask,
+      after_any: afterAny ? JSON.stringify(afterAny) : null,
+      origin: req.originWorkspaceId ?? null,
+      priority: req.priority ?? DEFAULT_PRIORITY,
+      machine_needs: setting ? JSON.stringify(setting) : null,
+    });
+    if (req.pieceId) claimPiece(req.pieceId, id);
+  })();
   tickQueueSoon();
   return queuedView(id)!;
 }

@@ -7,7 +7,7 @@ import {
   seedWorkspace,
 } from "@/lib/orchestrator/testing";
 import { amendBrief } from "@/lib/orchestrator/amendments";
-import { claimPiece, findPiece, workspacePieces } from "./claim";
+import { claimPiece, releaseClaim, findPiece, workspacePieces } from "./claim";
 import { piecesOf } from "./features";
 import { releasePieces, type ReleaseDeps } from "./release";
 import { startOrQueue } from "@/lib/tasks/queue";
@@ -191,6 +191,20 @@ describe("a plan approved as written", () => {
       piecesOf(f.id).find((p) => p.id === f.p2)?.status;
     expect(status(approved)).toBe("merged");
     expect(status(changed)).not.toBe("merged");
+  });
+});
+
+describe("a claim whose session never came to be", () => {
+  it("is given back, and only by the session it was made for", () => {
+    const f = feature();
+    claimPiece(f.p2, "gone");
+    releaseClaim(f.p2, "someone-else");
+    expect(piecesOf(f.id).find((p) => p.id === f.p2)?.status).toBe("building");
+    releaseClaim(f.p2, "gone");
+    expect(piecesOf(f.id).find((p) => p.id === f.p2)).toMatchObject({
+      status: "waiting",
+      session_id: null,
+    });
   });
 });
 

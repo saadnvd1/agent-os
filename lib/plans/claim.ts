@@ -112,6 +112,14 @@ export function claimPiece(id: number, sessionId: string): void {
     throw new Error(`That piece is ${pieceStatus(id) ?? "gone"}, not waiting`);
 }
 
+// Gives a claim back when the session it was made for never came to be.
+export function releaseClaim(id: number, sessionId: string): void {
+  db.prepare(
+    `UPDATE feature_pieces SET status = 'waiting', session_id = NULL
+     WHERE id = ? AND session_id = ? AND status = 'building'`
+  ).run(id, sessionId);
+}
+
 export function pieceLabel(id: number): string {
   const r = db
     .prepare(

@@ -35,7 +35,7 @@ import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
 import { doneSession } from "../done";
 import { archiveChecked } from "../done/archive";
-import { amendBrief, amendmentsOf } from "./amendments";
+import { amendBrief, scopeChangesOf } from "./amendments";
 import { db, type Session } from "../db";
 import { resurrectSession } from "../resurrect";
 import { resolveEnded } from "../resurrect/find";
@@ -97,7 +97,7 @@ export async function send(
     amendBrief(workspaceId, to.id, message);
     // In the decision log, so Saad sees every change of scope it records.
     addNote(workspaceId, `Scope change for ${to.name}: ${message}`);
-    amended = ` Recorded as scope change ${amendmentsOf(to.id).length} on its brief: reviews from now on judge against it (call review with fresh to judge the current head again).`;
+    amended = ` Recorded as scope change ${scopeChangesOf(to.id).length} on its brief: reviews from now on judge against it (call review with fresh to judge the current head again).`;
   }
   const { delivery } = await sendMessage({
     fromId: orchestratorId(workspaceId),
@@ -128,7 +128,7 @@ async function sendToQueued(
   if (opts.scopeChange) {
     amendBrief(workspaceId, queued.id, message);
     addNote(workspaceId, `Scope change for ${queued.name}: ${message}`);
-    amended = ` Recorded as scope change ${amendmentsOf(queued.id).length} on its brief: reviews judge against it once it has a PR.`;
+    amended = ` Recorded as scope change ${scopeChangesOf(queued.id).length} on its brief: reviews judge against it once it has a PR.`;
   }
   const sent = await sendMessage({
     fromId: orchestratorId(workspaceId),

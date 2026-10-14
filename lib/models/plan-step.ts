@@ -21,7 +21,7 @@ import { ANTHROPIC } from "./roles";
 import { queueEvent } from "../orchestrator/events";
 import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { addNote } from "../orchestrator/notes";
-import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
+import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
 import { PIECES_PROMPT, foldedBrief, pieceBrief } from "../plans/pieces";
 import { orchestratorOf } from "../tasks/starter";
 import {
@@ -566,5 +566,5 @@ export async function approvePlan(
       subject: `plan for ${s.name}`,
       detail: "already waiting when the mode was turned on",
     });
-  return { ref, amendments: amendmentsOf(s.id).length };
+  return { ref, amendments: scopeChangesOf(s.id).length };
 }
