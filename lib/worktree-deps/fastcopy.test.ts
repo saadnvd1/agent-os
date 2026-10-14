@@ -13,7 +13,11 @@ afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 describe("copyArgs", () => {
   it("is the cp for each mode", () => {
-    expect(copyArgs("clone", "a", "b")).toEqual(["-Rc", "a", "b"]);
+    expect(copyArgs("clone", "a", "b")).toEqual([
+      process.platform === "darwin" ? "-Rc" : "-R",
+      "a",
+      "b",
+    ]);
     expect(copyArgs("reflink", "a", "b")).toEqual([
       "-a",
       "--reflink=always",
