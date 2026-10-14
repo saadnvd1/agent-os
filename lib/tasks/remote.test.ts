@@ -193,7 +193,7 @@ describe("signing off and dropping there", () => {
     await expect(signOffTask(r.id!, { head })).resolves.toBe("rebase");
     const [url, init] = fetchMock.mock.calls.at(-1)!;
     expect(url).toBe(`http://devbox:3011/api/tasks/${r.id}/merge`);
-    expect(JSON.parse(init.body)).toEqual({ head });
+    expect(JSON.parse(init.body)).toEqual({ head, base: "main" });
     expect(row(r.id!).task_status).toBe("merged");
   });
 
@@ -226,6 +226,28 @@ describe("signing off and dropping there", () => {
     await expect(signOffTask(r.id!, { head })).rejects.toThrow(
       /without confirming/
     );
+  });
+
+  it("a bare 502 after the merge ran is a merge when that machine lists the task merged", async () => {
+    const r = await startOne();
+    fetchMock
+      .mockResolvedValueOnce(list([]))
+      .mockResolvedValueOnce(new Response("Bad Gateway", { status: 502 }))
+      .mockResolvedValueOnce(list([view(r, "merged")]));
+    await expect(signOffTask(r.id!, { head })).resolves.toBeNull();
+    expect(row(r.id!).task_status).toBe("merged");
+  });
+
+  it("a bare 502 it can't confirm says so instead of HTTP 502", async () => {
+    const r = await startOne();
+    fetchMock
+      .mockResolvedValueOnce(list([]))
+      .mockResolvedValueOnce(new Response("Bad Gateway", { status: 502 }))
+      .mockResolvedValueOnce(list([view(r, "review")]));
+    await expect(signOffTask(r.id!, { head })).rejects.toThrow(
+      /HTTP 502: couldn't confirm whether devbox merged/
+    );
+    expect(row(r.id!).task_status).toBe("running");
   });
 
   it("a refused sign-off there leaves it running here", async () => {
