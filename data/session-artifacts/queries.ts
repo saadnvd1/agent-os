@@ -15,10 +15,7 @@ export const artifactContentUrl = (sessionId: string, id: string) =>
   `/api/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(id)}`;
 
 /** What a session made. Read only while the view is open. */
-export function useSessionArtifacts(
-  sessionId: string | null | undefined,
-  enabled = true
-) {
+export function useSessionArtifacts(sessionId: string | null | undefined) {
   return useQuery({
     queryKey: sessionArtifactKeys.session(sessionId ?? ""),
     queryFn: async (): Promise<SessionArtifacts> => {
@@ -29,9 +26,9 @@ export function useSessionArtifacts(
       if (!res.ok) throw new Error(data.error || "Couldn't load artifacts");
       return data;
     },
-    enabled: !!sessionId && enabled,
+    enabled: !!sessionId,
     staleTime: 5_000,
-    refetchInterval: enabled ? 20_000 : false,
+    refetchInterval: 20_000,
   });
 }
 

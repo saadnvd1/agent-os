@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { ViewMode } from "@/contexts/PaneContext";
-import { useSessionArtifacts } from "@/data/session-artifacts";
 
 interface PaneViewToggleProps {
   sessionId?: string;
@@ -87,8 +86,6 @@ export function PaneViewToggle({
   onGitDrawerToggle,
   onShellDrawerToggle,
 }: PaneViewToggleProps) {
-  // Counted only once the view has been opened: closed, it never fetches.
-  const artifacts = useSessionArtifacts(sessionId, false).data?.artifacts;
   return (
     <div className="bg-accent/50 flex shrink-0 items-center rounded-md p-0.5">
       <ToggleButton
@@ -131,11 +128,6 @@ export function PaneViewToggle({
           onClick={() => onViewModeChange("artifacts")}
         >
           <Package className="h-3.5 w-3.5" />
-          {!!artifacts?.length && (
-            <span className="bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-medium">
-              {artifacts.length}
-            </span>
-          )}
         </ToggleButton>
       )}
       {hasLog && (
