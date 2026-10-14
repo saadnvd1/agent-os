@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { requireApprover } from "@/lib/security/approver";
 import { getPasskey, revokePasskey } from "@/lib/security/passkeys";
-import { relyingParty, verifyPresence } from "@/lib/security/presence";
-import { placeOf, refusalResponse } from "@/lib/security/presence-http";
+import {
+  placeOf,
+  refusalResponse,
+  requirePresence,
+  type PresenceProof,
+} from "@/lib/security/presence-http";
 import { raisePasskeyAsks } from "@/lib/orchestrator/passkey-asks";
 import { revokePresence } from "@/lib/orchestrator/presence-binding";
 import { resolvePasskeyAsks } from "@/lib/orchestrator/asks";
@@ -21,12 +24,11 @@ export async function DELETE(request: NextRequest, { params }: Ctx) {
     const key = getPasskey(id);
     if (!key || key.revoked_at)
       return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const { assertion } = (await request.json().catch(() => ({}))) as {
-      assertion?: AuthenticationResponseJSON;
-    };
-    await verifyPresence(
-      relyingParty(request.headers),
-      assertion,
+    const body = (await request.json().catch(() => ({}))) as PresenceProof;
+    await requirePresence(
+      request,
+      gate.approver,
+      body,
       "revoke",
       revokePresence(id)
     );

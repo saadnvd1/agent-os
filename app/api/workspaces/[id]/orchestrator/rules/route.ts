@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import type { PresenceProof } from "@/lib/security/presence-http";
 import { getWorkspace } from "@/lib/workspaces";
 import { addRule, listRules } from "@/lib/orchestrator/rules";
 import { provenAsSaad } from "./presence";
@@ -19,13 +19,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   if (!getWorkspace(id))
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  const { text, assertion } = (await request.json().catch(() => ({}))) as {
+  const body = (await request.json().catch(() => ({}))) as {
     text?: unknown;
-    assertion?: AuthenticationResponseJSON;
-  };
+  } & PresenceProof;
+  const { text } = body;
   if (typeof text !== "string")
     return NextResponse.json({ error: "text is required" }, { status: 400 });
-  const refused = await provenAsSaad(request, id, assertion);
+  const refused = await provenAsSaad(request, id, body);
   if (refused) return refused;
   try {
     return NextResponse.json({ rule: addRule(id, text, "saad") });

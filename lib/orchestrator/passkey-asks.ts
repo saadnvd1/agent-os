@@ -3,8 +3,11 @@
 // Declining a new passkey's ask revokes it.
 
 import type { PasskeyRow } from "../security/passkeys";
+import { revokeDeviceKeys } from "../security/device-keys";
+import { revokeDevice } from "../security/devices";
 import {
   AskRefused,
+  resolvePasskeyAsks,
   passkeySubject,
   raiseAsk,
   revokedPasskeySubject,
@@ -53,4 +56,15 @@ export function raisePasskeyAsks(
     }
   }
   return n;
+}
+
+// Signing a device out takes its approval key with it, and the revoke goes
+// on the asks list like any other.
+export function revokeDeviceAndKeys(deviceId: string, place: string): boolean {
+  const changed = revokeDevice(deviceId);
+  for (const key of revokeDeviceKeys(deviceId)) {
+    resolvePasskeyAsks(key.id, "revoked");
+    raisePasskeyAsks(key, place, "revoked");
+  }
+  return changed;
 }

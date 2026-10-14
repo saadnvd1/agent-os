@@ -81,3 +81,24 @@ export function softAuthenticator(rpId = "localhost") {
     },
   };
 }
+
+// Tests only: a software stand-in for the app's Secure Enclave key. The
+// public key is the uncompressed X9.63 point the app sends; sign() gives a
+// DER signature, as iOS does.
+export function softDeviceKey() {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ec", {
+    namedCurve: "P-256",
+  });
+  const jwk = publicKey.export({ format: "jwk" }) as { x: string; y: string };
+  return {
+    publicKey: b64url(
+      Buffer.concat([
+        Buffer.from([0x04]),
+        Buffer.from(jwk.x, "base64url"),
+        Buffer.from(jwk.y, "base64url"),
+      ])
+    ),
+    sign: (message: string) =>
+      b64url(crypto.sign("sha256", Buffer.from(message), privateKey)),
+  };
+}

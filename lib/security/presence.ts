@@ -23,6 +23,14 @@ import {
   type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
 import { getDb } from "@/lib/db";
+import { deviceKeyMessage, deviceRp } from "./device-key-message";
+import {
+  activeDeviceKey,
+  newDeviceKeyId,
+  revokeDeviceKeys,
+  spkiFromRawP256,
+  verifyDeviceSignature,
+} from "./device-keys";
 import {
   activePasskeys,
   markBootstrapped,
@@ -317,5 +325,181 @@ export async function verifyRegistration(
       rpId: rp.rpID,
       ...meta,
     });
+  })();
+}
+
+// ---- A paired device's own key (Secure Enclave, Face ID) ----
+
+export interface DeviceSignature {
+  keyId: string;
+  challenge: string;
+  signature: string;
+}
+
+export interface DeviceOptions {
+  challenge: string;
+  keyId: string;
+  message: string;
+}
+
+const newChallenge = () => crypto.randomBytes(32).toString("base64url");
+
+// Options for a device-key assertion, or null when the device has no key.
+export function deviceAssertionOptions(
+  deviceId: string,
+  purpose: PresencePurpose,
+  binding: string
+): DeviceOptions | null {
+  const key = activeDeviceKey(deviceId);
+  if (!key) return null;
+  const challenge = newChallenge();
+  storeChallenge(challenge, "assert", purpose, binding, deviceRp(deviceId));
+  return {
+    challenge,
+    keyId: key.id,
+    message: deviceKeyMessage({ challenge, purpose, binding, deviceId }),
+  };
+}
+
+// Checks a device's signature over exactly this challenge, purpose and
+// binding, by that device's own active key. The message is rebuilt here
+// from what the server issued.
+export function verifyDevicePresence(
+  deviceId: string,
+  proof: DeviceSignature | null | undefined,
+  purpose: PresencePurpose,
+  binding: string
+): PasskeyRow {
+  if (!proof?.keyId || !proof.challenge || !proof.signature)
+    throw new PresenceError("This needs your Face ID or Touch ID");
+  const key = getPasskey(proof.keyId);
+  if (
+    !key ||
+    key.type !== "device" ||
+    key.revoked_at ||
+    key.device_id !== deviceId
+  )
+    throw new PresenceError("Unknown passkey");
+  // Spent before the signature is checked: one try per challenge.
+  takeChallenge(
+    proof.challenge,
+    "assert",
+    purpose,
+    binding,
+    deviceRp(deviceId)
+  );
+  const message = deviceKeyMessage({
+    challenge: proof.challenge,
+    purpose,
+    binding,
+    deviceId,
+  });
+  if (
+    !verifyDeviceSignature(
+      key.public_key,
+      message,
+      Buffer.from(proof.signature, "base64url")
+    )
+  )
+    throw new PresenceError("Passkey check failed");
+  touchPasskey(key.id, key.counter);
+  return key;
+}
+
+// Options for registering this device's key: a challenge the new key signs.
+// Needs the same trust as a browser passkey (the free first one, or a code).
+export function deviceRegistrationOptions(
+  deviceId: string,
+  enrollCode?: string
+): { challenge: string; message: string } {
+  const binding = registrationBinding(enrollCode);
+  const challenge = newChallenge();
+  storeChallenge(
+    challenge,
+    "register",
+    "register",
+    binding,
+    deviceRp(deviceId)
+  );
+  return {
+    challenge,
+    message: deviceKeyMessage({
+      challenge,
+      purpose: "register",
+      binding,
+      deviceId,
+    }),
+  };
+}
+
+export function verifyDeviceRegistration(
+  deviceId: string,
+  body: {
+    publicKey: string;
+    challenge: string;
+    signature: string;
+    name: string;
+    hardware?: string;
+  },
+  meta: { via: string; from: string | null; userAgent: string | null },
+  enrollCode?: string
+): { key: PasskeyRow; replaced: PasskeyRow[] } {
+  const binding = registrationBinding(enrollCode);
+  let spki: Buffer;
+  try {
+    spki = spkiFromRawP256(Buffer.from(body.publicKey, "base64url"));
+  } catch {
+    throw new PresenceError("Not a usable key");
+  }
+  const message = deviceKeyMessage({
+    challenge: body.challenge,
+    purpose: "register",
+    binding,
+    deviceId,
+  });
+  if (
+    !verifyDeviceSignature(
+      spki,
+      message,
+      Buffer.from(body.signature, "base64url")
+    )
+  )
+    throw new PresenceError("The new key couldn't sign the request");
+  return getDb().transaction(() => {
+    takeChallenge(
+      body.challenge,
+      "register",
+      "register",
+      binding,
+      deviceRp(deviceId)
+    );
+    if (binding === "bootstrap") {
+      if (passkeysBootstrapped())
+        throw new PresenceError(
+          "A passkey was added meanwhile; get a code from it"
+        );
+      markBootstrapped();
+    } else {
+      const used = getDb()
+        .prepare(
+          `UPDATE passkey_enrollments SET used_at = ? WHERE code_hash = ? AND used_at IS NULL`
+        )
+        .run(now(), hash(enrollCode!)).changes;
+      if (used !== 1) throw new PresenceError("That code was already used");
+    }
+    // A reinstall makes a new key; the old one stops counting.
+    const replaced = revokeDeviceKeys(deviceId);
+    const hardware = body.hardware === "software" ? " (software key)" : "";
+    const key = addPasskey({
+      id: newDeviceKeyId(),
+      publicKey: spki,
+      counter: 0,
+      rpId: deviceRp(deviceId),
+      name: `${body.name.trim().slice(0, 60) || "Device"}${hardware}`,
+      type: "device",
+      deviceId,
+      ...meta,
+    });
+    return { key, replaced };
   })();
 }
