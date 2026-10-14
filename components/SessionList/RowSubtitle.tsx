@@ -62,7 +62,8 @@ export function RowSubtitle({
   const pause = session.pause_state;
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      {pause ? (
+      <LiveLine {...live} />
+      {pause && (
         <span className="flex min-w-0 items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
           <Pause aria-hidden className="h-3 w-3 shrink-0" />
           <span className="truncate">
@@ -75,8 +76,6 @@ export function RowSubtitle({
             })}
           </span>
         </span>
-      ) : (
-        <LiveLine {...live} />
       )}
       {group && (
         <span

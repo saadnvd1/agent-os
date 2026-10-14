@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 export type RowMenuKind = "dropdown" | "context";
 
 // Every sidebar row's frame: a leading mark, title over subtitle, what's on
-// the right (hidden under the ⋯ on hover), and the same menu on ⋯ and on
+// the right (hidden under the ⋯ on hover: only the time goes there), and the same menu on ⋯ and on
 // right-click. Session rows and queued tasks both draw through it. The
 // title is its hover tip (lib/hover-tip), or tipKey's when one resolves.
 export function RowShell({
@@ -22,7 +22,7 @@ export function RowShell({
   leading,
   children,
   aside,
-  trailing,
+  hoverHidden,
   menu,
   menuLabel,
   menuButton = true,
@@ -35,9 +35,11 @@ export function RowShell({
   onActivate?: () => void;
   leading: ReactNode;
   children: ReactNode;
-  // Stays on hover, unlike trailing.
+  // Stays on hover, unlike hoverHidden.
   aside?: ReactNode;
-  trailing?: ReactNode;
+  // Hidden on hover, focus and while the menu is open so the ⋯ can sit on
+  // it. Only for what may vanish, the timestamp. Status goes on the second line.
+  hoverHidden?: ReactNode;
   // Null hides the ⋯ (and the right-click menu).
   menu: ((kind: RowMenuKind) => ReactNode) | null;
   menuLabel: string;
@@ -73,8 +75,13 @@ export function RowShell({
         {children}
       </span>
       {aside}
-      <span className="flex shrink-0 items-center gap-2 md:group-hover:invisible md:group-has-[:focus-visible]:invisible md:group-has-[[data-state=open]]:invisible">
-        {trailing}
+      {/* Invisible on hover so the ⋯ shows over it: never put status here, it
+          belongs on the second line (liveParts). */}
+      <span
+        data-hover-hidden
+        className="flex shrink-0 items-center gap-2 md:group-hover:invisible md:group-has-[:focus-visible]:invisible md:group-has-[[data-state=open]]:invisible"
+      >
+        {hoverHidden}
       </span>
       {menu && menuButton && (
         <DM.DropdownMenu>

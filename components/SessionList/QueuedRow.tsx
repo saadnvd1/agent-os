@@ -16,6 +16,8 @@ import { sessionLink } from "@/lib/session-url";
 import { cn } from "@/lib/utils";
 import { useRowContext } from "./RowContext";
 import { RowShell, type RowMenuKind } from "./RowShell";
+import { LiveLine } from "./LiveLine";
+import type { StatusBadge } from "@/lib/sidebar/row-badge";
 
 const ITEM = { dropdown: DM.DropdownMenuItem, context: CM.ContextMenuItem };
 const SEPARATOR = {
@@ -142,19 +144,6 @@ export function QueuedRow({ row }: { row: Row }) {
           )}
         />
       }
-      trailing={
-        // Under the Queued heading a waiting one needs no badge.
-        item.status !== "queued" && (
-          <span
-            className={cn(
-              "rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
-              failed ? "text-destructive" : "bg-muted text-muted-foreground"
-            )}
-          >
-            {failed ? "Failed" : "Starting"}
-          </span>
-        )
-      }
       menu={menu}
       menuLabel="Queued task actions"
       onClick={open}
@@ -169,43 +158,53 @@ export function QueuedRow({ row }: { row: Row }) {
 function QueuedSubtitle({ row }: { row: Row }) {
   const ctx = useRowContext();
   const { item } = row;
+  // Under the Queued heading a waiting one needs no badge.
+  const badge: StatusBadge | null =
+    item.status === "failed"
+      ? { kind: "failed", label: "Failed" }
+      : item.status === "queued"
+        ? null
+        : { kind: "starting", label: "Starting" };
   const { lead, after } = queuedSubtitle(item);
   const target = row.afterSessionId;
   return (
-    <span
-      className={cn(
-        "text-muted-foreground/70 text-xs",
-        // A failed start's reason is read in full, phones included.
-        item.status === "failed" ? "line-clamp-3 break-words" : "truncate"
-      )}
-    >
-      <span className={cn(item.status === "failed" && "text-destructive")}>
-        {lead}
+    <span className="flex items-start gap-1.5 md:pr-6">
+      <LiveLine badge={badge} />
+      <span
+        className={cn(
+          "text-muted-foreground/70 min-w-0 text-xs",
+          // A failed start's reason is read in full, phones included.
+          item.status === "failed" ? "line-clamp-3 break-words" : "truncate"
+        )}
+      >
+        <span className={cn(item.status === "failed" && "text-destructive")}>
+          {lead}
+        </span>
+        {after &&
+          (target ? (
+            <>
+              {" "}
+              <a
+                href={sessionLink("", target)}
+                onClick={(e) => {
+                  // The row opens it too; the link alone handles its click.
+                  e.stopPropagation();
+                  // A plain click opens it here; a modified one, a new tab.
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)
+                    return;
+                  e.preventDefault();
+                  ctx.onSelect(target);
+                }}
+                className="hover:text-foreground underline decoration-dotted underline-offset-2"
+              >
+                {after}
+              </a>
+            </>
+          ) : (
+            ` ${after}`
+          ))}
+        {item.projectName && ` · ${item.projectName}`}
       </span>
-      {after &&
-        (target ? (
-          <>
-            {" "}
-            <a
-              href={sessionLink("", target)}
-              onClick={(e) => {
-                // The row opens it too; the link alone handles its click.
-                e.stopPropagation();
-                // A plain click opens it here; a modified one, a new tab.
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)
-                  return;
-                e.preventDefault();
-                ctx.onSelect(target);
-              }}
-              className="hover:text-foreground underline decoration-dotted underline-offset-2"
-            >
-              {after}
-            </a>
-          </>
-        ) : (
-          ` ${after}`
-        ))}
-      {item.projectName && ` · ${item.projectName}`}
     </span>
   );
 }

@@ -4,15 +4,36 @@ import {
   type PrStage,
   type PrStageName,
 } from "../tasks/pr-stage";
+import type { StatusBadge } from "./row-badge";
 
-export type LiveTone = "blue" | "amber" | "red" | "green" | "purple" | "muted";
+export type LiveTone =
+  | "blue"
+  | "amber"
+  | "red"
+  | "green"
+  | "purple"
+  | "primary"
+  | "muted";
 
 export interface LivePart {
   text: string;
   tone: LiveTone;
   // Still moving on its own: the UI shows a spinner.
   busy?: boolean;
+  // A status badge (need, stalled, plan step): drawn as a pill, with an icon
+  // for the plan kinds.
+  badge?: StatusBadge["kind"];
+  tip?: string;
 }
+
+export const BADGE_TONE: Record<StatusBadge["kind"], LiveTone> = {
+  need: "amber",
+  failed: "red",
+  stalled: "amber",
+  starting: "muted",
+  planning: "blue",
+  "plan-ready": "primary",
+};
 
 export const PR_STAGE_TONE: Record<PrStageName, LiveTone> = {
   merged: "purple",
@@ -28,14 +49,24 @@ export const PR_STAGE_TONE: Record<PrStageName, LiveTone> = {
 };
 
 // What the row's second line says about the session right now, in order:
-// "Compacting", then "PR CI". Empty when there is nothing to say.
+// "Compacting", then a status badge (Needs you, Stalled, Planning, Plan
+// ready), then "PR CI". Empty when there is nothing to say.
 export function liveParts(input: {
   compacting?: boolean;
   prStage?: PrStage;
+  badge?: StatusBadge | null;
 }): LivePart[] {
   const parts: LivePart[] = [];
   if (input.compacting)
     parts.push({ text: "Compacting", tone: "blue", busy: true });
+  const b = input.badge;
+  if (b)
+    parts.push({
+      text: b.label,
+      tone: BADGE_TONE[b.kind],
+      badge: b.kind,
+      tip: b.tip,
+    });
   const s = input.prStage;
   if (s) {
     const word = PR_STAGE_SHORT[s.stage];

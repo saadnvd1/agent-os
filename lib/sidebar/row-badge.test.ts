@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/lib/db/types";
 import type { SidebarRow } from "./shelves";
-import { rowKindBadge } from "./row-badge";
+import { rowKindBadge, rowStatusBadge } from "./row-badge";
 import { rowDetails, rowState } from "./row-details";
 
 const NOW = Date.parse("2026-10-14T18:00:00Z");
@@ -130,5 +130,18 @@ describe("rowDetails", () => {
       NOW
     );
     expect(old.lines.at(-1)?.[1]).not.toMatch(/ago/);
+  });
+});
+
+describe("rowStatusBadge", () => {
+  it("says what it needs, then stalled, then the plan step", () => {
+    expect(rowStatusBadge(row({}, { need: "failed" }))).toMatchObject({
+      kind: "failed",
+    });
+    expect(rowStatusBadge(row({}, { need: "approve" }))?.kind).toBe("need");
+    expect(rowStatusBadge(row({ plan_phase: "awaiting" }))?.kind).toBe(
+      "plan-ready"
+    );
+    expect(rowStatusBadge(row())).toBeNull();
   });
 });
