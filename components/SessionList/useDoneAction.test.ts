@@ -124,7 +124,7 @@ describe("Done from a row's menu", () => {
     );
     act(() => hook.current(quick));
     expect(toast.error).not.toHaveBeenCalled();
-    await act(() => vi.advanceTimersByTimeAsync(121_000));
+    await act(() => vi.advanceTimersByTimeAsync(181_000));
     vi.useRealTimers();
     expect(toast.error).toHaveBeenCalledWith(
       expect.any(String),

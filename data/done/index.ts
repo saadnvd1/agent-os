@@ -19,7 +19,7 @@ async function json<T>(res: Response): Promise<T> {
 
 // Longer than the server's own deadline for done (lib/done/deadline.ts), so
 // the pending toast always ends even if the server never answers.
-export const DONE_REQUEST_TIMEOUT_MS = 120_000;
+export const DONE_REQUEST_TIMEOUT_MS = 180_000;
 
 async function post(url: string, body?: object, timeoutMs?: number) {
   const abort = new AbortController();

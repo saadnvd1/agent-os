@@ -1,7 +1,7 @@
 // Done merges, stops the agent and cleans up; any step can stall on a lock or
 // a slow remote. A request must always end: past this it answers that it is
 // still going, rather than leaving the row on "Merging…".
-export const DONE_DEADLINE_MS = 90_000;
+export const DONE_DEADLINE_MS = 150_000;
 
 export async function withinDeadline<T>(
   work: Promise<T>,
