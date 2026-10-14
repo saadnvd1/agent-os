@@ -120,7 +120,7 @@ export function DesktopTabBar({
             className={cn(
               "group relative flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               tab.id === activeTabId
-                ? "bg-foreground/[0.07] text-foreground after:bg-primary after:absolute after:inset-x-3 after:-bottom-1.5 after:h-px"
+                ? "bg-foreground/[0.07] text-foreground [[data-split][data-focused]_&]:after:bg-primary [[data-split][data-focused]_&]:after:absolute [[data-split][data-focused]_&]:after:inset-x-3 [[data-split][data-focused]_&]:after:bottom-0 [[data-split][data-focused]_&]:after:h-0.5"
                 : "text-muted-foreground hover:text-foreground/80 hover:bg-foreground/[0.04]"
             )}
           >
