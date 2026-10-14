@@ -164,6 +164,7 @@ export const Pane = memo(function Pane({
     ? (terminalRefs.current.get(activeTab.id) ?? null)
     : null;
   const isFocused = focusedPaneId === paneId;
+  const isSplit = canClose;
   const session = activeTab
     ? sessions.find((s) => s.id === activeTab.sessionId)
     : null;
@@ -433,9 +434,17 @@ export const Pane = memo(function Pane({
         "flex h-full w-full flex-col overflow-hidden",
         !isMobile &&
           "bg-card rounded-xl shadow-(--elevation) ring-1 transition-shadow duration-200",
-        !isMobile && (isFocused ? "ring-primary/40" : "ring-foreground/[0.07]")
+        !isMobile &&
+          (isSplit && isFocused
+            ? "ring-foreground/[0.16]"
+            : "ring-foreground/[0.07]"),
+        !isMobile &&
+          "[&>*]:transition-opacity [&>*]:duration-150 focus-within:[&>*]:opacity-100 hover:[&>*]:opacity-100",
+        !isMobile && isSplit && !isFocused && "[&>*]:opacity-60"
       )}
       data-pane-id={paneId}
+      data-split={isSplit || undefined}
+      data-focused={isFocused || undefined}
       onClick={handleFocus}
     >
       {/* Tab Bar - Mobile vs Desktop */}
