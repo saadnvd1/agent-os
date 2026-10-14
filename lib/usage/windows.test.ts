@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromPlan } from "./windows";
+import { fromLast, fromPlan } from "./windows";
 
 const NOW = Date.parse("2026-10-07T12:00:00Z");
 
@@ -24,5 +24,33 @@ describe("fromPlan", () => {
     expect(
       fromPlan({ utilization: 5, resets_at: "2026-10-07T11:00:00Z" }, NOW)
     ).toEqual({ pct: 5, resetsIn: 0 });
+  });
+});
+
+describe("fromLast", () => {
+  const nowSec = NOW / 1000;
+  it("shows the last value seen, marked stale, while its window is open", () => {
+    expect(
+      fromLast(
+        { pct: 42, resetsAt: nowSec + 600, sampledAt: nowSec - 3660 },
+        nowSec
+      )
+    ).toEqual({
+      pct: 42,
+      resetsIn: 600,
+      stale: true,
+      sampledAt: (nowSec - 3660) * 1000,
+      ageSec: 3660,
+    });
+  });
+
+  it("shows nothing for a window that has since reset, or no value", () => {
+    expect(
+      fromLast(
+        { pct: 42, resetsAt: nowSec - 1, sampledAt: nowSec - 9000 },
+        nowSec
+      )
+    ).toBeNull();
+    expect(fromLast(null, nowSec)).toBeNull();
   });
 });

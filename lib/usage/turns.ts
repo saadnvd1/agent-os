@@ -33,7 +33,7 @@ function savedTotals(sessionId: string): UsageTotals | null {
 }
 
 // The plan's 5-hour window when a turn on it ended, for its share of the
-// plan (lib/usage/compare): unknown when the statusline isn't sampling.
+// plan (lib/usage/compare): unknown when nothing is sampling it.
 export function planWindowPct(): number | null {
   const u = readUsage();
   return "window" in u && u.window ? u.window.pct : null;

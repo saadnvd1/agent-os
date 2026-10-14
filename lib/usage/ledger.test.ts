@@ -13,8 +13,10 @@ import { recordCheckRun } from "./check-runs";
 import {
   currentWindow,
   estimateWeekly,
+  lastReading,
   parseRateLimit,
   recordReadings,
+  windowSamples,
 } from "./rate-limits";
 
 const k = (n: number) => n * 1000;
@@ -348,5 +350,96 @@ describe("readings", () => {
 
   it("has no estimate before any reading", () => {
     expect(estimateWeekly(Date.now())).toBeNull();
+  });
+});
+
+describe("the window readings an event carries", () => {
+  const event = (five: number, seven: number, extra = {}) => ({
+    status: "allowed",
+    unifiedWindows: {
+      five_hour: { utilization: five, resetsAt: 1_800_018_000 },
+      seven_day: { utilization: seven, resetsAt: 1_800_400_000 },
+    },
+    ...extra,
+  });
+
+  it("reads both windows from unifiedWindows, as percent and ms", () => {
+    expect(parseRateLimit(event(0.06, 0.31))).toEqual([
+      {
+        window: "five_hour",
+        utilization: 6,
+        raw: 0.06,
+        resetsAt: 1_800_018_000_000,
+        status: "allowed",
+      },
+      {
+        window: "seven_day",
+        utilization: 31,
+        raw: 0.31,
+        resetsAt: 1_800_400_000_000,
+        status: "allowed",
+      },
+    ]);
+  });
+
+  it("keeps one reading per window, preferring unifiedWindows", () => {
+    const r = parseRateLimit(
+      event(0.06, 0.31, {
+        rateLimitType: "five_hour",
+        utilization: 0.05,
+        resetsAt: 1_800_018_000,
+      })
+    );
+    expect(r.map((x) => [x.window, x.utilization])).toEqual([
+      ["five_hour", 6],
+      ["seven_day", 31],
+    ]);
+  });
+
+  it("skips malformed windows", () => {
+    expect(
+      parseRateLimit({
+        unifiedWindows: { five_hour: { utilization: "x" }, seven_day: null },
+      })
+    ).toEqual([]);
+  });
+
+  it("refreshes an unchanged reading's time once a minute, not a row", () => {
+    const count = () =>
+      (
+        db.prepare(`SELECT count(*) AS n FROM rate_limit_readings`).get() as {
+          n: number;
+        }
+      ).n;
+    const readings = parseRateLimit(event(0.06, 0.31));
+    const t0 = 1_800_000_000_000;
+    expect(recordReadings(readings, "event", null, t0)).toBe(2);
+    expect(recordReadings(readings, "event", null, t0 + 30_000)).toBe(0);
+    expect(lastReading("five_hour")?.at).toBe(t0);
+    expect(recordReadings(readings, "event", null, t0 + 90_000)).toBe(0);
+    expect(lastReading("five_hour")?.at).toBe(t0 + 90_000);
+    expect(count()).toBe(2);
+  });
+
+  it("gives the current period's last hour as a series", () => {
+    const t0 = 1_800_000_000_000;
+    const at = (u: number, reset: number, when: number) =>
+      recordReadings(
+        parseRateLimit({
+          unifiedWindows: { five_hour: { utilization: u, resetsAt: reset } },
+        }),
+        "event",
+        null,
+        when
+      );
+    at(0.9, 1_799_990_000, t0 - 4 * 3_600_000);
+    at(0.1, 1_800_018_000, t0 - 3_000_000);
+    at(0.2, 1_800_018_000, t0);
+    const w = windowSamples("five_hour");
+    expect(w.resetsAt).toBe(1_800_018_000_000);
+    expect(w.samples).toEqual([
+      [(t0 - 3_000_000) / 1000, 10],
+      [t0 / 1000, 20],
+    ]);
   });
 });

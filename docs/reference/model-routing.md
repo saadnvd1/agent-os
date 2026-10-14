@@ -112,9 +112,13 @@ estimate of how much of the plan's limits a call uses.
 
 The 5-hour and weekly windows come from the `rate_limit_event`s Claude Code
 sends on each response (the `anthropic-ratelimit-unified-*` headers), stored
-with their time in `rate_limit_readings` with no extra calls. An event
-carries one window, so the weekly figure can go stale: when it is over 6
-hours old it is estimated from recorded usage and marked `~`.
+with their time in `rate_limit_readings` with no extra calls. Every event's
+`unifiedWindows` carries both windows (its top-level reading appears only
+when a threshold is crossed). A value that hasn't moved only refreshes the
+last row's time, once a minute, so a steady window reads as fresh. When the
+weekly figure is over 6 hours old it is estimated from recorded usage and
+marked `~`. With no agent running, the Usage screen shows the last value seen
+and how long ago, not "Not available".
 
 A rollup job inside the server (no model) writes one `usage_rollups` row per
 day: weighted total, cost per merged PR, cost per _clean_-merged PR (the

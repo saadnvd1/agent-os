@@ -8,7 +8,7 @@ import { mergeApprovalsOn } from "./merge-approvals";
 import { noApprovalsOn } from "../approvals/no-approvals";
 import { buildDigest } from "./digest";
 
-const BRAKES_ON = `Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets, or can't be read at all. Each card of a stack you start counts as a start of its own; a braked card waits in the stack. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.`;
+const BRAKES_ON = `Starting work (\`start_task\`, \`start_session\`, \`stack\`) is braked: at most a set number of sessions running in this workspace (4 by default), at most a set number of starts an hour (6 by default), and nothing new once the account's usage window would run out before it resets, or isn't being sampled and was near its cap when last seen. Each card of a stack you start counts as a start of its own; a braked card waits in the stack. A brake refuses the start with its reason and writes one note; running work carries on. Don't retry a braked start in a loop: carry on with reviews, answers and merges, and start again when a later event gives you reason to.`;
 
 const BRAKES_OFF = `Starting work has no limits right now: no cap on running sessions or starts, and no usage-window check. Saad's Pause still stops new starts; the start tools say so when it's on.`;
 

@@ -240,36 +240,34 @@ describe("the usage window brake", () => {
     await expect(ws.start("y")).resolves.toMatch(/Started/);
   });
 
-  it("fails closed when the window can't be read or is 15 minutes stale", async () => {
+  it("fails closed when nothing was ever sampled", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-limits-"));
-    const file = path.join(dir, "limits.json");
-    expect(readUsage(file, now)).toEqual({
-      unknown: `the usage window can't be read (${file})`,
-    });
-    fs.writeFileSync(
-      file,
-      JSON.stringify({ window: now + 3600, samples: [[now - 16 * 60, 20]] })
-    );
-    expect(readUsage(file, now)).toEqual({
-      unknown:
-        "the usage window was last sampled 16m ago, so it can't be checked",
-    });
-    // Eleven minutes stale: no projection, but not unknown either.
-    fs.writeFileSync(
-      file,
-      JSON.stringify({ window: now + 3600, samples: [[now - 11 * 60, 20]] })
-    );
-    expect(readUsage(file, now)).toEqual({ window: null });
-
     const ws = workspace();
-    usage = readUsage(path.join(dir, "missing.json"), now);
+    usage = readUsage(path.join(dir, "missing.json"), now, () => null);
     await expect(ws.start("x")).rejects.toThrow(
-      /Brake: not starting a session: the usage window can't be read/
+      /Brake: not starting a session: No agent has reported the usage window yet/
     );
     await expect(ws.start("y")).rejects.toThrow(/Brake/);
     expect(
       listNotes(ws.workspace.id).filter((n) => n.kind === "brake")
     ).toHaveLength(1);
+  });
+
+  it("lets a start through on a stale low window, and refuses a stale full one", async () => {
+    const ws = workspace();
+    const stale = (pct: number) =>
+      readUsage(
+        path.join(os.tmpdir(), "aos-missing-limits.json"),
+        now,
+        () => ({ window: now + 3600, samples: [[now - 3 * 3600, pct]] }),
+        () => null
+      );
+    usage = stale(20);
+    await expect(ws.start("low")).resolves.toMatch(/Started/);
+    usage = stale(95);
+    await expect(ws.start("full")).rejects.toThrow(
+      /Brake: .*No agent has run since .*95% used when last seen/
+    );
   });
 });
 

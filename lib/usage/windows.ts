@@ -1,15 +1,23 @@
 /**
- * The account's rolling usage windows. The 5-hour one comes from the
- * statusline's samples (lib/orchestrator/usage.ts), which also give its burn
- * rate; the weekly one only the agent knows, so it's asked through a
- * short-lived agent start (no turn is spent) and kept for a few minutes.
+ * The account's rolling usage windows. The 5-hour one comes from the samples
+ * in lib/orchestrator/usage.ts (AgentOS's own agents and the terminal
+ * statusline, whichever is fresher), which also give its burn rate; the
+ * weekly one from the readings AgentOS's agents store, else the plan's answer
+ * to a short-lived agent start (no turn is spent), kept for a few minutes.
+ * With nothing fresh, the last value seen is shown as such.
  */
 
 import os from "os";
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { InputQueue } from "../chat/queue";
-import { readUsage } from "../orchestrator/usage";
-import { currentWindow, type WindowReading } from "./rate-limits";
+import { readUsage, type LastSeen } from "../orchestrator/usage";
+import {
+  currentWindow,
+  lastReading,
+  parseRateLimit,
+  recordReadings,
+  type WindowReading,
+} from "./rate-limits";
 
 export interface WindowView {
   pct: number;
@@ -20,6 +28,11 @@ export interface WindowView {
   burnPerMin?: number | null;
   // Worked out from recorded usage, not read from the account.
   estimated?: boolean;
+  // Not sampled lately: the last value seen, and when (epoch ms).
+  stale?: boolean;
+  sampledAt?: number;
+  // Seconds since then, when this was worked out.
+  ageSec?: number;
 }
 
 export interface UsageWindows {
@@ -71,7 +84,12 @@ async function askAgent(): Promise<PlanLimits | null> {
         );
       }),
     ]);
-    return usage.rate_limits_available ? (usage.rate_limits ?? null) : null;
+    const limits = usage.rate_limits_available
+      ? ((usage.rate_limits ?? null) as PlanLimits | null)
+      : null;
+    // A plan answer is a reading too: keep it for the screens and brakes.
+    if (limits) recordReadings(parseRateLimit(limits), "plan");
+    return limits;
   } finally {
     clearTimeout(timer);
     input.end();
@@ -125,6 +143,34 @@ const fromReading = (
       }
     : null;
 
+// The last value seen, shown as such, while its window is still open.
+export function fromLast(
+  last: LastSeen | null | undefined,
+  nowSec = Date.now() / 1000
+): WindowView | null {
+  if (!last || (last.resetsAt !== null && last.resetsAt <= nowSec)) return null;
+  return {
+    pct: last.pct,
+    resetsIn:
+      last.resetsAt === null ? null : Math.round(last.resetsAt - nowSec),
+    stale: true,
+    sampledAt: Math.round(last.sampledAt * 1000),
+    ageSec: Math.max(0, Math.round(nowSec - last.sampledAt)),
+  };
+}
+
+function lastWeekly(nowMs: number): WindowView | null {
+  const r = lastReading("seven_day");
+  return fromLast(
+    r && {
+      pct: Math.round(r.utilization),
+      resetsAt: r.resetsAt === null ? null : r.resetsAt / 1000,
+      sampledAt: r.at / 1000,
+    },
+    nowMs / 1000
+  );
+}
+
 export async function usageWindows(): Promise<UsageWindows> {
   const sampled = readUsage();
   const read = (w: "five_hour" | "seven_day") => {
@@ -144,14 +190,23 @@ export async function usageWindows(): Promise<UsageWindows> {
           capsIn: sampled.window.capsIn,
           burnPerMin: sampled.window.burnPerMin,
         }
-      : (fromPlan(plan.limits?.five_hour) ?? read("five_hour"));
-  const sevenDay = fromPlan(plan.limits?.seven_day) ?? read("seven_day");
+      : (fromPlan(plan.limits?.five_hour) ??
+        read("five_hour") ??
+        ("unknown" in sampled ? fromLast(sampled.last) : null));
+  let sevenDay: WindowView | null = null;
+  try {
+    sevenDay =
+      fromPlan(plan.limits?.seven_day) ??
+      read("seven_day") ??
+      lastWeekly(Date.now());
+  } catch {
+    // No readings to show.
+  }
   const note =
-    !sevenDay || !fiveHour
-      ? (plan.error ??
-        ("unknown" in sampled
-          ? sampled.unknown
-          : "the plan's limits aren't available for this login"))
-      : undefined;
+    "unknown" in sampled && (!fiveHour || fiveHour.stale)
+      ? sampled.unknown
+      : !sevenDay || !fiveHour
+        ? (plan.error ?? "the plan's limits aren't available for this login")
+        : undefined;
   return { fiveHour, sevenDay, note };
 }

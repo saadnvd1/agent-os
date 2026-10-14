@@ -32,23 +32,38 @@ const num = (v: unknown) =>
 const eventPercent = (fraction: number) => fraction * 100;
 
 // Readings in what the CLI emits: a rate_limit_event's info, or a plan's
-// per-window object. Anything else gives none.
+// per-window object. Anything else gives none. An event's top-level reading
+// is only there when a threshold was crossed, while its `unifiedWindows`
+// (read from the same response headers) carries both windows every time, so
+// that one wins for a window both name.
 export function parseRateLimit(info: unknown): Reading[] {
   if (!info || typeof info !== "object") return [];
   const i = info as Record<string, unknown>;
-  const out: Reading[] = [];
+  const out = new Map<LimitWindow, Reading>();
   const status = typeof i.status === "string" ? i.status : null;
-  const type = i.rateLimitType;
-  const raw = num(i.utilization);
-  if ((type === "five_hour" || type === "seven_day") && raw !== null) {
-    const reset = num(i.resetsAt);
-    out.push({
-      window: type,
+  const eventReading = (
+    window: LimitWindow,
+    fraction: unknown,
+    resetsAt: unknown
+  ) => {
+    const raw = num(fraction);
+    if (raw === null) return;
+    const reset = num(resetsAt);
+    out.set(window, {
+      window,
       utilization: eventPercent(raw),
       raw,
       resetsAt: reset === null ? null : reset * 1000,
       status,
     });
+  };
+  const type = i.rateLimitType;
+  if (type === "five_hour" || type === "seven_day")
+    eventReading(type, i.utilization, i.resetsAt);
+  const unified = i.unifiedWindows as Record<string, unknown> | undefined;
+  for (const w of WINDOWS) {
+    const o = unified?.[w] as Record<string, unknown> | null | undefined;
+    if (o && typeof o === "object") eventReading(w, o.utilization, o.resetsAt);
   }
   for (const w of WINDOWS) {
     const o = i[w] as Record<string, unknown> | null | undefined;
@@ -56,7 +71,7 @@ export function parseRateLimit(info: unknown): Reading[] {
     if (!o || u === null || u === undefined) continue;
     const reset =
       typeof o.resets_at === "string" ? Date.parse(o.resets_at) : NaN;
-    out.push({
+    out.set(w, {
       window: w,
       utilization: u,
       raw: u,
@@ -64,11 +79,16 @@ export function parseRateLimit(info: unknown): Reading[] {
       status,
     });
   }
-  return out;
+  return [...out.values()];
 }
 
+// An unchanged reading refreshes the last row's time at most this often, so
+// the newest row's `at` is when the value was last seen, not when it moved.
+const REFRESH_MS = 60_000;
+
 // Stores a reading only when it differs from that window's last, so a busy
-// day adds a handful of rows, not one per response.
+// day adds a handful of rows, not one per response. A reading that hasn't
+// moved only touches the last row's time. Returns the rows added.
 export function recordReadings(
   readings: Reading[],
   source: string,
@@ -79,19 +99,31 @@ export function recordReadings(
   for (const r of readings) {
     const last = db
       .prepare(
-        `SELECT utilization, resets_at, status FROM rate_limit_readings
+        `SELECT id, at, utilization, resets_at, status FROM rate_limit_readings
          WHERE window = ? ORDER BY id DESC LIMIT 1`
       )
       .get(r.window) as
-      | { utilization: number; resets_at: number | null; status: string | null }
+      | {
+          id: number;
+          at: number;
+          utilization: number;
+          resets_at: number | null;
+          status: string | null;
+        }
       | undefined;
     if (
       last &&
       last.utilization === r.utilization &&
       last.resets_at === r.resetsAt &&
       last.status === r.status
-    )
+    ) {
+      if (at - last.at >= REFRESH_MS)
+        db.prepare(`UPDATE rate_limit_readings SET at = ? WHERE id = ?`).run(
+          at,
+          last.id
+        );
       continue;
+    }
     db.prepare(
       `INSERT INTO rate_limit_readings (at, window, utilization, raw, resets_at, status, session_id, source)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
@@ -133,6 +165,38 @@ export function lastReading(
   return r
     ? { at: r.at, utilization: r.utilization, resetsAt: r.resets_at }
     : null;
+}
+
+// A window's readings in its current reset period over the hour up to the
+// newest, oldest first as [epoch seconds, percent]: the series a burn rate
+// is fitted to. Empty when there are none.
+export function windowSamples(
+  window: LimitWindow,
+  spanMs = 3_600_000
+): { resetsAt: number | null; samples: [number, number][] } {
+  const newest = lastReading(window);
+  if (!newest) return { resetsAt: null, samples: [] };
+  const rows = db
+    .prepare(
+      `SELECT at, utilization FROM rate_limit_readings
+       WHERE window = ? AND resets_at IS ? AND at >= ? ORDER BY at, id`
+    )
+    .all(window, newest.resetsAt, newest.at - spanMs) as {
+    at: number;
+    utilization: number;
+  }[];
+  return {
+    resetsAt: newest.resetsAt,
+    samples: rows.map((r) => [r.at / 1000, r.utilization]),
+  };
+}
+
+// When any agent call was last recorded.
+export function lastAgentActivity(): number | null {
+  const r = db.prepare(`SELECT MAX(at) AS at FROM usage_calls`).get() as {
+    at: number | null;
+  };
+  return r.at;
 }
 
 const WEEK = 7 * 24 * 3600 * 1000;
