@@ -1934,6 +1934,59 @@ describe("the PR's real base", () => {
     ]);
   });
 
+  it("follows a PR on main when the task's recorded base was another task's branch, since dropped", async () => {
+    const t = setup();
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/other-gone' WHERE id = ?`
+    ).run(t.task);
+    pr = { ...pr!, base: "main" };
+    const { text } = await reviewNow(t.w);
+    expect(text).toMatch(/: pass/);
+    expect(baseOf(t.task)).toBe("main");
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", t.sha],
+    ]);
+  });
+
+  it("still refuses an unrelated base when the recorded one is a dropped branch", async () => {
+    const t = setup();
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/other-gone' WHERE id = ?`
+    ).run(t.task);
+    pr = { ...pr!, base: "feature/elsewhere" };
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(
+      /targets feature\/elsewhere, not its base feature\/other-gone/
+    );
+    expect(baseOf(t.task)).toBe("feature/other-gone");
+    expect(merges).toEqual([]);
+  });
+
+  it("merges a forwarded sign-off judged against the default branch though this row's base is stale", async () => {
+    const t = setup();
+    db.prepare(
+      `UPDATE sessions SET base_branch = 'feature/other-gone' WHERE id = ?`
+    ).run(t.task);
+    pr = { ...pr!, base: "main" };
+    const { signOffTask } = await import("@/lib/tasks/finish");
+    await expect(
+      signOffTask(t.task, { head: t.sha, base: "main" })
+    ).resolves.toBe("squash");
+    expect(baseOf(t.task)).toBe("main");
+    expect(merges).toHaveLength(1);
+  });
+
+  it("refuses a forwarded sign-off judged against a base this task may not have", async () => {
+    const t = setup();
+    pr = { ...pr!, base: "feature/elsewhere" };
+    const { signOffTask } = await import("@/lib/tasks/finish");
+    await expect(
+      signOffTask(t.task, { head: t.sha, base: "feature/elsewhere" })
+    ).rejects.toThrow(/isn't a base add-a may merge into/);
+    expect(merges).toEqual([]);
+  });
+
   it("keeps a merged parent's child on its branch until the restack moves it", async () => {
     const t = setup();
     db.prepare(

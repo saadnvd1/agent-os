@@ -191,7 +191,8 @@ export function setMirrorStatus(id: string, status: TaskStatus): void {
 export async function remoteTaskAction(
   session: Session,
   action: "merge" | "drop",
-  head?: string
+  head?: string,
+  base?: string | null
 ): Promise<MergeMethod | null> {
   const link = requireHostLink(session.host_id);
   // An AgentOS that predates pinned merges would ignore the head and merge
@@ -203,11 +204,28 @@ export async function remoteTaskAction(
         `${link.hostName}'s AgentOS can't pin a merge to a commit; update it first`
       );
   }
+  // base: what the gates here were judged against; the machine that merges
+  // compares the PR with it, not with a base only it recorded.
   const res = await hostApi<{ head?: string | null; method?: unknown }>(
     link,
     `/api/tasks/${encodeURIComponent(session.id)}/${action}`,
-    { body: head ? { head } : {}, timeout: 300000 }
-  );
+    {
+      body: { ...(head && { head }), ...(head && base && { base }) },
+      timeout: 300000,
+    }
+  ).catch(async (err) => {
+    if (action !== "merge" || !unknownOutcome(err)) throw err;
+    // A proxy or a dropped connection after the merge ran answers 502 with
+    // nothing from AgentOS: ask what state the task is in before failing.
+    const merged = await hostTasks(link, true)
+      .then((l) => l.tasks.find((t) => t.id === session.id)?.state === "merged")
+      .catch(() => false);
+    if (!merged)
+      throw new Error(
+        `${(err as Error).message}: couldn't confirm whether ${link.hostName} merged ${session.name}; check its PR before signing off again`
+      );
+    return { head: head ?? null, method: undefined };
+  });
   forgetHostTasks(link.hostId);
   setMirrorStatus(session.id, action === "merge" ? "merged" : "dropped");
   if (head && res.head !== head)

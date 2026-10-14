@@ -24,7 +24,13 @@ import {
 import { mergePR } from "./merge-pr";
 import { getProject } from "../projects";
 import { canSignOff } from "./state";
-import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
+import {
+  forgetPR,
+  getTaskSession,
+  isAllowedBase,
+  prFor,
+  projectPathFor,
+} from "./session";
 import { dropSessionDatabase } from "../project-config/database";
 import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
@@ -114,7 +120,13 @@ async function finishMerge(
 // machine merged it and didn't say).
 export async function signOffTask(
   id: string,
-  opts: { wait?: boolean; head?: string; device?: string | null } = {}
+  opts: {
+    wait?: boolean;
+    head?: string;
+    device?: string | null;
+    // The base another machine judged the gates against (a forwarded merge).
+    base?: string;
+  } = {}
 ): Promise<MergeMethod | null> {
   const session = getTaskSession(id);
   if (session.task_status !== "running")
@@ -124,14 +136,24 @@ export async function signOffTask(
   if (held) throw new Error(held);
   // Its own machine checks the gates and merges.
   // That machine's settings chose the method; null if it didn't say.
-  if (isMirror(session)) return remoteTaskAction(session, "merge", opts.head);
+  if (isMirror(session))
+    return remoteTaskAction(session, "merge", opts.head, session.base_branch);
   const repo = projectPathFor(session);
   if (!repo) throw new Error("Task has no project");
   const refusal = signOffRefusal(id);
   if (refusal) throw new Error(refusal);
   // prFor follows a retarget onto the record, so compare with what the
   // checks above were judged against.
-  const judgedBase = session.base_branch;
+  // A forwarded merge was judged on the other machine against the base it
+  // recorded, which may be newer than this machine's row; only a base this
+  // task may have is taken.
+  if (
+    opts.base &&
+    opts.base !== session.base_branch &&
+    !(await isAllowedBase(session, repo, opts.base))
+  )
+    throw new Error(`${opts.base} isn't a base ${session.name} may merge into`);
+  const judgedBase = opts.base ?? session.base_branch;
   const pr = await prFor(session, true);
   const verdict = canSignOff(pr);
   if (!verdict.ok) throw new Error(verdict.reason);
