@@ -215,6 +215,8 @@ export interface FailureRow {
   last_reason: string | null;
   escalated_at: string | null;
   last_sha: string | null;
+  // Set while the escalation's ask waits for the agent to finish (held-asks.ts).
+  ask_held_at: string | null;
 }
 
 // Counts one failure; returns the count now. With `sha`, a failure is
@@ -276,6 +278,30 @@ export function markEscalated(sessionId: string, gate: string): void {
   ).run(sessionId, gate);
   markStatusDirty(sessionId);
 }
+
+export function holdAsk(sessionId: string, gate: string): void {
+  db.prepare(
+    `UPDATE orchestrator_gate_failures SET ask_held_at = COALESCE(ask_held_at, datetime('now')) WHERE session_id = ? AND gate = ?`
+  ).run(sessionId, gate);
+}
+
+export function releaseHeldAsks(sessionId: string): void {
+  db.prepare(
+    `UPDATE orchestrator_gate_failures SET ask_held_at = NULL WHERE session_id = ?`
+  ).run(sessionId);
+}
+
+export function heldAskFailures(workspaceId: string): FailureRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM orchestrator_gate_failures
+       WHERE workspace_id = ? AND escalated_at IS NOT NULL AND ask_held_at IS NOT NULL`
+    )
+    .all(workspaceId) as FailureRow[];
+}
+
+export const failedTwiceWhy = (gate: string, reason: string) =>
+  `the ${gate} gate failed on two different commits: ${reason}`;
 
 export function escalations(sessionId: string): FailureRow[] {
   return db

@@ -40,9 +40,12 @@ export function heldVerdict(
       text: `${task.name}: ${why}. Asked him again; don't retry.`,
     };
   }
+  const waiting = held.some((h) => h.ask_held_at)
+    ? " His ask goes up once its agent is idle and CI has settled on its latest head."
+    : "";
   return {
     ok: false,
     wait: false,
-    text: `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}: ${held[0].last_reason}). Only he can merge it now, or approve it on his asks list.`,
+    text: `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}: ${held[0].last_reason}). Only he can merge it now, or approve it on his asks list.${waiting}`,
   };
 }
