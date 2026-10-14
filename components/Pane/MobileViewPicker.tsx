@@ -75,7 +75,7 @@ export function MobileViewPicker({
           type="button"
           aria-label={`View: ${current.label}`}
           onClick={(e) => e.stopPropagation()}
-          className="bg-accent/50 flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs"
+          className="bg-accent/50 relative flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
         >
           <CurrentIcon className="h-4 w-4" />
           <span className="max-[359px]:hidden">{current.label}</span>

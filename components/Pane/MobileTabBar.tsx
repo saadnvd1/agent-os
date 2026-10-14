@@ -17,10 +17,12 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Ellipsis,
   Circle,
   Menu,
   Plus,
   Search,
+  Star,
   Share2,
   TextSearch,
 } from "lucide-react";
@@ -29,6 +31,7 @@ import { useAwayQuery } from "@/data/away";
 import { awayUntil } from "@/components/Away/time";
 import type { Session, Project } from "@/lib/db";
 import { HostBadge } from "@/components/Hosts/HostBadge";
+import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
@@ -122,7 +125,7 @@ export function MobileTabBar({
 
   return (
     <div
-      className="bg-muted flex items-center gap-1 px-2 py-1.5"
+      className="bg-muted flex items-center gap-1.5 px-2 py-1.5"
       onClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
       onTouchEnd={(e) => e.stopPropagation()}
@@ -153,13 +156,13 @@ export function MobileTabBar({
       )}
 
       {/* Session/Tab navigation */}
-      <div className="flex min-w-0 flex-1 items-center gap-1 max-[359px]:hidden">
+      <div className="flex min-w-0 flex-1 items-center gap-1">
         <button
           type="button"
           onClick={handlePrev}
           onTouchEnd={(e) => e.stopPropagation()}
           disabled={!hasPrev || isNavigating}
-          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50"
+          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 max-[429px]:hidden"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -258,7 +261,7 @@ export function MobileTabBar({
           onClick={handleNext}
           onTouchEnd={(e) => e.stopPropagation()}
           disabled={!hasNext || isNavigating}
-          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50"
+          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 max-[429px]:hidden"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -267,7 +270,7 @@ export function MobileTabBar({
       {bookmarksSessionId && (
         <ChatBookmarksButton
           sessionId={bookmarksSessionId}
-          className="-my-1.5 h-11 min-w-9 max-[359px]:min-w-8"
+          className="-my-1.5 h-11 min-w-11 max-[429px]:hidden"
         />
       )}
       {onFind && (
@@ -279,7 +282,7 @@ export function MobileTabBar({
             e.stopPropagation();
             onFind();
           }}
-          className="-my-1.5 h-11 w-9 shrink-0 max-[359px]:w-8"
+          className="-my-1.5 h-11 w-11 shrink-0 max-[429px]:hidden"
         >
           <TextSearch className="h-4 w-4" />
         </Button>
@@ -292,11 +295,49 @@ export function MobileTabBar({
           e.stopPropagation();
           paletteActions.open();
         }}
-        // A 44px target in a 32px bar row.
-        className="-my-1.5 h-11 w-9 shrink-0 max-[359px]:w-8"
+        // 44px targets in a 32px bar row, via -my-1.5.
+        className="-my-1.5 h-11 w-11 shrink-0 max-[429px]:hidden"
       >
         <Search className="h-4 w-4" />
       </Button>
+      {/* Below 430px Find, Palette and Bookmarks fold into one menu. */}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="More"
+            onClick={(e) => e.stopPropagation()}
+            className="-my-1.5 hidden h-11 w-11 shrink-0 max-[429px]:flex"
+          >
+            <Ellipsis className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-48">
+          {onFind && (
+            <DropdownMenuItem className="h-11 gap-2" onSelect={onFind}>
+              <TextSearch className="h-4 w-4" />
+              Find in conversation
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            className="h-11 gap-2"
+            onSelect={() => paletteActions.open()}
+          >
+            <Search className="h-4 w-4" />
+            Command palette
+          </DropdownMenuItem>
+          {bookmarksSessionId && (
+            <DropdownMenuItem
+              className="h-11 gap-2"
+              onSelect={() => bookmarksUiActions.openChat(bookmarksSessionId)}
+            >
+              <Star className="h-4 w-4" />
+              Bookmarks
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -305,7 +346,7 @@ export function MobileTabBar({
           e.stopPropagation();
           newDraft({ kind: "current" });
         }}
-        className="-my-1.5 h-11 w-9 shrink-0 max-[359px]:w-8"
+        className="-my-1.5 h-11 w-11 shrink-0"
       >
         <Plus className="h-4 w-4" />
       </Button>
