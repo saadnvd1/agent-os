@@ -13,7 +13,7 @@ import {
 import { compactTimeAgo } from "@/lib/session-meta";
 import { wakeLabel } from "@/lib/sidebar/snooze";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
-import { rowKindBadge } from "@/lib/sidebar/row-badge";
+import { rowStatusBadge } from "@/lib/sidebar/row-badge";
 import { useMinuteTick } from "@/hooks/useMinuteTick";
 import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ import { QuickChangeRow } from "./QuickChangeRow";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowShell, type RowMenuKind } from "./RowShell";
-import { NestRail, RowBadge, RowDot, RowRename } from "./RowParts";
+import { NestRail, RowDot, RowRename, UnreadDot } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
 
@@ -62,6 +62,8 @@ export const SessionRow = memo(function SessionRow({
     ctx.onSelect(session.id);
   };
 
+  const badge = rowStatusBadge(row);
+
   const menu = (kind: RowMenuKind) => (
     <SessionRowMenu
       session={session}
@@ -100,17 +102,13 @@ export const SessionRow = memo(function SessionRow({
                 />
               </span>
             )}
+            {row.unread && !badge && <UnreadDot />}
             {isFork(session) && (
               <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />
             )}
           </>
         }
-        hoverHidden={
-          <>
-            <RowBadge row={row} />
-            {!row.need && <RowTime row={row} />}
-          </>
-        }
+        hoverHidden={!row.need && <RowTime row={row} />}
         menu={menu}
         menuLabel="Session actions"
         menuButton={!selecting}
@@ -140,11 +138,11 @@ export const SessionRow = memo(function SessionRow({
           detail={row.status?.detail}
           live={
             row.need
-              ? undefined
+              ? { badge }
               : {
                   compacting: row.compacting,
                   prStage: row.status?.prStage,
-                  kindBadge: rowKindBadge(row),
+                  badge,
                 }
           }
         />

@@ -2,7 +2,7 @@
 
 import { ClipboardList, Loader2, Pencil } from "lucide-react";
 import { liveParts, liveText, type LiveTone } from "@/lib/sidebar/live-status";
-import type { RowKindBadge } from "@/lib/sidebar/row-badge";
+import type { StatusBadge } from "@/lib/sidebar/row-badge";
 import type { PrStage } from "@/lib/tasks/pr-stage";
 import { prStageText } from "@/lib/tasks/pr-stage";
 import { cn } from "@/lib/utils";
@@ -10,8 +10,19 @@ import { cn } from "@/lib/utils";
 export interface LiveInput {
   compacting?: boolean;
   prStage?: PrStage;
-  kindBadge?: RowKindBadge | null;
+  badge?: StatusBadge | null;
 }
+
+// A status badge's pill; the failed need is red text alone.
+const PILL: Record<LiveTone, string> = {
+  blue: "bg-blue-500/15",
+  amber: "bg-amber-500/15",
+  red: "bg-red-500/15",
+  green: "bg-green-500/15",
+  purple: "bg-purple-500/15",
+  primary: "bg-primary/15",
+  muted: "bg-muted",
+};
 
 const TONE: Record<LiveTone, string> = {
   blue: "text-blue-700 dark:text-blue-400",
@@ -26,8 +37,8 @@ const TONE: Record<LiveTone, string> = {
 // The row's live status in small coloured words under the name: "Compacting
 // · Plan ready · PR CI". The PR word links to the PR; its number, full wording and sha are
 // in the tooltip. Renders nothing when there is nothing to say.
-export function LiveLine({ compacting, prStage, kindBadge }: LiveInput) {
-  const parts = liveParts({ compacting, prStage, kindBadge });
+export function LiveLine({ compacting, prStage, badge }: LiveInput) {
+  const parts = liveParts({ compacting, prStage, badge });
   if (parts.length === 0) return null;
   const pr = prStage
     ? `${prStageText(prStage)}${prStage.sha ? ` · ${prStage.sha}` : ""}`
@@ -38,14 +49,15 @@ export function LiveLine({ compacting, prStage, kindBadge }: LiveInput) {
       className="flex shrink-0 items-center gap-1 text-xs font-medium whitespace-nowrap"
     >
       {parts.map((p, i) => {
-        const isPr = !p.plan && p.text.startsWith("PR");
-        const PlanIcon = p.plan === "planning" ? Pencil : ClipboardList;
+        const isPr = !p.badge && p.text.startsWith("PR");
+        const PlanIcon = p.badge === "planning" ? Pencil : ClipboardList;
+        const isPlan = p.badge === "planning" || p.badge === "plan-ready";
         const body = (
           <>
             {p.busy && (
               <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden />
             )}
-            {p.plan && <PlanIcon className="h-2.5 w-2.5" aria-hidden />}
+            {isPlan && <PlanIcon className="h-2.5 w-2.5" aria-hidden />}
             {p.text}
           </>
         );
@@ -70,7 +82,14 @@ export function LiveLine({ compacting, prStage, kindBadge }: LiveInput) {
             ) : (
               <span
                 data-tip={p.tip}
-                className={cn("flex items-center gap-1", TONE[p.tone])}
+                data-status-badge={p.badge}
+                className={cn(
+                  "flex items-center gap-1",
+                  TONE[p.tone],
+                  p.badge &&
+                    "rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
+                  p.badge && PILL[p.tone]
+                )}
               >
                 {body}
               </span>

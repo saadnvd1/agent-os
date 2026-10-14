@@ -1,7 +1,7 @@
-// The plan badge a row shows on its right: writing its plan, or a plan
+// The plan badge a row shows: writing its plan, or a plan
 // waiting for approval. A need or a stall says more and wins; finished,
 // snoozed and quick-change rows show none. Client-safe.
-import type { SidebarRow } from "./shelves";
+import { NEED_LABEL, type SidebarRow } from "./shelves";
 
 export type RowKindBadge = {
   kind: "planning" | "plan-ready";
@@ -37,4 +37,28 @@ export function rowKindBadge(
           : "Plan mode: it plans and changes nothing yet.",
     };
   return null;
+}
+
+// The one status badge a row's second line carries: what it needs from you,
+// stalled, or its plan step. They are mutually exclusive by precedence. The
+// queued rows' Failed/Starting use the same shape.
+export type StatusBadge = {
+  kind: "need" | "failed" | "stalled" | "starting" | RowKindBadge["kind"];
+  label: string;
+  tip?: string;
+};
+
+export function rowStatusBadge(
+  row: Parameters<typeof rowKindBadge>[0] &
+    Pick<SidebarRow, "need"> & { status?: SidebarRow["status"] }
+): StatusBadge | null {
+  if (row.need) {
+    const asks = row.status?.asks ?? 0;
+    return {
+      kind: row.need === "failed" ? "failed" : "need",
+      label: `${NEED_LABEL[row.need]}${asks > 1 ? ` ${asks}` : ""}`,
+    };
+  }
+  if (row.status?.stalled) return { kind: "stalled", label: "Stalled" };
+  return rowKindBadge(row);
 }

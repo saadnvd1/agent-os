@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/lib/db/types";
 import type { SidebarRow } from "./shelves";
-import { rowKindBadge } from "./row-badge";
+import { rowKindBadge, rowStatusBadge } from "./row-badge";
 import { rowDetails, rowState } from "./row-details";
 
 const NOW = Date.parse("2026-10-14T18:00:00Z");
@@ -133,19 +133,15 @@ describe("rowDetails", () => {
   });
 });
 
-describe("plan badge placement", () => {
-  it("is drawn by the second line, never the hover-hidden slot", async () => {
-    const { readFileSync } = await import("node:fs");
-    const src = (f: string) => readFileSync(f, "utf8");
-    expect(src("components/SessionList/RowParts.tsx")).not.toMatch(
-      /rowKindBadge|KindBadge/
+describe("rowStatusBadge", () => {
+  it("says what it needs, then stalled, then the plan step", () => {
+    expect(rowStatusBadge(row({}, { need: "failed" }))).toMatchObject({
+      kind: "failed",
+    });
+    expect(rowStatusBadge(row({}, { need: "approve" }))?.kind).toBe("need");
+    expect(rowStatusBadge(row({ plan_phase: "awaiting" }))?.kind).toBe(
+      "plan-ready"
     );
-    const sessionRow = src("components/SessionList/SessionRow.tsx");
-    const slot = sessionRow.slice(
-      sessionRow.indexOf("hoverHidden={"),
-      sessionRow.indexOf("menu={menu}")
-    );
-    expect(slot).not.toContain("rowKindBadge");
-    expect(sessionRow).toContain("kindBadge: rowKindBadge(row)");
+    expect(rowStatusBadge(row())).toBeNull();
   });
 });
