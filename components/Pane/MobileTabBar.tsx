@@ -18,68 +18,22 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
-  FolderOpen,
-  GitBranch,
   Menu,
   Plus,
   Search,
   Share2,
-  Terminal as TerminalIcon,
   TextSearch,
-  Users,
-  ScrollText,
-  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAwayQuery } from "@/data/away";
 import { awayUntil } from "@/components/Away/time";
 import type { Session, Project } from "@/lib/db";
-import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 import type { ViewMode } from "@/contexts/PaneContext";
-
-interface ViewModeButtonProps {
-  mode: ViewMode;
-  currentMode: ViewMode;
-  icon: LucideIcon;
-  label?: string;
-  onClick: (mode: ViewMode) => void;
-  badge?: React.ReactNode;
-}
-
-function ViewModeButton({
-  mode,
-  currentMode,
-  icon: Icon,
-  label,
-  onClick,
-  badge,
-}: ViewModeButtonProps) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={currentMode === mode}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick(mode);
-      }}
-      className={cn(
-        "rounded p-1.5 transition-colors",
-        badge && "flex items-center gap-0.5",
-        currentMode === mode
-          ? "bg-secondary text-foreground"
-          : "text-muted-foreground"
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {badge}
-    </button>
-  );
-}
+import { MobileViewPicker } from "./MobileViewPicker";
 
 interface MobileTabBarProps {
   session: Session | null | undefined;
@@ -168,7 +122,7 @@ export function MobileTabBar({
 
   return (
     <div
-      className="bg-muted flex items-center gap-1.5 px-2 py-1.5"
+      className="bg-muted flex items-center gap-1 px-2 py-1.5"
       onClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
       onTouchEnd={(e) => e.stopPropagation()}
@@ -199,7 +153,7 @@ export function MobileTabBar({
       )}
 
       {/* Session/Tab navigation */}
-      <div className="flex min-w-0 flex-1 items-center gap-1">
+      <div className="flex min-w-0 flex-1 items-center gap-1 max-[359px]:hidden">
         <button
           type="button"
           onClick={handlePrev}
@@ -313,7 +267,7 @@ export function MobileTabBar({
       {bookmarksSessionId && (
         <ChatBookmarksButton
           sessionId={bookmarksSessionId}
-          className="-my-1.5 h-11 min-w-11"
+          className="-my-1.5 h-11 min-w-9 max-[359px]:min-w-8"
         />
       )}
       {onFind && (
@@ -325,7 +279,7 @@ export function MobileTabBar({
             e.stopPropagation();
             onFind();
           }}
-          className="-my-1.5 h-11 w-11 shrink-0"
+          className="-my-1.5 h-11 w-9 shrink-0 max-[359px]:w-8"
         >
           <TextSearch className="h-4 w-4" />
         </Button>
@@ -339,7 +293,7 @@ export function MobileTabBar({
           paletteActions.open();
         }}
         // A 44px target in a 32px bar row.
-        className="-my-1.5 h-11 w-11 shrink-0"
+        className="-my-1.5 h-11 w-9 shrink-0 max-[359px]:w-8"
       >
         <Search className="h-4 w-4" />
       </Button>
@@ -351,67 +305,22 @@ export function MobileTabBar({
           e.stopPropagation();
           newDraft({ kind: "current" });
         }}
-        className="-my-1.5 h-11 w-11 shrink-0"
+        className="-my-1.5 h-11 w-9 shrink-0 max-[359px]:w-8"
       >
         <Plus className="h-4 w-4" />
       </Button>
       <SessionPrStage sessionId={session?.id} />
       <ViewSwitch session={session} />
 
-      {/* View mode toggle */}
       {session?.working_directory && (
-        <div className="bg-accent/50 flex shrink-0 items-center rounded-md p-0.5">
-          <ViewModeButton
-            mode="terminal"
-            currentMode={viewMode}
-            icon={TerminalIcon}
-            onClick={onViewModeChange}
-          />
-          {isLocalSession && (
-            <ViewModeButton
-              mode="files"
-              currentMode={viewMode}
-              icon={FolderOpen}
-              onClick={onViewModeChange}
-            />
-          )}
-          {isLocalSession && (
-            <ViewModeButton
-              mode="git"
-              currentMode={viewMode}
-              icon={GitBranch}
-              onClick={onViewModeChange}
-            />
-          )}
-          <ViewModeButton
-            mode="artifacts"
-            currentMode={viewMode}
-            icon={Package}
-            label="Artifacts"
-            onClick={onViewModeChange}
-          />
-          {hasLog && (
-            <ViewModeButton
-              mode="log"
-              currentMode={viewMode}
-              icon={ScrollText}
-              onClick={onViewModeChange}
-            />
-          )}
-          {isConductor && (
-            <ViewModeButton
-              mode="workers"
-              currentMode={viewMode}
-              icon={Users}
-              onClick={onViewModeChange}
-              badge={
-                <span className="bg-primary/20 text-primary rounded px-1 text-[10px]">
-                  {workerCount}
-                </span>
-              }
-            />
-          )}
-        </div>
+        <MobileViewPicker
+          viewMode={viewMode}
+          onViewModeChange={onViewModeChange}
+          isLocalSession={isLocalSession}
+          hasLog={hasLog}
+          isConductor={isConductor}
+          workerCount={workerCount}
+        />
       )}
     </div>
   );
