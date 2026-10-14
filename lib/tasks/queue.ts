@@ -22,6 +22,7 @@ import { getProject } from "../projects";
 import { isRemoteHost } from "../hosts";
 import { getWorkspace } from "../workspaces";
 import { isPaused } from "../orchestrator/pause";
+import { autoHold } from "./auto-hold";
 import {
   BrakeRefused,
   braked,
@@ -81,7 +82,7 @@ import {
   type DueResume,
   claimResume,
   dueResumes,
-  loadHoldFor,
+  resumeHoldFor,
   setPauseNote,
 } from "./pause";
 
@@ -568,16 +569,6 @@ const sqliteMs = (v: string) =>
 export const queuedView = (id: string) =>
   listQueue().find((q) => q.id === id) ?? null;
 
-// Why an automatic start has to wait, or null. A start now by a person
-// isn't held.
-function autoHold(workspaceId: string | null, planOnly = false): Hold | null {
-  if (workspaceId && isPaused(workspaceId))
-    return { code: "orch_paused", text: "Waiting: the orchestrator is paused" };
-  if (planOnly) return null;
-  const window = brakesEnabled() ? windowRefusal(readUsage()) : null;
-  return window ? { code: "window", text: `Waiting: ${window}` } : null;
-}
-
 const requestNeeds = (
   projectId: string,
   workingDirectory: string,
@@ -968,15 +959,15 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
   const due = dueResumes();
   // A deliberate resume starts past the slot limit; only a red machine holds
   // it, and the task says so.
-  for (const d of due.filter((x) => x.manual)) {
+  for (const d of due.filter((x) => x.resumeBy)) {
     const s = db
       .prepare(`SELECT * FROM sessions WHERE id = ?`)
       .get(d.sessionId) as Session | undefined;
-    const load = s ? loadHoldFor(s) : null;
-    if (load) setPauseNote(d.sessionId, `held: ${load}`);
-    else await claimResume(d.sessionId, { reason: d.byKind, force: true });
+    const why = s ? resumeHoldFor(s, d.resumeBy!) : null;
+    if (why) setPauseNote(d.sessionId, `held: ${why}`);
+    else await claimResume(d.sessionId, { reason: d.resumeBy!, force: true });
   }
-  const resumes = due.filter((x) => !x.manual);
+  const resumes = due.filter((x) => !x.resumeBy);
   if (!rows.length && !resumes.length) return;
   const queued = rows.filter((r) => r.status === "queued");
   const used = usedFinishes();

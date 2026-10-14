@@ -47,6 +47,7 @@ vi.mock("@/lib/hosts/peer-load", () => ({
 }));
 
 const { requestPause, resumeNow, sweepPauses } = await import("./pause");
+const { setPaused } = await import("@/lib/orchestrator/pause");
 const { tickOnce } = await import("./queue");
 const { runTool } = await import("@/lib/orchestrator/serve");
 const { ensureOrchestrator } = await import("@/lib/orchestrator/home");
@@ -121,6 +122,34 @@ describe("resuming a paused task with every slot taken", () => {
     await tickOnce();
     expect(released).toContain(t.paused);
     expect(sess(t.paused).pause_note).toBeNull();
+  });
+});
+
+describe("while the orchestrator is paused", () => {
+  it("holds the orchestrator's resume, says why, and lets it go when unpaused", async () => {
+    const t = await fullWorkspace();
+    setPaused(t.workspace.id, true);
+    const out = await resumeNow(t.paused, "orchestrator");
+    expect(out).toEqual({
+      outcome: "held",
+      note: "held: the orchestrator is paused",
+    });
+    expect(sess(t.paused).pause_note).toBe("held: the orchestrator is paused");
+    await tickOnce();
+    expect(released).not.toContain(t.paused);
+    setPaused(t.workspace.id, false);
+    await tickOnce();
+    expect(released).toContain(t.paused);
+    expect(sess(t.paused).pause_note).toBeNull();
+  });
+
+  it("doesn't hold a resume by a person", async () => {
+    const t = await fullWorkspace();
+    setPaused(t.workspace.id, true);
+    expect(await resumeNow(t.paused, "person")).toEqual({
+      outcome: "resumed",
+    });
+    expect(released).toContain(t.paused);
   });
 });
 

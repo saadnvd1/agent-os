@@ -34,6 +34,7 @@ import { openBySubject, workSubject } from "../orchestrator/asks";
 import { queueEventOnce } from "../orchestrator/events";
 import { isPaused } from "../orchestrator/pause";
 import { isMerging } from "./finish";
+import { autoHold } from "./auto-hold";
 import { localView } from "../load/machines";
 import { machineHold } from "./schedule";
 import {
@@ -412,6 +413,17 @@ export function loadHoldFor(s: Session): string | null {
   return hold?.code === "load_red" ? hold.text.replace(/^Waiting: /, "") : null;
 }
 
+// Why a resume this actor asked for must wait: this machine's load, and for
+// the orchestrator also what holds its own starts (it is paused, or the
+// usage window). Saad's own resume skips the second.
+export function resumeHoldFor(s: Session, actor: PauseBy): string | null {
+  const load = loadHoldFor(s);
+  if (load) return load;
+  if (actor !== "orchestrator") return null;
+  const ws = s.project_id ? getProject(s.project_id)?.workspace_id : null;
+  return autoHold(ws ?? null)?.text.replace(/^Waiting: /, "") ?? null;
+}
+
 export function setPauseNote(sessionId: string, note: string | null): void {
   db.prepare(
     `UPDATE sessions SET pause_note = ? WHERE id = ? AND pause_state = 'paused' AND COALESCE(pause_note, '') != COALESCE(?, '')`
@@ -438,12 +450,12 @@ export async function resumeNow(
     return { outcome: "cancelled" };
   }
   const s = sessionOf(sessionId);
-  const load = s ? loadHoldFor(s) : null;
-  if (s && load && row.state === "paused") {
+  const why = s ? resumeHoldFor(s, actor) : null;
+  if (s && why && row.state === "paused") {
     db.prepare(
       `UPDATE task_pauses SET resume_requested_at = COALESCE(resume_requested_at, datetime('now')), resume_by_kind = ? WHERE id = ?`
     ).run(actor, row.id);
-    const note = `held: ${load}`;
+    const note = `held: ${why}`;
     setPauseNote(sessionId, note);
     nudge();
     return { outcome: "held", note };
@@ -460,7 +472,7 @@ export interface DueResume {
   dueAtMs: number;
   byKind: PauseBy;
   // A person or the orchestrator asked: it isn't queued behind the slot limit.
-  manual: boolean;
+  resumeBy: PauseBy | null;
 }
 
 // Paused tasks whose time came (or that someone asked to resume), for the
@@ -493,7 +505,7 @@ export function dueResumes(): DueResume[] {
       priority: isPriority(r.priority) ? r.priority : DEFAULT_PRIORITY,
       dueAtMs: r.until_at ? ms(r.until_at) : ms(r.resume_requested_at),
       byKind: r.by_kind,
-      manual: !!r.resume_by_kind,
+      resumeBy: (r.resume_by_kind as PauseBy | null) ?? null,
     }));
 }
 
