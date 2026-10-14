@@ -443,3 +443,62 @@ describe("the window readings an event carries", () => {
     ]);
   });
 });
+
+describe("subagent models", () => {
+  it("records the model each subagent type ran on", async () => {
+    const { subagentModelUsage } = await import("./subagents");
+    const agents = new Map<string, string>();
+    const msg = (id: string, model: string, over: object = {}) => ({
+      type: "assistant",
+      message: {
+        id,
+        model,
+        usage: { input_tokens: 10, output_tokens: 5 },
+        ...over,
+      },
+      ...over,
+    });
+    const events = [
+      msg("main", "claude-opus-5-5", {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu1",
+            name: "Agent",
+            input: { subagent_type: "Explore" },
+          },
+          {
+            type: "tool_use",
+            id: "tu2",
+            name: "Agent",
+            input: { subagent_type: "review-security" },
+          },
+        ],
+      }),
+      { ...msg("e1", "claude-haiku-4-5-20251001"), parent_tool_use_id: "tu1" },
+      { ...msg("r1", "claude-sonnet-5-5"), parent_tool_use_id: "tu2" },
+    ].flatMap((m) => usageEvents(m as never, agents));
+    const sid = session();
+    for (const e of events)
+      if (e.type === "call_usage")
+        recordCall(e.call, sessionContext(sid), "live");
+    expect(subagentModelUsage(7)).toEqual(
+      expect.arrayContaining([
+        {
+          agentType: "Explore",
+          model: "claude-haiku-4-5-20251001",
+          calls: 1,
+          tokens: 15,
+        },
+        {
+          agentType: "review-security",
+          model: "claude-sonnet-5-5",
+          calls: 1,
+          tokens: 15,
+        },
+      ])
+    );
+    expect(subagentModelUsage(7)).toHaveLength(2);
+    expect(subagentModelUsage(7, Date.now() + 30 * 86_400_000)).toEqual([]);
+  });
+});

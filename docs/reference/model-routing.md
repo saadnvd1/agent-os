@@ -161,3 +161,13 @@ column with fewer than 10 tasks is marked a small sample: a hint, not a
 result. Parity means the routed column's outcome rows match the baseline's
 while its window points per task drop. Why it works this way:
 [docs/decisions/2026-10-11-model-routing.md](../decisions/2026-10-11-model-routing.md).
+
+## Subagent models
+
+A Claude session's subagents (the Agent tool) run on a model chosen by their type, set under Settings → Models → Subagent models. The defaults: `Explore` (read-only search) on Haiku 4.5; `Plan`, `general-purpose` and every `review-*` agent on Sonnet 5.5. Other types, and forks, stay on the session's model unless you add them. A type can be an exact name or `prefix*`.
+
+Types that plan, decide or review can't be put on Haiku: Settings refuses it, and a call that asks for Haiku on one runs on its tier. A model the caller picked on purpose is kept otherwise.
+
+How it works: Claude Code takes a subagent's model from the call, then its definition (the built-in `Explore` and `Plan` say "inherit"), then the session's. A PreToolUse hook on `Agent|Task` fills in the call's model from the map in the session's `AGENTOS_SUBAGENT_MODELS` environment variable: in-process for chat sessions, and `scripts/subagent-model-hook.mjs` (installed to the AgentOS config folder) for terminal ones. Sessions on another provider get no map, and their tiers stay mapped as before. A new session picks up a change; a running one keeps its map.
+
+`GET /api/usage/subagents?days=7` lists calls and tokens by subagent type and the model that answered, so what actually ran is one request away.

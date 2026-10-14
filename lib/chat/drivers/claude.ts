@@ -25,6 +25,8 @@ import {
   URL_USERINFO,
 } from "../../orchestrator/untrusted";
 import { NO_ATTRIBUTION } from "../../agents/attribution";
+import { SUBAGENTS_ENV } from "../../models/subagent-env";
+import { parseSubagentEnv, subagentModelHook } from "../../models/subagents";
 import { callFromAssistant } from "../../usage/calls";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
@@ -196,7 +198,11 @@ export const claudeDriver: ChatDriver = {
         allowedTools: options.allowedTools,
         disallowedTools: options.disallowedTools,
         hooks: {
-          PreToolUse: preToolUseHooks(approvals, options.toolGuard),
+          PreToolUse: preToolUseHooks(
+            approvals,
+            options.toolGuard,
+            subagentHook(options.env)
+          ),
           ...(options.compactContext && {
             SessionStart: compactedHooks(options.compactContext),
           }),
@@ -377,6 +383,13 @@ export const claudeDriver: ChatDriver = {
     };
   },
 };
+
+// The hook that sets a subagent call's model, when the session's
+// environment carries a map.
+function subagentHook(env: Record<string, string> | undefined) {
+  const map = parseSubagentEnv(env?.[SUBAGENTS_ENV]);
+  return map ? subagentModelHook(map) : null;
+}
 
 // The tokens of each response, subagents' too (the mapper drops those), and
 // the CLI's limit readings, for the usage ledger. `agents` maps a subagent's

@@ -6,6 +6,12 @@ import { NO_ATTRIBUTION } from "../agents/attribution";
 const DIR = path.join(os.homedir(), ".agent-os");
 const HOOK = path.join(DIR, "bin", "agentos-status");
 const SETTINGS = path.join(DIR, "claude-status-hooks.json");
+const SUBAGENT_HOOK = path.join(DIR, "bin", "agentos-subagent-model.mjs");
+const SUBAGENT_SOURCE = path.join(
+  process.cwd(),
+  "scripts",
+  "subagent-model-hook.mjs"
+);
 const SOURCE = path.join(process.cwd(), "scripts", "claude-status-hook.sh");
 
 const EVENTS = [
@@ -21,8 +27,14 @@ const EVENTS = [
 const TOOL_EVENTS = new Set(["PreToolUse", "PermissionRequest", "PostToolUse"]);
 
 // The flag settings every terminal Claude AgentOS starts reads: the status
-// hooks, and no AI attribution on its commits and PRs.
-export function claudeStatusSettings(hook = HOOK) {
+// hooks, the subagent model hook (a no-op unless the session's environment
+// carries a map, lib/models/subagents), and no AI attribution on its
+// commits and PRs.
+export function claudeStatusSettings(
+  hook = HOOK,
+  subagentHook = SUBAGENT_HOOK,
+  node = process.execPath
+) {
   return {
     attribution: NO_ATTRIBUTION,
     hooks: Object.fromEntries(
@@ -39,6 +51,20 @@ export function claudeStatusSettings(hook = HOOK) {
               },
             ],
           },
+          ...(event === "PreToolUse"
+            ? [
+                {
+                  matcher: "Agent|Task",
+                  hooks: [
+                    {
+                      type: "command",
+                      command: `${JSON.stringify(node)} ${JSON.stringify(subagentHook)}`,
+                      timeout: 5,
+                    },
+                  ],
+                },
+              ]
+            : []),
         ],
       ])
     ),
@@ -64,6 +90,7 @@ export function installClaudeStatusHooks(): void {
   try {
     fs.mkdirSync(path.dirname(HOOK), { recursive: true });
     writeAtomic(HOOK, fs.readFileSync(SOURCE), 0o755);
+    writeAtomic(SUBAGENT_HOOK, fs.readFileSync(SUBAGENT_SOURCE), 0o755);
     writeAtomic(
       SETTINGS,
       Buffer.from(JSON.stringify(claudeStatusSettings(), null, 2) + "\n")

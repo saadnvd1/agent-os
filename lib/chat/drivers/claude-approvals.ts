@@ -262,9 +262,15 @@ export function guardHook(guard: ToolGuard): HookCallback {
 // role's guard (an orchestrator's, on where it writes) sees every call.
 export function preToolUseHooks(
   approvals: Approvals,
-  guard?: ToolGuard
+  guard?: ToolGuard,
+  subagentModels?: HookCallback | null
 ): HookCallbackMatcher[] {
   return [
+    // Sets the model of a subagent call by its type. It only fills in the
+    // input, so the guard and permissions below still see the call.
+    ...(subagentModels
+      ? [{ matcher: "Agent|Task", hooks: [subagentModels] }]
+      : []),
     {
       matcher: "AskUserQuestion",
       hooks: [approvals.askQuestions],

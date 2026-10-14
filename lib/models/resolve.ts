@@ -5,6 +5,7 @@
  * AGENTOS_TITLE_MODEL, then the default (lib/models/roles).
  */
 
+import { SUBAGENTS_ENV } from "./subagent-env";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import {
@@ -227,6 +228,8 @@ function routingEnv(p: ModelProvider, model: string): Record<string, string> {
     ANTHROPIC_DEFAULT_SONNET_MODEL: p.tiers?.sonnet ?? model,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: p.tiers?.haiku ?? model,
     CLAUDE_CODE_SUBAGENT_MODEL: p.tiers?.sonnet ?? model,
+    // Per-type subagent routing is for Claude's own models.
+    [SUBAGENTS_ENV]: "",
   };
 }
 

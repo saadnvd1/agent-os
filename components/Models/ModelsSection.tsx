@@ -10,6 +10,7 @@ import {
   type ModelPrice,
   type ModelProvider,
 } from "@/lib/models/providers";
+import { SubagentModels } from "./SubagentModels";
 import { MODEL_ROLES, ROLE_LABELS } from "@/lib/models/roles";
 import { ModelSelect } from "./ModelSelect";
 import { ProviderCard } from "./ProviderCard";
@@ -97,6 +98,12 @@ export function ModelsSection() {
           onChange={(planStep) => save({ planStep })}
         />
       </section>
+
+      <SubagentModels
+        saved={saved.subagents}
+        disabled={update.isPending}
+        onChange={(subagents) => save({ subagents })}
+      />
 
       <section className="space-y-2">
         <h3 className="text-sm font-medium">Providers</h3>
