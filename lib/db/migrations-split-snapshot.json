@@ -1,0 +1,1754 @@
+{
+  "lastKey": "20261014T2100_gate_failure_ask_held",
+  "applied": [
+    {
+      "id": 1,
+      "key": null,
+      "name": "add_group_path_to_sessions"
+    },
+    {
+      "id": 2,
+      "key": null,
+      "name": "add_agent_type_to_sessions"
+    },
+    {
+      "id": 3,
+      "key": null,
+      "name": "add_worktree_columns_to_sessions"
+    },
+    {
+      "id": 4,
+      "key": null,
+      "name": "add_pr_tracking_to_sessions"
+    },
+    {
+      "id": 5,
+      "key": null,
+      "name": "add_group_path_index"
+    },
+    {
+      "id": 6,
+      "key": null,
+      "name": "add_orchestration_columns_to_sessions"
+    },
+    {
+      "id": 7,
+      "key": null,
+      "name": "add_auto_approve_to_sessions"
+    },
+    {
+      "id": 8,
+      "key": null,
+      "name": "add_dev_server_columns"
+    },
+    {
+      "id": 9,
+      "key": null,
+      "name": "add_project_id_to_sessions"
+    },
+    {
+      "id": 10,
+      "key": null,
+      "name": "add_project_id_to_dev_servers"
+    },
+    {
+      "id": 11,
+      "key": null,
+      "name": "add_tmux_name_to_sessions"
+    },
+    {
+      "id": 12,
+      "key": null,
+      "name": "add_initial_prompt_to_projects"
+    },
+    {
+      "id": 13,
+      "key": null,
+      "name": "add_project_repositories_table"
+    },
+    {
+      "id": 14,
+      "key": null,
+      "name": "add_hosts"
+    },
+    {
+      "id": 15,
+      "key": null,
+      "name": "add_workspaces"
+    },
+    {
+      "id": 16,
+      "key": null,
+      "name": "add_task_columns_to_sessions"
+    },
+    {
+      "id": 17,
+      "key": null,
+      "name": "add_bus_messages"
+    },
+    {
+      "id": 18,
+      "key": null,
+      "name": "add_chat"
+    },
+    {
+      "id": 19,
+      "key": null,
+      "name": "add_lumifyhub"
+    },
+    {
+      "id": 20,
+      "key": null,
+      "name": "add_lumifyhub_published_docs"
+    },
+    {
+      "id": 21,
+      "key": null,
+      "name": "add_chat_access"
+    },
+    {
+      "id": 22,
+      "key": null,
+      "name": "add_last_seen"
+    },
+    {
+      "id": 23,
+      "key": null,
+      "name": "mark_existing_sessions_seen"
+    },
+    {
+      "id": 24,
+      "key": null,
+      "name": "add_stacks"
+    },
+    {
+      "id": 25,
+      "key": null,
+      "name": "add_stack_item_attempts"
+    },
+    {
+      "id": 26,
+      "key": null,
+      "name": "add_workspace_orchestrator"
+    },
+    {
+      "id": 27,
+      "key": null,
+      "name": "add_devices_and_settings"
+    },
+    {
+      "id": 28,
+      "key": null,
+      "name": "add_orchestrator_acting"
+    },
+    {
+      "id": 29,
+      "key": null,
+      "name": "add_orchestrator_asks_and_pause"
+    },
+    {
+      "id": 30,
+      "key": null,
+      "name": "add_sessions_archived_at"
+    },
+    {
+      "id": 31,
+      "key": null,
+      "name": "add_stack_item_restacked_heads"
+    },
+    {
+      "id": 32,
+      "key": null,
+      "name": "add_sessions_pinned"
+    },
+    {
+      "id": 33,
+      "key": null,
+      "name": "add_program_status"
+    },
+    {
+      "id": 34,
+      "key": null,
+      "name": "add_session_names"
+    },
+    {
+      "id": 35,
+      "key": null,
+      "name": "add_artifacts"
+    },
+    {
+      "id": 36,
+      "key": null,
+      "name": "add_chat_queue"
+    },
+    {
+      "id": 37,
+      "key": null,
+      "name": "add_chat_plan_and_turns"
+    },
+    {
+      "id": 38,
+      "key": null,
+      "name": "add_schedules"
+    },
+    {
+      "id": 39,
+      "key": null,
+      "name": "add_session_name_source"
+    },
+    {
+      "id": 40,
+      "key": null,
+      "name": "add_schedule_targets_and_phone_notify"
+    },
+    {
+      "id": 41,
+      "key": null,
+      "name": "add_task_setup"
+    },
+    {
+      "id": 42,
+      "key": null,
+      "name": "add_host_links_and_moved_tasks"
+    },
+    {
+      "id": 43,
+      "key": null,
+      "name": "scratch_project"
+    },
+    {
+      "id": 44,
+      "key": null,
+      "name": "chat_item_kind"
+    },
+    {
+      "id": 45,
+      "key": null,
+      "name": "change_versions"
+    },
+    {
+      "id": 46,
+      "key": null,
+      "name": "session_port_slots"
+    },
+    {
+      "id": 47,
+      "key": null,
+      "name": "pin_orchestrators"
+    },
+    {
+      "id": 48,
+      "key": null,
+      "name": "session_database"
+    },
+    {
+      "id": 49,
+      "key": null,
+      "name": "peer_mirror"
+    },
+    {
+      "id": 50,
+      "key": null,
+      "name": "task_queue"
+    },
+    {
+      "id": 51,
+      "key": null,
+      "name": "chat_queue_sent_by"
+    },
+    {
+      "id": 52,
+      "key": null,
+      "name": "sessions_chat_restarted"
+    },
+    {
+      "id": 53,
+      "key": null,
+      "name": "brief_amendments_failure_sha_ask_raised_by"
+    },
+    {
+      "id": 54,
+      "key": null,
+      "name": "sessions_chat_tools_digest"
+    },
+    {
+      "id": 55,
+      "key": null,
+      "name": "sessions_merge_armed_and_rebase"
+    },
+    {
+      "id": 56,
+      "key": null,
+      "name": "orchestrator_rules"
+    },
+    {
+      "id": 57,
+      "key": null,
+      "name": "task_pr_wakes"
+    },
+    {
+      "id": 58,
+      "key": null,
+      "name": "away_mode"
+    },
+    {
+      "id": 59,
+      "key": null,
+      "name": "gate_failure_commits"
+    },
+    {
+      "id": 60,
+      "key": null,
+      "name": "check_runs_and_compactions"
+    },
+    {
+      "id": 61,
+      "key": null,
+      "name": "model_routing"
+    },
+    {
+      "id": 62,
+      "key": null,
+      "name": "sessions_quick_of"
+    },
+    {
+      "id": 63,
+      "key": null,
+      "name": "one_off_schedules"
+    },
+    {
+      "id": 64,
+      "key": null,
+      "name": "chat_compactions_phase"
+    },
+    {
+      "id": 65,
+      "key": null,
+      "name": "orchestrator_triage"
+    },
+    {
+      "id": 66,
+      "key": null,
+      "name": "workspace_orch_mcp_servers"
+    },
+    {
+      "id": 67,
+      "key": null,
+      "name": "orchestrator_event_log_suppressed"
+    },
+    {
+      "id": 68,
+      "key": null,
+      "name": "usage_calls_and_rollups"
+    },
+    {
+      "id": 69,
+      "key": null,
+      "name": "session_logs"
+    },
+    {
+      "id": 70,
+      "key": null,
+      "name": "chat_items_running"
+    },
+    {
+      "id": 71,
+      "key": null,
+      "name": "devices_push"
+    },
+    {
+      "id": 72,
+      "key": null,
+      "name": "push_outbox"
+    },
+    {
+      "id": 73,
+      "key": null,
+      "name": "orchestrated_task_moves"
+    },
+    {
+      "id": 74,
+      "key": null,
+      "name": "held_task_replies"
+    },
+    {
+      "id": 75,
+      "key": null,
+      "name": "plan_only_tasks"
+    },
+    {
+      "id": 76,
+      "key": null,
+      "name": "welcome_backfill"
+    },
+    {
+      "id": 77,
+      "key": null,
+      "name": "simulator_leases"
+    },
+    {
+      "id": 78,
+      "key": null,
+      "name": "orchestrator_questions"
+    },
+    {
+      "id": 79,
+      "key": null,
+      "name": "task_queue_agent"
+    },
+    {
+      "id": 80,
+      "key": null,
+      "name": "recipes"
+    },
+    {
+      "id": 81,
+      "key": null,
+      "name": "schedules_into_recipes"
+    },
+    {
+      "id": 82,
+      "key": null,
+      "name": "session_shelf_times"
+    },
+    {
+      "id": 83,
+      "key": null,
+      "name": "native_devices_can_approve"
+    },
+    {
+      "id": 84,
+      "key": null,
+      "name": "approval_audit"
+    },
+    {
+      "id": 85,
+      "key": null,
+      "name": "experiment_usage"
+    },
+    {
+      "id": 86,
+      "key": null,
+      "name": "learning_cards"
+    },
+    {
+      "id": 87,
+      "key": null,
+      "name": "plan_pieces_reconcile"
+    },
+    {
+      "id": 88,
+      "key": null,
+      "name": "shared_links"
+    },
+    {
+      "id": 89,
+      "key": null,
+      "name": "passkeys_device_keys"
+    },
+    {
+      "id": 90,
+      "key": "20261014T0900_task_scheduling",
+      "name": "task_scheduling"
+    },
+    {
+      "id": 91,
+      "key": "20261014T1235_placed_mirror_started_by",
+      "name": "placed_mirror_started_by"
+    },
+    {
+      "id": 92,
+      "key": "20261014T1600_queued_task_messages",
+      "name": "queued_task_messages"
+    },
+    {
+      "id": 93,
+      "key": "20261014T1800_task_starter_device",
+      "name": "task_starter_device"
+    },
+    {
+      "id": 94,
+      "key": "20261014T2000_chat_bookmarks",
+      "name": "chat_bookmarks"
+    },
+    {
+      "id": 95,
+      "key": "20261014T2100_gate_failure_ask_held",
+      "name": "gate_failure_ask_held"
+    }
+  ],
+  "schema": [
+    {
+      "type": "index",
+      "name": "idx_artifacts_session",
+      "tbl_name": "artifacts",
+      "sql": "CREATE INDEX idx_artifacts_session ON artifacts(session_id, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_brief_amendments_session",
+      "tbl_name": "brief_amendments",
+      "sql": "CREATE INDEX idx_brief_amendments_session\n          ON brief_amendments(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_bus_messages_held_queued",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE INDEX idx_bus_messages_held_queued\n           ON bus_messages(to_id) WHERE held_queued = 1"
+    },
+    {
+      "type": "index",
+      "name": "idx_bus_relay_key",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE UNIQUE INDEX idx_bus_relay_key ON bus_messages(relay_key) WHERE relay_key IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_bus_relay_pending",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE INDEX idx_bus_relay_pending ON bus_messages(relay_state) WHERE relay_state = 'pending'"
+    },
+    {
+      "type": "index",
+      "name": "idx_bus_to",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE INDEX idx_bus_to ON bus_messages(to_id, read_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_bookmarks_ws",
+      "tbl_name": "chat_bookmarks",
+      "sql": "CREATE INDEX idx_chat_bookmarks_ws\n           ON chat_bookmarks(workspace_id, created_at DESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_compactions_at",
+      "tbl_name": "chat_compactions",
+      "sql": "CREATE INDEX idx_chat_compactions_at ON chat_compactions(at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_items_kind",
+      "tbl_name": "chat_items",
+      "sql": "CREATE INDEX idx_chat_items_kind ON chat_items(session_id, kind, seq)"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_items_running",
+      "tbl_name": "chat_items",
+      "sql": "CREATE INDEX idx_chat_items_running ON chat_items(session_id, kind, seq)\n         WHERE json_extract(data, '$.status') = 'running'"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_items_seq",
+      "tbl_name": "chat_items",
+      "sql": "CREATE INDEX idx_chat_items_seq ON chat_items(session_id, seq)"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_queue_session",
+      "tbl_name": "chat_queue",
+      "sql": "CREATE INDEX idx_chat_queue_session ON chat_queue(session_id, position)"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_turns_at",
+      "tbl_name": "chat_turns",
+      "sql": "CREATE INDEX idx_chat_turns_at ON chat_turns(at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_chat_turns_session",
+      "tbl_name": "chat_turns",
+      "sql": "CREATE INDEX idx_chat_turns_session ON chat_turns(session_id, id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_check_runs_at",
+      "tbl_name": "check_runs",
+      "sql": "CREATE INDEX idx_check_runs_at ON check_runs(at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_check_runs_sha",
+      "tbl_name": "check_runs",
+      "sql": "CREATE INDEX idx_check_runs_sha ON check_runs(session_id, sha, kind)"
+    },
+    {
+      "type": "index",
+      "name": "idx_devices_push_token",
+      "tbl_name": "devices",
+      "sql": "CREATE INDEX idx_devices_push_token ON devices(push_token)\n         WHERE push_token IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_experiment_usage_exp_at",
+      "tbl_name": "experiment_usage",
+      "sql": "CREATE INDEX idx_experiment_usage_exp_at\n          ON experiment_usage(experiment_id, at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_experiment_usage_session",
+      "tbl_name": "experiment_usage",
+      "sql": "CREATE INDEX idx_experiment_usage_session\n          ON experiment_usage(session_id, experiment_id, event)"
+    },
+    {
+      "type": "index",
+      "name": "idx_feature_pieces_session",
+      "tbl_name": "feature_pieces",
+      "sql": "CREATE INDEX idx_feature_pieces_session\n          ON feature_pieces(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_features_plan",
+      "tbl_name": "features",
+      "sql": "CREATE INDEX idx_features_plan\n          ON features(plan_session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_learning_cards_dest",
+      "tbl_name": "learning_cards",
+      "sql": "CREATE INDEX idx_learning_cards_dest\n          ON learning_cards(destination, decided_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_messages_session",
+      "tbl_name": "messages",
+      "sql": "CREATE INDEX idx_messages_session ON messages(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_migrations_key",
+      "tbl_name": "_migrations",
+      "sql": "CREATE UNIQUE INDEX idx_migrations_key ON _migrations(key)"
+    },
+    {
+      "type": "index",
+      "name": "idx_notify_outbox_source",
+      "tbl_name": "notify_outbox",
+      "sql": "CREATE INDEX idx_notify_outbox_source ON notify_outbox(source, sent_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_orchestrator_asks_open",
+      "tbl_name": "orchestrator_asks",
+      "sql": "CREATE UNIQUE INDEX idx_orchestrator_asks_open\n         ON orchestrator_asks(workspace_id, subject) WHERE status = 'open'"
+    },
+    {
+      "type": "index",
+      "name": "idx_orchestrator_asks_workspace",
+      "tbl_name": "orchestrator_asks",
+      "sql": "CREATE INDEX idx_orchestrator_asks_workspace\n         ON orchestrator_asks(workspace_id, status)"
+    },
+    {
+      "type": "index",
+      "name": "idx_orchestrator_event_log",
+      "tbl_name": "orchestrator_event_log",
+      "sql": "CREATE INDEX idx_orchestrator_event_log\n         ON orchestrator_event_log(workspace_id, delivered_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_orchestrator_notes",
+      "tbl_name": "orchestrator_notes",
+      "sql": "CREATE INDEX idx_orchestrator_notes\n         ON orchestrator_notes(workspace_id, id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_orchestrator_questions_open",
+      "tbl_name": "orchestrator_questions",
+      "sql": "CREATE INDEX idx_orchestrator_questions_open\n          ON orchestrator_questions(workspace_id, status)"
+    },
+    {
+      "type": "index",
+      "name": "idx_orchestrator_rules",
+      "tbl_name": "orchestrator_rules",
+      "sql": "CREATE INDEX idx_orchestrator_rules\n         ON orchestrator_rules(workspace_id, removed_at, id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_orchestrator_starts",
+      "tbl_name": "orchestrator_starts",
+      "sql": "CREATE INDEX idx_orchestrator_starts\n         ON orchestrator_starts(workspace_id, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_passkeys_device",
+      "tbl_name": "passkeys",
+      "sql": "CREATE INDEX idx_passkeys_device ON passkeys(device_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_project_dev_servers_project",
+      "tbl_name": "project_dev_servers",
+      "sql": "CREATE INDEX idx_project_dev_servers_project ON project_dev_servers(project_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_project_repositories_project",
+      "tbl_name": "project_repositories",
+      "sql": "CREATE INDEX idx_project_repositories_project ON project_repositories(project_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_push_outbox_device",
+      "tbl_name": "push_outbox",
+      "sql": "CREATE INDEX idx_push_outbox_device ON push_outbox(device_id, sent_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_push_outbox_due",
+      "tbl_name": "push_outbox",
+      "sql": "CREATE INDEX idx_push_outbox_due ON push_outbox(state, next_attempt_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_rate_limit_readings",
+      "tbl_name": "rate_limit_readings",
+      "sql": "CREATE INDEX idx_rate_limit_readings ON rate_limit_readings(window, at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_recipe_runs_one_live",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE UNIQUE INDEX idx_recipe_runs_one_live\n          ON recipe_runs(recipe_id)\n          WHERE status IN ('queued','starting','running')"
+    },
+    {
+      "type": "index",
+      "name": "idx_recipe_runs_recipe",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE INDEX idx_recipe_runs_recipe\n          ON recipe_runs(recipe_id, id DESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_recipe_runs_request",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE UNIQUE INDEX idx_recipe_runs_request\n          ON recipe_runs(request_id) WHERE request_id IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_recipe_runs_session",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE INDEX idx_recipe_runs_session\n          ON recipe_runs(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_recipes_name",
+      "tbl_name": "recipes",
+      "sql": "CREATE UNIQUE INDEX idx_recipes_name\n          ON recipes(workspace_id, name COLLATE NOCASE) WHERE archived_at IS NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_schedule_runs_schedule",
+      "tbl_name": "schedule_runs",
+      "sql": "CREATE INDEX idx_schedule_runs_schedule ON schedule_runs(schedule_id, id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_schedules_run_at",
+      "tbl_name": "schedules",
+      "sql": "CREATE INDEX idx_schedules_run_at ON schedules(run_at) WHERE run_at IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_session_logs_project",
+      "tbl_name": "session_logs",
+      "sql": "CREATE INDEX idx_session_logs_project\n          ON session_logs(project_id, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_session_logs_workspace",
+      "tbl_name": "session_logs",
+      "sql": "CREATE INDEX idx_session_logs_workspace\n          ON session_logs(workspace_id, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_session_names_session",
+      "tbl_name": "session_names",
+      "sql": "CREATE INDEX idx_session_names_session ON session_names(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_archived_at",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_archived_at ON sessions(archived_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_conductor",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_conductor ON sessions(conductor_session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_group",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_group ON sessions(group_path)"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_moved_from",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_moved_from ON sessions(moved_from)"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_orchestrator",
+      "tbl_name": "sessions",
+      "sql": "CREATE UNIQUE INDEX idx_sessions_orchestrator\n         ON sessions(workspace_id) WHERE role = 'orchestrator'"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_parent",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_parent ON sessions(parent_session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_port_slot",
+      "tbl_name": "sessions",
+      "sql": "CREATE UNIQUE INDEX idx_sessions_port_slot ON sessions(port_slot) WHERE port_slot IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_project",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_project ON sessions(project_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_quick_of",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_quick_of ON sessions(quick_of) WHERE quick_of IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_sessions_task_status",
+      "tbl_name": "sessions",
+      "sql": "CREATE INDEX idx_sessions_task_status ON sessions(task_status)"
+    },
+    {
+      "type": "index",
+      "name": "idx_shared_links_created",
+      "tbl_name": "shared_links",
+      "sql": "CREATE INDEX idx_shared_links_created\n          ON shared_links(created_at DESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_stack_items_session",
+      "tbl_name": "stack_items",
+      "sql": "CREATE INDEX idx_stack_items_session ON stack_items(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_stack_items_stack",
+      "tbl_name": "stack_items",
+      "sql": "CREATE INDEX idx_stack_items_stack ON stack_items(stack_id, position)"
+    },
+    {
+      "type": "index",
+      "name": "idx_task_pauses_session",
+      "tbl_name": "task_pauses",
+      "sql": "CREATE INDEX idx_task_pauses_session\n          ON task_pauses(session_id, state)"
+    },
+    {
+      "type": "index",
+      "name": "idx_task_queue_after_any_used",
+      "tbl_name": "task_queue",
+      "sql": "CREATE UNIQUE INDEX idx_task_queue_after_any_used\n           ON task_queue(after_any_used) WHERE after_any_used IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_task_queue_status",
+      "tbl_name": "task_queue",
+      "sql": "CREATE INDEX idx_task_queue_status ON task_queue(status, position)"
+    },
+    {
+      "type": "index",
+      "name": "idx_tool_calls_message",
+      "tbl_name": "tool_calls",
+      "sql": "CREATE INDEX idx_tool_calls_message ON tool_calls(message_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_tool_calls_session",
+      "tbl_name": "tool_calls",
+      "sql": "CREATE INDEX idx_tool_calls_session ON tool_calls(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_usage_calls_at",
+      "tbl_name": "usage_calls",
+      "sql": "CREATE INDEX idx_usage_calls_at ON usage_calls(at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_usage_calls_session",
+      "tbl_name": "usage_calls",
+      "sql": "CREATE INDEX idx_usage_calls_session ON usage_calls(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_usage_calls_task",
+      "tbl_name": "usage_calls",
+      "sql": "CREATE INDEX idx_usage_calls_task ON usage_calls(task_id)"
+    },
+    {
+      "type": "table",
+      "name": "_migrations",
+      "tbl_name": "_migrations",
+      "sql": "CREATE TABLE _migrations (\n      id INTEGER PRIMARY KEY,\n      name TEXT NOT NULL,\n      applied_at TEXT NOT NULL DEFAULT (datetime('now'))\n    , key TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "agent_prs",
+      "tbl_name": "agent_prs",
+      "sql": "CREATE TABLE agent_prs (\n          url TEXT PRIMARY KEY,\n          session_id TEXT NOT NULL,\n          repo TEXT NOT NULL,\n          number INTEGER NOT NULL,\n          seen_at TEXT NOT NULL DEFAULT (datetime('now')),\n          told_at TEXT\n        )"
+    },
+    {
+      "type": "table",
+      "name": "approval_audit",
+      "tbl_name": "approval_audit",
+      "sql": "CREATE TABLE approval_audit (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          at TEXT NOT NULL DEFAULT (datetime('now')),\n          source TEXT NOT NULL,\n          workspace_id TEXT,\n          session_id TEXT,\n          subject TEXT NOT NULL,\n          detail TEXT NOT NULL DEFAULT ''\n        )"
+    },
+    {
+      "type": "table",
+      "name": "artifacts",
+      "tbl_name": "artifacts",
+      "sql": "CREATE TABLE artifacts (\n          id TEXT PRIMARY KEY,\n          session_id TEXT NOT NULL,\n          title TEXT NOT NULL,\n          path TEXT NOT NULL,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "away_actions",
+      "tbl_name": "away_actions",
+      "sql": "CREATE TABLE away_actions (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          away_id INTEGER NOT NULL,\n          workspace_id TEXT NOT NULL,\n          subject TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          key TEXT NOT NULL,\n          detail TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          UNIQUE (away_id, key)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "away_periods",
+      "tbl_name": "away_periods",
+      "sql": "CREATE TABLE away_periods (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          set_by TEXT NOT NULL,\n          started_at TEXT NOT NULL DEFAULT (datetime('now')),\n          expires_at TEXT,\n          ended_at TEXT,\n          ended_by TEXT,\n          last_sweep_at TEXT,\n          asks_notified_at TEXT,\n          report TEXT,\n          report_seen_at TEXT\n        )"
+    },
+    {
+      "type": "table",
+      "name": "brief_amendments",
+      "tbl_name": "brief_amendments",
+      "sql": "CREATE TABLE brief_amendments (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          session_id TEXT NOT NULL,\n          workspace_id TEXT NOT NULL,\n          text TEXT NOT NULL,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "bus_messages",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE TABLE bus_messages (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          from_id TEXT,\n          from_name TEXT NOT NULL,\n          to_id TEXT NOT NULL,\n          to_name TEXT NOT NULL,\n          body TEXT NOT NULL,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          delivered_at TEXT,\n          read_at TEXT\n        , relay_state TEXT, relay_key TEXT, held_pause_id INTEGER, held_queued INTEGER)"
+    },
+    {
+      "type": "table",
+      "name": "change_versions",
+      "tbl_name": "change_versions",
+      "sql": "CREATE TABLE change_versions (\n      topic TEXT PRIMARY KEY,\n      version INTEGER NOT NULL DEFAULT 0\n    )"
+    },
+    {
+      "type": "table",
+      "name": "chat_bookmarks",
+      "tbl_name": "chat_bookmarks",
+      "sql": "CREATE TABLE chat_bookmarks (\n          id TEXT PRIMARY KEY,\n          session_id TEXT NOT NULL,\n          item_id TEXT NOT NULL,\n          scope TEXT NOT NULL DEFAULT 'item',\n          workspace_id TEXT,\n          kind TEXT NOT NULL,\n          text TEXT NOT NULL,\n          session_name TEXT NOT NULL,\n          note TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          UNIQUE (session_id, item_id, scope)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "chat_compactions",
+      "tbl_name": "chat_compactions",
+      "sql": "CREATE TABLE chat_compactions (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          session_id TEXT NOT NULL,\n          session_name TEXT NOT NULL,\n          workspace_id TEXT,\n          at INTEGER NOT NULL,\n          trigger TEXT NOT NULL,\n          before_tokens INTEGER,\n          after_tokens INTEGER\n        , phase TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "chat_items",
+      "tbl_name": "chat_items",
+      "sql": "CREATE TABLE chat_items (\n          session_id TEXT NOT NULL,\n          item_id TEXT NOT NULL,\n          seq INTEGER NOT NULL,\n          data TEXT NOT NULL, kind TEXT\n             GENERATED ALWAYS AS (json_extract(data, '$.kind')) VIRTUAL,\n          PRIMARY KEY (session_id, item_id)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "chat_queue",
+      "tbl_name": "chat_queue",
+      "sql": "CREATE TABLE chat_queue (\n          session_id TEXT NOT NULL,\n          id TEXT NOT NULL,\n          position REAL NOT NULL,\n          text TEXT NOT NULL,\n          images TEXT,\n          image_count INTEGER NOT NULL DEFAULT 0,\n          created_at INTEGER NOT NULL, sent_by TEXT,\n          PRIMARY KEY (session_id, id)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "chat_turns",
+      "tbl_name": "chat_turns",
+      "sql": "CREATE TABLE chat_turns (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          session_id TEXT NOT NULL,\n          session_name TEXT NOT NULL,\n          workspace_id TEXT,\n          at INTEGER NOT NULL,\n          cost_usd REAL NOT NULL,\n          input_tokens INTEGER NOT NULL,\n          output_tokens INTEGER NOT NULL,\n          cache_read_tokens INTEGER NOT NULL,\n          cache_write_tokens INTEGER NOT NULL\n        , model TEXT, provider TEXT, role TEXT, duration_ms INTEGER, window_pct REAL)"
+    },
+    {
+      "type": "table",
+      "name": "check_runs",
+      "tbl_name": "check_runs",
+      "sql": "CREATE TABLE check_runs (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          session_id TEXT NOT NULL,\n          label TEXT NOT NULL,\n          pr_number INTEGER,\n          sha TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          model TEXT,\n          input_tokens INTEGER NOT NULL,\n          cache_write_tokens INTEGER NOT NULL,\n          cache_read_tokens INTEGER NOT NULL,\n          output_tokens INTEGER NOT NULL,\n          cost_usd REAL NOT NULL,\n          duration_ms INTEGER,\n          at INTEGER NOT NULL\n        , provider TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "dev_servers",
+      "tbl_name": "dev_servers",
+      "sql": "CREATE TABLE dev_servers (\n      id TEXT PRIMARY KEY,\n      project_id TEXT NOT NULL,\n      type TEXT NOT NULL DEFAULT 'node',\n      name TEXT NOT NULL DEFAULT '',\n      command TEXT NOT NULL DEFAULT '',\n      status TEXT NOT NULL DEFAULT 'stopped',\n      pid INTEGER,\n      container_id TEXT,\n      ports TEXT NOT NULL DEFAULT '[]',\n      working_directory TEXT NOT NULL DEFAULT '',\n      created_at TEXT NOT NULL DEFAULT (datetime('now')),\n      updated_at TEXT NOT NULL DEFAULT (datetime('now')),\n      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE\n    )"
+    },
+    {
+      "type": "table",
+      "name": "devices",
+      "tbl_name": "devices",
+      "sql": "CREATE TABLE devices (\n          id TEXT PRIMARY KEY,\n          name TEXT NOT NULL,\n          token_hash TEXT NOT NULL UNIQUE,\n          user_agent TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          last_seen_at TEXT,\n          last_address TEXT,\n          revoked_at TEXT\n        , can_approve INTEGER NOT NULL DEFAULT 0, push_token TEXT, push_platform TEXT, push_environment TEXT, push_categories TEXT, push_updated_at TEXT, push_last_error TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "experiment_usage",
+      "tbl_name": "experiment_usage",
+      "sql": "CREATE TABLE experiment_usage (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          experiment_id TEXT NOT NULL,\n          event TEXT NOT NULL,\n          trigger TEXT NOT NULL,\n          session_id TEXT,\n          workspace_id TEXT,\n          model TEXT,\n          provider TEXT,\n          input_tokens INTEGER NOT NULL DEFAULT 0,\n          cache_write_tokens INTEGER NOT NULL DEFAULT 0,\n          cache_read_tokens INTEGER NOT NULL DEFAULT 0,\n          output_tokens INTEGER NOT NULL DEFAULT 0,\n          cost_usd REAL NOT NULL DEFAULT 0,\n          duration_ms INTEGER,\n          ok INTEGER NOT NULL DEFAULT 1,\n          detail TEXT,\n          at INTEGER NOT NULL\n        )"
+    },
+    {
+      "type": "table",
+      "name": "feature_pieces",
+      "tbl_name": "feature_pieces",
+      "sql": "CREATE TABLE feature_pieces (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          feature_id TEXT NOT NULL,\n          position INTEGER NOT NULL,\n          name TEXT NOT NULL,\n          slice TEXT NOT NULL,\n          project_id TEXT NOT NULL,\n          after_position INTEGER,\n          after_kind TEXT,\n          reasons TEXT,\n          owns TEXT,\n          status TEXT NOT NULL,\n          session_id TEXT,\n          note TEXT,\n          UNIQUE (feature_id, position)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "features",
+      "tbl_name": "features",
+      "sql": "CREATE TABLE features (\n          id TEXT PRIMARY KEY,\n          workspace_id TEXT NOT NULL,\n          name TEXT NOT NULL,\n          plan_session_id TEXT NOT NULL,\n          plan_text TEXT NOT NULL,\n          status TEXT NOT NULL,\n          done_at TEXT,\n          cost_usd REAL,\n          duration_ms INTEGER,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        , listed INTEGER, folded TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "groups",
+      "tbl_name": "groups",
+      "sql": "CREATE TABLE groups (\n      path TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      expanded INTEGER NOT NULL DEFAULT 1,\n      sort_order INTEGER NOT NULL DEFAULT 0,\n      created_at TEXT NOT NULL DEFAULT (datetime('now'))\n    )"
+    },
+    {
+      "type": "table",
+      "name": "host_links",
+      "tbl_name": "host_links",
+      "sql": "CREATE TABLE host_links (\n            host_id TEXT PRIMARY KEY REFERENCES hosts(id) ON DELETE CASCADE,\n            url TEXT NOT NULL,\n            token TEXT NOT NULL,\n            linked_at TEXT NOT NULL DEFAULT (datetime('now'))\n          )"
+    },
+    {
+      "type": "table",
+      "name": "hosts",
+      "tbl_name": "hosts",
+      "sql": "CREATE TABLE hosts (\n          id TEXT PRIMARY KEY,\n          name TEXT NOT NULL,\n          ssh_target TEXT NOT NULL,\n          sort_order INTEGER NOT NULL DEFAULT 0,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "learning_cards",
+      "tbl_name": "learning_cards",
+      "sql": "CREATE TABLE learning_cards (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          session_id TEXT NOT NULL,\n          workspace_id TEXT,\n          kind TEXT NOT NULL,\n          status TEXT NOT NULL DEFAULT 'pending',\n          payload TEXT NOT NULL,\n          destination TEXT,\n          applied_ref TEXT,\n          shown_at INTEGER,\n          decided_at INTEGER,\n          created_at INTEGER NOT NULL,\n          UNIQUE (session_id, kind)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "lumifyhub_connect_attempts",
+      "tbl_name": "lumifyhub_connect_attempts",
+      "sql": "CREATE TABLE lumifyhub_connect_attempts (\n          state TEXT PRIMARY KEY,\n          verifier TEXT NOT NULL,\n          redirect_uri TEXT NOT NULL,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "lumifyhub_connection",
+      "tbl_name": "lumifyhub_connection",
+      "sql": "CREATE TABLE lumifyhub_connection (\n          id INTEGER PRIMARY KEY CHECK (id = 1),\n          base_url TEXT NOT NULL,\n          token TEXT NOT NULL,\n          user_id TEXT,\n          user_email TEXT,\n          user_name TEXT,\n          connected_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "lumifyhub_published_docs",
+      "tbl_name": "lumifyhub_published_docs",
+      "sql": "CREATE TABLE lumifyhub_published_docs (\n          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,\n          repo_path TEXT NOT NULL,\n          page_id TEXT NOT NULL,\n          content_hash TEXT NOT NULL,\n          published_at TEXT NOT NULL DEFAULT (datetime('now')),\n          PRIMARY KEY (project_id, repo_path)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "messages",
+      "tbl_name": "messages",
+      "sql": "CREATE TABLE messages (\n      id INTEGER PRIMARY KEY AUTOINCREMENT,\n      session_id TEXT NOT NULL,\n      role TEXT NOT NULL,\n      content TEXT NOT NULL,\n      timestamp TEXT NOT NULL DEFAULT (datetime('now')),\n      duration_ms INTEGER,\n      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE\n    )"
+    },
+    {
+      "type": "table",
+      "name": "needs_you_dismissed",
+      "tbl_name": "needs_you_dismissed",
+      "sql": "CREATE TABLE needs_you_dismissed (\n          workspace_id TEXT NOT NULL,\n          key TEXT NOT NULL,\n          dismissed_at TEXT NOT NULL DEFAULT (datetime('now')),\n          PRIMARY KEY (workspace_id, key)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "notify_outbox",
+      "tbl_name": "notify_outbox",
+      "sql": "CREATE TABLE notify_outbox (\n            id INTEGER PRIMARY KEY AUTOINCREMENT,\n            source TEXT NOT NULL,\n            text TEXT NOT NULL,\n            created_at INTEGER NOT NULL,\n            send_after INTEGER NOT NULL,\n            sent_at INTEGER,\n            error TEXT\n          )"
+    },
+    {
+      "type": "table",
+      "name": "notify_settings",
+      "tbl_name": "notify_settings",
+      "sql": "CREATE TABLE notify_settings (\n            id INTEGER PRIMARY KEY CHECK (id = 1),\n            telegram_token TEXT,\n            telegram_chat_id TEXT,\n            updated_at TEXT NOT NULL DEFAULT (datetime('now'))\n          )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_asks",
+      "tbl_name": "orchestrator_asks",
+      "sql": "CREATE TABLE orchestrator_asks (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          subject TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          title TEXT NOT NULL,\n          detail TEXT NOT NULL DEFAULT '',\n          link TEXT,\n          sha TEXT,\n          status TEXT NOT NULL DEFAULT 'open',\n          answer TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          resolved_at TEXT,\n          used_at TEXT,\n          brake_key TEXT\n        , raised_by TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_checks",
+      "tbl_name": "orchestrator_checks",
+      "sql": "CREATE TABLE orchestrator_checks (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          session_id TEXT NOT NULL,\n          sha TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          status TEXT NOT NULL,\n          detail TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          UNIQUE (session_id, sha, kind)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_event_log",
+      "tbl_name": "orchestrator_event_log",
+      "sql": "CREATE TABLE orchestrator_event_log (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          subject TEXT,\n          delivered_at TEXT NOT NULL\n        , suppressed TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_events",
+      "tbl_name": "orchestrator_events",
+      "sql": "CREATE TABLE orchestrator_events (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          key TEXT NOT NULL,\n          subject TEXT,\n          line TEXT NOT NULL,\n          sticky INTEGER NOT NULL DEFAULT 1,\n          low INTEGER NOT NULL DEFAULT 0,\n          hits INTEGER NOT NULL DEFAULT 1,\n          created_at TEXT NOT NULL,\n          delivered_at TEXT,\n          cleared_at TEXT,\n          UNIQUE (workspace_id, key)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_gate_failure_commits",
+      "tbl_name": "orchestrator_gate_failure_commits",
+      "sql": "CREATE TABLE orchestrator_gate_failure_commits (\n          session_id TEXT NOT NULL,\n          gate TEXT NOT NULL,\n          sha TEXT NOT NULL,\n          workspace_id TEXT NOT NULL,\n          reason TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          PRIMARY KEY (session_id, gate, sha)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_gate_failures",
+      "tbl_name": "orchestrator_gate_failures",
+      "sql": "CREATE TABLE orchestrator_gate_failures (\n          session_id TEXT NOT NULL,\n          gate TEXT NOT NULL,\n          workspace_id TEXT NOT NULL,\n          count INTEGER NOT NULL DEFAULT 0,\n          last_reason TEXT,\n          escalated_at TEXT, last_sha TEXT, ask_held_at TEXT,\n          PRIMARY KEY (session_id, gate)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_notes",
+      "tbl_name": "orchestrator_notes",
+      "sql": "CREATE TABLE orchestrator_notes (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          kind TEXT NOT NULL DEFAULT 'note',\n          text TEXT NOT NULL,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_questions",
+      "tbl_name": "orchestrator_questions",
+      "sql": "CREATE TABLE orchestrator_questions (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          text TEXT NOT NULL,\n          task TEXT,\n          status TEXT NOT NULL DEFAULT 'open',\n          resolved_by TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          resolved_at TEXT\n        )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_rules",
+      "tbl_name": "orchestrator_rules",
+      "sql": "CREATE TABLE orchestrator_rules (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          text TEXT NOT NULL,\n          added_by TEXT NOT NULL,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          updated_at TEXT NOT NULL DEFAULT (datetime('now')),\n          removed_at TEXT,\n          removed_by TEXT\n        )"
+    },
+    {
+      "type": "table",
+      "name": "orchestrator_starts",
+      "tbl_name": "orchestrator_starts",
+      "sql": "CREATE TABLE orchestrator_starts (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          workspace_id TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          target TEXT,\n          created_at TEXT NOT NULL\n        )"
+    },
+    {
+      "type": "table",
+      "name": "passkey_enrollments",
+      "tbl_name": "passkey_enrollments",
+      "sql": "CREATE TABLE passkey_enrollments (\n          code_hash TEXT PRIMARY KEY,\n          expires_at INTEGER NOT NULL,\n          used_at INTEGER\n        )"
+    },
+    {
+      "type": "table",
+      "name": "passkeys",
+      "tbl_name": "passkeys",
+      "sql": "CREATE TABLE passkeys (\n          id TEXT PRIMARY KEY,\n          public_key BLOB NOT NULL,\n          counter INTEGER NOT NULL DEFAULT 0,\n          transports TEXT,\n          rp_id TEXT NOT NULL,\n          name TEXT NOT NULL,\n          registered_via TEXT,\n          registered_from TEXT,\n          user_agent TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          last_used_at TEXT,\n          revoked_at TEXT\n        , type TEXT NOT NULL DEFAULT 'webauthn', device_id TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "presence_challenges",
+      "tbl_name": "presence_challenges",
+      "sql": "CREATE TABLE presence_challenges (\n          challenge TEXT PRIMARY KEY,\n          kind TEXT NOT NULL,\n          purpose TEXT NOT NULL,\n          binding TEXT NOT NULL,\n          rp_id TEXT NOT NULL,\n          expires_at INTEGER NOT NULL,\n          used_at INTEGER\n        )"
+    },
+    {
+      "type": "table",
+      "name": "program_status",
+      "tbl_name": "program_status",
+      "sql": "CREATE TABLE program_status (\n          session_name TEXT PRIMARY KEY,\n          records TEXT NOT NULL,\n          updated_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "project_dev_servers",
+      "tbl_name": "project_dev_servers",
+      "sql": "CREATE TABLE project_dev_servers (\n      id TEXT PRIMARY KEY,\n      project_id TEXT NOT NULL,\n      name TEXT NOT NULL,\n      type TEXT NOT NULL DEFAULT 'node',\n      command TEXT NOT NULL,\n      port INTEGER,\n      port_env_var TEXT,\n      sort_order INTEGER NOT NULL DEFAULT 0,\n      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE\n    )"
+    },
+    {
+      "type": "table",
+      "name": "project_repositories",
+      "tbl_name": "project_repositories",
+      "sql": "CREATE TABLE project_repositories (\n      id TEXT PRIMARY KEY,\n      project_id TEXT NOT NULL,\n      name TEXT NOT NULL,\n      path TEXT NOT NULL,\n      is_primary INTEGER NOT NULL DEFAULT 0,\n      sort_order INTEGER NOT NULL DEFAULT 0,\n      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE\n    )"
+    },
+    {
+      "type": "table",
+      "name": "projects",
+      "tbl_name": "projects",
+      "sql": "CREATE TABLE projects (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      working_directory TEXT NOT NULL,\n      agent_type TEXT NOT NULL DEFAULT 'claude',\n      default_model TEXT NOT NULL DEFAULT 'opus',\n      initial_prompt TEXT,\n      expanded INTEGER NOT NULL DEFAULT 1,\n      sort_order INTEGER NOT NULL DEFAULT 0,\n      is_uncategorized INTEGER NOT NULL DEFAULT 0,\n      created_at TEXT NOT NULL DEFAULT (datetime('now')),\n      updated_at TEXT NOT NULL DEFAULT (datetime('now'))\n    , host_id TEXT NOT NULL DEFAULT 'local', workspace_id TEXT, lh_board_id TEXT, lh_board_name TEXT, lh_board_page_id TEXT, machine_needs TEXT, machine_needs_source TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "push_outbox",
+      "tbl_name": "push_outbox",
+      "sql": "CREATE TABLE push_outbox (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          event_key TEXT NOT NULL,\n          device_id TEXT NOT NULL,\n          category TEXT NOT NULL,\n          level TEXT NOT NULL,\n          payload TEXT NOT NULL,\n          collapse_id TEXT,\n          state TEXT NOT NULL,\n          attempts INTEGER NOT NULL DEFAULT 0,\n          next_attempt_at INTEGER NOT NULL,\n          created_at INTEGER NOT NULL,\n          sent_at INTEGER,\n          error TEXT,\n          fallback_source TEXT,\n          fallback_text TEXT,\n          UNIQUE(event_key, device_id)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "rate_limit_readings",
+      "tbl_name": "rate_limit_readings",
+      "sql": "CREATE TABLE rate_limit_readings (\n            id INTEGER PRIMARY KEY AUTOINCREMENT,\n            at INTEGER NOT NULL,\n            window TEXT NOT NULL,\n            utilization REAL NOT NULL,\n            raw REAL,\n            resets_at INTEGER,\n            status TEXT,\n            session_id TEXT,\n            source TEXT NOT NULL\n          )"
+    },
+    {
+      "type": "table",
+      "name": "recipe_revisions",
+      "tbl_name": "recipe_revisions",
+      "sql": "CREATE TABLE recipe_revisions (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          recipe_id TEXT NOT NULL,\n          brief TEXT NOT NULL,\n          settings TEXT NOT NULL,\n          edited_by_session_id TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "recipe_runs",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE TABLE recipe_runs (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          recipe_id TEXT NOT NULL,\n          seq INTEGER NOT NULL,\n          trigger TEXT NOT NULL,\n          triggered_by_session_id TEXT,\n          schedule_run_id INTEGER,\n          request_id TEXT,\n          note TEXT,\n          prompt TEXT NOT NULL,\n          revision_id INTEGER,\n          status TEXT NOT NULL,\n          session_id TEXT,\n          pr_number INTEGER,\n          pr_url TEXT,\n          summary TEXT,\n          outputs TEXT,\n          summary_source TEXT,\n          error TEXT,\n          cost_usd REAL,\n          duration_ms INTEGER,\n          started_at TEXT,\n          ended_at TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          UNIQUE (recipe_id, seq)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "recipes",
+      "tbl_name": "recipes",
+      "sql": "CREATE TABLE recipes (\n          id TEXT PRIMARY KEY,\n          workspace_id TEXT NOT NULL,\n          project_id TEXT NOT NULL,\n          name TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          brief TEXT NOT NULL,\n          model TEXT,\n          view TEXT NOT NULL DEFAULT 'chat',\n          auto_done INTEGER NOT NULL DEFAULT 1,\n          max_minutes INTEGER,\n          carry_cleared_at INTEGER,\n          source_session_id TEXT,\n          created_by_session_id TEXT,\n          updated_by_session_id TEXT,\n          archived_at TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          updated_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "schedule_runs",
+      "tbl_name": "schedule_runs",
+      "sql": "CREATE TABLE schedule_runs (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          schedule_id TEXT NOT NULL,\n          slot TEXT NOT NULL,\n          slot_at INTEGER NOT NULL,\n          trigger TEXT NOT NULL,\n          outcome TEXT NOT NULL,\n          detail TEXT,\n          session_id TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          UNIQUE (schedule_id, slot)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "scheduler_lease",
+      "tbl_name": "scheduler_lease",
+      "sql": "CREATE TABLE scheduler_lease (\n          id INTEGER PRIMARY KEY CHECK (id = 1),\n          owner TEXT NOT NULL,\n          pid INTEGER NOT NULL,\n          heartbeat INTEGER NOT NULL\n        )"
+    },
+    {
+      "type": "table",
+      "name": "schedules",
+      "tbl_name": "schedules",
+      "sql": "CREATE TABLE schedules (\n          id TEXT PRIMARY KEY,\n          workspace_id TEXT NOT NULL,\n          project_id TEXT,\n          name TEXT NOT NULL,\n          cron TEXT NOT NULL,\n          timezone TEXT NOT NULL DEFAULT 'America/Chicago',\n          prompt TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          enabled INTEGER NOT NULL DEFAULT 1,\n          armed_at INTEGER NOT NULL,\n          archived_at TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          updated_at TEXT NOT NULL DEFAULT (datetime('now'))\n        , target_session_id TEXT, created_by_session_id TEXT, run_at INTEGER, done_at INTEGER, recipe_id TEXT, migrated_from_kind TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "session_logs",
+      "tbl_name": "session_logs",
+      "sql": "CREATE TABLE session_logs (\n          session_id TEXT PRIMARY KEY,\n          project_id TEXT,\n          workspace_id TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          markdown TEXT NOT NULL,\n          data TEXT NOT NULL,\n          file_path TEXT\n        )"
+    },
+    {
+      "type": "table",
+      "name": "session_names",
+      "tbl_name": "session_names",
+      "sql": "CREATE TABLE session_names (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          session_id TEXT NOT NULL,\n          name TEXT NOT NULL,\n          renamed_at TEXT NOT NULL DEFAULT (datetime('now'))\n        )"
+    },
+    {
+      "type": "table",
+      "name": "sessions",
+      "tbl_name": "sessions",
+      "sql": "CREATE TABLE sessions (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL DEFAULT (datetime('now')),\n      updated_at TEXT NOT NULL DEFAULT (datetime('now')),\n      status TEXT NOT NULL DEFAULT 'idle',\n      working_directory TEXT NOT NULL DEFAULT '~',\n      parent_session_id TEXT,\n      claude_session_id TEXT,\n      model TEXT DEFAULT 'opus',\n      system_prompt TEXT,\n      group_path TEXT NOT NULL DEFAULT 'sessions',\n      agent_type TEXT NOT NULL DEFAULT 'claude', worktree_path TEXT, branch_name TEXT, base_branch TEXT, dev_server_port INTEGER, pr_url TEXT, pr_number INTEGER, pr_status TEXT, conductor_session_id TEXT REFERENCES sessions(id), worker_task TEXT, worker_status TEXT, auto_approve INTEGER NOT NULL DEFAULT 0, project_id TEXT REFERENCES projects(id), tmux_name TEXT, host_id TEXT NOT NULL DEFAULT 'local', task_prompt TEXT, task_status TEXT, view TEXT NOT NULL DEFAULT 'terminal', lh_card_id TEXT, lh_board_id TEXT, lh_card_list TEXT, chat_access TEXT NOT NULL DEFAULT 'full', chat_resume_at TEXT, last_seen_at TEXT, role TEXT, workspace_id TEXT, orch_token TEXT, archived_at TEXT, pinned INTEGER NOT NULL DEFAULT 0, chat_suggestion TEXT, chat_plan INTEGER NOT NULL DEFAULT 0, chat_context TEXT, chat_usage TEXT, name_source TEXT NOT NULL DEFAULT 'default', setup_status TEXT, setup_ms INTEGER, setup_error TEXT, task_brief TEXT, moved_to TEXT, moved_from TEXT, port_slot INTEGER, ports TEXT, database TEXT, peer_mirror INTEGER NOT NULL DEFAULT 0, chat_restarted INTEGER NOT NULL DEFAULT 0, chat_tools_digest TEXT, merge_armed_at TEXT, merge_armed_seen TEXT, rebased_from TEXT, rebased_to TEXT, rebase_asked_head TEXT, chat_refreshed INTEGER NOT NULL DEFAULT 0, pr_wake_since TEXT, merged_at TEXT, task_ended_at TEXT, model_provider TEXT, model_overrides TEXT, plan_phase TEXT, quick_of TEXT, started_by TEXT, plan_decided INTEGER, plan_reason TEXT, task_since TEXT, held_by_device TEXT, held_from TEXT, plan_note TEXT, held_for TEXT, held_for_name TEXT, plan_only INTEGER, plan_edits TEXT, active_at TEXT, settled_at TEXT, snoozed_until TEXT, snoozed_at TEXT, priority TEXT, pause_state TEXT, paused_until TEXT, pause_id INTEGER, placed_note TEXT, started_by_device TEXT,\n      FOREIGN KEY (parent_session_id) REFERENCES sessions(id)\n    )"
+    },
+    {
+      "type": "table",
+      "name": "settings",
+      "tbl_name": "settings",
+      "sql": "CREATE TABLE settings (\n          key TEXT PRIMARY KEY,\n          value TEXT NOT NULL\n        )"
+    },
+    {
+      "type": "table",
+      "name": "shared_links",
+      "tbl_name": "shared_links",
+      "sql": "CREATE TABLE shared_links (\n          id TEXT PRIMARY KEY,\n          url TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          title TEXT NOT NULL,\n          session_id TEXT,\n          artifact_id TEXT,\n          expires_at TEXT,\n          created_at TEXT NOT NULL,\n          revoked_at TEXT\n        )"
+    },
+    {
+      "type": "table",
+      "name": "simulator_leases",
+      "tbl_name": "simulator_leases",
+      "sql": "CREATE TABLE simulator_leases (\n           session_id TEXT PRIMARY KEY,\n           udid TEXT,\n           name TEXT NOT NULL,\n           state TEXT NOT NULL,\n           error TEXT,\n           created_at INTEGER NOT NULL,\n           last_used_at INTEGER NOT NULL\n         )"
+    },
+    {
+      "type": "table",
+      "name": "stack_items",
+      "tbl_name": "stack_items",
+      "sql": "CREATE TABLE stack_items (\n          id TEXT PRIMARY KEY,\n          stack_id TEXT NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,\n          position INTEGER NOT NULL,\n          lh_card_id TEXT NOT NULL,\n          ticket TEXT,\n          title TEXT NOT NULL,\n          parent_item_id TEXT,\n          also_item_ids TEXT NOT NULL DEFAULT '[]',\n          blocker_item_ids TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'planned',\n          session_id TEXT,\n          base_branch TEXT,\n          base_tip TEXT,\n          pr_number INTEGER,\n          note TEXT,\n          error TEXT\n        , attempts INTEGER NOT NULL DEFAULT 0, held_outside INTEGER NOT NULL DEFAULT 0, restacked_from TEXT, restacked_to TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "stacks",
+      "tbl_name": "stacks",
+      "sql": "CREATE TABLE stacks (\n          id TEXT PRIMARY KEY,\n          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,\n          lh_board_id TEXT NOT NULL,\n          name TEXT NOT NULL,\n          status TEXT NOT NULL DEFAULT 'running',\n          max_parallel INTEGER NOT NULL DEFAULT 3,\n          progress TEXT,\n          error TEXT,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          landed_at TEXT\n        )"
+    },
+    {
+      "type": "table",
+      "name": "task_pauses",
+      "tbl_name": "task_pauses",
+      "sql": "CREATE TABLE task_pauses (\n          id INTEGER PRIMARY KEY AUTOINCREMENT,\n          session_id TEXT NOT NULL,\n          mode TEXT NOT NULL DEFAULT 'turn',\n          by_kind TEXT NOT NULL DEFAULT 'person',\n          by_id TEXT,\n          reason TEXT,\n          until_at TEXT,\n          state TEXT NOT NULL DEFAULT 'pausing',\n          requested_at TEXT NOT NULL DEFAULT (datetime('now')),\n          paused_at TEXT,\n          resume_requested_at TEXT,\n          resume_by_kind TEXT,\n          resumed_at TEXT,\n          ended_at TEXT,\n          end_reason TEXT,\n          interrupted INTEGER NOT NULL DEFAULT 0,\n          held_count INTEGER NOT NULL DEFAULT 0\n        )"
+    },
+    {
+      "type": "table",
+      "name": "task_pr_wakes",
+      "tbl_name": "task_pr_wakes",
+      "sql": "CREATE TABLE task_pr_wakes (\n          session_id TEXT NOT NULL,\n          key TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          PRIMARY KEY (session_id, key)\n        )"
+    },
+    {
+      "type": "table",
+      "name": "task_queue",
+      "tbl_name": "task_queue",
+      "sql": "CREATE TABLE task_queue (\n          id TEXT PRIMARY KEY,\n          project_id TEXT NOT NULL,\n          prompt TEXT NOT NULL,\n          name TEXT,\n          model TEXT,\n          view TEXT,\n          base_branch TEXT,\n          host_id TEXT,\n          after_task TEXT,\n          after_any TEXT,\n          origin_workspace_id TEXT,\n          position INTEGER NOT NULL,\n          status TEXT NOT NULL DEFAULT 'queued',\n          note TEXT,\n          error TEXT,\n          attempts INTEGER NOT NULL DEFAULT 0,\n          created_at TEXT NOT NULL DEFAULT (datetime('now')),\n          started_at TEXT\n        , model_overrides TEXT, plan INTEGER, plan_reason TEXT, started_by TEXT, plan_only INTEGER, agent_type TEXT, priority TEXT NOT NULL DEFAULT 'normal', machine_needs TEXT, after_any_used TEXT, wait_code TEXT)"
+    },
+    {
+      "type": "table",
+      "name": "tool_calls",
+      "tbl_name": "tool_calls",
+      "sql": "CREATE TABLE tool_calls (\n      id INTEGER PRIMARY KEY AUTOINCREMENT,\n      message_id INTEGER NOT NULL,\n      session_id TEXT NOT NULL,\n      tool_name TEXT NOT NULL,\n      tool_input TEXT NOT NULL,\n      tool_result TEXT,\n      status TEXT NOT NULL DEFAULT 'pending',\n      timestamp TEXT NOT NULL DEFAULT (datetime('now')),\n      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,\n      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE\n    )"
+    },
+    {
+      "type": "table",
+      "name": "usage_alerts",
+      "tbl_name": "usage_alerts",
+      "sql": "CREATE TABLE usage_alerts (\n            kind TEXT PRIMARY KEY,\n            opened_at INTEGER NOT NULL,\n            cleared_at INTEGER,\n            message TEXT NOT NULL\n          )"
+    },
+    {
+      "type": "table",
+      "name": "usage_baseline",
+      "tbl_name": "usage_baseline",
+      "sql": "CREATE TABLE usage_baseline (\n            metric TEXT PRIMARY KEY,\n            value REAL NOT NULL,\n            set_at INTEGER NOT NULL,\n            supporting TEXT\n          )"
+    },
+    {
+      "type": "table",
+      "name": "usage_calls",
+      "tbl_name": "usage_calls",
+      "sql": "CREATE TABLE usage_calls (\n            id INTEGER PRIMARY KEY AUTOINCREMENT,\n            call_key TEXT NOT NULL UNIQUE,\n            at INTEGER NOT NULL,\n            session_id TEXT,\n            task_id TEXT,\n            workspace_id TEXT,\n            project_id TEXT,\n            session_name TEXT,\n            role TEXT,\n            kind TEXT NOT NULL,\n            agent_type TEXT,\n            model TEXT,\n            provider TEXT,\n            input_tokens INTEGER NOT NULL DEFAULT 0,\n            cache_read_tokens INTEGER NOT NULL DEFAULT 0,\n            cache_write_5m_tokens INTEGER NOT NULL DEFAULT 0,\n            cache_write_1h_tokens INTEGER NOT NULL DEFAULT 0,\n            output_tokens INTEGER NOT NULL DEFAULT 0,\n            ctx_tokens INTEGER,\n            source TEXT NOT NULL\n          )"
+    },
+    {
+      "type": "table",
+      "name": "usage_import_offsets",
+      "tbl_name": "usage_import_offsets",
+      "sql": "CREATE TABLE usage_import_offsets (\n            path TEXT PRIMARY KEY,\n            offset INTEGER NOT NULL,\n            mtime INTEGER NOT NULL\n          )"
+    },
+    {
+      "type": "table",
+      "name": "usage_rollups",
+      "tbl_name": "usage_rollups",
+      "sql": "CREATE TABLE usage_rollups (\n            day TEXT PRIMARY KEY,\n            data TEXT NOT NULL,\n            final INTEGER NOT NULL DEFAULT 0,\n            computed_at INTEGER NOT NULL\n          )"
+    },
+    {
+      "type": "table",
+      "name": "workspaces",
+      "tbl_name": "workspaces",
+      "sql": "CREATE TABLE workspaces (\n          id TEXT PRIMARY KEY,\n          name TEXT NOT NULL,\n          sort_order INTEGER NOT NULL DEFAULT 0,\n          collapsed INTEGER NOT NULL DEFAULT 0,\n          created_at TEXT NOT NULL DEFAULT (datetime('now'))\n        , lh_workspace_id TEXT, lh_workspace_slug TEXT, lh_workspace_name TEXT, orch_max_running INTEGER NOT NULL DEFAULT 4, orch_max_starts_per_hour INTEGER NOT NULL DEFAULT 6, orch_brake TEXT, orch_paused_at TEXT, max_running_tasks INTEGER, wake_tasks_on_pr INTEGER NOT NULL DEFAULT 1, orch_mcp_servers TEXT NOT NULL DEFAULT '[\"linear\"]')"
+    },
+    {
+      "type": "trigger",
+      "name": "change_away_periods_del",
+      "tbl_name": "away_periods",
+      "sql": "CREATE TRIGGER change_away_periods_del\n           AFTER DELETE ON away_periods\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('away_periods', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_away_periods_ins",
+      "tbl_name": "away_periods",
+      "sql": "CREATE TRIGGER change_away_periods_ins\n           AFTER INSERT ON away_periods\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('away_periods', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_away_periods_upd",
+      "tbl_name": "away_periods",
+      "sql": "CREATE TRIGGER change_away_periods_upd\n           AFTER UPDATE ON away_periods\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('away_periods', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_bus_messages_del",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE TRIGGER change_bus_messages_del\n           AFTER DELETE ON bus_messages\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('bus_messages', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_bus_messages_ins",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE TRIGGER change_bus_messages_ins\n           AFTER INSERT ON bus_messages\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('bus_messages', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_bus_messages_upd",
+      "tbl_name": "bus_messages",
+      "sql": "CREATE TRIGGER change_bus_messages_upd\n           AFTER UPDATE ON bus_messages\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('bus_messages', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_chat_bookmarks_del",
+      "tbl_name": "chat_bookmarks",
+      "sql": "CREATE TRIGGER change_chat_bookmarks_del\n           AFTER DELETE ON chat_bookmarks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('chat_bookmarks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_chat_bookmarks_ins",
+      "tbl_name": "chat_bookmarks",
+      "sql": "CREATE TRIGGER change_chat_bookmarks_ins\n           AFTER INSERT ON chat_bookmarks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('chat_bookmarks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_chat_bookmarks_upd",
+      "tbl_name": "chat_bookmarks",
+      "sql": "CREATE TRIGGER change_chat_bookmarks_upd\n           AFTER UPDATE ON chat_bookmarks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('chat_bookmarks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_dev_servers_del",
+      "tbl_name": "dev_servers",
+      "sql": "CREATE TRIGGER change_dev_servers_del\n           AFTER DELETE ON dev_servers\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('dev_servers', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_dev_servers_ins",
+      "tbl_name": "dev_servers",
+      "sql": "CREATE TRIGGER change_dev_servers_ins\n           AFTER INSERT ON dev_servers\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('dev_servers', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_dev_servers_upd",
+      "tbl_name": "dev_servers",
+      "sql": "CREATE TRIGGER change_dev_servers_upd\n           AFTER UPDATE ON dev_servers\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('dev_servers', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_feature_pieces_del",
+      "tbl_name": "feature_pieces",
+      "sql": "CREATE TRIGGER change_feature_pieces_del\n           AFTER DELETE ON feature_pieces\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('feature_pieces', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_feature_pieces_ins",
+      "tbl_name": "feature_pieces",
+      "sql": "CREATE TRIGGER change_feature_pieces_ins\n           AFTER INSERT ON feature_pieces\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('feature_pieces', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_feature_pieces_upd",
+      "tbl_name": "feature_pieces",
+      "sql": "CREATE TRIGGER change_feature_pieces_upd\n           AFTER UPDATE ON feature_pieces\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('feature_pieces', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_features_del",
+      "tbl_name": "features",
+      "sql": "CREATE TRIGGER change_features_del\n           AFTER DELETE ON features\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('features', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_features_ins",
+      "tbl_name": "features",
+      "sql": "CREATE TRIGGER change_features_ins\n           AFTER INSERT ON features\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('features', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_features_upd",
+      "tbl_name": "features",
+      "sql": "CREATE TRIGGER change_features_upd\n           AFTER UPDATE ON features\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('features', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_groups_del",
+      "tbl_name": "groups",
+      "sql": "CREATE TRIGGER change_groups_del\n           AFTER DELETE ON groups\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('groups', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_groups_ins",
+      "tbl_name": "groups",
+      "sql": "CREATE TRIGGER change_groups_ins\n           AFTER INSERT ON groups\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('groups', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_groups_upd",
+      "tbl_name": "groups",
+      "sql": "CREATE TRIGGER change_groups_upd\n           AFTER UPDATE ON groups\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('groups', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_hosts_del",
+      "tbl_name": "hosts",
+      "sql": "CREATE TRIGGER change_hosts_del\n           AFTER DELETE ON hosts\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('hosts', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_hosts_ins",
+      "tbl_name": "hosts",
+      "sql": "CREATE TRIGGER change_hosts_ins\n           AFTER INSERT ON hosts\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('hosts', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_hosts_upd",
+      "tbl_name": "hosts",
+      "sql": "CREATE TRIGGER change_hosts_upd\n           AFTER UPDATE ON hosts\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('hosts', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_needs_you_dismissed_del",
+      "tbl_name": "needs_you_dismissed",
+      "sql": "CREATE TRIGGER change_needs_you_dismissed_del\n           AFTER DELETE ON needs_you_dismissed\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('needs_you_dismissed', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_needs_you_dismissed_ins",
+      "tbl_name": "needs_you_dismissed",
+      "sql": "CREATE TRIGGER change_needs_you_dismissed_ins\n           AFTER INSERT ON needs_you_dismissed\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('needs_you_dismissed', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_needs_you_dismissed_upd",
+      "tbl_name": "needs_you_dismissed",
+      "sql": "CREATE TRIGGER change_needs_you_dismissed_upd\n           AFTER UPDATE ON needs_you_dismissed\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('needs_you_dismissed', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_asks_del",
+      "tbl_name": "orchestrator_asks",
+      "sql": "CREATE TRIGGER change_orchestrator_asks_del\n           AFTER DELETE ON orchestrator_asks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_asks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_asks_ins",
+      "tbl_name": "orchestrator_asks",
+      "sql": "CREATE TRIGGER change_orchestrator_asks_ins\n           AFTER INSERT ON orchestrator_asks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_asks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_asks_upd",
+      "tbl_name": "orchestrator_asks",
+      "sql": "CREATE TRIGGER change_orchestrator_asks_upd\n           AFTER UPDATE ON orchestrator_asks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_asks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_questions_del",
+      "tbl_name": "orchestrator_questions",
+      "sql": "CREATE TRIGGER change_orchestrator_questions_del\n           AFTER DELETE ON orchestrator_questions\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_questions', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_questions_ins",
+      "tbl_name": "orchestrator_questions",
+      "sql": "CREATE TRIGGER change_orchestrator_questions_ins\n           AFTER INSERT ON orchestrator_questions\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_questions', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_questions_upd",
+      "tbl_name": "orchestrator_questions",
+      "sql": "CREATE TRIGGER change_orchestrator_questions_upd\n           AFTER UPDATE ON orchestrator_questions\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_questions', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_rules_del",
+      "tbl_name": "orchestrator_rules",
+      "sql": "CREATE TRIGGER change_orchestrator_rules_del\n           AFTER DELETE ON orchestrator_rules\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_rules', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_rules_ins",
+      "tbl_name": "orchestrator_rules",
+      "sql": "CREATE TRIGGER change_orchestrator_rules_ins\n           AFTER INSERT ON orchestrator_rules\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_rules', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_orchestrator_rules_upd",
+      "tbl_name": "orchestrator_rules",
+      "sql": "CREATE TRIGGER change_orchestrator_rules_upd\n           AFTER UPDATE ON orchestrator_rules\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('orchestrator_rules', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_projects_del",
+      "tbl_name": "projects",
+      "sql": "CREATE TRIGGER change_projects_del\n           AFTER DELETE ON projects\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('projects', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_projects_ins",
+      "tbl_name": "projects",
+      "sql": "CREATE TRIGGER change_projects_ins\n           AFTER INSERT ON projects\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('projects', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_projects_upd",
+      "tbl_name": "projects",
+      "sql": "CREATE TRIGGER change_projects_upd\n           AFTER UPDATE ON projects\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('projects', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_recipe_runs_del",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE TRIGGER change_recipe_runs_del\n           AFTER DELETE ON recipe_runs\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('recipe_runs', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_recipe_runs_ins",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE TRIGGER change_recipe_runs_ins\n           AFTER INSERT ON recipe_runs\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('recipe_runs', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_recipe_runs_upd",
+      "tbl_name": "recipe_runs",
+      "sql": "CREATE TRIGGER change_recipe_runs_upd\n           AFTER UPDATE ON recipe_runs\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('recipe_runs', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_recipes_del",
+      "tbl_name": "recipes",
+      "sql": "CREATE TRIGGER change_recipes_del\n           AFTER DELETE ON recipes\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('recipes', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_recipes_ins",
+      "tbl_name": "recipes",
+      "sql": "CREATE TRIGGER change_recipes_ins\n           AFTER INSERT ON recipes\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('recipes', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_recipes_upd",
+      "tbl_name": "recipes",
+      "sql": "CREATE TRIGGER change_recipes_upd\n           AFTER UPDATE ON recipes\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('recipes', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_schedule_runs_del",
+      "tbl_name": "schedule_runs",
+      "sql": "CREATE TRIGGER change_schedule_runs_del\n           AFTER DELETE ON schedule_runs\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('schedule_runs', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_schedule_runs_ins",
+      "tbl_name": "schedule_runs",
+      "sql": "CREATE TRIGGER change_schedule_runs_ins\n           AFTER INSERT ON schedule_runs\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('schedule_runs', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_schedule_runs_upd",
+      "tbl_name": "schedule_runs",
+      "sql": "CREATE TRIGGER change_schedule_runs_upd\n           AFTER UPDATE ON schedule_runs\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('schedule_runs', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_schedules_del",
+      "tbl_name": "schedules",
+      "sql": "CREATE TRIGGER change_schedules_del\n           AFTER DELETE ON schedules\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('schedules', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_schedules_ins",
+      "tbl_name": "schedules",
+      "sql": "CREATE TRIGGER change_schedules_ins\n           AFTER INSERT ON schedules\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('schedules', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_schedules_upd",
+      "tbl_name": "schedules",
+      "sql": "CREATE TRIGGER change_schedules_upd\n           AFTER UPDATE ON schedules\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('schedules', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_sessions_del",
+      "tbl_name": "sessions",
+      "sql": "CREATE TRIGGER change_sessions_del\n           AFTER DELETE ON sessions\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('sessions', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_sessions_ins",
+      "tbl_name": "sessions",
+      "sql": "CREATE TRIGGER change_sessions_ins\n           AFTER INSERT ON sessions\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('sessions', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_sessions_upd",
+      "tbl_name": "sessions",
+      "sql": "CREATE TRIGGER change_sessions_upd\n           AFTER UPDATE ON sessions\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('sessions', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_stack_items_del",
+      "tbl_name": "stack_items",
+      "sql": "CREATE TRIGGER change_stack_items_del\n           AFTER DELETE ON stack_items\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('stack_items', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_stack_items_ins",
+      "tbl_name": "stack_items",
+      "sql": "CREATE TRIGGER change_stack_items_ins\n           AFTER INSERT ON stack_items\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('stack_items', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_stack_items_upd",
+      "tbl_name": "stack_items",
+      "sql": "CREATE TRIGGER change_stack_items_upd\n           AFTER UPDATE ON stack_items\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('stack_items', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_stacks_del",
+      "tbl_name": "stacks",
+      "sql": "CREATE TRIGGER change_stacks_del\n           AFTER DELETE ON stacks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('stacks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_stacks_ins",
+      "tbl_name": "stacks",
+      "sql": "CREATE TRIGGER change_stacks_ins\n           AFTER INSERT ON stacks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('stacks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_stacks_upd",
+      "tbl_name": "stacks",
+      "sql": "CREATE TRIGGER change_stacks_upd\n           AFTER UPDATE ON stacks\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('stacks', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_task_queue_del",
+      "tbl_name": "task_queue",
+      "sql": "CREATE TRIGGER change_task_queue_del\n           AFTER DELETE ON task_queue\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('task_queue', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_task_queue_ins",
+      "tbl_name": "task_queue",
+      "sql": "CREATE TRIGGER change_task_queue_ins\n           AFTER INSERT ON task_queue\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('task_queue', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_task_queue_upd",
+      "tbl_name": "task_queue",
+      "sql": "CREATE TRIGGER change_task_queue_upd\n           AFTER UPDATE ON task_queue\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('task_queue', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_workspaces_del",
+      "tbl_name": "workspaces",
+      "sql": "CREATE TRIGGER change_workspaces_del\n           AFTER DELETE ON workspaces\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('workspaces', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_workspaces_ins",
+      "tbl_name": "workspaces",
+      "sql": "CREATE TRIGGER change_workspaces_ins\n           AFTER INSERT ON workspaces\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('workspaces', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "change_workspaces_upd",
+      "tbl_name": "workspaces",
+      "sql": "CREATE TRIGGER change_workspaces_upd\n           AFTER UPDATE ON workspaces\n         BEGIN\n           INSERT INTO change_versions (topic, version) VALUES ('workspaces', 1)\n           ON CONFLICT(topic) DO UPDATE SET version = version + 1;\n         END"
+    },
+    {
+      "type": "trigger",
+      "name": "gate_failures_clear_commits",
+      "tbl_name": "orchestrator_gate_failures",
+      "sql": "CREATE TRIGGER gate_failures_clear_commits\n          AFTER DELETE ON orchestrator_gate_failures\n        BEGIN\n          DELETE FROM orchestrator_gate_failure_commits\n            WHERE session_id = OLD.session_id AND gate = OLD.gate;\n        END"
+    },
+    {
+      "type": "trigger",
+      "name": "sessions_merged_at",
+      "tbl_name": "sessions",
+      "sql": "CREATE TRIGGER sessions_merged_at\n          AFTER UPDATE OF task_status ON sessions\n          WHEN NEW.task_status = 'merged' AND OLD.task_status IS NOT 'merged'\n            -- unless the same statement set it (an import keeps its own)\n            AND NEW.merged_at IS OLD.merged_at\n        BEGIN\n          UPDATE sessions SET merged_at = datetime('now') WHERE id = NEW.id;\n        END"
+    },
+    {
+      "type": "trigger",
+      "name": "sessions_task_ended_at",
+      "tbl_name": "sessions",
+      "sql": "CREATE TRIGGER sessions_task_ended_at\n          AFTER UPDATE OF task_status ON sessions\n          WHEN NEW.task_status IN ('dropped', 'done')\n            AND OLD.task_status IS NOT NEW.task_status\n            AND NEW.task_ended_at IS OLD.task_ended_at\n        BEGIN\n          UPDATE sessions SET task_ended_at = datetime('now') WHERE id = NEW.id;\n        END"
+    }
+  ]
+}

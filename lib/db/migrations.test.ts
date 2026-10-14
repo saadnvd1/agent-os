@@ -11,7 +11,11 @@ const KEY_RE = /^\d{8}T\d{4}_[a-z0-9]+(_[a-z0-9]+)*$/;
 
 const checksum = (fn: unknown) =>
   createHash("sha256")
-    .update(String(fn).replace(/\s+/g, ""))
+    .update(
+      String(fn)
+        .replace(/__vite_ssr_import_\d+__/g, "__vite_ssr_import__")
+        .replace(/\s+/g, "")
+    )
     .digest("hex")
     .slice(0, 16);
 
