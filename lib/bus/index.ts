@@ -333,7 +333,12 @@ export async function sendMessage(opts: {
   await statusDetector.refreshCache();
   const delivery = await deliver(
     to,
-    opts.line ?? wakeLine({ fromName, fromId: from?.id ?? null, body }),
+    opts.line ??
+      wakeLine(
+        { fromName, fromId: from?.id ?? null, body },
+        // The linked machine's inbox never held a long body.
+        { inline: isHeldRemote(to) }
+      ),
     {
       name: fromName,
       messageId: id,

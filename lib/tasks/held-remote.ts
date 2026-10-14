@@ -113,11 +113,10 @@ export async function flushUndelivered(
       ).run(m.id);
       continue;
     }
-    const line = wakeLine({
-      fromName: m.from_name,
-      fromId: m.from_id,
-      body: m.body,
-    });
+    const line = wakeLine(
+      { fromName: m.from_name, fromId: m.from_id, body: m.body },
+      { inline: true }
+    );
     const res = await relayToHeldTask(task, line, m.from_name, m.id, false);
     if (res.state === "failed") return;
     db.prepare(

@@ -128,6 +128,17 @@ describe("a task the queue placed on a linked machine", () => {
     expect((call[0].body as { id: string }).id).toMatch(/^bus-\d+$/);
   });
 
+  it("is sent a long message whole, since that machine's inbox never held it", async () => {
+    const t = await placed();
+    peer.routes[`/api/tasks/${t.id}/message`] = () => ({ state: "delivered" });
+    const body = "fix the review findings. ".repeat(60).trim();
+    await sendMessage({ fromId: null, to: t.id, body });
+    const call = peer.calls.filter((c) => c.path.endsWith(`${t.id}/message`));
+    const line = (call.at(-1)!.body as { line: string }).line;
+    expect(line).toContain(body);
+    expect(line).not.toContain("aos inbox");
+  });
+
   it("asks its chat facts directly", async () => {
     const t = await placed();
     peer.routes[`/api/tasks/${t.id}/chat-facts`] = () => ({
