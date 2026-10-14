@@ -4,7 +4,9 @@ import { DevServerCard } from "@/components/DevServers/DevServerCard";
 import { ElsewhereTmuxList, TmuxSessionRow } from "@/components/Hosts";
 import { useDevServersQuery } from "@/data/dev-servers";
 import { useDiscoveredTmuxQuery } from "@/data/hosts";
+import { SquareTerminal } from "lucide-react";
 import type { ProjectWithRepositories } from "@/lib/projects";
+import { ShelfLabel } from "./SessionShelves";
 
 interface DevServerHandlers {
   onStop: (id: string) => Promise<void>;
@@ -58,7 +60,11 @@ export function SidebarExtras({
       )}
       {tmux.length > 0 && (
         <section aria-label="Terminals">
-          <div className={label}>Terminals · {tmux.length}</div>
+          <ShelfLabel
+            label="Terminals"
+            count={tmux.length}
+            icon={SquareTerminal}
+          />
           {tmux.map((t) => (
             <TmuxSessionRow key={`${t.hostId}:${t.name}`} session={t} />
           ))}

@@ -42,7 +42,7 @@ export function QuickChangeRow({ row }: { row: SidebarRow }) {
   );
   const openPr = pr ? () => window.open(pr, "_blank") : undefined;
   return (
-    <div className="ml-5">
+    <div>
       <RowShell
         title={`Quick change: ${session.name}\n${label}`}
         onActivate={openPr}

@@ -16,6 +16,7 @@ import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowRename, UnreadDot } from "./RowParts";
 import { QuickChangeRow } from "./QuickChangeRow";
+import { NestRail } from "./RowParts";
 
 // A workspace's orchestrator, pinned above its sessions and titled with the
 // workspace's name: what it's doing and how many asks wait on you, on a line
@@ -54,7 +55,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
 
   const content = (
     <RowFrame
-      title={`${label}\n${summary}`}
+      data-tip={`${label}\n${summary}`}
       onActivate={() => !renaming && ctx.onSelect(session.id)}
       className={
         active
@@ -172,9 +173,13 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
           {menu("context")}
         </CM.ContextMenuContent>
       </CM.ContextMenu>
-      {row.quick?.map((q) => (
-        <QuickChangeRow key={q.session.id} row={q} />
-      ))}
+      {!!row.quick?.length && (
+        <NestRail>
+          {row.quick.map((q) => (
+            <QuickChangeRow key={q.session.id} row={q} />
+          ))}
+        </NestRail>
+      )}
     </>
   );
 }, sameProps);
@@ -190,7 +195,7 @@ export function OrchestratorStartRow({
 }) {
   return (
     <RowFrame
-      title={`${name}\nStart orchestrator`}
+      data-tip={`${name}\nStart orchestrator`}
       onActivate={() => orchestratorOpenActions.request(workspaceId)}
       className="hover:bg-muted/50 border-dashed"
     >
