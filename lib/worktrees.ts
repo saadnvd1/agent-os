@@ -14,6 +14,7 @@ import {
 } from "./git";
 import { installWorktreeHooks } from "./worktree-hooks";
 import { gitResult, isGitError, worktreeList } from "./git-exec";
+import { addWorktree } from "./worktree-add";
 import {
   markRemoving,
   removalKey,
@@ -149,10 +150,12 @@ export async function createWorktree(
       break;
     }
     try {
-      await git(
+      await addWorktree(
+        (args, cwd) => git(cwd, args, timeout).then((r) => r.stdout),
         resolvedProjectPath,
-        ["worktree", "add", "-b", branchName, "--", worktreePath, ref],
-        timeout
+        worktreePath,
+        ref,
+        ["-b", branchName]
       );
       // Best effort: a worktree without the hook still works, it just
       // doesn't strip attribution.

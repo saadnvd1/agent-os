@@ -10,6 +10,7 @@ import { getRepoName, slugify } from "../git";
 import { WORKTREES_DIR } from "../worktrees";
 import { installWorktreeHooks } from "../worktree-hooks";
 import { git as runGit } from "../git-exec";
+import { addWorktree } from "../worktree-add";
 import { pushedRef } from "./move";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -105,14 +106,12 @@ async function checkoutBranch(
   if (existing) await git(projectPath, "worktree", "prune");
   fs.mkdirSync(WORKTREES_DIR, { recursive: true });
   const worktreePath = worktreeDirFor(projectPath, branch);
-  await git(
+  await addWorktree(
+    (args, cwd) => runGit(cwd, args, { timeout: 120000 }),
     projectPath,
-    "worktree",
-    "add",
-    "-B",
-    branch,
     worktreePath,
-    `origin/${branch}`
+    `origin/${branch}`,
+    ["-B", branch]
   );
   await git(worktreePath, "branch", "--set-upstream-to", `origin/${branch}`);
   return { worktreePath, reused: false };

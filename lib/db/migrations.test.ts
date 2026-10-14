@@ -45,8 +45,8 @@ describe("migration registry guard", () => {
     expect(
       Math.max(...ids),
       "Do not add numbered migrations: use a timestamp key (YYYYMMDDTHHMM_snake_name, UTC)."
-    ).toBe(88);
-    expect(ids).toEqual(Array.from({ length: 88 }, (_, i) => i + 1));
+    ).toBe(89);
+    expect(ids).toEqual(Array.from({ length: 89 }, (_, i) => i + 1));
     const firstKeyed = migrations.findIndex((m) => m.key !== undefined);
     if (firstKeyed >= 0) {
       expect(
@@ -83,16 +83,16 @@ describe("migration registry guard", () => {
 });
 
 describe("runMigrations with keys", () => {
-  it("upgrades a database with 1..88 applied without rerunning any legacy migration", () => {
+  it("upgrades a database with 1..89 applied without rerunning any legacy migration", () => {
     const db = new Database(":memory:");
     createSchema(db);
-    runMigrations(db, 88);
-    // Simulate a pre-upgrade database: no key column, 88 integer rows.
+    runMigrations(db, 89);
+    // Simulate a pre-upgrade database: no key column, 89 integer rows.
     const rows = db.prepare(`SELECT id, name FROM _migrations`).all() as {
       id: number;
       name: string;
     }[];
-    expect(rows).toHaveLength(88);
+    expect(rows).toHaveLength(89);
     db.exec(`
       DROP INDEX IF EXISTS idx_migrations_key;
       ALTER TABLE _migrations DROP COLUMN key;
@@ -111,14 +111,14 @@ describe("runMigrations with keys", () => {
       legacy.forEach((m, i) => (m.up = originals[i]));
     }
     expect(calls).toEqual([]);
-    const after = db.prepare(`SELECT id FROM _migrations WHERE id <= 88`).all();
-    expect(after).toHaveLength(88);
+    const after = db.prepare(`SELECT id FROM _migrations WHERE id <= 89`).all();
+    expect(after).toHaveLength(89);
   });
 
   it("applies keyed migrations once, after legacy, and honours upTo keys", () => {
     const db = new Database(":memory:");
     createSchema(db);
-    runMigrations(db, 88);
+    runMigrations(db, 89);
     const order: string[] = [];
     const fakes = [
       { key: "29990101T0000_a_test", up: () => void order.push("a") },
@@ -154,7 +154,7 @@ describe("runMigrations with keys", () => {
       up: () => void (ran = true),
     });
     try {
-      runMigrations(db, 88);
+      runMigrations(db, 89);
       expect(ran).toBe(false);
     } finally {
       migrations.pop();
