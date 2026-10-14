@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { Session } from "../db";
 import { db } from "../db";
 import { agentEnv } from "../agents/launch";
-import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import {
+  seedOrchestrator,
+  seedSession,
+  seedWorkspace,
+} from "../orchestrator/testing";
 import {
   AUTO_COMPACT_ENV,
   DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS,
@@ -134,6 +138,7 @@ describe("the mid-turn window by role", () => {
     const chat = seedSession({ projectId: ws.app.id, name: "c", view: "chat" });
     const task = seedSession({ projectId: ws.app.id, name: "t", task: true });
     const started = seedSession({ projectId: ws.app.id, name: "s" });
+    seedOrchestrator("orch");
     db.prepare(`UPDATE sessions SET started_by = 'orch' WHERE id = ?`).run(
       started
     );
