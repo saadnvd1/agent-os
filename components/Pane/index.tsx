@@ -173,6 +173,12 @@ export const Pane = memo(function Pane({
     return s?.view === "chat" ? s : null;
   };
 
+  // The chat on show in the main view, whose bookmarks the header lists.
+  const bookmarksSessionId =
+    activeTab && viewMode === "terminal"
+      ? (chatSessionFor(activeTab)?.id ?? null)
+      : null;
+
   // File editor state - lifted here so it persists across view switches
   const fileEditor = useFileEditor();
 
@@ -432,6 +438,7 @@ export const Pane = memo(function Pane({
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
           onSelectSession={onSelectSession}
+          bookmarksSessionId={bookmarksSessionId}
           onFind={
             activeTab && viewMode === "terminal" && chatSessionFor(activeTab)
               ? () => openFind(activeTab.sessionId as string)
@@ -465,6 +472,7 @@ export const Pane = memo(function Pane({
           onSplitVertical={() => splitVertical(paneId)}
           onClose={() => close(paneId)}
           onDetach={handleDetach}
+          bookmarksSessionId={bookmarksSessionId}
         />
       )}
 

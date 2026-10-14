@@ -37,6 +37,7 @@ import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
+import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 
 type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
@@ -90,6 +91,8 @@ interface MobileTabBarProps {
   onSelectSession?: (sessionId: string) => void;
   // Opens find in the chat on show (there's no ⌘F on a phone).
   onFind?: () => void;
+  // The chat on show, for its bookmarks.
+  bookmarksSessionId?: string | null;
 }
 
 export function MobileTabBar({
@@ -105,6 +108,7 @@ export function MobileTabBar({
   onViewModeChange,
   onSelectSession,
   onFind,
+  bookmarksSessionId,
 }: MobileTabBarProps) {
   const away = useAwayQuery().data?.away ?? null;
   // Find current session index and calculate prev/next
@@ -301,6 +305,12 @@ export function MobileTabBar({
         </button>
       </div>
 
+      {bookmarksSessionId && (
+        <ChatBookmarksButton
+          sessionId={bookmarksSessionId}
+          className="-my-1.5 h-11 min-w-11"
+        />
+      )}
       {onFind && (
         <Button
           variant="ghost"

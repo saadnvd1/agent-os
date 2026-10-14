@@ -41,6 +41,8 @@ export const TABLES_WATCHED_80 = [
   "feature_pieces",
 ] as const;
 
+export const TABLES_WATCHED_CHAT_BOOKMARKS = ["chat_bookmarks"] as const;
+
 // Every table any migration watches, for the browser's topic map to cover.
 export const WATCHED_TABLES: readonly string[] = [
   ...TABLES_WATCHED_45,
@@ -49,6 +51,7 @@ export const WATCHED_TABLES: readonly string[] = [
   ...TABLES_WATCHED_58,
   ...TABLES_WATCHED_78,
   ...TABLES_WATCHED_80,
+  ...TABLES_WATCHED_CHAT_BOOKMARKS,
 ];
 
 export function installChangeTriggers(

@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  Star,
   BookOpen,
   ChefHat,
   Clock,
@@ -29,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { Workspace } from "@/lib/db";
 import { archivedUiActions } from "@/stores/archivedUi";
+import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { newDraft } from "@/stores/drafts";
 import { schedulesUiActions } from "@/stores/schedulesUi";
@@ -119,6 +121,9 @@ export function SidebarHeader(props: SidebarHeaderProps) {
               : []),
             menuItem("Archived", () => archivedUiActions.open(), {
               icon: Archive,
+            }),
+            menuItem("Bookmarks", () => bookmarksUiActions.open(workspaceId), {
+              icon: Star,
             }),
             menuItem("Usage", () => usageUiActions.open(), { icon: Gauge }),
             menuItem("Model comparison", () => usageUiActions.open("compare"), {

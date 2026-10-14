@@ -4,6 +4,7 @@ import { useSnapshot } from "valtio";
 import { useTheme } from "next-themes";
 import {
   Archive,
+  Star,
   ChefHat,
   Code,
   FolderGit2,
@@ -27,6 +28,7 @@ import { useRecipesQuery } from "@/data/recipes";
 import { recipesUiActions } from "@/stores/recipesUi";
 import { usePaletteCommands } from "@/hooks/usePaletteCommands";
 import { archivedUiActions } from "@/stores/archivedUi";
+import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { busUiActions } from "@/stores/busUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
@@ -208,6 +210,14 @@ export function useAppCommands({
       group: "Go to",
       icon: Archive,
       run: () => archivedUiActions.open(),
+    },
+    {
+      id: "app.bookmarks",
+      title: "Bookmarks",
+      group: "Go to",
+      keywords: ["starred", "saved", "favourite", "favorite"],
+      icon: Star,
+      run: () => bookmarksUiActions.open(current?.id ?? null),
     },
     ...settingsCommands(current?.id ?? null),
     {

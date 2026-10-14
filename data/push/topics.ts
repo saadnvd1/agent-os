@@ -16,6 +16,7 @@ import { recipeKeys } from "../recipes";
 import { featureKeys } from "../features";
 import { archivedKeys } from "../done";
 import { awayKeys } from "../away";
+import { bookmarkKeys } from "../bookmarks/keys";
 
 // What each pushed topic (a table that changed, lib/db/changes.ts, or a
 // pushed view) means the browser should refetch. Only queries on screen
@@ -72,6 +73,8 @@ function keysFor(topic: string): QueryKey[] {
       return [awayKeys.all];
     case "dev_servers":
       return [devServerKeys.all];
+    case "chat_bookmarks":
+      return [bookmarkKeys.all];
     default:
       return [];
   }

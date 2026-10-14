@@ -248,3 +248,15 @@
 - [ ] Record usage for titles, recipe drafts, PR text and summaries; bound the summarize input; run PR text through the hardened runner
 - [ ] Measure the extra model call behind chat prompt suggestions, then decide whether to keep it
 - [ ] Keep the scope check and gate review off Haiku
+
+## Bookmarks (after V1)
+
+- Labels or colours on bookmarks, and filtering by them.
+- Share one bookmarked message as a link (`lib/share/render.tsx` for one item).
+- Export bookmarks to Markdown (`lib/share/markdown.ts`) or a LumifyHub page.
+- A read-only `list_bookmarks` tool for the orchestrator, and `aos bookmarks`.
+- Jump to a very old bookmark without paging back: a `history` request
+  `around` a seq.
+- Bookmark a text selection inside a message (a range, not a whole item).
+- Bookmarks on terminal-view sessions (they have no item ids).
+- A star on a collapsed run of steps when one of its tool calls is bookmarked.

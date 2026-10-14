@@ -21,6 +21,11 @@ import { Markdown } from "./Markdown";
 import { openSessionLink } from "./session-link";
 import { UndoButton } from "./Undo";
 import { useRowState } from "./rowState";
+import {
+  BookmarkButton,
+  TurnBookmark,
+  BookmarkPress,
+} from "@/components/Bookmarks/BookmarkButton";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
@@ -94,29 +99,34 @@ export function UserMessage({
   onUndo?: () => void;
 }) {
   return (
-    <div className="group flex flex-col items-end gap-1">
-      {item.from && (
-        <span data-copy-skip className="label-mono text-muted-foreground">
-          from {item.from}
-        </span>
-      )}
-      {item.images?.length ? (
-        <div data-copy-skip className="flex flex-wrap justify-end gap-1.5">
-          {item.images.map((img, i) => (
-            <ImageThumb
-              key={i}
-              src={`data:${img.mediaType};base64,${img.data}`}
-            />
-          ))}
+    <BookmarkPress itemId={item.id}>
+      <div className="group flex flex-col items-end gap-1">
+        {item.from && (
+          <span data-copy-skip className="label-mono text-muted-foreground">
+            from {item.from}
+          </span>
+        )}
+        {item.images?.length ? (
+          <div data-copy-skip className="flex flex-wrap justify-end gap-1.5">
+            {item.images.map((img, i) => (
+              <ImageThumb
+                key={i}
+                src={`data:${img.mediaType};base64,${img.data}`}
+              />
+            ))}
+          </div>
+        ) : null}
+        {item.text && (
+          <div className="bg-foreground/[0.07] max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm whitespace-pre-wrap">
+            <UserText text={item.text} />
+          </div>
+        )}
+        <div className="-mr-1.5 flex items-center">
+          {onUndo && <UndoButton onClick={onUndo} />}
+          <BookmarkButton itemId={item.id} />
         </div>
-      ) : null}
-      {item.text && (
-        <div className="bg-foreground/[0.07] max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm whitespace-pre-wrap">
-          <UserText text={item.text} />
-        </div>
-      )}
-      {onUndo && <UndoButton onClick={onUndo} />}
-    </div>
+      </div>
+    </BookmarkPress>
   );
 }
 
@@ -128,27 +138,32 @@ export function AssistantMessage({
   onQuote?: (text: string) => void;
 }) {
   return (
-    <div className="group">
-      <div data-quotable className={cn(item.streaming && "streaming-cursor")}>
-        <Markdown text={item.text} streaming={item.streaming} />
-      </div>
-      {!item.streaming && (
-        <div className="-ml-1.5 flex items-center opacity-40 group-hover:opacity-100 md:opacity-0">
-          <CopyButton text={item.text} label="Copy message" />
-          {onQuote && (
-            <button
-              type="button"
-              aria-label="Quote message"
-              title="Quote"
-              onClick={() => onQuote(item.text)}
-              className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] flex h-9 w-9 items-center justify-center rounded-md md:h-7 md:w-7"
-            >
-              <Quote className="h-3.5 w-3.5" />
-            </button>
-          )}
+    <BookmarkPress itemId={item.id}>
+      <div className="group">
+        <div data-quotable className={cn(item.streaming && "streaming-cursor")}>
+          <Markdown text={item.text} streaming={item.streaming} />
         </div>
-      )}
-    </div>
+        {!item.streaming && (
+          <div className="-ml-1.5 flex items-center">
+            <div className="flex items-center opacity-40 group-hover:opacity-100 md:opacity-0">
+              <CopyButton text={item.text} label="Copy message" />
+              {onQuote && (
+                <button
+                  type="button"
+                  aria-label="Quote message"
+                  title="Quote"
+                  onClick={() => onQuote(item.text)}
+                  className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] flex h-9 w-9 items-center justify-center rounded-md md:h-7 md:w-7"
+                >
+                  <Quote className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <BookmarkButton itemId={item.id} />
+          </div>
+        )}
+      </div>
+    </BookmarkPress>
   );
 }
 
@@ -207,9 +222,10 @@ export function TurnEnd({ item }: { item: Of<"turn_end"> }) {
       ? `Done in ${secs}s`
       : "Done";
   return (
-    <div className="text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
+    <div className="group text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
       <span className="bg-foreground/[0.06] h-px flex-1" />
       {label}
+      <TurnBookmark turnEndId={item.id} />
       <span className="bg-foreground/[0.06] h-px flex-1" />
     </div>
   );

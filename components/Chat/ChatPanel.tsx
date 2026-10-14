@@ -65,6 +65,13 @@ import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
 import { copySelection } from "./copy-selection";
 import { arrivalKey, useStickToBottom } from "./stick-to-bottom";
+import { useSnapshot } from "valtio";
+import {
+  BookmarkChatContext,
+  TurnStarts,
+  type BookmarkChat,
+} from "@/components/Bookmarks/context";
+import { bookmarksUi, bookmarksUiActions } from "@/stores/bookmarksUi";
 import {
   AssistantMessage,
   CommandOutput,
@@ -295,6 +302,7 @@ export function ChatPanel({
     requestFiles,
     search,
     compacting,
+    loadedFor,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const startFresh = useFreshStart();
   const { isMobile } = useViewport();
@@ -511,6 +519,37 @@ export function ChatPanel({
     scrollToBlock,
     foldEvents: !!orchestratorOf,
   });
+  // Where each turn starts, for a TurnEnd's "Bookmark turn".
+  const turnStarts = useMemo(() => {
+    const m = new Map<string, string>();
+    let user: string | null = null;
+    for (const i of items) {
+      if (i.kind === "user") user = i.id;
+      else if (i.kind === "turn_end" && user) m.set(i.id, user);
+    }
+    return m;
+  }, [items]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const turnStartStore = useMemo(() => new TurnStarts(), [sessionId]);
+  useLayoutEffect(
+    () => turnStartStore.set(turnStarts),
+    [turnStartStore, turnStarts]
+  );
+  const bookmarkChat = useMemo<BookmarkChat>(
+    () => ({ sessionId, turnStarts: turnStartStore }),
+    [sessionId, turnStartStore]
+  );
+  // A bookmark opened from a list: once this chat is the one showing.
+  const { jump } = useSnapshot(bookmarksUi);
+  useEffect(() => {
+    // Waits for this chat's first page: until it lands, the items are
+    // the last chat's, and every jump would miss.
+    if (!jump || jump.sessionId !== sessionId || loadedFor !== sessionId)
+      return;
+    const itemId = bookmarksUiActions.takeJump(sessionId);
+    if (itemId)
+      goTo((all) => (all.some((i) => i.id === itemId) ? itemId : null));
+  }, [jump, sessionId, goTo, loadedFor]);
   const resolveQuestion = useResolveQuestion(orchestratorOf ?? "");
   // The question the next message answers, resolved when it is sent.
   const [replyTo, setReplyTo] = useState<{ id: number; text: string } | null>(
@@ -588,39 +627,41 @@ export function ChatPanel({
         <RowState.Provider value={rowState}>
           <Background.Provider value={background}>
             <ToolBodies.Provider value={bodies}>
-              <div
-                // A new conversation starts over, scrolled to the end.
-                key={sessionId}
-                ref={listRef}
-                onScroll={onListScroll}
-                onCopy={onCopy}
-                className="h-full overflow-y-auto overscroll-y-contain"
-              >
-                <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
-                  {hasMore && (
-                    <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
-                      {loadingOlder ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={loadOlder}
-                          className="hover:text-foreground min-h-11 px-3"
-                        >
-                          Show earlier messages
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <SetupCard sessionId={sessionId} />
-                  {blocks.length === 0 && !queue.length && (
-                    <p className="text-muted-foreground py-16 text-center text-sm">
-                      Ask anything to start.
-                    </p>
-                  )}
+              <BookmarkChatContext.Provider value={bookmarkChat}>
+                <div
+                  // A new conversation starts over, scrolled to the end.
+                  key={sessionId}
+                  ref={listRef}
+                  onScroll={onListScroll}
+                  onCopy={onCopy}
+                  className="h-full overflow-y-auto overscroll-y-contain"
+                >
+                  <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
+                    {hasMore && (
+                      <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
+                        {loadingOlder ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={loadOlder}
+                            className="hover:text-foreground min-h-11 px-3"
+                          >
+                            Show earlier messages
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <SetupCard sessionId={sessionId} />
+                    {blocks.length === 0 && !queue.length && (
+                      <p className="text-muted-foreground py-16 text-center text-sm">
+                        Ask anything to start.
+                      </p>
+                    )}
+                  </div>
+                  <TimelineRows blocks={blocks} actions={actions} />
                 </div>
-                <TimelineRows blocks={blocks} actions={actions} />
-              </div>
+              </BookmarkChatContext.Provider>
             </ToolBodies.Provider>
           </Background.Provider>
         </RowState.Provider>

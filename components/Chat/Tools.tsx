@@ -12,6 +12,7 @@ import { Highlighted } from "./Code";
 import { BackgroundButton, BackgroundState, useBackground } from "./background";
 import { useNow } from "./useNow";
 import { useRowState } from "./rowState";
+import { BookmarkButton } from "@/components/Bookmarks/BookmarkButton";
 
 // Output and diffs of tool calls sent without them (lib/chat/page), loaded
 // when one is opened.
@@ -152,7 +153,7 @@ function ToolRow({ tool }: { tool: ToolItem }) {
   );
   return (
     <div data-item={tool.id}>
-      <div className="hover:bg-foreground/[0.04] flex items-center gap-1 rounded-lg pr-1">
+      <div className="group hover:bg-foreground/[0.04] flex items-center gap-1 rounded-lg pr-1">
         <button
           type="button"
           onClick={() => setOpen(!open)}
@@ -169,6 +170,7 @@ function ToolRow({ tool }: { tool: ToolItem }) {
           )}
         </button>
         <BackgroundButton tool={tool} />
+        <BookmarkButton itemId={tool.id} />
       </div>
       {open && <ToolDetail tool={tool} />}
     </div>

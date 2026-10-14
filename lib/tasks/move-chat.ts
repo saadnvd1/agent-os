@@ -11,6 +11,7 @@ import { settle, listItems } from "../chat/store";
 import { stopChatAtTurnEnd } from "../chat/stop";
 import { rewritePaths } from "./transcript";
 import { MAX_CHAT_BYTES, type ChatBundle } from "./move-bundle";
+import { bookmarksForMove, insertMovedBookmarks } from "../bookmarks/store";
 
 // A turn this long is left to finish: the move is refused, not cut short.
 export const MOVE_TURN_WAIT_MS = 3 * 60_000;
@@ -50,6 +51,7 @@ export function packChat(session: Session): ChatBundle {
     sentBy: r.sent_by,
     createdAt: r.created_at,
   }));
+  const bookmarks = bookmarksForMove(session.id);
   const chat: ChatBundle = {
     items,
     queue,
@@ -57,10 +59,15 @@ export function packChat(session: Session): ChatBundle {
     plan: !!session.chat_plan,
     resumeAt: session.chat_resume_at,
     context: session.chat_context,
+    bookmarks,
   };
   const bytes =
     items.reduce((n, i) => n + i.id.length + i.data.length, 0) +
-    queue.reduce((n, m) => n + m.text.length + (m.images?.length ?? 0), 0);
+    queue.reduce((n, m) => n + m.text.length + (m.images?.length ?? 0), 0) +
+    bookmarks.reduce(
+      (n, b) => n + b.itemId.length + b.text.length + (b.note?.length ?? 0),
+      0
+    );
   if (bytes > MAX_CHAT_BYTES) throw new Error("The chat is too large to move");
   return chat;
 }
@@ -103,6 +110,7 @@ export function unpackChat(
       m.createdAt
     )
   );
+  insertMovedBookmarks(id, chat.bookmarks ?? []);
 }
 
 const imageCount = (images: string) => {
@@ -118,4 +126,5 @@ const imageCount = (images: string) => {
 export function dropChat(id: string): void {
   db.prepare(`DELETE FROM chat_items WHERE session_id = ?`).run(id);
   db.prepare(`DELETE FROM chat_queue WHERE session_id = ?`).run(id);
+  db.prepare(`DELETE FROM chat_bookmarks WHERE session_id = ?`).run(id);
 }

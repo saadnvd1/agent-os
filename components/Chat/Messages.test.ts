@@ -10,6 +10,16 @@ const item = {
   streaming: false,
 } as never;
 
+// The element with this aria-label, anywhere in an unrendered tree.
+function findByLabel(node: unknown, label: string): unknown {
+  if (Array.isArray(node))
+    return node.map((n) => findByLabel(n, label)).find(Boolean);
+  const props = (node as { props?: Record<string, unknown> } | null)?.props;
+  if (!props) return undefined;
+  if (props["aria-label"] === label) return node;
+  return findByLabel(props.children, label);
+}
+
 describe("AssistantMessage quote action", () => {
   it("shows a labelled Quote button next to Copy", () => {
     const html = renderToStaticMarkup(
@@ -22,15 +32,10 @@ describe("AssistantMessage quote action", () => {
 
   it("hands the markdown source to onQuote on click", () => {
     const onQuote = vi.fn();
-    const el = AssistantMessage({ item, onQuote }) as never as {
-      props: { children: unknown[] };
-    };
-    const group = (
-      el.props.children as { props: { children: unknown[] } }[]
-    )[1];
-    const button = group.props.children[1] as {
-      props: { onClick: () => void };
-    };
+    const button = findByLabel(
+      AssistantMessage({ item, onQuote }),
+      "Quote message"
+    ) as { props: { onClick: () => void } };
     button.props.onClick();
     expect(onQuote).toHaveBeenCalledWith("Hello\n\n```ts\nx\n```");
   });

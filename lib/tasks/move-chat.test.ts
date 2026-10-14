@@ -47,7 +47,13 @@ import { chatHold, chatRefusal } from "../chat/hold";
 import { exportOrResume, exportTask, markMoved } from "./move";
 import { importTask } from "./import";
 import { MOVE_TURN_WAIT_MS } from "./move-chat";
-import { MAX_CHAT_BYTES } from "./move-bundle";
+import { MAX_CHAT_BYTES, MAX_MOVED_BOOKMARKS } from "./move-bundle";
+import { MAX_NOTE_CHARS, MAX_SNAPSHOT_CHARS } from "../bookmarks/types";
+import {
+  createBookmark,
+  listBookmarks,
+  listSessionBookmarks,
+} from "../bookmarks/store";
 import {
   CLAUDE_ID,
   git,
@@ -217,7 +223,7 @@ describe("moving a chat task", () => {
       .prepare(`SELECT id FROM sessions WHERE moved_from = ?`)
       .all(id) as { id: string }[];
     expect(left).toEqual([]);
-    for (const table of ["chat_items", "chat_queue"])
+    for (const table of ["chat_items", "chat_queue", "chat_bookmarks"])
       expect(
         db
           .prepare(
@@ -225,6 +231,36 @@ describe("moving a chat task", () => {
           )
           .get()
       ).toEqual({ n: 0 });
+  });
+
+  it("carries its bookmarks, and lands from a machine that predates them", async () => {
+    const { id, cwd } = await seedChat("feature/chat-marks");
+    createBookmark({ sessionId: id, itemId: "assistant-1", note: "the word" });
+    createBookmark({ sessionId: id, itemId: "user-1", scope: "turn" });
+    const bundle = await exportTask(id, "box");
+    expect(bundle.chat!.bookmarks).toHaveLength(2);
+    leave(id, cwd, "feature/chat-marks");
+    const arrived = await importTask(bundle);
+    expect(
+      listSessionBookmarks(arrived.id).map((b) => [b.itemId, b.scope, b.note])
+    ).toEqual([
+      ["user-1", "turn", null],
+      ["assistant-1", "item", "the word"],
+    ]);
+    // The row it left keeps its own as history, not listed twice.
+    expect(listSessionBookmarks(id).every((b) => b.state === "moved")).toBe(
+      true
+    );
+    const listed = listBookmarks({ workspace: "all", q: "PELICAN" }).bookmarks;
+    expect(listed.map((b) => b.sessionId)).not.toContain(id);
+    expect(listed.map((b) => b.sessionId)).toContain(arrived.id);
+
+    const older = await seedChat("feature/chat-old");
+    const oldBundle = await exportTask(older.id, "box");
+    delete oldBundle.chat!.bookmarks;
+    leave(older.id, older.cwd, "feature/chat-old");
+    const landed = await importTask(oldBundle);
+    expect(listSessionBookmarks(landed.id)).toEqual([]);
   });
 
   it("goes there and back with its history and queue intact", async () => {
@@ -270,6 +306,14 @@ describe("moving a chat task", () => {
       })
     ).rejects.toThrow(/Bad chat item/);
     const chat = bundle.chat!;
+    const ONE_BOOKMARK = {
+      itemId: "user-1",
+      scope: "item",
+      kind: "user",
+      text: "",
+      note: null,
+      createdAt: "",
+    };
     const bad: [object, RegExp][] = [
       [{ queue: "x" }, /Bad chat queue/],
       [{ queue: [{ ...chat.queue[0], images: 5 }] }, /Bad queued message/],
@@ -278,6 +322,47 @@ describe("moving a chat task", () => {
         /Bad queued message/,
       ],
       [{ resumeAt: 5 }, /Bad chat/],
+      [{ bookmarks: "x" }, /Bad chat bookmarks/],
+      [
+        {
+          bookmarks: [
+            {
+              itemId: "user-1",
+              scope: "all",
+              kind: "user",
+              text: "",
+              note: null,
+              createdAt: "",
+            },
+          ],
+        },
+        /Bad bookmark/,
+      ],
+      [
+        {
+          bookmarks: [
+            { ...ONE_BOOKMARK, note: "n".repeat(MAX_NOTE_CHARS + 1) },
+          ],
+        },
+        /Bad bookmark/,
+      ],
+      [
+        {
+          bookmarks: [
+            { ...ONE_BOOKMARK, text: "t".repeat(MAX_SNAPSHOT_CHARS + 2) },
+          ],
+        },
+        /Bad bookmark/,
+      ],
+      [
+        {
+          bookmarks: Array.from(
+            { length: MAX_MOVED_BOOKMARKS + 1 },
+            () => ONE_BOOKMARK
+          ),
+        },
+        /Too many bookmarks/,
+      ],
       [
         { items: [{ id: "big", data: "x".repeat(MAX_CHAT_BYTES + 1) }] },
         /too large to move/,

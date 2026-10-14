@@ -186,6 +186,19 @@ installed (or `AGENTOS_CHROME` pointing at one).
 Chat runs on this machine, and on linked machines through their own AgentOS
 (see [Machines](https://github.com/saadnvd1/agent-os/blob/main/docs/reference/machines.md)); sessions on machines reached over ssh only use
 the terminal.
+
+**Bookmarks** mark a single message to come back to. Star a message, a
+tool call or a whole turn (on its end line), or hold a message on a phone.
+The star in the chat's header lists that chat's bookmarks in order and jumps
+to one, loading older history to reach it. **Bookmarks** in the sidebar menu
+or the palette lists every chat's, by workspace or all, with a search over the
+text, your note and the chat's name. A bookmark keeps a copy of the text with
+secrets masked, so it stays readable after `/compact`, an archive, a move to
+another machine, or the chat being deleted. Bookmarks are yours: they don't
+pin the chat, and agents don't see them. The API is `GET/POST
+/api/sessions/:id/bookmarks`, `GET /api/bookmarks`, and `PATCH/DELETE
+/api/bookmarks/:id`.
+
 Drivers for other agent CLIs plug into `lib/chat/drivers`; undo, `@file`
 suggestions and visuals are Claude-only for now, and plan mode is Claude and
 OpenCode.
