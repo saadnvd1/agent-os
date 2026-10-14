@@ -7,7 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { InboxButton } from "@/components/Inbox";
+import { InboxButton } from "@/components/Inbox/InboxButton";
 import { newDraft } from "@/stores/drafts";
 import { DRAFT_KEYS } from "@/lib/drafts";
 
