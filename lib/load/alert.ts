@@ -18,9 +18,14 @@ export function alertText(view: LoadView): string {
       : "";
     return `${s.name} ${s.cores.toFixed(1)} cores, ${gb(s.rssBytes)}${heavy}`;
   });
+  const others = (view.unattributed ?? []).map(
+    (g) =>
+      `${g.name}${g.count > 1 ? ` ×${g.count}` : ""} ${g.cores.toFixed(1)} cores, ${gb(g.rssBytes)}`
+  );
   return [
     `Machine load red for 2+ minutes: ${view.load1} on ${view.cores} cores${memory}.`,
     top.length ? `Top: ${top.join("; ")}.` : "",
+    others.length ? `Not from a session: ${others.join("; ")}.` : "",
   ]
     .filter(Boolean)
     .join(" ");

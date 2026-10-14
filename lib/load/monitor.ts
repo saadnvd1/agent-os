@@ -9,21 +9,24 @@ import { LoadAlarm } from "./alarm";
 import { HeavyRegistry, type HeavyRun } from "./heavy";
 import { nextLevel, type LoadLevel, type Pressure } from "./level";
 import { readPressure } from "./pressure";
-import { readUsage, type Usage } from "./usage";
-import { workerTmuxName } from "../chat/worker/protocol";
+import type { Usage } from "./usage";
+import { readSnapshot } from "./usage";
+import {
+  attributeLoad,
+  BUSY_CORES,
+  claimSessions,
+  cwdCandidates,
+  readCwds,
+  type ProcGroup,
+  type SessionLoad,
+  type SessionRow,
+} from "./attribute";
 import { alertText, raiseAlert } from "./alert";
 import { LOCAL, feedGate, gateOpen } from "./start-gate";
 
 export const SAMPLE_MS = 10_000;
 export const USAGE_MS = 30_000;
-// A row shows its usage from here up.
-const BUSY_CORES = 0.5;
-
-export interface SessionLoad extends Usage {
-  sessionId: string;
-  name: string;
-  heavy: string[];
-}
+export type { SessionLoad, ProcGroup };
 
 export interface LoadView {
   level: LoadLevel;
@@ -32,6 +35,8 @@ export interface LoadView {
   memUsedPct: number;
   pressure: Pressure;
   top: SessionLoad[];
+  // Heavy processes that belong to no session, grouped by name.
+  unattributed: ProcGroup[];
   sessions: Record<string, Usage>;
 }
 
@@ -39,6 +44,7 @@ interface State {
   level: LoadLevel | null;
   view: LoadView | null;
   usage: Record<string, SessionLoad>;
+  unattributed: ProcGroup[];
   registry: HeavyRegistry;
   alarm: LoadAlarm;
   timers: ReturnType<typeof setInterval>[];
@@ -50,6 +56,7 @@ const state: State = (g.__agentosLoad ??= {
   level: null,
   view: null,
   usage: {},
+  unattributed: [],
   registry: new HeavyRegistry(),
   alarm: new LoadAlarm(),
   timers: [],
@@ -107,6 +114,7 @@ async function sample(): Promise<void> {
     memUsedPct: Math.round(((total - os.freemem()) / total) * 100),
     pressure,
     top: topSessions(),
+    unattributed: state.unattributed,
     sessions,
   };
   state.view = view;
@@ -145,39 +153,24 @@ export function loadAlarmFromDb(): void {
   state.alarm = new LoadAlarm(readArmed());
 }
 
-type UsageRow = { id: string; name: string; tmux_name: string };
-
-// Each session's share of the usage: its own tmux session's, plus its chat
-// worker's, where a chat's agent runs.
-export function sessionUsage(
-  byTmux: Record<string, Usage>,
-  rows: UsageRow[]
-): Record<string, SessionLoad> {
-  const usage: Record<string, SessionLoad> = {};
-  for (const row of rows) {
-    const parts = [byTmux[row.tmux_name], byTmux[workerTmuxName(row.id)]];
-    const found = parts.filter((u): u is Usage => !!u);
-    if (!found.length) continue;
-    const cores = found.reduce((n, u) => n + u.cores, 0);
-    usage[row.id] = {
-      sessionId: row.id,
-      name: row.name,
-      cores: Math.round(cores * 10) / 10,
-      rssBytes: found.reduce((n, u) => n + u.rssBytes, 0),
-      heavy: [],
-    };
-  }
-  return usage;
-}
-
 async function sampleUsage(): Promise<void> {
-  const byTmux = await readUsage();
+  const { procs, panes } = await readSnapshot();
   const rows = db
     .prepare(
-      `SELECT id, name, tmux_name FROM sessions WHERE archived_at IS NULL AND host_id = 'local'`
+      `SELECT id, name, tmux_name, worktree_path, working_directory FROM sessions WHERE archived_at IS NULL AND host_id = 'local'`
     )
-    .all() as UsageRow[];
-  state.usage = sessionUsage(byTmux, rows);
+    .all() as SessionRow[];
+  const owner = claimSessions(procs, panes, rows);
+  const cwds = await readCwds(cwdCandidates(procs, owner));
+  const { sessions, unattributed } = attributeLoad({
+    procs,
+    owner,
+    rows,
+    cwds,
+    home: os.homedir(),
+  });
+  state.usage = sessions;
+  state.unattributed = unattributed;
 }
 
 // Off the hot path: each tick is async, never overlaps the last, and logs
