@@ -65,6 +65,7 @@ export const STATIC_SIBLINGS = [
   "me",
   "items",
   "network",
+  "preview",
   "queue",
   "status",
 ];

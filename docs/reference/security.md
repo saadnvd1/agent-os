@@ -84,6 +84,27 @@ device. It answers only the machine's own host name and drops
 `X-Forwarded-Host`, `Forwarded` and `X-Original-Host` before anything reads
 them.
 
+### Shared links
+
+A chat or page can be shared as a read-only snapshot through Connect
+(`docs/guides/sharing.md`). Redaction and rendering run on this machine: the
+snapshot builder masks secrets (the orchestrator's token and assignment rules,
+private-key blocks, bearer tokens, URL credentials, secret query parameters,
+and the values of secret-looking environment variables), the home folder, IP
+addresses, this machine's names and `*.ts.net` names, and email addresses, and
+leaves tool calls and thinking out unless asked. A tool that read a secret
+file (`lib/secret-paths.ts`) has its output replaced.
+
+`POST /api/shares/preview` is local only. `POST /api/shares` renders the page
+again from the same inputs, requires its SHA-256 to match the preview's, and
+only then sends it, signed with the machine key like every other Connect call;
+markup from the browser is never uploaded. Connect stores the page and a
+digest of the link's token, and serves it with a CSP `sandbox` that omits
+`allow-same-origin`, so a script in it runs in an opaque origin and cannot read
+runagentos.com cookies or storage. Because Connect keeps no copy of the link,
+the full URL is kept only in this machine's `shared_links` table. The routes
+refuse in demo mode and cap their request bodies.
+
 | Variable               | Effect                                                              |
 | ---------------------- | ------------------------------------------------------------------- |
 | `AGENTOS_CONNECT=0`    | Never start Connect in this process.                                |

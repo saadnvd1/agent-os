@@ -19,7 +19,11 @@ import { toChatContext, usageTotals } from "../context";
 import { cacheTtlMs } from "../stale";
 import { ClaudeMapper, toCommand, type ClaudeMessage } from "./claude-mapper";
 import { SuggestionTrace } from "./suggestion-trace";
-import { redact } from "../../orchestrator/untrusted";
+import {
+  redact,
+  SECRET_PARAM,
+  URL_USERINFO,
+} from "../../orchestrator/untrusted";
 import { NO_ATTRIBUTION } from "../../agents/attribution";
 import { callFromAssistant } from "../../usage/calls";
 
@@ -52,9 +56,6 @@ const firstLine = (text?: string) => {
 
 // A server's error text can quote its URL, and with it a key: shown and
 // stored redacted, on one line, and short.
-const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^@\s/]+@/gi;
-const SECRET_PARAM =
-  /([?&][\w.-]*(?:key|token|secret|password|auth|sig|code)[\w.-]*=)[^&\s#]+/gi;
 function cleanError(text?: string): string | undefined {
   if (!text) return undefined;
   const line = redact(

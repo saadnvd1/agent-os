@@ -12,6 +12,7 @@ import {
   Cpu,
   GitMerge,
   LayoutGrid,
+  Link2,
   ListChecks,
   ShieldOff,
   FlaskConical,
@@ -32,6 +33,7 @@ import { AuditsPanel } from "@/components/Audits/AuditsPanel";
 import { DevicesPanel } from "@/components/Devices";
 import { GlobalMergeSection } from "@/components/Merge/GlobalMergeSection";
 import { ModelsSection } from "@/components/Models/ModelsSection";
+import { SharedLinksPanel } from "@/components/Shares/SharedLinksPanel";
 import { SchedulesPanel } from "@/components/Schedules";
 import { UpdatesSection } from "@/components/Updates/UpdatesSection";
 import { ExperimentsSection } from "./ExperimentsSection";
@@ -72,6 +74,11 @@ export const SECTION_INFO: Record<
     label: "Devices & access",
     hint: "Pairing, passkeys, network",
     icon: Smartphone,
+  },
+  shares: {
+    label: "Shared links",
+    hint: "Snapshot links you made, with views, and revoke",
+    icon: Link2,
   },
   models: {
     label: "Models",
@@ -133,6 +140,8 @@ function SectionBody({
       return <ModelsSection />;
     case "devices":
       return <DevicesPanel />;
+    case "shares":
+      return <SharedLinksPanel />;
     case "notifications":
       return <NotificationsSection browser={browser} />;
     case "recipes":

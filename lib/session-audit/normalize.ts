@@ -9,7 +9,7 @@ import { redact } from "../orchestrator/untrusted";
 /** Tokens a text costs, by the usual 4 characters a token. An estimate. */
 export const estTokens = (chars: number) => Math.ceil(chars / 4);
 
-const HOME = /\/(?:Users|home)\/[^/\s"']+/g;
+export const HOME = /\/(?:Users|home)\/[^/\s"']+/g;
 const WORKTREE = /~\/\.agent-os\/worktrees\/[^/\s"']+/g;
 const ORCH_DIR = /~\/\.agent-os\/orchestrators\/[^/\s"']+/g;
 const TMP = /\/(?:private\/)?(?:var\/folders|tmp)\/[^\s"']*/g;

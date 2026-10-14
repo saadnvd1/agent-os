@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, Maximize2, X } from "lucide-react";
+import { ExternalLink, Maximize2, Share2, X } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { shareUiActions } from "@/stores/shareUi";
 import { ArtifactFrame, artifactUrl } from "./ArtifactFrame";
 
 type ArtifactItem = Extract<ChatItem, { kind: "artifact" }>;
@@ -31,6 +32,21 @@ function Actions({
           <Maximize2 className="h-4 w-4" />
         </button>
       )}
+      <button
+        type="button"
+        onClick={() =>
+          shareUiActions.open({
+            kind: "artifact",
+            artifactId: item.artifactId,
+            title: item.title,
+          })
+        }
+        className={ICON_BUTTON}
+        aria-label="Share"
+        title="Share"
+      >
+        <Share2 className="h-4 w-4" />
+      </button>
       <a
         href={artifactUrl(item.artifactId)}
         target="_blank"

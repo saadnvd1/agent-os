@@ -38,6 +38,9 @@ vi.mock("@/components/Models/ModelsSection", () => ({
   ModelsSection: stub("models"),
 }));
 vi.mock("@/components/Devices", () => ({ DevicesPanel: stub("devices") }));
+vi.mock("@/components/Shares/SharedLinksPanel", () => ({
+  SharedLinksPanel: stub("shares"),
+}));
 vi.mock("@/components/Schedules", () => ({
   SchedulesPanel: stub("schedules"),
 }));

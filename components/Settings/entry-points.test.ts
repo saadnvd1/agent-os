@@ -23,6 +23,7 @@ describe("⌘K entry points", () => {
     ["app.workspace-settings", "workspaces"],
     ["app.models", "models"],
     ["app.devices", "devices"],
+    ["app.shares", "shares"],
     ["app.notifications", "notifications"],
     ["app.phone-notifications", "notifications"],
     ["app.schedules", "schedules"],

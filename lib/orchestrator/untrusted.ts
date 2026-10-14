@@ -20,8 +20,8 @@ const TOKEN_PATTERNS: RegExp[] = [...SECRET_TOKENS, /\b[a-fA-F0-9]{40,}\b/g];
 
 // A long base64-ish run that reads as random rather than as a path or a
 // slug: mixed case, digits, few separators.
-const BASE64_RUN = /[A-Za-z0-9+/_-]{40,}={0,2}/g;
-const looksRandom = (s: string) =>
+export const BASE64_RUN = /[A-Za-z0-9+/_-]{40,}={0,2}/g;
+export const looksRandom = (s: string) =>
   /[A-Z]/.test(s) &&
   /[a-z]/.test(s) &&
   /[0-9]/.test(s) &&
@@ -30,6 +30,16 @@ const looksRandom = (s: string) =>
 // An env-style secret assignment: API_KEY=..., export TOKEN="...".
 export const SECRET_ASSIGNMENT =
   /^(\s*(?:export\s+)?[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD|CREDENTIALS?|AUTH)[A-Z0-9_]*\s*[=:]\s*).+$/gm;
+
+// A URL's userinfo (https://key@host, postgres://user:pw@host) and a query
+// parameter that carries a credential (?token=, &api_key=).
+export const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^@\s/]+@/gi;
+export const SECRET_PARAM =
+  /([?&][\w.-]*(?:key|token|secret|password|auth|sig|code)[\w.-]*=)[^&\s#]+/gi;
+
+// A private key block's opening line.
+export const PRIVATE_KEY_BLOCK =
+  /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)/g;
 
 // The password in a URL: postgres://user:secret@host.
 const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)[^@\s]+@/gi;

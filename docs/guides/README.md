@@ -9,5 +9,6 @@ How-to guides for using AgentOS, in reading order.
 5. [Tasks](tasks.md): work that ends in a pull request, queued tasks, stacks and plans in pieces.
 6. [Schedules and recipes](schedules.md): start work on a timer, or save a job that comes up again.
 7. [Agent network](agent-network.md): sessions that message each other with `aos`.
+8. [Sharing](sharing.md): a read-only link to a chat or a page, checked and masked first, or downloaded as HTML.
 
 How each part works in detail is in [the reference docs](https://github.com/saadnvd1/agent-os/tree/main/docs/reference).
