@@ -223,21 +223,17 @@ describe("what a task needs", () => {
     expect(heavyNeeds(["mac"])).toBe(false);
   });
 
-  it("keeps plan-only, orchestrator, pinned and non-claude tasks at home", () => {
+  it("keeps plan-only, plan-first, pinned and non-claude tasks at home", () => {
     const base = {
       plan_only: null,
       plan: null,
       agent_type: "claude",
       model_overrides: null,
-      origin_workspace_id: null,
       host_id: null,
     };
     expect(unplaceable(base)).toBeNull();
     expect(unplaceable({ ...base, plan_only: 1 })).toMatch(/plan-only/);
     expect(unplaceable({ ...base, plan: 1 })).toMatch(/plan-first/);
-    expect(unplaceable({ ...base, origin_workspace_id: "w" })).toMatch(
-      /orchestrator/
-    );
     expect(unplaceable({ ...base, host_id: "h" })).toMatch(/pinned/);
     expect(unplaceable({ ...base, agent_type: "codex" })).toMatch(/Claude/);
   });

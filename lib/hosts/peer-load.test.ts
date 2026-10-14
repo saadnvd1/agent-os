@@ -3,6 +3,7 @@ import {
   PEER_POLL_MS,
   PEER_STALE_MS,
   parseReading,
+  peerReading,
   peerSource,
   refreshPeers,
   setPeerReading,
@@ -29,6 +30,7 @@ describe("parseReading", () => {
 
   it.each([
     ["not an object", "green"],
+    ["no level yet (before its first sample)", { ...body, level: null }],
     ["an unknown level", { ...body, level: "purple" }],
     ["a negative load", { ...body, load1: -1 }],
     ["no cores", { ...body, cores: 0 }],
@@ -62,6 +64,17 @@ describe("the peer poll", () => {
       level: "green",
       stale: false,
     });
+  });
+
+  it("a machine that is no longer linked fails only its own fetch", async () => {
+    await expect(
+      refreshPeers([id, "no-such-host"], 1000, async (h) => {
+        if (h === id) return body;
+        throw new Error("not linked");
+      })
+    ).resolves.toBeUndefined();
+    expect(peerReading(id)).not.toBeNull();
+    await expect(refreshPeers(["no-such-host"], 1000)).resolves.toBeUndefined();
   });
 
   it("a reading older than 60 seconds is stale, and so is none", async () => {

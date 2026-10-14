@@ -54,6 +54,7 @@ import {
   parseNeeds,
   place,
   unplaceable,
+  wantsPlacing,
   type Need,
   type Placement,
   type PeerOption,
@@ -886,20 +887,24 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
   // linked machine, best score first, one per machine per look.
   const placements = new Map<string, Placement>();
   const home = localView(now);
-  const wantsPlacing = candidates.filter(
-    (c) => c.kind === "start" && !c.remote && !unplaceable(row(c.id)!)
+  const toPlace = candidates.filter(
+    (c) =>
+      c.kind === "start" &&
+      !c.remote &&
+      !unplaceable(row(c.id)!) &&
+      wantsPlacing(c, home, now)
   );
-  if (wantsPlacing.length) {
+  if (toPlace.length) {
     const before = lineSignature();
     const peers = await peerOptions(
-      wantsPlacing.map((c) => rows.find((r) => r.id === c.id)!),
+      toPlace.map((c) => rows.find((r) => r.id === c.id)!),
       now
     );
     // The line moved while the machines were asked: this look is stale, and
     // the one a change during it asks for sees the line as it is now.
     if (lineSignature() !== before) return "stale";
     const taken = new Set<string>();
-    for (const c of [...wantsPlacing].sort(
+    for (const c of [...toPlace].sort(
       (a, b) =>
         scoreParts(b, now).score - scoreParts(a, now).score ||
         a.position - b.position
@@ -941,7 +946,8 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
   }
 
   const plan = planStarts(candidates, groups, home, now);
-  for (const r of queued) noteWaiting(r, plan.explain.get(r.id));
+  for (const r of queued)
+    noteWaiting(r, withStayReason(r, plan.explain.get(r.id)));
 
   for (const id of plan.start) {
     if (id.startsWith("resume:")) {
@@ -960,6 +966,25 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
 
 // Writes why a row waits when that changed: its hold text and code. A bare
 // rank isn't stored (the view computes it), so the stream stays quiet.
+const MACHINE_HOLDS = new Set<WaitCode>([
+  "load_red",
+  "load_amber",
+  "heavy",
+  "needs",
+]);
+
+// A hold on this machine's load says, for a task that can't go elsewhere,
+// why it waits here instead of starting on a linked machine.
+function withStayReason(
+  r: QueueRow,
+  explain: { code: WaitCode | null; text: string | null } | undefined
+) {
+  if (!explain?.code || !explain.text || !MACHINE_HOLDS.has(explain.code))
+    return explain;
+  const why = unplaceable(r);
+  return why ? { ...explain, text: `${explain.text} (${why})` } : explain;
+}
+
 function noteWaiting(
   r: QueueRow,
   explain: { code: WaitCode | null; text: string | null } | undefined

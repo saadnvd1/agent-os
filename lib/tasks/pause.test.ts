@@ -9,6 +9,7 @@ let turnEnds: Promise<{ stopped: true } | { stopped: false; reason: string }> =
 const released: string[] = [];
 const killed: string[] = [];
 const launched: { prompt: string; resume?: string }[] = [];
+let failLaunch = false;
 let tmuxAlive = false;
 
 vi.mock("@/lib/chat/runner", () => ({
@@ -31,8 +32,10 @@ vi.mock("./start", () => ({
   killTmux: async (name: string) => void killed.push(name),
 }));
 vi.mock("@/lib/agents/launch", () => ({
-  launchClaude: async (o: { prompt: string; resume?: string }) =>
-    void launched.push({ prompt: o.prompt, resume: o.resume }),
+  launchClaude: async (o: { prompt: string; resume?: string }) => {
+    if (failLaunch) throw new Error("launch failed");
+    launched.push({ prompt: o.prompt, resume: o.resume });
+  },
 }));
 
 const {
@@ -125,6 +128,7 @@ beforeEach(() => {
   released.length = 0;
   killed.length = 0;
   launched.length = 0;
+  failLaunch = false;
   tmuxAlive = false;
   forgetDriving();
 });
@@ -402,6 +406,39 @@ describe("a terminal task", () => {
     expect(() => requestPause(t.id, { until: hour(1) })).toThrow(
       /waiting on you/
     );
+  });
+
+  it("refuses a terminal whose agent can't be started again", () => {
+    const t = terminal();
+    db.prepare(`UPDATE sessions SET agent_type = 'codex' WHERE id = ?`).run(
+      t.id
+    );
+    expect(() => requestPause(t.id, { until: hour(1) })).toThrow(
+      /started again/
+    );
+    db.prepare(
+      `UPDATE sessions SET agent_type = 'claude', claude_session_id = NULL WHERE id = ?`
+    ).run(t.id);
+    expect(() => requestPause(t.id, { until: hour(1) })).toThrow(
+      /started again/
+    );
+    expect(activePause(t.id)).toBeNull();
+  });
+
+  it("a relaunch that fails ends the pause with the reason, not stuck resuming", async () => {
+    const t = terminal();
+    requestPause(t.id, { until: hour(1) });
+    await settle();
+    failLaunch = true;
+    await claimResume(t.id, { reason: "person" });
+    expect(activePause(t.id)).toBeNull();
+    expect(sess(t.id).pause_state).toBeNull();
+    const ended = db
+      .prepare(`SELECT end_reason FROM task_pauses WHERE session_id = ?`)
+      .get(t.id) as { end_reason: string };
+    expect(ended.end_reason).toBe("failed");
+    await sweepPauses();
+    expect(launched).toHaveLength(0);
   });
 
   it("a cut-off relaunch is finished by the sweep from the held rows, once", async () => {

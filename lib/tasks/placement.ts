@@ -135,11 +135,9 @@ export function unplaceable(r: {
   plan: number | null;
   agent_type: string | null;
   model_overrides: string | null;
-  origin_workspace_id: string | null;
   host_id: string | null;
 }): string | null {
   if (r.host_id) return "it was pinned to a machine";
-  if (r.origin_workspace_id) return "orchestrator tasks run on this machine";
   if (r.plan_only) return "plan-only tasks run on this machine";
   if (r.plan) return "plan-first tasks run on this machine";
   if (r.agent_type && r.agent_type !== "claude")
@@ -172,6 +170,18 @@ const LOAD_HOLDS = new Set<Hold["code"]>([
   "heavy",
 ]);
 
+// True when the home machine's load or needs rule this start out, which is
+// the only time a linked machine is worth asking.
+export const wantsPlacing = (
+  c: Pick<Candidate, "heavy" | "needsUnmet" | "remote" | "priority">,
+  home: MachineView,
+  now: number
+): boolean => {
+  if (c.remote || home.reading) return false;
+  const hold = machineHold(c, home, now);
+  return !!hold && LOAD_HOLDS.has(hold.code);
+};
+
 // Null: start it at home (or hold it there for a reason placing doesn't
 // change). Otherwise the best linked machine that is green, fresh, has the
 // project and meets the needs.
@@ -182,9 +192,8 @@ export function place(
   needs: Need[],
   now: number
 ): Placement | null {
-  if (c.remote || home.reading) return null;
-  const hold = machineHold(c, home, now);
-  if (!hold || !LOAD_HOLDS.has(hold.code)) return null;
+  if (!wantsPlacing(c, home, now)) return null;
+  const hold = machineHold(c, home, now)!;
   const options = peers
     .filter(
       (p) =>

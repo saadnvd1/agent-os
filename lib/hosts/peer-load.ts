@@ -62,7 +62,7 @@ export function parseReading(body: unknown, at: number): PeerReading | null {
 
 export type LoadFetch = (hostId: string) => Promise<unknown>;
 
-const fetchLoad: LoadFetch = (hostId) => {
+const fetchLoad: LoadFetch = async (hostId) => {
   const link = hostLink(hostId);
   if (!link) throw new Error("not linked");
   return hostApi<unknown>(link, "/api/load", { timeout: 5000 });

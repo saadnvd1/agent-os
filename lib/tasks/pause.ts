@@ -62,10 +62,10 @@ const CRITICAL =
   /\bgit\s+(push|rebase|commit|merge)\b|\bgh\s+pr\s+(create|merge)\b/;
 
 const g = globalThis as unknown as {
-  __agentosPauseDriving?: Set<number>;
+  __agentosPauseDriving?: Map<number, symbol>;
   __agentosPauseTimer?: ReturnType<typeof setInterval>;
 };
-const driving = (g.__agentosPauseDriving ??= new Set<number>());
+const driving = (g.__agentosPauseDriving ??= new Map<number, symbol>());
 
 const nudge = () =>
   void import("./queue").then((q) => q.tickQueueSoon()).catch(() => undefined);
@@ -116,6 +116,9 @@ function factsOf(s: Session): PauseFacts {
     openQuestion: !!question,
     escalated: holdingEscalations(s.id).length > 0,
     planAwaiting: s.plan_phase === "awaiting",
+    resumable:
+      s.view === "chat" ||
+      (s.agent_type === "claude" && !!s.claude_session_id && !!s.worktree_path),
   };
 }
 
@@ -165,8 +168,8 @@ export function requestPause(sessionId: string, req: PauseRequest): TaskPause {
       until ? toSqliteTime(until) : null,
       sessionId
     );
-    if (mode === "now") driving.delete(existing.id);
-    drive(sessionId, existing.id);
+    // "Pause now" takes over: the first driver is superseded, not raced.
+    drive(sessionId, existing.id, mode === "now");
     return pauseRow(existing.id)!;
   }
   const refusal = pauseRefusal(factsOf(s));
@@ -202,11 +205,16 @@ function criticalInFlight(sessionId: string): boolean {
     )
     .all(sessionId) as { data: string }[];
   return rows.some((r) => {
-    const item = JSON.parse(r.data) as {
+    let item: {
       name?: string;
       status?: string;
       input?: { command?: unknown };
     };
+    try {
+      item = JSON.parse(r.data);
+    } catch {
+      return false;
+    }
     return (
       item.status === "running" &&
       item.name === "Bash" &&
@@ -222,20 +230,24 @@ function stillPausing(pauseId: number): boolean {
   return pauseRow(pauseId)?.state === "pausing";
 }
 
-// Ends the agent at the turn boundary (or now), then marks it paused.
-function drive(sessionId: string, pauseId: number): void {
-  if (driving.has(pauseId)) return;
-  driving.add(pauseId);
+// Ends the agent at the turn boundary (or now), then marks it paused. Each
+// driver holds a token; a newer one (pause now) replaces it, and the old one
+// then does nothing with its outcome.
+function drive(sessionId: string, pauseId: number, takeOver = false): void {
+  if (driving.has(pauseId) && !takeOver) return;
+  const token = Symbol(String(pauseId));
+  driving.set(pauseId, token);
+  const mine = () => driving.get(pauseId) === token;
   void (async () => {
     try {
-      const outcome = await stopAgent(sessionId, pauseId);
-      if (!stillPausing(pauseId)) return;
+      const outcome = await stopAgent(sessionId, pauseId, mine);
+      if (!mine() || !stillPausing(pauseId)) return;
       if (outcome !== true) return void cancelPause(sessionId, outcome);
       markPaused(sessionId, pauseId);
     } catch (error) {
       console.error("[pause] stop:", error);
     } finally {
-      driving.delete(pauseId);
+      if (mine()) driving.delete(pauseId);
     }
   })();
 }
@@ -243,7 +255,8 @@ function drive(sessionId: string, pauseId: number): void {
 // True when the agent is stopped; otherwise why it couldn't be.
 async function stopAgent(
   sessionId: string,
-  pauseId: number
+  pauseId: number,
+  mine: () => boolean
 ): Promise<true | string> {
   const s = sessionOf(sessionId);
   if (!s) return "No such session";
@@ -251,7 +264,7 @@ async function stopAgent(
     const row = pauseRow(pauseId)!;
     if (row.mode === "now") {
       for (let waited = 0; criticalInFlight(sessionId); waited += 1000) {
-        if (!stillPausing(pauseId)) return true;
+        if (!mine() || !stillPausing(pauseId)) return true;
         if (waited >= CRITICAL_WAIT_MS)
           return "a push or merge was still running; try again once it ends";
         await sleep(1000);
@@ -272,7 +285,7 @@ async function stopAgent(
   }
   // A terminal: at the boundary, when its status reads idle.
   for (let waited = 0; ; waited += 2000) {
-    if (!stillPausing(pauseId)) return true;
+    if (!mine() || !stillPausing(pauseId)) return true;
     const now = sessionOf(sessionId);
     if (!now) return "No such session";
     if (now.status === "waiting") return "it's waiting on you";
@@ -372,7 +385,10 @@ export function requestResume(sessionId: string, actor: PauseBy): void {
   ).run(actor, row.id);
   const s = sessionOf(sessionId);
   if (s?.task_status) nudge();
-  else void claimResume(sessionId, { reason: actor });
+  else
+    void claimResume(sessionId, { reason: actor }).catch((error) =>
+      console.error("[pause] resume:", error)
+    );
 }
 
 // A person's Resume now: past the slot limit, like Start now.
@@ -540,7 +556,12 @@ export async function claimResume(
     );
     settleResume(sessionId);
   } else {
-    await finishTerminalResume(s, row.id, prompt);
+    try {
+      await finishTerminalResume(s, row.id, prompt);
+    } catch (error) {
+      failResume(s, row.id, error);
+      return "gone";
+    }
   }
   say(
     s,
@@ -548,6 +569,23 @@ export async function claimResume(
     `Task "${s.name}" resumed${held.length ? `; ${held.length} held message${held.length === 1 ? "" : "s"} went with it` : ""}.`
   );
   return "resumed";
+}
+
+// A relaunch that can't happen ends the pause with the reason shown, instead
+// of leaving it stuck in resuming for the sweep to retry forever.
+function failResume(s: Session, pauseId: number, error: unknown): void {
+  console.error("[pause] relaunch:", error);
+  const row = pauseRow(pauseId);
+  if (row) endPause(row, "failed");
+  db.prepare(
+    `UPDATE bus_messages SET read_at = COALESCE(read_at, datetime('now'))
+     WHERE held_pause_id = ? AND delivered_at IS NULL`
+  ).run(pauseId);
+  say(
+    s,
+    `resume-failed:${pauseId}`,
+    `Task "${s.name}" could not be resumed: ${error instanceof Error ? error.message : String(error)}. Its held messages were not delivered; reopen it by hand.`
+  );
 }
 
 async function finishTerminalResume(
@@ -650,7 +688,7 @@ export async function sweepPauses(now = Date.now()): Promise<void> {
           s,
           row.id,
           buildPrompt(row, takeHeldBus(s.id, row.id))
-        ).catch((error) => console.error("[pause] relaunch:", error));
+        ).catch((error) => failResume(s, row.id, error));
       }
     }
   }

@@ -98,8 +98,8 @@ row says why it waits: `#2 of 5 · Urgent`, `Waiting: this machine load red`,
   its load at `GET /api/load`; the queue asks linked machines every 15 s while
   work is waiting, and a reading older than a minute counts as red. Work that
   needs a Mac never leaves it, and a task already running is never moved.
-  Plan-only, plan-first, orchestrator-started, pinned and non-Claude tasks
-  stay on this machine and wait.
+  Plan-only, plan-first, pinned and non-Claude tasks stay on this machine
+  and wait; the hold says why.
 - **After any.** `after: "any"` consumes one finish: three waiters and one
   finish start one of them.
 - **Usage window.** Only while the orchestrator's brakes are on.

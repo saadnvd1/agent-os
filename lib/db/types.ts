@@ -201,7 +201,7 @@ export interface TaskPause {
   resume_by_kind: string | null;
   resumed_at: string | null;
   ended_at: string | null;
-  end_reason: "resumed" | "cancelled" | "finished" | null;
+  end_reason: "resumed" | "cancelled" | "finished" | "failed" | null;
   interrupted: number;
   held_count: number;
 }

@@ -236,4 +236,4 @@
 - [ ] A project settings screen for `machine.needs` (today: `agentos.json`, brief tag or inferred)
 - [ ] Move a paused task to a linked machine
 - [ ] A task pausing itself (`aos pause`, turn boundary only)
-- [ ] Placement for plan-only, plan-first and orchestrator-started tasks (`startRemoteTask` refuses them today)
+- [ ] Placement for plan-only and plan-first tasks (`startRemoteTask` refuses them today)

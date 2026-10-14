@@ -38,7 +38,7 @@ export function pausedNote(name: string, hold: PauseHold): string {
 
 export function endPause(
   row: Pick<TaskPause, "id" | "session_id">,
-  reason: "resumed" | "cancelled" | "finished"
+  reason: "resumed" | "cancelled" | "finished" | "failed"
 ): void {
   db.transaction(() => {
     db.prepare(

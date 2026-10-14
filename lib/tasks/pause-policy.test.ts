@@ -24,6 +24,7 @@ const facts = (over: Partial<PauseFacts> = {}): PauseFacts => ({
   openQuestion: false,
   escalated: false,
   planAwaiting: false,
+  resumable: true,
   ...over,
 });
 
@@ -37,6 +38,7 @@ describe("pauseRefusal", () => {
     ["an orchestrator", { isOrchestrator: true }, /orchestrator/i],
     ["a quick change", { isQuickChange: true }, /quick change/],
     ["a remote session", { isRemote: true }, /another machine/],
+    ["an agent it can't restart", { resumable: false }, /started again/],
     ["a task that isn't running", { taskStatus: "merged" }, /merged/],
     ["one already paused", { pauseState: "paused" }, /already paused/],
     ["one that is merging", { merging: true }, /merging/],

@@ -5,6 +5,7 @@ import type { Session } from "@/lib/db";
 import { db } from "@/lib/db";
 import { changeWatcher } from "@/lib/db/changes";
 import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
+import { resetMachineStarts } from "@/lib/load/start-gate";
 import { setPaused } from "@/lib/orchestrator/pause";
 import { updateWorkspace } from "@/lib/workspaces";
 import type { MachineView } from "./schedule";
@@ -154,6 +155,7 @@ beforeEach(() => {
   startedOn.clear();
   peers = {};
   machine = greenView();
+  resetMachineStarts();
   db.prepare(`UPDATE task_queue SET status = 'removed'`).run();
 });
 
@@ -754,6 +756,7 @@ describe("after any consumes a finish", () => {
     const b = seedSession({ projectId: t.app.id, name: "b", task: true });
     queueIfNeeded({ projectId: t.app.id, prompt: "w1", after: "any" });
     queueIfNeeded({ projectId: t.app.id, prompt: "w2", after: "any" });
+    await tickQueue();
     finish(t.task);
     finish(b);
     await tickQueue();
@@ -834,6 +837,8 @@ describe("machine load", () => {
     const t = setup(null);
     afterTask(t, "one");
     afterTask(t, "two");
+    // The look queueing set off ends first, so the next one is the only one.
+    await tickQueue();
     finish(t.task);
     await tickQueue();
     expect(started.map((s) => s.prompt)).toEqual(["one"]);
@@ -916,14 +921,31 @@ describe("placement on a linked machine", () => {
     expect(started).toEqual([]);
   });
 
-  it("keeps plan-only and orchestrator tasks here", async () => {
+  it("keeps plan-only tasks here, and says why in the hold", async () => {
     const t = setup(null);
-    queue(t, "plan it", { planOnly: true });
+    const q = queue(t, "plan it", { planOnly: true });
     finish(t.task);
     redHome();
     peers = { box: { level: "green" } };
     await tick();
     expect(started).toEqual([]);
+    expect(waitOf(q.id).note).toMatch(/plan-only tasks run on this machine/);
+  });
+
+  it("places an orchestrator's task and tells it where it started", async () => {
+    const t = setup(null);
+    const q = queue(t, "orch work", { originWorkspaceId: t.workspace.id });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green" } };
+    await tick();
+    expect(startedOn.get("orch work")).toBe("box");
+    const event = db
+      .prepare(
+        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE ?`
+      )
+      .get(t.workspace.id, `%queued-start:${q.id}`) as { line: string };
+    expect(event.line).toContain("started on box · this machine load red");
   });
 
   it("starts at home when the home machine is free", async () => {

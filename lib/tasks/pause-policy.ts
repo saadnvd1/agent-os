@@ -26,6 +26,9 @@ export interface PauseFacts {
   openQuestion: boolean;
   escalated: boolean;
   planAwaiting: boolean;
+  // A terminal whose agent can be started again from its saved conversation
+  // (Claude with a conversation id). A chat always can.
+  resumable: boolean;
 }
 
 // Why it can't be paused now, or null.
@@ -35,6 +38,8 @@ export function pauseRefusal(f: PauseFacts): string | null {
   if (f.isQuickChange)
     return "A quick change runs no agent, so there is nothing to pause";
   if (f.isRemote) return "It runs on another machine: pause it from there";
+  if (!f.resumable)
+    return "Its agent can't be started again from where it stopped, so it can't be paused";
   if (f.isTask && f.taskStatus && f.taskStatus !== "running")
     return `It's ${f.taskStatus}, not running`;
   if (f.pauseState === "paused") return "It's already paused";

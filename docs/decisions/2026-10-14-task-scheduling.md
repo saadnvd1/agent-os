@@ -32,10 +32,13 @@ task can be paused for a set time.
   needs gets it, through the existing start-on-a-machine path. Linked machines
   report `GET /api/load`; they are asked every 15 s while work waits. Work
   that needs a Mac never leaves it, and a running task is never moved by the
-  scheduler. The kinds of task the remote start path refuses (plan-only,
-  plan-first, orchestrator-started, pinned, non-Claude, per-role models) are
-  kept as holds with a reason: lifting them changes what runs on the other
-  machine and is not small.
+  scheduler. Orchestrator-started tasks are placed like any other (the
+  orchestrator hears "started on <machine> · <why>"). The kinds of task the
+  remote start path refuses (plan-only, plan-first, pinned, non-Claude,
+  per-role models) are kept as holds, and the hold text says why it stays
+  here: lifting them changes what runs on the other machine and is not small.
+  A machine that hasn't taken its first sample reports no level, which the
+  asker reads as no reading, never as green.
 - **Pause.** `running → pausing → paused → resuming → running`. The agent
   process is ended at the end of its step (or at once for "pause now", after a
   push or merge in flight), never frozen; its worktree and conversation stay.

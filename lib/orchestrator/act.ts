@@ -382,7 +382,10 @@ export function setTaskPriority(
   }
   const task = workspaceTask(workspaceId, ref);
   setPriority(task.id, priority);
-  return `${task.name} is ${priority}. It's running, so this only matters if it is paused and waits to resume.`;
+  const running = task.task_status === "running";
+  return running
+    ? `${task.name} is ${priority}. It's running, so this only matters if it is paused and waits to resume.`
+    : `${task.name} is ${priority}. It's ${task.task_status ?? "not queued"}, so this changes nothing now.`;
 }
 
 const PAUSE_FOR: Record<string, PausePreset> = {
