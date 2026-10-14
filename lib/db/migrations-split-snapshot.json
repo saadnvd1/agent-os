@@ -468,11 +468,16 @@
     },
     {
       "id": 94,
+      "key": "20261014T1900_pause_note",
+      "name": "pause_note"
+    },
+    {
+      "id": 95,
       "key": "20261014T2000_chat_bookmarks",
       "name": "chat_bookmarks"
     },
     {
-      "id": 95,
+      "id": 96,
       "key": "20261014T2100_gate_failure_ask_held",
       "name": "gate_failure_ask_held"
     }
@@ -1244,7 +1249,7 @@
       "type": "table",
       "name": "sessions",
       "tbl_name": "sessions",
-      "sql": "CREATE TABLE sessions (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL DEFAULT (datetime('now')),\n      updated_at TEXT NOT NULL DEFAULT (datetime('now')),\n      status TEXT NOT NULL DEFAULT 'idle',\n      working_directory TEXT NOT NULL DEFAULT '~',\n      parent_session_id TEXT,\n      claude_session_id TEXT,\n      model TEXT DEFAULT 'opus',\n      system_prompt TEXT,\n      group_path TEXT NOT NULL DEFAULT 'sessions',\n      agent_type TEXT NOT NULL DEFAULT 'claude', worktree_path TEXT, branch_name TEXT, base_branch TEXT, dev_server_port INTEGER, pr_url TEXT, pr_number INTEGER, pr_status TEXT, conductor_session_id TEXT REFERENCES sessions(id), worker_task TEXT, worker_status TEXT, auto_approve INTEGER NOT NULL DEFAULT 0, project_id TEXT REFERENCES projects(id), tmux_name TEXT, host_id TEXT NOT NULL DEFAULT 'local', task_prompt TEXT, task_status TEXT, view TEXT NOT NULL DEFAULT 'terminal', lh_card_id TEXT, lh_board_id TEXT, lh_card_list TEXT, chat_access TEXT NOT NULL DEFAULT 'full', chat_resume_at TEXT, last_seen_at TEXT, role TEXT, workspace_id TEXT, orch_token TEXT, archived_at TEXT, pinned INTEGER NOT NULL DEFAULT 0, chat_suggestion TEXT, chat_plan INTEGER NOT NULL DEFAULT 0, chat_context TEXT, chat_usage TEXT, name_source TEXT NOT NULL DEFAULT 'default', setup_status TEXT, setup_ms INTEGER, setup_error TEXT, task_brief TEXT, moved_to TEXT, moved_from TEXT, port_slot INTEGER, ports TEXT, database TEXT, peer_mirror INTEGER NOT NULL DEFAULT 0, chat_restarted INTEGER NOT NULL DEFAULT 0, chat_tools_digest TEXT, merge_armed_at TEXT, merge_armed_seen TEXT, rebased_from TEXT, rebased_to TEXT, rebase_asked_head TEXT, chat_refreshed INTEGER NOT NULL DEFAULT 0, pr_wake_since TEXT, merged_at TEXT, task_ended_at TEXT, model_provider TEXT, model_overrides TEXT, plan_phase TEXT, quick_of TEXT, started_by TEXT, plan_decided INTEGER, plan_reason TEXT, task_since TEXT, held_by_device TEXT, held_from TEXT, plan_note TEXT, held_for TEXT, held_for_name TEXT, plan_only INTEGER, plan_edits TEXT, active_at TEXT, settled_at TEXT, snoozed_until TEXT, snoozed_at TEXT, priority TEXT, pause_state TEXT, paused_until TEXT, pause_id INTEGER, placed_note TEXT, started_by_device TEXT,\n      FOREIGN KEY (parent_session_id) REFERENCES sessions(id)\n    )"
+      "sql": "CREATE TABLE sessions (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      created_at TEXT NOT NULL DEFAULT (datetime('now')),\n      updated_at TEXT NOT NULL DEFAULT (datetime('now')),\n      status TEXT NOT NULL DEFAULT 'idle',\n      working_directory TEXT NOT NULL DEFAULT '~',\n      parent_session_id TEXT,\n      claude_session_id TEXT,\n      model TEXT DEFAULT 'opus',\n      system_prompt TEXT,\n      group_path TEXT NOT NULL DEFAULT 'sessions',\n      agent_type TEXT NOT NULL DEFAULT 'claude', worktree_path TEXT, branch_name TEXT, base_branch TEXT, dev_server_port INTEGER, pr_url TEXT, pr_number INTEGER, pr_status TEXT, conductor_session_id TEXT REFERENCES sessions(id), worker_task TEXT, worker_status TEXT, auto_approve INTEGER NOT NULL DEFAULT 0, project_id TEXT REFERENCES projects(id), tmux_name TEXT, host_id TEXT NOT NULL DEFAULT 'local', task_prompt TEXT, task_status TEXT, view TEXT NOT NULL DEFAULT 'terminal', lh_card_id TEXT, lh_board_id TEXT, lh_card_list TEXT, chat_access TEXT NOT NULL DEFAULT 'full', chat_resume_at TEXT, last_seen_at TEXT, role TEXT, workspace_id TEXT, orch_token TEXT, archived_at TEXT, pinned INTEGER NOT NULL DEFAULT 0, chat_suggestion TEXT, chat_plan INTEGER NOT NULL DEFAULT 0, chat_context TEXT, chat_usage TEXT, name_source TEXT NOT NULL DEFAULT 'default', setup_status TEXT, setup_ms INTEGER, setup_error TEXT, task_brief TEXT, moved_to TEXT, moved_from TEXT, port_slot INTEGER, ports TEXT, database TEXT, peer_mirror INTEGER NOT NULL DEFAULT 0, chat_restarted INTEGER NOT NULL DEFAULT 0, chat_tools_digest TEXT, merge_armed_at TEXT, merge_armed_seen TEXT, rebased_from TEXT, rebased_to TEXT, rebase_asked_head TEXT, chat_refreshed INTEGER NOT NULL DEFAULT 0, pr_wake_since TEXT, merged_at TEXT, task_ended_at TEXT, model_provider TEXT, model_overrides TEXT, plan_phase TEXT, quick_of TEXT, started_by TEXT, plan_decided INTEGER, plan_reason TEXT, task_since TEXT, held_by_device TEXT, held_from TEXT, plan_note TEXT, held_for TEXT, held_for_name TEXT, plan_only INTEGER, plan_edits TEXT, active_at TEXT, settled_at TEXT, snoozed_until TEXT, snoozed_at TEXT, priority TEXT, pause_state TEXT, paused_until TEXT, pause_id INTEGER, placed_note TEXT, started_by_device TEXT, pause_note TEXT,\n      FOREIGN KEY (parent_session_id) REFERENCES sessions(id)\n    )"
     },
     {
       "type": "table",
