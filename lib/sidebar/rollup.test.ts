@@ -45,6 +45,10 @@ const queueItem = (
   note: null,
   error: null,
   startedBy: null,
+  priority: "normal",
+  wait: null,
+  rank: 1,
+  of: 1,
   createdAt: "2026-10-11T00:00:00Z",
   ...over,
 });

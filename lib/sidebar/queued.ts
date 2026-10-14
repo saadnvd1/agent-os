@@ -1,4 +1,9 @@
 import type { QueuedTaskView } from "@/lib/tasks/queue";
+import {
+  PRIORITIES,
+  PRIORITY_LABEL,
+  type Priority,
+} from "@/lib/tasks/schedule-types";
 
 export interface QueuedRow {
   item: QueuedTaskView;
@@ -71,7 +76,35 @@ export function queuedSubtitle(item: QueuedTaskView): {
   // Why a start it tried is held: the orchestrator paused, a brake.
   if (item.note) return { lead: item.note, after: null };
   if (item.after) return { lead: "After", after: item.after };
-  return { lead: `#${item.position} in line`, after: null };
+  const priority =
+    item.priority === "normal" ? "" : ` · ${PRIORITY_LABEL[item.priority]}`;
+  return { lead: `#${item.rank} of ${item.of}${priority}`, after: null };
+}
+
+// The priority choices for a waiting task's menu, the current one marked.
+export function priorityMenu(
+  item: Pick<QueuedTaskView, "priority" | "status">
+): { priority: Priority; label: string; current: boolean }[] {
+  if (item.status !== "queued") return [];
+  return PRIORITIES.map((priority) => ({
+    priority,
+    label: PRIORITY_LABEL[priority],
+    current: priority === item.priority,
+  }));
+}
+
+export function priorityRequest(
+  id: string,
+  priority: Priority
+): { url: string; init: RequestInit } {
+  return {
+    url: `/api/tasks/${encodeURIComponent(id)}/priority`,
+    init: {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority }),
+    },
+  };
 }
 
 export type QueueMenuAction = "start" | "up" | "down" | "remove";

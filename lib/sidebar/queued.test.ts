@@ -19,6 +19,10 @@ const item = (
   note: null,
   error: null,
   startedBy: null,
+  priority: "normal",
+  wait: null,
+  rank: 1,
+  of: 1,
   createdAt: "2026-10-10T00:00:00Z",
   ...over,
 });
@@ -150,10 +154,13 @@ describe("queuedRows without a workspace", () => {
 
 describe("queuedSubtitle", () => {
   it("says its place, its wait, a hold, or what went wrong", () => {
-    expect(queuedSubtitle(item("a", { position: 2 }))).toEqual({
-      lead: "#2 in line",
+    expect(queuedSubtitle(item("a", { position: 2, rank: 2, of: 5 }))).toEqual({
+      lead: "#2 of 5",
       after: null,
     });
+    expect(
+      queuedSubtitle(item("a", { rank: 1, of: 3, priority: "urgent" })).lead
+    ).toBe("#1 of 3 · Urgent");
     expect(queuedSubtitle(item("a", { after: "Fix login" }))).toEqual({
       lead: "After",
       after: "Fix login",

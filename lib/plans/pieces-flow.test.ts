@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { retireChat } = vi.hoisted(() => ({
   retireChat: vi.fn(async () => {}),
 }));
+// These tests start tasks; the machine's real load must not decide whether they queue.
+process.env.AGENTOS_LOAD = "off";
+
 vi.mock("../chat/runner", () => ({ retireChat, sendQueuedNow: vi.fn() }));
 const { doneSession } = vi.hoisted(() => ({
   doneSession: vi.fn(async () => ({})),

@@ -151,6 +151,19 @@
       "required": ["start"],
       "additionalProperties": false
     },
+    "machine": {
+      "type": "object",
+      "properties": {
+        "needs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["mac", "xcode", "simulator"]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "database": {
       "type": "object",
       "properties": {

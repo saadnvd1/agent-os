@@ -1,7 +1,8 @@
 import { parseOverride } from "@/lib/models/resolve";
 import { NextRequest, NextResponse } from "next/server";
 import { createTask, listTasks, movedTasks } from "@/lib/tasks";
-import { startOrQueue } from "@/lib/tasks/queue";
+import { stampPriority, startOrQueue } from "@/lib/tasks/queue";
+import { isPriority } from "@/lib/tasks/schedule-types";
 import { TASK_CAPABILITIES } from "@/lib/tasks/remote";
 import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
 import { isSessionId, statusFor } from "@/lib/tasks/move-bundle";
@@ -40,12 +41,20 @@ export async function POST(request: NextRequest) {
       plan,
       plan_reason,
       plan_only,
+      priority,
+      machine,
     } = await request.json();
     if (id !== undefined && !isSessionId(id)) throw new Error("Bad task id");
     const pid =
       project && typeof project === "object"
         ? (await ensureProject(project as ProjectRef)).id
         : projectId;
+    if (priority !== undefined && !isPriority(priority))
+      throw new Error(
+        "Priority is one of: urgent, blocking, normal, background"
+      );
+    if (machine !== undefined && machine !== "any" && machine !== "mac")
+      throw new Error('Machine is "any" or "mac"');
     if (agent !== undefined && !isValidAgentType(agent))
       throw new Error("Unknown agent");
     if (agent && agent !== "claude" && model != null && model !== "")
@@ -76,12 +85,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ session }, { status: 201 });
     }
     const out = await startOrQueue(
-      { ...opts, after: typeof after === "string" ? after : undefined },
+      {
+        ...opts,
+        after: typeof after === "string" ? after : undefined,
+        priority,
+        machine,
+      },
       () => createTask(opts)
     );
     if ("queued" in out)
       return NextResponse.json({ queued: out.queued }, { status: 202 });
     const session = out.started;
+    stampPriority(session.id, priority);
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

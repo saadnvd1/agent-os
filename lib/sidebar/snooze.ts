@@ -100,3 +100,29 @@ export function wakeLabel(
     return `${date.toLocaleDateString("en-US", { timeZone, weekday: "short" })} ${time}`;
   return `${date.toLocaleDateString("en-US", { timeZone, month: "short", day: "numeric" })}, ${time}`;
 }
+
+// How long a paused session stays paused: a set time, or until someone
+// resumes it. "Tomorrow" is the same 9am as Snooze's.
+export type PausePreset = "1h" | "2h" | "tomorrow" | "until-resumed";
+
+export const PAUSE_PRESETS: { key: PausePreset; label: string }[] = [
+  { key: "1h", label: "For 1 hour" },
+  { key: "2h", label: "For 2 hours" },
+  { key: "tomorrow", label: "Until tomorrow 9 AM" },
+  { key: "until-resumed", label: "Until I resume" },
+];
+
+// The instant a pause ends; null: until resumed.
+export function pauseUntil(
+  preset: PausePreset,
+  now: Date = new Date(),
+  timeZone: string = localZone()
+): Date | null {
+  if (preset === "1h") return new Date(now.getTime() + 3_600_000);
+  if (preset === "2h") return new Date(now.getTime() + 7_200_000);
+  if (preset === "tomorrow") return snoozePreset("tomorrow", now, timeZone);
+  return null;
+}
+
+export const isPausePreset = (v: unknown): v is PausePreset =>
+  PAUSE_PRESETS.some((p) => p.key === v);

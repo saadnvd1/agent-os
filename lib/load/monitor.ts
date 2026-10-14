@@ -1,6 +1,7 @@
 // The machine-load monitor: samples the load every 10s and each session's
 // process trees every 30s, pushes both over /ws/status, and raises one alert
-// when the load stays red. It never stops, pauses or queues anything.
+// when the load stays red. It never stops or pauses anything; it feeds the
+// start gate (start-gate.ts) that holds queued tasks while the load is red.
 import os from "os";
 import { db } from "../db";
 import { publishLoad } from "../status/hub";
@@ -11,6 +12,7 @@ import { readPressure } from "./pressure";
 import { readUsage, type Usage } from "./usage";
 import { workerTmuxName } from "../chat/worker/protocol";
 import { alertText, raiseAlert } from "./alert";
+import { LOCAL, feedGate, gateOpen } from "./start-gate";
 
 export const SAMPLE_MS = 10_000;
 export const USAGE_MS = 30_000;
@@ -53,6 +55,13 @@ const state: State = (g.__agentosLoad ??= {
   timers: [],
 });
 
+// The queue lives above this module (it reads the load); reach it lazily.
+function nudgeQueue(): void {
+  void import("../tasks/queue")
+    .then((q) => q.tickQueueSoon())
+    .catch(() => undefined);
+}
+
 export const heavyRegistry = () => state.registry;
 // AGENTOS_LOAD=off: no sampling, no notes, no alerts.
 export const loadEnabled = () => process.env.AGENTOS_LOAD !== "off";
@@ -78,8 +87,14 @@ async function sample(): Promise<void> {
   const cores = os.cpus().length || 1;
   const load1 = os.loadavg()[0];
   const pressure = await readPressure();
-  const level = nextLevel(state.level ?? "green", load1 / cores, pressure);
+  const prev = state.level;
+  const level = nextLevel(prev ?? "green", load1 / cores, pressure);
   state.level = level;
+  const t = Date.now();
+  const wasOpen = gateOpen(LOCAL, prev, t);
+  feedGate(LOCAL, level, t);
+  // Starts held for load go ahead within a sample of the gate opening.
+  if (prev !== level || wasOpen !== gateOpen(LOCAL, level, t)) nudgeQueue();
   const total = os.totalmem();
   const sessions: Record<string, Usage> = {};
   for (const s of Object.values(state.usage))

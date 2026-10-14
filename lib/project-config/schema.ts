@@ -69,6 +69,14 @@ const simulator = z.strictObject({
   device: z.string().min(1).optional(),
 });
 
+// What a project's tasks need from a machine (lib/tasks/placement.ts): `mac`,
+// `xcode`, `simulator`. A task whose needs a machine can't meet never starts
+// there; with none listed, repo files decide (an Xcode project implies all).
+export const MACHINE_NEEDS = ["mac", "xcode", "simulator"] as const;
+const machine = z.strictObject({
+  needs: z.array(z.enum(MACHINE_NEEDS)).optional(),
+});
+
 const database = z.strictObject({
   from: z.string().min(1),
   env: projectEnvName.optional(),
@@ -119,6 +127,7 @@ const shape = {
   notes: notes.optional(),
   browse: browse.optional(),
   simulator: simulator.optional(),
+  machine: machine.optional(),
   database: database.optional(),
   mcp: z.array(z.string().min(1)).optional(),
   model: z.string().min(1).optional(),

@@ -41,6 +41,15 @@ import { getOrchestrator } from "./home";
 import { addNote } from "./notes";
 import { findWorkspaceSession } from "./read";
 import { workspaceProject, workspaceStack, workspaceTask } from "./targets";
+import { setPriority, stampPriority } from "../tasks/queue";
+import {
+  PauseRefused,
+  activePause,
+  requestPause,
+  requestResume,
+} from "../tasks/pause";
+import { pauseUntil, type PausePreset } from "../sidebar/snooze";
+import type { Priority } from "../tasks/schedule-types";
 
 function orchestratorId(workspaceId: string): string {
   const o = getOrchestrator(workspaceId);
@@ -104,6 +113,8 @@ export async function startTask(
     plan?: boolean;
     planOnly?: boolean;
     planReason?: string;
+    priority?: Priority;
+    machine?: "mac" | "any";
   } = {}
 ): Promise<string> {
   if (opts.planOnly && opts.plan === false)
@@ -133,6 +144,8 @@ export async function startTask(
       baseBranch: opts.base || undefined,
       after: opts.after,
       originWorkspaceId: workspaceId,
+      priority: opts.priority,
+      machine: opts.machine,
     },
     () =>
       braked(
@@ -159,6 +172,7 @@ export async function startTask(
     return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}. It starts by itself; you'll get an event when it does.`;
   }
   const task = out.started;
+  if (opts.priority) stampPriority(task.id, opts.priority);
   const planOnlyNote = opts.planOnly
     ? " Plan only: it stops after the plan and waits; approve_plan continues it, drop rejects it."
     : "";
@@ -354,3 +368,64 @@ export async function moveTaskTo(
 
 const machineName = (hostId: string) =>
   getHost(hostId)?.name ?? "the other machine";
+
+// A queued task re-ranks at once; a running one only carries the word.
+export function setTaskPriority(
+  workspaceId: string,
+  ref: string,
+  priority: Priority
+): string {
+  const queued = findQueued(workspaceId, ref, { byName: true });
+  if (queued) {
+    setPriority(queued.id, priority);
+    return `${queued.name} is ${priority} in the queue now.`;
+  }
+  const task = workspaceTask(workspaceId, ref);
+  setPriority(task.id, priority);
+  return `${task.name} is ${priority}. It's running, so this only matters if it is paused and waits to resume.`;
+}
+
+const PAUSE_FOR: Record<string, PausePreset> = {
+  "1h": "1h",
+  "2h": "2h",
+  tomorrow: "tomorrow",
+  until_resumed: "until-resumed",
+};
+
+export function pauseTask(
+  workspaceId: string,
+  ref: string,
+  howLong: string,
+  now: boolean,
+  reason: string
+): string {
+  const task = workspaceTask(workspaceId, ref);
+  const preset = PAUSE_FOR[howLong];
+  if (!preset) throw new Error("for is 1h, 2h, tomorrow or until_resumed");
+  try {
+    requestPause(task.id, {
+      until: pauseUntil(preset),
+      mode: now ? "now" : "turn",
+      by: "orchestrator",
+      byId: orchestratorId(workspaceId),
+      reason,
+    });
+  } catch (error) {
+    if (error instanceof PauseRefused)
+      throw new Error(`Can't pause ${task.name}: ${error.message}`);
+    throw error;
+  }
+  return `Pausing ${task.name} ${now ? "now" : "at the end of its step"}. Its slot frees once it has stopped; an event says when.`;
+}
+
+export function resumeTask(workspaceId: string, ref: string): string {
+  const task = workspaceTask(workspaceId, ref);
+  if (!activePause(task.id)) throw new Error(`${task.name} isn't paused`);
+  try {
+    requestResume(task.id, "orchestrator");
+  } catch (error) {
+    if (error instanceof PauseRefused) throw new Error(error.message);
+    throw error;
+  }
+  return `${task.name} will resume as soon as it has a slot.`;
+}

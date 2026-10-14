@@ -2,6 +2,8 @@
 
 Date: 2026-10-10
 
+Superseded in part by [2026-10-14-task-scheduling.md](2026-10-14-task-scheduling.md): the line is ranked by a score, `after: "any"` consumes a finish, and starts also wait on machine load.
+
 ## Decision
 
 A task that can't start yet waits in a queue instead of being refused. It

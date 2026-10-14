@@ -244,3 +244,34 @@ describe("sendMessage to a chat session", () => {
     );
   });
 });
+
+describe("a paused terminal", () => {
+  it("parks the message for the resume prompt instead of typing it", async () => {
+    const { sender, target } = setup();
+    db.prepare(
+      `INSERT INTO task_pauses (session_id, mode, by_kind, state) VALUES (?, 'turn', 'person', 'paused')`
+    ).run(target);
+    const pauseId = (
+      db
+        .prepare(`SELECT id FROM task_pauses WHERE session_id = ?`)
+        .get(target) as { id: number }
+    ).id;
+    db.prepare(
+      `UPDATE sessions SET pause_state = 'paused', pause_id = ? WHERE id = ?`
+    ).run(pauseId, target);
+    typed.length = 0;
+    const sent = await bus.sendMessage({
+      fromId: sender,
+      to: target.slice(0, 8),
+      body: "later",
+    });
+    expect(typed).toEqual([]);
+    expect(sent.delivery.state).toBe("queued");
+    expect(deliveredAt(sent.message.id)).toBeNull();
+    expect(
+      db
+        .prepare(`SELECT held_pause_id FROM bus_messages WHERE id = ?`)
+        .get(sent.message.id)
+    ).toEqual({ held_pause_id: pauseId });
+  });
+});

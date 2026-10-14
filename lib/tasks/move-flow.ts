@@ -42,6 +42,12 @@ export function assertMovable(id: string, toHostId: string): Session {
   const session = getTaskSession(id);
   if (!LIVE.has(session.task_status ?? ""))
     throw new Error(`Task is already ${session.task_status}`);
+  if (session.pause_state)
+    throw new Error(
+      session.pause_state === "paused"
+        ? "It's paused: resume it first"
+        : `It's ${session.pause_state}: let that finish first`
+    );
   const fromRemote = isRemoteHost(session.host_id);
   const toRemote = isRemoteHost(toHostId);
   if (fromRemote === toRemote) {

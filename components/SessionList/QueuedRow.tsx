@@ -1,12 +1,13 @@
 "use client";
 
 import { Fragment } from "react";
-import { ArrowDown, ArrowUp, Play, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Flag, Play, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import * as DM from "@/components/ui/dropdown-menu";
 import * as CM from "@/components/ui/context-menu";
-import { useQueueAction, type QueueAction } from "@/data/tasks";
+import { useQueueAction, useSetPriority, type QueueAction } from "@/data/tasks";
 import {
+  priorityMenu,
   queueMenu,
   queuedSubtitle,
   type QueuedRow as Row,
@@ -22,6 +23,18 @@ const SEPARATOR = {
   context: CM.ContextMenuSeparator,
 };
 const icon = "mr-2 h-3.5 w-3.5";
+const SUB = {
+  dropdown: {
+    Sub: DM.DropdownMenuSub,
+    Trigger: DM.DropdownMenuSubTrigger,
+    Content: DM.DropdownMenuSubContent,
+  },
+  context: {
+    Sub: CM.ContextMenuSub,
+    Trigger: CM.ContextMenuSubTrigger,
+    Content: CM.ContextMenuSubContent,
+  },
+};
 const ICONS = { start: Play, up: ArrowUp, down: ArrowDown, remove: Trash2 };
 
 const DONE: Record<QueueAction, string> = {
@@ -55,16 +68,47 @@ export function QueuedRow({ row }: { row: Row }) {
     );
   const failed = item.status === "failed";
   const busy = action.isPending;
+  const setPriority = useSetPriority();
+  const priorities = priorityMenu(item);
 
   const items = queueMenu(row);
   const menu = items.length
     ? (kind: RowMenuKind) => {
         const Item = ITEM[kind];
         const Separator = SEPARATOR[kind];
+        const { Sub, Trigger, Content } = SUB[kind];
         return items.map(({ action: a, label, disabled }) => {
           const Icon = ICONS[a];
           return (
             <Fragment key={a}>
+              {a === "remove" && priorities.length > 0 && (
+                <Sub>
+                  <Trigger>
+                    <Flag className={icon} />
+                    Priority
+                  </Trigger>
+                  <Content>
+                    {priorities.map((p) => (
+                      <Item
+                        key={p.priority}
+                        onClick={() =>
+                          setPriority.mutate(
+                            { id: item.id, priority: p.priority },
+                            { onError: (e) => toast.error(e.message) }
+                          )
+                        }
+                      >
+                        {p.label}
+                        {p.current && (
+                          <span className="text-muted-foreground ml-3 text-xs">
+                            current
+                          </span>
+                        )}
+                      </Item>
+                    ))}
+                  </Content>
+                </Sub>
+              )}
               {a === "remove" && items.length > 1 && <Separator />}
               <Item
                 disabled={disabled || busy}

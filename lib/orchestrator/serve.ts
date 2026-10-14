@@ -12,6 +12,9 @@ import {
   stackStatus,
   startSession,
   startTask,
+  setTaskPriority,
+  pauseTask,
+  resumeTask,
   stop,
 } from "./act";
 import { readCards } from "./cards";
@@ -63,6 +66,9 @@ const ACTING = new Set<ToolName>([
   "move",
   "approve_plan",
   "plan_pieces",
+  "set_priority",
+  "pause_task",
+  "resume_task",
   "stop",
   "done",
   "review",
@@ -131,8 +137,20 @@ export async function runTool(
         plan: a.plan,
         planOnly: a.plan_only,
         planReason: a.plan_reason,
+        priority: a.priority,
+        machine: a.machine,
       });
     }
+    case "set_priority": {
+      const a = p(tool, raw);
+      return setTaskPriority(w, a.task, a.priority);
+    }
+    case "pause_task": {
+      const a = p(tool, raw);
+      return pauseTask(w, a.task, a.for, a.now ?? false, a.reason);
+    }
+    case "resume_task":
+      return resumeTask(w, p(tool, raw).task);
     case "approve_plan": {
       const a = p(tool, raw);
       const task = workspaceTask(w, a.task);

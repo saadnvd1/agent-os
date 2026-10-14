@@ -66,6 +66,7 @@ export function DraftPanel({
           projectId: project.id,
           prompt: text,
           model: draft.taskModel ?? undefined,
+          priority: draft.taskPriority,
           baseBranch: draft.baseBranch ?? undefined,
           hostId: draft.hostId !== project.host_id ? draft.hostId : undefined,
           view: draft.terminal ? "terminal" : undefined,

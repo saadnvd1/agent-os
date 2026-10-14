@@ -1,7 +1,8 @@
 /**
  * Holding a chat still while something outside it works on its task: a
  * move to another machine (its row is 'moving'), or a Land of the stack it
- * sits in (the stack is 'landing'). Both are facts in SQLite, so the worker
+ * sits in (the stack is 'landing'), or a timed pause (lib/tasks/pause.ts).
+ * All are facts in SQLite, so the worker
  * process sees the hold too: it neither starts what's queued (queued.ts) nor
  * a turn for a message sent meanwhile, which waits in the queue instead.
  *
@@ -17,6 +18,8 @@ export const HELD_SQL = `(
   EXISTS (SELECT 1 FROM sessions WHERE id = @sid AND task_status = 'moving')
   OR EXISTS (SELECT 1 FROM stack_items i JOIN stacks s ON s.id = i.stack_id
              WHERE i.session_id = @sid AND s.status = 'landing')
+  OR EXISTS (SELECT 1 FROM sessions WHERE id = @sid
+             AND pause_state IN ('pausing', 'paused'))
 )`;
 
 export const isHeld = (sessionId: string): boolean =>
@@ -45,12 +48,14 @@ interface HoldRow {
   moved_to: string | null;
   quick_of: string | null;
   landing: number;
+  pause_state: string | null;
+  paused_until: string | null;
 }
 
 const holdRow = (sessionId: string) =>
   db
     .prepare(
-      `SELECT task_status, moved_to, quick_of,
+      `SELECT task_status, moved_to, quick_of, pause_state, paused_until,
          EXISTS (SELECT 1 FROM stack_items i JOIN stacks s ON s.id = i.stack_id
                  WHERE i.session_id = @sid AND s.status = 'landing') AS landing
        FROM sessions WHERE id = @sid`
@@ -63,6 +68,10 @@ export function chatHold(sessionId: string): string | null {
   if (row?.task_status === "moving" && collecting.has(sessionId))
     return "It's sent once the move to another machine finishes";
   if (row?.landing) return "It's sent once its stack has landed";
+  if (row?.pause_state === "pausing" || row?.pause_state === "paused")
+    return row.paused_until
+      ? "It's sent when the session resumes, with anything else held meanwhile"
+      : "It's sent when the session is resumed, with anything else held meanwhile";
   return null;
 }
 

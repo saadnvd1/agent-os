@@ -86,6 +86,13 @@ export interface Session {
   // Snoozed until this time, from snoozed_at; activity since wakes it early.
   snoozed_until?: string | null;
   snoozed_at?: string | null;
+  // Task priority (null reads as normal) and timed pause (lib/tasks/pause.ts):
+  // pausing, paused or resuming, until when (null: until resumed).
+  priority?: string | null;
+  pause_state?: "pausing" | "paused" | "resuming" | null;
+  paused_until?: string | null;
+  pause_id?: number | null;
+  placed_note?: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;
   // On the sidebar's Pinned shelf (0/1 from SQLite).
@@ -172,8 +179,31 @@ export interface Project {
   lh_board_id: string | null;
   lh_board_name: string | null;
   lh_board_page_id: string | null;
+  // What its tasks need from a machine (JSON array), and where that came from.
+  machine_needs?: string | null;
+  machine_needs_source?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TaskPause {
+  id: number;
+  session_id: string;
+  mode: "turn" | "now";
+  by_kind: "person" | "orchestrator" | "scheduler";
+  by_id: string | null;
+  reason: string | null;
+  until_at: string | null;
+  state: "pausing" | "paused" | "resuming" | "ended";
+  requested_at: string;
+  paused_at: string | null;
+  resume_requested_at: string | null;
+  resume_by_kind: string | null;
+  resumed_at: string | null;
+  ended_at: string | null;
+  end_reason: "resumed" | "cancelled" | "finished" | null;
+  interrupted: number;
+  held_count: number;
 }
 
 export interface ProjectDevServer {

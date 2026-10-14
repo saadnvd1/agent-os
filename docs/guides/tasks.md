@@ -73,6 +73,55 @@ and the same actions in each row's menu; a row becomes the task's own row
 when it starts. Why it works
 this way: [docs/decisions/2026-10-10-queued-tasks.md](https://github.com/saadnvd1/agent-os/blob/main/docs/decisions/2026-10-10-queued-tasks.md).
 
+**Which queued task starts next.** The line is ranked by a score, not only
+by arrival: the task's **priority** (`urgent`, `blocking`, `normal`,
+`background`; set in the start form, with `aos task --priority`, by the
+orchestrator's `start_task`/`set_priority`, or from a queued row's menu), plus
+a little for every minute it has waited (capped, so nothing starves), plus a
+bonus for a paused task that is due to resume. Ties go to the earlier one. A
+row says why it waits: `#2 of 5 · Urgent`, `Waiting: this machine load red`,
+`Waiting: after any running task (…)`. `aos queue` lists the line.
+
+- **Machine load.** The load monitor feeds a start gate: starts are held while
+  the machine is red and allowed again only after it has stayed out of red for
+  two minutes. On amber only `blocking` and `urgent` work starts. At most one
+  automatic start a minute per machine, and a task that boots a simulator
+  waits for the previous one to finish booting and for a free simulator
+  (`AGENTOS_SIMULATOR_MAX`, default 2).
+- **Where it runs.** What a task needs (`mac`, `xcode`, `simulator`) comes from
+  the task (`--on-mac`, the `machine` field), a `machine: mac` or
+  `needs: simulator` line in the brief, `machine.needs` in `agentos.json`, or
+  the repo (an Xcode project, an Expo `ios` section, a `simulator` block).
+  When this machine is red or can't meet the needs, a queued task starts on a
+  linked machine that is green, has the project and meets them, and its row
+  says `Started on <machine> · this machine load red`. Each machine reports
+  its load at `GET /api/load`; the queue asks linked machines every 15 s while
+  work is waiting, and a reading older than a minute counts as red. Work that
+  needs a Mac never leaves it, and a task already running is never moved.
+  Plan-only, plan-first, orchestrator-started, pinned and non-Claude tasks
+  stay on this machine and wait.
+- **After any.** `after: "any"` consumes one finish: three waiters and one
+  finish start one of them.
+- **Usage window.** Only while the orchestrator's brakes are on.
+
+**Pause for a time.** A running task or chat can be paused from its row menu
+(or `POST /api/sessions/<id>/pause`, the orchestrator's `pause_task`): for 1
+hour, 2 hours, until tomorrow 9 AM, or until resumed. By default the agent
+finishes its current step, then ends; **Pause now** interrupts the step (after
+a push or merge in flight). The worktree and conversation stay, nothing is
+frozen, and the task gives its slot to the next queued one. The row moves to
+the Snoozed shelf as `Paused · resumes 9 AM`. Anything that would have woken
+it (CI and review notes, the orchestrator's and other sessions' messages)
+waits and is delivered together, in one continue prompt, when it resumes. A
+resume (the timer, **Resume now**, `resume_task`) needs a slot again and goes
+ahead of new arrivals of the same priority; **Resume now** from a person skips
+the limit. A person's pause is only lifted by a person; the orchestrator can
+lift its own. Not pausable: a task that is merging, moving, setting up, an
+orchestrator or quick change, or one waiting on you (an ask, a question, a
+plan to approve). An armed paused task still merges when its gates pass, and
+a paused task can't be moved. Decision record:
+[docs/decisions/2026-10-14-task-scheduling.md](https://github.com/saadnvd1/agent-os/blob/main/docs/decisions/2026-10-14-task-scheduling.md).
+
 A paired device's token can run the building loop through read-only routes:
 `GET /api/start-options?projectId=` (agents and models, the models a task can
 run on, machines, branches, whether a task plans first, in one request),

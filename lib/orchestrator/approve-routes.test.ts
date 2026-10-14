@@ -346,8 +346,13 @@ describe("agents have no way to approve", () => {
   it("gives the orchestrator no tool to answer an ask or resume", () => {
     // approve_plan continues a plan-only task the orchestrator started; it
     // answers no ask and unlocks no gate, so it's the one approve* tool.
+    // pause_task and resume_task pause one task's agent for a time, which
+    // the orchestrator may do and a person's pause outranks; neither lifts
+    // the workspace's own Pause, which needs a passkey.
     expect(
-      Object.keys(TOOL_NAMES).filter((n) => n !== "approve_plan")
+      Object.keys(TOOL_NAMES).filter(
+        (n) => !["approve_plan", "pause_task", "resume_task"].includes(n)
+      )
     ).not.toEqual(
       expect.arrayContaining([
         expect.stringMatching(/approve|answer|resume|pause/),

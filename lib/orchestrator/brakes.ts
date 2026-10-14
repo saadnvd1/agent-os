@@ -53,6 +53,8 @@ export async function runningCount(
   const running = new Set<string>();
   for (const s of workspaceSessions(workspaceId)) {
     if (s.task_status && s.task_status !== "running") continue;
+    // A paused task has stopped its agent and holds no slot.
+    if (s.pause_state === "paused") continue;
     // A task still setting up, or held at launch, has no terminal yet, and
     // its agent will launch.
     if (

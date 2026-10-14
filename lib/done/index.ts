@@ -8,6 +8,7 @@
  * its own action, archive.ts). What it will do is decided first (plan.ts).
  */
 
+import { endPauseOnFinish } from "../tasks/pause-hold";
 import { db, queries, type Session } from "../db";
 import { endSessionAgent } from "../sessions/end";
 import { clearQueue } from "../chat/queued";
@@ -112,6 +113,7 @@ function mark(s: Session, status: "merged" | "done", pr: TaskPR | null) {
       ? `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
       : `UPDATE sessions SET task_status = 'done' WHERE id = ?`
   ).run(s.id);
+  endPauseOnFinish(s.id);
   syncTaskCardInBackground(s, status, pr);
   void sessionEnded(s.id, status);
   if (status === "merged") {

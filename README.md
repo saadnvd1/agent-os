@@ -13,7 +13,7 @@ and check on all of it from your phone.
 ## What it does
 
 - **An orchestrator for each workspace.** A chat that starts tasks, answers blocked agents, and merges pull requests only through gates. Anything that is yours to decide waits as an ask. [More](docs/reference/orchestrator.md)
-- **Tasks that end in a pull request.** Each gets its own worktree, branch and ports, runs the project's code review, and waits for your sign-off. [More](docs/guides/tasks.md)
+- **Tasks that end in a pull request.** Each gets its own worktree, branch and ports, runs the project's code review, and waits for your sign-off. A queue ranks waiting tasks by priority and machine load, can start one on a linked machine when this one is busy, and a running task can be paused for a set time and resumes by itself. [More](docs/guides/tasks.md)
 - **Each kind of work on the right model.** Planning, review, implementation and titles each run on their own model, set in Settings → Models. [More](docs/reference/model-routing.md)
 - **Nothing starts until you send.** ⌥N opens a draft with project, machine, agent and branch as chips. [More](docs/guides/sessions.md)
 - **Other machines in the same list.** Link another machine that runs AgentOS and start or move work there. [More](docs/reference/machines.md)

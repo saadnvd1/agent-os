@@ -1,4 +1,5 @@
 import { db, type Session } from "../db";
+import { endPauseOnFinish } from "./pause-hold";
 import { isMirror, remoteTaskAction } from "./remote";
 import { deleteWorktree } from "../worktrees";
 import { settleWorktree, type MergedAs } from "../done/worktree";
@@ -154,6 +155,7 @@ export async function signOffTask(
     db.prepare(
       `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
     ).run(id);
+    endPauseOnFinish(id);
     db.prepare(
       `UPDATE stack_items SET status = 'merged', error = NULL WHERE session_id = ?`
     ).run(id);
@@ -181,6 +183,10 @@ export async function signOffTask(
   if (opts.wait) await done;
   return policy.method;
 }
+
+// Between `gh pr merge` and the end of the tidying after it.
+export const isMerging = (id: string): boolean =>
+  signingOff.has(id) || afterMerge.has(id);
 
 export function mergeSettled(id: string): Promise<void> {
   return afterMerge.get(id) ?? Promise.resolve();
@@ -212,6 +218,7 @@ export async function dropTask(id: string): Promise<void> {
   db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
     id
   );
+  endPauseOnFinish(id);
   db.prepare(
     `UPDATE stack_items SET status = 'dropped' WHERE session_id = ?`
   ).run(id);

@@ -168,6 +168,28 @@ describe("the starts-per-hour brake", () => {
     expect(await runningCount(w.workspace.id)).toBe(1);
   });
 
+  it("doesn't count a paused task: it holds no slot", async () => {
+    const w = workspace();
+    const id = seedSession({
+      projectId: w.app.id,
+      name: "paused-one",
+      task: true,
+    });
+    db.prepare(`UPDATE sessions SET setup_status = 'running' WHERE id = ?`).run(
+      id
+    );
+    const { runningCount } = await import("./brakes");
+    expect(await runningCount(w.workspace.id)).toBe(1);
+    db.prepare(`UPDATE sessions SET pause_state = 'paused' WHERE id = ?`).run(
+      id
+    );
+    expect(await runningCount(w.workspace.id)).toBe(0);
+    db.prepare(`UPDATE sessions SET pause_state = 'pausing' WHERE id = ?`).run(
+      id
+    );
+    expect(await runningCount(w.workspace.id)).toBe(1);
+  });
+
   it("allows 6 starts an hour by default, then refuses", async () => {
     const ws = workspace();
     const insert = db.prepare(

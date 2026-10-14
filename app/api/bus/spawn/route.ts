@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnSession, findProject } from "@/lib/agents/spawn";
 import { createTask } from "@/lib/tasks";
-import { startOrQueue } from "@/lib/tasks/queue";
+import { startOrQueue, stampPriority } from "@/lib/tasks/queue";
+import { isPriority } from "@/lib/tasks/schedule-types";
 import { hostIdNamed } from "@/lib/hosts";
 import { startView } from "@/lib/sessions/launch";
 import { db } from "@/lib/db";
@@ -30,6 +31,8 @@ export async function POST(request: NextRequest) {
       after,
       view,
       planOnly,
+      priority,
+      machine,
       from,
     } = await request.json();
     const startedBy = orchestratorFrom(from);
@@ -38,6 +41,12 @@ export async function POST(request: NextRequest) {
       throw new Error("--after works for tasks only");
     if (planOnly !== undefined && mode !== "task")
       throw new Error("--plan-only works for tasks only");
+    if ((priority !== undefined || machine !== undefined) && mode !== "task")
+      throw new Error("--priority and --on-mac work for tasks only");
+    if (priority !== undefined && !isPriority(priority))
+      throw new Error("--priority is urgent, blocking, normal or background");
+    if (machine !== undefined && machine !== "mac" && machine !== "any")
+      throw new Error('machine is "mac" or "any"');
     if (mode === "task") {
       const task = {
         projectId: findProject(String(project ?? "")).id,
@@ -50,8 +59,17 @@ export async function POST(request: NextRequest) {
         startedBy,
       };
       const out = await startOrQueue(
-        { ...task, after: typeof after === "string" ? after : undefined },
-        () => createTask(task)
+        {
+          ...task,
+          after: typeof after === "string" ? after : undefined,
+          priority,
+          machine,
+        },
+        async () => {
+          const session = await createTask(task);
+          stampPriority(session.id, priority);
+          return session;
+        }
       );
       return "queued" in out
         ? NextResponse.json({ queued: out.queued }, { status: 202 })

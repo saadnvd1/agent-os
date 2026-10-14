@@ -6,6 +6,9 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
 import { seedSession, seedWorkspace } from "./testing";
 
+// These tests start tasks; the machine's real load must not decide whether they queue.
+process.env.AGENTOS_LOAD = "off";
+
 const hostCalls: string[] = [];
 const started: string[] = [];
 // How each start asked to run.
@@ -178,6 +181,9 @@ describe("workspace scoping", () => {
       ["land", { id: stackId }],
       ["drop", { task: theirs, reason: "no" }],
       ["stop", { session: theirs }],
+      ["pause_task", { task: theirs, for: "1h", reason: "no" }],
+      ["resume_task", { task: theirs }],
+      ["set_priority", { task: theirs, priority: "urgent" }],
       ["review", { target: theirs }],
       ["sign_off", { task: theirs }],
     ];

@@ -67,6 +67,10 @@ export interface SidebarRow {
   wakesAt?: number;
   // A plain session in Done: marked by hand, or settled by itself.
   settled?: "manual" | "auto";
+  // Its agent is being stopped, is stopped, or is starting again
+  // (lib/tasks/pause): until is when it resumes by itself (ms), null: when
+  // someone resumes it.
+  paused?: { state: "pausing" | "paused" | "resuming"; until: number | null };
 }
 
 export interface Shelves {
@@ -234,6 +238,7 @@ export function recipeRunOpen(session: Pick<Session, "recipe_run">): boolean {
 function toRow(input: ShelfInput, session: Session, now: number): SidebarRow {
   const status = input.statuses[session.id];
   const wakesAt = snoozedUntil(session, now);
+  const pauseState = session.pause_state;
   return {
     session,
     status,
@@ -241,6 +246,12 @@ function toRow(input: ShelfInput, session: Session, now: number): SidebarRow {
     unread: !!status?.unread || wokeUnread(session, now),
     activeAt: activeMs(session, now),
     ...(wakesAt && { wakesAt }),
+    ...(pauseState && {
+      paused: {
+        state: pauseState,
+        until: session.paused_until ? ms(session.paused_until) : null,
+      },
+    }),
     working:
       status?.status === "running" ||
       (status?.background ?? 0) > 0 ||
@@ -305,6 +316,8 @@ export function buildShelves(input: ShelfInput): Shelves {
     if (pinned && current) shelves.orchestrators.push(row);
     else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
     else if (row.need) shelves.needsYou.push(row);
+    // A stopped agent is not working, whatever its last status said.
+    else if (row.paused?.state === "paused") shelves.snoozed.push(row);
     else if (row.working) shelves.working.push(row);
     else if (row.wakesAt) shelves.snoozed.push(row);
     else if (row.task || row.session.task_status)
@@ -323,7 +336,12 @@ export function buildShelves(input: ShelfInput): Shelves {
   shelves.working.sort(newestFirst);
   shelves.inReview.sort(newestFirst);
   shelves.ongoing.sort((a, b) => b.activeAt - a.activeAt);
-  shelves.snoozed.sort((a, b) => a.wakesAt! - b.wakesAt!);
+  // By when each comes back; a pause with no end goes last.
+  const comesBack = (r: SidebarRow) =>
+    r.paused?.state === "paused"
+      ? (r.paused.until ?? Number.POSITIVE_INFINITY)
+      : r.wakesAt!;
+  shelves.snoozed.sort((a, b) => comesBack(a) - comesBack(b));
   shelves.done.sort((a, b) => doneAtMs(b) - doneAtMs(a));
   return shelves;
 }
@@ -390,6 +408,8 @@ export function sameRow(a: SidebarRow, b: SidebarRow): boolean {
     a.task === b.task &&
     a.activeAt === b.activeAt &&
     a.wakesAt === b.wakesAt &&
+    a.paused?.state === b.paused?.state &&
+    a.paused?.until === b.paused?.until &&
     a.settled === b.settled &&
     a.workers.length === b.workers.length &&
     a.workers.every((w, i) => sameRow(w, b.workers[i])) &&

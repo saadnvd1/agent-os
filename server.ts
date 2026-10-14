@@ -8,6 +8,7 @@ import { ensureBusBrief } from "./lib/agents/launch";
 import { reattachChats } from "./lib/chat/runner";
 import { serveChatSocket } from "./lib/chat/socket";
 import { startStackWatcher } from "./lib/stacks";
+import { startPauseWatcher } from "./lib/tasks/pause";
 import { setStartGate } from "./lib/stacks/tick";
 import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
@@ -393,7 +394,7 @@ app.prepare().then(async () => {
   void sweepSims();
   setInterval(sweepSims, 5 * 60_000);
   // Chat turns that kept running through a restart.
-  void reattachChats();
+  void reattachChats().finally(() => startPauseWatcher());
   // Reviews this restart cut off run again and deliver their verdicts.
   if (process.env.AGENTOS_ORCHESTRATOR !== "off")
     resumeReviews().catch((error) =>

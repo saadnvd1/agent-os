@@ -227,3 +227,13 @@
   that update; Mermaid diagrams in snapshots (they show as code today); share
   from the native app; per-day view counts.
 - [ ] `DELETE /api/devices/:id` has no approver check: any paired device can sign another out (it only removes approval power, never grants it)
+
+## Task scheduling, next
+
+- [ ] Hold or penalise a start that overlaps a running task's files (a plan's file list, paths named in the brief, migrations), with "waiting: overlaps X in <file>" in the row
+- [ ] The scheduler pauses low-priority running work while a machine is red and resumes it when load drops (hysteresis), never mid-push or mid-merge
+- [ ] A graded usage-window term in the score instead of the brakes' all-or-nothing hold
+- [ ] A project settings screen for `machine.needs` (today: `agentos.json`, brief tag or inferred)
+- [ ] Move a paused task to a linked machine
+- [ ] A task pausing itself (`aos pause`, turn boundary only)
+- [ ] Placement for plan-only, plan-first and orchestrator-started tasks (`startRemoteTask` refuses them today)

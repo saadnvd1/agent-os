@@ -564,6 +564,71 @@ describe("Ongoing, Snoozed and settled", () => {
     expect(s.working).toEqual(["r"]);
   });
 
+  describe("paused", () => {
+    const paused = (
+      id: string,
+      state: string,
+      untilMs: number | null,
+      over: Partial<Session> = {}
+    ) =>
+      session(id, {
+        task_status: "running",
+        pause_state: state,
+        paused_until: untilMs === null ? null : utc(NOW + untilMs),
+        ...over,
+      } as Partial<Session>);
+
+    it("a paused task moves to Snoozed, soonest first, until-resumed last", () => {
+      const s = shelves(
+        [
+          paused("never", "paused", null),
+          paused("late", "paused", 5 * DAY),
+          paused("soon", "paused", 3600_000),
+        ],
+        {},
+        {
+          tasks: {
+            never: "running",
+            late: "running",
+            soon: "running",
+          } as never,
+        }
+      );
+      expect(s.snoozed).toEqual(["soon", "late", "never"]);
+      expect(s.raw.snoozed[0].paused).toEqual({
+        state: "paused",
+        until: NOW + 3600_000,
+      });
+      expect(s.raw.snoozed[2].paused?.until).toBeNull();
+    });
+
+    it("stays on its shelf while pausing or resuming, and needs-you still wins", () => {
+      const s = shelves(
+        [
+          paused("going", "pausing", 3600_000),
+          paused("back", "resuming", null),
+          paused("asks", "paused", 3600_000),
+        ],
+        {
+          going: { status: "running" },
+          back: { status: "running" },
+          asks: { need: "answer" },
+        }
+      );
+      expect(s.working).toEqual(expect.arrayContaining(["going", "back"]));
+      expect(s.snoozed).toEqual([]);
+      expect(s.needsYou).toEqual(["asks"]);
+    });
+
+    it("a stale running status doesn't keep a paused row in Working", () => {
+      const s = shelves([paused("p", "paused", 3600_000)], {
+        p: { status: "running" },
+      });
+      expect(s.snoozed).toEqual(["p"]);
+      expect(s.working).toEqual([]);
+    });
+  });
+
   describe("snoozed", () => {
     const snooze = (id: string, untilMs: number, over: Partial<Session> = {}) =>
       quiet(id, DAY, {
