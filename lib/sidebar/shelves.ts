@@ -198,6 +198,17 @@ export function settledHow(
   return now - active >= SETTLE_AFTER_MS ? "auto" : null;
 }
 
+// Whether the bell lists a session: waiting on you, and not put away. Like
+// the shelves, a live need wins over Done.
+export function inBell(
+  session: Parameters<typeof settledHow>[0] & Pick<Session, "archived_at">,
+  status: RowStatus | undefined,
+  now: number
+): boolean {
+  if (status?.status !== "waiting" || session.archived_at) return false;
+  return !!status.need || !settledHow(session, now);
+}
+
 // Woken by its timer and not opened since.
 function wokeUnread(
   session: Parameters<typeof activeMs>[0] & Pick<Session, "last_seen_at">,

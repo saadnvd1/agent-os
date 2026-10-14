@@ -7,6 +7,7 @@ import { db, queries, type Session } from "../db";
 import { finalMessage, usageRows } from "../session-logs/gather";
 import { chatStateNow } from "../chat/runner";
 import { doneSession } from "../done";
+import { notifyStatusChanged } from "../status/hub";
 import { blockedReason } from "../tasks/state";
 import { runClaude, type ClaudeRunner } from "../orchestrator/claude-cli";
 import { releasePieces } from "../plans/release";
@@ -406,23 +407,35 @@ async function settleOne(
   } else idleSince.delete(run.id);
 }
 
-// After a run settles: a finished session run is marked Done so the sidebar
-// doesn't pile up; a task run is left to its gates. Idle alerts for it are
-// silenced because the settle event already told the orchestrator.
+// After a run settles: a session run that reported its result (ok or failed)
+// is marked Done so the sidebar and the bell don't pile up; a task run is left
+// to its gates. A run that ended without a result line, was blocked or timed
+// out may be a real question, so it stays open. The settle event already told
+// the orchestrator.
+export function finishesSession(
+  row: { status: RunStatus; summary_source: string | null },
+  recipe: Pick<Recipe, "kind" | "auto_done">
+): boolean {
+  if (recipe.kind !== "session" || !recipe.auto_done) return false;
+  if (row.status === "succeeded") return true;
+  return row.status === "failed" && row.summary_source === "line";
+}
+
 async function afterSettle(run: Live): Promise<void> {
   const row = db
-    .prepare(`SELECT status FROM recipe_runs WHERE id = ?`)
-    .get(run.id) as { status: RunStatus } | undefined;
-  if (!row || run.recipe.kind !== "session" || !run.session_id) return;
-  if (row.status === "succeeded" && run.recipe.auto_done) {
-    try {
-      await doneSession(run.session_id, { by: "direct", noMerge: true });
-    } catch (error) {
-      console.warn(
-        "[recipes] couldn't mark done:",
-        error instanceof Error ? error.message : error
-      );
-    }
+    .prepare(`SELECT status, summary_source FROM recipe_runs WHERE id = ?`)
+    .get(run.id) as
+    | { status: RunStatus; summary_source: string | null }
+    | undefined;
+  if (!row || !run.session_id || !finishesSession(row, run.recipe)) return;
+  try {
+    await doneSession(run.session_id, { by: "direct", noMerge: true });
+    notifyStatusChanged();
+  } catch (error) {
+    console.warn(
+      `[recipes] couldn't mark run #${run.seq} (${run.session_id}) done:`,
+      error instanceof Error ? error.message : error
+    );
   }
 }
 

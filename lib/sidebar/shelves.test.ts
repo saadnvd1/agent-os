@@ -4,6 +4,7 @@ import type { TaskState } from "@/lib/tasks/state";
 import {
   buildShelves,
   doneLimit,
+  inBell,
   inWorkspace,
   needOf,
   sameRow,
@@ -718,5 +719,36 @@ describe("Ongoing, Snoozed and settled", () => {
     expect(sameRow(row, { ...row, activeAt: row.activeAt + 1 })).toBe(false);
     expect(sameRow(row, { ...row, wakesAt: 5 })).toBe(false);
     expect(sameRow(row, { ...row, settled: "auto" })).toBe(false);
+  });
+});
+
+describe("inBell", () => {
+  const waiting: RowStatus = { status: "waiting" };
+  const recent = utc(NOW - 1000);
+
+  it("lists a waiting session that is not put away", () => {
+    expect(inBell(session("a", { updated_at: recent }), waiting, NOW)).toBe(
+      true
+    );
+    expect(inBell(session("a", { updated_at: recent }), undefined, NOW)).toBe(
+      false
+    );
+    expect(
+      inBell(session("a", { updated_at: recent }), { status: "idle" }, NOW)
+    ).toBe(false);
+  });
+
+  it("never lists a Done or archived session", () => {
+    const done = session("a", { updated_at: recent, settled_at: utc(NOW) });
+    expect(inBell(done, waiting, NOW)).toBe(false);
+    expect(inBell(session("a"), waiting, NOW)).toBe(false);
+    expect(inBell(session("a", { archived_at: utc(NOW) }), waiting, NOW)).toBe(
+      false
+    );
+  });
+
+  it("keeps a live approval or question on the list, as the shelves do", () => {
+    const done = session("a", { updated_at: recent, settled_at: utc(NOW) });
+    expect(inBell(done, { status: "waiting", need: "answer" }, NOW)).toBe(true);
   });
 });

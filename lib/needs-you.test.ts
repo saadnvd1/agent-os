@@ -32,6 +32,27 @@ describe("needsYou", () => {
     ).toBe(true);
   });
 
+  it("drops a turn that ended before the session was put on Done", () => {
+    const chat = finishedUnseen(null);
+    const settled = (ms: number) =>
+      new Date(ms).toISOString().slice(0, 19).replace("T", " ");
+    const now = Date.now();
+    expect(needsYou({ ...chat, settled_at: settled(now + 5000) }, "idle")).toBe(
+      false
+    );
+    // A turn that ends after it was settled is news again.
+    expect(
+      needsYou({ ...chat, settled_at: settled(now - 60_000) }, "idle")
+    ).toBe(true);
+    // A pending approval always counts.
+    expect(
+      needsYou({ ...chat, settled_at: settled(now + 5000) }, "waiting")
+    ).toBe(true);
+    expect(needsYou({ ...chat, archived_at: settled(now) }, "idle")).toBe(
+      false
+    );
+  });
+
   it("counts only a waiting card for an orchestrator", () => {
     const orchestrator = finishedUnseen("orchestrator");
     expect(needsYou(orchestrator, "idle")).toBe(false);

@@ -14,6 +14,8 @@ import { NotificationsMenu } from "@/components/NotificationsMenu";
 import type { ViewProps } from "./types";
 import { newDraft } from "@/stores/drafts";
 import { paletteActions } from "@/stores/palette";
+import { useClock } from "@/hooks/useMinuteTick";
+import { inBell } from "@/lib/sidebar/shelves";
 import { DRAFT_KEYS } from "@/lib/drafts";
 
 // Labels collapse to icons when the pane bar carrying these is narrow
@@ -70,6 +72,7 @@ export function DesktopAppActions({
   notificationSettings,
   attachToSession,
 }: AppActionsProps) {
+  const now = useClock();
   return (
     <div
       className="flex shrink-0 items-center gap-0.5"
@@ -95,7 +98,7 @@ export function DesktopAppActions({
       <NotificationsMenu
         settings={notificationSettings}
         waitingSessions={sessions
-          .filter((s) => sessionStatuses[s.id]?.status === "waiting")
+          .filter((s) => inBell(s, sessionStatuses[s.id], now))
           .map((s) => ({ id: s.id, name: s.name }))}
         onSelectSession={(id) => {
           const session = sessions.find((s) => s.id === id);
