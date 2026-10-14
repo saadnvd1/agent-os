@@ -7,7 +7,7 @@ import { getProviderDefinition } from "@/lib/providers/registry";
 import type { TabData } from "@/lib/panes";
 import { useRef, useCallback, useEffect, memo, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { usePanes } from "@/contexts/PaneContext";
+import { usePanes, type ViewMode } from "@/contexts/PaneContext";
 import { useViewport } from "@/hooks/useViewport";
 import type { TerminalHandle } from "@/components/Terminal";
 import type { Session, Project } from "@/lib/db";
@@ -37,6 +37,13 @@ import { useDemoMode } from "@/data/demo";
 import { DemoNotice } from "@/components/DemoNotice";
 
 // Dynamic imports for client-only components with loading states
+const ArtifactsPanel = dynamic(
+  () =>
+    import("@/components/Artifacts/ArtifactsPanel").then(
+      (mod) => mod.ArtifactsPanel
+    ),
+  { ssr: false }
+);
 const LogDocument = dynamic(
   () =>
     import("@/components/SessionLogs/LogDocument").then(
@@ -97,8 +104,6 @@ interface PaneProps {
   // is running, otherwise starts it (resuming the agent's conversation).
   onAttachSession?: (terminal: TerminalHandle, session: Session) => void;
 }
-
-type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
 export const Pane = memo(function Pane({
   paneId,
@@ -230,6 +235,15 @@ export const Pane = memo(function Pane({
       // TODO: Scroll to line (requires FileEditor enhancement)
     }
   }, [fileOpenRequest, isFocused, session, fileEditor]);
+
+  // An artifact's file, opened in the Files view.
+  const openInFiles = useCallback(
+    (path: string) => {
+      setViewMode("files");
+      fileEditor.openFile(path);
+    },
+    [setViewMode, fileEditor]
+  );
 
   const handleFocus = useCallback(() => {
     focusPane(paneId);
@@ -524,6 +538,15 @@ export const Pane = memo(function Pane({
             <LogDocument sessionId={session.id} />
           )}
 
+          {/* Artifacts */}
+          {viewMode === "artifacts" && session && (
+            <ArtifactsPanel
+              sessionId={session.id}
+              mobile
+              onOpenInFiles={isLocalSession ? openInFiles : undefined}
+            />
+          )}
+
           {/* Workers */}
           {viewMode === "workers" && session && (
             <ConductorPanel
@@ -584,6 +607,15 @@ export const Pane = memo(function Pane({
                   {/* Log */}
                   {viewMode === "log" && session && (
                     <LogDocument sessionId={session.id} />
+                  )}
+
+                  {/* Artifacts */}
+                  {viewMode === "artifacts" && session && (
+                    <ArtifactsPanel
+                      sessionId={session.id}
+                      mobile={false}
+                      onOpenInFiles={isLocalSession ? openInFiles : undefined}
+                    />
                   )}
 
                   {/* Workers */}

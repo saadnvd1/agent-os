@@ -37,6 +37,9 @@ process.env.AGENTOS_SESSION_LOGS_DIR = join(
   "logs"
 );
 
+// A removed worktree's kept artifacts go here, not to ~/.agent-os/kept.
+process.env.AGENTOS_KEPT_DIR = mkdtempSync(join(tmpdir(), "agent-os-kept-"));
+
 // Nor the owner's phone: a test that sends sets its own notify command.
 delete process.env.AGENTOS_NOTIFY_CMD;
 

@@ -10,7 +10,7 @@ const found = new Map<string, string>();
 // Claude Code writes each background task's output under
 // <tmp>/claude-<uid>/<project>/<session>/tasks/<task id>.output; the path is
 // only reported when the task ends, so a running one is found by name.
-function findOutputFile(taskId: string): string | null {
+export function findOutputFile(taskId: string): string | null {
   const cached = found.get(taskId);
   if (cached && fs.existsSync(cached)) return cached;
   const uid = process.getuid?.() ?? "";

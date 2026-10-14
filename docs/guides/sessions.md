@@ -201,6 +201,24 @@ minutes, one message goes to your phone and to each workspace orchestrator,
 naming the top sessions and their heavy commands; the next one waits until
 it has been green for ten minutes. `AGENTOS_LOAD=off` turns it all off.
 
+## Artifacts
+
+The box icon in a session's toolbar opens everything the session made, in
+one list: its plan and PR, the pages it rendered, the files it wrote or
+edited (with an edit count), the images it took or you attached, the output
+of its background jobs, and its recipe run and log. Pick one to preview it
+(markdown, HTML, images and text) beside the list, or full screen on a
+phone.
+
+It is read from what AgentOS already records, the chat's tool calls, the
+plan, the PR and `git status` in the worktree, so nothing is scanned and no
+model is asked. Secret files (`.env`, keys, `~/.ssh`) never show, and a file
+opens only inside the folders AgentOS already serves. When a worktree is
+removed after a merge or a drop, the uncommitted files the session made are
+copied to `~/.agent-os/kept/<session>/` first (2 MB a file, 20 MB a
+session); committed ones show as in the PR. A session on a linked machine
+lists its artifacts from that machine.
+
 ## And the rest
 
 - **Status from the screen and the agent.** Every session moves between

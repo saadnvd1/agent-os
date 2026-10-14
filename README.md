@@ -21,6 +21,7 @@ and check on all of it from your phone.
 - **Agents that talk to each other.** Sessions message each other with `aos`, and you see every conversation in Messages. [More](docs/guides/agent-network.md)
 - **Chat or terminal, same conversation.** Streaming replies, steps and diffs, plan mode, slash commands, `@file`, undo. [More](docs/guides/chat.md)
 - **Bookmarks.** Star any message, tool call or turn, then find it again from the chat or across every chat, with a search. [More](docs/guides/chat.md)
+- **Every artifact in one place.** A session's plan, PR, files, pages, images and job logs in one list, with a preview, kept after its worktree is removed. [More](docs/guides/sessions.md#artifacts)
 - **Share a chat or a page.** A read-only snapshot link with secrets, home paths and machine names masked, a preview before anything leaves your machine, and a Markdown copy to hand to an agent. [More](docs/guides/sharing.md)
 - **Project config.** `agentos.json` gives each session its own ports, environment, files and a private Postgres copy. [More](docs/reference/project-config.md)
 - **Schedules and recipes.** Start work on a timer, or save a job that comes up again. [More](docs/guides/schedules.md)

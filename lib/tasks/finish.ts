@@ -36,6 +36,7 @@ import { dropSessionDatabase } from "../project-config/database";
 import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
 import { snapshotWorktree } from "../resurrect/snapshot";
+import { keepSessionFiles } from "../session-artifacts/collect";
 
 // Never deleted, whatever a setting says.
 export const PROTECTED_BRANCHES = new Set(["main", "master", "HEAD"]);
@@ -60,6 +61,7 @@ async function cleanup(
     if (fate?.action === "kept")
       console.log(`[tasks] kept ${fate.path} after merge: ${fate.why}`);
   } else if (session.worktree_path) {
+    await keepSessionFiles(session.id);
     await deleteWorktree(session.worktree_path, repo, true).catch(() => {});
   }
   // A stacked child's PR targets this branch: deleting it on origin would

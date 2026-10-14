@@ -1,16 +1,23 @@
 "use client";
 
-import { FolderOpen, GitBranch, Home, ScrollText, Users } from "lucide-react";
+import {
+  FolderOpen,
+  GitBranch,
+  Home,
+  Package,
+  ScrollText,
+  Users,
+} from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-
-type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
+import type { ViewMode } from "@/contexts/PaneContext";
 
 interface PaneViewToggleProps {
+  sessionId?: string;
   viewMode: ViewMode;
   isLocalSession: boolean;
   isConductor: boolean;
@@ -67,6 +74,7 @@ function ToggleButton({
 // Files, git and the shell drawer read this machine's disk, so a remote
 // session only gets the terminal (and workers).
 export function PaneViewToggle({
+  sessionId,
   viewMode,
   isLocalSession,
   isConductor,
@@ -112,6 +120,15 @@ export function PaneViewToggle({
             {">_"}
           </ToggleButton>
         </>
+      )}
+      {sessionId && (
+        <ToggleButton
+          label="Artifacts"
+          active={viewMode === "artifacts"}
+          onClick={() => onViewModeChange("artifacts")}
+        >
+          <Package className="h-3.5 w-3.5" />
+        </ToggleButton>
       )}
       {hasLog && (
         <ToggleButton

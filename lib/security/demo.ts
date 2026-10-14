@@ -84,6 +84,7 @@ const READS = [
   "sessions/[id]/messages",
   "sessions/[id]/pr",
   "sessions/[id]/artifacts",
+  "sessions/[id]/artifacts/[id]",
   "sessions/[id]/setup",
   "sessions/[id]/preview",
   "projects",

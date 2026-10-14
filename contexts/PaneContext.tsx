@@ -26,7 +26,13 @@ import {
 } from "@/lib/panes";
 import { useViewport } from "@/hooks/useViewport";
 
-export type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
+export type ViewMode =
+  | "terminal"
+  | "files"
+  | "git"
+  | "workers"
+  | "log"
+  | "artifacts";
 
 export interface PaneViewState {
   viewMode: ViewMode;

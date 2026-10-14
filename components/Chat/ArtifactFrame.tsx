@@ -25,12 +25,15 @@ export function artifactHeight(data: unknown, max: number): number | null {
 // the bounds; filling, it takes its container.
 export function ArtifactFrame({
   artifactId,
+  src,
   title,
   fill = false,
   maxHeight = 720,
   className,
 }: {
   artifactId: string;
+  // Another sandboxed URL for the same kind of page (a session's HTML file).
+  src?: string;
   title: string;
   fill?: boolean;
   maxHeight?: number;
@@ -62,7 +65,7 @@ export function ArtifactFrame({
   return (
     <iframe
       ref={ref}
-      src={artifactUrl(artifactId)}
+      src={src ?? artifactUrl(artifactId)}
       title={title}
       sandbox={ARTIFACT_IFRAME_SANDBOX}
       referrerPolicy="no-referrer"
