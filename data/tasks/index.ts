@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TaskView } from "@/lib/tasks";
 import type { QueuedTaskView } from "@/lib/tasks/queue";
+import type { Priority } from "@/lib/tasks/schedule-types";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "./keys";
 import { usePollWhenOffline } from "../push/connection";
@@ -43,6 +44,7 @@ export function useCreateTask() {
       projectId: string;
       prompt: string;
       model?: string;
+      priority?: Priority;
       baseBranch?: string;
       hostId?: string;
       view?: "chat" | "terminal";

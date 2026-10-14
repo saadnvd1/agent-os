@@ -9,6 +9,7 @@ import { headerParts } from "@/lib/orchestrator/header-line";
 import { cn } from "@/lib/utils";
 import { usageLabel, useSessionUsage } from "@/data/load";
 import { useRowContext } from "./RowContext";
+import { pauseSubtitle } from "@/lib/sidebar/paused";
 
 const ATTENTION = (part: string) => part === "paused" || /\basks?$/.test(part);
 
@@ -56,9 +57,21 @@ export function RowSubtitle({
   }
   const project = ctx.projectNames.get(session.project_id ?? "");
   const group = rowGroup(session);
+  const pause = session.pause_state;
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <LiveLine {...live} />
+      {pause ? (
+        <span className="min-w-0 truncate text-xs text-amber-600 dark:text-amber-400">
+          {pauseSubtitle({
+            state: pause,
+            until: session.paused_until
+              ? Date.parse(`${session.paused_until.replace(" ", "T")}Z`)
+              : null,
+          })}
+        </span>
+      ) : (
+        <LiveLine {...live} />
+      )}
       {group && (
         <span
           className="text-muted-foreground/70 hidden min-w-0 shrink items-center gap-1 truncate text-xs @[14rem]:flex"
@@ -72,9 +85,14 @@ export function RowSubtitle({
           <span className="truncate">{group.text}</span>
         </span>
       )}
-      {(project || detail || usage) && (
+      {(project || detail || usage || session.placed_note) && (
         <span className="text-muted-foreground/70 min-w-0 truncate text-xs">
-          {[usage && usageLabel(usage), detail?.slice(0, 200), project]
+          {[
+            usage && usageLabel(usage),
+            detail?.slice(0, 200),
+            session.placed_note,
+            project,
+          ]
             .filter(Boolean)
             .join(" · ")}
         </span>

@@ -31,6 +31,7 @@ export const REKEYED = [
 export const KEPT = [
   ["orchestrator_event_log", "subject", "history is never rewritten"],
   ["stack_items", "session_id", "stacked tasks don't move"],
+  ["task_pauses", "session_id", "a paused task can't be moved"],
   [
     "task_queue",
     "after_any",

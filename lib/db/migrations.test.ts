@@ -133,7 +133,7 @@ describe("runMigrations with keys", () => {
       expect(order).toEqual(["a", "b"]);
       const keys = db
         .prepare(
-          `SELECT key FROM _migrations WHERE key IS NOT NULL ORDER BY id`
+          `SELECT key FROM _migrations WHERE key LIKE '2999%' ORDER BY id`
         )
         .all();
       expect(keys).toEqual([

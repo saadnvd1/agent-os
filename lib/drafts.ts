@@ -4,6 +4,7 @@
  */
 
 import type { AgentType } from "./providers";
+import type { Priority } from "@/lib/tasks/schedule-types";
 import type { ChatAccess } from "./chat/events";
 import { resolveModelForAgent } from "./model-catalog";
 import { projectsInWorkspace } from "./sidebar/shelves";
@@ -26,6 +27,8 @@ export interface Draft {
   // A task's own model, "provider/model"; unset, its roles' models
   // (lib/models).
   taskModel?: string | null;
+  // A task's priority in the queue; unset: normal.
+  taskPriority?: Priority;
   createdAt: number;
 }
 

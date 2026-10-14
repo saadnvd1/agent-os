@@ -56,6 +56,9 @@ interface TaskRow {
   pr_status: string | null;
   view: string;
   armed_at: string | null;
+  pause_state: string | null;
+  paused_until: string | null;
+  placed_note: string | null;
 }
 
 export interface CheckRow {
@@ -162,7 +165,7 @@ function tasksSection(
   const tasks = db
     .prepare(
       `SELECT s.id, s.name, p.name AS project, s.pr_number, s.pr_status, s.view,
-         s.merge_armed_at AS armed_at
+         s.merge_armed_at AS armed_at, s.pause_state, s.paused_until, s.placed_note
        FROM sessions s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
@@ -177,7 +180,11 @@ function tasksSection(
         : "no PR yet";
       const gates = gateState(checks.get(t.id), failures.get(t.id));
       const arm = t.armed_at ? " | armed to merge" : "";
-      return `- ${clip(t.name, 80)} (${t.project ?? "?"}, ${t.view}, id ${shortId(t.id)}): ${pr}${arm}${gates ? ` | ${gates}` : ""}`;
+      const paused = t.pause_state
+        ? ` | ${t.pause_state}${t.paused_until ? ` until ${t.paused_until} UTC` : t.pause_state === "paused" ? " until resumed" : ""}`
+        : "";
+      const placed = t.placed_note ? ` | ${t.placed_note}` : "";
+      return `- ${clip(t.name, 80)} (${t.project ?? "?"}, ${t.view}, id ${shortId(t.id)}): ${pr}${arm}${paused}${placed}${gates ? ` | ${gates}` : ""}`;
     }),
     empty: "- None.",
     more: "the sessions tool",
@@ -210,7 +217,7 @@ function externalSection(
 function queueSection(workspaceId: string): Section {
   const rows = db
     .prepare(
-      `SELECT q.id, q.name, q.prompt, q.status, q.after_task, q.after_any,
+      `SELECT q.id, q.name, q.prompt, q.status, q.after_task, q.after_any, q.priority, q.note,
          p.name AS project, a.name AS after_name
        FROM task_queue q JOIN projects p ON p.id = q.project_id
        LEFT JOIN sessions a ON a.id = q.after_task
@@ -226,6 +233,8 @@ function queueSection(workspaceId: string): Section {
     after_any: string | null;
     project: string;
     after_name: string | null;
+    priority: string;
+    note: string | null;
   }[];
   return {
     title: "Queued tasks, in line order",
@@ -236,7 +245,9 @@ function queueSection(workspaceId: string): Section {
           ? " | after any running task"
           : "";
       const status = r.status === "queued" ? "" : ` | ${r.status}`;
-      return `- ${i + 1}. ${clip(r.name ?? r.prompt, 80)} (${r.project}, id ${shortId(r.id)})${after}${status}`;
+      const priority = r.priority === "normal" ? "" : ` | ${r.priority}`;
+      const why = r.note ? ` | ${clip(r.note, 100)}` : "";
+      return `- ${i + 1}. ${clip(r.name ?? r.prompt, 80)} (${r.project}, id ${shortId(r.id)})${after}${priority}${status}${why}`;
     }),
     more: "the sessions tool",
   };

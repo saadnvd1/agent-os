@@ -7,6 +7,7 @@ import { RAISED_KINDS } from "./asks";
 import { MAX_RULE_CHARS } from "./rules";
 import { PROJECT_NAME } from "../project-add/name";
 import { TASK_ROLES, type ModelRole } from "../models/roles";
+import { PRIORITIES } from "../tasks/schedule-types";
 
 const ref = (what: string) => z.string().trim().min(1).max(300).describe(what);
 const session = ref("Session name, project/name, or id from sessions");
@@ -114,6 +115,18 @@ export const TOOL_SHAPES = {
       .optional()
       .describe(
         'Queue it until this task finishes (id or name), or "any" for whichever running task finishes first'
+      ),
+    priority: z
+      .enum(PRIORITIES)
+      .optional()
+      .describe(
+        "Where it stands in the queue: urgent (a bug Saad hit), blocking (something waits on it), normal (the default), background"
+      ),
+    machine: z
+      .enum(["mac", "any"])
+      .optional()
+      .describe(
+        'Where it may run: "mac" for work that needs this Mac (Xcode, a simulator); "any" if no machine need applies. Unset: the project\'s setting, else decided from its files'
       ),
     model: modelOverride,
     plan: z
@@ -233,6 +246,26 @@ export const TOOL_SHAPES = {
         'A linked machine\'s name (see Machines), or "here" to bring the task back'
       ),
   },
+  set_priority: {
+    task: ref("A queued or running task: name, project/name or id"),
+    priority: z.enum(PRIORITIES),
+  },
+  pause_task: {
+    task,
+    for: z
+      .enum(["1h", "2h", "tomorrow", "until_resumed"])
+      .describe(
+        "How long: 1h, 2h, tomorrow (9 AM, Saad's time) or until_resumed (until you or Saad resume it)"
+      ),
+    now: z
+      .boolean()
+      .optional()
+      .describe(
+        "Interrupt its step now. Default: let the step finish, then pause"
+      ),
+    reason: z.string().trim().min(1).max(300),
+  },
+  resume_task: { task },
   stop: { session },
   done: { session },
   archive: { session },

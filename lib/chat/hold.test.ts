@@ -35,6 +35,27 @@ function chatSession(status = "running"): string {
 const queued = (id: string, text: string) =>
   enqueue(id, { id: `user-${randomUUID()}`, text });
 
+describe("a paused chat", () => {
+  it("keeps its queue while pausing or paused, and lets it go once resuming", () => {
+    const id = chatSession("running");
+    queued(id, "from CI");
+    for (const state of ["pausing", "paused"]) {
+      db.prepare(`UPDATE sessions SET pause_state = ? WHERE id = ?`).run(
+        state,
+        id
+      );
+      expect(chatHold(id)).toMatch(/resume/);
+      expect(claimNext(id)).toBeNull();
+      expect(listQueue(id)).toHaveLength(1);
+    }
+    db.prepare(`UPDATE sessions SET pause_state = 'resuming' WHERE id = ?`).run(
+      id
+    );
+    expect(chatHold(id)).toBeNull();
+    expect(claimNext(id)?.text).toBe("from CI");
+  });
+});
+
 describe("a held chat", () => {
   it("keeps its queue while its task is moving, and lets it go after", () => {
     const id = chatSession("moving");

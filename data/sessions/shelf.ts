@@ -83,3 +83,53 @@ export function useSettleSession() {
         : { settled_at: null, active_at: now }
   );
 }
+
+async function send(method: string, url: string, body?: object) {
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok)
+    throw new Error(
+      (await res.json().catch(() => null))?.error ?? "Request failed"
+    );
+}
+
+// until null: until resumed. The row moves to "pausing" at once; the server
+// stops the agent at the end of its step (or now) and the push settles it.
+export function usePauseSession() {
+  return useShelfMutation<{
+    id: string;
+    until: Date | null;
+    mode: "turn" | "now";
+  }>(
+    ({ id, until, mode }) =>
+      send("POST", `/api/sessions/${id}/pause`, {
+        until: until?.toISOString() ?? null,
+        mode,
+      }),
+    ({ until }) => ({
+      pause_state: "pausing",
+      paused_until: until ? toSqliteTime(until) : null,
+    })
+  );
+}
+
+// Resume now, or keep running while it is still pausing.
+export function useResumeSession() {
+  return useShelfMutation<{ id: string }>(
+    ({ id }) => send("DELETE", `/api/sessions/${id}/pause`),
+    () => ({ pause_state: "resuming", paused_until: null })
+  );
+}
+
+export function useChangeResumeTime() {
+  return useShelfMutation<{ id: string; until: Date | null }>(
+    ({ id, until }) =>
+      send("PATCH", `/api/sessions/${id}/pause`, {
+        until: until?.toISOString() ?? null,
+      }),
+    ({ until }) => ({ paused_until: until ? toSqliteTime(until) : null })
+  );
+}

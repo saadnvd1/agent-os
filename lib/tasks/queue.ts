@@ -2,9 +2,12 @@
  * Queued tasks: a task that can't start yet waits here instead of being
  * refused. It waits for a slot under its workspace's limit on running tasks
  * (`max_running_tasks`, off unless set), or for another task to finish
- * (`after`). The stack watcher's loop ticks it (lib/stacks/tick.ts), with
- * the same slot filling as stacks: in line order, up to the limit, skipping
- * one whose `after` hasn't happened.
+ * (`after`). The stack watcher's loop ticks it (lib/stacks/tick.ts), and the
+ * load monitor nudges it when a held machine calms down. Each tick scores
+ * the candidates (lib/tasks/schedule.ts: priority, age, a resume bonus),
+ * holds the ones a machine's load, simulators or start spacing rule out, and
+ * starts what fits under the limit, best first. A start the home machine's
+ * load rules out goes to a linked machine that is free (placement.ts).
  *
  * A row's id is the session id it starts as, and it's claimed ('starting')
  * before the task is created, so a restart never starts one twice. Nothing
@@ -18,7 +21,6 @@ import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { isRemoteHost } from "../hosts";
 import { getWorkspace } from "../workspaces";
-import { fillSlots } from "../stacks/ready";
 import { isPaused } from "../orchestrator/pause";
 import {
   BrakeRefused,
@@ -29,6 +31,45 @@ import {
 import { queueEvent } from "../orchestrator/events";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
 import { createTask } from "./index";
+import { expandHome } from "./session";
+import {
+  DEFAULT_PRIORITY,
+  isPriority,
+  type Priority,
+  type WaitCode,
+} from "./schedule-types";
+import {
+  machineHold,
+  planStarts,
+  scoreParts,
+  type Candidate,
+  type Group,
+  type Hold,
+} from "./schedule";
+import {
+  heavyNeeds,
+  meetsNeeds,
+  needsFromSetting,
+  needsOf,
+  parseNeeds,
+  place,
+  unplaceable,
+  wantsPlacing,
+  type Need,
+  type Placement,
+  type PeerOption,
+} from "./placement";
+import {
+  LOCAL,
+  localView,
+  machineCapabilities,
+  recordAutoStart,
+  viewOf,
+} from "../load/machines";
+import { peerReading, peerSource, refreshPeers } from "../hosts/peer-load";
+import { linkedHostIds } from "../hosts/remote-api";
+import { projectMachines } from "../hosts/project-machines";
+import { claimResume, dueResumes } from "./pause";
 
 export type QueueStatus =
   | "queued"
@@ -60,6 +101,14 @@ export interface QueueRow {
   // "after any": the tasks running when it was queued, as JSON; the first
   // of them to finish lets it go.
   after_any: string | null;
+  // The finish (a task id) this "after any" waiter took; one finish lets one
+  // waiter go (a unique index keeps it so).
+  after_any_used: string | null;
+  priority: Priority;
+  // What it needs from a machine, as JSON, when the starter said.
+  machine_needs: string | null;
+  // The code behind `note`, set by the scheduler.
+  wait_code: WaitCode | null;
   // The orchestrator's workspace, when the orchestrator queued it: its
   // start goes through that orchestrator's brakes.
   origin_workspace_id: string | null;
@@ -93,6 +142,12 @@ export interface QueuedTaskView {
   // The orchestrator session that queued it, when one did.
   startedBy: string | null;
   createdAt: string;
+  priority: Priority;
+  // Why it isn't starting, from the scheduler; null: nothing but its turn.
+  wait: WaitCode | null;
+  // Its place in the score order within its line, and how many are in it.
+  rank: number;
+  of: number;
 }
 
 export const START_ATTEMPTS = 3;
@@ -120,7 +175,8 @@ const workspaceOf = (projectId: string) =>
   getProject(projectId)?.workspace_id ?? null;
 
 // Running tasks hold their slot until they finish (merged, dropped, done),
-// PR open or not; a queued task being started counts too. A quick change
+// PR open or not; a queued task being started counts too. A paused task
+// gives its slot back until it resumes. A quick change
 // runs no agent, so it holds none. Without a
 // workspace, the project is the scope.
 function runningIn(scope: { workspaceId: string | null; projectId: string }) {
@@ -132,6 +188,7 @@ function runningIn(scope: { workspaceId: string | null; projectId: string }) {
       .prepare(
         `SELECT s.id FROM sessions s JOIN projects p ON p.id = s.project_id
          WHERE ${where} AND s.archived_at IS NULL AND s.quick_of IS NULL
+           AND (s.pause_state IS NULL OR s.pause_state != 'paused')
            AND s.task_status IN (${IN_FLIGHT.map((s) => `'${s}'`).join(", ")})`
       )
       .all({ ws: scope.workspaceId, project: scope.projectId }) as {
@@ -176,7 +233,7 @@ function stillWorking(taskId: string): boolean {
 
 export function afterMet(r: QueueRow): boolean {
   if (r.after_task && !hasFinished(r.after_task)) return false;
-  if (r.after_any) {
+  if (r.after_any && !r.after_any_used) {
     const ids = JSON.parse(r.after_any) as string[];
     if (ids.length && !ids.some((id) => !stillWorking(id))) return false;
   }
@@ -235,6 +292,11 @@ export interface QueueRequest {
   after?: string;
   // Set when the orchestrator starts it.
   originWorkspaceId?: string;
+  // Where it sits among the queued: urgent, blocking, normal (the default)
+  // or background.
+  priority?: Priority;
+  // "mac" pins it to a Mac; "any" says it needs nothing in particular.
+  machine?: "any" | "mac";
 }
 
 const waitingIn = (workspaceId: string) =>
@@ -278,14 +340,26 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
       startingIn(workspaceId) >=
       limit ||
       waitingIn(workspaceId) > 0);
-  if (!waits && !full) return null;
+  if (req.priority !== undefined && !isPriority(req.priority))
+    throw new Error(`Priority is one of: urgent, blocking, normal, background`);
+  const setting = needsFromSetting(req.machine);
+  if (req.machine !== undefined && !setting)
+    throw new Error(`Machine is "any" or "mac"`);
+  // The orchestrator's own starts wait out a loaded machine; a person's
+  // direct start goes ahead, as "start now" always has.
+  const loaded =
+    !waits &&
+    !full &&
+    !!req.originWorkspaceId &&
+    loadHeldStart(project.id, req.prompt, setting);
+  if (!waits && !full && !loaded) return null;
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
   db.prepare(
     `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, view, agent_type, base_branch,
-       host_id, after_task, after_any, origin_workspace_id, position)
+       host_id, after_task, after_any, origin_workspace_id, priority, machine_needs, position)
      VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @view, @agent_type, @base_branch,
-       @host_id, @after_task, @after_any, @origin,
+       @host_id, @after_task, @after_any, @origin, @priority, @machine_needs,
        (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
   ).run({
     id,
@@ -308,6 +382,8 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
     after_task: afterTask,
     after_any: afterAny ? JSON.stringify(afterAny) : null,
     origin: req.originWorkspaceId ?? null,
+    priority: req.priority ?? DEFAULT_PRIORITY,
+    machine_needs: setting ? JSON.stringify(setting) : null,
   });
   tickQueueSoon();
   return queuedView(id)!;
@@ -372,10 +448,28 @@ export function listQueue(): QueuedTaskView[] {
     workspace_id: string | null;
   })[];
   const places = new Map<string, number>();
+  // The score order within each line, by priority and age alone: holds
+  // don't move a task's rank.
+  const now = Date.now();
+  const ranked = new Map<string, { rank: number; of: number }>();
+  const lines = new Map<string, typeof rows>();
+  for (const r of rows.filter((r) => r.status === "queued")) {
+    const key = r.workspace_id ?? `project:${r.project_id}`;
+    lines.set(key, [...(lines.get(key) ?? []), r]);
+  }
+  for (const line of lines.values()) {
+    const order = line
+      .map((r) => ({ r, score: scoreOf(r, now) }))
+      .sort((a, b) => b.score - a.score || a.r.position - b.r.position);
+    order.forEach(({ r }, i) =>
+      ranked.set(r.id, { rank: i + 1, of: order.length })
+    );
+  }
   return rows.map((r) => {
     const key = r.workspace_id ?? `project:${r.project_id}`;
     const place = (places.get(key) ?? 0) + 1;
     places.set(key, place);
+    const rank = ranked.get(r.id);
     return {
       id: r.id,
       name: label(r),
@@ -391,20 +485,67 @@ export function listQueue(): QueuedTaskView[] {
       error: r.error,
       startedBy: r.started_by,
       createdAt: r.created_at,
+      priority: isPriority(r.priority) ? r.priority : DEFAULT_PRIORITY,
+      wait: r.wait_code,
+      rank: rank?.rank ?? place,
+      of: rank?.of ?? place,
     };
   });
 }
+
+function scoreOf(r: QueueRow, now: number): number {
+  return scoreParts(
+    {
+      kind: "start",
+      priority: isPriority(r.priority) ? r.priority : DEFAULT_PRIORITY,
+      waitingSinceMs: sqliteMs(r.created_at),
+    },
+    now
+  ).score;
+}
+
+// SQLite's datetime('now') is UTC without a zone.
+const sqliteMs = (v: string) =>
+  Date.parse(v.includes("T") ? v : `${v.replace(" ", "T")}Z`) || 0;
 
 export const queuedView = (id: string) =>
   listQueue().find((q) => q.id === id) ?? null;
 
 // Why an automatic start has to wait, or null. A start now by a person
 // isn't held.
-function autoHold(workspaceId: string | null): string | null {
+function autoHold(workspaceId: string | null): Hold | null {
   if (workspaceId && isPaused(workspaceId))
-    return "Waiting: the orchestrator is paused";
+    return { code: "orch_paused", text: "Waiting: the orchestrator is paused" };
   const window = brakesEnabled() ? windowRefusal(readUsage()) : null;
-  return window ? `Waiting: ${window}` : null;
+  return window ? { code: "window", text: `Waiting: ${window}` } : null;
+}
+
+// Whether this machine's load rules out starting a task for this project now.
+function loadHeldStart(
+  projectId: string,
+  prompt: string,
+  setting: Need[] | null
+): boolean {
+  const project = getProject(projectId);
+  if (!project || isRemoteHost(project.host_id)) return false;
+  const needs =
+    setting ??
+    needsOf({
+      projectId,
+      projectPath: expandHome(project.working_directory),
+      prompt,
+    }).needs;
+  const hold = machineHold(
+    {
+      heavy: heavyNeeds(needs),
+      needsUnmet: !meetsNeeds(needs, machineCapabilities()),
+      remote: false,
+      priority: DEFAULT_PRIORITY,
+    },
+    localView(),
+    Date.now()
+  );
+  return !!hold && (hold.code === "load_red" || hold.code === "heavy");
 }
 
 export type StartOutcome = "started" | "held" | "retry" | "failed";
@@ -412,20 +553,32 @@ export type StartOutcome = "started" | "held" | "retry" | "failed";
 // Tells the orchestrator that queued it that it started.
 function announce(
   r: Pick<QueueRow, "id" | "origin_workspace_id">,
-  session: Pick<Session, "name" | "branch_name">
+  session: Pick<Session, "name" | "branch_name">,
+  placed?: { text: string } | null
 ): void {
   if (!r.origin_workspace_id) return;
   queueEvent(
     r.origin_workspace_id,
     `queued-start:${r.id}`,
     r.id,
-    `Queued task "${session.name}" (id ${r.id.slice(0, 8)}) started on ${session.branch_name ?? "its branch"}.`
+    placed
+      ? `Queued task "${session.name}" (id ${r.id.slice(0, 8)}) ${placed.text}.`
+      : `Queued task "${session.name}" (id ${r.id.slice(0, 8)}) started on ${session.branch_name ?? "its branch"}.`
   );
+}
+
+interface StartOpts {
+  force?: boolean;
+  // The finish an "after any" start takes (null: none left to take).
+  consume?: string | null;
+  // Start on this linked machine instead of the project's.
+  placement?: Placement | null;
+  heavy?: boolean;
 }
 
 async function startRow(
   r: QueueRow,
-  opts: { force?: boolean } = {}
+  opts: StartOpts = {}
 ): Promise<StartOutcome> {
   const project = getProject(r.project_id);
   const workspaceId = project?.workspace_id ?? null;
@@ -448,7 +601,8 @@ async function startRow(
   if (!opts.force) {
     const held = autoHold(workspaceId);
     if (held) {
-      if (r.note !== held) patch(r.id, { note: held });
+      if (r.note !== held.text)
+        patch(r.id, { note: held.text, wait_code: held.code });
       return "held";
     }
     // A start that came in during this tick's earlier starts may have taken
@@ -463,12 +617,24 @@ async function startRow(
     )
       return "held";
   }
-  const claimed = db
-    .prepare(
-      `UPDATE task_queue SET status = 'starting', note = NULL WHERE id = ? AND status = 'queued'`
-    )
-    .run(r.id).changes;
+  let claimed = 0;
+  try {
+    claimed = db
+      .prepare(
+        `UPDATE task_queue SET status = 'starting', note = NULL, wait_code = NULL,
+           after_any_used = COALESCE(after_any_used, @used)
+         WHERE id = @id AND status = 'queued'`
+      )
+      .run({ id: r.id, used: opts.consume ?? null }).changes;
+  } catch (error) {
+    // Another waiter took that finish between the plan and the claim.
+    if (String(error).includes("UNIQUE")) return "held";
+    throw error;
+  }
   if (!claimed) return "held";
+  const placed = opts.placement ?? null;
+  if (!opts.force)
+    recordAutoStart(placed?.hostId ?? LOCAL, !!opts.heavy, Date.now());
   const task = {
     id: r.id,
     projectId: r.project_id,
@@ -484,9 +650,12 @@ async function startRow(
     view: r.view ?? undefined,
     agent: (r.agent_type as AgentType | null) ?? undefined,
     baseBranch: r.base_branch ?? undefined,
-    hostId: r.host_id ?? undefined,
+    hostId: placed?.hostId ?? r.host_id ?? undefined,
     reclaim: true,
   };
+  const placedText = placed
+    ? `started on ${placed.name} · ${placed.why}`
+    : null;
   try {
     // The orchestrator's queued starts pass its brakes when they start,
     // a person's "start now" included: it skips only the limit and `after`.
@@ -505,7 +674,8 @@ async function startRow(
       error: null,
       note: null,
     });
-    announce(r, session);
+    stampStarted(r, placed);
+    announce(r, session, placedText ? { text: placedText } : null);
     return "started";
   } catch (error) {
     if (error instanceof BrakeRefused) {
@@ -538,65 +708,328 @@ async function startRow(
   }
 }
 
-// One look at the line: per workspace, what fits under its limit, in order,
-// with its `after` met. Pure, for tests: rows in, ids to start out.
-export function planQueue(
-  rows: (QueueRow & { workspace_id: string | null })[],
-  running: (scope: { workspaceId: string | null; projectId: string }) => number,
-  limit: (workspaceId: string | null) => number | null,
-  ready: (r: QueueRow) => boolean
-): string[] {
-  const groups = new Map<string, typeof rows>();
-  for (const r of rows) {
-    const key = r.workspace_id ?? `project:${r.project_id}`;
-    groups.set(key, [...(groups.get(key) ?? []), r]);
-  }
-  const start: string[] = [];
-  for (const group of groups.values()) {
-    const first = group[0];
-    const scope = {
-      workspaceId: first.workspace_id,
-      projectId: first.project_id,
-    };
-    const max = limit(first.workspace_id) ?? Number.POSITIVE_INFINITY;
-    const queued = group.filter((r) => r.status === "queued");
-    const inFlight =
-      running(scope) + group.filter((r) => r.status === "starting").length;
-    start.push(...fillSlots(queued, inFlight, max, ready).map((r) => r.id));
-  }
-  return start;
+// Marks the task a queue row became: its priority, and where it was placed.
+function stampStarted(r: QueueRow, placed: Placement | null): void {
+  const note = placed ? `Started on ${placed.name} · ${placed.why}` : null;
+  const priority =
+    r.priority && r.priority !== DEFAULT_PRIORITY ? r.priority : null;
+  if (!note && !priority) return;
+  db.prepare(
+    `UPDATE sessions SET priority = COALESCE(?, priority), placed_note = COALESCE(?, placed_note) WHERE id = ?`
+  ).run(priority, note, r.id);
 }
 
-async function tickOnce(): Promise<void> {
+type QueueRowWithWorkspace = QueueRow & { workspace_id: string | null };
+
+const groupKey = (workspaceId: string | null, projectId: string) =>
+  workspaceId ?? `project:${projectId}`;
+
+function groupFor(
+  workspaceId: string | null,
+  projectId: string,
+  startingRows: number
+): Group {
+  const scope = { workspaceId, projectId };
+  return {
+    inFlight:
+      runningIn(scope).length +
+      (workspaceId ? (reserved.get(workspaceId) ?? 0) : 0) +
+      startingRows,
+    limit: limitOf(workspaceId) ?? Number.POSITIVE_INFINITY,
+  };
+}
+
+// Finishes other waiters have taken, so one finish lets one waiter go.
+const usedFinishes = (): string[] =>
+  (
+    db
+      .prepare(
+        `SELECT after_any_used AS id FROM task_queue WHERE after_any_used IS NOT NULL`
+      )
+      .all() as { id: string }[]
+  ).map((x) => x.id);
+
+function candidateOf(
+  r: QueueRowWithWorkspace,
+  used: string[]
+): { c: Candidate; needs: Need[] } {
+  const project = getProject(r.project_id);
+  const hostId = r.host_id ?? project?.host_id;
+  const remote = isRemoteHost(hostId);
+  const needs = remote
+    ? []
+    : (parseNeeds(r.machine_needs) ??
+      (project
+        ? needsOf({
+            projectId: project.id,
+            projectPath: expandHome(project.working_directory),
+            prompt: r.prompt,
+          }).needs
+        : []));
+  let before: Hold | null = null;
+  if (r.after_task && !hasFinished(r.after_task))
+    before = {
+      code: "after",
+      text: `After ${afterLabel({ ...r, after_any: null }) ?? "its task"}`,
+    };
+  let any: Candidate["any"] = null;
+  if (r.after_any) {
+    const ids = JSON.parse(r.after_any) as string[];
+    any = {
+      ids,
+      finished: ids.filter((id) => !stillWorking(id)),
+      used: used.filter((id) => id !== r.after_any_used),
+      released: !!r.after_any_used,
+      label:
+        ids
+          .filter(stillWorking)
+          .map((id) => sessionOf(id)?.name ?? id.slice(0, 8))
+          .join(", ") || "its set",
+    };
+  }
+  return {
+    needs,
+    c: {
+      id: r.id,
+      kind: "start",
+      group: groupKey(r.workspace_id, r.project_id),
+      priority: isPriority(r.priority) ? r.priority : DEFAULT_PRIORITY,
+      position: r.position,
+      waitingSinceMs: sqliteMs(r.created_at),
+      heavy: heavyNeeds(needs),
+      needsUnmet: !remote && !meetsNeeds(needs, machineCapabilities()),
+      remote,
+      before,
+      auto: autoHold(r.workspace_id),
+      any,
+    },
+  };
+}
+
+// The linked machines a task could be placed on, with what they report.
+async function peerOptions(
+  rows: QueueRowWithWorkspace[],
+  now: number
+): Promise<Map<string, PeerOption[]>> {
+  const out = new Map<string, PeerOption[]>();
+  const hostIds = [...linkedHostIds()];
+  if (!hostIds.length || !rows.length) return out;
+  await refreshPeers(hostIds, now);
+  const perProject = new Map<string, Record<string, string | null>>();
+  for (const r of rows) {
+    if (out.has(r.project_id)) continue;
+    const project = getProject(r.project_id);
+    let can: Record<string, string | null> = {};
+    if (project) {
+      can =
+        perProject.get(project.id) ??
+        (await projectMachines(project).catch(() => ({})));
+      perProject.set(project.id, can);
+    }
+    out.set(
+      r.project_id,
+      hostIds.map((hostId) => {
+        const src = peerSource(hostId, now);
+        const reading = peerReading(hostId);
+        return {
+          hostId,
+          name: src.label,
+          view: viewOf(src, now),
+          capabilities: src.capabilities,
+          hasProject: can[hostId] === null,
+          loadPerCore: reading ? reading.load1 / reading.cores : 99,
+        };
+      })
+    );
+  }
+  return out;
+}
+
+// One look at the line: every queued task and every paused task that came
+// due, scored, held or started. Machine readings come from the monitor and
+// the peer poll; the clock is passed in.
+export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
   const rows = db
     .prepare(
       `SELECT q.*, p.workspace_id AS workspace_id FROM task_queue q
        JOIN projects p ON p.id = q.project_id
        WHERE q.status IN ('queued', 'starting') ORDER BY q.position`
     )
-    .all() as (QueueRow & { workspace_id: string | null })[];
-  if (!rows.length) return;
-  const plan = planQueue(
-    rows,
-    (scope) =>
-      runningIn(scope).length +
-      (scope.workspaceId ? (reserved.get(scope.workspaceId) ?? 0) : 0),
-    limitOf,
-    afterMet
+    .all() as QueueRowWithWorkspace[];
+  const resumes = dueResumes();
+  if (!rows.length && !resumes.length) return;
+  const queued = rows.filter((r) => r.status === "queued");
+  const used = usedFinishes();
+  const built = new Map(
+    queued.map((r) => [r.id, candidateOf(r, used)] as const)
   );
-  for (const id of plan) {
+  const candidates: Candidate[] = [...built.values()].map((b) => b.c);
+  for (const d of resumes) {
+    const workspaceId = workspaceOf(d.projectId);
+    candidates.push({
+      id: `resume:${d.sessionId}`,
+      kind: "resume",
+      group: groupKey(workspaceId, d.projectId),
+      priority: d.priority,
+      position: -1_000_000 + d.pauseId,
+      waitingSinceMs: d.dueAtMs,
+      heavy: false,
+      needsUnmet: false,
+      remote: false,
+      before: null,
+      // A person's timed resume goes ahead of an orchestrator Pause.
+      auto: d.byKind === "person" ? null : autoHold(workspaceId),
+      any: null,
+    });
+  }
+
+  // Placement: a start the home machine's load rules out goes to a free
+  // linked machine, best score first, one per machine per look.
+  const placements = new Map<string, Placement>();
+  const home = localView(now);
+  const toPlace = candidates.filter(
+    (c) =>
+      c.kind === "start" &&
+      !c.remote &&
+      !unplaceable(row(c.id)!) &&
+      wantsPlacing(c, home, now)
+  );
+  if (toPlace.length) {
+    const before = lineSignature();
+    const peers = await peerOptions(
+      toPlace.map((c) => rows.find((r) => r.id === c.id)!),
+      now
+    );
+    // The line moved while the machines were asked: this look is stale, and
+    // the one a change during it asks for sees the line as it is now.
+    if (lineSignature() !== before) return "stale";
+    const taken = new Set<string>();
+    for (const c of [...toPlace].sort(
+      (a, b) =>
+        scoreParts(b, now).score - scoreParts(a, now).score ||
+        a.position - b.position
+    )) {
+      const r = rows.find((x) => x.id === c.id)!;
+      const options = (peers.get(r.project_id) ?? []).filter(
+        (p) => !taken.has(p.hostId)
+      );
+      const spot = place(c, home, options, built.get(c.id)!.needs, now);
+      if (!spot) continue;
+      taken.add(spot.hostId);
+      placements.set(c.id, spot);
+      c.remote = true;
+    }
+  }
+
+  const groups = new Map<string, Group>();
+  for (const c of candidates) {
+    if (groups.has(c.group)) continue;
+    const r = rows.find(
+      (x) => groupKey(x.workspace_id, x.project_id) === c.group
+    );
+    const projectId =
+      r?.project_id ??
+      resumes.find((d) => `resume:${d.sessionId}` === c.id)!.projectId;
+    const workspaceId = r?.workspace_id ?? workspaceOf(projectId);
+    groups.set(
+      c.group,
+      groupFor(
+        workspaceId,
+        projectId,
+        rows.filter(
+          (x) =>
+            x.status === "starting" &&
+            groupKey(x.workspace_id, x.project_id) === c.group
+        ).length
+      )
+    );
+  }
+
+  const plan = planStarts(candidates, groups, home, now);
+  for (const r of queued)
+    noteWaiting(r, withStayReason(r, plan.explain.get(r.id)));
+
+  for (const id of plan.start) {
+    if (id.startsWith("resume:")) {
+      await claimResume(id.slice("resume:".length), { reason: "due" });
+      continue;
+    }
     const r = row(id);
-    if (r?.status === "queued") await startRow(r);
+    if (r?.status === "queued")
+      await startRow(r, {
+        consume: plan.consume.get(id) ?? null,
+        placement: placements.get(id) ?? null,
+        heavy: built.get(id)?.c.heavy,
+      });
   }
 }
 
-// One look at a time; a call during one shares it.
+// Writes why a row waits when that changed: its hold text and code. A bare
+// rank isn't stored (the view computes it), so the stream stays quiet.
+const MACHINE_HOLDS = new Set<WaitCode>([
+  "load_red",
+  "load_amber",
+  "heavy",
+  "needs",
+]);
+
+// A hold on this machine's load says, for a task that can't go elsewhere,
+// why it waits here instead of starting on a linked machine.
+function withStayReason(
+  r: QueueRow,
+  explain: { code: WaitCode | null; text: string | null } | undefined
+) {
+  if (!explain?.code || !explain.text || !MACHINE_HOLDS.has(explain.code))
+    return explain;
+  const why = unplaceable(r);
+  return why ? { ...explain, text: `${explain.text} (${why})` } : explain;
+}
+
+function noteWaiting(
+  r: QueueRow,
+  explain: { code: WaitCode | null; text: string | null } | undefined
+): void {
+  if (!explain) return;
+  const hold = explain.code && explain.code !== "slot" ? explain : null;
+  if (hold) {
+    if (r.note !== hold.text || r.wait_code !== hold.code)
+      patch(r.id, { note: hold.text, wait_code: hold.code });
+    return;
+  }
+  // A hold we wrote before is cleared; a brake's note isn't ours to clear.
+  if (r.wait_code && r.wait_code !== "slot")
+    patch(r.id, { note: null, wait_code: explain.code });
+  else if (r.wait_code !== explain.code)
+    patch(r.id, { wait_code: explain.code });
+}
+
+function lineSignature(): string {
+  const r = db
+    .prepare(
+      `SELECT COUNT(*) AS n, COALESCE(MAX(position), 0) AS p,
+              COALESCE(SUM(priority = 'normal'), 0) AS pr,
+              (SELECT COUNT(*) FROM sessions WHERE task_status IS NOT NULL
+                 AND task_status NOT IN ('merged', 'dropped')) AS running
+       FROM task_queue WHERE status IN ('queued', 'starting')`
+    )
+    .get() as { n: number; p: number; pr: number; running: number };
+  return `${r.n}:${r.p}:${r.pr}:${r.running}`;
+}
+
+// One look at a time; a call during one shares it, and a look that went
+// stale (the line changed while it waited on a machine) is run again.
 const tickState = (g.__agentosQueueTick ??= { ticking: null });
 
 export function tickQueue(): Promise<void> {
-  tickState.ticking ??= tickOnce().finally(() => {
-    tickState.ticking = null;
-  });
+  tickState.ticking ??= (async () => {
+    try {
+      for (let i = 0; i < 3; i++) {
+        if ((await tickOnce()) !== "stale") break;
+      }
+    } finally {
+      tickState.ticking = null;
+    }
+  })();
   return tickState.ticking;
 }
 
@@ -645,6 +1078,31 @@ export function findQueued(
 }
 
 export const queuedLabel = label;
+
+// Changes the priority of a queued task or a running one (they share an
+// id). Age is kept. Throws when no such task is waiting or running.
+export function setPriority(id: string, priority: Priority): void {
+  if (!isPriority(priority))
+    throw new Error("Priority is one of: urgent, blocking, normal, background");
+  const queued = db
+    .prepare(
+      `UPDATE task_queue SET priority = ? WHERE id = ? AND status IN ('queued', 'failed')`
+    )
+    .run(priority, id).changes;
+  const running = db
+    .prepare(
+      `UPDATE sessions SET priority = ? WHERE id = ? AND task_status IS NOT NULL AND archived_at IS NULL`
+    )
+    .run(priority === DEFAULT_PRIORITY ? null : priority, id).changes;
+  if (!queued && !running) throw new Error("No such queued or running task");
+  tickQueueSoon();
+}
+
+// A task started directly (never queued) keeps the priority it was given.
+export function stampPriority(id: string, priority: Priority | undefined) {
+  if (!priority || priority === DEFAULT_PRIORITY) return;
+  db.prepare(`UPDATE sessions SET priority = ? WHERE id = ?`).run(priority, id);
+}
 
 export function removeQueued(id: string): void {
   const changed = db

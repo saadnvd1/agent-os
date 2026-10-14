@@ -5,18 +5,33 @@ import type { Session } from "@/lib/db";
 import { db } from "@/lib/db";
 import { changeWatcher } from "@/lib/db/changes";
 import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
+import { resetMachineStarts } from "@/lib/load/start-gate";
 import { setPaused } from "@/lib/orchestrator/pause";
 import { updateWorkspace } from "@/lib/workspaces";
+import type { MachineView } from "./schedule";
 
 // What was started, in order, by prompt and the id it was given.
 const started: { prompt: string; id?: string }[] = [];
+// The machine each start was sent to, by prompt (undefined: the project's).
+const startedOn = new Map<string, string | undefined>();
+// Linked machines the placing pass sees: set per test.
+let peers: Record<
+  string,
+  { level: "green" | "red"; stale?: boolean; hasProject?: boolean }
+> = {};
 
 // A start makes a running task row with the id it was given, and nothing
 // else: no worktree, no agent.
 vi.mock("@/lib/tasks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tasks")>()),
-  createTask: async (o: { id?: string; projectId: string; prompt: string }) => {
+  createTask: async (o: {
+    id?: string;
+    projectId: string;
+    prompt: string;
+    hostId?: string;
+  }) => {
     started.push({ prompt: o.prompt, id: o.id });
+    startedOn.set(o.prompt, o.hostId);
     if (o.prompt.startsWith("fail")) throw new Error("no worktree");
     db.prepare(
       `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status, branch_name)
@@ -40,14 +55,71 @@ vi.mock("@/lib/orchestrator/usage", async (importOriginal) => ({
   windowRefusal: () => windowReason,
 }));
 
+// The machine as the scheduler sees it: calm and idle unless a test says so.
+const greenView = (): MachineView => ({
+  label: "this machine",
+  enabled: true,
+  reading: false,
+  level: "green",
+  settled: true,
+  settleLeftMs: 0,
+  booted: 0,
+  maxBooted: 2,
+  heavyStarting: 0,
+  lastAutoStartAt: null,
+  lastHeavyStartAt: null,
+});
+let machine: MachineView = greenView();
+const recorded: { hostId: string; heavy: boolean }[] = [];
+vi.mock("@/lib/load/machines", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/load/machines")>()),
+  localView: () => machine,
+  machineCapabilities: () => ["mac", "xcode", "simulator"],
+  recordAutoStart: (hostId: string, heavy: boolean) => {
+    recorded.push({ hostId, heavy });
+  },
+}));
+
+vi.mock("@/lib/hosts/remote-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hosts/remote-api")>()),
+  linkedHostIds: () => new Set(Object.keys(peers)),
+}));
+vi.mock("@/lib/hosts/project-machines", () => ({
+  projectMachines: async () =>
+    Object.fromEntries(
+      Object.entries(peers).map(([id, p]) => [
+        id,
+        p.hasProject === false ? "not there" : null,
+      ])
+    ),
+}));
+vi.mock("@/lib/hosts/peer-load", () => ({
+  refreshPeers: async (ids: string[], now: number) => {
+    const { feedGate } = await import("@/lib/load/start-gate");
+    for (const id of ids)
+      if (peers[id] && !peers[id].stale) feedGate(id, peers[id].level, now);
+  },
+  peerReading: (id: string) =>
+    peers[id] ? { load1: 1, cores: 8, level: peers[id].level } : null,
+  peerSource: (id: string) => ({
+    hostId: id,
+    label: id,
+    level: peers[id]?.level ?? null,
+    booted: 0,
+    maxBooted: 2,
+    capabilities: ["linux"],
+    stale: !!peers[id]?.stale,
+  }),
+}));
+
 const {
   findQueued,
   listQueue,
   moveQueued,
-  planQueue,
   queueIfNeeded,
   recoverQueue,
   removeQueued,
+  setPriority,
   startOrQueue,
   startQueuedNow,
   tickQueue,
@@ -79,6 +151,11 @@ function setup(limit: number | null) {
 
 beforeEach(() => {
   started.length = 0;
+  recorded.length = 0;
+  startedOn.clear();
+  peers = {};
+  machine = greenView();
+  resetMachineStarts();
   db.prepare(`UPDATE task_queue SET status = 'removed'`).run();
 });
 
@@ -545,39 +622,339 @@ describe("a keyed retry's leftovers", () => {
   });
 });
 
-describe("planQueue", () => {
-  const row = (id: string, workspace: string | null, status = "queued") =>
-    ({
-      id,
-      project_id: `p-${id}`,
-      workspace_id: workspace,
-      status,
-    }) as Parameters<typeof planQueue>[0][number];
+const waitOf = (id: string) =>
+  db.prepare(`SELECT note, wait_code FROM task_queue WHERE id = ?`).get(id) as {
+    note: string | null;
+    wait_code: string | null;
+  };
 
-  it("fills each workspace's slots in order, skipping one not ready", () => {
-    const rows = [
-      row("a", "w1"),
-      row("b", "w1"),
-      row("c", "w1"),
-      row("d", "w2"),
-      row("e", null),
-    ];
-    const plan = planQueue(
-      rows,
-      (s) => (s.workspaceId === "w1" ? 1 : 0),
-      (w) => (w === "w1" ? 2 : w === "w2" ? 0 : null),
-      (r) => r.id !== "a"
-    );
-    expect(plan).toEqual(["b", "e"]);
+describe("priority and score", () => {
+  it("stores a priority, defaulting to normal", () => {
+    const t = setup(1);
+    const a = queueIfNeeded({ projectId: t.app.id, prompt: "a" })!;
+    const b = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "b",
+      priority: "urgent",
+    })!;
+    expect(a.priority).toBe("normal");
+    expect(b.priority).toBe("urgent");
+    expect(() =>
+      queueIfNeeded({
+        projectId: t.app.id,
+        prompt: "c",
+        priority: "whenever" as never,
+      })
+    ).toThrow(/Priority is one of/);
   });
 
-  it("counts a row being started as in flight", () => {
-    const plan = planQueue(
-      [row("a", "w1", "starting"), row("b", "w1")],
-      () => 0,
-      () => 1,
-      () => true
+  it("starts the higher priority first, whatever the line order", async () => {
+    const t = setup(1);
+    queueIfNeeded({ projectId: t.app.id, prompt: "plain" });
+    queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "later",
+      priority: "background",
+    });
+    queueIfNeeded({ projectId: t.app.id, prompt: "bug", priority: "urgent" });
+    finish(t.task);
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["bug"]);
+  });
+
+  it("a priority change reorders the line and keeps the task's age", async () => {
+    const t = setup(1);
+    const a = queueIfNeeded({ projectId: t.app.id, prompt: "first" })!;
+    const b = queueIfNeeded({ projectId: t.app.id, prompt: "second" })!;
+    expect(listQueue().find((q) => q.id === b.id)).toMatchObject({
+      rank: 2,
+      of: 2,
+    });
+    setPriority(b.id, "blocking");
+    expect(listQueue().find((q) => q.id === b.id)).toMatchObject({
+      rank: 1,
+      priority: "blocking",
+    });
+    expect(listQueue().find((q) => q.id === a.id)!.rank).toBe(2);
+    const created = db
+      .prepare(`SELECT created_at FROM task_queue WHERE id = ?`)
+      .get(b.id);
+    setPriority(b.id, "normal");
+    expect(
+      db.prepare(`SELECT created_at FROM task_queue WHERE id = ?`).get(b.id)
+    ).toEqual(created);
+    expect(() => setPriority("nope", "urgent")).toThrow(/No such/);
+  });
+
+  it("changes a running task's priority too", () => {
+    const t = setup(null);
+    setPriority(t.task, "blocking");
+    expect(
+      db.prepare(`SELECT priority FROM sessions WHERE id = ?`).get(t.task)
+    ).toEqual({ priority: "blocking" });
+  });
+
+  it("a paused task gives its slot back", async () => {
+    const t = setup(1);
+    const q = queueIfNeeded({ projectId: t.app.id, prompt: "next" })!;
+    await tick();
+    expect(started).toEqual([]);
+    db.prepare(`UPDATE sessions SET pause_state = 'paused' WHERE id = ?`).run(
+      t.task
     );
-    expect(plan).toEqual([]);
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["next"]);
+    expect(statusOf(q.id)).toBe("started");
+  });
+});
+
+describe("after any consumes a finish", () => {
+  it("one finish releases one waiter, the next finish the next", async () => {
+    const t = setup(null);
+    const b = seedSession({ projectId: t.app.id, name: "b", task: true });
+    const c = seedSession({ projectId: t.app.id, name: "c", task: true });
+    const waiters = ["w1", "w2", "w3"].map(
+      (p) => queueIfNeeded({ projectId: t.app.id, prompt: p, after: "any" })!
+    );
+    finish(t.task);
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["w1"]);
+    expect(waitOf(waiters[1].id)).toMatchObject({ wait_code: "after_any" });
+    expect(waitOf(waiters[1].id).note).toMatch(/after any running task/);
+    finish(b);
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["w1", "w2"]);
+    finish(c);
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["w1", "w2", "w3"]);
+  });
+
+  it("the unique index refuses a finish used twice", () => {
+    const t = setup(null);
+    const a = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "a",
+      after: "any",
+    })!;
+    const b = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "b",
+      after: "any",
+    })!;
+    db.prepare(`UPDATE task_queue SET after_any_used = 'x' WHERE id = ?`).run(
+      a.id
+    );
+    expect(() =>
+      db
+        .prepare(`UPDATE task_queue SET after_any_used = 'x' WHERE id = ?`)
+        .run(b.id)
+    ).toThrow(/UNIQUE/);
+  });
+
+  it("two finishes at once release two waiters, one start per look", async () => {
+    const t = setup(null);
+    const b = seedSession({ projectId: t.app.id, name: "b", task: true });
+    queueIfNeeded({ projectId: t.app.id, prompt: "w1", after: "any" });
+    queueIfNeeded({ projectId: t.app.id, prompt: "w2", after: "any" });
+    await tickQueue();
+    finish(t.task);
+    finish(b);
+    await tickQueue();
+    expect(started.map((s) => s.prompt)).toEqual(["w1"]);
+    await tickQueue();
+    expect(started.map((s) => s.prompt)).toEqual(["w1", "w2"]);
+  });
+
+  it("recoverQueue keeps the finish a cut-off start had taken", () => {
+    const t = setup(null);
+    const q = queueIfNeeded({
+      projectId: t.app.id,
+      prompt: "cut",
+      after: "any",
+    })!;
+    db.prepare(
+      `UPDATE task_queue SET status = 'starting', after_any_used = 'r9' WHERE id = ?`
+    ).run(q.id);
+    recoverQueue();
+    expect(
+      db
+        .prepare(`SELECT status, after_any_used FROM task_queue WHERE id = ?`)
+        .get(q.id)
+    ).toEqual({ status: "queued", after_any_used: "r9" });
+  });
+});
+
+describe("machine load", () => {
+  const afterTask = (t: ReturnType<typeof setup>, prompt: string, extra = {}) =>
+    queueIfNeeded({ projectId: t.app.id, prompt, after: t.task, ...extra })!;
+
+  it("holds starts while the machine is red, and says so once", async () => {
+    const t = setup(null);
+    const q = afterTask(t, "held");
+    finish(t.task);
+    machine = { ...greenView(), level: "red", settled: false };
+    await tick();
+    expect(started).toEqual([]);
+    expect(waitOf(q.id)).toEqual({
+      note: "Waiting: this machine load red",
+      wait_code: "load_red",
+    });
+    machine = greenView();
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["held"]);
+    expect(waitOf(q.id)).toEqual({ note: null, wait_code: null });
+  });
+
+  it("on amber only blocking and urgent work starts", async () => {
+    const t = setup(null);
+    afterTask(t, "plain");
+    afterTask(t, "bug", { priority: "urgent" });
+    finish(t.task);
+    machine = { ...greenView(), level: "amber" };
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["bug"]);
+  });
+
+  it("holds a simulator task when the simulators are in use", async () => {
+    const t = setup(null);
+    const q = afterTask(t, "ios");
+    db.prepare(`UPDATE task_queue SET machine_needs = ? WHERE id = ?`).run(
+      JSON.stringify(["mac", "xcode", "simulator"]),
+      q.id
+    );
+    finish(t.task);
+    machine = { ...greenView(), booted: 2 };
+    await tick();
+    expect(started).toEqual([]);
+    expect(waitOf(q.id)).toMatchObject({ wait_code: "heavy" });
+    machine = { ...greenView(), booted: 0 };
+    await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["ios"]);
+    expect(recorded).toEqual([{ hostId: "local", heavy: true }]);
+  });
+
+  it("spaces automatic starts: one per look on a machine", async () => {
+    const t = setup(null);
+    afterTask(t, "one");
+    afterTask(t, "two");
+    // The look queueing set off ends first, so the next one is the only one.
+    await tickQueue();
+    finish(t.task);
+    await tickQueue();
+    expect(started.map((s) => s.prompt)).toEqual(["one"]);
+    await tickQueue();
+    expect(started.map((s) => s.prompt)).toEqual(["one", "two"]);
+  });
+
+  it("an orchestrator's own start waits out a red machine; a person's goes", () => {
+    const t = setup(null);
+    machine = { ...greenView(), level: "red", settled: false };
+    expect(queueIfNeeded({ projectId: t.app.id, prompt: "person" })).toBeNull();
+    expect(
+      queueIfNeeded({
+        projectId: t.app.id,
+        prompt: "orch",
+        originWorkspaceId: t.workspace.id,
+      })
+    ).toMatchObject({ status: "queued" });
+  });
+
+  it("Start now ignores the load", async () => {
+    const t = setup(null);
+    const q = afterTask(t, "now");
+    machine = { ...greenView(), level: "red", settled: false };
+    expect(await startQueuedNow(q.id)).toBe("started");
+  });
+});
+
+describe("placement on a linked machine", () => {
+  const redHome = () => {
+    machine = { ...greenView(), level: "red", settled: false };
+  };
+  const queue = (t: ReturnType<typeof setup>, prompt: string, extra = {}) =>
+    queueIfNeeded({ projectId: t.app.id, prompt, after: t.task, ...extra })!;
+
+  it("starts a held task on a green linked machine and says why", async () => {
+    const t = setup(null);
+    const q = queue(t, "move out");
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green" } };
+    await tick();
+    expect(startedOn.get("move out")).toBe("box");
+    expect(statusOf(q.id)).toBe("started");
+    expect(
+      db.prepare(`SELECT placed_note FROM sessions WHERE id = ?`).get(q.id)
+    ).toEqual({ placed_note: "Started on box · this machine load red" });
+  });
+
+  it("holds when the linked machine's reading is stale or it's red", async () => {
+    const t = setup(null);
+    const q = queue(t, "stay");
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green", stale: true } };
+    await tick();
+    peers = { box: { level: "red" } };
+    await tick();
+    expect(started).toEqual([]);
+    expect(waitOf(q.id).wait_code).toBe("load_red");
+  });
+
+  it("skips a linked machine without the project", async () => {
+    const t = setup(null);
+    queue(t, "no project there");
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green", hasProject: false } };
+    await tick();
+    expect(started).toEqual([]);
+  });
+
+  it("never places a Mac task, however red the Mac is", async () => {
+    const t = setup(null);
+    queue(t, "ios", { machine: "mac" });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green" } };
+    await tick();
+    expect(started).toEqual([]);
+  });
+
+  it("keeps plan-only tasks here, and says why in the hold", async () => {
+    const t = setup(null);
+    const q = queue(t, "plan it", { planOnly: true });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green" } };
+    await tick();
+    expect(started).toEqual([]);
+    expect(waitOf(q.id).note).toMatch(/plan-only tasks run on this machine/);
+  });
+
+  it("places an orchestrator's task and tells it where it started", async () => {
+    const t = setup(null);
+    const q = queue(t, "orch work", { originWorkspaceId: t.workspace.id });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green" } };
+    await tick();
+    expect(startedOn.get("orch work")).toBe("box");
+    const event = db
+      .prepare(
+        `SELECT line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE ?`
+      )
+      .get(t.workspace.id, `%queued-start:${q.id}`) as { line: string };
+    expect(event.line).toContain("started on box · this machine load red");
+  });
+
+  it("starts at home when the home machine is free", async () => {
+    const t = setup(null);
+    queue(t, "home");
+    finish(t.task);
+    peers = { box: { level: "green" } };
+    await tick();
+    expect(startedOn.get("home")).toBeUndefined();
+    expect(started.map((s) => s.prompt)).toEqual(["home"]);
   });
 });

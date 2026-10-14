@@ -12,6 +12,7 @@ import {
 import { ArrowDown, Loader2 } from "lucide-react";
 import type { ClipboardEvent } from "react";
 import { useChat } from "@/data/chat/useChat";
+import { PausedBanner } from "./PausedBanner";
 import {
   groupTimeline,
   sameBlock,
@@ -716,6 +717,7 @@ export function ChatPanel({
             setInsert({ text: quoteMarkdown(text), at: Date.now() })
           }
         />
+        <PausedBanner sessionId={sessionId} />
         <Queue
           queue={queue}
           running={running}

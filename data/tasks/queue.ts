@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueuedTaskView, StartOutcome } from "@/lib/tasks/queue";
-import { queueRequest, type QueueMenuAction } from "@/lib/sidebar/queued";
+import {
+  priorityRequest,
+  queueRequest,
+  type QueueMenuAction,
+} from "@/lib/sidebar/queued";
+import type { Priority } from "@/lib/tasks/schedule-types";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "./keys";
 import { usePollWhenOffline } from "../push/connection";
@@ -38,5 +43,37 @@ export function useQueueAction() {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
       queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
+  });
+}
+
+// Changes where a waiting task stands; the line re-ranks from the push.
+export function useSetPriority() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      priority,
+    }: {
+      id: string;
+      priority: Priority;
+    }) => {
+      const { url, init } = priorityRequest(id, priority);
+      return json<unknown>(await fetch(url, init));
+    },
+    onMutate: async ({ id, priority }) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.queue() });
+      const previous = queryClient.getQueryData<QueuedTaskView[]>(
+        taskKeys.queue()
+      );
+      queryClient.setQueryData<QueuedTaskView[]>(taskKeys.queue(), (old) =>
+        old?.map((q) => (q.id === id ? { ...q, priority } : q))
+      );
+      return { previous };
+    },
+    onError: (_e, _v, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(taskKeys.queue(), context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }),
   });
 }

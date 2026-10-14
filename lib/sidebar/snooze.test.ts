@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { snoozePreset, wakeLabel } from "./snooze";
+import { isPausePreset, pauseUntil, snoozePreset, wakeLabel } from "./snooze";
 
 const at = (iso: string, tz: string, preset: "tomorrow" | "next-week") =>
   snoozePreset(preset, new Date(iso), tz).toISOString();
@@ -62,5 +62,36 @@ describe("wakeLabel", () => {
     expect(label("2026-10-14T14:00:00Z")).toBe("Tomorrow 9 AM");
     expect(label("2026-10-19T14:00:00Z")).toBe("Mon 9 AM");
     expect(label("2026-10-27T14:00:00Z")).toBe("Oct 27, 9 AM");
+  });
+});
+
+describe("pauseUntil", () => {
+  const now = new Date("2026-10-14T15:00:00Z");
+
+  it("adds the hours", () => {
+    expect(pauseUntil("1h", now, "America/Chicago")?.toISOString()).toBe(
+      "2026-10-14T16:00:00.000Z"
+    );
+    expect(pauseUntil("2h", now, "America/Chicago")?.toISOString()).toBe(
+      "2026-10-14T17:00:00.000Z"
+    );
+  });
+
+  it("tomorrow is 9 AM in the reader's zone, as Snooze's", () => {
+    expect(pauseUntil("tomorrow", now, "America/Chicago")?.toISOString()).toBe(
+      snoozePreset("tomorrow", now, "America/Chicago").toISOString()
+    );
+    expect(pauseUntil("tomorrow", now, "America/Chicago")?.toISOString()).toBe(
+      "2026-10-15T14:00:00.000Z"
+    );
+  });
+
+  it("has no end until resumed", () => {
+    expect(pauseUntil("until-resumed", now, "UTC")).toBeNull();
+  });
+
+  it("knows its presets", () => {
+    expect(isPausePreset("2h")).toBe(true);
+    expect(isPausePreset("next-week")).toBe(false);
   });
 });

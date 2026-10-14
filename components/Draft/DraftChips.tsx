@@ -6,6 +6,7 @@ import {
   Cpu,
   FolderGit2,
   GitBranch,
+  Flag,
   GitPullRequest,
   Monitor,
   SquareTerminal,
@@ -21,6 +22,12 @@ import { useProjectMachinesQuery } from "@/data/projects";
 import { modelChoices, useModelsQuery } from "@/data/models";
 import type { AgentProbe } from "@/lib/agents/probe";
 import { ChipHeading, ChipItem, ChipMenu, ChipToggle } from "./Chip";
+import {
+  DEFAULT_PRIORITY,
+  PRIORITIES,
+  PRIORITY_HINT,
+  PRIORITY_LABEL,
+} from "@/lib/tasks/schedule-types";
 
 // What stands between an agent and its first prompt, if anything.
 export function agentBlocker(probe?: AgentProbe): string | null {
@@ -256,6 +263,24 @@ export function DraftChips({
               hint={c.provider}
             >
               {c.label}
+            </ChipItem>
+          ))}
+        </ChipMenu>
+      )}
+      {project && draft.openPr && (
+        <ChipMenu
+          icon={Flag}
+          name="Priority"
+          label={PRIORITY_LABEL[draft.taskPriority ?? DEFAULT_PRIORITY]}
+        >
+          {PRIORITIES.map((p) => (
+            <ChipItem
+              key={p}
+              checked={p === (draft.taskPriority ?? DEFAULT_PRIORITY)}
+              onSelect={() => onChange({ taskPriority: p })}
+              hint={PRIORITY_HINT[p]}
+            >
+              {PRIORITY_LABEL[p]}
             </ChipItem>
           ))}
         </ChipMenu>

@@ -17,6 +17,7 @@ import {
   Loader2,
   Pencil,
   Pin,
+  Pause,
   Play,
   Repeat,
   ChefHat,
@@ -35,7 +36,13 @@ import { rowGroup } from "@/lib/recipes/chip";
 import { finishActions } from "@/lib/sidebar/row-actions";
 import { useArchiveAction, useDoneAction } from "./useDoneAction";
 import { useShelfActions } from "./useShelfActions";
-import { SNOOZE_PRESETS, snoozePreset, wakeLabel } from "@/lib/sidebar/snooze";
+import {
+  PAUSE_PRESETS,
+  SNOOZE_PRESETS,
+  pauseUntil,
+  snoozePreset,
+  wakeLabel,
+} from "@/lib/sidebar/snooze";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
 import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
@@ -399,6 +406,47 @@ export function SessionRowMenu({
               </Sub>
             )
           )}
+          {session.task_status || session.view === "chat" ? (
+            session.pause_state === "paused" ||
+            session.pause_state === "pausing" ? (
+              <Item onClick={() => shelf.resume(session)}>
+                <Play className={icon} />
+                {session.pause_state === "paused"
+                  ? "Resume now"
+                  : "Keep running"}
+              </Item>
+            ) : session.pause_state ? null : (
+              <Sub>
+                <SubTrigger>
+                  <Pause className={icon} />
+                  Pause
+                </SubTrigger>
+                <SubContent>
+                  {PAUSE_PRESETS.map((p) => {
+                    const at = pauseUntil(p.key);
+                    return (
+                      <Item
+                        key={p.key}
+                        onClick={() => shelf.pause(session, p.key)}
+                      >
+                        {p.label}
+                        {at && (
+                          <span className="text-muted-foreground ml-3 text-xs">
+                            {wakeLabel(at.getTime())}
+                          </span>
+                        )}
+                      </Item>
+                    );
+                  })}
+                  <Item
+                    onClick={() => shelf.pause(session, "until-resumed", true)}
+                  >
+                    Pause now (interrupt its step)
+                  </Item>
+                </SubContent>
+              </Sub>
+            )
+          ) : null}
           {plain &&
             (row.settled ? (
               <Item onClick={() => shelf.reopen(session)}>

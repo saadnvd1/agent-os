@@ -15,6 +15,7 @@ vi.mock("@/lib/tasks", () => ({
 // Queued only when it waits on another task; the queue has its own tests.
 const asked: unknown[] = [];
 vi.mock("@/lib/tasks/queue", () => ({
+  stampPriority: () => undefined,
   startOrQueue: async (
     o: { after?: string; name?: string },
     start: () => Promise<unknown>

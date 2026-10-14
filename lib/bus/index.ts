@@ -15,6 +15,7 @@ import { deliverToPane, type Delivery } from "./delivery";
 import { resolveRef, wasNames, type Candidate } from "./resolve";
 import { tmuxPane } from "./tmux-pane";
 import { hostLink } from "../hosts/remote-api";
+import { pauseHoldOf, pausedNote } from "../tasks/pause-hold";
 import { relayToHeldTask } from "../tasks/held-remote";
 import { heldOrchestrator, heldTarget } from "./held-reply";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
@@ -215,6 +216,16 @@ export async function deliver(
       return { state: "failed", why };
     }
   }
+  // A paused terminal has no agent: the message waits for the resume prompt.
+  const paused = pauseHoldOf(to.id);
+  if (paused) {
+    if (from.messageId)
+      db.prepare(`UPDATE bus_messages SET held_pause_id = ? WHERE id = ?`).run(
+        paused.pauseId,
+        from.messageId
+      );
+    return { state: "queued" };
+  }
   if (!statusDetector.sessionExists(to.tmux_name))
     return { state: "failed", why: "its terminal isn't running" };
   try {
@@ -298,7 +309,10 @@ export async function sendMessage(opts: {
         : opts.origin,
     }
   );
-  if (delivery.state !== "failed") {
+  // A message held for a paused terminal isn't delivered until it resumes.
+  const hold = pauseHoldOf(to.id);
+  const parked = !!hold && to.view !== "chat";
+  if (delivery.state !== "failed" && !parked) {
     db.prepare(
       `UPDATE bus_messages SET delivered_at = datetime('now') WHERE id = ?`
     ).run(id);
@@ -308,7 +322,12 @@ export async function sendMessage(opts: {
       `UPDATE bus_messages SET read_at = datetime('now') WHERE id = ?`
     ).run(id);
   const message = toView(db.prepare(`${SELECT} WHERE m.id = ?`).get(id) as Row);
-  return { message, delivery, note };
+  const heldNote = hold ? pausedNote(to.name, hold) : null;
+  return {
+    message,
+    delivery,
+    note: [note, heldNote].filter(Boolean).join("; ") || undefined,
+  };
 }
 
 function storeForHolder(
