@@ -15,6 +15,7 @@ import {
   renderArtifactSnapshot,
   renderChatSnapshot,
 } from "./render";
+import { artifactToMarkdown, chatToMarkdown } from "./markdown";
 import { buildArtifactSnapshot, buildChatSnapshot } from "./snapshot";
 
 export interface ShareRequest {
@@ -36,6 +37,7 @@ export interface ItemRow {
 
 export interface Page {
   html: string;
+  markdown: string;
   title: string;
   bytes: number;
   hash: string;
@@ -99,9 +101,14 @@ export function parseRequest(raw: unknown, sharedAt?: unknown): ShareRequest {
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
+/** Binds both parts: neither can change without the hash changing. */
+export const pageHash = (html: string, markdown: string) =>
+  sha256(`${sha256(html)}\n${sha256(markdown)}`);
+
 export async function buildPage(req: ShareRequest): Promise<Page> {
   const ctx = shareContext();
   let html: string;
+  let markdown: string;
   let title: string;
   let hits: Hits;
   let items: ItemRow[] = [];
@@ -133,6 +140,7 @@ export async function buildPage(req: ShareRequest): Promise<Page> {
     if (!snap.items.length)
       throw new BadShare("Nothing to share: every message is left out", 400);
     html = renderChatSnapshot(snap, { sharedAt: req.sharedAt });
+    markdown = chatToMarkdown(snap, { sharedAt: req.sharedAt });
     title = snap.title;
     hits = snap.hits;
   } else {
@@ -140,15 +148,18 @@ export async function buildPage(req: ShareRequest): Promise<Page> {
     const snap = await buildArtifactSnapshot(req.artifactId!, ctx);
     if (!snap) throw new BadShare("That page is gone", 404);
     html = renderArtifactSnapshot(snap.html, snap.title);
+    markdown = artifactToMarkdown(snap.html, snap.title, req.sharedAt);
     title = snap.title;
     hits = snap.hits;
   }
-  const bytes = Buffer.byteLength(html, "utf8");
+  const bytes =
+    Buffer.byteLength(html, "utf8") + Buffer.byteLength(markdown, "utf8");
   return {
     html,
+    markdown,
     title,
     bytes,
-    hash: sha256(html),
+    hash: pageHash(html, markdown),
     hits,
     items,
     tooBig: bytes > MAX_SHARE_BYTES,

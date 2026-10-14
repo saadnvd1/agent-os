@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       kind: req.kind,
       title: page.title,
       html: page.html,
+      markdown: page.markdown,
       expiresIn,
     });
     insertSharedLink({

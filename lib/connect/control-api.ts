@@ -297,6 +297,7 @@ export async function uploadShare(
     kind: "chat" | "artifact";
     title: string;
     html: string;
+    markdown: string;
     expiresIn: ShareExpiry;
   }
 ): Promise<RemoteShare & { url: string }> {
@@ -307,6 +308,7 @@ export async function uploadShare(
       kind: share.kind,
       title: share.title,
       html: share.html,
+      markdown: share.markdown,
       expires_in: share.expiresIn,
     }
   );

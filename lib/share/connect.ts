@@ -59,6 +59,7 @@ export async function createRemote(share: {
   kind: "chat" | "artifact";
   title: string;
   html: string;
+  markdown: string;
   expiresIn: ShareExpiry;
 }) {
   const { config, machineKey } = files();

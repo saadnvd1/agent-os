@@ -20,7 +20,7 @@ and check on all of it from your phone.
 - **Built for your phone.** The whole app works on a phone; pair it with a QR code. [More](docs/guides/phone.md)
 - **Agents that talk to each other.** Sessions message each other with `aos`, and you see every conversation in Messages. [More](docs/guides/agent-network.md)
 - **Chat or terminal, same conversation.** Streaming replies, steps and diffs, plan mode, slash commands, `@file`, undo. [More](docs/guides/chat.md)
-- **Share a chat or a page.** A read-only snapshot link with secrets, home paths and machine names masked, and a preview before anything leaves your machine. [More](docs/guides/sharing.md)
+- **Share a chat or a page.** A read-only snapshot link with secrets, home paths and machine names masked, a preview before anything leaves your machine, and a Markdown copy to hand to an agent. [More](docs/guides/sharing.md)
 - **Project config.** `agentos.json` gives each session its own ports, environment, files and a private Postgres copy. [More](docs/reference/project-config.md)
 - **Schedules and recipes.** Start work on a timer, or save a job that comes up again. [More](docs/guides/schedules.md)
 - **Plans in pieces and stacks.** A plan splits into several PRs only for a real reason; a board can run as stacked PRs. [More](docs/guides/tasks.md#plans-in-pieces)
