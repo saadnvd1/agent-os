@@ -5,7 +5,9 @@ import { agentEnv } from "../agents/launch";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import {
   AUTO_COMPACT_ENV,
+  DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS,
   PROVIDER_BASE_TOKENS,
+  autoCompactTokensFor,
   compactThreshold,
   refreshSettings,
   setRefreshSettings,
@@ -28,6 +30,7 @@ describe("fresh-start settings", () => {
       taskTokens: 0,
       compactTokens: 150_000,
       autoCompactTokens: 300_000,
+      interactiveAutoCompactTokens: DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS,
     });
     expect((await roleExtras(task())).refresh).toBeUndefined();
   });
@@ -79,6 +82,79 @@ describe("fresh-start settings", () => {
   });
 });
 
+describe("the mid-turn window by role", () => {
+  const s = {
+    orchestratorTokens: 200_000,
+    taskTokens: 0,
+    compactTokens: 150_000,
+    autoCompactTokens: 300_000,
+    interactiveAutoCompactTokens: 200_000,
+  };
+
+  it("gives interactive sessions their own size and everything else the task size", () => {
+    expect(autoCompactTokensFor("interactive", s)).toBe(200_000);
+    for (const role of ["implement", "plan", "review", "helper"] as const)
+      expect(autoCompactTokensFor(role, s)).toBe(300_000);
+    expect(autoCompactTokensFor("orchestrator", s)).toBe(0);
+  });
+
+  it("keeps the two sizes independent, off included", () => {
+    expect(
+      autoCompactTokensFor("interactive", {
+        ...s,
+        interactiveAutoCompactTokens: 0,
+      })
+    ).toBe(0);
+    expect(
+      autoCompactTokensFor("implement", { ...s, autoCompactTokens: 0 })
+    ).toBe(0);
+    expect(
+      autoCompactTokensFor("interactive", { ...s, autoCompactTokens: 0 })
+    ).toBe(200_000);
+  });
+
+  it("is saved, 0 for off, in the same range", () => {
+    try {
+      setRefreshSettings({ interactiveAutoCompactTokens: 200_000 });
+      expect(refreshSettings().interactiveAutoCompactTokens).toBe(200_000);
+      expect(() =>
+        setRefreshSettings({ interactiveAutoCompactTokens: 10_000 })
+      ).toThrow(/off or between/);
+      expect(refreshSettings().interactiveAutoCompactTokens).toBe(200_000);
+    } finally {
+      setRefreshSettings({
+        interactiveAutoCompactTokens: DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS,
+      });
+    }
+  });
+
+  it("reaches a session's agent by the role its row says, not its view", () => {
+    const ws = seedWorkspace();
+    const terminal = seedSession({ projectId: ws.app.id, name: "term" });
+    const chat = seedSession({ projectId: ws.app.id, name: "c", view: "chat" });
+    const task = seedSession({ projectId: ws.app.id, name: "t", task: true });
+    const started = seedSession({ projectId: ws.app.id, name: "s" });
+    db.prepare(`UPDATE sessions SET started_by = 'orch' WHERE id = ?`).run(
+      started
+    );
+    try {
+      setRefreshSettings({
+        autoCompactTokens: 300_000,
+        interactiveAutoCompactTokens: 200_000,
+      });
+      expect(agentEnv(terminal)[AUTO_COMPACT_ENV]).toBe("200000");
+      expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("200000");
+      expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe("300000");
+      expect(agentEnv(started)[AUTO_COMPACT_ENV]).toBe("300000");
+    } finally {
+      setRefreshSettings({
+        autoCompactTokens: 300_000,
+        interactiveAutoCompactTokens: DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS,
+      });
+    }
+  });
+});
+
 describe("the compact threshold at launch", () => {
   it("sets Claude Code's own auto-compact window for chats and tasks, never an orchestrator", () => {
     const ws = seedWorkspace();
@@ -110,9 +186,11 @@ describe("the compact threshold at launch", () => {
     try {
       // Under Claude Code's 100k floor, it gets the floor; off sets nothing.
       setRefreshSettings({ autoCompactTokens: 60_000 });
-      expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("100000");
+      expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBe(
+        String(100_000 + PROVIDER_BASE_TOKENS)
+      );
       setRefreshSettings({ autoCompactTokens: 0 });
-      expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBeUndefined();
+      expect(agentEnv(task)[AUTO_COMPACT_ENV]).toBeUndefined();
       // The between-turn threshold is a separate setting.
       setRefreshSettings({ autoCompactTokens: 300_000, compactTokens: 0 });
       expect(agentEnv(chat)[AUTO_COMPACT_ENV]).toBe("300000");

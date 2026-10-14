@@ -85,7 +85,10 @@ amber past 60%, red past 85%. Tap it for the breakdown and **Compact now**.
 Two thresholds (Settings → Workspaces → Compact; 0 turns one off). Mid-turn,
 the agent compacts itself at 300k by default: AgentOS launches Claude Code
 with `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to that size (its floor is 100k),
-high enough that a long job isn't cut in half. Between
+high enough that a long job isn't cut in half. Your own sessions, in a chat
+or a terminal, have a separate mid-turn size (a terminal can't be compacted
+between turns, so that is the only compaction it gets); a session already
+open keeps the size it was launched with. Between
 turns AgentOS catches what it didn't: a chat over its 150k threshold is compacted
 before the next message, and so is one idle past its prompt cache (5 minutes
 or an hour, read from the agent's own usage), whose next message would
