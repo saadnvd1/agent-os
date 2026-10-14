@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     const page = await buildPage(req);
     return NextResponse.json({
       html: page.html,
+      markdown: page.markdown,
       title: page.title,
       bytes: page.bytes,
       hash: page.hash,

@@ -184,6 +184,13 @@ describe("preview", () => {
     expect(p.html).not.toContain(tailnet);
     expect(p.html).toContain("[secret]");
     expect(p.hits).toMatchObject({ secret: 1, path: 1, host: 1 });
+    expect(p.markdown).toContain("**User:**");
+    expect(p.bytes).toBe(
+      Buffer.byteLength(p.html) + Buffer.byteLength(p.markdown)
+    );
+    expect(p.markdown).toContain("[secret]");
+    for (const leak of [secret, home, tailnet])
+      expect(p.markdown).not.toContain(leak);
     expect(p.items.map((i: { id: string }) => i.id)).toEqual(["u1", "a1"]);
     expect(seen).toHaveLength(0);
   });
@@ -254,6 +261,7 @@ describe("create", () => {
       title: "Share me",
       expires_in: "7d",
       html: p.html,
+      markdown: p.markdown,
     });
     for (const leak of [secret, home, tailnet])
       expect(upload.body).not.toContain(leak);

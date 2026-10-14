@@ -75,6 +75,7 @@ function ShareBody({
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<"page" | "markdown">("page");
   const previewReq = useSharePreview();
   const create = useCreateShare();
   const seq = useRef(0);
@@ -131,14 +132,16 @@ function ShareBody({
     }
   };
 
-  const download = () => {
+  const download = (what: "html" | "md") => {
     if (!preview) return;
     const url = URL.createObjectURL(
-      new Blob([preview.html], { type: "text/html" })
+      new Blob([what === "md" ? preview.markdown : preview.html], {
+        type: what === "md" ? "text/markdown" : "text/html",
+      })
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = fileName(target.title);
+    a.download = fileName(target.title, what);
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -172,20 +175,40 @@ function ShareBody({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto md:flex-row md:overflow-hidden">
-        <div className="bg-background min-h-[45vh] flex-1 overflow-hidden rounded-lg border md:min-h-0">
-          {preview ? (
-            <iframe
-              title="Preview of what will be shared"
-              sandbox="allow-scripts"
-              referrerPolicy="no-referrer"
-              srcDoc={preview.html}
-              className="h-full min-h-[45vh] w-full md:min-h-0"
-            />
-          ) : (
-            <p className="text-muted-foreground p-4 text-sm">
-              {error ?? "Preparing the preview…"}
-            </p>
-          )}
+        <div className="flex min-h-[45vh] flex-1 flex-col gap-2 md:min-h-0">
+          <div className="flex gap-2" role="group" aria-label="Preview format">
+            {(["page", "markdown"] as const).map((t) => (
+              <Button
+                key={t}
+                size="sm"
+                variant={tab === t ? "default" : "outline"}
+                className="min-h-11"
+                aria-pressed={tab === t}
+                onClick={() => setTab(t)}
+              >
+                {t === "page" ? "Page" : "Markdown"}
+              </Button>
+            ))}
+          </div>
+          <div className="bg-background min-h-0 flex-1 overflow-hidden rounded-lg border">
+            {preview && tab === "markdown" ? (
+              <pre className="h-full overflow-auto p-4 font-mono text-xs break-words whitespace-pre-wrap">
+                {preview.markdown}
+              </pre>
+            ) : preview ? (
+              <iframe
+                title="Preview of what will be shared"
+                sandbox="allow-scripts"
+                referrerPolicy="no-referrer"
+                srcDoc={preview.html}
+                className="h-full min-h-[45vh] w-full md:min-h-0"
+              />
+            ) : (
+              <p className="text-muted-foreground p-4 text-sm">
+                {error ?? "Preparing the preview…"}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex shrink-0 flex-col gap-4 md:w-80 md:overflow-y-auto">
@@ -304,10 +327,19 @@ function ShareBody({
             variant="outline"
             className="min-h-11"
             disabled={!preview || preview.tooBig || empty}
-            onClick={download}
+            onClick={() => download("html")}
           >
             <Download className="h-4 w-4" />
             Download HTML
+          </Button>
+          <Button
+            variant="outline"
+            className="min-h-11"
+            disabled={!preview || preview.tooBig || empty}
+            onClick={() => download("md")}
+          >
+            <Download className="h-4 w-4" />
+            Download Markdown
           </Button>
           {linked && (
             <Button

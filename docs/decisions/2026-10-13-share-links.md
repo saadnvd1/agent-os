@@ -34,6 +34,15 @@ raw text is the only one that reads it, and a preview shows what leaves.
 - **Dropped messages are a deny-list.** The dialog sends the ids it dropped;
   anything that arrives later is caught by the hash check.
 
+- **Markdown copy.** Built here from the same redacted snapshot as the HTML
+  (`lib/share/markdown.ts`), with a "written by someone else, use judgment"
+  header inside the uploaded text, so the preview, the download and the hash
+  all carry it. The hash covers both parts (`sha256(sha256(html) + "\n" +
+sha256(markdown))`) and the 5 MB limit counts both. Connect serves a frame
+  at `/s/<token>` with Copy for agent, the snapshot at `/s/<token>/raw` and
+  the text at `/s/<token>.md`. Shares made before this have no Markdown and
+  `.md` answers 404.
+
 **Not done here.** Live-updating links, comments, passwords or viewer
 accounts, sharing from the native app, Mermaid in snapshots (they render as
 code), and a separate user-content domain.

@@ -18,6 +18,7 @@ describe("share format", () => {
   it("names the download after the title", () => {
     expect(fileName("My chat: part 2!")).toBe("my-chat-part-2.html");
     expect(fileName("???")).toBe("shared.html");
+    expect(fileName("My chat: part 2!", "md")).toBe("my-chat-part-2.md");
   });
   it("sizes", () => {
     expect(formatBytes(500)).toBe("500 bytes");

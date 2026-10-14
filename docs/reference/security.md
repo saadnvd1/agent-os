@@ -93,7 +93,9 @@ private-key blocks, bearer tokens, URL credentials, secret query parameters,
 and the values of secret-looking environment variables), the home folder, IP
 addresses, this machine's names and `*.ts.net` names, and email addresses, and
 leaves tool calls and thinking out unless asked. A tool that read a secret
-file (`lib/secret-paths.ts`) has its output replaced.
+file (`lib/secret-paths.ts`) has its output replaced. The Markdown version
+uploaded with every share is rendered from that same redacted snapshot and
+is covered by the same hash check.
 
 `POST /api/shares/preview` is local only. `POST /api/shares` renders the page
 again from the same inputs, requires its SHA-256 to match the preview's, and

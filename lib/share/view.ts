@@ -24,6 +24,7 @@ export interface PreviewItem {
 
 export interface SharePreview {
   html: string;
+  markdown: string;
   title: string;
   bytes: number;
   hash: string;
@@ -101,14 +102,14 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** A file name for a download: the title, plain, with .html. */
-export function fileName(title: string): string {
+/** A file name for a download: the title, plain, with .html (or `ext`). */
+export function fileName(title: string, ext: "html" | "md" = "html"): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
-  return `${slug || "shared"}.html`;
+  return `${slug || "shared"}.${ext}`;
 }
 
 export function toggleDrop(dropped: string[], id: string): string[] {

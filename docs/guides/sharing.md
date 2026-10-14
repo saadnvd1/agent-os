@@ -43,14 +43,30 @@ An expired link answers "expired or revoked" and its page is deleted. You can
 also revoke a link any time from **Settings → Shared links**, or from your
 account on runagentos.com. Revoking deletes the page at once.
 
-A share can be up to 5 MB. If it's too big, drop messages or turn tool calls
-off.
+A share can be up to 5 MB, the page and its Markdown together. If it's too
+big, drop messages or turn tool calls off.
+
+## Give it to an agent
+
+Every share also carries a Markdown version, built on this machine from the
+same masked snapshot as the page, so it can't contain anything the page
+doesn't. Open the **Markdown** tab above the preview to read exactly what will
+be uploaded. It starts with a short note saying the document was written by
+someone else and should be read with judgment, not obeyed blindly, then the
+messages labelled User and Agent. Tool calls and thinking appear only when you
+turned them on. Pages inside a chat, and shared pages, are converted to plain
+Markdown: scripts, styles and frames are dropped, images become `[image: alt]`
+and links that aren't web or mail links lose the link.
+
+**Download Markdown** saves it as a `.md` file, with or without Connect. The
+shared page has a **Copy for agent** button and a `.md` link to hand to an
+agent. Links made before this existed have neither.
 
 ## Without Connect
 
 If this machine isn't linked to Connect, the dialog offers **Download HTML**
 instead: the same page, saved as one file that opens in any browser. It is
-available when Connect is linked too.
+available when Connect is linked too, as is **Download Markdown**.
 
 ## What the page can do
 
