@@ -267,11 +267,16 @@ export function buildShelves(input: ShelfInput): Shelves {
 
   const top: SidebarRow[] = [];
   for (const row of rows) {
-    // A quick change always sits under the orchestrator that makes it: it's
-    // that orchestrator's to carry, never one that needs you.
-    const owner = row.session.quick_of
-      ? byId.get(row.session.quick_of)
-      : undefined;
+    // A quick change sits under the orchestrator that makes it: it's that
+    // orchestrator's to carry, never one that needs you. Once merged it
+    // leaves for the shelves, so Done can take it.
+    const finished =
+      (row.task && isFinished(row.task)) ||
+      row.session.task_status === "merged";
+    const owner =
+      row.session.quick_of && !finished
+        ? byId.get(row.session.quick_of)
+        : undefined;
     if (owner) {
       (owner.quick ??= []).push(row);
       continue;

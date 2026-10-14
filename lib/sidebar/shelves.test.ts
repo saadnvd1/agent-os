@@ -62,6 +62,27 @@ function shelves(
   };
 }
 
+describe("quick changes", () => {
+  const orch = session("orch", { role: "orchestrator" });
+
+  it("sit under their orchestrator while open", () => {
+    const open = session("q", { quick_of: "orch", task_status: "running" });
+    const out = shelves([orch, open], {}, { tasks: { q: "review" } });
+    expect(out.done).not.toContain("q");
+    const owner = [...out.raw.ongoing, ...out.raw.done].find(
+      (r) => r.session.id === "orch"
+    );
+    expect(owner?.quick?.map((r) => r.session.id)).toEqual(["q"]);
+  });
+
+  it("go to Done once merged, by task state or session row", () => {
+    const byTask = session("q1", { quick_of: "orch" });
+    const byRow = session("q2", { quick_of: "orch", task_status: "merged" });
+    const out = shelves([orch, byTask, byRow], {}, { tasks: { q1: "merged" } });
+    expect(out.done).toEqual(expect.arrayContaining(["q1", "q2"]));
+  });
+});
+
 describe("needOf", () => {
   it("prefers an approval or a question over the task's state", () => {
     expect(needOf(session("a"), { need: "approve" }, "checks-failing")).toBe(
