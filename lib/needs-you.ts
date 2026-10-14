@@ -33,7 +33,12 @@ function latestChatItem(sessionId: string): ChatItem | null {
 // is routine for it.
 export function needsYou(
   session: Pick<Session, "id" | "view" | "updated_at" | "last_seen_at"> &
-    Partial<Pick<Session, "role" | "workspace_id" | "task_status">>,
+    Partial<
+      Pick<
+        Session,
+        "role" | "workspace_id" | "task_status" | "settled_at" | "archived_at"
+      >
+    >,
   chatState: ChatState | null
 ): boolean {
   const seen = sqliteMs(session.last_seen_at);
@@ -43,7 +48,16 @@ export function needsYou(
     if (chatState === "waiting") return true;
     if (session.role === "orchestrator")
       return openAskCount(session.workspace_id) > 0;
+    if (session.archived_at) return false;
     const latest = latestChatItem(session.id);
+    // Put on the Done shelf after its last turn: that turn is history, not
+    // news. (settled_at has second precision.)
+    if (
+      latest &&
+      session.settled_at &&
+      latest.createdAt <= sqliteMs(session.settled_at) + 1000
+    )
+      return false;
     return latest?.kind === "turn_end" && latest.createdAt > seen;
   }
   // A terminal session's updated_at moves when it starts waiting.

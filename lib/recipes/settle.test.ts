@@ -97,8 +97,35 @@ describe("settleRuns: session recipes", () => {
     const id = liveRun(r.id, s, { trigger: "timer" });
     await settleRuns(Date.now(), noModel);
     expect(getRun(id)!.status).toBe("failed");
-    expect(done).toEqual([]);
+    expect(done).toEqual([s]);
     expect(events(r.workspace_id)[0].line).toContain("signing key expired");
+  });
+
+  it("leaves the session open when auto_done is off, ok or failed", async () => {
+    for (const line of ["RESULT: ok — fine", "RESULT: failed — nope"]) {
+      const r = makeRecipe({ autoDone: false });
+      const s = makeSession();
+      finals.set(s, line);
+      liveRun(r.id, s);
+    }
+    expect(await settleRuns(Date.now(), noModel)).toBe(2);
+    expect(done).toEqual([]);
+  });
+
+  it("keeps a session open when the run ended without a result line", async () => {
+    const r = makeRecipe();
+    const s = makeSession();
+    finals.set(s, "no idea");
+    liveRun(r.id, s);
+    const t0 = Date.now();
+    await settleRuns(t0, noModel);
+    await settleRuns(t0 + IDLE_SETTLE_MS + 1000, noModel);
+    expect(done).toEqual([]);
+    const b = makeSession();
+    finals.set(b, "BLOCKED: needs a password");
+    liveRun(r.id, b, { seq: 2 });
+    await settleRuns(Date.now(), noModel);
+    expect(done).toEqual([]);
   });
 
   it("a BLOCKED line blocks the run", async () => {
