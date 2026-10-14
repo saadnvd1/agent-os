@@ -198,6 +198,7 @@ describe("agentEnv", () => {
     const id = session(false);
     expect(Object.keys(agentEnv(id)).sort()).toEqual([
       "AGENTOS_SESSION_ID",
+      "AGENTOS_SUBAGENT_MODELS",
       "AGENTOS_URL",
       "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
       "PATH",
