@@ -9,6 +9,7 @@ import type { SessionFacts } from "./facts";
 
 // A real repository with a local bare remote; gh is faked around it.
 let pr: TaskPR | null = null;
+let prError: Error | null = null;
 const ATTRIBUTED = "a Co-Authored-By trailer naming Claude" as const;
 const merges: string[][] = [];
 let pane = "";
@@ -41,6 +42,10 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
       return real.run(cmd, args, cwd, t);
     },
     findPR: async () => pr,
+    findPRStrict: async () => {
+      if (prError) throw prError;
+      return pr;
+    },
   };
 });
 // The test clones have a local origin; the CI probes need a GitHub name.
@@ -88,6 +93,7 @@ const { fetchRefs } = await import("./repo");
 const { getTaskSession } = await import("@/lib/tasks/session");
 const { changedFiles } = await import("./diff");
 const { followAskHeads } = await import("./ask-heads");
+const { raiseHeldAsks, HOLD_MIN_MS, HOLD_MAX_MS } = await import("./held-asks");
 
 // The one ask a task's escalation leaves on Saad's list.
 function oneGateAsk(w: string, task: string, sha: string) {
@@ -102,6 +108,26 @@ function oneGateAsk(w: string, task: string, sha: string) {
   });
   return asks[0];
 }
+
+// Facts for the task: its agent idle, or busy.
+const taskFacts = (task: string, status: "idle" | "running" = "idle") =>
+  [
+    { id: task, name: "add-a", status, task: { state: "review", pr } },
+  ] as unknown as SessionFacts[];
+
+// A failed-twice escalation's ask goes up once the agent is idle and CI
+// has settled; `after` ms from now.
+// The first look at a head's checks starts CI's settle clock, so it looks
+// twice, the second a settle period later.
+const askUp = async (
+  w: string,
+  task: string,
+  after = HOLD_MIN_MS + 1000,
+  status: "idle" | "running" = "idle"
+) => {
+  await raiseHeldAsks(w, taskFacts(task, status), Date.now() + after);
+  await raiseHeldAsks(w, taskFacts(task, status), Date.now() + after + 200_000);
+};
 
 // Poll for the condition, generously: a loaded machine is slow, not wrong.
 const POLL = { timeout: 20000, interval: 20 };
@@ -621,6 +647,9 @@ describe("sign_off", () => {
     await expect(t.signOff()).rejects.toThrow(
       /ci failed \(again\)[\s\S]*Escalated to Saad: the ci gate failed on two different commits/
     );
+    // The ask waits for the agent; the task is held meanwhile.
+    expect(openAsks(t.w)).toEqual([]);
+    await askUp(t.w, t.task);
     const notes = listNotes(t.w).filter((n) => n.kind === "escalation");
     expect(notes).toHaveLength(1);
     expect(notes[0].text).toMatch(
@@ -819,6 +848,177 @@ describe("sign_off", () => {
     answerAsk(t.w, ask.id, { action: "approve" }, last);
     await reviewNow(t.w);
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+  });
+
+  it("keeps an ask on the head it was raised at when the facts still hold the old head", async () => {
+    const t = setup({ approvals: true });
+    t.push(".github/workflows/ci.yml", "on: push\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    const first = oneGateAsk(t.w, t.task, pr!.head!);
+    answerAsk(t.w, first.id, { action: "approve" });
+    const stale = pr;
+    const next = t.push("src/b.ts", "export const b = 2;\n");
+    await expect(t.signOff()).rejects.toThrow(/Asked him again/);
+    const second = oneGateAsk(t.w, t.task, next);
+    // The tick's facts were taken before the push.
+    await followAskHeads(t.w, [
+      { id: t.task, task: { pr: stale } },
+    ] as unknown as SessionFacts[]);
+    const kept = oneGateAsk(t.w, t.task, next);
+    expect(kept.id).toBe(second.id);
+    expect(kept.detail).not.toMatch(/Head moved from/);
+    answerAsk(t.w, second.id, { action: "approve" }, next);
+    await reviewNow(t.w);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", next],
+    ]);
+  });
+
+  it("never moves an ask back to an ancestor of its commit", async () => {
+    const t = setup({ approvals: true });
+    const a = t.push(".github/workflows/ci.yml", "on: push\n");
+    const b = t.push("src/b.ts", "export const b = 2;\n");
+    await reviewNow(t.w);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    oneGateAsk(t.w, t.task, b);
+    // GitHub itself still says the older commit.
+    pr = { ...pr!, head: a };
+    await followAskHeads(t.w, [
+      { id: t.task, task: { pr } },
+    ] as unknown as SessionFacts[]);
+    expect(oneGateAsk(t.w, t.task, b).detail).not.toMatch(/Head moved from/);
+  });
+
+  describe("an ask held until the agent is done", () => {
+    // CI failing on two commits, so the gate escalates and holds the ask.
+    async function escalated() {
+      const t = setup();
+      await reviewNow(t.w);
+      pr = { ...pr!, checks: "fail", failing: "unit" };
+      await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
+      t.push("src/b.ts", "export const b = 2;\n");
+      await reviewNow(t.w);
+      await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+      expect(openAsks(t.w)).toEqual([]);
+      return t;
+    }
+    const later = (ms: number) => Date.now() + ms;
+
+    it("waits while the agent works, then asks at the head it pushed", async () => {
+      const t = await escalated();
+      await raiseHeldAsks(
+        t.w,
+        taskFacts(t.task, "running"),
+        later(HOLD_MIN_MS + 1000)
+      );
+      expect(openAsks(t.w)).toEqual([]);
+      // The fix is pushed and its CI is still running.
+      const fix = t.push("src/c.ts", "export const c = 3;\n");
+      pr = { ...pr!, checks: "pending", failing: null };
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      expect(openAsks(t.w)).toEqual([]);
+      pr = { ...pr!, checks: "pass" };
+      await askUp(t.w, t.task);
+      const ask = oneGateAsk(t.w, t.task, fix);
+      expect(ask.detail).toMatch(/failed on two different commits/);
+      expect(ask.detail).toMatch(new RegExp(`Asked at ${fix.slice(0, 7)}`));
+      expect(
+        listNotes(t.w).filter((n) => n.kind === "escalation")
+      ).toHaveLength(1);
+      await askUp(t.w, t.task);
+      expect(openAsks(t.w)).toHaveLength(1);
+    });
+
+    it("waits out the minimum hold and a recent message to the task", async () => {
+      const t = await escalated();
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(1000));
+      expect(openAsks(t.w)).toEqual([]);
+      // Stamped ahead, so it is recent at the simulated times below.
+      const orch = ensureOrchestrator(t.w);
+      db.prepare(
+        `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, created_at) VALUES (?, 'orch', ?, 'add-a', 'fix the bug', datetime('now', '+4 minutes'))`
+      ).run(orch.id, t.task);
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      expect(openAsks(t.w)).toEqual([]);
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(10 * 60 * 1000));
+      oneGateAsk(t.w, t.task, pr!.head!);
+    });
+
+    it("moves the one open ask when the head moves after it's raised", async () => {
+      const t = await escalated();
+      pr = { ...pr!, checks: "pass", failing: null };
+      await askUp(t.w, t.task);
+      const ask = oneGateAsk(t.w, t.task, pr!.head!);
+      const next = t.push("src/d.ts", "export const d = 4;\n");
+      await followAskHeads(t.w, taskFacts(t.task));
+      expect(oneGateAsk(t.w, t.task, next).id).toBe(ask.id);
+      await askUp(t.w, t.task);
+      expect(openAsks(t.w)).toHaveLength(1);
+    });
+
+    it("asks after an hour even if the agent never goes idle", async () => {
+      const t = await escalated();
+      await raiseHeldAsks(
+        t.w,
+        taskFacts(t.task, "running"),
+        later(HOLD_MAX_MS + 1000)
+      );
+      expect(oneGateAsk(t.w, t.task, pr!.head!).detail).toMatch(
+        /still working after an hour/
+      );
+    });
+
+    it("asks after an hour while CI is still pending", async () => {
+      const t = await escalated();
+      pr = { ...pr!, checks: "pending", failing: null };
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      expect(openAsks(t.w)).toEqual([]);
+      await raiseHeldAsks(
+        t.w,
+        taskFacts(t.task, "running"),
+        later(HOLD_MAX_MS + 1000)
+      );
+      expect(oneGateAsk(t.w, t.task, pr!.head!).detail).toMatch(
+        /still working after an hour/
+      );
+    });
+
+    it("asks after an hour even without session facts", async () => {
+      const t = await escalated();
+      await raiseHeldAsks(t.w, [], later(HOLD_MIN_MS + 1000));
+      expect(openAsks(t.w)).toEqual([]);
+      await raiseHeldAsks(t.w, [], later(HOLD_MAX_MS + 1000));
+      oneGateAsk(t.w, t.task, pr!.head!);
+    });
+
+    it("keeps the hold when gh fails, and releases it when the PR is closed", async () => {
+      const t = await escalated();
+      prError = new Error("gh: network down");
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      } finally {
+        spy.mockRestore();
+        prError = null;
+      }
+      expect(openAsks(t.w)).toEqual([]);
+      expect(failureOf(t.task, "ci")?.ask_held_at).toBeTruthy();
+      pr = { ...pr!, state: "CLOSED" };
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      expect(failureOf(t.task, "ci")?.ask_held_at).toBeNull();
+    });
+
+    it("drops the hold when the task is no longer running", async () => {
+      const t = await escalated();
+      db.prepare(
+        `UPDATE sessions SET task_status = 'dropped' WHERE id = ?`
+      ).run(t.task);
+      await askUp(t.w, t.task);
+      expect(openAsks(t.w)).toEqual([]);
+      expect(failureOf(t.task, "ci")?.ask_held_at).toBeNull();
+    });
   });
 
   // Approves the first commit, moves the head, and approves the new one too.
@@ -1402,6 +1602,7 @@ describe("gate failures count per task and gate", () => {
     await reviewNow(t.w, "block");
     expect(failureOf(t.task, "review")).toMatchObject({ count: 2 });
     expect(failureOf(t.task, "review")?.escalated_at).toBeTruthy();
+    await askUp(t.w, t.task);
     oneGateAsk(t.w, t.task, next);
     expect(events(t.w).at(-1)).toMatch(
       /review of \w+ found blocking issues; the review gate failed twice, so it's with Saad now/
@@ -1479,6 +1680,7 @@ describe("gate failures count per task and gate", () => {
       /ci failed \(again\)[\s\S]*Escalated to Saad: the ci gate failed on two different commits/
     );
     expect(failureOf(t.task, "ci")).toMatchObject({ count: 2, last_sha: c });
+    await askUp(t.w, t.task);
     oneGateAsk(t.w, t.task, c);
   });
 });
@@ -1732,6 +1934,7 @@ describe("a merge decision from Saad", () => {
     recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
     pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await askUp(t.w, t.task);
     const gate = oneGateAsk(t.w, t.task, t.sha);
     // Saad replies rather than approving: the task stays held, and the
     // orchestrator raises its own merge ask.
@@ -1760,6 +1963,7 @@ describe("a merge decision from Saad", () => {
     recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
     pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await askUp(t.w, t.task);
     answerAsk(t.w, oneGateAsk(t.w, t.task, t.sha).id, {
       action: "reply",
       text: "fix it",
