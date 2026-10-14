@@ -15,7 +15,9 @@ vi.mock("@/lib/updates/check", async (orig) => ({
   cachedCheck: () => check,
   checkForUpdate: async () => ({ result: refreshed ?? check, throttled }),
 }));
-vi.mock("@/lib/busy", () => ({ inFlight: () => ({ reviews: 0, setups: 0 }) }));
+vi.mock("@/lib/busy", () => ({
+  inFlight: () => ({ reviews: 0, setups: 0, simulatorStarts: 0 }),
+}));
 vi.mock("@/lib/status/collect", () => ({
   collectStatuses: async () => ({
     statuses: {

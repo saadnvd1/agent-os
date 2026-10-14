@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Waits until the AgentOS server on $PORT has nothing in flight that a
-# restart would cut off (reviews, task setups: GET /api/busy), for at most
+# restart would cut off (reviews, task setups, simulator starts: GET /api/busy), for at most
 # AGENTOS_QUIET_WAIT seconds; then returns, so a deploy always lands. A
 # server that doesn't answer (down, or a build without /api/busy) is quiet.
 set -uo pipefail

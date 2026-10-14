@@ -13,7 +13,7 @@ import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { endTmuxSession } from "../tmux/end";
 import { launchClaude } from "../agents/launch";
-import { buildTaskBrief } from "./brief";
+import { buildTaskBrief, declaredTest } from "./brief";
 import { git as runGit } from "../git-exec";
 import { getTaskSession, isoUTC } from "./session";
 import { projectRef } from "./project-ref";
@@ -308,6 +308,7 @@ async function relaunch(session: Session, note?: string): Promise<void> {
       ? buildTaskBrief({
           branch: session.branch_name,
           baseBranch: session.base_branch ?? "main",
+          test: declaredTest(session.working_directory),
         })
       : undefined,
   });

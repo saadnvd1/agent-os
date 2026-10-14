@@ -8,5 +8,6 @@ export async function GET(request: NextRequest) {
   const refused = requireLocalTrust(request);
   if (refused) return refused;
   const work = inFlight();
-  return NextResponse.json({ ...work, busy: work.reviews + work.setups > 0 });
+  const busy = work.reviews + work.setups + work.simulatorStarts > 0;
+  return NextResponse.json({ ...work, busy });
 }

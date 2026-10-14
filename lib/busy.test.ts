@@ -1,6 +1,8 @@
+import * as os from "os";
 import { describe, expect, it } from "vitest";
 import { db } from "./db";
 import { inFlight } from "./busy";
+import { runStart } from "./simulator";
 import { putCheck } from "./orchestrator/checks";
 import { seedSession, seedWorkspace } from "./orchestrator/testing";
 
@@ -28,6 +30,7 @@ describe("inFlight", () => {
     expect(inFlight()).toEqual({
       reviews: before.reviews + 1,
       setups: before.setups + 1,
+      simulatorStarts: before.simulatorStarts,
     });
     db.prepare(
       `UPDATE orchestrator_checks SET created_at = datetime('now', '-31 minutes') WHERE session_id = ?`
@@ -36,5 +39,21 @@ describe("inFlight", () => {
       `UPDATE sessions SET created_at = datetime('now', '-31 minutes') WHERE id = ?`
     ).run(task);
     expect(inFlight()).toEqual(before);
+  });
+});
+
+describe("inFlight simulator starts", () => {
+  it("counts a start while it runs, and not once it has ended", async () => {
+    const before = inFlight().simulatorStarts;
+    const done = runStart(
+      `busy-test-${Date.now()}`,
+      "sleep 1",
+      os.tmpdir(),
+      "udid",
+      {}
+    );
+    expect(inFlight().simulatorStarts).toBe(before + 1);
+    await done;
+    expect(inFlight().simulatorStarts).toBe(before);
   });
 });

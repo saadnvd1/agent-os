@@ -144,6 +144,11 @@ const tail = (file: string, lines = 15) => {
 // simulator can stop it.
 const starts = new Map<string, ChildProcess>();
 
+// Simulator starts running now, for lib/busy: a restart kills them.
+export function runningStarts(): number {
+  return starts.size;
+}
+
 // The whole group: the project's build and Metro are children of the shell.
 export function killGroup(child: ChildProcess, signal: NodeJS.Signals) {
   try {
@@ -153,7 +158,7 @@ export function killGroup(child: ChildProcess, signal: NodeJS.Signals) {
   }
 }
 
-function runStart(
+export function runStart(
   sessionId: string,
   command: string,
   cwd: string,

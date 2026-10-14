@@ -33,7 +33,7 @@ import { agentLabel } from "../agent-options";
 import { supportsChat } from "../chat/capabilities";
 import { AGENT_DEFAULT_MODEL } from "../providers/registry";
 import { statusDetector } from "../status-detector";
-import { buildTaskBrief, type StackedOn } from "./brief";
+import { buildTaskBrief, declaredTest, type StackedOn } from "./brief";
 import {
   attachTaskCard,
   inBackground,
@@ -354,6 +354,7 @@ async function startTask(
         branch: wt.branchName,
         baseBranch,
         stack: opts.base?.stack,
+        test: declaredTest(wt.worktreePath),
       }),
       naming.source,
       view,
