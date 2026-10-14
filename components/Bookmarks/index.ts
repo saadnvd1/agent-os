@@ -1,3 +1,4 @@
 export { BookmarkButton, TurnBookmark } from "./BookmarkButton";
 export { BookmarksDialog } from "./BookmarksDialog";
-export { ChatBookmarksButton, ChatBookmarksDialog } from "./ChatBookmarks";
+export { ChatBookmarksButton } from "./ChatBookmarksButton";
+export { ChatBookmarksDialog } from "./ChatBookmarks";

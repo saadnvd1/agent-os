@@ -37,7 +37,7 @@ import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
-import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarks";
+import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 
 type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 

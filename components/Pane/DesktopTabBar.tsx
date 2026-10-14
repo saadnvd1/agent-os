@@ -16,7 +16,7 @@ import { PaneViewToggle } from "./PaneViewToggle";
 import { PaneMenu } from "./PaneMenu";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { usePaneBarSlots } from "./PaneBarSlots";
-import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarks";
+import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 
 type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
