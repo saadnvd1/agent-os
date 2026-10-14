@@ -3,6 +3,7 @@
 import { Check, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ChatItem } from "@/lib/chat/events";
+import { useChatIdle } from "./idle";
 import { Markdown } from "./Markdown";
 
 type PlanItem = Extract<ChatItem, { kind: "plan" }>;
@@ -14,10 +15,11 @@ export function PlanCard({
   onKeepPlanning,
 }: {
   item: PlanItem;
-  // Absent while a turn runs.
+  // Absent inside undone messages; a running turn disables it too.
   onCarryOut?: () => void;
   onKeepPlanning: () => void;
 }) {
+  const idle = useChatIdle();
   return (
     <div className="bg-primary/[0.06] space-y-3 rounded-xl p-3">
       <div className="text-primary flex items-center gap-2 text-xs font-medium">
@@ -41,7 +43,7 @@ export function PlanCard({
           </Button>
           <Button
             className="h-11 md:h-9"
-            disabled={!onCarryOut}
+            disabled={!onCarryOut || !idle}
             onClick={onCarryOut}
           >
             Carry it out

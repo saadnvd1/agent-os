@@ -183,6 +183,19 @@ export const claudeDriver: ChatDriver = {
     );
     let access = options.access;
     let plan = !options.permissionMode && !!options.plan;
+    // The mode the CLI is in. Asking again for the same one waits on the
+    // CLI starting up (seconds, on a new worker) for nothing.
+    let applied = sdkMode(access, plan);
+    const applyMode = async () => {
+      const mode = sdkMode(access, plan);
+      if (mode === applied) return;
+      const before = applied;
+      applied = mode;
+      await q.setPermissionMode(mode).catch((error: unknown) => {
+        if (applied === mode) applied = before;
+        throw error;
+      });
+    };
     const q = query({
       prompt: input,
       options: {
@@ -344,12 +357,12 @@ export const claudeDriver: ChatDriver = {
       async setAccess(next) {
         access = next;
         if (options.permissionMode || plan) return;
-        await q.setPermissionMode(sdkMode(access, plan));
+        await applyMode();
       },
       async setPlan(next) {
         if (options.permissionMode) return;
         plan = next;
-        await q.setPermissionMode(sdkMode(access, plan));
+        await applyMode();
       },
       respond(id, answer) {
         approvals.respond(id, answer);

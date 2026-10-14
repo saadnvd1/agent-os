@@ -14,6 +14,7 @@ import type { UndoPreview } from "@/lib/chat/events";
 import type { UndoItem } from "@/lib/chat/group";
 import { shortPath } from "@/lib/chat/diff";
 import { cn } from "@/lib/utils";
+import { useChatIdle } from "./idle";
 import { useRowState } from "./rowState";
 
 const counts = (p: { insertions?: number; deletions?: number }) =>
@@ -86,7 +87,9 @@ export function UndoDialog({
   );
 }
 
+// Shown only while the chat is idle.
 export function UndoButton({ onClick }: { onClick: () => void }) {
+  if (!useChatIdle()) return null;
   return (
     <button
       type="button"

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { AssistantMessage } from "./Messages";
+import { AssistantMessage, UserMessage } from "./Messages";
 
 const item = {
   id: "a1",
@@ -45,5 +45,44 @@ describe("AssistantMessage quote action", () => {
       createElement(AssistantMessage, { item })
     );
     expect(html).not.toContain("Quote message");
+  });
+});
+
+describe("a sent message not in the chat yet", () => {
+  const user = { id: "user-c-1", kind: "user", text: "An article" } as never;
+  const render = (status: "sending" | "accepted" | "failed") =>
+    renderToStaticMarkup(
+      createElement(UserMessage, {
+        item: user,
+        pending: {
+          status,
+          error: "connection lost",
+          onRetry: vi.fn(),
+          onEdit: vi.fn(),
+        },
+      })
+    );
+
+  it("shows the text at once, dimmed, with its progress", () => {
+    expect(render("sending")).toContain("An article");
+    expect(render("sending")).toContain("opacity-60");
+    expect(render("sending")).toContain("Sending");
+    expect(render("accepted")).toContain("Starting the agent");
+  });
+
+  it("says a failed one wasn't sent, with Retry and Edit", () => {
+    const html = render("failed");
+    expect(html).toContain("Not sent · connection lost");
+    expect(html).toContain(">Retry</button>");
+    expect(html).toContain(">Edit</button>");
+    expect(html).not.toContain("opacity-60");
+  });
+
+  it("a message in the chat shows no status", () => {
+    const html = renderToStaticMarkup(
+      createElement(UserMessage, { item: user })
+    );
+    expect(html).not.toContain("Sending");
+    expect(html).not.toContain("Not sent");
   });
 });

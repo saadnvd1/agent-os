@@ -381,11 +381,16 @@ export type ChatServerMessage =
       ok: boolean;
       error?: string;
     }
-  | { type: "undone"; from: string; text: string };
+  | { type: "undone"; from: string; text: string }
+  // A send with a `clientId` was taken in (before any worker is up), or
+  // failed. The message itself still comes as an item or in the queue.
+  | { type: "accepted"; id: string }
+  | { type: "send_failed"; id: string; message: string };
 
 // What a browser sends.
 export type ChatClientMessage =
-  | { type: "send"; text: string; images?: ChatImage[] }
+  // `clientId` (`user-c-…`) becomes the message's id: a resend is a no-op.
+  | { type: "send"; text: string; images?: ChatImage[]; clientId?: string }
   | { type: "queue_edit"; id: string; text: string }
   | { type: "queue_move"; id: string; by: -1 | 1 }
   | { type: "queue_delete"; id: string }

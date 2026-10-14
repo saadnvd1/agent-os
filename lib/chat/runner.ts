@@ -384,6 +384,10 @@ const sentBy = ({ from, peer, origin }: SentBy): SentBy => ({
   origin,
 });
 
+// Already a message in the chat or its queue.
+const taken = (sessionId: string, id: string) =>
+  hasItem(sessionId, id) || listQueue(sessionId).some((q) => q.id === id);
+
 export async function sendChat(
   sessionId: string,
   input: {
@@ -393,16 +397,20 @@ export async function sendChat(
     queue?: boolean;
     // Compact a stale chat first (lib/chat/stale).
     compact?: CompactFirst;
+    // The client's own id for it, so a resend after a reconnect is a no-op.
+    id?: string;
   } & SentBy
 ): Promise<void> {
   const text = input.text.trim();
   if (!text && !input.images?.length) return;
+  if (input.id && taken(sessionId, input.id)) return;
   refuseAway(sessionId);
+  const id = input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
   // Its worktree is still being set up, its task hasn't launched (held by
   // Pause, say), or it's moving or landing: the message waits its turn.
   if (settingUp(sessionId) || launchPending(sessionId) || chatHold(sessionId)) {
     enqueue(sessionId, {
-      id: `user-${Date.now()}-${randomUUID().slice(0, 5)}`,
+      id,
       text,
       images: input.images,
       ...sentBy(input),
@@ -411,7 +419,8 @@ export async function sendChat(
     return;
   }
   const live = await ensureLive(sessionId);
-  const id = `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
+  // Sent again while the worker was starting.
+  if (input.id && taken(sessionId, id)) return;
   if (queuedIfHeld(sessionId, { ...input, id, text })) return;
   live.worker.command({
     type: "send",

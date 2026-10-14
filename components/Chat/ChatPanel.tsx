@@ -51,6 +51,7 @@ import { FIND_EVENT, isFindKey, useFind } from "./useFind";
 import { McpServers } from "./McpServers";
 import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
+import { ChatIdle } from "./idle";
 import { ContextMeter } from "./ContextMeter";
 import { SetupCard } from "./SetupCard";
 import { UserTurn } from "./EventRow";
@@ -77,6 +78,7 @@ import {
   CommandOutput,
   Compacted,
   SkillChip,
+  UserMessage,
   ErrorMessage,
   NoteLine,
   Reasoning,
@@ -86,10 +88,10 @@ import {
 
 interface ItemActions {
   respond: (id: string, answer: ApprovalDecision) => void;
-  // Absent while the agent is working, and inside undone messages.
+  // Absent inside undone messages; hidden while the agent works (ChatIdle).
   onCarryPlan?: (id: string) => void;
   onKeepPlanning?: () => void;
-  // Absent while the agent is working, and inside undone messages.
+  // Absent inside undone messages; hidden while the agent works (ChatIdle).
   onUndo?: (id: string) => void;
   onQuote?: (text: string) => void;
 }
@@ -294,6 +296,9 @@ export function ChatPanel({
     loadTaskOutput,
     taskOutputs,
     queue,
+    pending,
+    retrySend,
+    dropSend,
     queueEdit,
     queueMove,
     queueDelete,
@@ -606,12 +611,12 @@ export function ChatPanel({
   const actions: ItemActions = useMemo(
     () => ({
       respond,
-      onUndo: idle ? (id) => undo(id, true) : undefined,
-      onCarryPlan: idle ? carryPlan : undefined,
+      onUndo: (id) => undo(id, true),
+      onCarryPlan: carryPlan,
       onKeepPlanning: focusComposer,
       onQuote: (text) => setInsert(quoteInsert(text)),
     }),
-    [respond, idle, undo, carryPlan, focusComposer]
+    [respond, undo, carryPlan, focusComposer]
   );
 
   return (
@@ -653,13 +658,42 @@ export function ChatPanel({
                       </div>
                     )}
                     <SetupCard sessionId={sessionId} />
-                    {blocks.length === 0 && !queue.length && (
-                      <p className="text-muted-foreground py-16 text-center text-sm">
-                        Ask anything to start.
-                      </p>
-                    )}
+                    {blocks.length === 0 &&
+                      !queue.length &&
+                      !pending.length && (
+                        <p className="text-muted-foreground py-16 text-center text-sm">
+                          Ask anything to start.
+                        </p>
+                      )}
                   </div>
-                  <TimelineRows blocks={blocks} actions={actions} />
+                  <ChatIdle.Provider value={idle}>
+                    <TimelineRows blocks={blocks} actions={actions} />
+                  </ChatIdle.Provider>
+                  {pending.map((p) => (
+                    <div
+                      key={p.id}
+                      className="mx-auto w-full max-w-3xl px-4 pb-4"
+                    >
+                      <UserMessage
+                        item={{
+                          id: p.id,
+                          kind: "user",
+                          text: p.text,
+                          images: p.images,
+                          createdAt: p.at,
+                        }}
+                        pending={{
+                          status: p.status,
+                          error: p.error,
+                          onRetry: () => retrySend(p.id),
+                          onEdit: () => {
+                            dropSend(p.id);
+                            setPrefill({ text: p.text, at: Date.now() });
+                          },
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
               </BookmarkChatContext.Provider>
             </ToolBodies.Provider>
