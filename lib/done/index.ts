@@ -22,6 +22,7 @@ import { archiveSession } from "./archive";
 import { settleSession } from "../sidebar/shelf-state";
 import { demoMode } from "../security/demo";
 import { planDone } from "./plan";
+import { withTimeout } from "./deadline";
 import { deleteMergedRemote } from "./remote";
 import { settleWorktree, type WorktreeFate } from "./worktree";
 import { sessionMergePolicy } from "../tasks/finish";
@@ -151,7 +152,9 @@ export async function doneSession(
   // A sign-off just before this (the orchestrator's sign_off, then done)
   // is still cleaning up in the background: read what it leaves.
   await mergeSettled(s.id);
-  await statusDetector.refreshCache();
+  // A quick change has no tmux session, and a listing that stalls (a slow
+  // ssh host, a loaded tmux) must not hold up a merge that doesn't read it.
+  if (!s.quick_of) await withTimeout(statusDetector.refreshCache(), 10_000);
   const plan = await planDone(s, opts.callerId);
   if (plan.action === "refuse") throw new Error(plan.reason);
   if (plan.action === "merge" && opts.noMerge)

@@ -57,10 +57,12 @@ vi.mock("@/lib/git-exec", async (importOriginal) => {
   };
 });
 
+// A tmux listing that never answers, when a test sets it.
+let tmuxListing: Promise<void> | null = null;
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
   statusDetector: {
-    refreshCache: async () => {},
+    refreshCache: () => (tmuxListing ? tmuxListing : Promise.resolve()),
     listSessions: async () => [],
     cleanup: () => {},
     hostErrors: () => ({}),
@@ -290,6 +292,56 @@ describe("done, by state", () => {
       archived_at: null,
     });
     expect(killed).toEqual([]);
+  });
+
+  // An orchestrator's quick change: a task row with no agent, owned by the
+  // orchestrator, whose PR is already up.
+  function quickChange(t: ReturnType<typeof setup>, name: string) {
+    const s = t.session(name, {
+      task: true,
+      commits: { "src/q.ts": "export const q = 1;\n" },
+    });
+    const pr = t.openPR(s, {}, true);
+    db.prepare(
+      `UPDATE sessions SET quick_of = ?, pr_number = ?, pr_url = ?, pr_status = 'open', view = 'chat' WHERE id = ?`
+    ).run(ensureOrchestrator(t.w).id, pr.number, pr.url, s.id);
+    return { s, pr };
+  }
+
+  it("a quick change's open PR merges through the gates from the sidebar's Done", async () => {
+    const t = setup();
+    const { s } = quickChange(t, "quick-ok");
+    const out = await doneSession(s.id, { by: "direct", onPeer: true });
+    expect(merges).toHaveLength(1);
+    expect(merges[0]).toEqual(
+      expect.arrayContaining(["merge", "--match-head-commit", s.head!])
+    );
+    expect(out.merged).toMatch(/Merged quick-ok/);
+    expect(row(s.id)).toMatchObject({ task_status: "merged" });
+    expect(row(s.id).settled_at).not.toBeNull();
+  });
+
+  it("a quick change merges even while the tmux listing never answers", async () => {
+    const t = setup();
+    const { s } = quickChange(t, "quick-stalled");
+    tmuxListing = new Promise(() => {});
+    try {
+      const out = await doneSession(s.id, { by: "direct", onPeer: true });
+      expect(out.merged).toMatch(/Merged quick-stalled/);
+    } finally {
+      tmuxListing = null;
+    }
+  });
+
+  it("a quick change whose gate fails is refused naming the gate", async () => {
+    const t = setup();
+    const { s, pr } = quickChange(t, "quick-red");
+    prs.set(s.branch, { ...pr, checks: "fail", failing: "test" });
+    await expect(
+      doneSession(s.id, { by: "direct", onPeer: true })
+    ).rejects.toThrow(/Not done, nothing merged[\s\S]*ci failed/);
+    expect(merges).toEqual([]);
+    expect(row(s.id)).toMatchObject({ task_status: "running" });
   });
 
   it("(a) refuses with no review of the head yet", async () => {
