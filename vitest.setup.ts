@@ -15,6 +15,10 @@ process.env.AGENTOS_LIMITS_FILE = join(
   "missing.json"
 );
 
+// Nor the Mac's simulators: ending a session would otherwise run the real
+// xcrun. The simulator tests turn this back on.
+process.env.AGENTOS_SIM_SHUTDOWN = "off";
+
 // Nor GitHub: a test that fakes `gh` counts every call as a merge, and a
 // session log would otherwise ask it for the merge commit.
 process.env.AGENTOS_SESSION_LOGS_NO_GH = "1";

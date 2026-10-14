@@ -11,8 +11,10 @@ vi.mock("../chat/runner", () => ({
   stopChat: (id: string) => stopped.push(id),
 }));
 const released = vi.hoisted(() => [] as unknown[][]);
+const shut = vi.hoisted(() => [] as unknown[]);
 vi.mock("../simulator", () => ({
   releaseOnEnd: (...a: unknown[]) => released.push(a),
+  shutTaskSimulators: (s: unknown) => shut.push(s),
 }));
 vi.mock("../chat/worker/client", () => ({
   waitForExit: async () => {},
@@ -24,6 +26,7 @@ beforeEach(() => {
   ended.length = 0;
   stopped.length = 0;
   released.length = 0;
+  shut.length = 0;
 });
 
 describe("endSessionAgent", () => {
@@ -36,5 +39,17 @@ describe("endSessionAgent", () => {
   it("removes the task's simulator with it", async () => {
     await endSessionAgent({ id: "s1", host_id: "h1", tmux_name: "claude-s1" });
     expect(released).toEqual([["s1", { remove: true }]]);
+  });
+
+  it("shuts the simulators booted for the task", async () => {
+    const s = {
+      id: "s1",
+      host_id: "h1",
+      tmux_name: "claude-s1",
+      branch_name: "feature/x",
+      worktree_path: "/wt",
+    };
+    await endSessionAgent(s);
+    expect(shut).toEqual([s]);
   });
 });

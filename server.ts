@@ -79,7 +79,7 @@ import { claimAgentosEnv } from "./lib/agents/self-env";
 import { wslNotes, wslVersion } from "./lib/wsl";
 import { getAllProjects } from "./lib/projects";
 import { isRemoteHost } from "./lib/hosts";
-import { sweepSimulators } from "./lib/simulator";
+import { shutFinishedTaskSimulators, sweepSimulators } from "./lib/simulator";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "127.0.0.1";
@@ -385,6 +385,7 @@ app.prepare().then(async () => {
     sweepingSims = true;
     try {
       await sweepSimulators();
+      await shutFinishedTaskSimulators();
     } catch (error) {
       console.error("Sweeping simulators failed:", error);
     } finally {

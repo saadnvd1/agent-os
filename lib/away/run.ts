@@ -55,6 +55,7 @@ import {
 import { checkDeploy } from "./deploy";
 import { buildAwayReport, phoneSummary, reportMarkdown } from "./report";
 import { awayOnLine } from "./brief";
+import { shutFinishedTaskSimulators } from "../simulator";
 
 const PHONE_SOURCE = "away";
 const PHONE_LINES = 8;
@@ -582,6 +583,9 @@ export function awayTick(now = Date.now()): void {
         console.error(`[away] sweep of ${workspaceId}:`, error);
       }
     }
+    await shutFinishedTaskSimulators().catch((error) =>
+      console.error("[away] simulator sweep:", error)
+    );
     // Ended meanwhile: the report's summary says what's waiting.
     const still = activeAway();
     if (still?.id === away.id) notifyBatch(still, Date.now());
