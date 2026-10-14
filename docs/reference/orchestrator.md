@@ -100,10 +100,15 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Brakes:** every start is refused, with the reason, while 4 sessions run in
   the workspace, after 6 starts in an hour (`orch_max_running` and
   `orch_max_starts_per_hour` on `workspaces`), or when the account's 5-hour
-  usage window would run out before it resets (read from the statusline's
-  `~/.claude/.context-cost/limits.json`, as dispatch does;
-  `AGENTOS_LIMITS_FILE` overrides). A missing file, or one not sampled for 15
-  minutes, refuses too. Each card of a stack it starts is braked as its own
+  usage window would run out before it resets. The window is sampled by
+  AgentOS's own agents (every rate-limit event a chat worker sees is stored in
+  `rate_limit_readings`) and by the terminal statusline's
+  `~/.claude/.context-cost/limits.json` (`AGENTOS_LIMITS_FILE` overrides);
+  whichever sampled last is used. Past 15 minutes without a sample the window
+  is unknown, and says so ("No agent has run since 7:58 PM, so usage isn't
+  sampled"). A start is then refused only if nothing was ever sampled or the
+  last value seen was 90% or more with its window not yet reset; otherwise it
+  goes ahead, and the agent it starts samples the window again. Each card of a stack it starts is braked as its own
   start. A brake writes one note and pauses only new starts.
 - **Review and sign-off:** `review` runs a fresh `claude -p` on a
   symlink-free detached checkout of the PR's exact head commit. It loads no
