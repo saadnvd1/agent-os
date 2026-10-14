@@ -51,7 +51,14 @@ async function build(worktree: string, sessionId: string): Promise<string> {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "aos-snap-"));
   try {
     const index = path.join(tmp, "index");
-    if (fs.existsSync(indexFile)) fs.copyFileSync(indexFile, index);
+    if (fs.existsSync(indexFile)) {
+      fs.copyFileSync(indexFile, index);
+      // Git trusts a file's stat only if it is older than the index. A copy
+      // is newer, so an edit of the same size made within the index's last
+      // timestamp tick would read as unchanged and be missed.
+      const stat = fs.statSync(indexFile);
+      fs.utimesSync(index, stat.atime, stat.mtime);
+    }
     const env = { GIT_INDEX_FILE: index, ...IDENTITY };
     const opts = { env, literalPathspecs: true };
     await git(worktree, ["add", "-u"], opts);
@@ -100,7 +107,10 @@ export async function snapshotWorktree(
   if (!worktree || process.env.AGENTOS_NO_END_SNAPSHOT) return null;
   const started = Date.now();
   try {
-    const commit = await build(worktree, sessionId);
+    // The index can be mid-write when copied; a second read is whole.
+    const commit = await build(worktree, sessionId).catch(() =>
+      build(worktree, sessionId)
+    );
     console.log(
       `[resurrect] snapshot ${sessionId} in ${Date.now() - started} ms`
     );
