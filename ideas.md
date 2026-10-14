@@ -214,3 +214,10 @@
   a snooze that waits for a task's PR or checks rather than a clock; the
   desktop sidebar's keyboard row navigation (there is none yet) in the new
   shelf order.
+
+## Learning cards
+
+- [ ] Compare briefs with a cheap stored embedding as well as word overlap
+- [ ] A pruning view of applied lessons (the `learning_cards` accepted rows)
+- [ ] Learning cards on mobile
+- [ ] Auto-apply a destination once its accept rate justifies it

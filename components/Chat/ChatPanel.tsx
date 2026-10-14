@@ -37,6 +37,7 @@ import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { StaleChip } from "./StaleChip";
+import { LearningCardsHost } from "@/components/LearningCards/LearningCard";
 import { composerCompacts } from "@/lib/chat/stale";
 import { useFreshStartQuery } from "@/data/fresh-start";
 import { QuoteButton } from "./QuoteButton";
@@ -734,6 +735,7 @@ export function ChatPanel({
           asIs={asIs}
           onAsIs={setAsIs}
         />
+        <LearningCardsHost sessionId={sessionId} />
         <Composer
           draftKey={sessionId}
           suggestion={shownSuggestion}

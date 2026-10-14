@@ -40,10 +40,10 @@ const SCHEMA = {
   required: ["brief", "summary"],
 };
 
-export async function recipeDraft(
-  sessionId: string,
-  run: ClaudeRunner = runClaude
-): Promise<RecipeDraft> {
+export type RecipePrefill = Omit<RecipeDraft, "draft">;
+
+// The form's deterministic part; refuses a session that can't become a recipe.
+export function recipePrefill(sessionId: string): RecipePrefill {
   const s = queries.getSession(db).get(sessionId) as Session | undefined;
   if (!s) throw new Error("Session not found");
   const project = s.project_id ? getProject(s.project_id) : null;
@@ -52,34 +52,6 @@ export async function recipeDraft(
   const first = itemsOfKind(s.id, "user")[0]?.text ?? "";
   const prompt = (s.task_prompt || first).trim().slice(0, MAX_BRIEF);
   if (!prompt) throw new Error("That session has no prompt to save");
-  const final = finalMessage(s.id);
-  let draft: RecipeDraft["draft"] = null;
-  try {
-    const out = (await run({
-      cwd: os.tmpdir(),
-      system: SYSTEM,
-      prompt: [
-        `What it was asked:\n${prompt.slice(0, 1500)}`,
-        final ? `What it ended with:\n${final.slice(-2000)}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-      schema: SCHEMA,
-      tools: [],
-      role: "helper",
-      timeoutMs: 20_000,
-    })) as { brief?: unknown; summary?: unknown };
-    if (typeof out?.brief === "string" && out.brief.trim())
-      draft = {
-        brief: out.brief.trim().slice(0, MAX_BRIEF),
-        summary: typeof out.summary === "string" ? out.summary.trim() : "",
-      };
-  } catch (error) {
-    console.warn(
-      "[recipes] no drafted brief:",
-      error instanceof Error ? error.message : error
-    );
-  }
   return {
     name: recipeNameFrom(s.name),
     workspaceId: project.workspace_id,
@@ -88,6 +60,63 @@ export async function recipeDraft(
     model: s.model_overrides ?? null,
     view: s.view,
     prompt,
-    draft,
   };
+}
+
+export const REPEATABLE_SYSTEM = `${SYSTEM} Also say whether this is a job someone would plausibly run again (repeatable); a one-off fix or a feature built once is not.`;
+const REPEATABLE_SCHEMA = {
+  ...SCHEMA,
+  properties: { ...SCHEMA.properties, repeatable: { type: "boolean" } },
+  required: ["brief", "summary", "repeatable"],
+};
+
+// The model's rewrite of a brief and final report (never the transcript).
+export const draftRequest = (
+  prompt: string,
+  final: string | null,
+  withRepeatable = false
+) => ({
+  cwd: os.tmpdir(),
+  system: withRepeatable ? REPEATABLE_SYSTEM : SYSTEM,
+  prompt: [
+    `What it was asked:\n${prompt.slice(0, 1500)}`,
+    final ? `What it ended with:\n${final.slice(-2000)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n"),
+  schema: withRepeatable ? REPEATABLE_SCHEMA : SCHEMA,
+  tools: [] as string[],
+  role: "helper" as const,
+  timeoutMs: 20_000,
+});
+
+export function parseDraft(out: unknown): RecipeDraft["draft"] {
+  const o = out as { brief?: unknown; summary?: unknown } | null;
+  if (typeof o?.brief !== "string" || !o.brief.trim()) return null;
+  return {
+    brief: o.brief.trim().slice(0, MAX_BRIEF),
+    summary: typeof o.summary === "string" ? o.summary.trim() : "",
+  };
+}
+
+export async function recipeDraft(
+  sessionId: string,
+  run: ClaudeRunner = runClaude,
+  // A brief already drafted for this session (a learning card's).
+  cached?: RecipeDraft["draft"]
+): Promise<RecipeDraft> {
+  const base = recipePrefill(sessionId);
+  if (cached) return { ...base, draft: cached };
+  let draft: RecipeDraft["draft"] = null;
+  try {
+    draft = parseDraft(
+      await run(draftRequest(base.prompt, finalMessage(sessionId)))
+    );
+  } catch (error) {
+    console.warn(
+      "[recipes] no drafted brief:",
+      error instanceof Error ? error.message : error
+    );
+  }
+  return { ...base, draft };
 }

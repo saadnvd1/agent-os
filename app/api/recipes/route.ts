@@ -5,6 +5,7 @@ import {
   recipeView,
   setTimer,
 } from "@/lib/recipes";
+import { acceptRecipeCardFor } from "@/lib/learning-cards/apply";
 import { failed } from "@/lib/recipes/api";
 
 export async function GET(request: NextRequest) {
@@ -27,6 +28,8 @@ export async function POST(request: NextRequest) {
       maxMinutes: body.maxMinutes,
       sourceSessionId: body.sourceSessionId,
     });
+    if (typeof body.sourceSessionId === "string")
+      acceptRecipeCardFor(body.sourceSessionId, recipe.id);
     if (body.timer) setTimer(recipe, body.timer);
     return NextResponse.json({ recipe: recipeView(recipe) }, { status: 201 });
   } catch (error) {

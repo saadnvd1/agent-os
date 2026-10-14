@@ -35,4 +35,17 @@ describe("sessionEnded", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(sessionEnded("s2", "done")).resolves.toBeUndefined();
   });
+
+  it("hands on a recipe run settling after its session ended", async () => {
+    const hook = vi.fn();
+    END_HOOKS["learning-cards"] = hook;
+    setExperiment("learning-cards", true);
+    await sessionEnded("s2", "done");
+    await sessionEnded("s2", "recipe-settled");
+    await sessionEnded("s2", "recipe-settled");
+    expect(hook.mock.calls).toEqual([
+      ["s2", "done"],
+      ["s2", "recipe-settled"],
+    ]);
+  });
 });
