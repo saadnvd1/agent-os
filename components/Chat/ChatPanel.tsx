@@ -27,7 +27,7 @@ import {
   OVERLAY_SELECTOR,
 } from "@/lib/chat/escape";
 import { sentPrompts } from "@/lib/chat/history";
-import { quoteMarkdown } from "@/lib/chat/quote";
+import { quoteInsert, quoteMarkdown } from "@/lib/chat/quote";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { ActivityLine } from "./Activity";
 import { Approval } from "./Approval";
@@ -82,6 +82,7 @@ interface ItemActions {
   onKeepPlanning?: () => void;
   // Absent while the agent is working, and inside undone messages.
   onUndo?: (id: string) => void;
+  onQuote?: (text: string) => void;
 }
 
 function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
@@ -98,7 +99,7 @@ function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
         />
       );
     case "assistant":
-      return <AssistantMessage item={item} />;
+      return <AssistantMessage item={item} onQuote={actions.onQuote} />;
     case "reasoning":
       return <Reasoning item={item} />;
     case "todos":
@@ -171,7 +172,10 @@ const Block = memo(
     actions: ItemActions;
   }) {
     const respond = actions.respond;
-    const undoneActions = useMemo(() => ({ respond }), [respond]);
+    const undoneActions = useMemo(
+      () => ({ respond, onQuote: actions.onQuote }),
+      [respond, actions.onQuote]
+    );
     return b.type === "tools" ? (
       <ToolGroup tools={b.tools} />
     ) : b.type === "events" ? (
@@ -239,7 +243,11 @@ export function ChatPanel({
   // The tab on show in the focused pane: opening it takes the caret.
   active: boolean;
 }) {
-  const [prefill, setPrefill] = useState<{ text: string; at: number }>();
+  const [prefill, setPrefill] = useState<{
+    text: string;
+    at: number;
+    append?: boolean;
+  }>();
   const {
     items,
     hasMore,
@@ -305,7 +313,11 @@ export function ChatPanel({
   const shownSuggestion = suggestion === dismissed ? null : suggestion;
   const dismissSuggestion = useCallback((s: string) => setDismissed(s), []);
   const history = useMemo(() => sentPrompts(items), [items]);
-  const [insert, setInsert] = useState<{ text: string; at: number }>();
+  const [insert, setInsert] = useState<{
+    text: string;
+    at: number;
+    append?: boolean;
+  }>();
 
   // Esc sets the composer's ghost text aside, or else stops the turn
   // (lib/chat/escape), from anywhere in this panel.
@@ -555,6 +567,7 @@ export function ChatPanel({
       onUndo: idle ? (id) => undo(id, true) : undefined,
       onCarryPlan: idle ? carryPlan : undefined,
       onKeepPlanning: focusComposer,
+      onQuote: (text) => setInsert(quoteInsert(text)),
     }),
     [respond, idle, undo, carryPlan, focusComposer]
   );

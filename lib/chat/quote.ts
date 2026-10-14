@@ -9,6 +9,11 @@ export function quoteMarkdown(selection: string): string {
   return `${lines.map((l) => (l.trim() ? `> ${l}` : ">")).join("\n")}\n\n`;
 }
 
+// A whole message to quote: after whatever is already written.
+export function quoteInsert(text: string, at = Date.now()) {
+  return { text: quoteMarkdown(text), at, append: true };
+}
+
 // Markdown as editor paragraphs, one per line (the composer writes each
 // paragraph as a line), to put in at the caret.
 export function markdownParagraphs(

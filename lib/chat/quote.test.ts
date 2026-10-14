@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownParagraphs, quoteMarkdown } from "./quote";
+import { markdownParagraphs, quoteInsert, quoteMarkdown } from "./quote";
 
 describe("quoteMarkdown", () => {
   it("quotes a sentence, with a blank line after", () => {
@@ -24,5 +24,21 @@ describe("markdownParagraphs", () => {
       { type: "paragraph" },
       { type: "paragraph" },
     ]);
+  });
+});
+
+describe("quoting a whole message", () => {
+  it("keeps code blocks and lists, quoting every line", () => {
+    const md = "Steps:\n\n- one\n- two\n\n```ts\nconst a = 1;\n```";
+    expect(quoteMarkdown(md)).toBe(
+      "> Steps:\n>\n> - one\n> - two\n>\n> ```ts\n> const a = 1;\n> ```\n\n"
+    );
+  });
+
+  it("asks to go after an existing draft, with the cursor after the quote", () => {
+    const ins = quoteInsert("hi\nthere", 7);
+    expect(ins).toEqual({ text: "> hi\n> there\n\n", at: 7, append: true });
+    const paras = markdownParagraphs(ins.text);
+    expect(paras.at(-1)).toEqual({ type: "paragraph" });
   });
 });

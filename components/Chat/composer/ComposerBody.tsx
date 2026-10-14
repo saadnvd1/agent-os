@@ -22,6 +22,7 @@ import { ComposerMenu, type MenuOption } from "../ComposerMenu";
 import { offeredSuggestion } from "@/lib/chat/suggestion";
 import { historyStep } from "@/lib/chat/history";
 import { markdownParagraphs } from "@/lib/chat/quote";
+import { insertMarkdown } from "./insert";
 import { useCoarsePointer } from "./useCoarsePointer";
 import { useMentions } from "./useMentions";
 import { Attachments } from "./Attachments";
@@ -68,7 +69,9 @@ export interface ComposerProps {
   // Files and folders for an @mention.
   requestFiles?: (query: string) => Promise<FileSuggestion[]>;
   // Markdown to put in at the caret (a quote), once per `at`.
-  insert?: { text: string; at: number };
+  // `append` puts it after what's already written, on its own lines, rather
+  // than at the caret.
+  insert?: { text: string; at: number; append?: boolean };
   // Takes the caret once it's ready, and again each time this changes to a
   // new key (the conversation shown), unless the user is busy elsewhere.
   focusKey?: string | null;
@@ -155,7 +158,7 @@ export function ComposerBody({
     inserted.current = insert.at;
     const content = markdownParagraphs(insert.text);
     if (!content.length) return;
-    editor.chain().focus().insertContent(content).run();
+    insertMarkdown(editor, content, insert.append);
   }, [insert, editor]);
 
   const query = slashQuery(text);
