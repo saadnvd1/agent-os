@@ -86,6 +86,7 @@ describe("naming a spawned session or task", () => {
       "the --name flag",
     ]);
     expect(body).toEqual({
+      cwd: process.cwd(),
       project: "agent-os",
       prompt: "check the --name flag",
       mode: "task",
@@ -102,9 +103,30 @@ describe("naming a spawned session or task", () => {
     expect(body).toMatchObject({ from: "orch-1" });
   });
 
+  it("aos task --piece names the plan piece it builds, and says where it is run from", async () => {
+    const { body, out } = await aos(
+      ["task", "agent-os", "--piece", "runbooks-ui", "build", "it"],
+      { session: { name: "x" }, builds: 'piece 2 runbooks-ui of "House"' },
+      "task-1"
+    );
+    expect(body).toEqual({
+      cwd: process.cwd(),
+      project: "agent-os",
+      prompt: "build it",
+      mode: "task",
+      from: "task-1",
+      piece: "runbooks-ui",
+    });
+    expect(out).toContain('building piece 2 runbooks-ui of "House"');
+    await expect(
+      aos(["spawn", "agent-os", "--piece", "x", "fix"])
+    ).rejects.toThrow();
+  });
+
   it("aos sends no name when none is given", async () => {
     const { body } = await aos(["spawn", "agent-os", "fix", "it"]);
     expect(body).toEqual({
+      cwd: process.cwd(),
       project: "agent-os",
       prompt: "fix it",
       mode: "session",
@@ -117,6 +139,7 @@ describe("naming a spawned session or task", () => {
       { queued: { name: "follow up", position: 2, after: "add-auth" } }
     );
     expect(body).toEqual({
+      cwd: process.cwd(),
       project: "agent-os",
       prompt: "follow up",
       mode: "task",

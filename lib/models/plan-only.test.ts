@@ -11,7 +11,11 @@ vi.mock("../chat/runner", () => ({ retireChat, sendQueuedNow: vi.fn() }));
 import { db } from "../db";
 import { listAutoApprovals, setNoApprovals } from "../approvals/no-approvals";
 import { listQueue } from "../chat/queued";
-import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import {
+  seedOrchestrator,
+  seedSession,
+  seedWorkspace,
+} from "../orchestrator/testing";
 import { pendingEvents } from "../orchestrator/events";
 import { amendmentsOf } from "../orchestrator/amendments";
 import { recordTurn } from "../usage/turns";
@@ -37,6 +41,7 @@ const turn = {
 
 function planOnlyTask() {
   const { app } = seedWorkspace();
+  seedOrchestrator("orch-1");
   const id = seedSession({
     projectId: app.id,
     name: "planned",
@@ -184,6 +189,26 @@ describe("plan only", () => {
     expect(
       deriveTaskState({ ...base, sessionStatus: "waiting", blocked: true })
     ).toBe("blocked");
+  });
+
+  it("every approval is on the brief, a plain Approve included, so the review judges the PR as the implementation", async () => {
+    const { id } = planOnlyTask();
+    await handoffAfterPlan(id, async () => {});
+    await approvePlan(id, undefined, async () => {});
+    expect(amendmentsOf(id).map((a) => [a.kind, a.text])).toEqual([
+      ["approval", "Saad approved the plan; implement it as planned."],
+    ]);
+    const orch = planOnlyTask();
+    await handoffAfterPlan(orch.id, async () => {});
+    await approvePlan(orch.id, undefined, async () => {}, "orchestrator");
+    expect(amendmentsOf(orch.id)[0]).toMatchObject({
+      kind: "approval",
+      text: "The orchestrator approved the plan; implement it as planned.",
+    });
+    const auto = planOnlyTask();
+    await handoffAfterPlan(auto.id, async () => {});
+    await approvePlan(auto.id, undefined, async () => {}, "no-approvals");
+    expect(amendmentsOf(auto.id)[0].text).toContain("approved automatically");
   });
 
   it("approves once, on the implementation model, with an amendment recorded", async () => {

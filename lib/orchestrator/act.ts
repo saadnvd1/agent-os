@@ -35,10 +35,11 @@ import { treeOrder } from "../stacks/tree";
 import type { StackItemView } from "../stacks/types";
 import { doneSession } from "../done";
 import { archiveChecked } from "../done/archive";
-import { amendBrief, amendmentsOf } from "./amendments";
+import { amendBrief, scopeChangesOf } from "./amendments";
 import { db, type Session } from "../db";
 import { resurrectSession } from "../resurrect";
 import { resolveEnded } from "../resurrect/find";
+import { findPiece, pieceLabel, workspacePieces } from "../plans/claim";
 import { approvePlanNow } from "../models/plan-step";
 import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
@@ -96,7 +97,7 @@ export async function send(
     amendBrief(workspaceId, to.id, message);
     // In the decision log, so Saad sees every change of scope it records.
     addNote(workspaceId, `Scope change for ${to.name}: ${message}`);
-    amended = ` Recorded as scope change ${amendmentsOf(to.id).length} on its brief: reviews from now on judge against it (call review with fresh to judge the current head again).`;
+    amended = ` Recorded as scope change ${scopeChangesOf(to.id).length} on its brief: reviews from now on judge against it (call review with fresh to judge the current head again).`;
   }
   const { delivery } = await sendMessage({
     fromId: orchestratorId(workspaceId),
@@ -127,7 +128,7 @@ async function sendToQueued(
   if (opts.scopeChange) {
     amendBrief(workspaceId, queued.id, message);
     addNote(workspaceId, `Scope change for ${queued.name}: ${message}`);
-    amended = ` Recorded as scope change ${amendmentsOf(queued.id).length} on its brief: reviews judge against it once it has a PR.`;
+    amended = ` Recorded as scope change ${scopeChangesOf(queued.id).length} on its brief: reviews judge against it once it has a PR.`;
   }
   const sent = await sendMessage({
     fromId: orchestratorId(workspaceId),
@@ -161,6 +162,7 @@ export async function startTask(
     machine?: "mac" | "any";
     now?: boolean;
     nowReason?: string;
+    piece?: string;
   } = {}
 ): Promise<string> {
   if (opts.planOnly && opts.plan === false)
@@ -170,6 +172,9 @@ export async function startTask(
   const project = workspaceProject(workspaceId, projectRef);
   const model = parseOverride(opts.model) ?? undefined;
   const startedBy = orchestratorId(workspaceId);
+  const pieceId = opts.piece
+    ? findPiece(workspacePieces(workspaceId, project.id), opts.piece).id
+    : undefined;
   // Its brakes read this machine's usage, not the other machine's account.
   if (isRemoteHost(project.host_id))
     throw new Error(
@@ -190,6 +195,9 @@ export async function startTask(
       planOnly: opts.planOnly,
       planReason: opts.planReason,
       startedBy,
+      parentSessionId: startedBy,
+      startedVia: "orchestrator",
+      pieceId,
       baseBranch: opts.base || undefined,
       after: opts.after,
       originWorkspaceId: workspaceId,
@@ -213,13 +221,17 @@ export async function startTask(
             planOnly: opts.planOnly,
             planReason: opts.planReason,
             startedBy,
+            parentSessionId: startedBy,
+            startedVia: "orchestrator",
+            pieceId,
           }),
         (s) => s.id
       )
   );
   if ("queued" in out) {
     const { queued } = out;
-    return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}. It starts by itself; you'll get an event when it does.`;
+    const builds = pieceId ? ` It builds ${pieceLabel(pieceId)}.` : "";
+    return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}.${builds} It starts by itself; you'll get an event when it does.`;
   }
   const task = out.started;
   if (opts.priority) stampPriority(task.id, opts.priority);
@@ -236,7 +248,7 @@ export async function startTask(
     opts.plan && !opts.planOnly && task.plan_phase !== "planning"
       ? ` Plan step skipped: ${view === "terminal" ? "a terminal task has none" : "planning and implementation use the same model"}.`
       : "";
-  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${skipped}${planOnlyNote}${past ? " Started past the running-task limit." : ""}`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${pieceId ? ` It builds ${pieceLabel(pieceId)}.` : ""}${skipped}${planOnlyNote}${past ? " Started past the running-task limit." : ""}`;
 }
 
 // Starts a queued task now, past the running-task limit and its `after`.
@@ -276,10 +288,10 @@ export async function approveTaskPlan(
   task: Session,
   message?: string
 ): Promise<string> {
-  const out = await approvePlanNow(task.id, message);
+  const out = await approvePlanNow(task.id, message, "orchestrator");
   const amended = message
     ? ` Recorded as scope change ${out.amendments} on its brief: its review judges against it.`
-    : "";
+    : " Recorded the approval on its brief.";
   return `Approved the plan of ${task.name}: implementing on ${out.ref}.${amended}`;
 }
 
@@ -312,6 +324,8 @@ export async function startSession(
               access: "full",
               model,
               startedBy,
+              parentSessionId: startedBy,
+              startedVia: "orchestrator",
             })
           ).session
         : spawnSession({
@@ -320,6 +334,7 @@ export async function startSession(
             name: opts.name,
             model,
             startedBy,
+            parentSessionId: startedBy,
           }),
     (s) => s.id
   );

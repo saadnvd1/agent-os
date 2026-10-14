@@ -18,6 +18,7 @@ import { projectRef } from "./project-ref";
 import { orchestratedStart } from "./held";
 import type { TaskStatus } from "./state";
 import type { TaskView } from "./index";
+import { orchestratorOf } from "./starter";
 
 // What this machine's task API does, for another machine deciding whether
 // it can trust it with a pinned merge or a move; keyed-start: a session
@@ -140,7 +141,8 @@ export async function startRemoteTask(
   }
 ): Promise<Session> {
   const link = requireHostLink(hostId);
-  const { startedBy, ...rest } = opts;
+  const { startedBy: by, ...rest } = opts;
+  const startedBy = orchestratorOf(by);
   if (startedBy)
     await requireCapability(
       link,

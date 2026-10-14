@@ -8,7 +8,8 @@ import { db, type Session } from "../db";
 import type { UsageTotals } from "../chat/events";
 import { totalTokens, turnDelta } from "../chat/context";
 import { readUsage } from "../orchestrator/usage";
-import { ANTHROPIC, sessionRole } from "../models/roles";
+import { ANTHROPIC } from "../models/roles";
+import { sessionRole } from "../models/session-role";
 
 // Where a worker's totals start: a resumed conversation continues from the
 // totals its transcript saved, which the last worker stored; a new one

@@ -4,7 +4,11 @@ import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
 import { listQueue } from "../chat/queued";
-import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import {
+  seedOrchestrator,
+  seedSession,
+  seedWorkspace,
+} from "../orchestrator/testing";
 import { pendingEvents } from "../orchestrator/events";
 import { recordTurn } from "../usage/turns";
 import { taskRouting } from "../tasks";
@@ -174,8 +178,12 @@ describe("plan then implement", () => {
       await handoffAfterPlan(id, async () => {});
       if (text === undefined) await handoffAfterPlan(id, async () => {});
     };
-    const startedBy = (id: string, by: string | null) =>
-      db.prepare(`UPDATE sessions SET started_by = ? WHERE id = ?`).run(by, id);
+    const startedBy = (id: string, by: string | null) => {
+      if (by) seedOrchestrator(by);
+      return db
+        .prepare(`UPDATE sessions SET started_by = ? WHERE id = ?`)
+        .run(by, id);
+    };
     const eventsFor = (id: string) =>
       pendingEvents(workspaceOf(id)).filter((e) => e.subject === id);
     const workspaceOf = (id: string) =>

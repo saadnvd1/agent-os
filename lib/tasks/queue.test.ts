@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
 import { db } from "@/lib/db";
 import { changeWatcher } from "@/lib/db/changes";
-import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
+import {
+  seedOrchestrator,
+  seedSession,
+  seedWorkspace,
+} from "@/lib/orchestrator/testing";
 import { resetMachineStarts } from "@/lib/load/start-gate";
 import { setPaused } from "@/lib/orchestrator/pause";
 import { updateWorkspace } from "@/lib/workspaces";
@@ -179,12 +183,15 @@ beforeEach(() => {
 describe("the task queue", () => {
   it("starts as usual with no limit set and no after", () => {
     const t = setup(null);
-    expect(queueIfNeeded({ projectId: t.app.id, prompt: "go" })).toBeNull();
+    expect(
+      queueIfNeeded({ startedVia: "person", projectId: t.app.id, prompt: "go" })
+    ).toBeNull();
   });
 
   it("keeps plan only while a task waits", () => {
     const t = setup(1);
     const q = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "plan it",
       planOnly: true,
@@ -198,6 +205,7 @@ describe("the task queue", () => {
   it("keeps the plan decision and who started it while a task waits", () => {
     const t = setup(1);
     const q = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "decided",
       plan: false,
@@ -219,7 +227,11 @@ describe("the task queue", () => {
 
   it("queues over the limit and starts it once a slot frees", async () => {
     const t = setup(1); // seedWorkspace has one running task already
-    const queued = queueIfNeeded({ projectId: t.app.id, prompt: "next" })!;
+    const queued = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "next",
+    })!;
     expect(queued).toMatchObject({ status: "queued", position: 1 });
     await tick();
     expect(started).toEqual([]);
@@ -234,6 +246,7 @@ describe("the task queue", () => {
   it("holds an after until its task finishes, then starts it", async () => {
     const t = setup(null);
     const queued = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "follow-up",
       after: "add-auth",
@@ -254,12 +267,14 @@ describe("the task queue", () => {
   it("chains: an after on a queued task waits for that one to finish", async () => {
     const t = setup(null);
     const first = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "first",
       name: "first one",
       after: t.task,
     })!;
     const second = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "second",
       after: "first one",
@@ -276,7 +291,12 @@ describe("the task queue", () => {
   it("after any waits for whichever running task finishes first", async () => {
     const t = setup(null);
     const other = seedSession({ projectId: t.app.id, name: "b", task: true });
-    queueIfNeeded({ projectId: t.app.id, prompt: "x", after: "any" });
+    queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "x",
+      after: "any",
+    });
     await tick();
     expect(started).toEqual([]);
     finish(other);
@@ -288,10 +308,15 @@ describe("the task queue", () => {
     const t = setup(null);
     finish(t.task);
     expect(
-      queueIfNeeded({ projectId: t.app.id, prompt: "x", after: "any" })
+      queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "x",
+        after: "any",
+      })
     ).toBeNull();
     const out = await startOrQueue(
-      { projectId: t.app.id, prompt: "x", after: "any" },
+      { startedVia: "person", projectId: t.app.id, prompt: "x", after: "any" },
       async () => "go"
     );
     expect(out).toEqual({ started: "go" });
@@ -303,10 +328,16 @@ describe("the task queue", () => {
       t.task
     );
     expect(
-      queueIfNeeded({ projectId: t.app.id, prompt: "x", after: "any" })
+      queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "x",
+        after: "any",
+      })
     ).toBeNull();
     const live = seedSession({ projectId: t.app.id, name: "live", task: true });
     const q = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "y",
       after: "any",
@@ -324,7 +355,11 @@ describe("the task queue", () => {
 
   it("removes a queued task by its id before it starts", async () => {
     const t = setup(1);
-    const q = queueIfNeeded({ projectId: t.app.id, prompt: "p" })!;
+    const q = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "p",
+    })!;
     expect(findQueued(t.workspace.id, q.id.slice(0, 8))?.id).toBe(q.id);
     removeQueued(q.id);
     expect(findQueued(t.workspace.id, q.id)).toBeNull();
@@ -336,13 +371,22 @@ describe("the task queue", () => {
   it("refuses an after that names no running or queued task", () => {
     const t = setup(null);
     expect(() =>
-      queueIfNeeded({ projectId: t.app.id, prompt: "x", after: "nope" })
+      queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "x",
+        after: "nope",
+      })
     ).toThrow(/No running or queued task matches "nope"/);
   });
 
   it("Pause stops auto-starts; start now still goes", async () => {
     const t = setup(1);
-    const queued = queueIfNeeded({ projectId: t.app.id, prompt: "p" })!;
+    const queued = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "p",
+    })!;
     setPaused(t.workspace.id, true);
     finish(t.task);
     await tick();
@@ -355,9 +399,21 @@ describe("the task queue", () => {
 
   it("starts in line order, one slot at a time, and can be reordered", async () => {
     const t = setup(1);
-    const a = queueIfNeeded({ projectId: t.app.id, prompt: "a" })!;
-    const b = queueIfNeeded({ projectId: t.api.id, prompt: "b" })!;
-    const c = queueIfNeeded({ projectId: t.app.id, prompt: "c" })!;
+    const a = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "a",
+    })!;
+    const b = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.api.id,
+      prompt: "b",
+    })!;
+    const c = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "c",
+    })!;
     expect([a, b, c].map((q) => q.position)).toEqual([1, 2, 3]);
     moveQueued(c.id, -1);
     expect(
@@ -377,23 +433,38 @@ describe("the task queue", () => {
 
   it("a new task waits behind a line already waiting for a slot", () => {
     const t = setup(2);
-    queueIfNeeded({ projectId: t.app.id, prompt: "x", after: t.task });
+    queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "x",
+      after: t.task,
+    });
     // One running of two, but nothing waits for a slot: it starts.
-    expect(queueIfNeeded({ projectId: t.app.id, prompt: "y" })).toBeNull();
+    expect(
+      queueIfNeeded({ startedVia: "person", projectId: t.app.id, prompt: "y" })
+    ).toBeNull();
     db.prepare(`UPDATE workspaces SET max_running_tasks = 1 WHERE id = ?`).run(
       t.workspace.id
     );
-    expect(queueIfNeeded({ projectId: t.app.id, prompt: "z" })).not.toBeNull();
+    expect(
+      queueIfNeeded({ startedVia: "person", projectId: t.app.id, prompt: "z" })
+    ).not.toBeNull();
     db.prepare(`UPDATE workspaces SET max_running_tasks = 2 WHERE id = ?`).run(
       t.workspace.id
     );
     // A slot is free, but "z" is waiting for one: this goes behind it.
-    expect(queueIfNeeded({ projectId: t.app.id, prompt: "w" })).not.toBeNull();
+    expect(
+      queueIfNeeded({ startedVia: "person", projectId: t.app.id, prompt: "w" })
+    ).not.toBeNull();
   });
 
   it("removed tasks never start", async () => {
     const t = setup(1);
-    const q = queueIfNeeded({ projectId: t.app.id, prompt: "gone" })!;
+    const q = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "gone",
+    })!;
     removeQueued(q.id);
     finish(t.task);
     await tick();
@@ -403,9 +474,21 @@ describe("the task queue", () => {
 
   it("keeps the line across a restart, and never starts one twice", async () => {
     const t = setup(1);
-    const kept = queueIfNeeded({ projectId: t.app.id, prompt: "kept" })!;
-    const cut = queueIfNeeded({ projectId: t.app.id, prompt: "cut" })!;
-    const made = queueIfNeeded({ projectId: t.app.id, prompt: "made" })!;
+    const kept = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "kept",
+    })!;
+    const cut = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "cut",
+    })!;
+    const made = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "made",
+    })!;
     // A restart between the claim and the task, and one just after it.
     db.prepare(
       `UPDATE task_queue SET status = 'starting' WHERE id IN (?, ?)`
@@ -433,6 +516,7 @@ describe("the task queue", () => {
   it("retries a failed start twice, then shows it failed", async () => {
     const t = setup(null);
     const q = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "fail to start",
       after: t.task,
@@ -459,6 +543,7 @@ describe("the task queue", () => {
   it("a start whose task row exists but whose agent failed counts as started", async () => {
     const t = setup(null);
     const q = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "half started",
       after: t.task,
@@ -472,7 +557,11 @@ describe("the task queue", () => {
 
   it("holds auto-starts while the usage window would run out", async () => {
     const t = setup(1);
-    const q = queueIfNeeded({ projectId: t.app.id, prompt: "later" })!;
+    const q = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "later",
+    })!;
     process.env.AGENTOS_ORCH_BRAKES = "1";
     windowReason = "the 5h window runs out before it resets";
     try {
@@ -526,10 +615,16 @@ describe("queue changes reach the browser", () => {
 
   it("enqueue, reorder, remove and start each move task_queue", async () => {
     const t = setup(1);
-    const a = moved(() => queueIfNeeded({ projectId: t.app.id, prompt: "a" }));
+    const a = moved(() =>
+      queueIfNeeded({ startedVia: "person", projectId: t.app.id, prompt: "a" })
+    );
     expect(a).toContain("task_queue");
     const first = listQueue().find((q) => q.name === "a")!;
-    const second = queueIfNeeded({ projectId: t.app.id, prompt: "b" })!;
+    const second = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "b",
+    })!;
     expect(moved(() => moveQueued(second.id, -1))).toContain("task_queue");
     expect(moved(() => removeQueued(second.id))).toContain("task_queue");
     finish(t.task);
@@ -541,11 +636,16 @@ describe("queue changes reach the browser", () => {
 
   it("a start now, an after-any start at once, and a failed start move it", async () => {
     const t = setup(1);
-    const now = queueIfNeeded({ projectId: t.app.id, prompt: "now" })!;
+    const now = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "now",
+    })!;
     watch();
     await startQueuedNow(now.id);
     expect(watch()).toContain("task_queue");
     const failing = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "fail now",
     })!;
@@ -561,11 +661,12 @@ describe("starting directly", () => {
     updateWorkspace(t.workspace.id, { maxRunningTasks: 2 });
     let release!: () => void;
     const slow = new Promise<void>((r) => (release = r));
-    const first = startOrQueue({ projectId: t.app.id, prompt: "a" }, () =>
-      slow.then(() => "a")
+    const first = startOrQueue(
+      { startedVia: "person", projectId: t.app.id, prompt: "a" },
+      () => slow.then(() => "a")
     );
     const second = await startOrQueue(
-      { projectId: t.app.id, prompt: "b" },
+      { startedVia: "person", projectId: t.app.id, prompt: "b" },
       async () => "b"
     );
     expect(second).toHaveProperty("queued");
@@ -579,12 +680,18 @@ describe("a slot held by a direct start", () => {
     const t = seedWorkspace();
     updateWorkspace(t.workspace.id, { maxRunningTasks: 2 });
     await expect(
-      startOrQueue({ projectId: t.app.id, prompt: "a" }, async () => {
-        throw new Error("braked");
-      })
+      startOrQueue(
+        { startedVia: "person", projectId: t.app.id, prompt: "a" },
+        async () => {
+          throw new Error("braked");
+        }
+      )
     ).rejects.toThrow("braked");
     expect(
-      await startOrQueue({ projectId: t.app.id, prompt: "b" }, async () => "b")
+      await startOrQueue(
+        { startedVia: "person", projectId: t.app.id, prompt: "b" },
+        async () => "b"
+      )
     ).toEqual({ started: "b" });
   });
 
@@ -592,6 +699,7 @@ describe("a slot held by a direct start", () => {
     const t = seedWorkspace();
     updateWorkspace(t.workspace.id, { maxRunningTasks: 2 });
     const waiting = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "waits",
       after: t.task,
@@ -600,8 +708,9 @@ describe("a slot held by a direct start", () => {
     let release!: () => void;
     const slow = new Promise<void>((r) => (release = r));
     finish(t.task); // its after is met; one running, one direct start
-    const direct = startOrQueue({ projectId: t.api.id, prompt: "d" }, () =>
-      slow.then(() => "d")
+    const direct = startOrQueue(
+      { startedVia: "person", projectId: t.api.id, prompt: "d" },
+      () => slow.then(() => "d")
     );
     await tick();
     expect(started).toEqual([]);
@@ -649,8 +758,13 @@ const waitOf = (id: string) =>
 describe("priority and score", () => {
   it("stores a priority, defaulting to normal", () => {
     const t = setup(1);
-    const a = queueIfNeeded({ projectId: t.app.id, prompt: "a" })!;
+    const a = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "a",
+    })!;
     const b = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "b",
       priority: "urgent",
@@ -659,6 +773,7 @@ describe("priority and score", () => {
     expect(b.priority).toBe("urgent");
     expect(() =>
       queueIfNeeded({
+        startedVia: "person",
         projectId: t.app.id,
         prompt: "c",
         priority: "whenever" as never,
@@ -668,13 +783,23 @@ describe("priority and score", () => {
 
   it("starts the higher priority first, whatever the line order", async () => {
     const t = setup(1);
-    queueIfNeeded({ projectId: t.app.id, prompt: "plain" });
     queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "plain",
+    });
+    queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "later",
       priority: "background",
     });
-    queueIfNeeded({ projectId: t.app.id, prompt: "bug", priority: "urgent" });
+    queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "bug",
+      priority: "urgent",
+    });
     finish(t.task);
     await tick();
     expect(started.map((s) => s.prompt)).toEqual(["bug"]);
@@ -682,8 +807,16 @@ describe("priority and score", () => {
 
   it("a priority change reorders the line and keeps the task's age", async () => {
     const t = setup(1);
-    const a = queueIfNeeded({ projectId: t.app.id, prompt: "first" })!;
-    const b = queueIfNeeded({ projectId: t.app.id, prompt: "second" })!;
+    const a = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "first",
+    })!;
+    const b = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "second",
+    })!;
     expect(listQueue().find((q) => q.id === b.id)).toMatchObject({
       rank: 2,
       of: 2,
@@ -714,7 +847,11 @@ describe("priority and score", () => {
 
   it("a paused task gives its slot back", async () => {
     const t = setup(1);
-    const q = queueIfNeeded({ projectId: t.app.id, prompt: "next" })!;
+    const q = queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "next",
+    })!;
     await tick();
     expect(started).toEqual([]);
     db.prepare(`UPDATE sessions SET pause_state = 'paused' WHERE id = ?`).run(
@@ -732,7 +869,13 @@ describe("after any consumes a finish", () => {
     const b = seedSession({ projectId: t.app.id, name: "b", task: true });
     const c = seedSession({ projectId: t.app.id, name: "c", task: true });
     const waiters = ["w1", "w2", "w3"].map(
-      (p) => queueIfNeeded({ projectId: t.app.id, prompt: p, after: "any" })!
+      (p) =>
+        queueIfNeeded({
+          startedVia: "person",
+          projectId: t.app.id,
+          prompt: p,
+          after: "any",
+        })!
     );
     finish(t.task);
     await tick();
@@ -750,11 +893,13 @@ describe("after any consumes a finish", () => {
   it("the unique index refuses a finish used twice", () => {
     const t = setup(null);
     const a = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "a",
       after: "any",
     })!;
     const b = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "b",
       after: "any",
@@ -772,8 +917,18 @@ describe("after any consumes a finish", () => {
   it("two finishes at once release two waiters, one start per look", async () => {
     const t = setup(null);
     const b = seedSession({ projectId: t.app.id, name: "b", task: true });
-    queueIfNeeded({ projectId: t.app.id, prompt: "w1", after: "any" });
-    queueIfNeeded({ projectId: t.app.id, prompt: "w2", after: "any" });
+    queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "w1",
+      after: "any",
+    });
+    queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt: "w2",
+      after: "any",
+    });
     await tickQueue();
     finish(t.task);
     finish(b);
@@ -786,6 +941,7 @@ describe("after any consumes a finish", () => {
   it("recoverQueue keeps the finish a cut-off start had taken", () => {
     const t = setup(null);
     const q = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "cut",
       after: "any",
@@ -804,7 +960,13 @@ describe("after any consumes a finish", () => {
 
 describe("machine load", () => {
   const afterTask = (t: ReturnType<typeof setup>, prompt: string, extra = {}) =>
-    queueIfNeeded({ projectId: t.app.id, prompt, after: t.task, ...extra })!;
+    queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt,
+      after: t.task,
+      ...extra,
+    })!;
 
   it("holds starts while the machine is red, and says so once", async () => {
     const t = setup(null);
@@ -867,9 +1029,16 @@ describe("machine load", () => {
   it("an orchestrator's own start waits out a red machine; a person's goes", () => {
     const t = setup(null);
     machine = { ...greenView(), level: "red", settled: false };
-    expect(queueIfNeeded({ projectId: t.app.id, prompt: "person" })).toBeNull();
     expect(
       queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "person",
+      })
+    ).toBeNull();
+    expect(
+      queueIfNeeded({
+        startedVia: "person",
         projectId: t.app.id,
         prompt: "orch",
         originWorkspaceId: t.workspace.id,
@@ -890,7 +1059,13 @@ describe("placement on a linked machine", () => {
     machine = { ...greenView(), level: "red", settled: false };
   };
   const queue = (t: ReturnType<typeof setup>, prompt: string, extra = {}) =>
-    queueIfNeeded({ projectId: t.app.id, prompt, after: t.task, ...extra })!;
+    queueIfNeeded({
+      startedVia: "person",
+      projectId: t.app.id,
+      prompt,
+      after: t.task,
+      ...extra,
+    })!;
 
   it("starts a held task on a green linked machine and says why", async () => {
     const t = setup(null);
@@ -988,6 +1163,7 @@ describe("placement on a linked machine", () => {
 
   it("doesn't place an orchestrator's task on a machine that can't hold it", async () => {
     const t = setup(null);
+    seedOrchestrator("orch-1");
     queue(t, "orch old", { startedBy: "orch-1" });
     queue(t, "person old");
     finish(t.task);
@@ -1013,6 +1189,7 @@ describe("placement on a linked machine", () => {
 describe("the orchestrator's start now", () => {
   const orchQueue = (t: ReturnType<typeof setup>, prompt: string, extra = {}) =>
     queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt,
       originWorkspaceId: t.workspace.id,
@@ -1076,11 +1253,18 @@ describe("the orchestrator's start now", () => {
 describe("now on a direct start", () => {
   it("skips the full limit instead of queueing", () => {
     const t = setup(1);
-    expect(queueIfNeeded({ projectId: t.app.id, prompt: "x" })).toMatchObject({
+    expect(
+      queueIfNeeded({ startedVia: "person", projectId: t.app.id, prompt: "x" })
+    ).toMatchObject({
       status: "queued",
     });
     expect(
-      queueIfNeeded({ projectId: t.app.id, prompt: "y", now: true })
+      queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "y",
+        now: true,
+      })
     ).toBeNull();
   });
 
@@ -1088,6 +1272,7 @@ describe("now on a direct start", () => {
     const t = setup(null);
     expect(() =>
       queueIfNeeded({
+        startedVia: "person",
         projectId: t.app.id,
         prompt: "y",
         now: true,
@@ -1101,6 +1286,7 @@ describe("now on a direct start", () => {
     capabilities = ["linux"];
     expect(() =>
       queueIfNeeded({
+        startedVia: "person",
         projectId: t.app.id,
         prompt: "ios",
         machine: "mac",
@@ -1116,12 +1302,22 @@ describe("a plan-only task and the running-task limit", () => {
     db.prepare(
       `UPDATE sessions SET plan_only = 1, plan_phase = 'awaiting' WHERE id = ?`
     ).run(t.task);
-    expect(queueIfNeeded({ projectId: t.app.id, prompt: "next" })).toBeNull();
+    expect(
+      queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "next",
+      })
+    ).toBeNull();
     db.prepare(
       `UPDATE sessions SET plan_phase = 'implementing' WHERE id = ?`
     ).run(t.task);
     expect(
-      queueIfNeeded({ projectId: t.app.id, prompt: "next" })
+      queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "next",
+      })
     ).toMatchObject({ status: "queued" });
   });
 
@@ -1131,11 +1327,16 @@ describe("a plan-only task and the running-task limit", () => {
     const slow = new Promise<void>((r) => (release = r));
     finish(t.task);
     const planning = startOrQueue(
-      { projectId: t.app.id, prompt: "plan", planOnly: true },
+      {
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: "plan",
+        planOnly: true,
+      },
       () => slow.then(() => "p")
     );
     const other = await startOrQueue(
-      { projectId: t.app.id, prompt: "b" },
+      { startedVia: "person", projectId: t.app.id, prompt: "b" },
       async () => "b"
     );
     expect(other).toEqual({ started: "b" });

@@ -13,6 +13,13 @@ const hostCalls: string[] = [];
 const started: string[] = [];
 // How each start asked to run.
 const views: { kind: string; view: string }[] = [];
+// The starter and piece each task start carried.
+const taskStarts: {
+  startedBy?: string | null;
+  parentSessionId?: string | null;
+  startedVia?: string;
+  pieceId?: number;
+}[] = [];
 const launches: { model?: unknown; startedBy?: string }[] = [];
 // Chat sessions waiting on an approval, and how a chat send went.
 const waitingChats = new Set<string>();
@@ -63,8 +70,13 @@ vi.mock("@/lib/tasks", async (importOriginal) => ({
     projectId: string;
     prompt: string;
     view?: string;
+    startedBy?: string | null;
+    parentSessionId?: string | null;
+    startedVia?: string;
+    pieceId?: number;
   }) => {
     started.push(o.prompt);
+    taskStarts.push(o);
     views.push({ kind: "task", view: o.view ?? "terminal" });
     const id = seedSession({
       projectId: o.projectId,
@@ -303,6 +315,48 @@ describe("acting inside the workspace", () => {
         })
       ).rejects.toThrow();
     expect(launches).toHaveLength(1);
+  });
+
+  it("a task it starts records the orchestrator as starter and parent, and claims a named piece", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    const feature = randomUUID();
+    db.prepare(
+      `INSERT INTO features (id, workspace_id, name, plan_session_id, plan_text, status)
+       VALUES (?, ?, 'House', 'plan', 'plan', 'building')`
+    ).run(feature, w);
+    const piece = Number(
+      db
+        .prepare(
+          `INSERT INTO feature_pieces (feature_id, position, name, slice, project_id, status)
+           VALUES (?, 2, 'runbooks-ui', 's', ?, 'waiting')`
+        )
+        .run(feature, mine.api.id).lastInsertRowid
+    );
+    taskStarts.length = 0;
+    const text = await runTool(w, "start_task", {
+      plan: false,
+      plan_reason: "clear",
+      project: mine.api.name,
+      prompt: "build the runbooks ui",
+      piece: "runbooks-ui",
+    });
+    expect(text).toContain('It builds piece 2 runbooks-ui of "House".');
+    const orchestrator = taskStarts[0].startedBy!;
+    expect(taskStarts[0]).toMatchObject({
+      parentSessionId: orchestrator,
+      startedVia: "orchestrator",
+      pieceId: piece,
+    });
+    await expect(
+      runTool(w, "start_task", {
+        plan: false,
+        plan_reason: "clear",
+        project: mine.api.name,
+        prompt: "again",
+        piece: "nope",
+      })
+    ).rejects.toThrow(/Waiting pieces: 2 runbooks-ui/);
   });
 
   it("starts a task and a session in its own projects, as chats", async () => {

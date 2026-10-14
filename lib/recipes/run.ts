@@ -152,6 +152,8 @@ export async function startRun(
           access: "full",
           model: typeof model === "string" ? model : null,
           startedBy,
+          parentSessionId: startedBy,
+          startedVia: byOrchestrator ? "orchestrator" : "recipe",
         }).then((l) => ({ ...l, id: l.session.id }))
       );
       settleStart(run.id, "running", { sessionId: session.id });
@@ -167,6 +169,8 @@ export async function startRun(
         plan: false,
         planReason: "recipe run",
         startedBy,
+        parentSessionId: startedBy,
+        startedVia: byOrchestrator ? "orchestrator" : "recipe",
         originWorkspaceId: byOrchestrator ? ws : undefined,
       },
       () =>
@@ -181,6 +185,8 @@ export async function startRun(
             plan: false,
             planReason: "recipe run",
             startedBy,
+            parentSessionId: startedBy,
+            startedVia: byOrchestrator ? "orchestrator" : "recipe",
           })
         )
     );

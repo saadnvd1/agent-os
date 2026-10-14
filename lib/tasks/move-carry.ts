@@ -9,6 +9,7 @@
 
 import type Database from "better-sqlite3";
 import { db } from "../db";
+import { orchestratorOf } from "./starter";
 
 // table, column, and how the id sits in it: the whole value, `task:<id>`, or
 // the tail of a `<condition>:<id>` key.
@@ -59,9 +60,19 @@ export const CARRIED_COLUMNS = [
 ] as const;
 
 /** The orchestration columns that make a session "an orchestrator's task". */
+// started_by carries as the orchestrator only: a task a plain task started is
+// not held, and a mirror reading it as held would relay to the wrong session.
 export const orchestrationOf = (session: Record<string, unknown>) =>
   Object.fromEntries(
-    CARRIED_COLUMNS.map((c) => [c, session[c] ?? null] as const)
+    CARRIED_COLUMNS.map(
+      (c) =>
+        [
+          c,
+          c === "started_by"
+            ? orchestratorOf(session.started_by as string | null)
+            : (session[c] ?? null),
+        ] as const
+    )
   );
 
 export function carryTaskState(

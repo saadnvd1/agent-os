@@ -80,6 +80,7 @@ async function toClaudeMd(card: Card, p: LessonPayload, line: string) {
     projectId: project.id,
     prompt: `Add exactly this line under a "${HEADING}" heading in CLAUDE.md at the repository root, creating the file and heading if missing, and change nothing else: ${line}`,
     startedBy: null,
+    startedVia: "person",
   });
   return task.id;
 }
@@ -105,7 +106,12 @@ async function applyLesson(card: Card, p: LessonPayload, edits: Edits) {
       if (!prompt || !p.projectId)
         throw new CardRefused("There's no task to start");
       return (
-        await createTask({ projectId: p.projectId, prompt, startedBy: null })
+        await createTask({
+          projectId: p.projectId,
+          prompt,
+          startedBy: null,
+          startedVia: "person",
+        })
       ).id;
     }
     case "rule":

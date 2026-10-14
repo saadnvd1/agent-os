@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { seedOrchestrator } from "../orchestrator/testing";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/lib/db";
 import {
@@ -37,6 +38,7 @@ describe("recordTurn", () => {
   it("records a session an orchestrator started as implementation", () => {
     const mine = session();
     const delegated = session();
+    seedOrchestrator("orch-1");
     getDb()
       .prepare(`UPDATE sessions SET started_by = 'orch-1' WHERE id = ?`)
       .run(delegated.id);

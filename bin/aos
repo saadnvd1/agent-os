@@ -17,6 +17,8 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos spawn <project> <prompt...>    start a new agent session in a project
   aos task <project> <prompt...>     start a background task that ends in a PR
                                      (--after <task|any>: queue it until that task finishes;
+                                      --piece <name>: the waiting piece of your plan it builds,
+                                      needed while your plan has pieces waiting in that project;
                                       --plan-only: stop after the plan and wait for approval)
                                      (--on <machine>: on a linked machine's AgentOS)
                                      (--name "<name>": name it; otherwise it's
@@ -188,6 +190,7 @@ function parseSpawnArgs(words) {
   let after;
   let terminal = false;
   let planOnly = false;
+  let piece;
   let priority;
   let onMac = false;
   let project;
@@ -209,6 +212,10 @@ function parseSpawnArgs(words) {
     else if (w === "--terminal") terminal = true;
     else if (w === "--plan-only") planOnly = true;
     else if (w === "--on-mac") onMac = true;
+    else if (w === "--piece") {
+      piece = words[++i];
+      if (piece === undefined) fail("--piece needs a piece name");
+    } else if (w.startsWith("--piece=")) piece = w.slice(8);
     else if (w === "--priority") {
       priority = words[++i];
       if (priority === undefined) fail("--priority needs a value");
@@ -222,6 +229,7 @@ function parseSpawnArgs(words) {
     after: after?.trim() || undefined,
     terminal,
     planOnly,
+    piece: piece?.trim() || undefined,
     priority: priority?.trim().toLowerCase() || undefined,
     onMac,
     project,
@@ -442,6 +450,7 @@ async function main() {
         after,
         terminal,
         planOnly,
+        piece,
         priority,
         onMac,
         project,
@@ -449,7 +458,7 @@ async function main() {
       } = parseSpawnArgs(args);
       if (!project || !words.length)
         fail(
-          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} <prompt...>`
+          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} <prompt...>`
         );
       if ((priority || onMac) && cmd !== "task")
         fail("--priority and --on-mac work for tasks only");
@@ -457,13 +466,16 @@ async function main() {
       if (after && cmd !== "task") fail("--after works for tasks only");
       if (terminal && cmd !== "task") fail("--terminal works for tasks only");
       if (planOnly && cmd !== "task") fail("--plan-only works for tasks only");
+      if (piece && cmd !== "task") fail("--piece works for tasks only");
       if (planOnly && terminal)
         fail("--plan-only needs a chat task, not --terminal");
-      const { session, queued } = await post("/api/bus/spawn", {
+      const { session, queued, builds } = await post("/api/bus/spawn", {
         project,
         prompt: words.join(" "),
         mode: cmd === "task" ? "task" : "session",
         ...(me && { from: me }),
+        cwd: process.cwd(),
+        ...(piece && { piece }),
         ...(name && { name }),
         ...(on && { on }),
         ...(after && { after }),
@@ -474,12 +486,12 @@ async function main() {
       });
       if (queued) {
         console.log(
-          `queued task "${queued.name}" (${queued.after ? `after ${queued.after}` : `position ${queued.position}`}); it starts by itself`
+          `queued task "${queued.name}" (${queued.after ? `after ${queued.after}` : `position ${queued.position}`}); it starts by itself${builds ? `; it builds ${builds}` : ""}`
         );
         return;
       }
       console.log(
-        `started ${cmd === "task" ? "task" : "session"} "${session.name}"`
+        `started ${cmd === "task" ? "task" : "session"} "${session.name}"${builds ? `, building ${builds}` : ""}`
       );
       return;
     }

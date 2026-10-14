@@ -1,5 +1,6 @@
 "use client";
 
+import { isFork } from "@/lib/sessions/fork";
 import { toast } from "sonner";
 
 import { subscribe } from "valtio";
@@ -299,7 +300,7 @@ function HomeContent() {
 
       // Get parent session ID for forking
       let parentSessionId: string | null = null;
-      if (!session.claude_session_id && session.parent_session_id) {
+      if (!session.claude_session_id && isFork(session)) {
         const parentSession = sessions.find(
           (s) => s.id === session.parent_session_id
         );

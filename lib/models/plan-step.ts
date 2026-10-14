@@ -21,8 +21,9 @@ import { ANTHROPIC } from "./roles";
 import { queueEvent } from "../orchestrator/events";
 import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { addNote } from "../orchestrator/notes";
-import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
+import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
 import { PIECES_PROMPT, foldedBrief, pieceBrief } from "../plans/pieces";
+import { orchestratorOf } from "../tasks/starter";
 import {
   createFeature,
   ownPieceOf,
@@ -119,7 +120,7 @@ function piecesLine(r: NonNullable<ReturnType<typeof planFor>>): string {
 
 // Tells the orchestrator that started a task its plan is written, once.
 function announcePlan(s: Session, ref: string | null, retried = false): void {
-  if (!s.started_by && !s.held_by_device) return;
+  if (!orchestratorOf(s.started_by) && !s.held_by_device) return;
   const workspaceId = sessionWorkspace(s);
   // A task held for another machine's orchestrator can't reach it: the line
   // waits on the task for that orchestrator to read (orchestrator/facts).
@@ -507,12 +508,21 @@ export async function recheckPlanning(
     );
 }
 
+export type ApprovedBy = "saad" | "orchestrator" | "no-approvals";
+
+const APPROVAL_TEXT: Record<ApprovedBy, string> = {
+  saad: "Saad approved the plan; implement it as planned.",
+  orchestrator: "The orchestrator approved the plan; implement it as planned.",
+  "no-approvals":
+    "The plan was approved automatically (no-approvals mode); implement it as planned.",
+};
+
 // approvePlan, sending through the chat runner (imported when needed: it
 // imports this file).
 export async function approvePlanNow(
   sessionId: string,
   message?: string,
-  by: "saad" | "no-approvals" = "saad"
+  by: ApprovedBy = "saad"
 ) {
   const { sendQueuedNow } = await import("../chat/runner");
   return approvePlan(sessionId, message, (id, m) => sendQueuedNow(id, m), by);
@@ -526,7 +536,7 @@ export async function approvePlan(
   sessionId: string,
   message: string | undefined,
   send: Send,
-  by: "saad" | "no-approvals" = "saad"
+  by: ApprovedBy = "saad"
 ): Promise<{ ref: string; amendments: number }> {
   const s = getSession(sessionId);
   if (!s || s.plan_phase !== "awaiting" || s.task_status !== "running")
@@ -535,9 +545,16 @@ export async function approvePlan(
     );
   const text = message?.trim() || undefined;
   const workspaceId = sessionWorkspace(s);
-  if (text && workspaceId) {
-    amendBrief(workspaceId, s.id, text);
-    addNote(workspaceId, `Plan approved with a change for ${s.name}: ${text}`);
+  // Every approval is on the brief, so the review judges the PR as the
+  // implementation of the plan, not as plan-only work.
+  if (workspaceId) {
+    if (text) {
+      amendBrief(workspaceId, s.id, text);
+      addNote(
+        workspaceId,
+        `Plan approved with a change for ${s.name}: ${text}`
+      );
+    } else amendBrief(workspaceId, s.id, APPROVAL_TEXT[by], "approval");
   }
   const ref = await startImplementing(s, "awaiting", send, text);
   if (!ref) throw new Error(`${s.name} isn't waiting for plan approval`);
@@ -549,5 +566,5 @@ export async function approvePlan(
       subject: `plan for ${s.name}`,
       detail: "already waiting when the mode was turned on",
     });
-  return { ref, amendments: amendmentsOf(s.id).length };
+  return { ref, amendments: scopeChangesOf(s.id).length };
 }

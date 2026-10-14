@@ -5,6 +5,7 @@
  * a green CI, past the gates its orchestrator judges it by.
  */
 
+import { orchestratorOf } from "./starter";
 import os from "os";
 import { db, type Session } from "../db";
 import type { OrchestratedBundle } from "./move-bundle";
@@ -102,7 +103,7 @@ type Holdable = Pick<
 export function mayHold(s: Holdable, device: string): boolean {
   if (!s.task_prompt || s.task_status !== "running") return false;
   if (s.host_id && s.host_id !== "local") return false;
-  if (s.started_by || s.held_by_device) return false;
+  if (orchestratorOf(s.started_by) || s.held_by_device) return false;
   return (
     s.started_by_device === device || s.started_by_device === UNRECORDED_STARTER
   );

@@ -119,6 +119,7 @@ export async function startItem(
       prompt: promptFromCard(card),
       name: card.title,
       cardId: card.id,
+      startedVia: "stack",
       base,
       onCreated: (sessionId) =>
         q.updateItem(db, item.id, {

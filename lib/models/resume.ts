@@ -18,7 +18,7 @@ import {
   taskOverride,
   type ModelOverride,
 } from "./resolve";
-import { sessionRole } from "./roles";
+import { sessionRole } from "./session-role";
 
 export const RESUME_MESSAGE =
   "You were paused. Carry on where you left off: check the worktree and the conversation above for where things stand, then finish the task.";

@@ -28,13 +28,18 @@ describe("a task's agent", () => {
   const projectId = createProject({ name: "a", workingDirectory: "/tmp" }).id;
 
   it("is Claude Code when nobody picks", async () => {
-    const task = await createTask({ projectId, prompt: "do x" });
+    const task = await createTask({
+      startedVia: "person",
+      projectId,
+      prompt: "do x",
+    });
     expect(task.agent_type).toBe("claude");
     expect(task.tmux_name).toMatch(/^claude-/);
   });
 
   it("is GitHub Copilot as a chat on its default model when picked", async () => {
     const task = await createTask({
+      startedVia: "person",
       projectId,
       prompt: "do y",
       agent: "copilot",
@@ -51,6 +56,7 @@ describe("a task's agent", () => {
 
   it("keeps the model a person names for it", async () => {
     const task = await createTask({
+      startedVia: "person",
       projectId,
       prompt: "do z",
       agent: "copilot",
@@ -61,11 +67,22 @@ describe("a task's agent", () => {
 
   it("refuses what only Claude Code does", async () => {
     const make = (o: object) =>
-      createTask({ projectId, prompt: "w", agent: "copilot", ...o });
+      createTask({
+        startedVia: "person",
+        projectId,
+        prompt: "w",
+        agent: "copilot",
+        ...o,
+      });
     await expect(make({ view: "terminal" })).rejects.toThrow(/as a chat/);
     await expect(make({ plan: true })).rejects.toThrow(/plan first/);
     await expect(
-      createTask({ projectId, prompt: "w", agent: "gemini" })
+      createTask({
+        startedVia: "person",
+        projectId,
+        prompt: "w",
+        agent: "gemini",
+      })
     ).rejects.toThrow(/can't run a task/);
   });
 });

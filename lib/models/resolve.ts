@@ -24,9 +24,9 @@ import {
   formatModelRef,
   isModelRole,
   parseModelRef,
-  sessionRole,
   type ModelRole,
 } from "./roles";
+import { sessionRole } from "./session-role";
 import {
   resolveSecret,
   secretShellExpansion,

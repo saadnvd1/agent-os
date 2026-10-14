@@ -211,3 +211,21 @@ names what was folded. A background sweep tells the orchestrator once about a
 piece still waiting 30 minutes after its dependency merged, a task whose turn
 ended with no PR, and a PR an agent opened outside its task's repository (read
 from its `gh pr create` call), which no task owns and no gate covers.
+
+A task of a plan that starts another task in a project where the plan has pieces
+waiting must say which piece the new task builds (`aos task --piece <name>`, or
+`piece` on the orchestrator's `start_task`); without it the start is refused
+with the waiting pieces listed. The piece is claimed for that task, follows it
+(merged when it merges) and is never started a second time. Pieces whose
+dependency isn't met yet can be claimed too; only waiting pieces can.
+
+## Who started a task
+
+Every start records who: `started_by` (the session that started it, empty for a
+person), `parent_session_id` (the session it came from; a plan's pieces point
+at the planning task) and `started_via` (session, orchestrator, person, plan,
+schedule, recipe, stack or remote). `aos task` and `aos spawn` run from inside
+a session record that session, found by its id or, without one, by the
+worktree the command runs in. Every plan approval, a plain Approve included,
+is written to the task's brief, so its review judges the PR as the
+implementation of the plan.

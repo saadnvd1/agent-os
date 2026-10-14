@@ -10,10 +10,11 @@ import { db, type Session } from "../db";
 import { escalations } from "../orchestrator/gates";
 import { taskSubject } from "../orchestrator/asks";
 import { usesGitCrypt } from "../worktree-add";
+import { orchestratorOf } from "./starter";
 
 /** Started by an orchestrator, or held for one by the machine it left. */
 export function isOrchestrated(session: Session): boolean {
-  if (session.started_by || session.held_by_device) return true;
+  if (orchestratorOf(session.started_by) || session.held_by_device) return true;
   return !!db
     .prepare(
       `SELECT 1 FROM orchestrator_starts WHERE kind != 'stack' AND target = ? LIMIT 1`

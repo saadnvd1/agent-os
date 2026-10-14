@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { orchestratorOf, recordStart } from "../tasks/starter";
 import os from "os";
 import { db, queries, type Session } from "../db";
 import { getProject, getAllProjects } from "../projects";
@@ -35,6 +36,7 @@ export async function spawnSession(opts: {
   // The orchestrator session that starts it: the implementation role's
   // model unless `model` is given.
   startedBy?: string | null;
+  parentSessionId?: string | null;
 }): Promise<Session> {
   const prompt = opts.prompt.trim();
   if (!prompt) throw new Error("Give the new session a prompt");
@@ -46,7 +48,7 @@ export async function spawnSession(opts: {
 
   const id = randomUUID();
   const tmuxName = `claude-${id}`;
-  const routed = opts.startedBy
+  const routed = orchestratorOf(opts.startedBy)
     ? resolveRole("implement", {
         workspaceId: project.workspace_id,
         override: parseOverride(opts.model),
@@ -76,9 +78,19 @@ export async function spawnSession(opts: {
       project.id,
       "local"
     );
-  db.prepare(
-    `UPDATE sessions SET name_source = ?, started_by = ? WHERE id = ?`
-  ).run(naming.source, opts.startedBy ?? null, id);
+  db.prepare(`UPDATE sessions SET name_source = ? WHERE id = ?`).run(
+    naming.source,
+    id
+  );
+  recordStart(id, {
+    startedBy: opts.startedBy ?? null,
+    parentSessionId: opts.parentSessionId ?? opts.startedBy ?? null,
+    startedVia: orchestratorOf(opts.startedBy)
+      ? "orchestrator"
+      : opts.startedBy
+        ? "session"
+        : "person",
+  });
   if (routed) setSessionModel(id, routed);
   void naming.refine?.(id);
   await launchClaude({ sessionId: id, tmuxName, cwd, model, prompt });

@@ -45,7 +45,12 @@ const view = (r: Partial<Session>, state: string) => ({
 async function startOne(): Promise<Partial<Session>> {
   const r = remoteSession();
   fetchMock.mockResolvedValueOnce(json({ session: r }, 201));
-  await createTask({ projectId: f.projectId, prompt: "do x", hostId });
+  await createTask({
+    startedVia: "person",
+    projectId: f.projectId,
+    prompt: "do x",
+    hostId,
+  });
   return r;
 }
 
@@ -90,7 +95,12 @@ describe("starting a task on a linked machine", () => {
     fetchMock
       .mockRejectedValueOnce(new Error("socket hang up"))
       .mockResolvedValueOnce(json({ session: r }, 201));
-    await createTask({ projectId: f.projectId, prompt: "do x", hostId });
+    await createTask({
+      startedVia: "person",
+      projectId: f.projectId,
+      prompt: "do x",
+      hostId,
+    });
     const ids = fetchMock.mock.calls.map((c) => JSON.parse(c[1].body).id);
     expect(ids[0]).toBe(ids[1]);
     expect(row(r.id!).host_id).toBe(hostId);
@@ -99,20 +109,31 @@ describe("starting a task on a linked machine", () => {
   it("an unlinked machine refuses with a way forward", async () => {
     const other = createHost("unlinked", "alice@other").id;
     await expect(
-      createTask({ projectId: f.projectId, prompt: "do x", hostId: other })
+      createTask({
+        startedVia: "person",
+        projectId: f.projectId,
+        prompt: "do x",
+        hostId: other,
+      })
     ).rejects.toThrow(/isn't linked/);
   });
 
   it("runs as a chat there by default, and in a terminal when picked", async () => {
     const chat = { ...remoteSession(), view: "chat" as const };
     fetchMock.mockResolvedValueOnce(json({ session: chat }, 201));
-    await createTask({ projectId: f.projectId, prompt: "do x", hostId });
+    await createTask({
+      startedVia: "person",
+      projectId: f.projectId,
+      prompt: "do x",
+      hostId,
+    });
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).view).toBe("chat");
     expect(row(chat.id!).view).toBe("chat");
 
     const term = { ...remoteSession(), view: "terminal" as const };
     fetchMock.mockResolvedValueOnce(json({ session: term }, 201));
     await createTask({
+      startedVia: "person",
       projectId: f.projectId,
       prompt: "do x",
       hostId,
@@ -129,7 +150,13 @@ describe("starting a task on a linked machine", () => {
 
   it("stacked and card tasks stay on this machine", async () => {
     await expect(
-      createTask({ projectId: f.projectId, prompt: "x", hostId, cardId: "c" })
+      createTask({
+        startedVia: "person",
+        projectId: f.projectId,
+        prompt: "x",
+        hostId,
+        cardId: "c",
+      })
     ).rejects.toThrow(/this machine only/);
     const base = {
       branch: "feature/parent",
@@ -137,7 +164,13 @@ describe("starting a task on a linked machine", () => {
       stack: { parentName: "p", parentBranch: "feature/parent" },
     } as unknown as Parameters<typeof createTask>[0]["base"];
     await expect(
-      createTask({ projectId: f.projectId, prompt: "x", hostId, base })
+      createTask({
+        startedVia: "person",
+        projectId: f.projectId,
+        prompt: "x",
+        hostId,
+        base,
+      })
     ).rejects.toThrow(/this machine only/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -276,6 +309,40 @@ it("refuses another id that names a session that isn't a task", async () => {
     `INSERT INTO sessions (id, name, tmux_name, working_directory) VALUES (?, 's', 't', '/x')`
   ).run(id);
   await expect(
-    createTask({ id, projectId: f.projectId, prompt: "x" })
+    createTask({
+      startedVia: "person",
+      id,
+      projectId: f.projectId,
+      prompt: "x",
+    })
   ).rejects.toThrow(/taken/);
+});
+
+it("a remote start from inside a plain task keeps the mirror unheld: no relay, parent recorded", async () => {
+  const { seedSession } = await import("../orchestrator/testing");
+  const { isHeldRemote } = await import("./held-remote");
+  const caller = seedSession({
+    projectId: f.projectId,
+    name: "caller",
+    task: true,
+  });
+  const r = remoteSession();
+  fetchMock.mockResolvedValueOnce(json({ session: r }, 201));
+  await createTask({
+    projectId: f.projectId,
+    prompt: "do x",
+    hostId,
+    startedBy: caller,
+    parentSessionId: caller,
+    startedVia: "session",
+  });
+  const mirror = db
+    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .get(r.id!) as Session;
+  expect(mirror).toMatchObject({
+    started_by: null,
+    parent_session_id: caller,
+    started_via: "session",
+  });
+  expect(isHeldRemote(mirror)).toBe(false);
 });

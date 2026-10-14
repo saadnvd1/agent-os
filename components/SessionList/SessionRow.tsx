@@ -1,5 +1,6 @@
 "use client";
 
+import { isFork } from "@/lib/sessions/fork";
 import { memo, useState } from "react";
 import { useSnapshot } from "valtio";
 import {
@@ -99,7 +100,7 @@ export const SessionRow = memo(function SessionRow({
                 />
               </span>
             )}
-            {session.parent_session_id && (
+            {isFork(session) && (
               <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />
             )}
           </>

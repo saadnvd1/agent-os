@@ -76,3 +76,11 @@ export function seedWorkspace(name = `ws-${randomUUID().slice(0, 6)}`) {
   });
   return { workspace, app, api, chat, task };
 }
+
+// An orchestrator session with this id, for rows that name it as started_by.
+export function seedOrchestrator(id: string): void {
+  db.prepare(
+    `INSERT OR IGNORE INTO sessions (id, name, tmux_name, working_directory, role)
+     VALUES (?, ?, ?, '/tmp', 'orchestrator')`
+  ).run(id, `orchestrator ${id}`, `claude-${id}`);
+}

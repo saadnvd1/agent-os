@@ -6,7 +6,8 @@
  */
 
 import { db } from "../db";
-import { ANTHROPIC, sessionRole } from "../models/roles";
+import { ANTHROPIC } from "../models/roles";
+import { sessionRole } from "../models/session-role";
 import { ctxOf, weighted, type TokenRow } from "./weights";
 import type { CallKind, CallRow, CallSource, CallUsage } from "./types";
 

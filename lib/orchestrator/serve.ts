@@ -145,6 +145,7 @@ export async function runTool(
         machine: a.machine,
         now: a.now,
         nowReason: a.now_reason,
+        piece: a.piece,
       });
     }
     case "start_now": {

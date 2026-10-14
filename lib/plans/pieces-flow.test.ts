@@ -28,7 +28,11 @@ import { db, type Session } from "../db";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
-import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import {
+  seedOrchestrator,
+  seedSession,
+  seedWorkspace,
+} from "../orchestrator/testing";
 import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
 import { pendingEvents } from "../orchestrator/events";
 import {
@@ -73,6 +77,7 @@ function task(
   planText: (api: string, app: string) => string
 ) {
   const { app, api } = seedWorkspace();
+  seedOrchestrator("orch-1");
   const id = seedSession({
     projectId: app.id,
     name: "Big feature",
