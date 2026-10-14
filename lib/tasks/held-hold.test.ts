@@ -88,6 +88,7 @@ describe("holding a task that started unheld", () => {
 describe("a keyed start retried with an orchestrator's description", () => {
   const retry = (id: string, device: string) =>
     createTask({
+      startedVia: "person",
       id,
       projectId: "p",
       prompt: "x",

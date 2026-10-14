@@ -107,6 +107,7 @@ describe("the scheduling tools", () => {
     const t = setup();
     updateWorkspace(t.workspace.id, { maxRunningTasks: 1 });
     const q = queueIfNeeded({
+      startedVia: "person",
       projectId: t.app.id,
       prompt: "queued thing",
       name: "queued thing",

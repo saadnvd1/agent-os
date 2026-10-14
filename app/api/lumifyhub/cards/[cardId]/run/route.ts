@@ -3,6 +3,7 @@ import { body, respond } from "@/lib/lumifyhub/http";
 import { lumifyHubId } from "@/lib/lumifyhub/ids";
 import { cardForTask, promptFromCard } from "@/lib/lumifyhub/task-cards";
 import { createTask } from "@/lib/tasks";
+import { callingDevice } from "@/lib/security/device-me";
 
 type RouteParams = { params: Promise<{ cardId: string }> };
 
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       prompt: promptFromCard(card),
       name: card.title,
       cardId: card.id,
+      startedVia: "person",
+      startedByDevice: callingDevice(request) ?? undefined,
     });
     return { session };
   });

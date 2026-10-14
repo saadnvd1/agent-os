@@ -5,17 +5,14 @@ import { startOrQueue, stampPriority } from "@/lib/tasks/queue";
 import { isPriority } from "@/lib/tasks/schedule-types";
 import { hostIdNamed } from "@/lib/hosts";
 import { startView } from "@/lib/sessions/launch";
-import { db } from "@/lib/db";
-
-// The calling session, when it's an orchestrator: what it starts runs on the
-// implementation model. A made-up `from` can only pick that cheaper role.
-function orchestratorFrom(from: unknown): string | null {
-  if (typeof from !== "string" || !from) return null;
-  const row = db
-    .prepare(`SELECT 1 FROM sessions WHERE id = ? AND role = 'orchestrator'`)
-    .get(from);
-  return row ? from : null;
-}
+import { callerSession, starterOf } from "@/lib/tasks/starter";
+import { callingDevice } from "@/lib/security/device-me";
+import {
+  findPiece,
+  pieceLabel,
+  pieceRefusal,
+  waitingPiecesFor,
+} from "@/lib/plans/claim";
 
 // mode "session" starts an interactive agent; "task" starts one that ends in
 // a PR, or queues it (over the workspace's limit, or with `after`).
@@ -34,8 +31,15 @@ export async function POST(request: NextRequest) {
       priority,
       machine,
       from,
+      cwd,
+      piece,
     } = await request.json();
-    const startedBy = orchestratorFrom(from);
+    // Whoever called: a session (by `from`, else the worktree it runs in) or a person.
+    const starter = starterOf(
+      callerSession({ from, cwd }),
+      callingDevice(request)
+    );
+    const { startedBy } = starter;
     const given = typeof name === "string" ? name : undefined;
     if (after !== undefined && mode !== "task")
       throw new Error("--after works for tasks only");
@@ -47,16 +51,29 @@ export async function POST(request: NextRequest) {
       throw new Error("--priority is urgent, blocking, normal or background");
     if (machine !== undefined && machine !== "mac" && machine !== "any")
       throw new Error('machine is "mac" or "any"');
+    if (piece !== undefined && mode !== "task")
+      throw new Error("--piece works for tasks only");
     if (mode === "task") {
+      const projectId = findProject(String(project ?? "")).id;
+      // A task whose plan has pieces waiting here must say which it builds.
+      const waiting = startedBy ? waitingPiecesFor(startedBy, projectId) : [];
+      let pieceId: number | undefined;
+      if (piece !== undefined) {
+        if (typeof piece !== "string" || !piece.trim())
+          throw new Error("--piece needs a piece name");
+        pieceId = findPiece(waiting, piece).id;
+      } else if (waiting.length)
+        throw new Error(pieceRefusal(waiting, projectId));
       const task = {
-        projectId: findProject(String(project ?? "")).id,
+        projectId,
+        ...starter,
+        pieceId,
         prompt: String(prompt ?? ""),
         name: given,
         model,
         hostId: on ? hostIdNamed(String(on)) : undefined,
         view: startView(view),
         planOnly: planOnly === true ? true : undefined,
-        startedBy,
       };
       const out = await startOrQueue(
         {
@@ -71,9 +88,10 @@ export async function POST(request: NextRequest) {
           return session;
         }
       );
+      const builds = pieceId ? pieceLabel(pieceId) : undefined;
       return "queued" in out
-        ? NextResponse.json({ queued: out.queued }, { status: 202 })
-        : NextResponse.json({ session: out.started }, { status: 201 });
+        ? NextResponse.json({ queued: out.queued, builds }, { status: 202 })
+        : NextResponse.json({ session: out.started, builds }, { status: 201 });
     }
     const session = await spawnSession({
       project: String(project ?? ""),
@@ -81,6 +99,7 @@ export async function POST(request: NextRequest) {
       name: given,
       model,
       startedBy,
+      parentSessionId: starter.parentSessionId,
     });
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {

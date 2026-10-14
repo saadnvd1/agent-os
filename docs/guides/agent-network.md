@@ -28,7 +28,9 @@ aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
                                   # (both take --name "..." before the prompt;
                                   # task takes --after <task|any> to queue it;
-                                  # a task opens as a chat, --terminal for tmux)
+                                  # a task opens as a chat, --terminal for tmux;
+                                  # task takes --piece <name> to build a waiting
+                                  # piece of your own plan)
 aos move <session> <machine>      # carry a task on there ("here" brings it back)
 aos stack <project> [--plan]      # run the project's board as stacked tasks
 aos stacks                        # every stack and where each card is

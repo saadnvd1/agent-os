@@ -85,6 +85,8 @@ export async function POST(request: NextRequest) {
       hostId: typeof hostId === "string" && hostId ? hostId : undefined,
       baseBranch: typeof baseBranch === "string" ? baseBranch : undefined,
       view: startView(view),
+      startedVia: "person" as const,
+      startedByDevice: callingDevice(request) ?? undefined,
     };
     if (id !== undefined) {
       // An orchestrator's task is held for the paired device that sent it,
@@ -105,6 +107,7 @@ export async function POST(request: NextRequest) {
         id,
         ...opts,
         held,
+        startedVia: "remote",
         startedByDevice: device ?? undefined,
       });
       return NextResponse.json({ session }, { status: 201 });

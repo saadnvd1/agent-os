@@ -48,7 +48,9 @@ import {
 } from "./state";
 import { expandHome, prFor, storedPR, taskSessions } from "./session";
 import { InProgressError, type OrchestratedBundle } from "./move-bundle";
-import { holdFor, mayHold, recordStarter } from "./held";
+import { holdFor, mayHold } from "./held";
+import { recordStart, type StartVia } from "./starter";
+import { claimable, claimPiece } from "../plans/claim";
 import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
 import { taskPlan } from "./plan-view";
@@ -136,8 +138,13 @@ export async function createTask(opts: {
   planReason?: string | null;
   // Stop after the plan and wait for approval (implies plan).
   planOnly?: boolean;
-  // The orchestrator session that started it (null: a person).
+  // The session that started it (null: a person), the session it came from,
+  // and how: every start says (tasks/starter.ts).
   startedBy?: string | null;
+  parentSessionId?: string | null;
+  startedVia: StartVia;
+  // The waiting plan piece it builds: claimed for this task.
+  pieceId?: number;
   // Started from this LumifyHub card, which the task then moves.
   cardId?: string;
   // Stacked: cut from another task's pushed branch, at this exact commit.
@@ -165,7 +172,7 @@ export async function createTask(opts: {
   // (held.ts): that machine's paired device and its description of the task.
   held?: { device: string; orchestrated: OrchestratedBundle };
   // The paired device that sent this keyed start: the only one that may hold it later.
-  startedByDevice?: string;
+  startedByDevice?: string | null;
 }): Promise<Session> {
   if (opts.id) {
     const existing = queries.getSession(db).get(opts.id) as Session | undefined;
@@ -222,6 +229,7 @@ async function startTask(
   if (!prompt) throw new Error("Describe the task");
   const project = getProject(opts.projectId);
   if (!project || project.is_uncategorized) throw new Error("Pick a project");
+  if (opts.pieceId) claimable(opts.pieceId);
   const hostId = opts.hostId ?? project.host_id;
   const view = opts.view ?? DEFAULT_START_VIEW;
   const agent = opts.agent ?? "claude";
@@ -251,6 +259,13 @@ async function startTask(
       view,
       startedBy: opts.startedBy,
     });
+    recordStart(session.id, {
+      startedBy: opts.startedBy ?? null,
+      parentSessionId: opts.parentSessionId ?? null,
+      startedVia: opts.startedVia,
+      startedByDevice: opts.held?.device ?? opts.startedByDevice,
+    });
+    if (opts.pieceId) claimPiece(opts.pieceId, session.id);
     opts.onCreated?.(session.id);
     return session;
   }
@@ -295,6 +310,16 @@ async function startTask(
   const model = routing.first.model;
   const tmuxName = `${provider.id}-${id}`;
 
+  // Claimed right before the row exists, with nothing awaited between, so the
+  // release sweep can't start the same piece.
+  if (opts.pieceId) {
+    try {
+      claimPiece(opts.pieceId, id);
+    } catch (error) {
+      await discardLeftoverStart(projectPath, feature).catch(() => {});
+      throw error;
+    }
+  }
   queries
     .createSession(db)
     .run(
@@ -318,7 +343,7 @@ async function startTask(
   db.prepare(
     `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ?,
        model_provider = ?, model_overrides = ?, plan_phase = ?, plan_only = ?,
-       plan_decided = ?, plan_reason = ?, started_by = ? WHERE id = ?`
+       plan_decided = ?, plan_reason = ? WHERE id = ?`
   ).run(
     prompt,
     buildTaskBrief({
@@ -334,11 +359,14 @@ async function startTask(
     routing.planOnly ? 1 : null,
     routing.planOnly ? 1 : opts.plan === undefined ? null : opts.plan ? 1 : 0,
     opts.planReason?.trim() || null,
-    opts.startedBy ?? null,
     id
   );
-  const starter = opts.held?.device ?? opts.startedByDevice;
-  if (starter) recordStarter(id, starter);
+  recordStart(id, {
+    startedBy: opts.startedBy ?? null,
+    parentSessionId: opts.parentSessionId ?? null,
+    startedVia: opts.startedVia,
+    startedByDevice: opts.held?.device ?? opts.startedByDevice,
+  });
   if (opts.held) holdFor(id, opts.held.device, opts.held.orchestrated);
   opts.onCreated?.(id);
   void naming.refine?.(id);

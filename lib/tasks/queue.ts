@@ -85,6 +85,8 @@ import {
   resumeHoldFor,
   setPauseNote,
 } from "./pause";
+import { orchestratorOf, type StartVia } from "./starter";
+import { claimPiece } from "../plans/claim";
 
 export type QueueStatus =
   | "queued"
@@ -107,6 +109,9 @@ export interface QueueRow {
   plan_reason: string | null;
   plan_only: number | null;
   started_by: string | null;
+  parent_session_id: string | null;
+  started_by_device: string | null;
+  started_via: string | null;
   view: "chat" | "terminal" | null;
   agent_type: string | null;
   base_branch: string | null;
@@ -306,6 +311,11 @@ export interface QueueRequest {
   planReason?: string | null;
   planOnly?: boolean;
   startedBy?: string | null;
+  parentSessionId?: string | null;
+  startedByDevice?: string | null;
+  startedVia: StartVia;
+  // The waiting plan piece it builds, claimed for its queue id.
+  pieceId?: number;
   view?: "chat" | "terminal";
   agent?: AgentType;
   baseBranch?: string;
@@ -413,9 +423,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   if (!req.prompt.trim()) throw new Error("Describe the task");
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, view, agent_type, base_branch,
+    `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, parent_session_id, started_by_device, started_via, view, agent_type, base_branch,
        host_id, after_task, after_any, origin_workspace_id, priority, machine_needs, position)
-     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @view, @agent_type, @base_branch,
+     VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @parent_session_id, @started_by_device, @started_via, @view, @agent_type, @base_branch,
        @host_id, @after_task, @after_any, @origin, @priority, @machine_needs,
        (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
   ).run({
@@ -432,6 +442,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
     plan_reason: req.planReason?.trim() || null,
     plan_only: req.planOnly ? 1 : null,
     started_by: req.startedBy ?? null,
+    parent_session_id: req.parentSessionId ?? null,
+    started_by_device: req.startedByDevice ?? null,
+    started_via: req.startedVia,
     view: req.view ?? null,
     agent_type: req.agent ?? null,
     base_branch: req.baseBranch || null,
@@ -442,6 +455,14 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
     priority: req.priority ?? DEFAULT_PRIORITY,
     machine_needs: setting ? JSON.stringify(setting) : null,
   });
+  if (req.pieceId) {
+    try {
+      claimPiece(req.pieceId, id);
+    } catch (error) {
+      db.prepare(`DELETE FROM task_queue WHERE id = ?`).run(id);
+      throw error;
+    }
+  }
   tickQueueSoon();
   return queuedView(id)!;
 }
@@ -729,6 +750,10 @@ async function startRow(
     planReason: r.plan_reason,
     planOnly: !!r.plan_only,
     startedBy: r.started_by,
+    parentSessionId: r.parent_session_id,
+    startedByDevice: r.started_by_device,
+    startedVia: (r.started_via ??
+      (r.started_by ? "session" : "person")) as StartVia,
     view: r.view ?? undefined,
     agent: (r.agent_type as AgentType | null) ?? undefined,
     baseBranch: r.base_branch ?? undefined,
@@ -1022,7 +1047,9 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
     )) {
       const r = rows.find((x) => x.id === c.id)!;
       const options = (peers.get(r.project_id) ?? []).filter(
-        (p) => !taken.has(p.hostId) && (!r.started_by || p.holds !== false)
+        (p) =>
+          !taken.has(p.hostId) &&
+          (!orchestratorOf(r.started_by) || p.holds !== false)
       );
       const spot = place(c, home, options, built.get(c.id)!.needs, now);
       if (!spot) continue;

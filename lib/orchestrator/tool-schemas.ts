@@ -141,6 +141,15 @@ export const TOOL_SHAPES = {
       .max(300)
       .optional()
       .describe("With now: why it can't wait for a slot; logged for Saad"),
+    piece: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .optional()
+      .describe(
+        "The waiting plan piece this task builds (its name or number, or feature/piece): it is claimed so AgentOS won't start it again"
+      ),
     model: modelOverride,
     plan: z
       .boolean()

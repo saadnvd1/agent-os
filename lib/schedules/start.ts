@@ -37,6 +37,7 @@ async function startTask(
     projectId: projectOf(schedule).id,
     prompt: schedule.prompt,
     name: schedule.name,
+    startedVia: "schedule",
     onCreated: onSession,
   });
   return session.id;

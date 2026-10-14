@@ -9,7 +9,7 @@ import { createTask } from "../tasks";
 import { startOrQueue } from "../tasks/queue";
 import { braked, BrakeRefused } from "../orchestrator/brakes";
 import { queueEvent, queueEventOnce } from "../orchestrator/events";
-import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
+import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
 import { usageRows } from "../session-logs/gather";
 import { pieceBrief } from "./pieces";
 import {
@@ -122,6 +122,9 @@ export const realDeps: ReleaseDeps = {
       // A retry under the same id clears what a failed attempt left behind.
       reclaim: true,
       startedBy: plan?.started_by ?? null,
+      parentSessionId: feature.plan_session_id,
+      startedVia: "plan" as const,
+      startedByDevice: plan?.started_by_device ?? null,
       originWorkspaceId: feature.workspace_id,
     };
     // A queued task keeps its queue id as its session id once it starts.
@@ -173,7 +176,7 @@ function creditParentMerge(feature: Feature, all: FeaturePiece[]): void {
     )
   )
     return;
-  if (amendmentsOf(parent.id).length) return;
+  if (scopeChangesOf(parent.id).length) return;
   const covered = all.filter(
     (p) => p.status === "waiting" && p.project_id === parent.project_id
   );

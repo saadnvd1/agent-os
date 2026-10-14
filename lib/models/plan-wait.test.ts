@@ -10,7 +10,11 @@ vi.mock("../chat/runner", () => ({ retireChat, sendQueuedNow: vi.fn() }));
 
 import { db } from "../db";
 import { listQueue } from "../chat/queued";
-import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import {
+  seedOrchestrator,
+  seedSession,
+  seedWorkspace,
+} from "../orchestrator/testing";
 import { pendingEvents } from "../orchestrator/events";
 import { recordTurn } from "../usage/turns";
 import {
@@ -35,6 +39,7 @@ const turn = {
 
 function task(planOnly: boolean) {
   const { app } = seedWorkspace();
+  seedOrchestrator("orch-1");
   const id = seedSession({
     projectId: app.id,
     name: "planned",

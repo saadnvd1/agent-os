@@ -3,6 +3,7 @@
  * then (for a worktree) the setup in the background, then the first message.
  */
 
+import type { StartVia } from "../tasks/starter";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -74,6 +75,7 @@ export interface LaunchInput {
   // The orchestrator session that starts it: it runs on the implementation
   // role's model (or `model`), not the interactive one's.
   startedBy?: string | null;
+  startedVia?: StartVia;
   groupPath?: string;
   systemPrompt?: string | null;
 }
@@ -277,12 +279,14 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       runOn
     );
   db.prepare(
-    `UPDATE sessions SET view = ?, name_source = ?, setup_status = ?, started_by = ? WHERE id = ?`
+    `UPDATE sessions SET view = ?, name_source = ?, setup_status = ?, started_by = ?,
+       started_via = ? WHERE id = ?`
   ).run(
     view,
     naming.source,
     useWorktree ? "running" : null,
     input.startedBy ?? null,
+    input.startedVia ?? (input.startedBy ? "orchestrator" : null),
     id
   );
   if (interactive) setSessionModel(id, interactive);
