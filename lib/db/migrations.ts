@@ -2243,6 +2243,23 @@ export const migrations: Migration[] = [
     },
   },
   {
+    key: "20261014T1235_placed_mirror_started_by",
+    up: (db) => {
+      // A task the queue started on a linked machine kept no record of the
+      // orchestrator that queued it, so it couldn't be read, messaged or
+      // stopped from there. Fills the mirror from the queue row; additive,
+      // only where the mirror has none.
+      db.exec(`
+        UPDATE sessions SET
+          started_by = (SELECT q.started_by FROM task_queue q WHERE q.id = sessions.id),
+          task_since = COALESCE(task_since, created_at)
+        WHERE started_by IS NULL AND task_prompt IS NOT NULL
+          AND host_id IS NOT NULL AND host_id != 'local'
+          AND (SELECT q.started_by FROM task_queue q WHERE q.id = sessions.id) IS NOT NULL
+      `);
+    },
+  },
+  {
     key: "20261014T1600_queued_task_messages",
     up: (db) => {
       // A message for a task still in the start queue, held (addressed to
@@ -2259,6 +2276,25 @@ export const migrations: Migration[] = [
         `CREATE INDEX IF NOT EXISTS idx_bus_messages_held_queued
            ON bus_messages(to_id) WHERE held_queued = 1`
       );
+    },
+  },
+  {
+    key: "20261014T1800_task_starter_device",
+    up: (db) => {
+      // The paired device that started a task over the API: the only one
+      // that may later hold it. Tasks already running have no record, so
+      // they're marked unrecorded. Additive.
+      const has = (
+        db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
+      ).some((c) => c.name === "started_by_device");
+      if (!has)
+        db.exec(`ALTER TABLE sessions ADD COLUMN started_by_device TEXT`);
+      db.exec(`
+        UPDATE sessions SET started_by_device = 'unrecorded'
+        WHERE started_by_device IS NULL AND started_by IS NULL
+          AND held_by_device IS NULL AND task_status = 'running'
+          AND task_prompt IS NOT NULL AND (host_id IS NULL OR host_id = 'local')
+      `);
     },
   },
 ];

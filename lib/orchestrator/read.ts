@@ -10,7 +10,7 @@ import { hostLink } from "../hosts/remote-api";
 import { peerPane } from "../hosts/peer-sessions";
 import { workspaceSessions } from "./facts";
 import { untrusted } from "./untrusted";
-import { heldChatTail } from "../tasks/held-remote";
+import { heldChatTail, isHeldRemote } from "../tasks/held-remote";
 import {
   findExternalSession,
   knownExternalSession,
@@ -130,7 +130,7 @@ export async function readSession(
   const link = hostLink(s.host_id);
   if (s.view === "chat" && link) {
     // Its orchestrator's task is read through the machine that holds it.
-    const text = s.started_by ? await heldChatTail(s, n) : null;
+    const text = isHeldRemote(s) ? await heldChatTail(s, n) : null;
     return text
       ? `${s.name} (chat on ${link.hostName}), last ${n} lines:\n${untrusted(s.name, text)}`
       : `${s.name} (chat on ${link.hostName}): its messages are on that machine; open it to read them.`;

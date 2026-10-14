@@ -17,7 +17,13 @@ const startedOn = new Map<string, string | undefined>();
 // Linked machines the placing pass sees: set per test.
 let peers: Record<
   string,
-  { level: "green" | "red"; stale?: boolean; hasProject?: boolean }
+  {
+    level: "green" | "red";
+    stale?: boolean;
+    hasProject?: boolean;
+    // An older AgentOS: it can't hold an orchestrator's task.
+    noHold?: boolean;
+  }
 > = {};
 
 // A start makes a running task row with the id it was given, and nothing
@@ -83,6 +89,14 @@ vi.mock("@/lib/load/machines", async (importOriginal) => ({
 vi.mock("@/lib/hosts/remote-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hosts/remote-api")>()),
   linkedHostIds: () => new Set(Object.keys(peers)),
+  hostLink: (id: string) => (peers[id] ? { hostId: id } : null),
+}));
+vi.mock("@/lib/tasks/remote", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/tasks/remote")>()),
+  hostTasks: async (link: { hostId: string }) => ({
+    tasks: [],
+    capabilities: peers[link.hostId]?.noHold ? [] : ["held-start"],
+  }),
 }));
 vi.mock("@/lib/hosts/project-machines", () => ({
   projectMachines: async () =>
@@ -946,6 +960,19 @@ describe("placement on a linked machine", () => {
       )
       .get(t.workspace.id, `%queued-start:${q.id}`) as { line: string };
     expect(event.line).toContain("started on box · this machine load red");
+  });
+
+  it("doesn't place an orchestrator's task on a machine that can't hold it", async () => {
+    const t = setup(null);
+    queue(t, "orch old", { startedBy: "orch-1" });
+    queue(t, "person old");
+    finish(t.task);
+    redHome();
+    peers = { old: { level: "green", noHold: true } };
+    await tick();
+    expect(startedOn.get("person old")).toBe("old");
+    expect(startedOn.has("orch old")).toBe(false);
+    expect(started.map((s) => s.prompt)).not.toContain("orch old");
   });
 
   it("starts at home when the home machine is free", async () => {

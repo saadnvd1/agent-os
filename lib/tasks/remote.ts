@@ -15,6 +15,7 @@ import {
 } from "../hosts/remote-api";
 import { isRemoteHost } from "../hosts";
 import { projectRef } from "./project-ref";
+import { orchestratedStart } from "./held";
 import type { TaskStatus } from "./state";
 import type { TaskView } from "./index";
 
@@ -33,6 +34,9 @@ export const TASK_CAPABILITIES = [
   // A held task's chat facts and its messages for its orchestrator.
   "held-chat-facts",
   "held-replies",
+  // A keyed start that carries an orchestrator's description holds the task
+  // for the device that sent it, as a move does (lib/tasks/held.ts).
+  "held-start",
 ] as const;
 
 export interface HostTasks {
@@ -48,7 +52,8 @@ export function isMirror(session: Session): boolean {
 export function mirrorTask(
   hostId: string,
   projectId: string | null,
-  remote: Session
+  remote: Session,
+  startedBy?: string | null
 ): void {
   db.prepare(
     `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
@@ -71,6 +76,35 @@ export function mirrorTask(
     // As that machine runs it: one that predates chat tasks says terminal.
     remote.view === "chat" ? "chat" : "terminal"
   );
+  // What carryTaskState gives a moved task's mirror: the orchestrator that
+  // holds it, and when it began (so its PR is judged from then).
+  if (startedBy)
+    db.prepare(
+      `UPDATE sessions SET started_by = COALESCE(started_by, ?),
+         task_since = COALESCE(task_since, created_at) WHERE id = ?`
+    ).run(startedBy, remote.id);
+}
+
+/**
+ * A machine on an older AgentOS would take a chat task as a terminal one,
+ * or an orchestrator's task as a plain one that anyone there could merge, or
+ * refuse to hand one over.
+ */
+export async function requireCapability(
+  link: HostLink,
+  capability: string,
+  what: string,
+  verb = "move"
+): Promise<void> {
+  const { capabilities = [] } = await hostTasks(link, true).catch((err) => {
+    throw new Error(
+      `Can't ask ${link.hostName} whether it takes ${what}: ${(err as Error).message}`
+    );
+  });
+  if (!capabilities.includes(capability))
+    throw new Error(
+      `${link.hostName}'s AgentOS can't ${verb} ${what} yet; update it first`
+    );
 }
 
 export const unknownOutcome = (err: unknown) =>
@@ -101,16 +135,30 @@ export async function startRemoteTask(
     model?: string;
     baseBranch?: string;
     view?: "chat" | "terminal";
+    // The orchestrator that started it: that machine holds the task for it.
+    startedBy?: string | null;
   }
 ): Promise<Session> {
   const link = requireHostLink(hostId);
+  const { startedBy, ...rest } = opts;
+  if (startedBy)
+    await requireCapability(
+      link,
+      "held-start",
+      "an orchestrator's task",
+      "hold"
+    );
   const { session } = await postIdempotent<{ session: Session }>(
     link,
     "/api/tasks",
-    { project: await projectRef(project), ...opts },
+    {
+      project: await projectRef(project),
+      ...rest,
+      orchestrated: startedBy ? orchestratedStart(startedBy) : undefined,
+    },
     180000
   );
-  mirrorTask(hostId, project.id, session);
+  mirrorTask(hostId, project.id, session, startedBy);
   forgetHostTasks(hostId);
   return db
     .prepare(`SELECT * FROM sessions WHERE id = ?`)

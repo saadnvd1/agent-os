@@ -127,7 +127,9 @@ function validateChat(c: ChatBundle): ChatBundle {
 
 const PHASES = ["planning", "implementing"];
 
-function validateOrchestrated(o: OrchestratedBundle): OrchestratedBundle {
+export function validateOrchestrated(
+  o: OrchestratedBundle
+): OrchestratedBundle {
   if (!o || typeof o !== "object") throw new Error("Bad orchestrated task");
   if (
     !isStrOrNull(o.since) ||

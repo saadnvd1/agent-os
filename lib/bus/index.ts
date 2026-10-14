@@ -14,9 +14,8 @@ import { previousNames } from "../session-names";
 import { deliverToPane, type Delivery } from "./delivery";
 import { resolveRef, wasNames, type Candidate } from "./resolve";
 import { tmuxPane } from "./tmux-pane";
-import { hostLink } from "../hosts/remote-api";
 import { pauseHoldOf, pausedNote } from "../tasks/pause-hold";
-import { relayToHeldTask } from "../tasks/held-remote";
+import { isHeldRemote, relayToHeldTask } from "../tasks/held-remote";
 import {
   assertTakesMessages,
   findQueuedTarget,
@@ -210,7 +209,7 @@ export async function deliver(
 ): Promise<Delivery> {
   // A task this machine's orchestrator moved to a linked machine: that
   // machine's AgentOS delivers it, labelled as the orchestrator's (held.ts).
-  if (to.task_prompt && to.started_by && hostLink(to.host_id))
+  if (isHeldRemote(to))
     return relayToHeldTask(to, line, from.name, from.messageId);
   // A linked machine's own session: an agent's message would reach it as
   // the user's (see runner.ts), so none is relayed yet.

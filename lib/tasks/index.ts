@@ -47,7 +47,8 @@ import {
   type TaskState,
 } from "./state";
 import { expandHome, prFor, storedPR, taskSessions } from "./session";
-import { InProgressError } from "./move-bundle";
+import { InProgressError, type OrchestratedBundle } from "./move-bundle";
+import { holdFor, mayHold, recordStarter } from "./held";
 import { nameFor } from "../session-titles";
 import { taskSetupOf, type TaskSetup } from "./setup";
 import { taskPlan } from "./plan-view";
@@ -160,10 +161,24 @@ export async function createTask(opts: {
   // How its agent runs: as a chat (the default, DEFAULT_START_VIEW) or in
   // a terminal.
   view?: StartView;
+  // Started by another machine's orchestrator, which this one holds it for
+  // (held.ts): that machine's paired device and its description of the task.
+  held?: { device: string; orchestrated: OrchestratedBundle };
+  // The paired device that sent this keyed start: the only one that may hold it later.
+  startedByDevice?: string;
 }): Promise<Session> {
   if (opts.id) {
     const existing = queries.getSession(db).get(opts.id) as Session | undefined;
-    if (existing?.task_status) return existing;
+    if (existing?.task_status) {
+      // A retry of a start that wasn't held holds it now, for the device
+      // that started it and no other.
+      if (opts.held && existing.held_by_device !== opts.held.device) {
+        if (!mayHold(existing, opts.held.device))
+          throw new Error("That id is taken");
+        holdFor(existing.id, opts.held.device, opts.held.orchestrated);
+      }
+      return existing;
+    }
     if (existing) throw new Error("That id is taken");
     if (starting.has(opts.id))
       throw new InProgressError("That task is starting already");
@@ -234,6 +249,7 @@ async function startTask(
       model: typeof opts.model === "string" ? opts.model : undefined,
       baseBranch: opts.baseBranch,
       view,
+      startedBy: opts.startedBy,
     });
     opts.onCreated?.(session.id);
     return session;
@@ -321,6 +337,9 @@ async function startTask(
     opts.startedBy ?? null,
     id
   );
+  const starter = opts.held?.device ?? opts.startedByDevice;
+  if (starter) recordStarter(id, starter);
+  if (opts.held) holdFor(id, opts.held.device, opts.held.orchestrated);
   opts.onCreated?.(id);
   void naming.refine?.(id);
 

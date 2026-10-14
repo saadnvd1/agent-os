@@ -74,7 +74,8 @@ import {
   viewOf,
 } from "../load/machines";
 import { peerReading, peerSource, refreshPeers } from "../hosts/peer-load";
-import { linkedHostIds } from "../hosts/remote-api";
+import { hostLink, linkedHostIds } from "../hosts/remote-api";
+import { hostTasks } from "./remote";
 import { projectMachines } from "../hosts/project-machines";
 import { claimResume, dueResumes } from "./pause";
 
@@ -829,6 +830,20 @@ async function peerOptions(
   const hostIds = [...linkedHostIds()];
   if (!hostIds.length || !rows.length) return out;
   await refreshPeers(hostIds, now);
+  // Whether each machine can hold an orchestrator's task (an older AgentOS
+  // can't, and would fail its start); unreadable counts as no.
+  const holds = new Map<string, boolean>();
+  await Promise.all(
+    hostIds.map(async (hostId) => {
+      const link = hostLink(hostId);
+      const caps = link
+        ? await hostTasks(link)
+            .then((t) => t.capabilities ?? [])
+            .catch(() => [])
+        : [];
+      holds.set(hostId, caps.includes("held-start"));
+    })
+  );
   const perProject = new Map<string, Record<string, string | null>>();
   for (const r of rows) {
     if (out.has(r.project_id)) continue;
@@ -850,6 +865,7 @@ async function peerOptions(
           name: src.label,
           view: viewOf(src, now),
           capabilities: src.capabilities,
+          holds: holds.get(hostId) ?? false,
           hasProject: can[hostId] === null,
           loadPerCore: reading ? reading.load1 / reading.cores : 99,
         };
@@ -925,7 +941,7 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
     )) {
       const r = rows.find((x) => x.id === c.id)!;
       const options = (peers.get(r.project_id) ?? []).filter(
-        (p) => !taken.has(p.hostId)
+        (p) => !taken.has(p.hostId) && (!r.started_by || p.holds !== false)
       );
       const spot = place(c, home, options, built.get(c.id)!.needs, now);
       if (!spot) continue;
