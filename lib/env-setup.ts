@@ -9,6 +9,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { bringDependencies, runCommand } from "./worktree-deps";
+import { inside, realExisting } from "./worktree-deps/paths";
+import { seedBuildCaches } from "./worktree-deps/caches";
 import { loadProjectConfig, projectEnv, withPorts } from "./project-config";
 import { recordPlaced } from "./worktree-placed";
 import { databaseEnv, ensureSessionDatabase } from "./project-config/database";
@@ -77,18 +79,6 @@ export async function copyEnvFiles(
   }
 
   return copied;
-}
-
-const inside = (root: string, p: string) =>
-  p === root || p.startsWith(root + path.sep);
-
-// The real path of `p`'s deepest part that exists.
-async function realExisting(p: string): Promise<string> {
-  for (let at = p; ; at = path.dirname(at)) {
-    const real = await fs.promises.realpath(at).catch(() => null);
-    if (real) return real;
-    if (path.dirname(at) === at) return at;
-  }
 }
 
 /**
@@ -270,6 +260,31 @@ export async function setupWorktree(options: {
       undefined,
       config.clone
     );
+  }
+
+  // Build caches, so the first typecheck, test or build is warm. An
+  // optimisation: it never fails a setup.
+  if (config.caches?.length !== 0 && sourcePath !== worktreePath) {
+    progress?.onStage?.("deps");
+    try {
+      const seeded = await seedBuildCaches({
+        sourcePath,
+        worktreePath,
+        paths: config.caches,
+      });
+      if (seeded.seeded.length || seeded.skipped.length)
+        result.steps.push({
+          name: "Seed build caches",
+          command: "cp (build caches)",
+          success: true,
+          output: [
+            ...seeded.seeded.map((c) => `${c.rel} (${c.how})`),
+            ...seeded.skipped.map((c) => `skipped ${c.rel}: ${c.why}`),
+          ].join("\n"),
+        });
+    } catch (error) {
+      console.error("Seeding build caches failed:", error);
+    }
   }
 
   // 4. The config's setup commands

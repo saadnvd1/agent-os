@@ -49,18 +49,35 @@ export async function takeSpare(
   }
 }
 
-// macOS clones (APFS, no extra disk); elsewhere this is a plain copy, which
-// production never asks for: Linux worktrees install instead.
-export const cloneArgs = (from: string, to: string) =>
-  process.platform === "darwin" ? ["-Rc", from, to] : ["-R", from, to];
+// How a tree is copied: an APFS clone (macOS), a reflink (Linux on a
+// copy-on-write filesystem), hardlinks (Linux, from AgentOS's own store), or
+// a plain copy.
+export type CopyMode = "clone" | "reflink" | "hardlink" | "copy";
+
+export const copyArgs = (mode: CopyMode, from: string, to: string) =>
+  mode === "clone"
+    ? ["-Rc", from, to]
+    : mode === "reflink"
+      ? ["-a", "--reflink=always", from, to]
+      : mode === "hardlink"
+        ? ["-al", from, to]
+        : ["-a", from, to];
+
+// What a copy with no mode given does: clones on macOS, a plain copy elsewhere.
+const defaultMode = (): CopyMode =>
+  process.platform === "darwin" ? "clone" : "copy";
 
 // A clone that stalls (a locked or dying volume) is killed rather than
 // holding a task's start forever.
 const COPY_TIMEOUT_MS = 10 * 60 * 1000;
 
-export function copyTree(from: string, to: string): Promise<boolean> {
+export function copyTree(
+  from: string,
+  to: string,
+  mode: CopyMode = defaultMode()
+): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn("cp", cloneArgs(from, to), {
+    const child = spawn("cp", copyArgs(mode, from, to), {
       stdio: "ignore",
       timeout: COPY_TIMEOUT_MS,
       killSignal: "SIGKILL",
@@ -104,7 +121,8 @@ export async function replenishSpare(
   root: string,
   sourcePath: string,
   rel: string,
-  lockHash: string
+  lockHash: string,
+  mode?: CopyMode
 ): Promise<"made" | "exists" | "failed"> {
   const spare = sparePath(root, sourcePath, rel, lockHash);
   if (building.has(spare) || fs.existsSync(spare)) return "exists";
@@ -113,7 +131,7 @@ export async function replenishSpare(
     await fs.promises.mkdir(root, { recursive: true });
     await pruneSpares(root, sourcePath, rel, spare);
     const tmp = `${spare}.${process.pid}-${Date.now()}`;
-    let made = await copyTree(path.join(sourcePath, rel), tmp);
+    let made = await copyTree(path.join(sourcePath, rel), tmp, mode);
     if (made) made = await takeSpare(tmp, spare);
     await fs.promises.rm(tmp, { recursive: true, force: true });
     return made ? "made" : "failed";

@@ -28,6 +28,15 @@ const projectPath = z
     "must be a path inside the project (relative, no '..')"
   );
 
+// Build caches to seed into a worktree: a path inside the project, with `*`
+// allowed in the last segment (`*.tsbuildinfo`), never `.git`.
+const cachePath = projectPath
+  .regex(
+    /^([^*]*[/\\])?[^*/\\]*\*?[^*/\\]*$/,
+    "`*` is allowed in the last segment only"
+  )
+  .refine((p) => !/(^|[/\\])\.git([/\\]|$)/.test(p), "not .git");
+
 const port = z.number().int().min(1024).max(65000);
 const notes = z.union([z.string(), z.array(z.string())]);
 
@@ -120,6 +129,7 @@ const shape = {
   setup: z.array(z.string().min(1)).optional(),
   copy: z.array(projectPath).optional(),
   clone: z.array(projectPath).optional(),
+  caches: z.array(cachePath).optional(),
   dev: z.string().min(1).optional(),
   ready: ready.optional(),
   deploy: deploy.optional(),

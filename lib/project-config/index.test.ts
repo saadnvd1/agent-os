@@ -108,6 +108,16 @@ describe("loadProjectConfig precedence", () => {
     );
   });
 
+  it("takes cache paths with a trailing glob, and nothing else", () => {
+    const check = (caches: string[]) =>
+      loadProjectConfig(project({ "agentos.json": { caches } })).error;
+    expect(
+      check([".next/cache", "*.tsbuildinfo", "web/*.tsbuildinfo"])
+    ).toBeNull();
+    for (const bad of ["../x", "/abs", "a/*/b", ".git/hooks", "**"])
+      expect(check([bad]), bad).not.toBeNull();
+  });
+
   it("refuses copy and clone paths outside the project", () => {
     for (const bad of ["../x", "/etc/passwd", "~/.ssh", "a/../../b"]) {
       const loaded = loadProjectConfig(

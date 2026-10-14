@@ -6,10 +6,16 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import type { SetupResult } from "../env-setup";
-import { NOT_MAC, cloneDeps } from "./clone";
+import { NO_FAST_COPY, cloneDeps } from "./clone";
 import { detectPackageManager, setupEnv } from "./install";
 
 const execAsync = promisify(exec);
+
+const COMMANDS = {
+  clone: "cp -Rc",
+  reflink: "cp -a --reflink=always",
+  hardlink: "cp -al (from the store)",
+};
 
 /**
  * Run a setup command in the worktree directory
@@ -57,15 +63,18 @@ export async function bringDependencies(
   if (pm) result.packageManager = pm.name;
 
   const clone = await deps.clone({ sourcePath, worktreePath, only });
-  // Off macOS only node_modules has a fallback (the install below).
-  if (!pm && !clone.ok && !clone.cloned.length && clone.reason === NOT_MAC)
+  // Without a fast copy only node_modules has a fallback (the install below).
+  if (!pm && !clone.ok && !clone.cloned.length && clone.reason === NO_FAST_COPY)
     return;
   if (clone.ok || !pm) {
     result.steps.push({
       name: "Clone dependencies",
-      command: "cp -Rc",
+      command: clone.mode ? COMMANDS[clone.mode] : "cp",
       success: clone.ok,
-      output: clone.cloned.map((c) => `${c.rel} (${c.from})`).join(", "),
+      output: [
+        ...clone.cloned.map((c) => `${c.rel} (${c.from})`),
+        ...(clone.skipped ?? []).map((r) => `skipped ${r}`),
+      ].join(", "),
       error: clone.ok ? undefined : clone.reason,
     });
     if (!clone.ok) result.success = false;
