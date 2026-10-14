@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
+import { ActiveTick } from "./RowShell";
 import { RowRename, UnreadDot } from "./RowParts";
 import { QuickChangeRow } from "./QuickChangeRow";
 import { NestRail } from "./RowParts";
@@ -59,10 +60,11 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
       onActivate={() => !renaming && ctx.onSelect(session.id)}
       className={
         active
-          ? "bg-primary/10 border-primary/30"
+          ? "bg-foreground/[0.07]"
           : "bg-muted/50 hover:bg-muted has-[[data-chip]:hover]:bg-muted/50"
       }
     >
+      {active && <ActiveTick />}
       <Workflow
         aria-hidden
         className={cn(

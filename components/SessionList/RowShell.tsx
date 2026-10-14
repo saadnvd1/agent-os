@@ -7,6 +7,17 @@ import * as DM from "@/components/ui/dropdown-menu";
 import * as CM from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 
+// The open row's accent: a thin rounded tick at the left edge, inside the
+// row so the list's overflow can't clip it.
+export function ActiveTick() {
+  return (
+    <span
+      aria-hidden
+      className="bg-primary pointer-events-none absolute inset-y-[9px] left-0 w-[3px] rounded-full"
+    />
+  );
+}
+
 export type RowMenuKind = "dropdown" | "context";
 
 // Every sidebar row's frame: a leading mark, title over subtitle, what's on
@@ -66,10 +77,11 @@ export function RowShell({
         highlight === "selected"
           ? "bg-primary/15"
           : highlight === "active"
-            ? "bg-primary/10"
-            : "hover:bg-foreground/[0.04]"
+            ? "bg-foreground/[0.07]"
+            : "hover:bg-foreground/[0.025]"
       )}
     >
+      {highlight === "active" && <ActiveTick />}
       {leading}
       <span className="@container flex min-w-0 flex-1 flex-col leading-tight">
         {children}
