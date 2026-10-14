@@ -27,18 +27,21 @@ interface Pulled {
   body: string;
 }
 
+// Held means an orchestrator started it, as isHeldRemote reads it.
+const HELD_BY = `started_by IN (SELECT id FROM sessions WHERE role = 'orchestrator')`;
+
 const heldMirror = (hostId: string, id: string) =>
   db
     .prepare(
       `SELECT * FROM sessions WHERE id = ? AND host_id = ?
-         AND started_by IS NOT NULL AND task_status IN ('running', 'moving')`
+         AND ${HELD_BY} AND task_status IN ('running', 'moving')`
     )
     .get(id, hostId) as Session | undefined;
 
 export function hasHeldMirrors(hostId: string): boolean {
   return !!db
     .prepare(
-      `SELECT 1 FROM sessions WHERE host_id = ? AND started_by IS NOT NULL
+      `SELECT 1 FROM sessions WHERE host_id = ? AND ${HELD_BY}
          AND task_prompt IS NOT NULL AND task_status IN ('running', 'moving')`
     )
     .get(hostId);

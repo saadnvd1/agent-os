@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "../db";
+import { seedOrchestrator } from "../orchestrator/testing";
+import { hasHeldMirrors } from "./held-replies";
 import { CARRIED_COLUMNS, KEPT, REKEYED, carryTaskState } from "./move-carry";
 
 const KEYS = /^(session_id|target|subject|after_task|after_any|task_id)$/;
@@ -55,6 +57,7 @@ describe("carryTaskState", () => {
     const from = randomUUID();
     const to = randomUUID();
     const other = randomUUID();
+    seedOrchestrator("orch-1");
     seedSession(from, "started_by=orch-1");
     seedSession(to);
     const w = "w-carry";
@@ -172,5 +175,39 @@ describe("carryTaskState", () => {
         }
       ).started_by
     ).toBe("new");
+  });
+
+  it("carries the orchestrator, never a plain task, as who holds the moved task", () => {
+    seedOrchestrator("orch-m");
+    const plain = randomUUID();
+    seedSession(plain);
+    const viaPlain = randomUUID();
+    const viaOrch = randomUUID();
+    seedSession(viaPlain, `started_by=${plain}`);
+    seedSession(viaOrch, "started_by=orch-m");
+    const heldBy = (id: string) =>
+      (
+        db.prepare(`SELECT started_by FROM sessions WHERE id = ?`).get(id) as {
+          started_by: string | null;
+        }
+      ).started_by;
+    for (const [src, want] of [
+      [viaPlain, null],
+      [viaOrch, "orch-m"],
+    ] as const) {
+      const mirror = randomUUID();
+      seedSession(mirror);
+      db.prepare(
+        `UPDATE sessions SET host_id = 'h-carry', task_prompt = 'x' WHERE id = ?`
+      ).run(mirror);
+      carryTaskState(src, mirror);
+      expect(heldBy(mirror)).toBe(want);
+    }
+    // Only the orchestrator's mirror counts as held for replies.
+    expect(hasHeldMirrors("h-carry")).toBe(true);
+    db.prepare(
+      `UPDATE sessions SET task_status = 'merged' WHERE host_id = 'h-carry' AND started_by IS NOT NULL`
+    ).run();
+    expect(hasHeldMirrors("h-carry")).toBe(false);
   });
 });

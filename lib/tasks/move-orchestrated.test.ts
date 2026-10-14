@@ -24,6 +24,7 @@ vi.mock("../env-setup", () => ({ setupWorktree: vi.fn(async () => ({})) }));
 vi.mock("../agents/launch", () => ({ launchClaude: vi.fn(async () => {}) }));
 
 import { db } from "../db";
+import { seedOrchestrator } from "../orchestrator/testing";
 import { createHost } from "../hosts";
 import { saveHostLink } from "../hosts/remote-api";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
@@ -56,6 +57,7 @@ const PLAN = "# Plan\n- change the thing\n";
 // An orchestrator's task: started by it, with its records and a plan.
 async function orchestratedTask(branch: string) {
   const t = await seedTask(branch);
+  seedOrchestrator("orch-1");
   db.prepare(
     `UPDATE sessions SET started_by = 'orch-1', model_overrides = 'anthropic/x',
        plan_decided = 1, plan_reason = 'big', merge_armed_at = 'then', pr_number = 7

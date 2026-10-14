@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { fakePeer } from "../__fixtures__/fake-peer";
 import { linkedHost } from "../__fixtures__/linked-host";
-import { seedWorkspace } from "./testing";
+import { seedOrchestrator, seedWorkspace } from "./testing";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -50,6 +50,7 @@ afterAll(async () => {
 // The mirror of a task that moved to the box, as the Mac keeps it.
 function mirror(over = "") {
   const ws = seedWorkspace();
+  seedOrchestrator("orch");
   const id = randomUUID();
   db.prepare(
     `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, view,

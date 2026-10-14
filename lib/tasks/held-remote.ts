@@ -16,6 +16,7 @@ import {
 import type { Delivery } from "../bus/delivery";
 import { wakeLine } from "../bus/format";
 import { orchestratedStart } from "./held";
+import { orchestratorOf } from "./starter";
 
 const path = (id: string, leaf: string) =>
   `/api/tasks/${encodeURIComponent(id)}/${leaf}`;
@@ -23,11 +24,12 @@ const path = (id: string, leaf: string) =>
 /**
  * A task its orchestrator put on a linked machine, whether by moving it or
  * by the queue placing it there: the one test every relayed call goes by.
- * (held-replies.ts reads the same rule in SQL: started_by IS NOT NULL.)
+ * (held-replies.ts reads the same rule in SQL: started_by is an orchestrator.)
  */
 export const isHeldRemote = (
   s: Pick<Session, "started_by" | "task_prompt" | "host_id">
-): boolean => !!s.started_by && !!s.task_prompt && !!hostLink(s.host_id);
+): boolean =>
+  !!s.task_prompt && !!hostLink(s.host_id) && !!orchestratorOf(s.started_by);
 
 type Held = Pick<
   Session,
