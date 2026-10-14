@@ -2,7 +2,7 @@
 // is, and each piece's state in one line.
 
 import { db } from "../db";
-import { piecesOf, type Feature, type FeaturePiece } from "./features";
+import { piecesOf, prOf, type Feature, type FeaturePiece } from "./features";
 
 export interface PieceView {
   id: number;
@@ -40,13 +40,7 @@ const LINE = {
 };
 
 function pieceView(p: FeaturePiece): PieceView {
-  const pr = p.session_id
-    ? ((
-        db
-          .prepare(`SELECT pr_number FROM sessions WHERE id = ?`)
-          .get(p.session_id) as { pr_number: number | null } | undefined
-      )?.pr_number ?? null)
-    : null;
+  const pr = prOf(p);
   return {
     id: p.id,
     position: p.position,

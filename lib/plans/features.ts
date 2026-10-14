@@ -7,6 +7,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import { loadProjectConfig } from "../project-config";
+import { repoSlugSync, slugOfRemote } from "../git-remote";
 import {
   applyEdits,
   checkPieces,
@@ -77,6 +78,33 @@ function ref(id: string): ProjectRef | null {
   return { id: p.id, name: p.name, deploys: !!deploy?.deployed };
 }
 
+// A repo named in a plan resolves by project name, then by the repo's folder
+// name, then by its GitHub owner/name (or just the name part), ignoring case.
+// A folder or GitHub match must be a single project: two would be a guess.
+export function resolveRepo<
+  T extends { id: string; name: string; working_directory: string },
+>(rows: T[], token: string): T | null {
+  const want = token
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  if (!want) return null;
+  const named = rows.filter((r) => r.name.toLowerCase() === want);
+  if (named.length) return named.length === 1 ? named[0] : null;
+  const folder = (r: T) =>
+    path.basename(expandHome(r.working_directory)).toLowerCase();
+  const byFolder = rows.filter((r) => folder(r) === want);
+  if (byFolder.length) return byFolder.length === 1 ? byFolder[0] : null;
+  const asSlug = slugOfRemote(`https://github.com/${want}`) ?? null;
+  const bySlug = rows.filter((r) => {
+    const slug = repoSlugSync(expandHome(r.working_directory));
+    return slug && (slug === asSlug || slug.split("/")[1] === want);
+  });
+  return bySlug.length === 1 ? bySlug[0] : null;
+}
+
 export function checkContext(
   s: Pick<Session, "project_id">
 ): CheckContext | null {
@@ -84,16 +112,14 @@ export function checkContext(
   if (!own) return null;
   const rows = db
     .prepare(
-      `SELECT id, name FROM projects
+      `SELECT id, name, working_directory FROM projects
        WHERE workspace_id = (SELECT workspace_id FROM projects WHERE id = ?)`
     )
-    .all(own.id) as { id: string; name: string }[];
+    .all(own.id) as { id: string; name: string; working_directory: string }[];
   return {
     own,
     find: (name) => {
-      const hit = rows.find(
-        (r) => r.name.toLowerCase() === name.trim().toLowerCase()
-      );
+      const hit = resolveRepo(rows, name);
       return hit ? ref(hit.id) : null;
     },
   };
@@ -122,8 +148,23 @@ export function piecesOf(featureId: string): FeaturePiece[] {
 
 export function pieceOfSession(sessionId: string): FeaturePiece | undefined {
   return db
-    .prepare(`SELECT * FROM feature_pieces WHERE session_id = ?`)
+    .prepare(
+      `SELECT * FROM feature_pieces WHERE session_id = ? ORDER BY position`
+    )
     .get(sessionId) as FeaturePiece | undefined;
+}
+
+// The PR a piece's task merged, when it is in the piece's own repository: a
+// session's PR is always in its project's repo, so another project's merge is
+// not this piece's work.
+export function prOf(p: FeaturePiece): number | null {
+  if (!p.session_id) return null;
+  const s = db
+    .prepare(`SELECT pr_number, project_id FROM sessions WHERE id = ?`)
+    .get(p.session_id) as
+    | { pr_number: number | null; project_id: string | null }
+    | undefined;
+  return s && s.project_id === p.project_id ? s.pr_number : null;
 }
 
 export function featureOfPlan(sessionId: string): Feature | undefined {

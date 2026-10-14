@@ -9,13 +9,14 @@ import { createTask } from "../tasks";
 import { startOrQueue } from "../tasks/queue";
 import { braked, BrakeRefused } from "../orchestrator/brakes";
 import { queueEvent, queueEventOnce } from "../orchestrator/events";
-import { amendBrief } from "../orchestrator/amendments";
+import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
 import { usageRows } from "../session-logs/gather";
 import { pieceBrief } from "./pieces";
 import {
   getFeature,
   planPathOf,
   piecesOf,
+  prOf,
   type Feature,
   type FeaturePiece,
 } from "./features";
@@ -46,8 +47,10 @@ const setPiece = (id: number, status: string, note: string | null = null) =>
     .prepare(`UPDATE feature_pieces SET status = ?, note = ? WHERE id = ?`)
     .run(status, note, id);
 
+const RELEASED_ANYWAY = "released anyway";
+
 // What a piece's task did: merged, or ended some other way.
-function syncPieces(pieces: FeaturePiece[]): void {
+function syncPieces(feature: Feature, pieces: FeaturePiece[]): void {
   for (const p of pieces) {
     if (p.status !== "building") continue;
     const s = sessionOf(p.session_id);
@@ -65,8 +68,19 @@ function syncPieces(pieces: FeaturePiece[]): void {
       else if (!q) setPiece(p.id, "blocked", "its task is gone");
       continue;
     }
-    if (s.task_status === "merged") setPiece(p.id, "merged");
-    else if (s.task_status === "dropped" || s.task_status === "done")
+    if (s.task_status === "merged") {
+      // A PR counts only for a piece in its own repository.
+      if (s.project_id && s.project_id !== p.project_id) {
+        const where = getProject(s.project_id)?.name ?? "another project";
+        const note = `its task merged #${s.pr_number ?? "?"} in ${where}, not in ${getProject(p.project_id)?.name ?? "this piece's project"}`;
+        setPiece(p.id, "blocked", note);
+        say(
+          feature,
+          `wrong-repo-${p.id}`,
+          `Feature "${feature.name}": piece ${p.position} ${p.name} ${note}. If that PR already built it, drop the piece; otherwise release it anyway.`
+        );
+      } else setPiece(p.id, "merged");
+    } else if (s.task_status === "dropped" || s.task_status === "done")
       setPiece(p.id, "dropped", `its task was ${s.task_status}`);
   }
 }
@@ -141,9 +155,75 @@ function beforeLines(all: FeaturePiece[], upTo: number): string[] {
   return all
     .filter((p) => p.position < upTo && p.status === "merged")
     .map((p) => {
-      const pr = sessionOf(p.session_id)?.pr_number;
+      const pr = prOf(p);
       return `${p.position} ${p.name} merged${pr ? ` as #${pr}` : ""}`;
     });
+}
+
+// The planning task's own merge covers what it built in its repository: its
+// own piece there, else every piece still waiting there. A recorded scope
+// change means it may have built only part, so nothing is credited and the
+// duplicate guard asks a person instead.
+function creditParentMerge(feature: Feature, all: FeaturePiece[]): void {
+  const parent = sessionOf(feature.plan_session_id);
+  if (!parent || parent.task_status !== "merged" || !parent.project_id) return;
+  if (
+    all.some(
+      (p) => p.session_id === parent.id && p.project_id === parent.project_id
+    )
+  )
+    return;
+  if (amendmentsOf(parent.id).length) return;
+  const covered = all.filter(
+    (p) => p.status === "waiting" && p.project_id === parent.project_id
+  );
+  if (!covered.length) return;
+  for (const p of covered)
+    db.prepare(
+      `UPDATE feature_pieces SET status = 'merged', session_id = ?, note = ?
+       WHERE id = ? AND status = 'waiting'`
+    ).run(
+      parent.id,
+      `built by the planning task in #${parent.pr_number ?? "?"}`,
+      p.id
+    );
+  queueEventOnce(
+    feature.workspace_id,
+    `feature:parent-built-${feature.id}-${parent.pr_number}`,
+    feature.plan_session_id,
+    `Feature "${feature.name}": the planning task's own PR #${parent.pr_number} built ${covered.map((p) => `${p.position} ${p.name}`).join(", ")}, so ${covered.length === 1 ? "that piece is" : "those pieces are"} marked merged and won't start again.`
+  );
+}
+
+// A merged PR from this feature in the piece's repository that no merged
+// piece there accounts for may already contain the piece's work.
+function unaccountedMerge(
+  feature: Feature,
+  all: FeaturePiece[],
+  piece: FeaturePiece
+): Session | null {
+  const ids = new Set<string>([
+    feature.plan_session_id,
+    ...all.map((p) => p.session_id).filter((id): id is string => !!id),
+  ]);
+  for (const id of ids) {
+    const s = sessionOf(id);
+    if (
+      !s ||
+      s.task_status !== "merged" ||
+      !s.pr_number ||
+      s.project_id !== piece.project_id
+    )
+      continue;
+    const accounted = all.some(
+      (p) =>
+        p.status === "merged" &&
+        p.session_id === id &&
+        p.project_id === piece.project_id
+    );
+    if (!accounted) return s;
+  }
+  return null;
 }
 
 async function releaseOne(
@@ -181,6 +261,20 @@ async function releaseOne(
         );
         return;
       }
+    }
+  }
+  if (piece.note !== RELEASED_ANYWAY) {
+    const dup = unaccountedMerge(feature, all, piece);
+    if (dup) {
+      const where = getProject(piece.project_id)?.name ?? "its project";
+      const note = `${where} already has #${dup.pr_number} merged from this feature; check it doesn't already build this`;
+      setPiece(piece.id, "blocked", note);
+      say(
+        feature,
+        `duplicate-${piece.id}`,
+        `Feature "${feature.name}": piece ${piece.position} ${piece.name} is held: ${note}. Release it anyway to start it, or drop it.`
+      );
+      return;
     }
   }
   const claimed = db
@@ -229,8 +323,8 @@ function close(feature: Feature, all: FeaturePiece[], deps: ReleaseDeps): void {
     return;
   }
   if (live.some((p) => p.status !== "merged")) return;
-  const sessions = live
-    .map((p) => sessionOf(p.session_id))
+  const sessions = [...new Set(live.map((p) => p.session_id))]
+    .map((id) => sessionOf(id))
     .filter(Boolean) as Session[];
   const cost = sessions.reduce(
     (n, s) => n + usageRows(s.id).reduce((m, r) => m + r.costUsd, 0),
@@ -265,7 +359,7 @@ function close(feature: Feature, all: FeaturePiece[], deps: ReleaseDeps): void {
   say(
     feature,
     `done-${feature.id}`,
-    `Feature "${feature.name}" is merged: ${live.length} ${live.length === 1 ? "PR" : "PRs"}.${short}`
+    `Feature "${feature.name}" is merged: ${sessions.length} ${sessions.length === 1 ? "PR" : "PRs"}.${short}`
   );
   deps.pushFeatureMerged(feature);
 }
@@ -302,7 +396,8 @@ export async function releasePieces(
     .prepare(`SELECT * FROM features WHERE status = 'building'`)
     .all() as Feature[];
   for (const feature of features) {
-    syncPieces(piecesOf(feature.id));
+    syncPieces(feature, piecesOf(feature.id));
+    creditParentMerge(feature, piecesOf(feature.id));
     const all = piecesOf(feature.id);
     for (const piece of all.filter((p) => p.status === "waiting"))
       await releaseOne(feature, piecesOf(feature.id), piece, deps).catch((e) =>
@@ -319,9 +414,9 @@ export function releaseAnyway(pieceId: number): boolean {
     db
       .prepare(
         `UPDATE feature_pieces SET status = 'waiting', after_position = NULL,
-           after_kind = NULL, note = NULL WHERE id = ? AND status = 'blocked'`
+           after_kind = NULL, note = ? WHERE id = ? AND status = 'blocked'`
       )
-      .run(pieceId).changes > 0
+      .run(RELEASED_ANYWAY, pieceId).changes > 0
   );
 }
 

@@ -208,7 +208,7 @@ export function checkPieces(text: string, ctx: CheckContext): PiecesResult {
     const found = ctx.find(r.repo);
     if (!found)
       errors.push(
-        `"${r.name}": (repo: ${r.repo}) is not a project of this workspace`
+        `"${r.name}": (repo: ${r.repo}) doesn't match one project of this workspace (by name, folder or GitHub repo)`
       );
     return found ?? ctx.own;
   });

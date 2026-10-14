@@ -134,6 +134,14 @@ held by a dropped or failed predecessor. A plan-only task that reaches
 approval sends a "Plan ready: name, N pieces" push, and a finished feature
 sends one "Feature merged" push naming it.
 
+A piece's repo can be written as the project name, the repository's folder
+name or its GitHub `owner/name`, in any case; one that fits two projects is
+refused. A merged PR counts only for a piece in its own repository. When the
+planning task merges, the pieces it built in that repository (its own piece, or
+else those still waiting there) are marked merged with its PR and don't start.
+A waiting piece whose repository already holds a merged PR of the feature that
+no piece accounts for is held, with **Release anyway** to start it.
+
 Nothing about a plan's pieces is silent. A Pieces block that can't be read, a
 count that differs from the items it lists, or a `(repo: …)` that is no project
 of the workspace holds the task for approval and tells the orchestrator ("couldn't
