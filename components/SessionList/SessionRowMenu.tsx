@@ -268,7 +268,7 @@ export function SessionRowMenu({
           {summarizing ? "Summarizing..." : "Fresh start"}
         </Item>
       )}
-      {(session.role === "orchestrator" || session.has_brief) &&
+      {(session.role === "orchestrator" || !!session.has_brief) &&
         session.view === "chat" &&
         !session.archived_at &&
         !blocked && (
