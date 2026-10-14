@@ -14,7 +14,15 @@ process.env.DB_PATH = join(
 // os.homedir doesn't reach modules that `import * as os`; HOME does.
 const testHome = mkdtempSync(join(tmpdir(), "agent-os-home-"));
 process.env.HOME = testHome;
-afterAll(() => rmSync(testHome, { recursive: true, force: true }));
+// A file's async work can still be writing here as it ends (ENOTEMPTY); the
+// folder is in tmp, so a failed cleanup must not fail the run.
+afterAll(() => {
+  try {
+    rmSync(testHome, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    // left for the OS to clear
+  }
+});
 
 // Nor the Mac's usage window: a test that needs one injects it, so a run
 // here behaves as it does in CI, where there is no limits.json.
