@@ -15,6 +15,7 @@ export default defineConfig({
       "src-tauri/**",
       ".claude/**",
     ],
+    globalSetup: ["./vitest.global-setup.ts"],
     setupFiles: ["./vitest.setup.ts"],
     // Sessions started by AgentOS inherit NODE_ENV=production, which loads
     // React's production build (no act()); tests always run as tests.

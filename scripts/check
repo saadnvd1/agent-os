@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 
 step() { printf '\n▸ %s\n' "$1"; }
 
+step "migrations"; node scripts/gen-migrations-index.mjs && node scripts/gen-migrations-index.mjs --check
 step "terms";     npx tsx scripts/hooks/banned-terms.ts --tree
 step "typecheck"; npx tsc --noEmit
 step "lint";      npx eslint . --max-warnings=40
