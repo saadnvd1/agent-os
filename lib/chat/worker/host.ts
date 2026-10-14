@@ -37,6 +37,7 @@ import {
   startingTotals,
 } from "../../usage/turns";
 import {
+  ORCHESTRATOR_VISUALS_BRIEF,
   VISUALS_BRIEF,
   VISUALS_SERVER,
   visualsTools,
@@ -195,10 +196,11 @@ export class ChatHost {
     const env = { ...agentEnv(session.id), ...extras.env };
     const orchestrator = session.role === "orchestrator";
     // Every chat can show visuals, asked for like any tool under its access
-    // setting (they read files and reach the web). Not an orchestrator: it
-    // reads other sessions' text, and a browser would be a way out for it.
+    // setting (they read files and reach the web). An orchestrator reads
+    // other sessions' text, so it gets a shorter brief that says what stays
+    // out of a page.
     const visuals =
-      session.role === "orchestrator" || driver.inProcessTools === false
+      driver.inProcessTools === false
         ? null
         : visualsTools({
             sessionId: session.id,
@@ -226,7 +228,7 @@ export class ChatHost {
         extras.systemAppend,
         sessionRunningBrief(session.id),
         BUS_BRIEF,
-        visuals && VISUALS_BRIEF,
+        visuals && (orchestrator ? ORCHESTRATOR_VISUALS_BRIEF : VISUALS_BRIEF),
         !orchestrator && COMPACT_BRIEF,
       ]
         .filter(Boolean)

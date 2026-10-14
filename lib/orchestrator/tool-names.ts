@@ -1,5 +1,8 @@
 import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 
+// Named here, not imported from lib/artifacts, to keep the SDK out of this file.
+const VISUALS_RULE = "mcp__visuals";
+
 // The orchestrator's MCP server and the names Claude sees its tools by.
 export const ORCHESTRATOR_SERVER = "agentos";
 
@@ -77,6 +80,8 @@ export const ORCHESTRATOR_PERMISSIONS: {
     "NotebookEdit",
     "ToolSearch",
     "TodoWrite",
+    // html_preview and html_render: a page for Saad to read or share.
+    VISUALS_RULE,
     // Anything; its worker refuses the deny list (shell-guard.ts).
     "Bash",
   ],

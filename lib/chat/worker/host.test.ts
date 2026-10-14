@@ -1,3 +1,4 @@
+import { ORCHESTRATOR_PERMISSIONS } from "../../orchestrator/tool-names";
 import { randomUUID } from "crypto";
 import { describe, expect, it, vi } from "vitest";
 import { getDb, type Session } from "@/lib/db";
@@ -57,11 +58,15 @@ function fakeConversation() {
 let current: ReturnType<typeof fakeConversation>;
 let started: ChatStartOptions | undefined;
 // Whether the fake driver says when it's at rest, as Claude does.
-const driverFlags = vi.hoisted(() => ({ atRest: true }));
+const driverFlags = vi.hoisted(() => ({
+  atRest: true,
+  inProcessTools: undefined as boolean | undefined,
+}));
 vi.mock("../drivers", () => ({
   chatDriverFor: () => ({
     id: "fake",
     atRest: driverFlags.atRest,
+    inProcessTools: driverFlags.inProcessTools,
     start: (options: ChatStartOptions) => {
       started = options;
       return current;
@@ -126,11 +131,27 @@ describe("ChatHost", () => {
     routed.host.close();
   });
 
-  it("keeps a browser away from an orchestrator", async () => {
+  it("gives an orchestrator the visuals tools with the short brief", async () => {
     const { host } = await startHost("orchestrator");
-    expect(started?.mcpServers?.visuals).toBeUndefined();
+    expect(started?.mcpServers?.visuals).toBeDefined();
+    // Its mode is dontAsk, so a tool not listed is refused.
+    expect(ORCHESTRATOR_PERMISSIONS.allowedTools).toContain("mcp__visuals");
+    expect(started?.systemAppend).toMatch(/## Pages/);
     expect(started?.systemAppend ?? "").not.toMatch(/Showing visuals/);
     host.close();
+  });
+
+  it("gives no visuals tools to a driver that can't run them in process", async () => {
+    driverFlags.inProcessTools = false;
+    try {
+      for (const role of ["agent", "orchestrator"]) {
+        const { host } = await startHost(role);
+        expect(started?.mcpServers?.visuals).toBeUndefined();
+        host.close();
+      }
+    } finally {
+      driverFlags.inProcessTools = undefined;
+    }
   });
 
   describe("No approvals mode", () => {
