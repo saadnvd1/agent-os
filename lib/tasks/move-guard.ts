@@ -9,6 +9,7 @@
 import { db, type Session } from "../db";
 import { escalations } from "../orchestrator/gates";
 import { taskSubject } from "../orchestrator/asks";
+import { usesGitCrypt } from "../worktree-add";
 
 /** Started by an orchestrator, or held for one by the machine it left. */
 export function isOrchestrated(session: Session): boolean {
@@ -23,6 +24,8 @@ export function isOrchestrated(session: Session): boolean {
 export function moveRefusal(session: Session): string | null {
   if (session.quick_of)
     return "It's a quick change its orchestrator makes on this machine, so it stays here";
+  if (usesGitCrypt(session.working_directory))
+    return "Its repo is encrypted with git-crypt and the key never leaves this machine, so it stays here";
   if (escalations(session.id).length)
     return "It's waiting on you (an escalated gate), so it stays here";
   if (session.plan_only && session.plan_phase !== "implementing")
