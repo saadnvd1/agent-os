@@ -9,20 +9,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ChatModel } from "@/lib/chat/events";
 
-export function modelLabel(models: ChatModel[], value: string): string {
-  return models.find((m) => m.value === value)?.label ?? value;
+export function modelLabel(
+  models: ChatModel[],
+  value: string,
+  serverLabel?: string
+): string {
+  return models.find((m) => m.value === value)?.label ?? (serverLabel || value);
 }
 
 // The session's model, switchable mid-conversation. Opened by its button or /model.
 export function ModelPicker({
   models,
   model,
+  label,
   open,
   onOpenChange,
   onPick,
 }: {
   models: ChatModel[];
   model: string;
+  label?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPick: (value: string) => void;
@@ -37,7 +43,7 @@ export function ModelPicker({
           className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] flex h-10 max-w-36 min-w-0 items-center gap-1 rounded-lg px-2 text-xs"
         >
           <span className="truncate">
-            {modelLabel(models, model) || "Model"}
+            {modelLabel(models, model, label) || "Model"}
           </span>
           <ChevronDown className="h-3 w-3 shrink-0" />
         </button>

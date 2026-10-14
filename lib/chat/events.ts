@@ -359,6 +359,8 @@ export type ChatServerMessage =
       commands: ChatCommand[];
       models: ChatModel[];
       model: string;
+      // A readable name for `model` when it is not one of `models`.
+      modelLabel?: string;
       access: ChatAccess;
       // Plan mode: on, or null when the session can't use it.
       plan: boolean | null;

@@ -7,7 +7,7 @@ import { effectiveChatAccess, noApprovalsOn } from "../approvals/no-approvals";
 import os from "os";
 import { db, type Session } from "../db";
 import { agentEnv } from "../agents/launch";
-import { resolveModelForAgent } from "../model-catalog";
+import { modelDisplayName, resolveModelForAgent } from "../model-catalog";
 import { chatDriverFor } from "./drivers";
 import {
   CHAT_ACCESS,
@@ -69,11 +69,15 @@ function visibleCommands(caps: Capabilities): ChatCommand[] {
 export function emitCapabilities(session: Session, listener?: Listener): void {
   const caps = registry.caps.get(capsKey(session));
   if (!caps) return;
+  const model = chatModel(session);
   const m: ChatServerMessage = {
     type: "capabilities",
     commands: visibleCommands(caps),
     models: caps.models,
-    model: chatModel(session),
+    model,
+    modelLabel:
+      caps.models.find((o) => o.value === model)?.label ??
+      modelDisplayName(model),
     access: effectiveChatAccess(session.chat_access),
     plan: canPlan(session) ? !!session.chat_plan && !noApprovalsOn() : null,
     background: chatDriverFor(session.agent_type)?.backgroundTasks === true,

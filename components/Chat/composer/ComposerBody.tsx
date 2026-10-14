@@ -51,6 +51,7 @@ export interface ComposerProps {
   refreshingCommands?: boolean;
   models?: ChatModel[];
   model?: string;
+  modelLabel?: string;
   onSetModel?: (model: string) => void;
   access?: ChatAccess;
   onSetAccess?: (access: ChatAccess) => void;
@@ -88,6 +89,7 @@ export function ComposerBody({
   refreshingCommands = false,
   models = [],
   model = "",
+  modelLabel,
   onSetModel,
   access,
   onSetAccess,
@@ -329,6 +331,7 @@ export function ComposerBody({
           onSetAccess={onSetAccess}
           models={models}
           model={model}
+          modelLabel={modelLabel}
           onSetModel={onSetModel}
           modelOpen={modelOpen}
           onModelOpenChange={setModelOpen}

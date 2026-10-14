@@ -84,3 +84,14 @@ export function resolveModelForAgent(
 
   return getDefaultModelForAgent(agentType);
 }
+
+// A readable name for a model id: "claude-opus-5-5" is "Opus 5.5", the alias
+// "opus" is "Opus". An id it can't read passes through unchanged.
+export function modelDisplayName(id: string): string {
+  const alias = CLAUDE_MODEL_OPTIONS.find((o) => o.value === id);
+  if (alias) return alias.label;
+  const m = /^claude-([a-z]+)-(\d{1,2}(?:-\d{1,2})*)(?:-\d{8})?$/.exec(id);
+  if (!m) return id;
+  const family = m[1][0].toUpperCase() + m[1].slice(1);
+  return `${family} ${m[2].replace(/-/g, ".")}`;
+}
