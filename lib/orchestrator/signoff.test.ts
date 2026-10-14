@@ -9,6 +9,7 @@ import type { SessionFacts } from "./facts";
 
 // A real repository with a local bare remote; gh is faked around it.
 let pr: TaskPR | null = null;
+let prError: Error | null = null;
 const ATTRIBUTED = "a Co-Authored-By trailer naming Claude" as const;
 const merges: string[][] = [];
 let pane = "";
@@ -41,6 +42,10 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
       return real.run(cmd, args, cwd, t);
     },
     findPR: async () => pr,
+    findPRStrict: async () => {
+      if (prError) throw prError;
+      return pr;
+    },
   };
 });
 // The test clones have a local origin; the CI probes need a GitHub name.
@@ -963,6 +968,46 @@ describe("sign_off", () => {
       expect(oneGateAsk(t.w, t.task, pr!.head!).detail).toMatch(
         /still working after an hour/
       );
+    });
+
+    it("asks after an hour while CI is still pending", async () => {
+      const t = await escalated();
+      pr = { ...pr!, checks: "pending", failing: null };
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      expect(openAsks(t.w)).toEqual([]);
+      await raiseHeldAsks(
+        t.w,
+        taskFacts(t.task, "running"),
+        later(HOLD_MAX_MS + 1000)
+      );
+      expect(oneGateAsk(t.w, t.task, pr!.head!).detail).toMatch(
+        /still working after an hour/
+      );
+    });
+
+    it("asks after an hour even without session facts", async () => {
+      const t = await escalated();
+      await raiseHeldAsks(t.w, [], later(HOLD_MIN_MS + 1000));
+      expect(openAsks(t.w)).toEqual([]);
+      await raiseHeldAsks(t.w, [], later(HOLD_MAX_MS + 1000));
+      oneGateAsk(t.w, t.task, pr!.head!);
+    });
+
+    it("keeps the hold when gh fails, and releases it when the PR is closed", async () => {
+      const t = await escalated();
+      prError = new Error("gh: network down");
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      } finally {
+        spy.mockRestore();
+        prError = null;
+      }
+      expect(openAsks(t.w)).toEqual([]);
+      expect(failureOf(t.task, "ci")?.ask_held_at).toBeTruthy();
+      pr = { ...pr!, state: "CLOSED" };
+      await raiseHeldAsks(t.w, taskFacts(t.task), later(HOLD_MIN_MS + 1000));
+      expect(failureOf(t.task, "ci")?.ask_held_at).toBeNull();
     });
 
     it("drops the hold when the task is no longer running", async () => {

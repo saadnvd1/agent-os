@@ -18,7 +18,7 @@ import {
   type FailureRow,
 } from "./gates";
 import { getOrchestrator } from "./home";
-import { commitTime, repoOf } from "./repo";
+import { commitTime, fetchRefs, repoOf } from "./repo";
 import { ciSettleIn, SETTLE_S } from "./task-state";
 
 // Long enough for the orchestrator to send the findings that caused the
@@ -70,17 +70,22 @@ async function raiseFor(
     latestApproval(workspaceId, workSubject(taskId))
   )
     return releaseHeldAsks(taskId);
-  if (!f) return;
-  const pr = await prFor(task, true);
-  if (pr?.state !== "OPEN" || !pr.head) return releaseHeldAsks(taskId);
   const heldFor =
     now - Math.min(...rows.map((r) => sqliteMs(r.ask_held_at as string)));
   const overdue = heldFor >= HOLD_MAX_MS;
-  if (!overdue) {
+  // No facts yet is a wait, but never past the hour.
+  if (!f && !overdue) return;
+  // A gh failure throws and keeps the hold: only GitHub saying the PR isn't
+  // open releases it.
+  const pr = await prFor(task, true, true);
+  if (pr?.state !== "OPEN" || !pr.head) return releaseHeldAsks(taskId);
+  if (!overdue && f) {
     if (f.status === "running" || f.compacting) return;
     if (messaged.has(taskId) || heldFor < HOLD_MIN_MS) return;
     if (getCheck(taskId, pr.head, "review")?.status === "running") return;
     const repo = repoOf(task);
+    // The head may be a commit this clone hasn't fetched yet.
+    await fetchRefs(repo, task);
     const committedAt = await commitTime(repo, pr.head);
     if (pr.checks === "pending") return;
     if (pr.checks === "pass") {
