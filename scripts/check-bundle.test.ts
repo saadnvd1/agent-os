@@ -21,9 +21,9 @@ describe("the first-load JS budget", () => {
     expect(r.code).toBe(0);
   });
 
-  it("fails a build over budget", () => {
+  it("warns, without failing, on a build over budget", () => {
     const r = run([{ route: "/", firstLoadUncompressedJsBytes: 2_000_000 }]);
-    expect([r.code, r.out]).toEqual([1, expect.stringContaining("over its")]);
+    expect([r.code, r.out]).toEqual([0, expect.stringContaining("% over its")]);
   });
 
   it("fails closed when the size is missing or not a number", () => {
