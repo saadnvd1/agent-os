@@ -45,9 +45,12 @@ const adopted = (g.__agentosAdopted ??= new Map());
  * this one, then sends what was left undelivered. False when it can't.
  */
 async function adoptHeld(task: Held): Promise<boolean> {
-  const at = adopted.get(task.id);
-  if (at && Date.now() - at < ADOPT_RETRY_MS) return false;
-  adopted.set(task.id, Date.now());
+  const now = Date.now();
+  // Only failures are remembered, and only for the retry window.
+  for (const [id, at] of adopted)
+    if (now - at >= ADOPT_RETRY_MS) adopted.delete(id);
+  if (adopted.has(task.id)) return false;
+  adopted.set(task.id, now);
   try {
     const link = requireHostLink(task.host_id);
     await hostApi(link, path(task.id, "hold"), {
@@ -62,6 +65,7 @@ async function adoptHeld(task: Held): Promise<boolean> {
   } catch {
     return false;
   }
+  adopted.delete(task.id);
   await flushUndelivered(task);
   return true;
 }

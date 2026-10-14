@@ -146,6 +146,8 @@ export interface Session {
   // The device and machine of the orchestrator that moved this task here.
   held_by_device?: string | null;
   held_from?: string | null;
+  // The paired device that started this task here over the API.
+  started_by_device?: string | null;
   held_for?: string | null;
   held_for_name?: string | null;
   // A held task's "plan written" line, for its orchestrator to read.

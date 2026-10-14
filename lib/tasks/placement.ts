@@ -151,6 +151,8 @@ export interface PeerOption {
   name: string;
   view: MachineView;
   capabilities: string[];
+  // It can hold an orchestrator's task (false: an older AgentOS). Unset: yes.
+  holds?: boolean;
   // The project exists there (projectMachines said null).
   hasProject: boolean;
   loadPerCore: number;

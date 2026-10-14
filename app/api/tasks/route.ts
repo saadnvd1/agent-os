@@ -89,9 +89,9 @@ export async function POST(request: NextRequest) {
     if (id !== undefined) {
       // An orchestrator's task is held for the paired device that sent it,
       // as a moved one is (lib/tasks/held.ts).
+      const device = callingDevice(request);
       let held;
       if (orchestrated !== undefined) {
-        const device = callingDevice(request);
         if (!device)
           return NextResponse.json(
             {
@@ -101,7 +101,12 @@ export async function POST(request: NextRequest) {
           );
         held = { device, orchestrated: validateOrchestrated(orchestrated) };
       }
-      const session = await createTask({ id, ...opts, held });
+      const session = await createTask({
+        id,
+        ...opts,
+        held,
+        startedByDevice: device ?? undefined,
+      });
       return NextResponse.json({ session }, { status: 201 });
     }
     const out = await startOrQueue(

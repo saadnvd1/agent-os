@@ -74,10 +74,45 @@ export function orchestratedStart(
   };
 }
 
+/** Stands in for a starter nobody recorded: tasks already running when starters began to be recorded. */
+const UNRECORDED_STARTER = "unrecorded";
+
+/** Records the paired device that started a task here, the only one that may later hold it. */
+export function recordStarter(id: string, device: string): void {
+  db.prepare(`UPDATE sessions SET started_by_device = ? WHERE id = ?`).run(
+    device,
+    id
+  );
+}
+
+type Holdable = Pick<
+  Session,
+  | "held_by_device"
+  | "started_by"
+  | "started_by_device"
+  | "task_status"
+  | "host_id"
+  | "task_prompt"
+>;
+
 /**
- * Holds a task already running here that nobody holds, for the device that
- * started it. False when there's no such running task; a task another device
- * holds is refused.
+ * Whether `device` may hold this task: a running task on this machine that
+ * nobody here (an orchestrator or a person) owns, which that device started.
+ */
+export function mayHold(s: Holdable, device: string): boolean {
+  if (!s.task_prompt || s.task_status !== "running") return false;
+  if (s.host_id && s.host_id !== "local") return false;
+  if (s.started_by || s.held_by_device) return false;
+  return (
+    s.started_by_device === device || s.started_by_device === UNRECORDED_STARTER
+  );
+}
+
+/**
+ * Holds a task already running here for the device that started it, and the
+ * orchestrator there. False when there's no such running task; a task this
+ * device didn't start, one an orchestrator here owns, or one another device
+ * holds is refused. Holding the same task again is a no-op.
  */
 export function holdExisting(
   id: string,
@@ -86,18 +121,14 @@ export function holdExisting(
 ): boolean {
   const s = db
     .prepare(
-      `SELECT held_by_device, task_status, host_id, task_prompt FROM sessions WHERE id = ?`
+      `SELECT held_by_device, started_by, started_by_device, task_status, host_id, task_prompt
+       FROM sessions WHERE id = ?`
     )
-    .get(id) as
-    | Pick<
-        Session,
-        "held_by_device" | "task_status" | "host_id" | "task_prompt"
-      >
-    | undefined;
+    .get(id) as Holdable | undefined;
   if (!s?.task_prompt || s.task_status !== "running") return false;
-  if (s.host_id && s.host_id !== "local") return false;
-  if (s.held_by_device && s.held_by_device !== device)
-    throw new Error("Another machine's orchestrator holds this task");
-  if (!s.held_by_device) holdFor(id, device, held);
+  if (s.held_by_device === device) return true;
+  if (!mayHold(s, device))
+    throw new Error("Only the machine that started this task can hold it");
+  holdFor(id, device, held);
   return true;
 }
