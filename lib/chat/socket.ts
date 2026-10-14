@@ -196,7 +196,10 @@ function onChatMessage(
     reply({
       type: "task_output",
       taskId: msg.taskId,
-      text: chatTaskOutput(sessionId, msg.taskId),
+      ...(chatTaskOutput(sessionId, msg.taskId) ?? {
+        text: null,
+        updatedAt: null,
+      }),
     });
   else if (msg.type === "history" && Number.isFinite(msg.before))
     reply({

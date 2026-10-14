@@ -369,7 +369,12 @@ export type ChatServerMessage =
     }
   | { type: "context"; context: ChatContext | null }
   | { type: "undo_preview"; from: string; preview: UndoPreview }
-  | { type: "task_output"; taskId: string; text: string | null }
+  | {
+      type: "task_output";
+      taskId: string;
+      text: string | null;
+      updatedAt: number | null;
+    }
   | {
       type: "background_result";
       toolUseId?: string;

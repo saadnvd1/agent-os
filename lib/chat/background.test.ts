@@ -4,6 +4,10 @@ import {
   backgroundFailure,
   backgroundKey,
   outputTail,
+  outputLines,
+  exitCode,
+  taskLife,
+  QUIET_AFTER_MS,
 } from "./background";
 
 const tool = { status: "running" as const, createdAt: 1000 };
@@ -102,5 +106,63 @@ describe("outputTail", () => {
     expect(outputTail("a\nb  \n\n  \n")).toBe("b");
     expect(outputTail("")).toBeNull();
     expect(outputTail(null)).toBeNull();
+  });
+});
+
+describe("outputLines", () => {
+  it("keeps the last non-empty lines, oldest first", () => {
+    expect(outputLines("a\nb\n\nc\nd\ne\n", 3)).toEqual(["c", "d", "e"]);
+    expect(outputLines(null)).toEqual([]);
+  });
+});
+
+describe("exitCode", () => {
+  it("reads the code from the agent's note", () => {
+    expect(exitCode('Background command "x" failed with exit code 65')).toBe(
+      65
+    );
+    expect(exitCode('Background command "x" completed (exit code 0)')).toBe(0);
+    expect(exitCode("done")).toBeNull();
+    expect(exitCode(undefined)).toBeNull();
+  });
+});
+
+describe("taskLife", () => {
+  const task = {
+    status: "running" as const,
+    createdAt: 1000,
+    summary: undefined,
+  };
+  it("is active while output is recent", () => {
+    const out = { text: "x", updatedAt: 10_000 };
+    expect(taskLife(task, out, 10_000 + QUIET_AFTER_MS - 1).state).toBe(
+      "active"
+    );
+  });
+  it("goes quiet at the threshold, counting from the start with no output", () => {
+    expect(taskLife(task, null, 1000 + QUIET_AFTER_MS)).toEqual({
+      state: "quiet",
+      idleMs: QUIET_AFTER_MS,
+    });
+    const out = { text: "x", updatedAt: 5000 };
+    expect(taskLife(task, out, 5000 + QUIET_AFTER_MS).state).toBe("quiet");
+  });
+  it("shows an ended task as exited with its code", () => {
+    const failed = {
+      ...task,
+      status: "failed" as const,
+      summary: "failed with exit code 65",
+    };
+    expect(taskLife(failed, null, 99)).toEqual({
+      state: "exited",
+      code: 65,
+      failed: true,
+    });
+    const ok = { ...task, status: "completed" as const };
+    expect(taskLife(ok, null, 99)).toEqual({
+      state: "exited",
+      code: 0,
+      failed: false,
+    });
   });
 });

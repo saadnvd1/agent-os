@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
-import { outputTail } from "@/lib/chat/background";
+import { outputLines, taskLife, type TaskOutput } from "@/lib/chat/background";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { cn } from "@/lib/utils";
 import { useNow } from "./useNow";
@@ -59,7 +59,7 @@ function TaskRow({
 }: {
   task: Task;
   now: number;
-  output: string | null | undefined;
+  output: TaskOutput | undefined;
   // Follows its output for the line under its name.
   tail: boolean;
   // Brought here from the call it came from.
@@ -77,7 +77,7 @@ function TaskRow({
   useEffect(() => {
     const el = outputRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [output]);
+  }, [output?.text]);
 
   useEffect(() => {
     if (!highlight) return;
@@ -95,8 +95,12 @@ function TaskRow({
   }, [open, tail, running, taskId, onLoadOutput]);
 
   const took = formatElapsed((task.endedAt ?? now) - task.createdAt);
-  const line =
-    running && !open ? (outputTail(output) ?? task.lastToolName) : null;
+  const life = taskLife(task, output, now);
+  const text = output?.text;
+  const lines = outputLines(text);
+  const idle = formatElapsed(
+    Math.max(0, now - (output?.updatedAt ?? task.createdAt))
+  );
   return (
     <div
       ref={rowRef}
@@ -137,10 +141,52 @@ function TaskRow({
           </button>
         )}
       </div>
-      {line && (
-        <p className="text-muted-foreground truncate pr-2 pb-1.5 pl-9 font-mono text-[11px]">
-          {line}
-        </p>
+      {!open && (
+        <div className="space-y-0.5 pr-2 pb-1.5 pl-9">
+          {life.state === "exited" && (
+            <p
+              className={cn(
+                "font-mono text-[11px]",
+                life.failed ? "text-destructive" : "text-muted-foreground"
+              )}
+            >
+              {life.code === null ? task.status : `exited ${life.code}`}
+            </p>
+          )}
+          {lines.length > 0 ? (
+            <pre className="text-muted-foreground max-h-[4.5rem] overflow-hidden font-mono text-[11px] leading-[1.15rem]">
+              {lines.map((l, i) => (
+                <span key={i} className="block truncate">
+                  {l}
+                </span>
+              ))}
+            </pre>
+          ) : (
+            running && (
+              <p className="text-muted-foreground truncate font-mono text-[11px]">
+                {task.taskType && /monitor|watch/.test(task.taskType)
+                  ? "watching"
+                  : "running"}
+                : {task.summary || task.description}
+              </p>
+            )
+          )}
+          {running && (
+            <p
+              className={cn(
+                "text-[11px] tabular-nums",
+                life.state === "quiet"
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground"
+              )}
+            >
+              {life.state === "quiet" ? "Quiet · " : ""}
+              {output?.updatedAt
+                ? `last output ${idle} ago`
+                : `no output in ${idle}`}
+            </p>
+          )}
+        </div>
       )}
       {open && (
         <div className="space-y-1 pb-2 pl-7">
@@ -149,12 +195,12 @@ function TaskRow({
           )}
           {output === undefined ? (
             <p className="text-muted-foreground text-xs">Loading output…</p>
-          ) : output ? (
+          ) : text ? (
             <pre
               ref={outputRef}
               className="bg-foreground/[0.04] max-h-56 overflow-auto rounded-lg px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap"
             >
-              {output}
+              {text}
             </pre>
           ) : (
             <p className="text-muted-foreground text-xs">
@@ -179,7 +225,7 @@ export function BackgroundTasks({
   items: ChatItem[];
   // A task to open the tray on, from the call that became it.
   reveal?: { taskId: string; at: number } | null;
-  outputs: Record<string, string | null>;
+  outputs: Record<string, TaskOutput>;
   onStop: (taskId: string) => void;
   onLoadOutput: (taskId: string) => void;
 }) {

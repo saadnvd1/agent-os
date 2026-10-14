@@ -75,3 +75,57 @@ export function outputTail(text: string | null | undefined): string | null {
   }
   return null;
 }
+
+// A running task that has printed nothing for this long is marked quiet.
+export const QUIET_AFTER_MS = 5 * 60 * 1000;
+const TAIL_LINES = 4;
+
+// What the server reads of a task's output file: the end of it, and when it
+// last changed.
+export interface TaskOutput {
+  text: string | null;
+  updatedAt: number | null;
+}
+
+// The last few lines that say anything, oldest first.
+export function outputLines(
+  text: string | null | undefined,
+  max = TAIL_LINES
+): string[] {
+  const lines = (text?.split("\n") ?? []).map((l) => l.trimEnd());
+  return lines.filter((l) => l.trim()).slice(-max);
+}
+
+// "... failed with exit code 65" from the agent's note on a finished task.
+export function exitCode(summary: string | undefined): number | null {
+  const m =
+    summary &&
+    /exit(?:ed)?(?: with)?(?: status| code)?\s*:?\s*(-?\d+)/i.exec(summary);
+  return m ? Number(m[1]) : null;
+}
+
+export type TaskLife =
+  | { state: "active" }
+  | { state: "quiet"; idleMs: number }
+  | { state: "exited"; code: number | null; failed: boolean };
+
+// Whether a task is progressing, has gone quiet, or has ended. Idle time
+// counts from its last output, or from its start when it has printed nothing.
+export function taskLife(
+  task: Pick<Task, "status" | "createdAt" | "summary">,
+  output: TaskOutput | null | undefined,
+  now: number
+): TaskLife {
+  if (task.status !== "running") {
+    const code = exitCode(task.summary);
+    return {
+      state: "exited",
+      code: code ?? (task.status === "completed" ? 0 : null),
+      failed: task.status === "failed" || (code !== null && code !== 0),
+    };
+  }
+  const idleMs = Math.max(0, now - (output?.updatedAt ?? task.createdAt));
+  return idleMs >= QUIET_AFTER_MS
+    ? { state: "quiet", idleMs }
+    : { state: "active" };
+}
