@@ -36,3 +36,13 @@ describe("model catalog", () => {
     );
   });
 });
+
+describe("modelDisplayName", () => {
+  it("names full ids, aliases and passes unknown ids through", async () => {
+    const { modelDisplayName } = await import("./model-catalog");
+    expect(modelDisplayName("claude-opus-5-5")).toBe("Opus 5.5");
+    expect(modelDisplayName("claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
+    expect(modelDisplayName("opus")).toBe("Opus");
+    expect(modelDisplayName("gpt-9")).toBe("gpt-9");
+  });
+});

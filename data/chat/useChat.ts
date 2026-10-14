@@ -146,6 +146,7 @@ export function useChat(
   const [commands, setCommands] = useState<ChatCommand[]>([]);
   const [models, setModels] = useState<ChatModel[]>([]);
   const [model, setModelState] = useState("");
+  const [modelLabel, setModelLabel] = useState<string | undefined>();
   const [refreshingCommands, setRefreshingCommands] = useState(false);
   const refreshTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [access, setAccessState] = useState<ChatAccess>("full");
@@ -251,6 +252,7 @@ export function useChat(
           setCommands(m.commands);
           setModels(m.models);
           setModelState(m.model);
+          setModelLabel(m.modelLabel);
           setAccessState(m.access);
           setPlanState(m.plan);
           setCanBackground(!!m.background);
@@ -519,6 +521,7 @@ export function useChat(
     refreshingCommands,
     models,
     model,
+    modelLabel,
     send,
     interrupt,
     setModel,

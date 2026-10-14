@@ -14,28 +14,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ACCESS_LEVELS } from "@/lib/chat/access-levels";
 import { CHAT_ACCESS, type ChatAccess } from "@/lib/chat/events";
 
-const LEVELS: Record<
+const ICON: Record<ChatAccess, typeof Shield> = {
+  ask: ShieldCheck,
+  edits: Shield,
+  full: ShieldOff,
+};
+const LEVELS = Object.fromEntries(
+  CHAT_ACCESS.map((a) => [a, { ...ACCESS_LEVELS[a], icon: ICON[a] }])
+) as Record<
   ChatAccess,
   { label: string; description: string; icon: typeof Shield }
-> = {
-  ask: {
-    label: "Ask first",
-    description: "Asks before edits and commands it isn't already allowed",
-    icon: ShieldCheck,
-  },
-  edits: {
-    label: "Accept edits",
-    description: "Edits files on its own, asks before other commands",
-    icon: Shield,
-  },
-  full: {
-    label: "Full access",
-    description: "Does everything without asking",
-    icon: ShieldOff,
-  },
-};
+>;
 
 // What the agent may do without asking, switchable mid-conversation.
 export function AccessPicker({

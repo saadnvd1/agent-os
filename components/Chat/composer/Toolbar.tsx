@@ -31,6 +31,7 @@ export function Toolbar({
   onSetAccess,
   models,
   model,
+  modelLabel,
   onSetModel,
   modelOpen,
   onModelOpenChange,
@@ -51,6 +52,7 @@ export function Toolbar({
   onSetAccess?: (access: ChatAccess) => void;
   models: ChatModel[];
   model: string;
+  modelLabel?: string;
   onSetModel?: (model: string) => void;
   modelOpen: boolean;
   onModelOpenChange: (open: boolean) => void;
@@ -135,6 +137,7 @@ export function Toolbar({
         <ModelPicker
           models={models}
           model={model}
+          label={modelLabel}
           open={modelOpen}
           onOpenChange={onModelOpenChange}
           onPick={onSetModel}

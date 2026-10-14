@@ -265,6 +265,7 @@ export function ChatPanel({
     refreshingCommands,
     models,
     model,
+    modelLabel,
     send,
     interrupt,
     setModel,
@@ -770,6 +771,7 @@ export function ChatPanel({
           refreshingCommands={refreshingCommands}
           models={models}
           model={model}
+          modelLabel={modelLabel}
           onSetModel={setModel}
           access={access}
           onSetAccess={accessLocked ? undefined : setAccess}
