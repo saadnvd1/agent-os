@@ -166,11 +166,10 @@ starts in the background (shells, subagents, monitors) sits behind a
 output, and its own Stop. The session list says the same thing, so a long
 wait never looks like nothing is happening.
 
-**Visuals.** Every chat agent (not an orchestrator, which reads other
-sessions' text and gets no browser) has two tools: `html_preview` renders a page in
+**Visuals.** Every chat agent has two tools: `html_preview` renders a page in
 headless Chrome and hands back a screenshot plus the console, so it can check
 its own work, and `html_render` shows the finished page (a chart, a table, a
-mockup) inline as its own card, with full screen and "open in new tab". Pages
+mockup) inline as its own card, with full screen and "open in new tab". An orchestrator has them too (with a shorter brief), so it can make a page, such as instructions or a report, for you to share. Pages
 are kept under `~/.agent-os/artifacts/<session>/` with a row in SQLite, so
 they survive reloads and restarts (`GET /api/sessions/<id>/artifacts` lists
 them). They're served behind the same device gate with a CSP sandbox and no

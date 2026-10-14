@@ -11,7 +11,7 @@ anyone can open. The link opens without signing in and doesn't change after
 you make it.
 
 Open **Share…** from a chat's menu (the sidebar row, the pane's ⋯ menu, or
-the session name on a phone), or press the share button on a page's card.
+the session name on a phone), or press the share button on a page's card. An orchestrator can make a page for you to share the same way.
 
 ## Check it first
 
