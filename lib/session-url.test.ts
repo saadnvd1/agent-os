@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SessionUrlSync,
   hrefWithSession,
+  inAppSessionId,
   locateSession,
   pairLocation,
   safeNextPath,
@@ -283,5 +284,20 @@ describe("SessionUrlSync", () => {
     now = 10_000;
     sync.focusChanged("a");
     expect(b.current()).toBe("/?session=a");
+  });
+});
+
+describe("inAppSessionId", () => {
+  const origin = "http://localhost:3108";
+  it("names the session of a link to this instance", () => {
+    expect(inAppSessionId(`${origin}/?session=abc`, origin)).toBe("abc");
+  });
+  it("is null for another origin, another path, no session or junk", () => {
+    expect(
+      inAppSessionId("https://example.com/?session=abc", origin)
+    ).toBeNull();
+    expect(inAppSessionId(`${origin}/settings?session=abc`, origin)).toBeNull();
+    expect(inAppSessionId(`${origin}/`, origin)).toBeNull();
+    expect(inAppSessionId("not a url", origin)).toBeNull();
   });
 });
