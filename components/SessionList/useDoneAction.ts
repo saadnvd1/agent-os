@@ -7,15 +7,12 @@ import {
 } from "@/data/done";
 import { useSettleSession } from "@/data/sessions/shelf";
 
-// Done from a session's menu: an open PR merges through the gates, and a
-// failing gate comes back as an error toast naming it. There is no confirm()
-// first: a webview drops it silently, which made Done do nothing.
+// Done from a session's menu: an open PR merges through the gates, after an
+// in-app confirmation; a failing gate comes back as an error toast naming it.
 export function useDoneAction() {
   const done = useDoneSession();
   const settle = useSettleSession();
-  return (session: Session) => {
-    const merges =
-      session.task_status === "running" && session.pr_status === "open";
+  const run = (session: Session, merges: boolean) => {
     const id = toast.loading(
       merges ? `Merging ${session.name}…` : `Finishing ${session.name}…`
     );
@@ -37,6 +34,20 @@ export function useDoneAction() {
             }),
         }),
       onError: (e) => toast.error(e.message, { id, duration: 12000 }),
+    });
+  };
+  return (session: Session) => {
+    const merges =
+      session.task_status === "running" && session.pr_status === "open";
+    if (!merges) return run(session, false);
+    // Merging is the one Done that can't be undone: asked in the app, not
+    // with confirm(), which a webview drops.
+    toast(`Merge ${session.name}'s PR and finish it?`, {
+      description:
+        "It merges only through the orchestrator's gates; a failing gate refuses and nothing merges.",
+      duration: 15000,
+      action: { label: "Merge", onClick: () => run(session, true) },
+      cancel: { label: "Cancel", onClick: () => {} },
     });
   };
 }

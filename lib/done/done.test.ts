@@ -57,10 +57,12 @@ vi.mock("@/lib/git-exec", async (importOriginal) => {
   };
 });
 
+// A tmux listing that never answers, when a test sets it.
+let tmuxListing: Promise<void> | null = null;
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
   statusDetector: {
-    refreshCache: async () => {},
+    refreshCache: () => (tmuxListing ? tmuxListing : Promise.resolve()),
     listSessions: async () => [],
     cleanup: () => {},
     hostErrors: () => ({}),
@@ -317,6 +319,18 @@ describe("done, by state", () => {
     expect(out.merged).toMatch(/Merged quick-ok/);
     expect(row(s.id)).toMatchObject({ task_status: "merged" });
     expect(row(s.id).settled_at).not.toBeNull();
+  });
+
+  it("a quick change merges even while the tmux listing never answers", async () => {
+    const t = setup();
+    const { s } = quickChange(t, "quick-stalled");
+    tmuxListing = new Promise(() => {});
+    try {
+      const out = await doneSession(s.id, { by: "direct", onPeer: true });
+      expect(out.merged).toMatch(/Merged quick-stalled/);
+    } finally {
+      tmuxListing = null;
+    }
   });
 
   it("a quick change whose gate fails is refused naming the gate", async () => {

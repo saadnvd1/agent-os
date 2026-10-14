@@ -28,3 +28,18 @@ export async function withinDeadline<T>(
     clearTimeout(timer);
   }
 }
+
+// Best-effort: waits for `work` up to `ms`, then carries on without it.
+export async function withTimeout(
+  work: Promise<unknown>,
+  ms: number
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  work.catch(() => {});
+  await Promise.race([
+    work,
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}

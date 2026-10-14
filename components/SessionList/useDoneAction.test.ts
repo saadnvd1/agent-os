@@ -5,11 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db/types";
 
-const toast = vi.hoisted(() => ({
-  loading: vi.fn(() => "t1"),
-  success: vi.fn(),
-  error: vi.fn(),
-}));
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), {
+    loading: vi.fn(() => "t1"),
+    success: vi.fn(),
+    error: vi.fn(),
+  })
+);
 vi.mock("sonner", () => ({ toast }));
 
 const { useDoneAction } = await import("./useDoneAction");
@@ -70,10 +72,18 @@ const respond = (status: number, body: object) =>
     status,
     json: async () => body,
   });
+// Done on an open PR asks first, in a toast; Merge is its action.
+const confirmMerge = () => {
+  const [, opts] = toast.mock.calls.at(-1) as unknown as [
+    string,
+    { action: { onClick: () => void } },
+  ];
+  act(() => opts.action.onClick());
+};
 const settle = () => act(() => new Promise((r) => setTimeout(r, 0)));
 
 describe("Done from a row's menu", () => {
-  it("asks the server to merge a quick change even where confirm() is dropped", async () => {
+  it("asks in the app, not with confirm(), and does nothing until Merge is chosen", async () => {
     respond(200, {
       outcome: {
         id: "q1",
@@ -84,6 +94,8 @@ describe("Done from a row's menu", () => {
       },
     });
     act(() => hook.current(quick));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    confirmMerge();
     await settle();
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -101,8 +113,10 @@ describe("Done from a row's menu", () => {
       error: "Not done, nothing merged.\n- ci failed: CI failed",
     });
     act(() => hook.current(quick));
+    confirmMerge();
     await settle();
     act(() => hook.current({ ...quick, id: "t2", quick_of: null } as Session));
+    confirmMerge();
     await settle();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(toast.error).toHaveBeenCalledTimes(2);
@@ -123,6 +137,7 @@ describe("Done from a row's menu", () => {
         )
     );
     act(() => hook.current(quick));
+    confirmMerge();
     expect(toast.error).not.toHaveBeenCalled();
     await act(() => vi.advanceTimersByTimeAsync(181_000));
     vi.useRealTimers();
