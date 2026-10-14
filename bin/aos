@@ -405,7 +405,9 @@ async function main() {
         `/api/bus/inbox?session=${encodeURIComponent(me)}`
       );
       console.log(
-        messages.length ? messages.map(show).join("\n\n") : "no new messages"
+        messages.length
+          ? messages.map(show).join("\n\n")
+          : "no new messages. If a message told you to read a long one here, it was never stored on this machine: ask the sender to resend it in full."
       );
       return;
     }

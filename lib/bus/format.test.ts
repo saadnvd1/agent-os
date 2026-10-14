@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchesRef, overRateLimit, wakeLine } from "./format";
+import { RELAY_LIMIT, matchesRef, overRateLimit, wakeLine } from "./format";
 
 describe("wakeLine", () => {
   it("names the sender and has the reply go to its id", () => {
@@ -20,6 +20,32 @@ describe("wakeLine", () => {
     expect(
       wakeLine({ fromName: "x", fromId: "a", body: "y".repeat(700) })
     ).toContain("aos inbox");
+  });
+});
+
+describe("wakeLine for a linked machine", () => {
+  const long = "word ".repeat(400).trim();
+  it("carries a long body whole instead of a stub", () => {
+    const line = wakeLine(
+      { fromName: "x", fromId: "abcdef123", body: long },
+      { inline: true }
+    );
+    expect(line).toContain(long);
+    expect(line).not.toContain("aos inbox");
+  });
+
+  it("says so when a huge body is cut", () => {
+    const line = wakeLine(
+      { fromName: "x", fromId: null, body: "y".repeat(RELAY_LIMIT + 50) },
+      { inline: true }
+    );
+    expect(line).toContain("[cut: 50 more chars");
+  });
+
+  it("keeps the stub for a local session", () => {
+    expect(wakeLine({ fromName: "x", fromId: "a", body: long })).toContain(
+      "Read it with: aos inbox"
+    );
   });
 });
 
