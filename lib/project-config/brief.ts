@@ -50,6 +50,10 @@ export function runningBrief(
     lines.push(
       `- \`${browse.map}\` maps every page to its URL: navigate by URL, don't explore.`
     );
+  if (browse)
+    lines.push(
+      "- Check state with the browser's text snapshot, not screenshots. Screenshot only the final changed screen, and just the changed element (its uid) rather than the full page where the tool allows; every image stays in your context."
+    );
   const sim = simulatorBrief(config.simulator);
   if (sim) lines.push(sim);
   for (const note of notesOf(config.notes))

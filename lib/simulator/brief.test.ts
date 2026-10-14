@@ -15,7 +15,10 @@ describe("simulatorBrief", () => {
     for (const needle of [
       "aos sim open",
       "aos sim snapshot -i",
-      "aos sim screenshot",
+      "aos sim screenshot --region @e3",
+      "read the `read:` one",
+      "full-size",
+      "only the final changed screens",
       "never gates",
       "don't put them in commits",
     ])

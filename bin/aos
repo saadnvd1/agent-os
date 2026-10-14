@@ -115,7 +115,7 @@ async function sim(words) {
   const base = `/api/sessions/${me}/simulator`;
   if (!sub)
     fail(
-      "usage: aos sim open [--no-wait] | status | close | logs [--last 2m] | snapshot -i | click @e3 | fill @e5 text | screenshot [path] ..."
+      "usage: aos sim open [--no-wait] | status | close | logs [--last 2m] | snapshot -i | click @e3 | fill @e5 text | screenshot [path] [--region @e3] ..."
     );
   if (sub === "status" || sub === "close") {
     const res =
@@ -158,7 +158,12 @@ async function sim(words) {
     process.stderr.write(
       res.stderr.endsWith("\n") ? res.stderr : res.stderr + "\n"
     );
-  if (res.screenshot) console.log(res.screenshot);
+  if (res.screenshot) {
+    if (res.read && res.read !== res.screenshot) {
+      console.log(`read: ${res.read}`);
+      console.log(`full-size (for the PR): ${res.screenshot}`);
+    } else console.log(res.screenshot);
+  }
   if (res.code) process.exit(res.code);
 }
 

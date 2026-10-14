@@ -20,6 +20,7 @@ export async function POST(
         stderr: "",
         code: 0,
         screenshot: null,
+        read: null,
       });
     if (
       !Array.isArray(body.args) ||
