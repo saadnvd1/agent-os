@@ -39,7 +39,14 @@ The agent starts once its worktree has its dependencies. On macOS the main
 checkout's `node_modules` (and workspace ones like `apps/web/node_modules`)
 are cloned with `cp -Rc` when the lockfile matches, and a spare clone waits in
 `~/.agent-os/spare` so the next task takes it by rename, in milliseconds.
-Otherwise, and on Linux, the lockfile's frozen install runs (`npm ci`,
+On Linux the same happens with a reflink copy where the filesystem has them,
+else hardlinks from a store AgentOS keeps under `~/.agent-os/deps-store` (one
+real copy per lockfile; the files tools rewrite in place are copied, and the main
+checkout is never linked to). Build caches (`.next/cache`, `*.tsbuildinfo`) are copied in too when the main
+checkout's are fresh and not huge, so the first typecheck or build is warm. A
+main checkout whose `node_modules` doesn't match its lockfile (pulled, never
+reinstalled) is not cloned from at all.
+Otherwise the lockfile's frozen install runs (`npm ci`,
 `pnpm/yarn/bun --frozen-lockfile`), then a plain install, always with
 devDependencies even though the server runs with `NODE_ENV=production`. A
 project's `agentos.json` can name exactly what to copy and clone, and its

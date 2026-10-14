@@ -24,6 +24,21 @@ root. Every field is optional:
 }
 ```
 
+`caches` lists build caches seeded into each new worktree from the main
+checkout, so its first typecheck or build starts warm; `*` is allowed in the
+last segment (`*.tsbuildinfo`) and `[]` turns seeding off. Without it a Node
+project gets `*.tsbuildinfo` and, with Next, `.next/cache` and `.next/dev/cache`
+(per workspace folder too); the vitest cache is not a default, it only orders
+tests. Seeding is copy-on-write (an APFS clone, or a reflink), or a plain copy
+under 512 MB (`AGENTOS_CACHE_COPY_MAX_MB`) on a filesystem with neither. A cache
+is seeded only when it was written since the worktree's base commit and is
+under 1 GB (`AGENTOS_CACHE_CLONE_MAX_MB`): an old or huge one made the first
+build slower than starting empty. It is never hardlinked or symlinked, so
+nothing a worktree writes reaches the main checkout, and it is skipped when git
+doesn't ignore it or the worktree already has it. It never fails a setup, and
+`AGENTOS_NO_BUILD_CACHES=1` switches it off. Other stacks add their defaults in
+`lib/worktree-deps/caches.ts`.
+
 `merge` sets the project's merge method and branch clean-up (see
 [Merging settings](../guides/tasks.md)).
 

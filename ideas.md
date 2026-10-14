@@ -269,3 +269,6 @@
 - Bookmark a text selection inside a message (a range, not a whole item).
 - Bookmarks on terminal-view sessions (they have no item ids).
 - A star on a collapsed run of steps when one of its tool calls is bookmarked.
+- Shared build caches harvested from finished worktrees into a store, so a cache newer than the main checkout's seeds the next one. Left out because one agent's cache would then be trusted by another's typecheck or build.
+- On a lockfile mismatch, seed node_modules and run the install for the delta only (`npm ci` deletes node_modules first, so it needs `npm install` and a guard that the worktree's lockfile isn't rewritten).
+- Sweep stale `aos-quick-repo-*` worktrees left under the worktrees folder.

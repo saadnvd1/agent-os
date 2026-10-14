@@ -5,7 +5,7 @@ import * as path from "path";
 import { detectPackageManager, setupEnv } from "./install";
 import { setupWorktree, type SetupResult } from "../env-setup";
 import { bringDependencies } from ".";
-import { NOT_MAC } from "./clone";
+import { NO_FAST_COPY } from "./clone";
 
 let dir: string;
 beforeEach(() => {
@@ -218,7 +218,10 @@ describe("bringDependencies with a declared clone and no package manager", () =>
       dir,
       dir,
       {},
-      { clone: async () => ({ ok: false, reason: NOT_MAC, cloned: [] }), run },
+      {
+        clone: async () => ({ ok: false, reason: NO_FAST_COPY, cloned: [] }),
+        run,
+      },
       [".venv"]
     );
     expect(result).toEqual(fresh());

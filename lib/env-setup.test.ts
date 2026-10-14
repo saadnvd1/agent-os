@@ -40,6 +40,32 @@ describe("setupWorktree with agentos.json", () => {
     expect(fs.existsSync(path.join(worktree, ".env"))).toBe(false);
   });
 
+  it("seeds build caches even when setup commands replace the install", async () => {
+    const { source, worktree } = checkout(
+      { setup: ["true"], caches: ["*.tsbuildinfo", ".next/cache"] },
+      { "a.tsbuildinfo": "T", ".next/cache/x": "X", "other.tsbuildinfo": "O" }
+    );
+    const result = await setupWorktree({
+      worktreePath: worktree,
+      sourcePath: source,
+    });
+    expect(result.success).toBe(true);
+    expect(
+      result.steps.find((s) => s.name === "Seed build caches")
+    ).toMatchObject({ success: true });
+    expect(read(worktree, "a.tsbuildinfo")).toBe("T");
+    expect(read(worktree, ".next/cache/x")).toBe("X");
+  });
+
+  it("seeds nothing when caches is empty", async () => {
+    const { source, worktree } = checkout(
+      { setup: ["true"], caches: [] },
+      { "a.tsbuildinfo": "T" }
+    );
+    await setupWorktree({ worktreePath: worktree, sourcePath: source });
+    expect(fs.existsSync(path.join(worktree, "a.tsbuildinfo"))).toBe(false);
+  });
+
   it("refuses a copy whose symlink leads outside the project", async () => {
     const outside = tmp("aos-outside-");
     fs.writeFileSync(path.join(outside, "secret"), "s");

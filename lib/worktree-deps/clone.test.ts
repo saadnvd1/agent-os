@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { cloneDeps, findNodeModules, lockfileHash } from "./clone";
+import {
+  cloneDeps,
+  findNodeModules,
+  lockfileHash,
+  nodeModulesMatchLock,
+} from "./clone";
 import { sparePath } from "./spare";
 
 let tmp: string, source: string, worktree: string, spares: string;
@@ -56,12 +61,12 @@ describe("findNodeModules", () => {
 });
 
 describe("cloneDeps", () => {
-  it("installs instead off macOS", async () => {
+  it("installs instead when no fast copy works", async () => {
     const r = await cloneDeps({
       sourcePath: source,
       worktreePath: worktree,
       spareRoot: spares,
-      platform: "linux",
+      mode: null,
     });
     expect(r.ok).toBe(false);
     expect(fs.existsSync(path.join(worktree, "node_modules"))).toBe(false);
@@ -101,7 +106,7 @@ describe("cloneDeps", () => {
 
   it("clones the checkout's node_modules when the lockfiles match, and leaves a spare", async () => {
     const r = await darwin();
-    expect(r).toEqual({
+    expect(r).toMatchObject({
       ok: true,
       cloned: [{ rel: "node_modules", from: "clone" }],
     });
@@ -187,7 +192,10 @@ describe("cloneDeps with agentos.json's clone", () => {
     fs.mkdirSync(path.join(source, ".venv", "bin"), { recursive: true });
     fs.writeFileSync(path.join(source, ".venv", "bin", "python"), "py");
     const r = await declared([".venv"]);
-    expect(r).toEqual({ ok: true, cloned: [{ rel: ".venv", from: "clone" }] });
+    expect(r).toMatchObject({
+      ok: true,
+      cloned: [{ rel: ".venv", from: "clone" }],
+    });
     expect(
       fs.readFileSync(path.join(worktree, ".venv", "bin", "python"), "utf8")
     ).toBe("py");
@@ -201,13 +209,151 @@ describe("cloneDeps with agentos.json's clone", () => {
     fs.writeFileSync(path.join(source, "vendor", "bundle", "x"), "1");
     fs.mkdirSync(path.join(worktree, "vendor"));
     const r = await declared(["vendor/bundle/"]);
-    expect(r).toEqual({
+    expect(r).toMatchObject({
       ok: true,
       cloned: [{ rel: "vendor/bundle", from: "clone" }],
     });
   });
 
   it("skips a declared path the checkout doesn't have", async () => {
-    expect(await declared(["missing"])).toEqual({ ok: true, cloned: [] });
+    expect(await declared(["missing"])).toMatchObject({ ok: true, cloned: [] });
+  });
+});
+
+describe("cloneDeps with a hardlinked store (Linux without reflinks)", () => {
+  const link = async () => {
+    const { refill, ...r } = await cloneDeps({
+      sourcePath: source,
+      worktreePath: worktree,
+      spareRoot: spares,
+      storeRoot: path.join(tmp, "store"),
+      mode: "hardlink",
+    });
+    await refill;
+    return r;
+  };
+  const ino = (...p: string[]) => fs.statSync(path.join(...p)).ino;
+
+  it("links node_modules from the store, never from the checkout", async () => {
+    fs.writeFileSync(
+      path.join(source, "node_modules", ".package-lock.json"),
+      "{}"
+    );
+    const r = await link();
+    expect(r).toMatchObject({ ok: true, mode: "hardlink" });
+    const dep = ["node_modules", "dep", "index.js"];
+    expect(ino(worktree, ...dep)).not.toBe(ino(source, ...dep));
+    const stored = fs
+      .readdirSync(path.join(tmp, "store"))
+      .map((n) => path.join(tmp, "store", n, "dep", "index.js"));
+    expect(stored).toHaveLength(1);
+    expect(ino(worktree, ...dep)).toBe(fs.statSync(stored[0]).ino);
+    // The files tools rewrite are the worktree's own.
+    fs.appendFileSync(
+      path.join(worktree, "node_modules", ".package-lock.json"),
+      "x"
+    );
+    expect(
+      fs.readFileSync(
+        path.join(source, "node_modules", ".package-lock.json"),
+        "utf-8"
+      )
+    ).toBe("{}");
+  });
+
+  it("leaves the checkout untouched whatever the worktree does", async () => {
+    await link();
+    fs.rmSync(path.join(worktree, "node_modules"), { recursive: true });
+    expect(
+      fs.readFileSync(
+        path.join(source, "node_modules", "dep", "index.js"),
+        "utf-8"
+      )
+    ).toBe("1");
+  });
+
+  it("makes no store when the lockfile differs", async () => {
+    fs.writeFileSync(path.join(worktree, "package-lock.json"), '{"v":2}');
+    const r = await link();
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/lockfile differs/);
+    expect(fs.existsSync(path.join(tmp, "store"))).toBe(false);
+  });
+
+  it("falls back (not ok) when the store can't be made", async () => {
+    fs.writeFileSync(path.join(tmp, "blocked"), "a file, not a folder");
+    const r = await cloneDeps({
+      sourcePath: source,
+      worktreePath: worktree,
+      spareRoot: spares,
+      storeRoot: path.join(tmp, "blocked", "store"),
+      mode: "hardlink",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/store/);
+    expect(fs.existsSync(path.join(worktree, "node_modules"))).toBe(false);
+  });
+
+  it("skips a declared non-node_modules folder rather than linking it", async () => {
+    fs.mkdirSync(path.join(source, ".venv"));
+    fs.writeFileSync(path.join(source, ".venv", "py"), "1");
+    const { refill, ...r } = await cloneDeps({
+      sourcePath: source,
+      worktreePath: worktree,
+      spareRoot: spares,
+      storeRoot: path.join(tmp, "store"),
+      mode: "hardlink",
+      only: ["node_modules", ".venv"],
+    });
+    await refill;
+    expect(r.ok).toBe(true);
+    expect(r.skipped).toEqual([".venv (not linked)"]);
+    expect(fs.existsSync(path.join(worktree, ".venv"))).toBe(false);
+  });
+});
+
+describe("nodeModulesMatchLock", () => {
+  const lockWith = (packages: object) =>
+    fs.writeFileSync(
+      path.join(source, "package-lock.json"),
+      JSON.stringify({ packages: { "": {}, ...packages } })
+    );
+  const installed = (packages: object) =>
+    fs.writeFileSync(
+      path.join(source, "node_modules", ".package-lock.json"),
+      JSON.stringify({ packages })
+    );
+
+  it("passes when every listed package is installed at its version", async () => {
+    lockWith({
+      "node_modules/a": { version: "1.0.0" },
+      "node_modules/b": { version: "2.0.0", optional: true },
+    });
+    installed({ "node_modules/a": { version: "1.0.0" } });
+    expect(await nodeModulesMatchLock(source)).toBe(true);
+  });
+
+  it("fails on a missing or different package, and a missing hidden lockfile", async () => {
+    lockWith({ "node_modules/a": { version: "1.0.0" } });
+    expect(await nodeModulesMatchLock(source)).toBe(false);
+    installed({ "node_modules/a": { version: "0.9.0" } });
+    expect(await nodeModulesMatchLock(source)).toBe(false);
+  });
+
+  it("makes the clone fall back to an install", async () => {
+    lockWith({ "node_modules/a": { version: "1.0.0" } });
+    fs.copyFileSync(
+      path.join(source, "package-lock.json"),
+      path.join(worktree, "package-lock.json")
+    );
+    const r = await cloneDeps({
+      sourcePath: source,
+      worktreePath: worktree,
+      spareRoot: spares,
+      mode: "clone",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/not what its lockfile lists/);
+    expect(fs.existsSync(path.join(worktree, "node_modules"))).toBe(false);
   });
 });
