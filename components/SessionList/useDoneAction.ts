@@ -7,21 +7,15 @@ import {
 } from "@/data/done";
 import { useSettleSession } from "@/data/sessions/shelf";
 
-// Done from a session's menu: an open PR merges through the gates, so that
-// one asks first; the rest can be undone from the toast.
+// Done from a session's menu: an open PR merges through the gates, and a
+// failing gate comes back as an error toast naming it. There is no confirm()
+// first: a webview drops it silently, which made Done do nothing.
 export function useDoneAction() {
   const done = useDoneSession();
   const settle = useSettleSession();
   return (session: Session) => {
     const merges =
       session.task_status === "running" && session.pr_status === "open";
-    if (
-      merges &&
-      !confirm(
-        `Merge ${session.name}'s PR through the gates and finish it? A failing gate refuses and nothing merges.`
-      )
-    )
-      return;
     const id = toast.loading(
       merges ? `Merging ${session.name}…` : `Finishing ${session.name}…`
     );
