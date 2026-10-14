@@ -27,7 +27,7 @@ and check on all of it from your phone.
 - **Workspaces.** Group projects, finish work with Done, and get a log of every merged task. [More](docs/reference/workspaces.md)
 - **LumifyHub (optional).** Boards, cards and docs for a workspace, if you want them. [More](docs/lumifyhub.md)
 - **No approvals mode.** One switch in Settings that approves every ask, lets brakes and plan-only tasks through, and starts every agent with its permission prompts off; each approval it makes is logged. Off by default. [More](docs/reference/orchestrator.md#no-approvals-mode)
-- **Experiments.** Settings → Experiments lists features still being tried, each off until you turn it on, with what it has cost and how often its suggestions were taken. [More](docs/decisions/2026-10-13-experiments.md)
+- **Experiments.** Settings → Experiments lists features still being tried, each off until you turn it on, with what it has cost and how often its suggestions were taken. The first is Learning cards: when a session ends it can offer to save the work as a recipe or keep a lesson where it belongs. [More](docs/decisions/2026-10-13-experiments.md)
 - **Also:** a ⌘K palette, code search, a file picker, a git panel, dev servers, up to four panes, and dictation.
 
 ## Documentation

@@ -29,3 +29,34 @@ spend.
 **Adding an experiment.** A registry entry, `experimentOn(id)` where it does
 its work, `experimentRun` for model calls, `countEvent` for the rest, and
 optionally an `END_HOOKS` entry.
+
+## Learning cards (`learning-cards`)
+
+When a session is done, merged, or its recipe run settles, scripts read it
+(zero tokens) and may leave one card with up to two rows. Nothing is applied
+without a tap.
+
+- **Save as recipe?** Signals: outside a repo or an external CLI (`asc`,
+  `eas`, `gh api`...) plus a report of facts (a `RESULT:` line, build numbers,
+  versions, ids), or a brief whose words overlap an earlier one in the
+  workspace (Jaccard ≥ 0.6, last 60 days). Only on a hit, one helper call
+  with the brief and final report (never the transcript) says whether it is
+  repeatable and drafts the brief. Save uses the same store call as
+  `recipe_save`; Edit opens the recipe form with the drafted brief.
+- **Keep this for next time?** Scripts extract at most four correction pairs
+  (a failed call then the same job done differently, a blocked review then a
+  pass, a person's correction then a change, a failed recipe run then a
+  success). One helper call returns whether it is reusable, a one-line
+  lesson and where it belongs: the recipe's brief, the repo's CLAUDE.md
+  (a quick change and PR through the gates, or a small task without an
+  orchestrator), a task to build a check, or a workspace rule.
+- No global lessons store and nothing is injected into briefs. A lesson goes
+  in the narrowest place that is already loaded when it matters. An accepted
+  `learning_cards` row (date, destination, source session, where it went) is
+  the record for pruning.
+- The hook is registered lazily and checks the database for a prior run, so a
+  restart does not repeat work. A recipe run's session usually ends before the
+  run settles, so `recipe-settled` is handed on separately and the analysis
+  waits for it.
+- Shown, accepted and dismissed are counted in `experiment_usage`; every
+  model call goes through `experimentRun`.

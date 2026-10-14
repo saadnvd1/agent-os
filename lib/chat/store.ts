@@ -180,6 +180,22 @@ export function itemsOfKind<K extends ChatItem["kind"]>(
   ).map((r) => JSON.parse(r.data));
 }
 
+// Several kinds in the order they happened.
+export function itemsOfKinds<K extends ChatItem["kind"]>(
+  sessionId: string,
+  kinds: K[]
+): Extract<ChatItem, { kind: K }>[] {
+  flushItems();
+  return (
+    db
+      .prepare(
+        `SELECT data FROM chat_items WHERE session_id = ?
+         AND kind IN (${kinds.map(() => "?").join(",")}) ORDER BY seq`
+      )
+      .all(sessionId, ...kinds) as { data: string }[]
+  ).map((r) => JSON.parse(r.data));
+}
+
 // A chat's background tasks still running, or ended after `since` (ms): what
 // the composer lists, read without parsing the rest of a long conversation.
 export function recentTasks(

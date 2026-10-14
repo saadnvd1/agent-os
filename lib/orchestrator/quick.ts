@@ -53,6 +53,15 @@ export async function quickChange(
   projectRef: string,
   name: string
 ): Promise<string> {
+  return (await startQuickChange(workspaceId, projectRef, name)).text;
+}
+
+// The same, for a caller that needs the new session's id and worktree.
+export async function startQuickChange(
+  workspaceId: string,
+  projectRef: string,
+  name: string
+): Promise<{ id: string; worktreePath: string; text: string }> {
   const owner = ownerOf(workspaceId);
   const project = workspaceProject(workspaceId, projectRef);
   if (isRemoteHost(project.host_id))
@@ -107,7 +116,11 @@ export async function quickChange(
     workspaceId,
     `Quick change "${label}" in ${project.name} on ${wt.branchName}.`
   );
-  return `Quick change "${label}" (id ${id.slice(0, 8)}) in ${project.name}: worktree ${wt.worktreePath} on ${wt.branchName}, cut from ${baseBranch}. Edit files there with Write and Edit; git there only as \`git -C ${wt.worktreePath} <status|diff|add|...>\`. Then quick_pr commits, pushes and opens its PR.`;
+  return {
+    id,
+    worktreePath: wt.worktreePath,
+    text: `Quick change "${label}" (id ${id.slice(0, 8)}) in ${project.name}: worktree ${wt.worktreePath} on ${wt.branchName}, cut from ${baseBranch}. Edit files there with Write and Edit; git there only as \`git -C ${wt.worktreePath} <status|diff|add|...>\`. Then quick_pr commits, pushes and opens its PR.`,
+  };
 }
 
 // A quick change of this workspace's orchestrator, by name, id or PR.
