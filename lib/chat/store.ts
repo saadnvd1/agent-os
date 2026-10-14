@@ -235,6 +235,59 @@ export function runningItems<K extends "tool" | "task">(
   ).map((r) => JSON.parse(r.data));
 }
 
+const LOST = "Its agent ended before this finished";
+
+function endTasks(
+  sessionId: string,
+  which: (task: Extract<ChatItem, { kind: "task" }>) => boolean
+): Extract<ChatItem, { kind: "task" }>[] {
+  const ended: Extract<ChatItem, { kind: "task" }>[] = [];
+  for (const task of runningItems(sessionId, "task")) {
+    if (!which(task)) continue;
+    const item = {
+      ...task,
+      status: "stopped" as const,
+      endedAt: Date.now(),
+      summary: task.summary ?? LOST,
+    };
+    saveItem(sessionId, item);
+    ended.push(item);
+  }
+  return ended;
+}
+
+// Its agent is gone (a fresh worker, no worker at restart): nothing it ran
+// in the background is still going. Returns what it ended.
+export const endRunningTasks = (sessionId: string) =>
+  endTasks(sessionId, () => true);
+
+// A task whose tool call was stopped or errored has no job behind it.
+export function endOrphanedTasks(sessionId: string) {
+  const dead = new Set(
+    runningItems(sessionId, "task").flatMap((t) => {
+      const tool = t.toolUseId ? getItem(sessionId, t.toolUseId) : undefined;
+      return tool?.kind === "tool" &&
+        (tool.status === "stopped" || tool.status === "error")
+        ? [t.id]
+        : [];
+    })
+  );
+  return endTasks(sessionId, (t) => dead.has(t.id));
+}
+
+// Chats with a task saved as running.
+export function sessionsWithRunningTasks(): string[] {
+  flushItems();
+  return (
+    db
+      .prepare(
+        `SELECT DISTINCT session_id FROM chat_items WHERE kind = 'task'
+         AND json_extract(data, '$.status') = 'running'`
+      )
+      .all() as { session_id: string }[]
+  ).map((r) => r.session_id);
+}
+
 // Tool calls saved as still running.
 export const runningTools = (sessionId: string) =>
   runningItems(sessionId, "tool");

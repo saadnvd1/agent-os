@@ -41,10 +41,13 @@ import {
   setChatPlan,
 } from "./settings";
 import {
+  endOrphanedTasks,
+  endRunningTasks,
   getItem,
   hasItem,
   itemsOfKind,
   recentTasks,
+  sessionsWithRunningTasks,
   saveItem,
   settle,
 } from "./store";
@@ -167,8 +170,26 @@ function planEnv(sessionId: string): PlanHandoffEnv {
   };
 }
 
+// Tell watchers of tasks that just ended, and drop them from the live count.
+function emitEnded(
+  sessionId: string,
+  live: Live | undefined,
+  ended: ReturnType<typeof endRunningTasks>
+): void {
+  for (const item of ended) {
+    live?.activity.tasks.delete(item.taskId);
+    emit(sessionId, { type: "item", item });
+  }
+}
+
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   track(live, e);
+  if (
+    e.type === "item" &&
+    e.item.kind === "tool" &&
+    (e.item.status === "stopped" || e.item.status === "error")
+  )
+    emitEnded(sessionId, live, endOrphanedTasks(sessionId));
   if (e.type === "item" && e.item.kind === "task")
     retireIfStale(sessionId, live);
   if (e.type === "item") {
@@ -297,7 +318,11 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
             );
       },
     };
+    // No worker running: its agent ended, and with it every job it ran.
+    const hadWorker = runningWorkers().includes(sessionId);
     let { client, hello } = await connectWorker(sessionId, spawn, handlers);
+    if (!hadWorker) emitEnded(sessionId, undefined, endRunningTasks(sessionId));
+    emitEnded(sessionId, undefined, endOrphanedTasks(sessionId));
     let activity = restoreActivity(sessionId, hello.state);
     // An idle worker left over from before a redeploy: retire it, and start
     // a fresh one only when a message needs it. One still running background
@@ -316,6 +341,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
           { code: RETIRED }
         );
       ({ client, hello } = await connectWorker(sessionId, true, handlers));
+      emitEnded(sessionId, undefined, endRunningTasks(sessionId));
       activity = restoreActivity(sessionId, hello.state);
     }
     live = {
@@ -965,6 +991,9 @@ export async function reattachChats(): Promise<void> {
         })
     )
   );
+  // A task saved as running with no worker behind it has no job either.
+  for (const id of sessionsWithRunningTasks())
+    if (!live.has(id)) endRunningTasks(id);
   // Turns cut off while no worker was left to finish them, then queues.
   // One at a time, and only what was queued recently: a backlog from long
   // ago isn't sent unasked by a restart (it stays on screen to send).
