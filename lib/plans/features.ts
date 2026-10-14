@@ -7,7 +7,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import { loadProjectConfig } from "../project-config";
-import { repoSlugSync, slugOfRemote } from "../orchestrator/repo-slug";
+import { repoSlugSync, slugOfRemote } from "../git-remote";
 import {
   applyEdits,
   checkPieces,
