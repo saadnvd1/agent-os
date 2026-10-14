@@ -86,3 +86,7 @@ it lacked was the level above: whole tasks.
   without a worktree. A restart between claiming a row and creating its task
   either finds that session (marked started) or doesn't (back in line), so a
   task never starts twice.
+
+Messages for a queued task are held as bus messages addressed to its row id
+(the id it starts as) and folded into its first prompt after the brief, so
+they can't race it as separate turns. Removing the row marks them read.

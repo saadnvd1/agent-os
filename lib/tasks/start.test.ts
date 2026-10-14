@@ -110,6 +110,58 @@ beforeEach(() => {
 });
 
 describe("finishTaskStart", () => {
+  it("puts messages held while queued after the brief, in order, then marks them delivered", async () => {
+    const id = seedTask(ws.app.id);
+    for (const body of ["first", "second", "third"])
+      db.prepare(
+        `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, held_queued) VALUES (NULL, 'you', ?, 'task', ?, 1)`
+      ).run(id, body);
+    db.prepare(
+      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, held_queued, read_at) VALUES (NULL, 'you', ?, 'task', 'discarded', 1, datetime('now'))`
+    ).run(id);
+    await finishTaskStart(id);
+    const prompt = launchClaude.mock.calls[0][0].prompt;
+    const at = (t: string) => prompt.indexOf(t);
+    expect(at("Do it")).toBe(0);
+    expect(at("## Messages while queued")).toBeGreaterThan(at("Do it"));
+    expect(at("1. From you: first")).toBeGreaterThan(
+      at("## Messages while queued")
+    );
+    expect(at("2. From you: second")).toBeGreaterThan(at("1. From you: first"));
+    expect(at("3. From you: third")).toBeGreaterThan(at("2. From you: second"));
+    expect(prompt).not.toContain("discarded");
+    const left = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM bus_messages WHERE to_id = ? AND held_queued = 1 AND delivered_at IS NULL AND read_at IS NULL`
+      )
+      .get(id) as { n: number };
+    expect(left.n).toBe(0);
+  });
+
+  it("gives a plan-only task its held messages in the planning step", async () => {
+    const id = seedChatTask(ws.app.id);
+    db.prepare(
+      `UPDATE sessions SET plan_phase = 'planning', plan_only = 1, worktree_path = ? WHERE id = ?`
+    ).run(fs.mkdtempSync(path.join(os.tmpdir(), "aos-wt-")), id);
+    db.prepare(
+      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, held_queued) VALUES (NULL, 'you', ?, 'task', 'use CSV', 1)`
+    ).run(id);
+    let planned = "";
+    sendQueuedNow.mockImplementationOnce(async (sessionId, mid) => {
+      const row = db
+        .prepare(`SELECT text FROM chat_queue WHERE session_id = ? AND id = ?`)
+        .get(sessionId, mid) as { text: string };
+      planned = row.text;
+    });
+    await finishTaskStart(id);
+    const sent = sendQueuedNow.mock.calls.find((c) => c[0] === id);
+    expect(sent).toBeTruthy();
+    expect(planned).toContain("use CSV");
+    expect(planned.indexOf("use CSV")).toBeLessThan(
+      planned.indexOf("Plan first.")
+    );
+  });
+
   it("launches after setup with the stored prompt and brief, then records it", async () => {
     const id = seedTask(ws.app.id);
     let setupDone = false;

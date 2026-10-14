@@ -29,6 +29,11 @@ import { planPrompt, preparePlanDir } from "../models/plan-step";
 export { firstMessageId, launchPending };
 import { expandHome } from "./session";
 import {
+  markQueuedHeldDelivered,
+  queuedHeldMessages,
+  queuedMessagesSection,
+} from "./queue-held";
+import {
   enterStage,
   finishSetup,
   logStep,
@@ -138,7 +143,12 @@ export async function finishTaskStart(
       ms: setup.ms,
       error: "Not launched: the task was closed during setup",
     });
-  const task = (session.task_prompt ?? "") + setupNote(setup);
+  // Messages sent while it waited in the queue follow the brief, in order.
+  const heldMessages = queuedHeldMessages(sessionId);
+  const task =
+    (session.task_prompt ?? "") +
+    queuedMessagesSection(heldMessages) +
+    setupNote(setup);
   const planning = session.plan_phase === "planning";
   if (planning) preparePlanDir(session.worktree_path);
   const prompt = planning ? planPrompt(task, !!session.plan_only) : task;
@@ -169,6 +179,7 @@ export async function finishTaskStart(
     );
     return done({ status: "failed", ms: setup.ms, error: message });
   }
+  if (heldMessages.length) markQueuedHeldDelivered(sessionId);
   return done(setup);
 }
 
@@ -237,6 +248,7 @@ export async function resumeTaskStarts(
         : fs.existsSync(promptFileFor(row.id)) && (await alive(row.tmux_name));
     if (launched) {
       recordSetup(db, row.id, { status: "ok", ms: null, error: null });
+      markQueuedHeldDelivered(row.id);
       if (queued)
         inBackground(`first message of task ${row.id}`, () =>
           sendQueuedNow(row.id, first)

@@ -31,6 +31,13 @@ import {
 import { queueEvent } from "../orchestrator/events";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
 import { createTask } from "./index";
+import {
+  discardQueuedHeld,
+  markQueuedHeldDelivered,
+  queuedHeldMessages,
+  queuedLabel,
+  queuedMessagesSection,
+} from "./queue-held";
 import { expandHome } from "./session";
 import {
   DEFAULT_PRIORITY,
@@ -148,6 +155,8 @@ export interface QueuedTaskView {
   // Its place in the score order within its line, and how many are in it.
   rank: number;
   of: number;
+  // Messages held for it until it starts.
+  held: number;
 }
 
 export const START_ATTEMPTS = 3;
@@ -419,11 +428,7 @@ export async function startOrQueue<T>(
   }
 }
 
-function label(r: Pick<QueueRow, "name" | "prompt">): string {
-  if (r.name) return r.name;
-  const line = r.prompt.split("\n")[0].trim();
-  return line.length > 60 ? `${line.slice(0, 57)}...` : line;
-}
+const label = queuedLabel;
 
 function afterLabel(r: QueueRow): string | null {
   if (r.after_task) {
@@ -438,7 +443,9 @@ function afterLabel(r: QueueRow): string | null {
 export function listQueue(): QueuedTaskView[] {
   const rows = db
     .prepare(
-      `SELECT q.*, p.name AS project_name, p.workspace_id AS workspace_id
+      `SELECT q.*, p.name AS project_name, p.workspace_id AS workspace_id,
+         (SELECT COUNT(*) FROM bus_messages b WHERE b.to_id = q.id
+            AND b.held_queued = 1 AND b.delivered_at IS NULL AND b.read_at IS NULL) AS held_count
        FROM task_queue q LEFT JOIN projects p ON p.id = q.project_id
        WHERE q.status IN ('queued', 'starting', 'failed')
        ORDER BY q.position`
@@ -446,6 +453,7 @@ export function listQueue(): QueuedTaskView[] {
     .all() as (QueueRow & {
     project_name: string | null;
     workspace_id: string | null;
+    held_count: number;
   })[];
   const places = new Map<string, number>();
   // The score order within each line, by priority and age alone: holds
@@ -489,6 +497,7 @@ export function listQueue(): QueuedTaskView[] {
       wait: r.wait_code,
       rank: rank?.rank ?? place,
       of: rank?.of ?? place,
+      held: r.held_count,
     };
   });
 }
@@ -635,10 +644,14 @@ async function startRow(
   const placed = opts.placement ?? null;
   if (!opts.force)
     recordAutoStart(placed?.hostId ?? LOCAL, !!opts.heavy, Date.now());
+  // A linked machine's start never sees this machine's held messages: they
+  // go with the brief it is sent.
+  const remote = isRemoteHost(placed?.hostId ?? r.host_id ?? project?.host_id);
+  const remoteHeld = remote ? queuedHeldMessages(r.id) : [];
   const task = {
     id: r.id,
     projectId: r.project_id,
-    prompt: r.prompt,
+    prompt: r.prompt + queuedMessagesSection(remoteHeld),
     name: r.name ?? undefined,
     model: r.model_overrides
       ? (JSON.parse(r.model_overrides) as ModelOverride)
@@ -668,6 +681,7 @@ async function startRow(
           { spendApproval: false }
         )
       : await createTask(task);
+    if (remoteHeld.length) markQueuedHeldDelivered(r.id);
     patch(r.id, {
       status: "started",
       started_at: new Date().toISOString(),
@@ -1077,7 +1091,7 @@ export function findQueued(
   return hits[0] ?? null;
 }
 
-export const queuedLabel = label;
+export { queuedLabel };
 
 // Changes the priority of a queued task or a running one (they share an
 // id). Age is kept. Throws when no such task is waiting or running.
@@ -1105,11 +1119,15 @@ export function stampPriority(id: string, priority: Priority | undefined) {
 }
 
 export function removeQueued(id: string): void {
-  const changed = db
-    .prepare(
-      `UPDATE task_queue SET status = 'removed' WHERE id = ? AND status IN ('queued', 'failed')`
-    )
-    .run(id).changes;
+  const changed = db.transaction(() => {
+    const n = db
+      .prepare(
+        `UPDATE task_queue SET status = 'removed' WHERE id = ? AND status IN ('queued', 'failed')`
+      )
+      .run(id).changes;
+    if (n) discardQueuedHeld(id);
+    return n;
+  })();
   if (!changed) throw new Error("That task isn't waiting in the queue");
   tickQueueSoon();
 }

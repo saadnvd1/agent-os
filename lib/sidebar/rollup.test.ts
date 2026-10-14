@@ -49,6 +49,7 @@ const queueItem = (
   wait: null,
   rank: 1,
   of: 1,
+  held: 0,
   createdAt: "2026-10-11T00:00:00Z",
   ...over,
 });

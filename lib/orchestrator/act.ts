@@ -40,6 +40,12 @@ import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
 import { addNote } from "./notes";
 import { findWorkspaceSession } from "./read";
+import {
+  assertTakesMessages,
+  findQueuedTarget,
+  heldQueuedNote,
+  type QueuedTarget,
+} from "../tasks/queue-held";
 import { workspaceProject, workspaceStack, workspaceTask } from "./targets";
 import { setPriority, stampPriority } from "../tasks/queue";
 import {
@@ -68,7 +74,15 @@ export async function send(
   message: string,
   opts: { scopeChange?: boolean } = {}
 ): Promise<string> {
-  const to = findWorkspaceSession(workspaceId, ref);
+  let to;
+  try {
+    to = findWorkspaceSession(workspaceId, ref);
+  } catch (error) {
+    // A task still in the queue has no session: it holds the message.
+    const queued = findQueuedTarget(ref, { workspaceId });
+    if (!queued) throw error;
+    return sendToQueued(workspaceId, queued, message, opts);
+  }
   let amended = "";
   if (opts.scopeChange) {
     if (to.task_status !== "running")
@@ -94,6 +108,32 @@ export async function send(
   return delivery.state === "queued"
     ? `Queued for ${to.name}: it's busy and will see it after this turn.${amended}`
     : `Delivered to ${to.name}.${amended}`;
+}
+
+// A queued task's id is the session id it starts as, so the amendment
+// recorded under it is already the running task's.
+async function sendToQueued(
+  workspaceId: string,
+  queued: QueuedTarget,
+  message: string,
+  opts: { scopeChange?: boolean }
+): Promise<string> {
+  assertTakesMessages(queued);
+  let amended = "";
+  if (opts.scopeChange) {
+    amendBrief(workspaceId, queued.id, message);
+    addNote(workspaceId, `Scope change for ${queued.name}: ${message}`);
+    amended = ` Recorded as scope change ${amendmentsOf(queued.id).length} on its brief: reviews judge against it once it has a PR.`;
+  }
+  const sent = await sendMessage({
+    fromId: orchestratorId(workspaceId),
+    to: queued.id,
+    body: message,
+  });
+  // It may have started in between: then it was delivered as to any task.
+  return sent.heldForQueued
+    ? `${heldQueuedNote(queued.name)}${amended}`
+    : `Delivered to ${queued.name}.${amended}`;
 }
 
 // What the orchestrator starts opens as a chat, as a new session in the UI

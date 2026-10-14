@@ -23,6 +23,7 @@ const item = (
   wait: null,
   rank: 1,
   of: 1,
+  held: 0,
   createdAt: "2026-10-10T00:00:00Z",
   ...over,
 });
