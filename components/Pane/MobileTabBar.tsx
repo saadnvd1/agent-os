@@ -17,69 +17,26 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Ellipsis,
   Circle,
-  FolderOpen,
-  GitBranch,
   Menu,
   Plus,
   Search,
+  Star,
   Share2,
-  Terminal as TerminalIcon,
   TextSearch,
-  Users,
-  ScrollText,
-  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAwayQuery } from "@/data/away";
 import { awayUntil } from "@/components/Away/time";
 import type { Session, Project } from "@/lib/db";
-import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
+import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 import type { ViewMode } from "@/contexts/PaneContext";
-
-interface ViewModeButtonProps {
-  mode: ViewMode;
-  currentMode: ViewMode;
-  icon: LucideIcon;
-  label?: string;
-  onClick: (mode: ViewMode) => void;
-  badge?: React.ReactNode;
-}
-
-function ViewModeButton({
-  mode,
-  currentMode,
-  icon: Icon,
-  label,
-  onClick,
-  badge,
-}: ViewModeButtonProps) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={currentMode === mode}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick(mode);
-      }}
-      className={cn(
-        "rounded p-1.5 transition-colors",
-        badge && "flex items-center gap-0.5",
-        currentMode === mode
-          ? "bg-secondary text-foreground"
-          : "text-muted-foreground"
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {badge}
-    </button>
-  );
-}
+import { MobileViewPicker } from "./MobileViewPicker";
 
 interface MobileTabBarProps {
   session: Session | null | undefined;
@@ -205,7 +162,7 @@ export function MobileTabBar({
           onClick={handlePrev}
           onTouchEnd={(e) => e.stopPropagation()}
           disabled={!hasPrev || isNavigating}
-          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50"
+          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 max-[429px]:hidden"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -304,7 +261,7 @@ export function MobileTabBar({
           onClick={handleNext}
           onTouchEnd={(e) => e.stopPropagation()}
           disabled={!hasNext || isNavigating}
-          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50"
+          className="hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 max-[429px]:hidden"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -313,7 +270,7 @@ export function MobileTabBar({
       {bookmarksSessionId && (
         <ChatBookmarksButton
           sessionId={bookmarksSessionId}
-          className="-my-1.5 h-11 min-w-11"
+          className="-my-1.5 h-11 min-w-11 max-[429px]:hidden"
         />
       )}
       {onFind && (
@@ -325,7 +282,7 @@ export function MobileTabBar({
             e.stopPropagation();
             onFind();
           }}
-          className="-my-1.5 h-11 w-11 shrink-0"
+          className="-my-1.5 h-11 w-11 shrink-0 max-[429px]:hidden"
         >
           <TextSearch className="h-4 w-4" />
         </Button>
@@ -338,11 +295,49 @@ export function MobileTabBar({
           e.stopPropagation();
           paletteActions.open();
         }}
-        // A 44px target in a 32px bar row.
-        className="-my-1.5 h-11 w-11 shrink-0"
+        // 44px targets in a 32px bar row, via -my-1.5.
+        className="-my-1.5 h-11 w-11 shrink-0 max-[429px]:hidden"
       >
         <Search className="h-4 w-4" />
       </Button>
+      {/* Below 430px Find, Palette and Bookmarks fold into one menu. */}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="More"
+            onClick={(e) => e.stopPropagation()}
+            className="-my-1.5 hidden h-11 w-11 shrink-0 max-[429px]:flex"
+          >
+            <Ellipsis className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-48">
+          {onFind && (
+            <DropdownMenuItem className="h-11 gap-2" onSelect={onFind}>
+              <TextSearch className="h-4 w-4" />
+              Find in conversation
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            className="h-11 gap-2"
+            onSelect={() => paletteActions.open()}
+          >
+            <Search className="h-4 w-4" />
+            Command palette
+          </DropdownMenuItem>
+          {bookmarksSessionId && (
+            <DropdownMenuItem
+              className="h-11 gap-2"
+              onSelect={() => bookmarksUiActions.openChat(bookmarksSessionId)}
+            >
+              <Star className="h-4 w-4" />
+              Bookmarks
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -358,60 +353,15 @@ export function MobileTabBar({
       <SessionPrStage sessionId={session?.id} />
       <ViewSwitch session={session} />
 
-      {/* View mode toggle */}
       {session?.working_directory && (
-        <div className="bg-accent/50 flex shrink-0 items-center rounded-md p-0.5">
-          <ViewModeButton
-            mode="terminal"
-            currentMode={viewMode}
-            icon={TerminalIcon}
-            onClick={onViewModeChange}
-          />
-          {isLocalSession && (
-            <ViewModeButton
-              mode="files"
-              currentMode={viewMode}
-              icon={FolderOpen}
-              onClick={onViewModeChange}
-            />
-          )}
-          {isLocalSession && (
-            <ViewModeButton
-              mode="git"
-              currentMode={viewMode}
-              icon={GitBranch}
-              onClick={onViewModeChange}
-            />
-          )}
-          <ViewModeButton
-            mode="artifacts"
-            currentMode={viewMode}
-            icon={Package}
-            label="Artifacts"
-            onClick={onViewModeChange}
-          />
-          {hasLog && (
-            <ViewModeButton
-              mode="log"
-              currentMode={viewMode}
-              icon={ScrollText}
-              onClick={onViewModeChange}
-            />
-          )}
-          {isConductor && (
-            <ViewModeButton
-              mode="workers"
-              currentMode={viewMode}
-              icon={Users}
-              onClick={onViewModeChange}
-              badge={
-                <span className="bg-primary/20 text-primary rounded px-1 text-[10px]">
-                  {workerCount}
-                </span>
-              }
-            />
-          )}
-        </div>
+        <MobileViewPicker
+          viewMode={viewMode}
+          onViewModeChange={onViewModeChange}
+          isLocalSession={isLocalSession}
+          hasLog={hasLog}
+          isConductor={isConductor}
+          workerCount={workerCount}
+        />
       )}
     </div>
   );
