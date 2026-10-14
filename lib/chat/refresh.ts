@@ -13,6 +13,7 @@
 
 import { db } from "../db";
 import { effectiveModels } from "../models/config";
+import { sessionRole, type ModelRole } from "../models/roles";
 import { MAX_REFRESH_TOKENS, MIN_REFRESH_TOKENS } from "./refresh-limits";
 
 export const ORCHESTRATOR_KEY = "orchestrator.refresh_tokens";
@@ -25,6 +26,12 @@ export const DEFAULT_COMPACT_TOKENS = 150_000;
 // mid-job costs the agent its files and its place.
 export const AUTO_COMPACT_KEY = "chat.auto_compact_tokens";
 export const DEFAULT_AUTO_COMPACT_TOKENS = 300_000;
+// The same window for a person's own (interactive) sessions, which run long
+// on the biggest model. 300k (DEFAULT_AUTO_COMPACT_TOKENS) was its value
+// before it had its own setting: set it back to restore that.
+export const INTERACTIVE_AUTO_COMPACT_KEY =
+  "chat.interactive_auto_compact_tokens";
+export const DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS = 300_000;
 export { MIN_REFRESH_TOKENS, MAX_REFRESH_TOKENS } from "./refresh-limits";
 
 export interface RefreshSettings {
@@ -37,6 +44,8 @@ export interface RefreshSettings {
   // Mid-turn: Claude Code's own auto-compact window for a chat's or task's
   // agent. 0 is off.
   autoCompactTokens: number;
+  // The same, for interactive sessions. 0 is off.
+  interactiveAutoCompactTokens: number;
 }
 
 function read(key: string, fallback: number): number {
@@ -53,6 +62,10 @@ export function refreshSettings(): RefreshSettings {
     taskTokens: read(TASK_KEY, 0),
     compactTokens: read(COMPACT_KEY, DEFAULT_COMPACT_TOKENS),
     autoCompactTokens: read(AUTO_COMPACT_KEY, DEFAULT_AUTO_COMPACT_TOKENS),
+    interactiveAutoCompactTokens: read(
+      INTERACTIVE_AUTO_COMPACT_KEY,
+      DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS
+    ),
   };
 }
 
@@ -92,6 +105,11 @@ export function setRefreshSettings(input: Partial<RefreshSettings>): void {
       AUTO_COMPACT_KEY,
       checkRefreshTokens(input.autoCompactTokens),
     ]);
+  if (input.interactiveAutoCompactTokens !== undefined)
+    checked.push([
+      INTERACTIVE_AUTO_COMPACT_KEY,
+      checkRefreshTokens(input.interactiveAutoCompactTokens),
+    ]);
   db.transaction(() => {
     for (const [key, n] of checked) put.run(key, String(n));
   })();
@@ -121,22 +139,46 @@ export function compactThreshold(
   return window ? Math.min(wanted, window) : wanted;
 }
 
+// Claude Code's own auto-compact window for an agent, before the provider's
+// adjustment; 0 is none. A person's session has its own window, in a chat
+// or a terminal alike (a terminal can't be compacted between turns, so this
+// is the only compaction it gets). An orchestrator starts over from its
+// brief at its own threshold instead, since a summary would carry what it
+// read from tasks and CI without its untrusted fence.
+export function autoCompactTokensFor(
+  role: ModelRole,
+  s: RefreshSettings
+): number {
+  if (role === "orchestrator") return 0;
+  return role === "interactive"
+    ? s.interactiveAutoCompactTokens
+    : s.autoCompactTokens;
+}
+
 // What an agent is launched with so it compacts itself at the threshold.
-// Not an orchestrator: it starts over from its brief at its own threshold
-// instead, since a summary would carry what it read from tasks and CI
-// without its untrusted fence. Nothing when it's off, so a window set in
-// the user's own environment still applies.
+// Nothing when it's off, so a window set in the user's own environment
+// still applies.
 export function autoCompactEnv(sessionId: string): Record<string, string> {
   const row = db
-    .prepare(`SELECT role, model_provider FROM sessions WHERE id = ?`)
+    .prepare(
+      `SELECT role, task_status, plan_phase, started_by, model_provider
+       FROM sessions WHERE id = ?`
+    )
     .get(sessionId) as
-    | { role: string | null; model_provider: string | null }
+    | {
+        role: string | null;
+        task_status: string | null;
+        plan_phase: string | null;
+        started_by: string | null;
+        model_provider: string | null;
+      }
     | undefined;
-  const tokens = refreshSettings().autoCompactTokens;
-  if (row?.role === "orchestrator" || tokens <= 0) return {};
+  if (!row) return {};
+  const tokens = autoCompactTokensFor(sessionRole(row), refreshSettings());
+  if (tokens <= 0) return {};
   const window = compactThreshold(
     Math.max(AUTO_COMPACT_MIN, tokens),
-    row?.model_provider
+    row.model_provider
   );
   return { [AUTO_COMPACT_ENV]: String(window) };
 }

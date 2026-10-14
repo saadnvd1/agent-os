@@ -19,7 +19,7 @@ export function FreshStartForm() {
     return <p className="text-destructive text-sm">{error.message}</p>;
   return (
     <Form
-      key={`${data.orchestratorTokens}:${data.taskTokens}:${data.compactTokens}:${data.autoCompactTokens}`}
+      key={`${data.orchestratorTokens}:${data.taskTokens}:${data.compactTokens}:${data.autoCompactTokens}:${data.interactiveAutoCompactTokens}`}
       saved={data}
     />
   );
@@ -31,14 +31,20 @@ function Form({ saved }: { saved: RefreshSettings }) {
   const task = useThreshold(saved.taskTokens, 200);
   const compact = useThreshold(saved.compactTokens, 150);
   const midTurn = useThreshold(saved.autoCompactTokens, 300);
+  const interactive = useThreshold(saved.interactiveAutoCompactTokens, 200);
   const error =
-    orchestrator.error ?? task.error ?? compact.error ?? midTurn.error;
+    orchestrator.error ??
+    task.error ??
+    compact.error ??
+    midTurn.error ??
+    interactive.error;
   const dirty =
     !error &&
     (orchestrator.tokens !== saved.orchestratorTokens ||
       task.tokens !== saved.taskTokens ||
       compact.tokens !== saved.compactTokens ||
-      midTurn.tokens !== saved.autoCompactTokens);
+      midTurn.tokens !== saved.autoCompactTokens ||
+      interactive.tokens !== saved.interactiveAutoCompactTokens);
 
   return (
     <form
@@ -51,6 +57,7 @@ function Form({ saved }: { saved: RefreshSettings }) {
             taskTokens: task.tokens,
             compactTokens: compact.tokens,
             autoCompactTokens: midTurn.tokens,
+            interactiveAutoCompactTokens: interactive.tokens,
           },
           {
             onSuccess: () => toast.success("Context settings saved"),
@@ -77,12 +84,19 @@ function Form({ saved }: { saved: RefreshSettings }) {
         AgentOS compacts a chat over the smaller size, or idle past its prompt
         cache, before the next message; the composer offers to first. Either way
         AgentOS hands the agent its task, scope changes, files and todos back.
-        Orchestrators start fresh instead.
+        Your own sessions, in a chat or a terminal, have their own mid-turn
+        size; a terminal can&apos;t be compacted between turns, so that is the
+        only compaction it gets. Orchestrators start fresh instead.
       </p>
       <ThresholdRow
-        label="Mid-turn"
+        label="Mid-turn, tasks"
         field={midTurn}
-        switchLabel="Let the agent compact itself mid-turn"
+        switchLabel="Let a task's agent compact itself mid-turn"
+      />
+      <ThresholdRow
+        label="Mid-turn, your sessions"
+        field={interactive}
+        switchLabel="Let your own sessions compact themselves mid-turn"
       />
       <ThresholdRow
         label="Between turns"

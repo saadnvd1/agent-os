@@ -12,6 +12,7 @@ import { BUS_BRIEF } from "./brief";
 import { selfUrl } from "./self-env";
 import { autoCompactEnv } from "../chat/refresh";
 import { subagentEnv } from "../models/subagents";
+import { COMPACT_BRIEF } from "../chat/working-state";
 import { CLAUDE_STATUS_SETTINGS_FLAG } from "../program-status/claude-flag";
 import {
   sessionProjectEnv,
@@ -28,7 +29,7 @@ export const BUS_BRIEF_FILE = path.join(
 
 export function ensureBusBrief(): void {
   fs.mkdirSync(path.dirname(BUS_BRIEF_FILE), { recursive: true });
-  fs.writeFileSync(BUS_BRIEF_FILE, BUS_BRIEF);
+  fs.writeFileSync(BUS_BRIEF_FILE, `${BUS_BRIEF}\n\n${COMPACT_BRIEF}`);
 }
 
 // Who a session is and how it reaches AgentOS, set in its tmux environment so
