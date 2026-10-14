@@ -5,6 +5,7 @@ import {
   ChefHat,
   ExternalLink,
   GitMerge,
+  RotateCcw,
   KanbanSquare,
   SquareTerminal,
 } from "lucide-react";
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import type { TaskView } from "@/lib/tasks";
 import { isFinished } from "@/lib/tasks/state";
 import { useArmTask, useDropTask, useSignOffTask } from "@/data/tasks";
+import { useResurrectSession } from "@/data/done";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
 import { tasksUiActions } from "@/stores/tasksUi";
 import { recipesUiActions } from "@/stores/recipesUi";
@@ -27,6 +29,7 @@ export function TaskRow({ task }: { task: TaskView }) {
   const signOff = useSignOffTask();
   const drop = useDropTask();
   const arm = useArmTask();
+  const restore = useResurrectSession();
   const [confirmDrop, setConfirmDrop] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const live = !isFinished(task.state);
@@ -34,6 +37,7 @@ export function TaskRow({ task }: { task: TaskView }) {
     signOff.error?.message ||
     drop.error?.message ||
     arm.error?.message ||
+    restore.error?.message ||
     moveError ||
     task.hostError;
   const settingUp = live && task.setup?.status === "running";
@@ -165,6 +169,20 @@ export function TaskRow({ task }: { task: TaskView }) {
         </div>
       )}
       {live && task.state === "plan-ready" && <PlanReview task={task} />}
+      {!live && task.state !== "merged" && (
+        <div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-11 md:h-8"
+            disabled={restore.isPending}
+            onClick={() => restore.mutate(task.id)}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {restore.isPending ? "Restoring..." : "Restore"}
+          </Button>
+        </div>
+      )}
       {!live && !task.hostId && (
         <div>
           <Button

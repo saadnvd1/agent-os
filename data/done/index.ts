@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DoneOutcome } from "@/lib/done";
 import type { BulkResult, PreviewRow } from "@/lib/done/bulk";
 import type { ArchivedView } from "@/lib/done/archive";
+import type { ResurrectOutcome } from "@/lib/resurrect";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "../tasks";
 
@@ -87,6 +88,22 @@ export function useDoneIdle() {
 export function useUnarchiveSession() {
   return useDoneMutation(async (id: string) =>
     json(await post(`/api/sessions/${id}/unarchive`))
+  );
+}
+
+// Brings a dropped, done or archived session back (lib/resurrect).
+export function useResurrectSession() {
+  return useDoneMutation(
+    async (id: string) =>
+      (
+        await json<{ outcome: ResurrectOutcome }>(
+          await post(
+            `/api/sessions/${id}/resurrect`,
+            undefined,
+            DONE_REQUEST_TIMEOUT_MS
+          )
+        )
+      ).outcome
   );
 }
 

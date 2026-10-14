@@ -37,6 +37,22 @@ all of them) lists
 them with Unarchive, which only puts the entry back. What lands there: what
 you archived, what Clean up swept, and what sat in Done for 30 days.
 
+**Restore** brings a dropped, done or archived session back with the same id
+and the same agent conversation: the ⋯ menu on a Done task, **Restore** in
+Archived and on a dropped or done task in Tasks, `aos resurrect [session]` (no
+session lists what can come back), `POST /api/sessions/:id/resurrect` and the
+orchestrator's `resurrect` tool (held by Pause, braked like a start). A task
+returns to the status it had: a plan-only task waits for plan approval again, one
+with a PR is idle, and a PR that a drop closed is reopened. Drop and Done save the
+worktree's uncommitted files and plan under a hidden ref
+(`refs/agentos/ended/<id>`, about a tenth of a second, alongside closing the PR);
+a restore puts them back on the branch. Without that (an older drop) it uses the
+branch where it still exists, makes a new one for a plan that was never approved,
+and otherwise brings back the conversation alone in the project folder. It
+refuses, with the reason, when the conversation is gone, the PR was merged, the
+project was removed or the branch is in use. A task that ran on a linked machine
+resumes there, or from before it moved when that machine is gone.
+
 **Clean up idle sessions** (the workspace switcher) first shows what will happen
 to each idle or stopped session, and `aos done --all-idle` does the same
 sweep. A clean-up archives what it finishes, and never merges: open PRs are listed for their own done.

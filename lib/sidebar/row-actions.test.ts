@@ -8,6 +8,13 @@ describe("finishActions", () => {
     ).toEqual(["done", "archive"]);
   });
 
+  it("gives a task that is already done Restore instead of Done", () => {
+    expect(finishActions({ role: null, task_status: "done" }, false)).toEqual([
+      "restore",
+      "archive",
+    ]);
+  });
+
   it("gives a plain session Archive (it is finished with Mark done)", () => {
     expect(finishActions({ role: null, task_status: null }, true)).toEqual([
       "archive",

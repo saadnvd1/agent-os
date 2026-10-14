@@ -29,6 +29,8 @@
 
 ## Tasks (after V1, 2026-10-05)
 
+- [ ] Prune `refs/agentos/ended/*` snapshots after 30 days, and show a snapshot's file count before a restore
+
 - [ ] Run tasks on other machines (worktree + tmux over the host exec layer)
 - [ ] Notify (push/Telegram) when a task needs you or is ready for review
 - [ ] Model picker and per-project brief additions in New task

@@ -138,6 +138,63 @@ describe("the read tool", () => {
   });
 });
 
+describe("the resurrect tool", () => {
+  const ended = async (workspaceId: string, name: string) => {
+    const { db } = await import("@/lib/db");
+    db.prepare(
+      `UPDATE sessions SET task_status = 'dropped' WHERE name = ?`
+    ).run(name);
+  };
+
+  it("is held by Pause like the other tools that change the workspace", async () => {
+    const { workspace } = seedWorkspace("Resurrect pause");
+    const { setPaused } = await import("./pause");
+    setPaused(workspace.id, true);
+    await expect(
+      runTool(workspace.id, "resurrect", {
+        session: "add-auth",
+        reason: "oops",
+      })
+    ).rejects.toThrow(/paused/i);
+  });
+
+  it("reaches only this workspace's dropped, done or archived sessions", async () => {
+    const mine = seedWorkspace("Resurrect mine");
+    const other = seedWorkspace("Resurrect other");
+    await ended(mine.workspace.id, "add-auth");
+    await expect(
+      runTool(other.workspace.id, "resurrect", {
+        session: mine.task.slice(0, 8),
+        reason: "oops",
+      })
+    ).rejects.toThrow(/No dropped, done or archived session/);
+    await expect(
+      runTool(mine.workspace.id, "resurrect", {
+        session: "chat-one",
+        reason: "x",
+      })
+    ).rejects.toThrow(/No dropped, done or archived session/);
+  });
+
+  it("goes through to the restore, which refuses a task with no conversation", async () => {
+    const { workspace } = seedWorkspace("Resurrect go");
+    await ended(workspace.id, "add-auth");
+    await expect(
+      runTool(workspace.id, "resurrect", {
+        session: "add-auth",
+        reason: "dropped by mistake",
+      })
+    ).rejects.toThrow(/no conversation to bring back|project folder/);
+  });
+
+  it("needs a reason", async () => {
+    const { workspace } = seedWorkspace("Resurrect why");
+    await expect(
+      runTool(workspace.id, "resurrect", { session: "add-auth" })
+    ).rejects.toThrow();
+  });
+});
+
 describe("the cards tool", () => {
   const card = (over: Partial<LhCard>): LhCard => ({
     id: "c",

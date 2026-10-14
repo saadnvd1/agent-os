@@ -13,6 +13,7 @@ import { getProject } from "../projects";
 import { deleteWorktree, isAgentOSWorktree } from "../worktrees";
 import { removalRunning, removalSettled } from "../worktree-removal";
 import { describeChanges, unsavedChanges } from "../worktree-placed";
+import { dropSnapshot, snapshotWorktree } from "../resurrect/snapshot";
 
 export type WorktreeFate =
   | { action: "none" }
@@ -100,7 +101,7 @@ export type FatePreview =
   | { action: "remove"; why: string; repo: string };
 
 type Judged = Pick<Session, "worktree_path" | "base_branch"> &
-  Partial<Pick<Session, "project_id">>;
+  Partial<Pick<Session, "project_id" | "id">>;
 
 // Gone, or still going: removed by whatever else got to it first.
 const gone = (merged: MergedAs | null, still = false) => ({
@@ -215,8 +216,23 @@ export async function settleWorktree(
   merged: MergedAs | null,
   movedAway = false
 ): Promise<WorktreeFate> {
+  // Unmerged work is saved for a restore while the fate is judged, and kept
+  // only if the worktree is really removed.
+  const snapshot =
+    !merged && !movedAway && session.id && session.worktree_path
+      ? snapshotWorktree(session.worktree_path, session.id)
+      : null;
   const fate = await worktreeFate(session, merged, undefined, movedAway);
-  if (fate.action !== "remove") return fate;
+  if (fate.action !== "remove") {
+    if (snapshot && fate.action === "kept") {
+      const { path } = fate;
+      void snapshot.then((made) => {
+        if (made) void dropSnapshot(path, session.id!);
+      });
+    }
+    return fate;
+  }
+  await snapshot;
   const path = session.worktree_path!;
   await deleteWorktree(path, fate.repo, true).catch(() => {});
   if (fs.existsSync(path))

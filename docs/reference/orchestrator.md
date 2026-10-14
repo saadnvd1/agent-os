@@ -21,7 +21,7 @@ it may do on its own, and the lines that always come back to you as asks.
 - **Tools:** `sessions` (every session's status, activity, task, PR, CI and
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
-  `start_session`, `stack`, `stack_status`, `land`, `drop`, `stop`, `done`, `move`,
+  `start_session`, `stack`, `stack_status`, `land`, `drop`, `resurrect` (bring back a dropped, done or archived session with its conversation), `stop`, `done`, `move`,
   `add_project` (a git repository on the machine becomes a project of the
   workspace, or the project already at that path moves in from no workspace;
   folders that hold secrets and projects of another workspace are refused),
