@@ -9,11 +9,15 @@ import { bookmarksUiActions } from "@/stores/bookmarksUi";
 export function ChatBookmarksButton({
   sessionId,
   className,
+  hideWhenEmpty,
 }: {
   sessionId: string;
   className?: string;
+  // The desktop bar shows it only once the chat has some.
+  hideWhenEmpty?: boolean;
 }) {
   const { data = [] } = useSessionBookmarks(sessionId);
+  if (hideWhenEmpty && data.length === 0) return null;
   return (
     <button
       type="button"

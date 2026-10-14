@@ -65,8 +65,8 @@ import { approvalsModeQuery } from "@/data/approvals";
 
 // The app's dialogs open from their stores, so none is needed for the first
 // paint: their code loads right after it.
-const TasksDialog = dynamic(
-  () => import("@/components/Tasks/TasksDialog").then((m) => m.TasksDialog),
+const InboxDialog = dynamic(
+  () => import("@/components/Inbox/InboxDialog").then((m) => m.InboxDialog),
   { ssr: false }
 );
 const AddProjectDialog = dynamic(
@@ -86,10 +86,6 @@ const SettingsDialog = dynamic(
 const WelcomeDialog = dynamic(
   () =>
     import("@/components/Welcome/WelcomeDialog").then((m) => m.WelcomeDialog),
-  { ssr: false }
-);
-const MessagesDialog = dynamic(
-  () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
   { ssr: false }
 );
 const BookmarksDialog = dynamic(
@@ -153,10 +149,9 @@ const AppDialogs = memo(function AppDialogs({
 }) {
   return (
     <>
-      <TasksDialog />
+      <InboxDialog />
       <WelcomeDialog notifications={notifications} />
       <AddProjectDialog />
-      <MessagesDialog />
       <ArchivedDialog />
       <BookmarksDialog />
       <ChatBookmarksDialog />

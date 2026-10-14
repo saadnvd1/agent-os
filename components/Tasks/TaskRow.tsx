@@ -15,7 +15,7 @@ import { isFinished } from "@/lib/tasks/state";
 import { useArmTask, useDropTask, useSignOffTask } from "@/data/tasks";
 import { useResurrectSession } from "@/data/done";
 import { tmuxAttachActions } from "@/stores/tmuxAttach";
-import { tasksUiActions } from "@/stores/tasksUi";
+import { inboxUiActions } from "@/stores/inboxUi";
 import { recipesUiActions } from "@/stores/recipesUi";
 import { cn } from "@/lib/utils";
 import { SimulatorIndicator } from "@/components/Simulator";
@@ -103,7 +103,7 @@ export function TaskRow({ task }: { task: TaskView }) {
             onClick={() => {
               if (task.hostError) return;
               tmuxAttachActions.request(task.tmuxName, task.hostId ?? "local");
-              tasksUiActions.setPanelOpen(false);
+              inboxUiActions.setOpen(false);
             }}
           >
             <SquareTerminal className="h-3.5 w-3.5" />
@@ -191,7 +191,7 @@ export function TaskRow({ task }: { task: TaskView }) {
             className="text-muted-foreground h-11 md:h-8"
             onClick={() => {
               recipesUiActions.saveSessionAs(task.id);
-              tasksUiActions.setPanelOpen(false);
+              inboxUiActions.setOpen(false);
             }}
           >
             <ChefHat className="h-3.5 w-3.5" />

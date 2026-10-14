@@ -10,6 +10,7 @@ import {
   FolderGit2,
   FolderPlus,
   Gauge,
+  Inbox,
   LayoutGrid,
   ListTodo,
   MessageSquare,
@@ -29,10 +30,9 @@ import { recipesUiActions } from "@/stores/recipesUi";
 import { usePaletteCommands } from "@/hooks/usePaletteCommands";
 import { archivedUiActions } from "@/stores/archivedUi";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
-import { busUiActions } from "@/stores/busUi";
+import { inboxUiActions } from "@/stores/inboxUi";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
-import { tasksUiActions } from "@/stores/tasksUi";
 import { newDraft } from "@/stores/drafts";
 import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
 import { useAddExistingProject } from "@/components/Projects/AddProject/useAddExistingProject";
@@ -190,11 +190,19 @@ export function useAppCommands({
       run: () => usageUiActions.open("compare"),
     },
     {
+      id: "app.inbox",
+      title: "Inbox",
+      group: "Go to",
+      keywords: ["needs you", "notifications", "asks", "questions", "waiting"],
+      icon: Inbox,
+      run: () => inboxUiActions.open(),
+    },
+    {
       id: "app.tasks",
       title: "Tasks",
       group: "Go to",
       icon: ListTodo,
-      run: tasksUiActions.openPanel,
+      run: () => inboxUiActions.open("tasks"),
     },
     {
       id: "app.messages",
@@ -202,7 +210,7 @@ export function useAppCommands({
       group: "Go to",
       keywords: ["bus", "peers"],
       icon: MessagesSquare,
-      run: busUiActions.open,
+      run: () => inboxUiActions.open("messages"),
     },
     {
       id: "app.archived",

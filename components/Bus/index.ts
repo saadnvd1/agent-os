@@ -1,2 +1,1 @@
-export { MessagesDialog } from "./MessagesDialog";
-export { MessagesButton } from "./MessagesButton";
+export { MessagesPanel } from "./MessagesPanel";
