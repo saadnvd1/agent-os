@@ -17,7 +17,7 @@ export async function GET() {
   });
 }
 
-// PUT /api/models {roles?, providers?, prices?, planStep?} - replaces the
+// PUT /api/models {roles?, subagents?, providers?, prices?, planStep?} - replaces the
 // saved settings. Only from this machine or the tailnet: a provider's base
 // URL and key reference decide where a key is sent, so a stolen device
 // token mustn't be able to point them anywhere.

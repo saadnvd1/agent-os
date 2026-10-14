@@ -11,6 +11,7 @@ import { trustPromptKeys } from "../tasks/state";
 import { BUS_BRIEF } from "./brief";
 import { selfUrl } from "./self-env";
 import { autoCompactEnv } from "../chat/refresh";
+import { subagentEnv } from "../models/subagents";
 import { CLAUDE_STATUS_SETTINGS_FLAG } from "../program-status/claude-flag";
 import {
   sessionProjectEnv,
@@ -38,6 +39,7 @@ export function agentEnv(sessionId: string): Record<string, string> {
   return {
     ...sessionProjectEnv(sessionId),
     ...autoCompactEnv(sessionId),
+    ...subagentEnv(),
     AGENTOS_SESSION_ID: sessionId,
     AGENTOS_URL: selfUrl(),
     PATH: `${AOS_BIN_DIR}:${process.env.PATH ?? ""}`,

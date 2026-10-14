@@ -240,7 +240,8 @@
 
 ## Model routing and token savings
 
-- [ ] Run read-only search subagents on a cheaper model than the parent session (A/B first)
+- [x] Run read-only search subagents on a cheaper model than the parent session
+- [ ] A/B Sonnet against the parent model for reviewer subagents before changing the never-Haiku rule
 - [ ] Compact long Opus chats earlier so fewer turns re-read a very large context
 - [ ] Gate review: put the checklist in a cache-stable prefix instead of repeating it in every diff part
 - [ ] Record usage for titles, recipe drafts, PR text and summaries; bound the summarize input; run PR text through the hardened runner

@@ -171,3 +171,13 @@ describe("commands that would take down every session", () => {
     expect(plain.code).toBe(0);
   });
 });
+
+describe("the subagent model hook in the settings", () => {
+  it("runs on Agent and Task calls, next to the status hook", async () => {
+    const { claudeStatusSettings } = await import("./claude-hooks");
+    const pre = claudeStatusSettings("/h", "/s.mjs", "/node").hooks.PreToolUse;
+    expect(pre.map((e) => e.matcher)).toEqual(["*", "Agent|Task"]);
+    expect(pre[1].hooks[0].command).toBe('"/node" "/s.mjs"');
+    expect(claudeStatusSettings().hooks.Stop).toHaveLength(1);
+  });
+});

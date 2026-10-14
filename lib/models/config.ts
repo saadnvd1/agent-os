@@ -22,6 +22,13 @@ import {
   REF_PATTERN,
   type ModelRole,
 } from "./roles";
+import {
+  mustNotBeHaiku,
+  SUBAGENT_PATTERN,
+  SUBAGENT_TIERS,
+  DEFAULT_SUBAGENT_MODELS,
+  type SubagentModels,
+} from "./subagent-tiers";
 
 // A name passed to `tv` or `security` as its own argument: no option, no
 // line break, nothing a shell would read.
@@ -114,8 +121,26 @@ const price = z.strictObject({
 const roleRef = z.string().trim().regex(REF_PATTERN, "must be provider/model");
 const roleMap = z.partialRecord(z.enum(MODEL_ROLES), roleRef);
 
+// Subagent type (or "prefix*") to the model its calls run on. A type that
+// plans, decides or reviews can't be put on Haiku.
+const subagentMap = z
+  .record(
+    z.string().regex(SUBAGENT_PATTERN, "not a subagent type"),
+    z.enum(SUBAGENT_TIERS)
+  )
+  .refine((m) => Object.keys(m).length <= 40, "at most 40 entries")
+  .superRefine((m, ctx) => {
+    for (const [pattern, tier] of Object.entries(m))
+      if (tier === "haiku" && mustNotBeHaiku(pattern))
+        ctx.addIssue({
+          code: "custom",
+          message: `${pattern} plans, decides or reviews, so it can't run on Haiku`,
+        });
+  });
+
 export const modelSettingsSchema = z.strictObject({
   roles: roleMap.optional(),
+  subagents: subagentMap.optional(),
   providers: z.array(providerSchema).optional(),
   prices: z.record(z.string().regex(REF_PATTERN), price).optional(),
   planStep: z.boolean().optional(),
@@ -200,6 +225,7 @@ export function setWorkspaceModels(
 // (by id), saved providers that aren't presets, and every role filled.
 export interface EffectiveModels {
   roles: Record<ModelRole, string>;
+  subagents: SubagentModels;
   providers: ModelProvider[];
   prices: Record<string, ModelPrice>;
   planStep: boolean;
@@ -212,6 +238,7 @@ export function effectiveModels(
   for (const p of saved.providers ?? []) byId.set(p.id, p as ModelProvider);
   return {
     roles: { ...DEFAULT_ROLE_MODELS, ...saved.roles },
+    subagents: { ...DEFAULT_SUBAGENT_MODELS, ...saved.subagents },
     providers: [...byId.values()],
     prices: { ...DEFAULT_PRICES, ...saved.prices },
     planStep: saved.planStep ?? true,
