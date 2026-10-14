@@ -91,6 +91,20 @@ const MessagesDialog = dynamic(
   () => import("@/components/Bus/MessagesDialog").then((m) => m.MessagesDialog),
   { ssr: false }
 );
+const BookmarksDialog = dynamic(
+  () =>
+    import("@/components/Bookmarks/BookmarksDialog").then(
+      (m) => m.BookmarksDialog
+    ),
+  { ssr: false }
+);
+const ChatBookmarksDialog = dynamic(
+  () =>
+    import("@/components/Bookmarks/ChatBookmarks").then(
+      (m) => m.ChatBookmarksDialog
+    ),
+  { ssr: false }
+);
 const ArchivedDialog = dynamic(
   () =>
     import("@/components/Archived/ArchivedDialog").then(
@@ -143,6 +157,8 @@ const AppDialogs = memo(function AppDialogs({
       <AddProjectDialog />
       <MessagesDialog />
       <ArchivedDialog />
+      <BookmarksDialog />
+      <ChatBookmarksDialog />
       <CleanupDialog />
       <LumifyHubDialogs />
       <UsageDialog />

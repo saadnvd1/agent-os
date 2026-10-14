@@ -16,6 +16,7 @@ import { PaneViewToggle } from "./PaneViewToggle";
 import { PaneMenu } from "./PaneMenu";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { usePaneBarSlots } from "./PaneBarSlots";
+import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarks";
 
 type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
 
@@ -52,6 +53,8 @@ interface DesktopTabBarProps {
   onSplitVertical: () => void;
   onClose: () => void;
   onDetach: () => void;
+  // The chat on show, for its bookmarks; null for a terminal or another view.
+  bookmarksSessionId?: string | null;
 }
 
 export function DesktopTabBar({
@@ -80,6 +83,7 @@ export function DesktopTabBar({
   onSplitVertical,
   onClose,
   onDetach,
+  bookmarksSessionId,
 }: DesktopTabBarProps) {
   const { leading, trailing } = usePaneBarSlots(paneId);
 
@@ -160,6 +164,12 @@ export function DesktopTabBar({
         <ContextMeter sessionId={session?.id} />
         <SessionPrStage sessionId={session?.id} />
         <ViewSwitch session={session} />
+        {bookmarksSessionId && (
+          <ChatBookmarksButton
+            sessionId={bookmarksSessionId}
+            className="h-7 min-w-7"
+          />
+        )}
         {session?.working_directory && (
           <PaneViewToggle
             viewMode={viewMode}

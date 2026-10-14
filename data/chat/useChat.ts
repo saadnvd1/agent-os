@@ -143,6 +143,8 @@ export function useChat(
   const [state, setState] = useState<ChatState>("idle");
   const [compacting, setCompacting] = useState<Compacting | null>(null);
   const [connected, setConnected] = useState(false);
+  // The chat whose snapshot the items are, once one has landed.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [commands, setCommands] = useState<ChatCommand[]>([]);
   const [models, setModels] = useState<ChatModel[]>([]);
   const [model, setModelState] = useState("");
@@ -232,6 +234,7 @@ export function useChat(
           setCompacting(m.compacting ?? null);
           setQueue(m.queue ?? []);
           setSuggestion(m.suggestion ?? null);
+          setLoadedFor(sessionId);
         } else if (m.type === "queue") {
           setQueue(m.queue);
         } else if (m.type === "suggestion") {
@@ -506,6 +509,7 @@ export function useChat(
 
   return {
     items,
+    loadedFor,
     hasMore,
     loadingOlder,
     loadOlder,

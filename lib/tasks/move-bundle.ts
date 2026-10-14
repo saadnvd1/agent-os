@@ -6,6 +6,7 @@
 import { isBranchName } from "../git";
 import { CHAT_ACCESS, type ChatAccess } from "../chat/events";
 import type { ProjectRef } from "./project-ref";
+import type { MovedBookmark } from "../bookmarks/store";
 import { isClaudeSessionId } from "./transcript";
 
 // A long task's conversation runs to a few MB; this is far past that.
@@ -92,10 +93,14 @@ export interface ChatBundle {
   // An undo's resume point not yet used up, and the context meter.
   resumeAt: string | null;
   context: string | null;
+  // Its bookmarks; absent from a machine that predates them.
+  bookmarks?: MovedBookmark[];
 }
 
 const isStr = (v: unknown): v is string => typeof v === "string";
 const isStrOrNull = (v: unknown) => v === null || isStr(v);
+
+const BOOKMARK_KINDS = ["user", "assistant", "tool", "turn"];
 
 function validateChat(c: ChatBundle): ChatBundle {
   if (!c || typeof c !== "object" || !Array.isArray(c.items))
@@ -118,6 +123,21 @@ function validateChat(c: ChatBundle): ChatBundle {
     )
       throw new Error("Bad queued message");
     bytes += m.id.length + m.text.length + (m.images?.length ?? 0);
+  }
+  if (c.bookmarks !== undefined && !Array.isArray(c.bookmarks))
+    throw new Error("Bad chat bookmarks");
+  for (const b of c.bookmarks ?? []) {
+    if (
+      !b ||
+      !isStr(b.itemId) ||
+      !(b.scope === "item" || b.scope === "turn") ||
+      !BOOKMARK_KINDS.includes(b.kind) ||
+      !isStr(b.text) ||
+      !isStrOrNull(b.note) ||
+      !isStr(b.createdAt)
+    )
+      throw new Error("Bad bookmark");
+    bytes += b.itemId.length + b.text.length + (b.note?.length ?? 0);
   }
   if (bytes > MAX_CHAT_BYTES) throw new Error("The chat is too large to move");
   if (!isStrOrNull(c.resumeAt) || !isStrOrNull(c.context))
