@@ -1,3 +1,9 @@
+---
+title: Sharing a chat or a page
+description: Share a chat or a page as a read-only snapshot link with redaction first, or download it as an HTML file.
+order: 8
+---
+
 # Sharing a chat or a page
 
 Share a chat, or a page an agent showed, as a read-only snapshot at a link
