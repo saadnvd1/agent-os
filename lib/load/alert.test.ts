@@ -22,10 +22,32 @@ describe("the load alert", () => {
         s("ios", 1),
         s("docs", 0.5),
       ],
+      unattributed: [],
       sessions: {},
     });
     expect(text).toBe(
       "Machine load red for 2+ minutes: 42.1 on 10 cores, memory critical. Top: api 6.2 cores, 2.0 GB (vitest); web 3.1 cores, 2.0 GB (tsc); ios 1.0 cores, 2.0 GB."
+    );
+  });
+});
+
+describe("the load alert's unattributed line", () => {
+  it("names heavy processes that belong to no session", () => {
+    const text = alertText({
+      level: "red",
+      load1: 20,
+      cores: 10,
+      memUsedPct: 50,
+      pressure: "normal",
+      top: [],
+      unattributed: [
+        { name: "clang", count: 6, cores: 4, rssBytes: 2 ** 30 },
+        { name: "node", count: 1, cores: 1.1, rssBytes: 2 ** 29 },
+      ],
+      sessions: {},
+    });
+    expect(text).toBe(
+      "Machine load red for 2+ minutes: 20 on 10 cores. Not from a session: clang ×6 4.0 cores, 1.0 GB; node 1.1 cores, 0.5 GB."
     );
   });
 });

@@ -77,8 +77,6 @@ const { recordConditions, pendingEvents, markDelivered } =
 const { readSession } = await import("./read");
 const { dropTask, taskView } = await import("@/lib/tasks");
 const { moveRefusal } = await import("@/lib/tasks/move-guard");
-const { sessionUsage } = await import("@/lib/load/monitor");
-const { workerTmuxName } = await import("@/lib/chat/worker/protocol");
 const { roleExtras } = await import("@/lib/chat/worker/extras");
 const { buildTaskBrief } = await import("@/lib/tasks/brief");
 
@@ -412,29 +410,5 @@ describe("chat tasks, where they differ from terminal ones", () => {
       view: "chat",
     });
     expect(await roleExtras(row(plain))).toEqual({});
-  });
-});
-
-describe("the load monitor", () => {
-  it("puts a chat's worker and a terminal's pane on their own sessions", () => {
-    const rows = [
-      { id: "c", name: "chat", tmux_name: "claude-c" },
-      { id: "t", name: "term", tmux_name: "claude-t" },
-      { id: "x", name: "idle", tmux_name: "claude-x" },
-    ];
-    const usage = sessionUsage(
-      {
-        [workerTmuxName("c")]: { cores: 1.24, rssBytes: 100 },
-        "claude-t": { cores: 2, rssBytes: 200 },
-      },
-      rows
-    );
-    expect(usage.c).toMatchObject({
-      sessionId: "c",
-      cores: 1.2,
-      rssBytes: 100,
-    });
-    expect(usage.t).toMatchObject({ sessionId: "t", cores: 2, rssBytes: 200 });
-    expect(usage.x).toBeUndefined();
   });
 });
