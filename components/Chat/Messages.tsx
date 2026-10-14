@@ -12,27 +12,49 @@ import type { ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
 import { compactedLine } from "@/lib/chat/stale";
-import { splitInlineCode, splitUserText } from "@/lib/chat/user-text";
+import { splitProse, splitUserText } from "@/lib/chat/user-text";
+import { inAppSessionId } from "@/lib/session-url";
 import { CodeBlock } from "./Code";
 import { CopyButton } from "./CopyButton";
 import { ImageThumb } from "./ImageThumb";
 import { Markdown } from "./Markdown";
+import { openSessionLink } from "./session-link";
 import { UndoButton } from "./Undo";
 import { useRowState } from "./rowState";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
+function UserLink({ href }: { href: string }) {
+  const id =
+    typeof window === "undefined"
+      ? null
+      : inAppSessionId(href, window.location.origin);
+  return (
+    <a
+      href={href}
+      target={id ? undefined : "_blank"}
+      rel={id ? undefined : "noopener noreferrer"}
+      onClick={id ? (e) => openSessionLink(e, id) : undefined}
+      className="font-medium [overflow-wrap:anywhere] underline underline-offset-2"
+    >
+      {href}
+    </a>
+  );
+}
+
 function Prose({ text }: { text: string }) {
   return (
     <>
-      {splitInlineCode(text).map((p, i) =>
-        p.code ? (
+      {splitProse(text).map((p, i) =>
+        p.kind === "code" ? (
           <code
             key={i}
             className="bg-foreground/[0.06] rounded px-1 py-0.5 font-mono text-[0.9em]"
           >
             {p.text}
           </code>
+        ) : p.kind === "link" ? (
+          <UserLink key={i} href={p.text} />
         ) : (
           <span key={i}>{p.text}</span>
         )

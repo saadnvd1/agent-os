@@ -1,6 +1,5 @@
 "use client";
 
-import type { MouseEvent } from "react";
 import {
   Bot,
   CalendarClock,
@@ -15,6 +14,7 @@ import { eventParts, originOf } from "@/lib/chat/origin";
 import { hrefWithSession } from "@/lib/session-url";
 import { cn } from "@/lib/utils";
 import { UserMessage } from "./Messages";
+import { openSessionLink as openSession } from "./session-link";
 import { useRowState } from "./rowState";
 
 type UserItem = Extract<ChatItem, { kind: "user" }>;
@@ -33,14 +33,6 @@ const SHORT = 32;
 
 export const clock = (at: number) =>
   new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-
-// Opens the session through its address, the way a shared link does.
-function openSession(e: MouseEvent<HTMLAnchorElement>, id: string) {
-  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-  e.preventDefault();
-  window.history.pushState(null, "", hrefWithSession(location.href, id));
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
 
 function Source({ origin }: { origin: ChatOrigin }) {
   const name = (

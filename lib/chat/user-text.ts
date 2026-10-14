@@ -62,3 +62,55 @@ export function splitInlineCode(
   if (last < text.length) out.push({ code: false, text: text.slice(last) });
   return out;
 }
+
+export type ProsePart =
+  | { kind: "text"; text: string }
+  | { kind: "code"; text: string }
+  | { kind: "link"; text: string };
+
+const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
+const TRAILING = /[.,;:!?]$/;
+
+// Punctuation that ends a sentence, or a closing paren with no opener in the
+// URL, belongs to the text around it.
+function trimUrl(url: string): string {
+  for (;;) {
+    if (TRAILING.test(url)) url = url.slice(0, -1);
+    else if (url.endsWith(")") && count(url, ")") > count(url, "("))
+      url = url.slice(0, -1);
+    else return url;
+  }
+}
+
+function count(s: string, ch: string): number {
+  return s.split(ch).length - 1;
+}
+
+// http(s) URLs in plain text, split out so they can be links.
+export function splitLinks(text: string): { link: boolean; text: string }[] {
+  const out: { link: boolean; text: string }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    const url = trimUrl(m[0]);
+    if (!/^https?:\/\/[^/?#]+/i.test(url)) continue;
+    if (m.index > last)
+      out.push({ link: false, text: text.slice(last, m.index) });
+    out.push({ link: true, text: url });
+    last = m.index + url.length;
+  }
+  if (last < text.length) out.push({ link: false, text: text.slice(last) });
+  return out;
+}
+
+// Prose split into code spans, links and the text between. Links are only
+// looked for outside code spans.
+export function splitProse(text: string): ProsePart[] {
+  return splitInlineCode(text).flatMap((p): ProsePart[] =>
+    p.code
+      ? [{ kind: "code", text: p.text }]
+      : splitLinks(p.text).map((l) => ({
+          kind: l.link ? "link" : "text",
+          text: l.text,
+        }))
+  );
+}

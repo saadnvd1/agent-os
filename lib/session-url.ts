@@ -26,6 +26,18 @@ export function hrefWithSession(href: string, id: string | null): string {
   return url.pathname + url.search + url.hash;
 }
 
+/** The session a link to this same instance opens, or null for any other link. */
+export function inAppSessionId(href: string, origin: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return null;
+  }
+  if (url.origin !== origin || url.pathname !== "/") return null;
+  return sessionIdFromHref(href);
+}
+
 export function sessionLink(origin: string, id: string): string {
   return `${origin}/?${SESSION_PARAM}=${encodeURIComponent(id)}`;
 }
