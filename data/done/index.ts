@@ -17,12 +17,34 @@ async function json<T>(res: Response): Promise<T> {
   return data;
 }
 
-const post = (url: string, body?: object) =>
-  fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+// Longer than the server's own deadline for done (lib/done/deadline.ts), so
+// the pending toast always ends even if the server never answers.
+export const DONE_REQUEST_TIMEOUT_MS = 120_000;
+
+async function post(url: string, body?: object, timeoutMs?: number) {
+  const abort = new AbortController();
+  const timer = timeoutMs
+    ? setTimeout(
+        () =>
+          abort.abort(
+            new Error(
+              "The server didn't answer in time. It may still be working: check the row, then try again."
+            )
+          ),
+        timeoutMs
+      )
+    : undefined;
+  try {
+    return await fetch(url, {
+      signal: abort.signal,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function useDoneMutation<V, R>(fn: (v: V) => Promise<R>) {
   const queryClient = useQueryClient();
@@ -40,7 +62,11 @@ export function useDoneSession() {
     async (id: string) =>
       (
         await json<{ outcome: DoneOutcome }>(
-          await post(`/api/sessions/${id}/done`)
+          await post(
+            `/api/sessions/${id}/done`,
+            undefined,
+            DONE_REQUEST_TIMEOUT_MS
+          )
         )
       ).outcome
   );

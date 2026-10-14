@@ -111,4 +111,24 @@ describe("Done from a row's menu", () => {
       expect.objectContaining({ id: "t1" })
     );
   });
+
+  it("ends the Merging toast with an error when the server never answers", async () => {
+    vi.useFakeTimers();
+    fetchSpy.mockImplementation(
+      (_url: string, init: { signal?: AbortSignal }) =>
+        new Promise((_, reject) =>
+          init.signal?.addEventListener("abort", () =>
+            reject(init.signal?.reason)
+          )
+        )
+    );
+    act(() => hook.current(quick));
+    expect(toast.error).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTimeAsync(121_000));
+    vi.useRealTimers();
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ id: "t1" })
+    );
+  });
 });
