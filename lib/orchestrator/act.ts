@@ -26,7 +26,9 @@ import {
   findQueued,
   queuedLabel,
   removeQueued,
+  slotState,
   startOrQueue,
+  startQueuedForOrchestrator,
 } from "../tasks/queue";
 import { getStack, previewStack, startStack } from "../stacks";
 import { treeOrder } from "../stacks/tree";
@@ -155,10 +157,14 @@ export async function startTask(
     planReason?: string;
     priority?: Priority;
     machine?: "mac" | "any";
+    now?: boolean;
+    nowReason?: string;
   } = {}
 ): Promise<string> {
   if (opts.planOnly && opts.plan === false)
     throw new Error("plan_only implies plan; pass plan true");
+  if (opts.now && !opts.nowReason)
+    throw new Error("now needs now_reason: say why it can't wait for a slot");
   const project = workspaceProject(workspaceId, projectRef);
   const model = parseOverride(opts.model) ?? undefined;
   const startedBy = orchestratorId(workspaceId);
@@ -168,6 +174,7 @@ export async function startTask(
       `${project.name} runs on another machine; the orchestrator starts tasks on this one only for now`
     );
   const view = opts.view ?? DEFAULT_START_VIEW;
+  const slots = slotState(project.id);
   // Held for a slot or its `after`, it starts by itself through the brakes;
   // you get an event when it does.
   const out = await startOrQueue(
@@ -186,6 +193,7 @@ export async function startTask(
       originWorkspaceId: workspaceId,
       priority: opts.priority,
       machine: opts.machine,
+      now: opts.now,
     },
     () =>
       braked(
@@ -213,6 +221,12 @@ export async function startTask(
   }
   const task = out.started;
   if (opts.priority) stampPriority(task.id, opts.priority);
+  const past = opts.now && slots.full && !opts.planOnly;
+  if (past)
+    addNote(
+      workspaceId,
+      `Started "${task.name}" past the running-task limit (${slots.running} of ${slots.limit} running): ${opts.nowReason}`
+    );
   const planOnlyNote = opts.planOnly
     ? " Plan only: it stops after the plan and waits; approve_plan continues it, drop rejects it."
     : "";
@@ -220,7 +234,39 @@ export async function startTask(
     opts.plan && !opts.planOnly && task.plan_phase !== "planning"
       ? ` Plan step skipped: ${view === "terminal" ? "a terminal task has none" : "planning and implementation use the same model"}.`
       : "";
-  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${skipped}${planOnlyNote}`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${skipped}${planOnlyNote}${past ? " Started past the running-task limit." : ""}`;
+}
+
+// Starts a queued task now, past the running-task limit and its `after`.
+// Pause, the brakes and a machine need still hold it.
+export async function startNow(
+  workspaceId: string,
+  ref: string,
+  reason: string
+): Promise<string> {
+  const queued = findQueued(workspaceId, ref, { byName: true });
+  if (!queued) {
+    const running = workspaceTask(workspaceId, ref);
+    throw new Error(`${running.name} is already started, not queued`);
+  }
+  const name = queuedLabel(queued);
+  const out = await startQueuedForOrchestrator(workspaceId, queued.id);
+  if (out.outcome === "held")
+    return `Not started: ${out.text}. ${name} stays in the queue.`;
+  if (out.outcome === "failed") return `Could not start ${name}: ${out.text}.`;
+  const skipped = [
+    out.wasFull
+      ? `past the running-task limit (${out.running} of ${out.limit} running)`
+      : "",
+    out.skippedAfter ? "without waiting for its after" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  addNote(
+    workspaceId,
+    `Started queued ${name} now${skipped ? `, ${skipped}` : ""}: ${reason}`
+  );
+  return `Started ${name} (id ${queued.id.slice(0, 8)}) now${skipped ? `, ${skipped}` : ""}. You'll get an event when its PR opens.`;
 }
 
 // The orchestrator approves a plan-only task's plan; a message amends it.
