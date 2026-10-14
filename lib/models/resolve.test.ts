@@ -8,7 +8,8 @@ import {
 import { setModelSettings, setWorkspaceModels } from "./config";
 import { PROVIDER_PRESETS } from "./providers";
 import { parseOverride, providerShellEnv, resolveRole } from "./resolve";
-import { DEFAULT_ROLE_MODELS, parseModelRef, sessionRole } from "./roles";
+import { DEFAULT_ROLE_MODELS, parseModelRef } from "./roles";
+import { sessionRole } from "./session-role";
 
 const deepseek = {
   ...PROVIDER_PRESETS.find((p) => p.id === "deepseek")!,

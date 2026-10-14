@@ -13,7 +13,8 @@
 
 import { db } from "../db";
 import { effectiveModels } from "../models/config";
-import { sessionRole, type ModelRole } from "../models/roles";
+import { type ModelRole } from "../models/roles";
+import { sessionRole } from "../models/session-role";
 import { MAX_REFRESH_TOKENS, MIN_REFRESH_TOKENS } from "./refresh-limits";
 
 export const ORCHESTRATOR_KEY = "orchestrator.refresh_tokens";

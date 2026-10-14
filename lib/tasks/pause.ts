@@ -28,7 +28,7 @@ import { launchPending } from "./launch-gate";
 import { killTmux } from "./start";
 import { launchClaude } from "../agents/launch";
 import { resolveRole, sessionWorkspace, taskOverride } from "../models/resolve";
-import { sessionRole } from "../models/roles";
+import { sessionRole } from "../models/session-role";
 import { holdingEscalations } from "../orchestrator/gates";
 import { openBySubject, workSubject } from "../orchestrator/asks";
 import { queueEventOnce } from "../orchestrator/events";
