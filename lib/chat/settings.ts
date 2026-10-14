@@ -66,6 +66,12 @@ function visibleCommands(caps: Capabilities): ChatCommand[] {
   );
 }
 
+// The commands already loaded for a session's folder; never loads them.
+export function cachedCommands(session: Session): ChatCommand[] {
+  const caps = registry.caps.get(capsKey(session));
+  return caps ? visibleCommands(caps) : [];
+}
+
 export function emitCapabilities(session: Session, listener?: Listener): void {
   const caps = registry.caps.get(capsKey(session));
   if (!caps) return;

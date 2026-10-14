@@ -43,6 +43,7 @@ coverage/
 .mem.db-wal
 .mem.db-shm
 agent-os.db
+/intake/
 agent-os.db-wal
 agent-os.db-shm
 

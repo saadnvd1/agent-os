@@ -5,6 +5,7 @@ import {
   CalendarClock,
   ChevronRight,
   Info,
+  Smartphone,
   UserCheck,
   Zap,
   type LucideIcon,
@@ -25,6 +26,7 @@ export const ICON: Record<ChatOriginKind, LucideIcon> = {
   schedule: CalendarClock,
   system: Info,
   decision: UserCheck,
+  device: Smartphone,
 };
 
 // Longer than this (what fits beside a source on a phone), or more than one line,

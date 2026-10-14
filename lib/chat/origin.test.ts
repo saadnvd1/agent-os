@@ -29,6 +29,17 @@ const KNOWN_PREFIXES = [
 ];
 
 describe("originOf", () => {
+  it("reads a device origin as set, with its short line", () => {
+    const origin: ChatOrigin = {
+      kind: "device",
+      label: "iPhone",
+      body: "Bug report: chip overlaps",
+    };
+    const item = user({ text: "Bug report from iPhone (long…)", origin });
+    expect(originOf(item)).toEqual(origin);
+    expect(eventParts(item, origin).body).toBe("Bug report: chip overlaps");
+  });
+
   it("is the tag set where the message was sent", () => {
     const origin: ChatOrigin = { kind: "event", label: "AgentOS" };
     expect(originOf(user({ origin, from: "agentos" }))).toBe(origin);

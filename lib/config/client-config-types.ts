@@ -26,4 +26,51 @@ export interface ClientConfig {
   taskStates: Record<string, LabelTone>;
   runStatuses: Record<string, LabelTone>;
   runTriggers: Record<string, string>;
+  features: ClientFeatures;
+  intake: IntakeLimits;
+  attachments: { max: number };
+  voice: VoiceLimits;
 }
+
+// Server kill switches for the phone's new sends.
+export interface ClientFeatures {
+  shakeToReport: boolean;
+  shareIntake: boolean;
+  voice: boolean;
+}
+
+export interface IntakeLimits {
+  maxBytes: number;
+  maxFiles: number;
+  maxInlineImages: number;
+  maxNoteChars: number;
+  screenshotMaxEdge: number;
+  logSeconds: number;
+  logMaxLines: number;
+}
+
+export interface VoiceLimits {
+  maxPhrases: number;
+  holdMinMs: number;
+  cancelSlidePx: number;
+  speakMaxChars: number;
+}
+
+export const INTAKE_LIMITS: IntakeLimits = {
+  maxBytes: 25_000_000,
+  maxFiles: 8,
+  maxInlineImages: 2,
+  maxNoteChars: 280,
+  screenshotMaxEdge: 1600,
+  logSeconds: 60,
+  logMaxLines: 200,
+};
+
+export const ATTACHMENT_LIMITS = { max: 8 };
+
+export const VOICE_LIMITS: VoiceLimits = {
+  maxPhrases: 100,
+  holdMinMs: 250,
+  cancelSlidePx: 80,
+  speakMaxChars: 300,
+};

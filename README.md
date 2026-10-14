@@ -18,6 +18,7 @@ and check on all of it from your phone.
 - **Nothing starts until you send.** ⌥N opens a draft with project, machine, agent and branch as chips. [More](docs/guides/sessions.md)
 - **Other machines in the same list.** Link another machine that runs AgentOS and start or move work there. [More](docs/reference/machines.md)
 - **Built for your phone.** The whole app works on a phone; pair it with a QR code. [More](docs/guides/phone.md)
+- **Phone to orchestrator.** A paired phone can send a shake report or a shared page or file to a workspace's orchestrator (`POST /api/orchestrators/:workspaceId/intake`, saved under `intake/` beside the database, shared content marked untrusted), and fetch names to improve dictation (`GET /api/voice/vocab?workspace=`). [More](docs/guides/phone.md)
 - **Agents that talk to each other.** Sessions message each other with `aos`, and you see every conversation in Messages. [More](docs/guides/agent-network.md)
 - **Chat or terminal, same conversation.** Streaming replies, steps and diffs, plan mode, slash commands, `@file`, undo. [More](docs/guides/chat.md)
 - **Bookmarks.** Star any message, tool call or turn, then find it again from the chat or across every chat, with a search. [More](docs/guides/chat.md)
