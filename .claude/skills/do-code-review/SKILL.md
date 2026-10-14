@@ -116,6 +116,6 @@ The agents carry the detail; this is the short list. (The orchestrator's own ind
 - **Secrets**: never in argv, logs, URLs, error text sent to a client, or a file that isn't owner-only (0600 file, 0700 dir).
 - **Untrusted text** (other sessions, terminals, CI, cards, PR bodies, web pages) reaches a model only inside `untrusted()` and redacted; it never becomes a command, a path or a tool argument without validation.
 - **Gates**: fail closed on missing, stale, unreadable or errored input; merge only with `--match-head-commit` at the sha that was judged; hard lines go to `ask_saad`, never around it; the reviewer subprocess has no shell, no settings from the PR, no MCP.
-- **Durability**: a session survives a server restart and reattaches; sends are idempotent by id; migrations are appended with the next id and never edited; nothing synchronous and slow runs in a request handler or the event loop.
+- **Durability**: a session survives a server restart and reattaches; sends are idempotent by id; a migration is one new file in `lib/db/migrations/` and a shipped one is never edited; nothing synchronous and slow runs in a request handler or the event loop.
 - **UI**: phone first (390px), 44px targets, light and dark both checked, no gradients, neon glows or cyan accents.
 - **Tests**: test the behaviour, not the mock; pin `NODE_ENV`; no reliance on the author's machine (real `~/.agent-os`, LibreSSL, tmux socket, `limits.json`).

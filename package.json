@@ -29,11 +29,13 @@
     "LICENSE"
   ],
   "scripts": {
-    "predev": "node scripts/ensure-native.mjs",
+    "predev": "node scripts/ensure-native.mjs && node scripts/gen-migrations-index.mjs",
     "dev": "AGENTOS_DEV=1 tsx server.ts",
+    "prebuild": "node scripts/gen-migrations-index.mjs",
     "build": "next build",
-    "prestart": "node scripts/ensure-native.mjs",
+    "prestart": "node scripts/ensure-native.mjs && node scripts/gen-migrations-index.mjs",
     "start": "NODE_ENV=production tsx server.ts",
+    "pretypecheck": "node scripts/gen-migrations-index.mjs",
     "typecheck": "tsc --noEmit",
     "setup": "bash scripts/setup.sh",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
@@ -42,6 +44,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:build:linux": "docker build -t agentos-linux -f src-tauri/Dockerfile.linux src-tauri && docker run --rm -v $(pwd)/src-tauri/target:/app/target agentos-linux",
+    "prelint": "node scripts/gen-migrations-index.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

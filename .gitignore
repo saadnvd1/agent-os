@@ -82,3 +82,6 @@ progress.md
 # update runner state and log (beside the database)
 agent-os-update.json
 agent-os-update.log
+
+# Built from lib/db/migrations/ by scripts/gen-migrations-index.mjs
+lib/db/migrations.generated.ts

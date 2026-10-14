@@ -28,7 +28,7 @@ Don't edit files. Running a test (`npx vitest run <file>`) or a read-only comman
 
 **Orchestrator safety**: CONFIRMED if there's a sequence of events (a push between judge and merge, a missing or stale file, a restart, a message from a task) that merges, starts or approves against the rules in `lib/orchestrator/brief.ts`. Check `gates.ts`, `signoff.ts`, `brakes.ts` and `ask-approvals.ts` for a guard that already covers it.
 
-**Durability**: name the restart, drop or race, and show the line after which a crash leaves the bad state, or the synchronous call on a request path. For a migration id, read `lib/db/migrations.ts` on main and on the branch.
+**Durability**: name the restart, drop or race, and show the line after which a crash leaves the bad state, or the synchronous call on a request path. For a migration key, list `lib/db/migrations/` on main and on the branch.
 
 **Frontend**: for a size or colour claim, find the class or token actually applied (including the component's defaults in `components/ui`). For React Query, show the key and the variable missing from it.
 

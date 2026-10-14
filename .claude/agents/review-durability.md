@@ -1,6 +1,6 @@
 ---
 name: review-durability
-description: Review AgentOS changes for lost or duplicated work across restarts - the chat worker protocol, restart and reattach, idempotent sends, migrations appended with the next id, state claimed before side effects, and nothing slow or synchronous blocking a request handler or the event loop. Dispatched by the do-code-review skill.
+description: Review AgentOS changes for lost or duplicated work across restarts - the chat worker protocol, restart and reattach, idempotent sends, a migration added as its own file, state claimed before side effects, and nothing slow or synchronous blocking a request handler or the event loop. Dispatched by the do-code-review skill.
 model: inherit
 tools: Read, Grep, Glob, Bash
 ---
@@ -9,7 +9,7 @@ tools: Read, Grep, Glob, Bash
 
 AgentOS is redeployed under running sessions many times a day: every push to main restarts the live server. Sessions, chat turns, tasks and stacks have to come through a restart, a dropped socket or a crash mid-operation without being lost, run twice or wedged. One Node process serves every session, so anything that blocks its event loop freezes all of them. Flag high-confidence problems in code **introduced or modified by this branch**.
 
-Read first: `lib/chat/worker/protocol.ts` (the server ↔ worker messages, `PROTOCOL_VERSION`), `lib/chat/worker/client.ts` and `host.ts`, `lib/chat/store.ts`, `lib/db/migrations.ts`, and for tasks and stacks `lib/stacks/start.ts`, `restack.ts`, `land.ts`, `tick.ts`.
+Read first: `lib/chat/worker/protocol.ts` (the server ↔ worker messages, `PROTOCOL_VERSION`), `lib/chat/worker/client.ts` and `host.ts`, `lib/chat/store.ts`, `lib/db/migrations.ts` (the runner) and `lib/db/migrations/README.md`, and for tasks and stacks `lib/stacks/start.ts`, `restack.ts`, `land.ts`, `tick.ts`.
 
 ## Process
 
@@ -38,7 +38,7 @@ Anything that starts work (a task, a stack item, a review, a merge) records that
 A lock file taken by `O_EXCL` create; a stale lock renamed aside before it's taken (two processes that both judged it stale must not both win); reading a lock never throws.
 
 **Migrations**
-In `lib/db/migrations.ts`: append a new `{ id, name, up }` with the next id (max + 1 on the branch **after rebasing on main**: two branches taking the same id is the usual collision). Flag:
+A migration is one new file, `lib/db/migrations/<YYYYMMDDTHHMM_snake_name>.ts` (UTC timestamp key, the file named exactly the key); nothing shared is edited. Flag a new numbered migration, a key that is not a fresh timestamp, a hand-edited index, and:
 
 - an edit to a migration that has shipped (its `up` never runs again on existing installs)
 - an id reused, skipped or out of order
