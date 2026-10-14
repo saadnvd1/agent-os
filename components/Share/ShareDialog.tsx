@@ -27,24 +27,17 @@ import {
   type SharePreview,
 } from "@/data/shares";
 import { shareUi, shareUiActions } from "@/stores/shareUi";
-import { redactionSummary, formatBytes, fileName } from "./format";
-
-const EXPIRIES: { value: ShareExpiry; label: string }[] = [
-  { value: "1d", label: "1 day" },
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "never", label: "Never" },
-];
-
-const TYPE_LABEL: Record<string, string> = {
-  user: "You",
-  assistant: "Agent",
-  plan: "Plan",
-  error: "Error",
-  divider: "Divider",
-  artifact: "Page",
-  detail: "Tool",
-};
+import {
+  DEFAULT_EXPIRY,
+  EXPIRIES,
+  EXPIRY_LABEL,
+  TYPE_LABEL,
+  fileName,
+  formatBytes,
+  nothingLeft,
+  redactionSummary,
+  toggleDrop,
+} from "@/lib/share/view";
 
 // Opened from a menu or an artifact: the redacted page exactly as it would be
 // uploaded, with what to leave out, then Create link or Download HTML.
@@ -77,7 +70,7 @@ function ShareBody({
 }) {
   const [tools, setTools] = useState(false);
   const [dropped, setDropped] = useState<string[]>([]);
-  const [expiresIn, setExpiresIn] = useState<ShareExpiry>("7d");
+  const [expiresIn, setExpiresIn] = useState<ShareExpiry>(DEFAULT_EXPIRY);
   const [preview, setPreview] = useState<SharePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
@@ -111,10 +104,7 @@ function ShareBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, sessionId, artifactId, tools, dropped]);
 
-  const toggle = (id: string) =>
-    setDropped((d) =>
-      d.includes(id) ? d.filter((x) => x !== id) : [...d, id]
-    );
+  const toggle = (id: string) => setDropped((d) => toggleDrop(d, id));
 
   const makeLink = async () => {
     if (!preview) return;
@@ -166,7 +156,7 @@ function ShareBody({
 
   const linked = preview?.connectLinked ?? false;
   const empty =
-    kind === "chat" && !!preview && preview.items.length === dropped.length;
+    kind === "chat" && !!preview && nothingLeft(preview.items, dropped);
   const summary = preview ? redactionSummary(preview.hits) : "";
 
   return (
@@ -245,8 +235,8 @@ function ShareBody({
                 </SelectTrigger>
                 <SelectContent>
                   {EXPIRIES.map((e) => (
-                    <SelectItem key={e.value} value={e.value}>
-                      {e.label}
+                    <SelectItem key={e} value={e}>
+                      {EXPIRY_LABEL[e]}
                     </SelectItem>
                   ))}
                 </SelectContent>
