@@ -12,6 +12,7 @@ import {
   slugify,
   generateBranchName,
 } from "./git";
+import { refuseRealStateUnderTest } from "./test-home-guard";
 import { installWorktreeHooks } from "./worktree-hooks";
 import { gitResult, isGitError, worktreeList } from "./git-exec";
 import { addWorktree } from "./worktree-add";
@@ -43,8 +44,13 @@ export async function mainCheckoutOf(worktreePath: string): Promise<string> {
   }
 }
 
+/** Where task worktrees live: ~/.agent-os/worktrees. */
+export function worktreesRoot(home = os.homedir()): string {
+  return refuseRealStateUnderTest(path.join(home, ".agent-os", "worktrees"));
+}
+
 // Base directory for all worktrees
-export const WORKTREES_DIR = path.join(os.homedir(), ".agent-os", "worktrees");
+export const WORKTREES_DIR = worktreesRoot();
 
 export interface WorktreeInfo {
   worktreePath: string;
