@@ -23,3 +23,24 @@ An orchestrator's state (gate checks, failure counts, asks, wakes, scope changes
 
 - Both machines need the `orchestrated-move` capability; the arriving one needs the task's model provider or it refuses.
 - Stop and drop on a moved task are left to the holder; a revoked holder device can't be released yet (see ideas.md).
+
+## Queue-placed tasks (2026-10-14)
+
+A task the queue starts on a linked machine is held there exactly like a moved
+one: the start carries the orchestrator's description (`orchestrated`, capability
+`held-start`), the mirror gets `started_by` and `task_since`, and every relayed
+call goes by the one `isHeldRemote` test (lib/tasks/held-remote.ts). A placed
+task started before this was held is held on first contact (`POST
+/api/tasks/:id/hold`, retried at most every 5 minutes), and the messages stored
+for it meanwhile are sent then (older than a day are marked read).
+
+## Queue-placed tasks (2026-10-14)
+
+A task the queue starts on a linked machine is held there exactly like a moved
+one: the start carries the orchestrator's description (`orchestrated`, capability
+`held-start`), the mirror gets `started_by` and `task_since`, and every relayed
+call goes by the one `isHeldRemote` test (lib/tasks/held-remote.ts). A placed
+task started before this was held is held on first contact (`POST
+/api/tasks/:id/hold`, which never starts anything; retried at most every 5
+minutes), and the messages stored for it meanwhile are sent then, in order and
+keyed by their stored id (older than a day are marked read).

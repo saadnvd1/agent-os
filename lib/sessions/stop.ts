@@ -2,7 +2,7 @@ import { endTmuxSession } from "../tmux/end";
 import { hostLink } from "../hosts/remote-api";
 import { stopChatTurn } from "../chat/stop";
 import type { Session } from "../db";
-import { stopHeldTask } from "../tasks/held-remote";
+import { isHeldRemote, stopHeldTask } from "../tasks/held-remote";
 import { releaseOnEnd } from "../simulator";
 import { forgetPlanWait } from "../models/plan-step";
 
@@ -21,12 +21,12 @@ export async function stopSession(
     | "tmux_name"
     | "started_by"
     | "task_prompt"
+    | "task_since"
   >
 ): Promise<string> {
   // A task its orchestrator moved to a linked machine stops through that
   // machine's AgentOS, chat or terminal.
-  if (s.started_by && s.task_prompt && hostLink(s.host_id))
-    return stopHeldTask(s);
+  if (isHeldRemote(s)) return stopHeldTask(s);
   if (s.view === "chat") {
     if (hostLink(s.host_id))
       throw new Error(

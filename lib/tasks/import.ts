@@ -28,6 +28,7 @@ import { expandHome } from "./session";
 import { ensureProject } from "./project-ref";
 import { checkoutBranchWorktree } from "./branch-worktree";
 import { rewritePaths, writeTranscript } from "./transcript";
+import { holdFor } from "./held";
 import { stepProgress } from "./move-progress";
 import { dropChat, unpackChat } from "./move-chat";
 import { sendChat, stopChat } from "../chat/runner";
@@ -171,20 +172,12 @@ async function arrive(
       // Held for the orchestrator's device. The orchestrator's own state
       // (started_by, its gates) never comes from the bundle: it stays on its
       // machine, and a task coming back takes it from the mirror's record.
-      if (holder)
+      if (holder) {
+        holdFor(id, holder, orch);
         db.prepare(
-          `UPDATE sessions SET held_by_device = ?, held_from = ?,
-             held_for = ?, held_for_name = ?,
-             model_provider = ?, model_overrides = ? WHERE id = ?`
-        ).run(
-          holder,
-          orch.heldFrom,
-          orch.orchestrator?.id ?? null,
-          orch.orchestrator?.name ?? null,
-          orch.modelProvider,
-          orch.modelOverrides,
-          id
-        );
+          `UPDATE sessions SET model_provider = ?, model_overrides = ? WHERE id = ?`
+        ).run(orch.modelProvider, orch.modelOverrides, id);
+      }
     }
     carryTaskState(bundle.moveId, id);
   })();

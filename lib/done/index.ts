@@ -31,7 +31,7 @@ import { releasePorts } from "../ports";
 import { dropSessionDatabase } from "../project-config/database";
 import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
 import { hostLink } from "../hosts/remote-api";
-import { doneHeldTask } from "../tasks/held-remote";
+import { doneHeldTask, isHeldRemote } from "../tasks/held-remote";
 import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
 import { pushMerged } from "../notify/push/events";
@@ -175,7 +175,7 @@ export async function doneSession(
     await stopAgent(s);
     // The sign-off's cleanup has already settled it; this reads the result.
     worktree = await settleWorktree(s, { prHead: m.sha });
-  } else if (s.started_by && s.task_prompt && hostLink(s.host_id)) {
+  } else if (isHeldRemote(s)) {
     // Moved to a linked machine by its orchestrator: that machine stops the
     // agent and removes the worktree, which is where they are.
     await doneHeldTask(s);

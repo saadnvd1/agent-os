@@ -5,7 +5,12 @@ import { stampPriority, startOrQueue } from "@/lib/tasks/queue";
 import { isPriority } from "@/lib/tasks/schedule-types";
 import { TASK_CAPABILITIES } from "@/lib/tasks/remote";
 import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
-import { isSessionId, statusFor } from "@/lib/tasks/move-bundle";
+import { callingDevice } from "@/lib/security/device-me";
+import {
+  isSessionId,
+  statusFor,
+  validateOrchestrated,
+} from "@/lib/tasks/move-bundle";
 import { startView } from "@/lib/sessions/launch";
 import { isValidAgentType } from "@/lib/providers";
 import { isAgentModelName } from "@/lib/providers/registry";
@@ -43,6 +48,7 @@ export async function POST(request: NextRequest) {
       plan_only,
       priority,
       machine,
+      orchestrated,
     } = await request.json();
     if (id !== undefined && !isSessionId(id)) throw new Error("Bad task id");
     const pid =
@@ -81,7 +87,21 @@ export async function POST(request: NextRequest) {
       view: startView(view),
     };
     if (id !== undefined) {
-      const session = await createTask({ id, ...opts });
+      // An orchestrator's task is held for the paired device that sent it,
+      // as a moved one is (lib/tasks/held.ts).
+      let held;
+      if (orchestrated !== undefined) {
+        const device = callingDevice(request);
+        if (!device)
+          return NextResponse.json(
+            {
+              error: "An orchestrator's task comes only from a paired machine",
+            },
+            { status: 403 }
+          );
+        held = { device, orchestrated: validateOrchestrated(orchestrated) };
+      }
+      const session = await createTask({ id, ...opts, held });
       return NextResponse.json({ session }, { status: 201 });
     }
     const out = await startOrQueue(

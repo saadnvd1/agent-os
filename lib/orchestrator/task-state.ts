@@ -9,7 +9,7 @@ import { blockedReason } from "../tasks/state";
 import { checkWaitingPatterns, statusDetector } from "../status-detector";
 import { getCheck, putCheck } from "./checks";
 import { cleanRemoteText, hostLink, type HostLink } from "../hosts/remote-api";
-import { heldChatFacts } from "../tasks/held-remote";
+import { heldChatFacts, isHeldRemote } from "../tasks/held-remote";
 import { hostTasks } from "../tasks/remote";
 import { peerPane } from "../hosts/peer-sessions";
 import { untrusted } from "./untrusted";
@@ -88,7 +88,7 @@ async function peerChatWaiting(
   };
   // A task its orchestrator moved is asked about directly: the whole task
   // list is slow, and a miss there reads as unread.
-  const facts = task.started_by ? await heldChatFacts(task) : null;
+  const facts = isHeldRemote(task) ? await heldChatFacts(task) : null;
   if (facts) {
     const { turn } = facts;
     return {

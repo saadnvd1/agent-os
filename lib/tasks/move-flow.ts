@@ -18,7 +18,7 @@ import { sessionWorkspace } from "../models/resolve";
 import { arrived as arrivedHere, importTask } from "./import";
 import {
   forgetHostTasks,
-  hostTasks,
+  requireCapability,
   postIdempotent,
   unknownOutcome,
 } from "./remote";
@@ -86,25 +86,6 @@ export async function moveTask(id: string, toHostId: string): Promise<Session> {
   } finally {
     inFlight.delete(id);
   }
-}
-
-// A machine on an older AgentOS would take a chat task as a terminal one,
-// or an orchestrator's task as a plain one that anyone there could merge, or
-// refuse to hand one over.
-async function requireCapability(
-  link: HostLink,
-  capability: string,
-  what: string
-): Promise<void> {
-  const { capabilities = [] } = await hostTasks(link, true).catch((err) => {
-    throw new Error(
-      `Can't ask ${link.hostName} whether it takes ${what}: ${(err as Error).message}`
-    );
-  });
-  if (!capabilities.includes(capability))
-    throw new Error(
-      `${link.hostName}'s AgentOS can't move ${what} yet; update it first`
-    );
 }
 
 const requireChatMoves = (link: HostLink) =>
