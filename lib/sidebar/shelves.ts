@@ -209,13 +209,12 @@ function wokeUnread(
 }
 
 // When a row went to Done: marked by hand, quiet for 3 days, or (a task)
-// last changed.
+// when it was finished, else last changed.
 export function doneAtMs(row: SidebarRow): number {
-  return row.settled === "manual"
-    ? ms(row.session.settled_at)
-    : row.settled === "auto"
-      ? row.activeAt
-      : ms(row.session.updated_at);
+  if (row.settled === "manual") return ms(row.session.settled_at);
+  if (row.settled === "auto") return row.activeAt;
+  const { settled_at, merged_at, updated_at } = row.session;
+  return ms(settled_at) || ms(merged_at) || ms(updated_at);
 }
 
 const OPEN_RUN = ["queued", "starting", "running"];

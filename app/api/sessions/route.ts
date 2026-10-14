@@ -10,9 +10,9 @@ import { isProjectRef } from "@/lib/tasks/project-ref";
 export async function GET() {
   try {
     const db = getDb();
-    // Merged and dropped tasks live in the Tasks panel (a moved one lives on
-    // the machine it moved to), archived sessions
-    // in the Archived view: neither is in the sidebar.
+    // Merged tasks are listed (the sidebar files them under Done). Dropped
+    // tasks live in the Tasks panel, a moved one on the machine it moved to,
+    // and archived sessions in the Archived view: none is in the sidebar.
     const sessions = queries.getSidebarSessions(db).all() as Session[];
     const groups = queries.getAllGroups(db).all() as Group[];
 
