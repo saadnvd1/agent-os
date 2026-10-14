@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ClipboardCheck, PencilRuler } from "lucide-react";
+import { ClipboardList, Pencil } from "lucide-react";
 import { NEED_LABEL, type SidebarRow } from "@/lib/sidebar/shelves";
 import { rowKindBadge, type RowKindBadge } from "@/lib/sidebar/row-badge";
 import { cn } from "@/lib/utils";
@@ -62,7 +62,7 @@ export function RowBadge({ row }: { row: SidebarRow }) {
 // Planning in blue, a plan waiting for approval in the primary colour:
 // an icon and a word, never colour alone.
 function KindBadge({ badge }: { badge: RowKindBadge }) {
-  const Icon = badge.kind === "planning" ? PencilRuler : ClipboardCheck;
+  const Icon = badge.kind === "planning" ? Pencil : ClipboardList;
   return (
     <span
       data-tip={badge.tip}

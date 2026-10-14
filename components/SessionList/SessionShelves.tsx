@@ -1,12 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  ChevronDown,
-  ListOrdered,
-  Server,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronDown, ListTodo, Server, type LucideIcon } from "lucide-react";
 import {
   DONE_PAGE,
   doneLimit,
@@ -183,7 +178,7 @@ export function SessionShelves({
         </Shelf>
       )}
       {queued.length > 0 && (
-        <Shelf label="Queued" count={queued.length} icon={ListOrdered}>
+        <Shelf label="Queued" count={queued.length} icon={ListTodo}>
           {queued.map((r) => (
             <QueuedRow key={r.item.id} row={r} />
           ))}

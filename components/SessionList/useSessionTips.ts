@@ -2,8 +2,6 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { useHostNames } from "@/data/hosts";
-import { registerTip } from "@/lib/hover-tip";
-import { rowDetails } from "@/lib/sidebar/row-details";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
 import type { SidebarData } from "./useSidebarData";
 
@@ -24,9 +22,16 @@ export function useSessionTips(data: SidebarData) {
   useLayoutEffect(() => {
     latest.current = { data, hostNames };
   });
-  useEffect(
-    () =>
-      registerTip("session", (id) => {
+  // Loaded after the page, like the tip itself: no first-load cost.
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let gone = false;
+    Promise.all([
+      import("@/lib/hover-tip"),
+      import("@/lib/sidebar/row-details"),
+    ]).then(([{ registerTip }, { rowDetails }]) => {
+      if (gone) return;
+      off = registerTip("session", (id) => {
         const { data, hostNames } = latest.current;
         const row = find(
           [
@@ -47,7 +52,11 @@ export function useSessionTips(data: SidebarData) {
               ? hostNames[s.host_id] || "remote"
               : undefined,
         });
-      }),
-    []
-  );
+      });
+    });
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, []);
 }
