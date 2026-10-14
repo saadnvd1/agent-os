@@ -8,7 +8,7 @@ import { loadProjectConfig } from "../project-config";
 import { createTask } from "../tasks";
 import { startOrQueue } from "../tasks/queue";
 import { braked, BrakeRefused } from "../orchestrator/brakes";
-import { queueEvent } from "../orchestrator/events";
+import { queueEvent, queueEventOnce } from "../orchestrator/events";
 import { amendBrief } from "../orchestrator/amendments";
 import { usageRows } from "../session-logs/gather";
 import { pieceBrief } from "./pieces";
@@ -190,7 +190,8 @@ async function releaseOne(
     )
     .run((piece.session_id ??= randomUUID()), piece.id).changes;
   if (!claimed) return;
-  const prompt = `[Feature "${feature.name}", piece ${piece.position} of ${all.length}, started by AgentOS from an approved plan]\n${pieceBrief(all.length, { position: piece.position, name: piece.name, slice: piece.slice, owns: piece.owns ? piece.owns.split(", ") : [] }, planPathOf(feature.id), beforeLines(all, piece.position))}`;
+  const project = getProject(piece.project_id);
+  const prompt = `[Feature "${feature.name}", piece ${piece.position} of ${all.length}, started by AgentOS from an approved plan]\n${pieceBrief(all.length, { position: piece.position, name: piece.name, slice: piece.slice, owns: piece.owns ? piece.owns.split(", ") : [] }, planPathOf(feature.id), beforeLines(all, piece.position), project?.name)}`;
   try {
     const id = await deps.start(feature, piece, prompt, piece.session_id);
     if (id !== piece.session_id)
@@ -246,16 +247,56 @@ function close(feature: Feature, all: FeaturePiece[], deps: ReleaseDeps): void {
     )
     .run(cost, ended > started ? ended - started : null, feature.id).changes;
   if (!claimed) return;
+  // A plan that listed more than it built is told, not closed quietly.
+  const listed = feature.listed ?? live.length;
+  const left = [
+    feature.folded ? `folded: ${feature.folded.split("\n").join("; ")}` : "",
+    all.some((p) => p.status === "dropped")
+      ? `dropped: ${all
+          .filter((p) => p.status === "dropped")
+          .map((p) => p.name)
+          .join(", ")}`
+      : "",
+  ].filter(Boolean);
+  const short =
+    listed > live.length || left.length
+      ? ` Its plan listed ${listed}; check the rest landed (${left.join("; ") || "not built as pieces"}).`
+      : "";
   say(
     feature,
     `done-${feature.id}`,
-    `Feature "${feature.name}" is merged: ${live.length} ${live.length === 1 ? "PR" : "PRs"}.`
+    `Feature "${feature.name}" is merged: ${live.length} ${live.length === 1 ? "PR" : "PRs"}.${short}`
   );
   deps.pushFeatureMerged(feature);
 }
 
+// A dependency merged and the piece after it still hasn't started: the sweep
+// that should have started it is stuck, or the start keeps being held.
+export const STUCK_PIECE_MS = 30 * 60 * 1000;
+
+function stuckPieces(feature: Feature, all: FeaturePiece[], now: number): void {
+  for (const piece of all) {
+    if (piece.status !== "waiting" || !piece.after_position) continue;
+    const dep = all.find((p) => p.position === piece.after_position);
+    const merged = dep ? sessionOf(dep.session_id)?.merged_at : null;
+    if (!dep || dep.status !== "merged" || !merged) continue;
+    const since = Date.parse(`${merged}Z`);
+    const wait =
+      piece.after_kind === "deployed" ? STUCK_PIECE_MS * 2 : STUCK_PIECE_MS;
+    if (now - since < wait) continue;
+    queueEventOnce(
+      feature.workspace_id,
+      `feature:stuck-${piece.id}-${since}`,
+      feature.plan_session_id,
+      `Feature "${feature.name}": piece ${piece.position} ${piece.name} is still waiting ${Math.floor((now - since) / 60000)}m after ${dep.position} ${dep.name} merged. Release it anyway or drop it.`,
+      now
+    );
+  }
+}
+
 export async function releasePieces(
-  deps: ReleaseDeps = realDeps
+  deps: ReleaseDeps = realDeps,
+  now = Date.now()
 ): Promise<void> {
   const features = db
     .prepare(`SELECT * FROM features WHERE status = 'building'`)
@@ -267,6 +308,7 @@ export async function releasePieces(
       await releaseOne(feature, piecesOf(feature.id), piece, deps).catch((e) =>
         console.error(`[features] piece ${piece.id}:`, e)
       );
+    stuckPieces(feature, piecesOf(feature.id), now);
     close(feature, piecesOf(feature.id), deps);
   }
 }

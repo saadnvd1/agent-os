@@ -37,6 +37,12 @@ export interface PiecesResult {
   pieces: Piece[];
   folded: Folded[];
   warnings: string[];
+  // Items the plan's Pieces block lists (0 when it has none), however well
+  // they parsed: a plan that builds as fewer than it listed is never silent.
+  listed: number;
+  // Problems that must stop a task from building on a guess: the pieces
+  // returned are then the one-piece fallback, for a person to approve or fix.
+  errors: string[];
 }
 
 interface Raw {
@@ -51,7 +57,10 @@ interface Raw {
 
 const HEADING = /^##\s+pieces\s*$/i;
 const ITEM = /^\s{0,3}(\d+)[.)]\s+(.*\S)\s*$/;
-const AFTER = /^\s*after:\s*(\d+)\s+is\s+(merged|deployed)\s*$/i;
+// An item as a person might write it, to count what the plan listed even
+// when the strict parser rejects the block.
+const LOOSE_ITEM = /^\s{0,3}(?:[-*+]\s+)?\**\d+[.)]/;
+const AFTER = /^\s*after:\s*(?:piece\s+)?(\d+)\s+is\s+(merged|deployed)\b.*$/i;
 const WHY = /^\s*why split:\s*(.+?)\s*$/i;
 const OWNS = /^\s*owns:\s*(.+?)\s*$/i;
 
@@ -68,6 +77,14 @@ function block(text: string): string[] | null {
     out.push(l);
   }
   return out;
+}
+
+// Bullets and bold around the numbers and keys a model sometimes adds
+// ("- **after:** 1 is merged") don't change what a line says.
+function plain(line: string): string {
+  return line
+    .replace(/^(\s*)[-*+]\s+(?=\**(?:\d+[.)]|after|why split|owns))/i, "$1")
+    .replace(/\*\*|__/g, "");
 }
 
 function parseItem(position: number, rest: string): Raw {
@@ -93,8 +110,9 @@ function parseItem(position: number, rest: string): Raw {
 
 function parseBlock(lines: string[]): Raw[] | null {
   const items: Raw[] = [];
-  for (const line of lines) {
-    if (!line.trim()) continue;
+  for (const original of lines) {
+    if (!original.trim()) continue;
+    const line = plain(original);
     const item = line.match(ITEM);
     if (item) {
       items.push(parseItem(Number(item[1]), item[2]));
@@ -123,6 +141,8 @@ function parseBlock(lines: string[]): Raw[] | null {
         .split(/[,;]/)
         .map((o) => o.trim().toLowerCase())
         .filter(Boolean);
+    // A wrapped slice: an indented line that is none of the keys.
+    else if (/^\s{2,}\S/.test(original)) current.slice += ` ${line.trim()}`;
     else return null;
   }
   if (!items.length || items.some((it, i) => it.position !== i + 1))
@@ -136,7 +156,13 @@ export interface CheckContext {
   find: (name: string) => ProjectRef | null;
 }
 
-function one(text: string, ctx: CheckContext, warnings: string[]) {
+function one(
+  text: string,
+  ctx: CheckContext,
+  warnings: string[],
+  listed = 0,
+  errors: string[] = []
+): PiecesResult {
   return {
     pieces: [
       {
@@ -152,30 +178,41 @@ function one(text: string, ctx: CheckContext, warnings: string[]) {
     ],
     folded: [] as Folded[],
     warnings,
+    listed,
+    errors,
   };
 }
 
 export function checkPieces(text: string, ctx: CheckContext): PiecesResult {
   const lines = block(text);
   if (!lines) return one("", ctx, []);
+  const listed = lines.filter((l) => LOOSE_ITEM.test(l)).length;
   const raw = parseBlock(lines);
   if (!raw)
-    return one("", ctx, [
-      "The Pieces block couldn't be read, so this is one piece.",
+    return one("", ctx, [], listed, [
+      "the Pieces block couldn't be read (a numbered item followed by anything but after:, why split: and owns: lines)",
+    ]);
+  if (raw.length !== listed)
+    return one("", ctx, [], listed, [
+      `the Pieces block lists ${listed} items but ${raw.length} were read`,
     ]);
   if (raw.length > MAX_PIECES)
-    return one("", ctx, [
-      `${raw.length} pieces is past the limit of ${MAX_PIECES}; built as one piece.`,
+    return one("", ctx, [], listed, [
+      `${raw.length} pieces is past the limit of ${MAX_PIECES}`,
     ]);
 
   const warnings: string[] = [];
+  const errors: string[] = [];
   const projects = raw.map((r) => {
     if (!r.repo) return ctx.own;
     const found = ctx.find(r.repo);
     if (!found)
-      warnings.push(`"${r.name}": no project named ${r.repo}; using this one.`);
+      errors.push(
+        `"${r.name}": (repo: ${r.repo}) is not a project of this workspace`
+      );
     return found ?? ctx.own;
   });
+  if (errors.length) return one("", ctx, [], listed, errors);
 
   // Where each original piece ended up, for `after:` lines that pointed at a
   // piece that was folded.
@@ -212,12 +249,15 @@ export function checkPieces(text: string, ctx: CheckContext): PiecesResult {
     }
 
     let reasons = r.reasons;
-    if (!reasons.length) return fold("no reason for a separate piece");
+    if (!reasons.length)
+      return fold("no `why split:` line naming one of (a) to (d)");
+    const lost: string[] = [];
 
     if (reasons.includes("a")) {
       const others = projects.filter((_, j) => j !== i);
       if (others.some((p) => p.id === project.id)) {
         reasons = reasons.filter((x) => x !== "a");
+        lost.push("(a) shares a repo with another piece");
         warnings.push(
           `"${r.name}" claimed (a) but shares a repo with another piece.`
         );
@@ -240,8 +280,10 @@ export function checkPieces(text: string, ctx: CheckContext): PiecesResult {
       const dep = afterPosition ? pieces[afterPosition - 1] : null;
       if (afterKind !== "deployed" || !dep) {
         reasons = reasons.filter((x) => x !== "b");
+        lost.push("(b) needs `after: N is deployed`, not merged");
       } else if (!dep.project.deploys) {
         reasons = reasons.filter((x) => x !== "b");
+        lost.push(`(b) waits on a deploy ${dep.project.name} can't check`);
         afterKind = "merged";
         warnings.push(
           `"${r.name}" waits on a deploy that ${dep.project.name} can't check; it waits for the merge instead.`
@@ -252,7 +294,8 @@ export function checkPieces(text: string, ctx: CheckContext): PiecesResult {
       if (!dep?.project.deploys) afterKind = "merged";
     }
 
-    if (!reasons.length) return fold("its reason didn't hold");
+    if (!reasons.length)
+      return fold(`its reason didn't hold: ${lost.join("; ")}`);
 
     keep({
       name: r.name,
@@ -274,7 +317,15 @@ export function checkPieces(text: string, ctx: CheckContext): PiecesResult {
       else seen.set(o, p.position);
     }
 
-  return { pieces, folded, warnings };
+  return { pieces, folded, warnings, listed, errors };
+}
+
+// What a task that builds fewer pieces than its plan listed is told, so the
+// folded work is built here and not left for pieces that will never start.
+export function foldedBrief(
+  result: Pick<PiecesResult, "listed" | "folded">
+): string {
+  return `The plan listed ${result.listed} pieces; they're built as ONE here (${result.folded.map((f) => `${f.name}: ${f.why}`).join("; ")}). Build all of it in this PR, including the folded pieces: ${result.folded.map((f) => f.name).join(", ")}. Nothing else will build them.`;
 }
 
 export const PIECES_PROMPT = `At the end of the plan, add a \`## Pieces\` block. The default is exactly one piece, which is what almost every task is, and one piece needs no more than:
@@ -292,14 +343,15 @@ Diff size is never a reason. A later piece looks like:
    after: 1 is merged   (or: 1 is deployed)
    why split: (a) + (b)
    owns: migration 81
-A shared resource (a migration id, a new table, a config key) goes on exactly one piece's \`owns:\` line. A piece with no valid reason is folded into the one before it.`;
+A shared resource (a migration id, a new table, a config key) goes on exactly one piece's \`owns:\` line. A piece with no valid reason is folded into the one before it. Reason (b) needs \`after: N is deployed\`; \`after: N is merged\` alone is only ordering, not a reason. A piece in another project runs as its own task in that project; this task builds only the pieces in its own repository.`;
 
 // Shown to a piece's agent in place of the whole plan.
 export function pieceBrief(
   total: number,
   piece: Pick<Piece, "position" | "name" | "slice" | "owns">,
   planPath: string,
-  before: string[] = []
+  before: string[] = [],
+  project?: string
 ): string {
   const owns = piece.owns.length
     ? `\nThis piece owns: ${piece.owns.join(", ")}. No other piece touches it.`
@@ -307,7 +359,10 @@ export function pieceBrief(
   const earlier = before.length
     ? `\nPieces before you: ${before.join("; ")}.`
     : "";
-  return `Build piece ${piece.position} of ${total} only, "${piece.name}": ${piece.slice}${owns}${earlier}\nThe rest of the plan is other pieces' work; don't start it. Full plan: ${planPath}`;
+  const where = project
+    ? `\nWork only in this task's repository (${project}) and its worktree. Don't create worktrees, branches or PRs in another repository: AgentOS starts the pieces that belong there as their own tasks.`
+    : "";
+  return `Build piece ${piece.position} of ${total} only, "${piece.name}": ${piece.slice}${owns}${earlier}${where}\nThe rest of the plan is other pieces' work; don't start it. Full plan: ${planPath}`;
 }
 
 export interface PlanEdits {

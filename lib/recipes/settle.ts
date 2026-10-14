@@ -459,6 +459,9 @@ export function startSettling(): void {
     busy = true;
     void settleRuns()
       .then(() => releasePieces())
+      .then(async () =>
+        (await import("../orchestrator/reconcile")).reconcileSweep()
+      )
       .catch((e) => console.error("[recipes] settle:", e))
       .finally(() => {
         busy = false;

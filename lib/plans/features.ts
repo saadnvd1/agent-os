@@ -12,6 +12,7 @@ import {
   checkPieces,
   parseEdits,
   type CheckContext,
+  type Folded,
   type PiecesResult,
   type Piece,
   type ProjectRef,
@@ -35,6 +36,9 @@ export interface Feature {
   cost_usd: number | null;
   duration_ms: number | null;
   created_at: string;
+  // Items the plan's Pieces block listed, and what the checker folded.
+  listed: number | null;
+  folded: string | null;
 }
 
 export interface FeaturePiece {
@@ -131,33 +135,82 @@ export function featureOfPlan(sessionId: string): Feature | undefined {
 export interface Split {
   pieces: Piece[];
   notBuilding: string[];
+  listed: number;
+  folded: Folded[];
+  // Why the plan's pieces can't be registered; when set, nothing is built
+  // on a guess.
+  errors: string[];
+  // Whether the plan needs a feature: false for one piece in the task's own
+  // repository that only has edits to carry.
+  feature: boolean;
 }
 
-// The pieces to build for a plan (one, when it isn't split). Edits Saad
-// made on the plan view apply only here, at approval.
+// The pieces to build for a plan, or null when it is one piece in the task's
+// own repository, as almost every plan is. A plan that lists more than it
+// builds, or whose one piece belongs to another project, is not null: it
+// gets a feature so nothing it listed goes missing. Edits Saad made on the
+// plan view apply only here, at approval.
 export function splitOf(s: Session, text: string): Split | null {
   const result = planFor(s, text);
-  if (!result || result.pieces.length < 2) return null;
+  if (!result) return null;
   const { pieces, notBuilding } = applyEdits(result, parseEdits(s.plan_edits));
-  return { pieces, notBuilding };
+  const elsewhere = pieces.some((p) => p.project.id !== s.project_id);
+  const feature = pieces.length > 1 || elsewhere || result.folded.length > 0;
+  if (!feature && !notBuilding.length && !result.errors.length) return null;
+  return {
+    pieces,
+    notBuilding,
+    listed: result.listed,
+    folded: result.folded,
+    errors: result.errors,
+    feature,
+  };
+}
+
+// The piece the planning task builds itself: the first one in its own
+// repository that doesn't wait on another. Every other piece starts as its own
+// task in its own project.
+export function ownPieceOf(
+  pieces: Piece[],
+  ownProjectId: string | null
+): Piece | undefined {
+  return pieces.find(
+    (p) => p.project.id === ownProjectId && p.afterPosition === null
+  );
 }
 
 // One transaction: the feature, its pieces, and the plan kept past the
-// worktree. Piece 1 is the planning task's own.
+// worktree. The planning task's own piece (if it has one) is already
+// building; the rest wait to start as tasks of their own.
 export function createFeature(
   s: Session,
   text: string,
   pieces: Piece[],
-  workspaceId: string
+  workspaceId: string,
+  meta: { listed: number; folded: Folded[] } = {
+    listed: pieces.length,
+    folded: [],
+  }
 ): Feature {
+  const own = ownPieceOf(pieces, s.project_id)?.position;
   const id = randomUUID();
   fs.mkdirSync(plansDir(), { recursive: true });
   fs.writeFileSync(planPathOf(id), text);
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO features (id, workspace_id, name, plan_session_id, plan_text, status)
-       VALUES (?, ?, ?, ?, ?, 'building')`
-    ).run(id, workspaceId, s.name, s.id, text);
+      `INSERT INTO features (id, workspace_id, name, plan_session_id, plan_text, status, listed, folded)
+       VALUES (?, ?, ?, ?, ?, 'building', ?, ?)`
+    ).run(
+      id,
+      workspaceId,
+      s.name,
+      s.id,
+      text,
+      meta.listed,
+      meta.folded.length
+        ? meta.folded.map((f) => `${f.name}: ${f.why}`).join("\n")
+        : null
+    );
     const insert = db.prepare(
       `INSERT INTO feature_pieces
          (feature_id, position, name, slice, project_id, after_position, after_kind,
@@ -175,8 +228,8 @@ export function createFeature(
         p.afterKind,
         p.reasons.join("+") || null,
         p.owns.join(", ") || null,
-        p.position === 1 ? "building" : "waiting",
-        p.position === 1 ? s.id : null
+        p.position === own ? "building" : "waiting",
+        p.position === own ? s.id : null
       );
   })();
   return getFeature(id)!;
@@ -195,6 +248,9 @@ export function reviewGoal(sessionId: string): string | null {
   const owns = piece.owns ? `\nThis piece owns: ${piece.owns}.` : "";
   const head = `Piece ${piece.position} of ${live.length}, "${piece.name}": ${piece.slice}${owns}`;
   const last = live.every((p) => p.id === piece.id || p.status === "merged");
-  if (!last || live.length < 2) return head;
-  return `${head}\n\nThis is the last piece. Also check that the plan as a whole is now done, and list anything in it that no piece built. The plan:\n${feature.plan_text.slice(0, PLAN_IN_REVIEW)}`;
+  const folded = feature.folded
+    ? ` Pieces the plan listed that were built into others: ${feature.folded}.`
+    : "";
+  if (!last || (live.length < 2 && !feature.folded)) return head;
+  return `${head}\n\nThis is the last piece.${folded} Also check that the plan as a whole is now done, and list anything in it that no piece built. The plan:\n${feature.plan_text.slice(0, PLAN_IN_REVIEW)}`;
 }

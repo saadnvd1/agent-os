@@ -182,6 +182,29 @@ export function queueEvent(
   ).run(workspaceId, `${ONCE}${key}`, subject, line, ARMED, iso(now));
 }
 
+// Like queueEvent, for a line a sweep would otherwise repeat: a key that
+// already exists, delivered or not, is left alone. Put the state in the key
+// so a change of state is a new line.
+export function queueEventOnce(
+  workspaceId: string,
+  key: string,
+  subject: string | null,
+  line: string,
+  now = Date.now()
+): boolean {
+  return (
+    db
+      .prepare(
+        `INSERT INTO orchestrator_events
+           (workspace_id, key, subject, line, sticky, low, hits, created_at, delivered_at)
+         VALUES (?, ?, ?, ?, 1, 0, ?, ?, NULL)
+         ON CONFLICT(workspace_id, key) DO NOTHING`
+      )
+      .run(workspaceId, `${ONCE}${key}`, subject, line, ARMED, iso(now))
+      .changes > 0
+  );
+}
+
 // A condition the orchestrator has been told about another way (a one-off
 // event said it), so a later diff doesn't send it again.
 export function markTold(

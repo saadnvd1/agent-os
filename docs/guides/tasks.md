@@ -118,8 +118,12 @@ standing reason is folded into the one before it, and a repository with no
 deploy check can't claim (b); this is a deterministic check, not the model's
 word.
 
-A one-piece plan behaves as always. With several, piece 1 continues in the
-planning task with only its slice, and the rest wait as rows (no worktree,
+A one-piece plan behaves as always. With several, the first piece that is in
+the planning task's own project (and waits on nothing) continues in that task
+with only its slice. A piece in another project of the workspace is never built
+by the planning task: it starts as its own task there, with its own worktree,
+so its PR is tracked and gated; a plan with no piece of the planning task's
+own ends that task once the pieces are registered. The rest wait as rows (no worktree,
 port or queue slot) until what they wait on has merged or deployed, then start
 as tasks through the usual brakes and queue. A plan waiting for approval
 shows its pieces: **Merge into ①** or **Drop** a piece (undoable until you
@@ -129,3 +133,14 @@ the feature's pieces and what each waits on, with **Release anyway** for one
 held by a dropped or failed predecessor. A plan-only task that reaches
 approval sends a "Plan ready: name, N pieces" push, and a finished feature
 sends one "Feature merged" push naming it.
+
+Nothing about a plan's pieces is silent. A Pieces block that can't be read, a
+count that differs from the items it lists, or a `(repo: …)` that is no project
+of the workspace holds the task for approval and tells the orchestrator ("couldn't
+register its pieces"), instead of building on a guess. A plan that builds as
+fewer pieces than it listed (a piece with no standing reason is folded) says
+so, tells the agent to build the folded work, and the "Feature merged" line
+names what was folded. A background sweep tells the orchestrator once about a
+piece still waiting 30 minutes after its dependency merged, a task whose turn
+ended with no PR, and a PR an agent opened outside its task's repository (read
+from its `gh pr create` call), which no task owns and no gate covers.
