@@ -36,11 +36,11 @@ export function seedSession(opts: {
 export function seedWorkspace(name = `ws-${randomUUID().slice(0, 6)}`) {
   const workspace = createWorkspace(name);
   const app = createProject({
-    name: `app-${randomUUID().slice(0, 4)}`,
+    name: `app-${randomUUID().slice(0, 8)}`,
     workingDirectory: "/tmp/app",
   });
   const api = createProject({
-    name: `api-${randomUUID().slice(0, 4)}`,
+    name: `api-${randomUUID().slice(0, 8)}`,
     workingDirectory: "/tmp/api",
   });
   setProjectWorkspace(app.id, workspace.id);
