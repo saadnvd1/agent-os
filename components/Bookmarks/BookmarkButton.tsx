@@ -44,7 +44,7 @@ function Press({
   );
 }
 
-export const STAR_ON = "fill-amber-400 text-amber-500 dark:text-amber-400";
+export const STAR_ON = "fill-bookmark text-bookmark";
 
 // The star in a message's action row. Unset, it shows as its row does (on
 // hover on a desktop, dimmed on a phone); set, it always shows, so a
@@ -130,12 +130,20 @@ function TurnStar({
       className={cn(
         "hover:text-foreground hover:bg-foreground/[0.06] -my-2 flex min-h-11 shrink-0 items-center gap-1 rounded-md px-2 md:-my-1 md:min-h-7",
         on
-          ? "text-amber-700 dark:text-amber-400"
-          : "opacity-60 group-hover:opacity-100 focus-visible:opacity-100 md:opacity-0"
+          ? "text-bookmark"
+          : "opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
       )}
+      aria-label={on ? "Turn bookmarked" : "Bookmark turn"}
     >
       <Star className={cn("h-3 w-3", on && STAR_ON)} />
-      {on ? "Turn bookmarked" : "Bookmark turn"}
+      {/* On desktop an unstarred turn shows only its star until hovered. */}
+      <span
+        className={cn(
+          !on && "md:hidden md:group-focus-within:inline md:group-hover:inline"
+        )}
+      >
+        {on ? "Turn bookmarked" : "Bookmark turn"}
+      </span>
     </button>
   );
 }

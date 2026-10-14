@@ -4,6 +4,7 @@ import {
   removeBookmark,
   setBookmarkNote,
 } from "@/lib/bookmarks/store";
+import { readBookmarkBody } from "@/lib/bookmarks/body";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -13,10 +14,9 @@ const notFound = () =>
 // PATCH /api/bookmarks/:id { note } - set or clear (null) its note.
 export async function PATCH(request: Request, { params }: Ctx) {
   const { id } = await params;
-  const body = (await request.json().catch(() => null)) as {
-    note?: unknown;
-  } | null;
-  if (!body || !("note" in body))
+  const body = await readBookmarkBody(request);
+  if (body instanceof NextResponse) return body;
+  if (!("note" in body))
     return NextResponse.json({ error: "note is required" }, { status: 400 });
   try {
     const bookmark = setBookmarkNote(id, body.note);

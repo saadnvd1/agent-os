@@ -47,7 +47,8 @@ import { chatHold, chatRefusal } from "../chat/hold";
 import { exportOrResume, exportTask, markMoved } from "./move";
 import { importTask } from "./import";
 import { MOVE_TURN_WAIT_MS } from "./move-chat";
-import { MAX_CHAT_BYTES } from "./move-bundle";
+import { MAX_CHAT_BYTES, MAX_MOVED_BOOKMARKS } from "./move-bundle";
+import { MAX_NOTE_CHARS, MAX_SNAPSHOT_CHARS } from "../bookmarks/types";
 import {
   createBookmark,
   listBookmarks,
@@ -305,6 +306,14 @@ describe("moving a chat task", () => {
       })
     ).rejects.toThrow(/Bad chat item/);
     const chat = bundle.chat!;
+    const ONE_BOOKMARK = {
+      itemId: "user-1",
+      scope: "item",
+      kind: "user",
+      text: "",
+      note: null,
+      createdAt: "",
+    };
     const bad: [object, RegExp][] = [
       [{ queue: "x" }, /Bad chat queue/],
       [{ queue: [{ ...chat.queue[0], images: 5 }] }, /Bad queued message/],
@@ -328,6 +337,31 @@ describe("moving a chat task", () => {
           ],
         },
         /Bad bookmark/,
+      ],
+      [
+        {
+          bookmarks: [
+            { ...ONE_BOOKMARK, note: "n".repeat(MAX_NOTE_CHARS + 1) },
+          ],
+        },
+        /Bad bookmark/,
+      ],
+      [
+        {
+          bookmarks: [
+            { ...ONE_BOOKMARK, text: "t".repeat(MAX_SNAPSHOT_CHARS + 2) },
+          ],
+        },
+        /Bad bookmark/,
+      ],
+      [
+        {
+          bookmarks: Array.from(
+            { length: MAX_MOVED_BOOKMARKS + 1 },
+            () => ONE_BOOKMARK
+          ),
+        },
+        /Too many bookmarks/,
       ],
       [
         { items: [{ id: "big", data: "x".repeat(MAX_CHAT_BYTES + 1) }] },

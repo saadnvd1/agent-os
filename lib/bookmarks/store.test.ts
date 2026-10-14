@@ -13,6 +13,7 @@ import {
   removeBookmark,
   setBookmarkNote,
 } from "./store";
+import { MAX_SNAPSHOT_CHARS } from "./types";
 
 // Built at runtime: the merge gate refuses token-shaped literals.
 const FAKE_KEY = "sk" + "-" + "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -132,6 +133,37 @@ describe("createBookmark", () => {
     expect(bookmark.kind).toBe("tool");
     expect(bookmark.text).toContain("Run tests");
     expect(bookmark.text).not.toContain(FAKE_KEY);
+  });
+
+  it("masks a secret the clip would split", () => {
+    const s = session();
+    const pad = "x".repeat(MAX_SNAPSHOT_CHARS - 20);
+    const user = say(s, {
+      kind: "user",
+      text: `${pad} OPENAI_API_KEY=${FAKE_KEY}`,
+    });
+    const { bookmark } = createBookmark({ sessionId: s, itemId: user });
+    expect(bookmark.text.length).toBeLessThanOrEqual(MAX_SNAPSHOT_CHARS + 1);
+    expect(bookmark.text).not.toContain(FAKE_KEY.slice(0, 8));
+  });
+
+  it("skips a row that isn't an item when it looks for a turn's reply", () => {
+    const s = session();
+    const user = say(s, { kind: "user", text: "what broke?" });
+    getDb()
+      .prepare(
+        `INSERT INTO chat_items (session_id, item_id, seq, data)
+         VALUES (?, 'corrupt', (SELECT MAX(seq) + 1 FROM chat_items WHERE session_id = ?), 'null')`
+      )
+      .run(s, s);
+    say(s, { kind: "assistant", text: "The realpath of TMPDIR." });
+    const { bookmark } = createBookmark({
+      sessionId: s,
+      itemId: user,
+      scope: "turn",
+    });
+    expect(bookmark.text).toContain("what broke?");
+    expect(bookmark.text).toContain("The realpath of TMPDIR.");
   });
 
   it("takes the workspace from the project, or an orchestrator's own", () => {

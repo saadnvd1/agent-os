@@ -4,6 +4,7 @@ import {
   createBookmark,
   listSessionBookmarks,
 } from "@/lib/bookmarks/store";
+import { readBookmarkBody } from "@/lib/bookmarks/body";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -19,15 +20,15 @@ export async function GET(_request: Request, { params }: Ctx) {
 // 200 with the one already there.
 export async function POST(request: Request, { params }: Ctx) {
   const { id } = await params;
-  const body = (await request.json().catch(() => null)) as {
-    itemId?: unknown;
-    scope?: unknown;
-    note?: unknown;
-  } | null;
-  if (!body || typeof body !== "object")
-    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+  const body = await readBookmarkBody(request);
+  if (body instanceof NextResponse) return body;
   try {
-    const { bookmark, created } = createBookmark({ sessionId: id, ...body });
+    const { bookmark, created } = createBookmark({
+      sessionId: id,
+      itemId: body.itemId,
+      scope: body.scope,
+      note: body.note,
+    });
     return NextResponse.json({ bookmark }, { status: created ? 201 : 200 });
   } catch (err) {
     if (err instanceof BookmarkError)

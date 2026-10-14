@@ -186,6 +186,7 @@ installed (or `AGENTOS_CHROME` pointing at one).
 Chat runs on this machine, and on linked machines through their own AgentOS
 (see [Machines](https://github.com/saadnvd1/agent-os/blob/main/docs/reference/machines.md)); sessions on machines reached over ssh only use
 the terminal.
+
 **Bookmarks** mark a single message to come back to. Star a message, a
 tool call or a whole turn (on its end line), or hold a message on a phone.
 The star in the chat's header lists that chat's bookmarks in order and jumps

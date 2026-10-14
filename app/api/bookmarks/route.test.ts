@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "@/lib/db";
 import type { ChatItem } from "@/lib/chat/events";
 import { saveItem } from "@/lib/chat/store";
+import { MAX_BOOKMARK_BODY_BYTES } from "@/lib/bookmarks/body";
 import * as sessionRoute from "../sessions/[id]/bookmarks/route";
 import * as oneRoute from "./[id]/route";
 import * as listRoute from "./route";
@@ -62,6 +63,21 @@ describe("bookmark routes", () => {
     expect((await post(c.id, { itemId: c.user, scope: "x" })).status).toBe(400);
     expect((await post(c.id, { itemId: "missing" })).status).toBe(404);
     expect((await post(randomUUID(), { itemId: c.user })).status).toBe(404);
+  });
+
+  it("refuses a body past its cap (413) on POST and PATCH", async () => {
+    const c = chat();
+    const huge = { itemId: c.user, note: "x".repeat(MAX_BOOKMARK_BODY_BYTES) };
+    expect((await post(c.id, huge)).status).toBe(413);
+    const { bookmark } = await (await post(c.id, { itemId: c.user })).json();
+    const patched = await oneRoute.PATCH(
+      new Request("http://localhost/x", {
+        method: "PATCH",
+        body: JSON.stringify({ note: "x".repeat(MAX_BOOKMARK_BODY_BYTES) }),
+      }),
+      ctx(bookmark.id)
+    );
+    expect(patched.status).toBe(413);
   });
 
   it("sets a note, deletes once, and 404s a missing id", async () => {

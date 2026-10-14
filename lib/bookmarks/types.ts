@@ -30,6 +30,8 @@ export interface BookmarksPage {
 export const BOOKMARKABLE_KINDS = ["user", "assistant", "tool"] as const;
 
 export const MAX_NOTE_CHARS = 500;
+// A snapshot is clipped to this, plus the ellipsis that marks the cut.
+export const MAX_SNAPSHOT_CHARS = 4_000;
 
 // The key the stars look a bookmark up by.
 export const bookmarkKey = (itemId: string, scope: BookmarkScope) =>

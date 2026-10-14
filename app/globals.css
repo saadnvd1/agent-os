@@ -10,6 +10,7 @@
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
+  --color-bookmark: hsl(var(--bookmark));
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 

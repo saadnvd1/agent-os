@@ -109,7 +109,14 @@ function firstReply(
     )
     .all(sessionId, sessionId, userItemId) as { data: string }[];
   for (const r of rows) {
-    const item = JSON.parse(r.data) as ChatItem;
+    let item: ChatItem | null;
+    try {
+      item = JSON.parse(r.data) as ChatItem | null;
+    } catch {
+      item = null;
+    }
+    // A row that isn't an item just isn't the reply.
+    if (!item || typeof item !== "object") continue;
     if (item.kind === "user" || item.kind === "turn_end") return undefined;
     if (item.kind === "assistant" && item.text.trim()) return item;
   }

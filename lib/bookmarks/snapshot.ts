@@ -7,8 +7,7 @@ import type { ChatItem } from "../chat/events";
 import { toRaw } from "../share/snapshot";
 import { NO_CONTEXT, redactForShare } from "../share/redact";
 import { envSecrets } from "../share/context";
-
-export const MAX_SNAPSHOT_CHARS = 4_000;
+import { MAX_SNAPSHOT_CHARS } from "./types";
 
 function plain(item: ChatItem): string {
   const raw = toRaw(item);
@@ -22,9 +21,13 @@ export function snapshotText(item: ChatItem, reply?: ChatItem): string {
     .filter((t) => t.trim())
     .join("\n\n")
     .trim();
-  const clipped =
-    text.length > MAX_SNAPSHOT_CHARS
-      ? text.slice(0, MAX_SNAPSHOT_CHARS) + "…"
-      : text;
-  return redactForShare(clipped, { ...NO_CONTEXT, secrets: envSecrets() }).text;
+  // Redacted before the cut, so a secret the cut splits is still caught; the
+  // wide first cut only bounds the work on a huge tool output.
+  const safe = redactForShare(text.slice(0, MAX_SNAPSHOT_CHARS * 4), {
+    ...NO_CONTEXT,
+    secrets: envSecrets(),
+  }).text;
+  return safe.length > MAX_SNAPSHOT_CHARS
+    ? safe.slice(0, MAX_SNAPSHOT_CHARS) + "…"
+    : safe;
 }

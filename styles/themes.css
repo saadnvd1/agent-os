@@ -28,6 +28,8 @@
     --find-match: 48 96% 53% / 0.45;
     --find-current: 25 95% 53%;
     --find-current-foreground: 0 0% 0%;
+    /* A bookmarked item's star. */
+    --bookmark: 30 90% 40%;
     --background: 240 10% 95.5%;
     --foreground: 240 12% 14%;
     --card: 0 0% 100%;
@@ -292,6 +294,7 @@
      =========================================================================== */
   .dark {
     --find-match: 48 96% 53% / 0.35;
+    --bookmark: 43 96% 56%;
     --background: 240 18% 3.5%;
     --foreground: 240 10% 93%;
     --card: 240 14% 6%;
