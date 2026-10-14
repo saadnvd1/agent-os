@@ -18,6 +18,10 @@ export function ActiveTick() {
   );
 }
 
+// A phone gets the full width, a desktop a fixed column; either scrolls when
+// the window is short (the menu primitives cap their height).
+export const ROW_MENU_CONTENT = "w-56 max-md:w-[calc(100vw-1rem)]";
+
 export type RowMenuKind = "dropdown" | "context";
 
 // Every sidebar row's frame: a leading mark, title over subtitle, what's on
@@ -109,7 +113,7 @@ export function RowShell({
           </DM.DropdownMenuTrigger>
           <DM.DropdownMenuContent
             align="end"
-            className="w-56"
+            className={ROW_MENU_CONTENT}
             onClick={(e) => e.stopPropagation()}
           >
             {menu("dropdown")}
@@ -122,7 +126,7 @@ export function RowShell({
   return (
     <CM.ContextMenu>
       <CM.ContextMenuTrigger asChild>{content}</CM.ContextMenuTrigger>
-      <CM.ContextMenuContent className="w-56">
+      <CM.ContextMenuContent className={ROW_MENU_CONTENT}>
         {menu("context")}
       </CM.ContextMenuContent>
     </CM.ContextMenu>

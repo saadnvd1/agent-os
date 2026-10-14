@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import {
   CheckSquare,
   AlarmClock,
@@ -26,8 +27,6 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import * as DM from "@/components/ui/dropdown-menu";
-import * as CM from "@/components/ui/context-menu";
 import type { Session } from "@/lib/db";
 import { selectionActions } from "@/stores/sessionSelection";
 import { schedulesUiActions } from "@/stores/schedulesUi";
@@ -53,90 +52,27 @@ import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { shareUiActions } from "@/stores/shareUi";
 import { copySessionLink } from "@/hooks/useCopyToClipboard";
 import { useLinkedHostNames } from "@/data/hosts";
-import { remoteBlocks } from "@/lib/hosts/remote-menu";
+import { remoteBlocks, remoteNote } from "@/lib/hosts/remote-menu";
+import { movableSession } from "@/lib/tasks/move-targets";
+import { useMoveTargets } from "@/data/tasks/move";
+import {
+  rowMenu,
+  groupLabel,
+  type RowMenuGroup,
+  type RowMenuItem,
+} from "@/lib/sidebar/row-menu";
+import { Expander, MenuItem, PARTS, icon, type MenuKind } from "./RowMenuParts";
 
-const PARTS = {
-  dropdown: {
-    Item: DM.DropdownMenuItem,
-    Separator: DM.DropdownMenuSeparator,
-    Sub: DM.DropdownMenuSub,
-    SubTrigger: DM.DropdownMenuSubTrigger,
-    SubContent: DM.DropdownMenuSubContent,
-  },
-  context: {
-    Item: CM.ContextMenuItem,
-    Separator: CM.ContextMenuSeparator,
-    Sub: CM.ContextMenuSub,
-    SubTrigger: CM.ContextMenuSubTrigger,
-    SubContent: CM.ContextMenuSubContent,
-  },
+const GROUP_ICON: Record<RowMenuGroup, typeof Copy> = {
+  open: ExternalLink,
+  share: Share2,
+  restart: Copy,
+  move: FolderInput,
+  automate: Clock,
 };
 
-const icon = "mr-2 h-3.5 w-3.5";
-
-interface BlockedProps {
-  kind: keyof typeof PARTS;
-  icon: typeof Copy;
-  label: string;
-  why: string;
-}
-
-// An action that can't run here yet: shown, disabled, with why.
-function BlockedItem({ kind, icon: Icon, label, why }: BlockedProps) {
-  const Item = PARTS[kind].Item;
-  return (
-    // Disabled, but the reason keeps full contrast: only the label dims.
-    <Item disabled className="items-start data-[disabled]:opacity-100">
-      <Icon className={`${icon} mt-0.5 opacity-50`} />
-      <span className="flex min-w-0 flex-col">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="text-muted-foreground text-xs leading-tight">
-          {why}
-        </span>
-      </span>
-    </Item>
-  );
-}
-
-// Done and Archive, as the session's kind allows.
-function FinishItems({
-  session,
-  plain,
-  Item,
-}: {
-  session: Session;
-  plain: boolean;
-  Item: (typeof PARTS)[keyof typeof PARTS]["Item"];
-}) {
-  const markDone = useDoneAction();
-  const archive = useArchiveAction();
-  const restore = useResurrectAction();
-  const actions = finishActions(session, plain);
-  return (
-    <>
-      {actions.includes("done") && (
-        <Item onClick={() => markDone(session)}>
-          <CircleCheck className={icon} />
-          Done
-        </Item>
-      )}
-      {actions.includes("restore") && (
-        <Item onClick={() => restore(session)}>
-          <RotateCcw className={icon} />
-          Restore
-        </Item>
-      )}
-      {actions.includes("archive") && (
-        <Item onClick={() => archive(session)}>
-          <Archive className={icon} />
-          Archive
-        </Item>
-      )}
-    </>
-  );
-}
-
-// The row's ⋯ menu (and right-click menu): everything a session can do.
+// The row's ⋯ menu (and right-click menu): everything a session can do. What
+// it offers is decided in lib/sidebar/row-menu; this only draws it.
 export function SessionRowMenu({
   session,
   row,
@@ -146,16 +82,18 @@ export function SessionRowMenu({
   session: Session;
   // Where it sits, for Snooze, Mark done and Reopen (not on an orchestrator).
   row?: SidebarRow;
-  kind: keyof typeof PARTS;
+  kind: MenuKind;
   onRename: () => void;
 }) {
   const ctx = useRowContext();
   const shelf = useShelfActions();
-  const plain = !!row && !row.task && !session.task_status;
-  const { Item, Separator, Sub, SubTrigger, SubContent } = PARTS[kind];
+  const markDone = useDoneAction();
+  const archive = useArchiveAction();
+  const restore = useResurrectAction();
+  const { Separator } = PARTS[kind];
   const linked = useLinkedHostNames();
-  // A linked machine's session: what can't reach it yet shows why.
-  const blocked = remoteBlocks(session, (id) => linked[id]);
+  const remote = remoteBlocks(session, (id) => linked[id]);
+  const targets = useMoveTargets(movableSession(session));
   const summarizing = ctx.summarizingSessionId === session.id;
   const cardUrl = ctx.cardUrl(session.id);
   const others = ctx.projects.filter(
@@ -168,31 +106,203 @@ export function SessionRowMenu({
     ctx.projects.find((p) => p.id === session.project_id)?.workspace_id ??
     null;
 
-  // A quick change has no agent: no fork, fresh start, snooze or move, just
-  // its PR and the ways to finish it.
-  if (session.quick_of)
-    return (
-      <>
-        {session.pr_url && (
-          <Item onClick={() => window.open(session.pr_url!, "_blank")}>
-            <GitPullRequest className={icon} />
-            Open PR #{session.pr_number}
-          </Item>
-        )}
-        <FinishItems session={session} plain={plain} Item={Item} />
-        <Item
-          onClick={() => ctx.onDelete(session.id)}
-          className="text-red-500 focus:text-red-500"
-        >
-          <Trash2 className={icon} />
-          Delete session
-        </Item>
-      </>
+  const plan = rowMenu({
+    session,
+    row,
+    remote: !!remote,
+    canOpenInTab: !!ctx.onOpenInTab,
+    hasCard: !!cardUrl,
+    recipeRun: !!recipeRun,
+    hasWorkspace: !!workspaceId,
+    machineTargets: targets.length,
+    otherProjects: others.length,
+  });
+
+  const item = (
+    label: string,
+    Icon: typeof Copy,
+    onClick: () => void,
+    extra?: { className?: string; disabled?: boolean; spin?: boolean }
+  ) => (
+    <MenuItem
+      key={label}
+      kind={kind}
+      onClick={onClick}
+      disabled={extra?.disabled}
+      className={extra?.className}
+    >
+      <Icon className={`${icon}${extra?.spin ? "animate-spin" : ""}`} />
+      {label}
+    </MenuItem>
+  );
+  const open = (url: string) => () => window.open(url, "_blank");
+  const projects = others.map((p) => (
+    <MenuItem
+      key={p.id}
+      kind={kind}
+      onClick={() => ctx.onMoveToProject(session.id, p.id)}
+    >
+      {p.name}
+    </MenuItem>
+  ));
+  const wake = (ms: number | null) =>
+    ms && (
+      <span className="text-muted-foreground ml-3 text-xs">
+        {wakeLabel(ms)}
+      </span>
     );
+
+  const render = (it: RowMenuItem, inGroup: boolean) => {
+    switch (it) {
+      case "rename":
+        return item("Rename", Pencil, onRename);
+      case "pin":
+        return item("Pin", Pin, () => ctx.onPin(session.id, true));
+      case "unpin":
+        return item("Unpin", PinOff, () => ctx.onPin(session.id, false));
+      case "select":
+        return item("Select", CheckSquare, () =>
+          selectionActions.toggle(session.id, false, ctx.orderedIds())
+        );
+      case "open-tab":
+        return item("Open in new tab", ExternalLink, () =>
+          ctx.onOpenInTab?.(session.id)
+        );
+      case "open-pr":
+        return item(
+          `Open PR #${session.pr_number}`,
+          GitPullRequest,
+          open(session.pr_url!)
+        );
+      case "card":
+        return item("LumifyHub card", KanbanSquare, open(cardUrl!));
+      case "open-recipe":
+        return item("Open recipe", Repeat, () =>
+          recipesUiActions.openRecipe(recipeRun!.id)
+        );
+      case "copy-link":
+        return item("Copy link", Link, () => copySessionLink(session.id));
+      case "share":
+        return item("Share…", Share2, () =>
+          shareUiActions.open({
+            kind: "chat",
+            sessionId: session.id,
+            title: session.name,
+          })
+        );
+      case "fork":
+        return item("Fork session", Copy, () => ctx.onFork(session.id));
+      case "fresh-start":
+        return item(
+          summarizing ? "Summarizing..." : "Fresh start",
+          summarizing ? Loader2 : Sparkles,
+          () => ctx.onSummarize(session.id),
+          { disabled: summarizing, spin: summarizing }
+        );
+      case "new-conversation":
+        return item("New conversation (keep brief)", RotateCcw, () =>
+          ctx.onFresh(session.id)
+        );
+      case "move-machine":
+        return (
+          <MoveMenuItems key={it} session={session} Item={PARTS[kind].Item} />
+        );
+      case "move-project":
+        return inGroup ? (
+          <div key={it}>
+            {targets.length > 0 && <Separator />}
+            {projects}
+          </div>
+        ) : (
+          <Expander
+            key={it}
+            kind={kind}
+            icon={FolderInput}
+            label="Move to project"
+          >
+            {projects}
+          </Expander>
+        );
+      case "check-ins":
+        return item("Schedule check-ins", Clock, () =>
+          schedulesUiActions.openDraft(workspaceId!, {
+            kind: "message",
+            targetSessionId: session.id,
+            name: `Check-in: ${session.name}`.slice(0, 80),
+          })
+        );
+      case "save-recipe":
+        return item("Save as recipe", ChefHat, () =>
+          recipesUiActions.saveSessionAs(session.id, workspaceId)
+        );
+      case "run-again":
+        return item("Run again", Play, () =>
+          recipesUiActions.openRecipe(recipeRun!.id, true)
+        );
+      case "snooze":
+        return (
+          <Expander key={it} kind={kind} icon={AlarmClock} label="Snooze">
+            {SNOOZE_PRESETS.map((p) => (
+              <MenuItem
+                key={p.key}
+                kind={kind}
+                onClick={() => shelf.snooze(session, p.key)}
+              >
+                {p.label}
+                {wake(snoozePreset(p.key).getTime())}
+              </MenuItem>
+            ))}
+          </Expander>
+        );
+      case "unsnooze":
+        return item("Unsnooze", AlarmClock, () => shelf.unsnooze(session));
+      case "pause":
+        return (
+          <Expander key={it} kind={kind} icon={Pause} label="Pause">
+            {PAUSE_PRESETS.map((p) => (
+              <MenuItem
+                key={p.key}
+                kind={kind}
+                onClick={() => shelf.pause(session, p.key)}
+              >
+                {p.label}
+                {wake(pauseUntil(p.key)?.getTime() ?? null)}
+              </MenuItem>
+            ))}
+            <MenuItem
+              kind={kind}
+              onClick={() => shelf.pause(session, "until-resumed", true)}
+            >
+              Pause now (interrupt its step)
+            </MenuItem>
+          </Expander>
+        );
+      case "resume":
+        return item(
+          session.pause_state === "paused" ? "Resume now" : "Keep running",
+          Play,
+          () => shelf.resume(session)
+        );
+      case "settle":
+        return item("Mark done", CircleCheck, () => shelf.settle(session));
+      case "reopen":
+        return item("Reopen", RotateCcw, () => shelf.reopen(session));
+      case "done":
+        return item("Done", CircleCheck, () => markDone(session));
+      case "restore":
+        return item("Restore", RotateCcw, () => restore(session));
+      case "archive":
+        return item("Archive", Archive, () => archive(session));
+      case "delete":
+        return item("Delete session", Trash2, () => ctx.onDelete(session.id), {
+          className: "text-red-500 focus:text-red-500",
+        });
+    }
+  };
 
   return (
     <>
-      {session.branch_name && (
+      {session.branch_name && !session.quick_of && (
         <>
           <div className="text-muted-foreground flex flex-col gap-0.5 px-2 py-1.5 text-xs">
             <span className="flex items-center gap-1.5">
@@ -208,278 +318,32 @@ export function SessionRowMenu({
           <Separator />
         </>
       )}
-      <Item onClick={() => ctx.onPin(session.id, !session.pinned)}>
-        {session.pinned ? (
-          <PinOff className={icon} />
-        ) : (
-          <Pin className={icon} />
-        )}
-        {session.pinned ? "Unpin" : "Pin"}
-      </Item>
-      {ctx.onOpenInTab && (
-        <Item onClick={() => ctx.onOpenInTab?.(session.id)}>
-          <ExternalLink className={icon} />
-          Open in new tab
-        </Item>
+      {plan.remoteNote && remote && (
+        <div className="text-muted-foreground px-2 py-1.5 text-xs leading-tight">
+          {remoteNote(linked[session.host_id!] ?? "its machine")}
+        </div>
       )}
-      <Item onClick={() => copySessionLink(session.id)}>
-        <Link className={icon} />
-        Copy link
-      </Item>
-      {session.view === "chat" && (
-        <Item
-          onClick={() =>
-            shareUiActions.open({
-              kind: "chat",
-              sessionId: session.id,
-              title: session.name,
-            })
-          }
-        >
-          <Share2 className={icon} />
-          Share…
-        </Item>
-      )}
-      <Item onClick={onRename}>
-        <Pencil className={icon} />
-        Rename
-      </Item>
-      {session.agent_type === "claude" && !session.role && blocked && (
-        <BlockedItem
-          kind={kind}
-          icon={Copy}
-          label="Fork session"
-          why={blocked.fork}
-        />
-      )}
-      {!session.role && blocked && (
-        <BlockedItem
-          kind={kind}
-          icon={Sparkles}
-          label="Fresh start"
-          why={blocked.freshStart}
-        />
-      )}
-      {session.agent_type === "claude" && !session.role && !blocked && (
-        <Item onClick={() => ctx.onFork(session.id)}>
-          <Copy className={icon} />
-          Fork session
-        </Item>
-      )}
-      {!session.role && !blocked && (
-        <Item
-          onClick={() => ctx.onSummarize(session.id)}
-          disabled={summarizing}
-        >
-          {summarizing ? (
-            <Loader2 className={`${icon} animate-spin`} />
-          ) : (
-            <Sparkles className={icon} />
-          )}
-          {summarizing ? "Summarizing..." : "Fresh start"}
-        </Item>
-      )}
-      {(session.role === "orchestrator" || !!session.has_brief) &&
-        session.view === "chat" &&
-        !session.archived_at &&
-        !blocked && (
-          <Item onClick={() => ctx.onFresh(session.id)}>
-            <RotateCcw className={icon} />
-            New conversation (keep brief)
-          </Item>
-        )}
-      {session.pr_url && (
-        <Item onClick={() => window.open(session.pr_url!, "_blank")}>
-          <GitPullRequest className={icon} />
-          Open PR #{session.pr_number}
-        </Item>
-      )}
-      {cardUrl && (
-        <Item onClick={() => window.open(cardUrl, "_blank")}>
-          <KanbanSquare className={icon} />
-          LumifyHub card
-        </Item>
-      )}
-      <MoveMenuItems session={session} Item={Item} />
-      {!session.role && others.length > 0 && blocked && (
-        <BlockedItem
-          kind={kind}
-          icon={FolderInput}
-          label="Move to project"
-          why={blocked.moveToProject}
-        />
-      )}
-      {!session.role && others.length > 0 && !blocked && (
-        <Sub>
-          <SubTrigger>
-            <FolderInput className={icon} />
-            Move to project
-          </SubTrigger>
-          <SubContent>
-            {others.map((p) => (
-              <Item
-                key={p.id}
-                onClick={() => ctx.onMoveToProject(session.id, p.id)}
-              >
-                {p.name}
-              </Item>
-            ))}
-          </SubContent>
-        </Sub>
-      )}
-      {workspaceId &&
-        session.role !== "orchestrator" &&
-        (!session.task_status || session.task_status === "running") &&
-        blocked && (
-          <BlockedItem
-            kind={kind}
-            icon={Clock}
-            label="Schedule check-ins"
-            why={blocked.schedule}
-          />
-        )}
-      {workspaceId &&
-        session.role !== "orchestrator" &&
-        (!session.task_status || session.task_status === "running") &&
-        !blocked && (
-          <Item
-            onClick={() =>
-              schedulesUiActions.openDraft(workspaceId, {
-                kind: "message",
-                targetSessionId: session.id,
-                name: `Check-in: ${session.name}`.slice(0, 80),
-              })
-            }
-          >
-            <Clock className={icon} />
-            Schedule check-ins
-          </Item>
-        )}
-      {recipeRun && (
-        <>
-          <Item onClick={() => recipesUiActions.openRecipe(recipeRun.id)}>
-            <Repeat className={icon} />
-            Open recipe
-          </Item>
-          <Item onClick={() => recipesUiActions.openRecipe(recipeRun.id, true)}>
-            <Play className={icon} />
-            Run again
-          </Item>
-        </>
-      )}
-      {!recipeRun && !session.role && !session.quick_of && (
-        <Item
-          onClick={() =>
-            recipesUiActions.saveSessionAs(session.id, workspaceId)
-          }
-        >
-          <ChefHat className={icon} />
-          Save as recipe
-        </Item>
-      )}
-      <Item
-        onClick={() =>
-          selectionActions.toggle(session.id, false, ctx.orderedIds())
-        }
-      >
-        <CheckSquare className={icon} />
-        Select
-      </Item>
-      {!session.role && (
-        <>
-          <Separator />
-          {row?.wakesAt ? (
-            <Item onClick={() => shelf.unsnooze(session)}>
-              <AlarmClock className={icon} />
-              Unsnooze
-            </Item>
-          ) : (
-            !session.pinned &&
-            row && (
-              <Sub>
-                <SubTrigger>
-                  <AlarmClock className={icon} />
-                  Snooze
-                </SubTrigger>
-                <SubContent>
-                  {SNOOZE_PRESETS.map((p) => (
-                    <Item
-                      key={p.key}
-                      onClick={() => shelf.snooze(session, p.key)}
-                    >
-                      {p.label}
-                      <span className="text-muted-foreground ml-3 text-xs">
-                        {wakeLabel(snoozePreset(p.key).getTime())}
-                      </span>
-                    </Item>
-                  ))}
-                </SubContent>
-              </Sub>
-            )
-          )}
-          {session.task_status || session.view === "chat" ? (
-            session.pause_state === "paused" ||
-            session.pause_state === "pausing" ? (
-              <Item onClick={() => shelf.resume(session)}>
-                <Play className={icon} />
-                {session.pause_state === "paused"
-                  ? "Resume now"
-                  : "Keep running"}
-              </Item>
-            ) : session.pause_state ? null : (
-              <Sub>
-                <SubTrigger>
-                  <Pause className={icon} />
-                  Pause
-                </SubTrigger>
-                <SubContent>
-                  {PAUSE_PRESETS.map((p) => {
-                    const at = pauseUntil(p.key);
-                    return (
-                      <Item
-                        key={p.key}
-                        onClick={() => shelf.pause(session, p.key)}
-                      >
-                        {p.label}
-                        {at && (
-                          <span className="text-muted-foreground ml-3 text-xs">
-                            {wakeLabel(at.getTime())}
-                          </span>
-                        )}
-                      </Item>
-                    );
-                  })}
-                  <Item
-                    onClick={() => shelf.pause(session, "until-resumed", true)}
-                  >
-                    Pause now (interrupt its step)
-                  </Item>
-                </SubContent>
-              </Sub>
-            )
-          ) : null}
-          {plain &&
-            (row.settled ? (
-              <Item onClick={() => shelf.reopen(session)}>
-                <RotateCcw className={icon} />
-                Reopen
-              </Item>
+      {plan.sections.map((section, i) => (
+        <Fragment key={i}>
+          {i > 0 && <Separator />}
+          {section.map((entry) =>
+            typeof entry === "string" ? (
+              render(entry, false)
             ) : (
-              <Item onClick={() => shelf.settle(session)}>
-                <CircleCheck className={icon} />
-                Mark done
-              </Item>
-            ))}
-          <FinishItems session={session} plain={plain} Item={Item} />
-          <Item
-            onClick={() => ctx.onDelete(session.id)}
-            className="text-red-500 focus:text-red-500"
-          >
-            <Trash2 className={icon} />
-            Delete session
-          </Item>
-        </>
-      )}
+              <Expander
+                key={entry.group}
+                kind={kind}
+                icon={GROUP_ICON[entry.group]}
+                label={groupLabel(entry.group)}
+              >
+                {entry.items.map((it) => (
+                  <Fragment key={it}>{render(it, true)}</Fragment>
+                ))}
+              </Expander>
+            )
+          )}
+        </Fragment>
+      ))}
     </>
   );
 }
