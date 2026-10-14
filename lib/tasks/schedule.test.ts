@@ -450,3 +450,68 @@ describe("the 2026-10-13 replay", () => {
     expect(plan.explain.get("m3")?.code).toBe("after_any");
   });
 });
+
+describe("plan-only tasks", () => {
+  const red = green({ level: "red", settled: false });
+  const full = () => groups(4, 4);
+  const codeOf = (plan: ReturnType<typeof planStarts>, id: string) =>
+    plan.explain.get(id)?.code ?? null;
+
+  it("starts under red load with the slot limit full", () => {
+    const plan = planStarts([cand("p", { planOnly: true })], full(), red, T0);
+    expect(plan.start).toEqual(["p"]);
+    expect(codeOf(plan, "p")).toBeNull();
+  });
+
+  it("ignores spacing, and doesn't use a slot or the spacing of the next start", () => {
+    const plan = planStarts(
+      [cand("p", { planOnly: true, position: 1 }), cand("i", { position: 2 })],
+      groups(3, 4),
+      green({ lastAutoStartAt: T0 - 1000 }),
+      T0
+    );
+    expect(plan.start).toEqual(["p"]);
+    expect(codeOf(plan, "i")).toBe("spacing");
+  });
+
+  it("leaves plan-first and implementation tasks waiting", () => {
+    const planFirst = cand("pf");
+    const impl = cand("i");
+    expect(codeOf(planStarts([planFirst, impl], groups(), red, T0), "pf")).toBe(
+      "load_red"
+    );
+    expect(codeOf(planStarts([impl], full(), green(), T0), "i")).toBe("slot");
+  });
+
+  it("still waits for its `after` task", () => {
+    const plan = planStarts(
+      [
+        cand("p", {
+          planOnly: true,
+          before: { code: "after", text: "After other" },
+        }),
+      ],
+      groups(),
+      green(),
+      T0
+    );
+    expect(plan.start).toEqual([]);
+    expect(codeOf(plan, "p")).toBe("after");
+  });
+
+  it("is still held by the orchestrator Pause", () => {
+    const plan = planStarts(
+      [
+        cand("p", {
+          planOnly: true,
+          auto: { code: "orch_paused", text: "Waiting: paused" },
+        }),
+      ],
+      groups(),
+      green(),
+      T0
+    );
+    expect(plan.start).toEqual([]);
+    expect(codeOf(plan, "p")).toBe("orch_paused");
+  });
+});

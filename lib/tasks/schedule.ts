@@ -82,6 +82,9 @@ export interface Candidate {
   needsUnmet: boolean;
   // Starts on another machine: this one's load doesn't matter to it.
   remote: boolean;
+  // A plan-only task before approval: it reads code and writes one file, so
+  // load, spacing and the slot limit don't apply. Pause and `after` still do.
+  planOnly?: boolean;
   // `after X` hold, from the caller (it needs the database).
   before: Hold | null;
   // Orchestrator Pause and the usage window, which hold after `after`.
@@ -127,11 +130,12 @@ const seconds = (ms: number) => Math.max(1, Math.ceil(ms / 1000));
 
 // The machine holds, in order. Null: it may start here now.
 export function machineHold(
-  c: Pick<Candidate, "heavy" | "needsUnmet" | "remote" | "priority">,
+  c: Pick<Candidate, "heavy" | "needsUnmet" | "remote" | "priority"> &
+    Partial<Pick<Candidate, "planOnly">>,
   m: MachineView,
   now: number
 ): Hold | null {
-  if (c.remote) return null;
+  if (c.remote || c.planOnly) return null;
   if (c.needsUnmet) return { code: "needs", text: `Waiting: needs a Mac` };
   if (!m.enabled) return null;
   if (m.reading)
@@ -226,7 +230,7 @@ export function planStarts(
         priority: c.priority,
       });
       if (hold) return void plan.explain.set(c.id, view(hold));
-      if (inFlight >= group.limit)
+      if (!c.planOnly && inFlight >= group.limit)
         return void plan.explain.set(
           c.id,
           view({
@@ -240,8 +244,8 @@ export function planStarts(
         if (free) used.add(free);
         plan.consume.set(c.id, free);
       }
-      inFlight += 1;
-      if (!c.remote) {
+      if (!c.planOnly) inFlight += 1;
+      if (!c.remote && !c.planOnly) {
         m.lastAutoStartAt = now;
         if (c.heavy) {
           m.lastHeavyStartAt = now;

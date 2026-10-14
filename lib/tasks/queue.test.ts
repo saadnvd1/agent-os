@@ -185,6 +185,7 @@ describe("the task queue", () => {
       projectId: t.app.id,
       prompt: "plan it",
       planOnly: true,
+      after: t.task,
     })!;
     expect(
       db.prepare(`SELECT plan_only FROM task_queue WHERE id = ?`).get(q.id)
@@ -935,15 +936,35 @@ describe("placement on a linked machine", () => {
     expect(started).toEqual([]);
   });
 
-  it("keeps plan-only tasks here, and says why in the hold", async () => {
+  it("starts a plan-only task at home under red load, never placed", async () => {
     const t = setup(null);
     const q = queue(t, "plan it", { planOnly: true });
     finish(t.task);
     redHome();
     peers = { box: { level: "green" } };
     await tick();
+    expect(started.map((s) => s.prompt)).toEqual(["plan it"]);
+    expect(startedOn.get("plan it")).toBeUndefined();
+    expect(statusOf(q.id)).toBe("started");
+  });
+
+  it("holds a plan-only task on its after dependency, with no load wait", async () => {
+    const t = setup(null);
+    const q = queue(t, "plan it", { planOnly: true });
+    redHome();
+    await tick();
     expect(started).toEqual([]);
-    expect(waitOf(q.id).note).toMatch(/plan-only tasks run on this machine/);
+    expect(waitOf(q.id).wait_code).toBe("after");
+  });
+
+  it("holds a plan-only task while the orchestrator is paused", async () => {
+    const t = setup(null);
+    const q = queue(t, "plan it", { planOnly: true });
+    finish(t.task);
+    setPaused(t.workspace.id, true);
+    await tick();
+    expect(started).toEqual([]);
+    expect(waitOf(q.id).wait_code).toBe("orch_paused");
   });
 
   it("places an orchestrator's task and tells it where it started", async () => {

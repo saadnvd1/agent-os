@@ -189,7 +189,10 @@ const workspaceOf = (projectId: string) =>
 // gives its slot back until it resumes. A quick change
 // runs no agent, so it holds none. Without a
 // workspace, the project is the scope.
-function runningIn(scope: { workspaceId: string | null; projectId: string }) {
+function runningIn(
+  scope: { workspaceId: string | null; projectId: string },
+  forSlots = false
+) {
   const where = scope.workspaceId
     ? `p.workspace_id = @ws`
     : `p.id = @project AND p.workspace_id IS NULL`;
@@ -199,6 +202,7 @@ function runningIn(scope: { workspaceId: string | null; projectId: string }) {
         `SELECT s.id FROM sessions s JOIN projects p ON p.id = s.project_id
          WHERE ${where} AND s.archived_at IS NULL AND s.quick_of IS NULL
            AND (s.pause_state IS NULL OR s.pause_state != 'paused')
+           ${forSlots ? `AND NOT (COALESCE(s.plan_only, 0) = 1 AND COALESCE(s.plan_phase, '') != 'implementing')` : ""}
            AND s.task_status IN (${IN_FLIGHT.map((s) => `'${s}'`).join(", ")})`
       )
       .all({ ws: scope.workspaceId, project: scope.projectId }) as {
@@ -214,7 +218,8 @@ function startingIn(workspaceId: string): number {
       db
         .prepare(
           `SELECT COUNT(*) AS n FROM task_queue q JOIN projects p ON p.id = q.project_id
-         WHERE q.status = 'starting' AND p.workspace_id = ?`
+         WHERE q.status = 'starting' AND p.workspace_id = ?
+           AND q.plan_only IS NULL`
         )
         .get(workspaceId) as { n: number }
     ).n
@@ -315,7 +320,8 @@ const waitingIn = (workspaceId: string) =>
       .prepare(
         `SELECT COUNT(*) AS n FROM task_queue q JOIN projects p ON p.id = q.project_id
          WHERE q.status = 'queued' AND p.workspace_id = ?
-           AND q.after_task IS NULL AND q.after_any IS NULL`
+           AND q.after_task IS NULL AND q.after_any IS NULL
+           AND q.plan_only IS NULL`
       )
       .get(workspaceId) as { n: number }
   ).n;
@@ -344,9 +350,10 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   } else if (after)
     afterTask = resolveAfter(after, req.originWorkspaceId ?? workspaceId).id;
   const full =
+    !req.planOnly &&
     limit !== null &&
     !!workspaceId &&
-    (runningIn({ workspaceId, projectId: project.id }).length +
+    (runningIn({ workspaceId, projectId: project.id }, true).length +
       startingIn(workspaceId) >=
       limit ||
       waitingIn(workspaceId) > 0);
@@ -360,6 +367,7 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   const loaded =
     !waits &&
     !full &&
+    !req.planOnly &&
     !!req.originWorkspaceId &&
     loadHeldStart(project.id, req.prompt, setting);
   if (!waits && !full && !loaded) return null;
@@ -523,9 +531,10 @@ export const queuedView = (id: string) =>
 
 // Why an automatic start has to wait, or null. A start now by a person
 // isn't held.
-function autoHold(workspaceId: string | null): Hold | null {
+function autoHold(workspaceId: string | null, planOnly = false): Hold | null {
   if (workspaceId && isPaused(workspaceId))
     return { code: "orch_paused", text: "Waiting: the orchestrator is paused" };
+  if (planOnly) return null;
   const window = brakesEnabled() ? windowRefusal(readUsage()) : null;
   return window ? { code: "window", text: `Waiting: ${window}` } : null;
 }
@@ -609,7 +618,7 @@ async function startRow(
     return "failed";
   }
   if (!opts.force) {
-    const held = autoHold(workspaceId);
+    const held = autoHold(workspaceId, !!r.plan_only);
     if (held) {
       if (r.note !== held.text)
         patch(r.id, { note: held.text, wait_code: held.code });
@@ -621,7 +630,8 @@ async function startRow(
     if (
       workspaceId &&
       limit !== null &&
-      runningIn({ workspaceId, projectId: r.project_id }).length +
+      !r.plan_only &&
+      runningIn({ workspaceId, projectId: r.project_id }, true).length +
         startingIn(workspaceId) >=
         limit
     )
@@ -643,7 +653,7 @@ async function startRow(
   }
   if (!claimed) return "held";
   const placed = opts.placement ?? null;
-  if (!opts.force)
+  if (!opts.force && !r.plan_only)
     recordAutoStart(placed?.hostId ?? LOCAL, !!opts.heavy, Date.now());
   // A linked machine's start never sees this machine's held messages: they
   // go with the brief it is sent.
@@ -747,7 +757,7 @@ function groupFor(
   const scope = { workspaceId, projectId };
   return {
     inFlight:
-      runningIn(scope).length +
+      runningIn(scope, true).length +
       (workspaceId ? (reserved.get(workspaceId) ?? 0) : 0) +
       startingRows,
     limit: limitOf(workspaceId) ?? Number.POSITIVE_INFINITY,
@@ -814,8 +824,9 @@ function candidateOf(
       heavy: heavyNeeds(needs),
       needsUnmet: !remote && !meetsNeeds(needs, machineCapabilities()),
       remote,
+      planOnly: !!r.plan_only,
       before,
-      auto: autoHold(r.workspace_id),
+      auto: autoHold(r.workspace_id, !!r.plan_only),
       any,
     },
   };
