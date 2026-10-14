@@ -2,15 +2,28 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import type { TaskPR } from "@/lib/tasks/state";
 
 // A home of its own before anything reads it: the worktrees folder is
-// fixed when lib/worktrees loads.
+// fixed when lib/worktrees loads. HOME, not a spy on os.homedir, which
+// modules that `import * as os` never see.
 const home = fs.realpathSync(
   fs.mkdtempSync(path.join(os.tmpdir(), "aos-quick-"))
 );
-vi.spyOn(os, "homedir").mockReturnValue(home);
+process.env.HOME = home;
+const roots: string[] = [home];
+afterAll(() => {
+  for (const r of roots) fs.rmSync(r, { recursive: true, force: true });
+});
 
 // gh is faked: `pr create` opens PR #31 at the pushed head, which the PR
 // lookups then find.
@@ -111,6 +124,7 @@ function setup() {
   const root = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "aos-quick-repo-"))
   );
+  roots.push(root);
   const remote = path.join(root, "remote.git");
   const repo = path.join(root, "repo");
   git(root, "init", "-q", "--bare", "-b", "main", remote);

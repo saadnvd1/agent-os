@@ -12,10 +12,13 @@ import path from "path";
 import { randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import { db, type Session } from "../db";
 import { getWorkspace } from "../workspaces";
+import { refuseRealStateUnderTest } from "../test-home-guard";
 
 // It works through tools, not in a repo: a scratch folder of its own.
 export const orchestratorDir = (workspaceId: string) =>
-  path.join(os.homedir(), ".agent-os", "orchestrators", workspaceId);
+  refuseRealStateUnderTest(
+    path.join(os.homedir(), ".agent-os", "orchestrators", workspaceId)
+  );
 
 export function getOrchestrator(workspaceId: string): Session | null {
   return (

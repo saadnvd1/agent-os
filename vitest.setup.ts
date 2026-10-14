@@ -1,4 +1,5 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll } from "vitest";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -7,6 +8,13 @@ process.env.DB_PATH = join(
   mkdtempSync(join(tmpdir(), "agent-os-test-")),
   "test.db"
 );
+
+// Nor the real home: every ~/.agent-os path (worktrees, orchestrators, chat,
+// plans, artifacts...) resolves under a temp folder per test file. Spying on
+// os.homedir doesn't reach modules that `import * as os`; HOME does.
+const testHome = mkdtempSync(join(tmpdir(), "agent-os-home-"));
+process.env.HOME = testHome;
+afterAll(() => rmSync(testHome, { recursive: true, force: true }));
 
 // Nor the Mac's usage window: a test that needs one injects it, so a run
 // here behaves as it does in CI, where there is no limits.json.
