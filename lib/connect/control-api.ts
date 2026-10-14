@@ -264,3 +264,87 @@ export async function pushRelay(
     throw new Error("the Connect service sent no push results");
   return r.results;
 }
+
+export type ShareStatus = "active" | "expired" | "revoked";
+
+/** A snapshot link as Connect reports it. The link itself is never in a list. */
+export interface RemoteShare {
+  id: string;
+  kind: string;
+  title: string;
+  status: ShareStatus;
+  byte_size: number;
+  view_count: number;
+  last_viewed_at: string | null;
+  created_at: string;
+  expires_at: string | null;
+}
+
+export type ShareExpiry = "1d" | "7d" | "30d" | "never";
+
+const shareFrom = (r: unknown): RemoteShare => {
+  const s = (r ?? {}) as Record<string, unknown>;
+  if (typeof s.id !== "string" || typeof s.status !== "string")
+    throw new Error("the Connect service sent an unusable share");
+  return s as unknown as RemoteShare;
+};
+
+/** Uploads a rendered snapshot; the answer carries the public link, once. */
+export async function uploadShare(
+  config: ConnectConfig,
+  privateKey: string,
+  share: {
+    kind: "chat" | "artifact";
+    title: string;
+    html: string;
+    expiresIn: ShareExpiry;
+  }
+): Promise<RemoteShare & { url: string }> {
+  const res = await signed(config, privateKey)(
+    "POST",
+    `/api/v1/machines/${config.machineId}/shares`,
+    {
+      kind: share.kind,
+      title: share.title,
+      html: share.html,
+      expires_in: share.expiresIn,
+    }
+  );
+  const r = (await res.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  const url = r?.url;
+  if (typeof url !== "string" || !/^https?:\/\//.test(url))
+    throw new Error("the Connect service sent no link");
+  return { ...shareFrom(r), url };
+}
+
+export async function listShares(
+  config: ConnectConfig,
+  privateKey: string
+): Promise<RemoteShare[]> {
+  const res = await signed(config, privateKey)(
+    "GET",
+    `/api/v1/machines/${config.machineId}/shares`
+  );
+  const r = (await res.json().catch(() => null)) as {
+    shares?: unknown[];
+  } | null;
+  if (!Array.isArray(r?.shares))
+    throw new Error("the Connect service sent no share list");
+  return r.shares.map(shareFrom);
+}
+
+export async function revokeShare(
+  config: ConnectConfig,
+  privateKey: string,
+  id: string
+): Promise<RemoteShare> {
+  if (!/^[a-z0-9]{12}$/.test(id)) throw new Error("not a share id");
+  const res = await signed(config, privateKey)(
+    "DELETE",
+    `/api/v1/machines/${config.machineId}/shares/${id}`
+  );
+  return shareFrom(await res.json().catch(() => null));
+}

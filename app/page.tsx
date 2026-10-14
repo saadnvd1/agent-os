@@ -118,6 +118,10 @@ const MoveDialog = dynamic(
   () => import("@/components/Tasks/MoveDialog").then((m) => m.MoveDialog),
   { ssr: false }
 );
+const ShareDialog = dynamic(
+  () => import("@/components/Share/ShareDialog").then((m) => m.ShareDialog),
+  { ssr: false }
+);
 const CommandPalette = dynamic(
   () =>
     import("@/components/CommandPalette/CommandPalette").then(
@@ -143,6 +147,7 @@ const AppDialogs = memo(function AppDialogs({
       <LumifyHubDialogs />
       <UsageDialog />
       <MoveDialog />
+      <ShareDialog />
       <AwayReport />
       <CommandPalette />
     </>

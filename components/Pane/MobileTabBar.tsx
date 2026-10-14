@@ -23,6 +23,7 @@ import {
   Menu,
   Plus,
   Search,
+  Share2,
   Terminal as TerminalIcon,
   TextSearch,
   Users,
@@ -34,6 +35,7 @@ import { awayUntil } from "@/components/Away/time";
 import type { Session, Project } from "@/lib/db";
 import type { LucideIcon } from "lucide-react";
 import { HostBadge } from "@/components/Hosts/HostBadge";
+import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
@@ -233,6 +235,23 @@ export function MobileTabBar({
                 After={DropdownMenuSeparator}
                 iconClassName="h-4 w-4"
               />
+            )}
+            {session?.view === "chat" && (
+              <>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    shareUiActions.open({
+                      kind: "chat",
+                      sessionId: session.id,
+                      title: session.name,
+                    })
+                  }
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
             )}
             {sessions
               .filter((s) => !s.conductor_session_id)

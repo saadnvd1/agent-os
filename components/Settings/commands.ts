@@ -6,6 +6,7 @@ import {
   FlaskConical,
   GitMerge,
   LayoutGrid,
+  Link2,
   RefreshCw,
   Settings,
   Smartphone,
@@ -71,6 +72,14 @@ export function settingsCommands(workspaceId: string | null): PaletteCommand[] {
       keywords: ["phone", "pair", "passkeys", "access", "network", "tailscale"],
       icon: Smartphone,
       run: () => settingsUiActions.open("devices"),
+    },
+    {
+      id: "app.shares",
+      title: "Shared links",
+      group,
+      keywords: ["share", "snapshot", "revoke", "link", "connect"],
+      icon: Link2,
+      run: () => settingsUiActions.open("shares"),
     },
     {
       id: "app.notifications",

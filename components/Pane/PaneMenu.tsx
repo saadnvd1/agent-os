@@ -5,6 +5,7 @@ import {
   Copy,
   Link,
   MoreHorizontal,
+  Share2,
   SplitSquareHorizontal,
   SplitSquareVertical,
   Unplug,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { copySessionLink, writeClipboard } from "@/hooks/useCopyToClipboard";
 import type { Session } from "@/lib/db";
+import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 interface PaneMenuProps {
@@ -87,6 +89,20 @@ export function PaneMenu({
               <Copy className="h-4 w-4" />
               Copy session ID
             </DropdownMenuItem>
+            {session.view === "chat" && (
+              <DropdownMenuItem
+                onSelect={() =>
+                  shareUiActions.open({
+                    kind: "chat",
+                    sessionId: session.id,
+                    title: session.name,
+                  })
+                }
+              >
+                <Share2 className="h-4 w-4" />
+                Share…
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <MoveMenuItems
               session={session}

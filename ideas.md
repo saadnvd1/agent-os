@@ -221,3 +221,8 @@
 - [ ] A pruning view of applied lessons (the `learning_cards` accepted rows)
 - [ ] Learning cards on mobile
 - [ ] Auto-apply a destination once its accept rate justifies it
+
+- Share links, next: a separate registered user-content domain for shared
+  pages (protection against a domain-wide blocklist; a purchase); live links
+  that update; Mermaid diagrams in snapshots (they show as code today); share
+  from the native app; per-day view counts.

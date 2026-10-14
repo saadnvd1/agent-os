@@ -13,6 +13,7 @@ import {
   GitPullRequest,
   KanbanSquare,
   Link,
+  Share2,
   Loader2,
   Pencil,
   Pin,
@@ -38,6 +39,7 @@ import { SNOOZE_PRESETS, snoozePreset, wakeLabel } from "@/lib/sidebar/snooze";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
 import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
+import { shareUiActions } from "@/stores/shareUi";
 import { copySessionLink } from "@/hooks/useCopyToClipboard";
 import { useLinkedHostNames } from "@/data/hosts";
 import { remoteBlocks } from "@/lib/hosts/remote-menu";
@@ -206,6 +208,20 @@ export function SessionRowMenu({
         <Link className={icon} />
         Copy link
       </Item>
+      {session.view === "chat" && (
+        <Item
+          onClick={() =>
+            shareUiActions.open({
+              kind: "chat",
+              sessionId: session.id,
+              title: session.name,
+            })
+          }
+        >
+          <Share2 className={icon} />
+          Share…
+        </Item>
+      )}
       <Item onClick={onRename}>
         <Pencil className={icon} />
         Rename
