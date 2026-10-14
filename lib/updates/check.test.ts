@@ -18,7 +18,10 @@ const sh = (cwd: string, ...args: string[]) =>
     cwd,
     encoding: "utf8",
     env: {
-      ...process.env,
+      ...(Object.fromEntries(
+        Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))
+      ) as NodeJS.ProcessEnv),
+      GIT_CONFIG_GLOBAL: "/dev/null",
       GIT_AUTHOR_NAME: "a",
       GIT_AUTHOR_EMAIL: "a@example.com",
       GIT_COMMITTER_NAME: "a",

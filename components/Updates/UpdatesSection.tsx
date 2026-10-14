@@ -117,6 +117,7 @@ export function UpdatesSection() {
         <Button
           variant="outline"
           size="sm"
+          className="min-h-11 md:min-h-0"
           disabled={check.isPending || running}
           onClick={onCheck}
         >

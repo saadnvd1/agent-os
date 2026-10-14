@@ -40,7 +40,7 @@ function Log({ lines }: { lines: string[] }) {
     <>
       <button
         type="button"
-        className="text-muted-foreground hover:text-foreground min-h-9 text-xs underline md:min-h-0"
+        className="text-muted-foreground hover:text-foreground min-h-11 text-xs underline md:min-h-0"
         onClick={() => setOpen(!open)}
       >
         {open ? "Hide log" : "Show log"}
@@ -135,7 +135,7 @@ export function UpdateBannerView({
             <button
               type="button"
               aria-expanded={notesOpen}
-              className="text-muted-foreground hover:text-foreground inline-flex min-h-9 items-center gap-1 text-xs md:min-h-0"
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs md:min-h-0"
               onClick={() => setNotesOpen(!notesOpen)}
             >
               What&apos;s new
@@ -152,7 +152,7 @@ export function UpdateBannerView({
               href={latest.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-primary inline-flex min-h-9 items-center text-xs underline md:min-h-0"
+              className="text-primary inline-flex min-h-11 items-center text-xs underline md:min-h-0"
             >
               Release notes
             </a>

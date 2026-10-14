@@ -42,6 +42,7 @@ export function UpdateActions({ view }: { view: UpdateView }) {
     return (
       <Button
         size="sm"
+        className="min-h-11 md:min-h-0"
         variant="outline"
         disabled={cancel.isPending}
         onClick={() => cancel.mutate(undefined, { onError: toastError })}
@@ -60,6 +61,7 @@ export function UpdateActions({ view }: { view: UpdateView }) {
     <>
       <Button
         size="sm"
+        className="min-h-11 md:min-h-0"
         disabled={run.isPending}
         onClick={() => (busy ? setConfirm(true) : start("now"))}
       >

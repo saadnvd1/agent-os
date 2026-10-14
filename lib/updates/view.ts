@@ -16,6 +16,14 @@ import { bannerEnabled, bannerLocked } from "./settings";
 const NOT_ALLOWED =
   "Update from the machine running AgentOS, over Tailscale, or from a device with Can approve.";
 
+const redact = (lines: string[]) =>
+  lines.map((l) =>
+    l
+      .replace(/(https?:\/\/)[^/@\s]+@/g, "$1***@")
+      .replace(/\b(gh[pousr]_|github_pat_|npm_|sk-)[\w-]{10,}/g, "***")
+      .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "***")
+  );
+
 export async function updateView(
   { mayUpdate }: { mayUpdate: boolean },
   deps: RunDeps = realRunDeps()
@@ -32,9 +40,15 @@ export async function updateView(
   )
     check = (await checkForUpdate({ force: true, always: true }, deps.check))
       .result;
+  // The log can carry paths and remote URLs; only a device that may update sees it.
   const run =
     stored && (stored.phase === "failed" || stored.phase === "built")
-      ? { ...stored, log: stored.log?.length ? stored.log : readLog(deps) }
+      ? {
+          ...stored,
+          log: mayUpdate
+            ? redact(stored.log?.length ? stored.log : readLog(deps))
+            : [],
+        }
       : stored;
   const pending = readPending(deps);
   const active = isActivePhase(run?.phase);

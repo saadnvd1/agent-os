@@ -420,7 +420,11 @@ app.prepare().then(async () => {
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
   // Looking for a newer version, and running an update only when one is
   // asked for (the banner, Settings > Updates).
-  reconcileUpdateRun();
+  try {
+    reconcileUpdateRun();
+  } catch (error) {
+    console.error("Reconciling the update run failed:", error);
+  }
   if (updateChecksEnabled()) {
     startUpdateChecks();
     startIdleWatcher();

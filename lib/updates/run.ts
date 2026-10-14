@@ -31,6 +31,7 @@ export const STALE_RUN_MS = 30 * 60_000;
 export const PENDING_EXPIRES_MS = 24 * 60 * 60_000;
 export const IDLE_TICK_MS = 30_000;
 const PENDING_KEY = "updates.pending";
+const CLAIM_STALE_MS = 2 * 60_000;
 
 export interface RunDeps {
   cwd: string;
@@ -52,7 +53,9 @@ export interface RunDeps {
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 async function parentOf(pid: number): Promise<number> {
-  const { stdout } = await exec("ps", ["-o", "ppid=", "-p", String(pid)]);
+  const { stdout } = await exec("ps", ["-o", "ppid=", "-p", String(pid)], {
+    timeout: 2_000,
+  });
   return Number(stdout.trim()) || 0;
 }
 
@@ -264,11 +267,60 @@ export type StartResult =
   | { ok: true; pending: boolean }
   | ({ ok: false } & Refusal);
 
+/** Takes the right to start, atomically, so two requests can't both run. */
+function claimStart(deps: Pick<RunDeps, "stateFile" | "now">): boolean {
+  const file = `${deps.stateFile}.claim`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  for (let i = 0; i < 2; i++) {
+    try {
+      fs.closeSync(fs.openSync(file, "wx"));
+      return true;
+    } catch {
+      try {
+        if (Date.now() - fs.statSync(file).mtimeMs < CLAIM_STALE_MS)
+          return false;
+        fs.unlinkSync(file);
+      } catch {}
+    }
+  }
+  return false;
+}
+
+const releaseStart = (deps: Pick<RunDeps, "stateFile">) => {
+  try {
+    fs.unlinkSync(`${deps.stateFile}.claim`);
+  } catch {}
+};
+
 export async function startUpdate(
   { when }: { when: "now" | "idle" },
   deps: RunDeps = realRunDeps()
 ): Promise<StartResult> {
+  if (!claimStart(deps))
+    return {
+      ok: false,
+      code: "running",
+      error: "An update is already starting.",
+    };
+  try {
+    return await begin(when, deps);
+  } finally {
+    releaseStart(deps);
+  }
+}
+
+async function begin(
+  when: "now" | "idle",
+  deps: RunDeps
+): Promise<StartResult> {
   const { result } = await checkForUpdate({ force: true }, deps.check);
+  // A failed look can't vouch for the cached answer.
+  if (result.error)
+    return {
+      ok: false,
+      code: "unknown",
+      error: `Couldn't look for updates: ${result.error}`,
+    };
   const refused = await preflight(result, deps);
   if (refused) return { ok: false, ...refused };
   if (when === "idle") {
@@ -326,31 +378,43 @@ export const cancelPending = (
  */
 export function createIdleWatcher(deps: RunDeps = realRunDeps()) {
   let quiet = 0;
-  return {
-    async tick(): Promise<"none" | "waiting" | "started"> {
-      if (!readPending(deps)) {
-        quiet = 0;
-        return "none";
-      }
-      const run = readRun(deps);
-      if (run && isActivePhase(run.phase)) return "waiting";
-      quiet = workingTotal(await deps.working()) === 0 ? quiet + 1 : 0;
-      if (quiet < 2) return "waiting";
+  let busy = false;
+  const tick = async (): Promise<"none" | "waiting" | "started"> => {
+    if (!readPending(deps)) {
       quiet = 0;
-      const started = await startUpdate({ when: "now" }, deps);
-      if (!started.ok) {
-        writeRun(deps.stateFile, {
-          id: `idle${deps.now().toString(36)}`,
-          phase: "failed",
-          from: "",
-          fromVersion: "",
-          toVersion: "",
-          startedAt: deps.now(),
-          finishedAt: deps.now(),
-          error: started.error,
-        });
+      return "none";
+    }
+    const run = readRun(deps);
+    if (run && isActivePhase(run.phase)) return "waiting";
+    quiet = workingTotal(await deps.working()) === 0 ? quiet + 1 : 0;
+    if (quiet < 2) return "waiting";
+    quiet = 0;
+    const started = await startUpdate({ when: "now" }, deps);
+    if (!started.ok) {
+      // Don't retry a refused request every tick for a day.
+      deps.putSetting(PENDING_KEY, null);
+      writeRun(deps.stateFile, {
+        id: `idle${deps.now().toString(36)}`,
+        phase: "failed",
+        from: "",
+        fromVersion: "",
+        toVersion: "",
+        startedAt: deps.now(),
+        finishedAt: deps.now(),
+        error: started.error,
+      });
+    }
+    return "started";
+  };
+  return {
+    async tick() {
+      if (busy) return "waiting";
+      busy = true;
+      try {
+        return await tick();
+      } finally {
+        busy = false;
       }
-      return "started";
     },
   };
 }

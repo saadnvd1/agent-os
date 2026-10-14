@@ -235,6 +235,23 @@ describe("update when idle", () => {
     await watcher.tick();
     expect(state()).toMatchObject({ phase: "failed" });
     expect(state().error).toContain("local changes");
+    expect(run.readPending(deps())).toBeNull();
+  });
+
+  it("starts one runner when two starts race", async () => {
+    const [a, b] = await Promise.all([
+      run.startUpdate({ when: "now" }, deps()),
+      run.startUpdate({ when: "now" }, deps()),
+    ]);
+    expect([a.ok, b.ok].sort()).toEqual([false, true]);
+    expect(spawned).toHaveLength(1);
+  });
+
+  it("refuses when the fresh look failed", async () => {
+    check = { ...check, error: "network down" };
+    const r = await run.startUpdate({ when: "now" }, deps());
+    expect(r).toMatchObject({ ok: false, code: "unknown" });
+    expect(spawned).toHaveLength(0);
   });
 });
 
