@@ -10,14 +10,43 @@ import {
 import type Database from "better-sqlite3";
 import { moveSchedulesToRecipes } from "./schedules-move";
 
-interface Migration {
+// HOW TO ADD A MIGRATION: append an object with a timestamp `key`, never an
+// integer `id`: `key: "YYYYMMDDTHHMM_snake_name"` (UTC, e.g.
+// "20261014T0130_share_links"). Hand-picked numbers collide when two tasks run
+// in parallel and the loser is silently skipped on databases that already
+// applied the winner. Ids 1..88 are legacy: they run first, by number, and
+// never change. Timestamp keys run after them, in lexical order. Never edit a
+// migration that has shipped; add a new one. lib/db/migrations.test.ts
+// enforces all of this.
+interface LegacyMigration {
   id: number;
+  key?: undefined;
   name: string;
   up: (db: Database.Database) => void;
 }
+interface KeyedMigration {
+  key: string;
+  id?: undefined;
+  name?: undefined;
+  up: (db: Database.Database) => void;
+}
+export type Migration = LegacyMigration | KeyedMigration;
+
+export const migrationKey = (m: Migration): string => m.key ?? String(m.id);
+const migrationName = (m: Migration): string =>
+  m.name ?? (m.key as string).replace(/^\d{8}T\d{4}_/, "");
+
+// Legacy ids sort before every timestamp key.
+function compareToUpTo(m: Migration, upTo: number | string): number {
+  if (typeof upTo === "number") {
+    return m.id === undefined ? 1 : m.id - upTo;
+  }
+  if (m.id !== undefined) return -1;
+  return m.key < upTo ? -1 : m.key > upTo ? 1 : 0;
+}
 
 // All migrations in order - never modify existing ones, only add new
-const migrations: Migration[] = [
+export const migrations: Migration[] = [
   {
     id: 1,
     name: "add_group_path_to_sessions",
@@ -2139,10 +2168,11 @@ const migrations: Migration[] = [
   },
 ];
 
-// `upTo`: stop after this id (tests that start from an older database).
+// `upTo`: stop after this legacy id or timestamp key, inclusive (tests that
+// start from an older database).
 export function runMigrations(
   db: Database.Database,
-  upTo = Number.POSITIVE_INFINITY
+  upTo?: number | string
 ): void {
   // Create migrations tracking table
   db.exec(`
@@ -2152,31 +2182,59 @@ export function runMigrations(
       applied_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+  // Timestamp-keyed rows get an auto id and carry their key here; legacy rows
+  // (key NULL) keep meaning "applied" by their integer id.
+  const cols = db.prepare(`PRAGMA table_info(_migrations)`).all() as {
+    name: string;
+  }[];
+  if (!cols.some((c) => c.name === "key")) {
+    try {
+      db.exec(`ALTER TABLE _migrations ADD COLUMN key TEXT`);
+    } catch (error) {
+      if (!String(error).includes("duplicate column")) throw error;
+    }
+  }
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_migrations_key ON _migrations(key)`
+  );
 
-  // Get already applied migrations
   const applied = new Set(
-    (db.prepare(`SELECT id FROM _migrations`).all() as { id: number }[]).map(
-      (r) => r.id
-    )
+    (
+      db.prepare(`SELECT id, key FROM _migrations`).all() as {
+        id: number;
+        key: string | null;
+      }[]
+    ).map((r) => r.key ?? String(r.id))
   );
 
   // Use INSERT OR IGNORE to handle concurrent workers
-  const insertMigration = db.prepare(
+  const insertLegacy = db.prepare(
     `INSERT OR IGNORE INTO _migrations (id, name) VALUES (?, ?)`
   );
+  const insertKeyed = db.prepare(
+    `INSERT OR IGNORE INTO _migrations (key, name) VALUES (?, ?)`
+  );
+  const record = (m: Migration) =>
+    m.key === undefined
+      ? insertLegacy.run(m.id, m.name)
+      : insertKeyed.run(m.key, migrationName(m));
 
   for (const migration of migrations) {
-    if (applied.has(migration.id) || migration.id > upTo) continue;
+    const key = migrationKey(migration);
+    const name = migrationName(migration);
+    if (
+      applied.has(key) ||
+      (upTo !== undefined && compareToUpTo(migration, upTo) > 0)
+    )
+      continue;
 
     try {
       migration.up(db);
-      const result = insertMigration.run(migration.id, migration.name);
+      const result = record(migration);
       if (result.changes > 0) {
-        console.log(`Migration ${migration.id}: ${migration.name} applied`);
+        console.log(`Migration ${key}: ${name} applied`);
       } else {
-        console.log(
-          `Migration ${migration.id}: ${migration.name} skipped (concurrent apply)`
-        );
+        console.log(`Migration ${key}: ${name} skipped (concurrent apply)`);
       }
     } catch (error) {
       // Some migrations may fail if columns already exist (from old system or concurrent worker)
@@ -2186,15 +2244,10 @@ export function runMigrations(
         errorMsg.includes("duplicate column") ||
         errorMsg.includes("already exists")
       ) {
-        insertMigration.run(migration.id, migration.name);
-        console.log(
-          `Migration ${migration.id}: ${migration.name} skipped (already applied)`
-        );
+        record(migration);
+        console.log(`Migration ${key}: ${name} skipped (already applied)`);
       } else {
-        console.error(
-          `Migration ${migration.id}: ${migration.name} failed:`,
-          error
-        );
+        console.error(`Migration ${key}: ${name} failed:`, error);
         throw error;
       }
     }
