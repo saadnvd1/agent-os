@@ -5,6 +5,7 @@ import {
   Cpu,
   GitMerge,
   LayoutGrid,
+  RefreshCw,
   Settings,
   Smartphone,
 } from "lucide-react";
@@ -101,6 +102,14 @@ export function settingsCommands(workspaceId: string | null): PaletteCommand[] {
       keywords: ["audit", "tokens", "waste", "report", "session-audit"],
       icon: ClipboardList,
       run: () => settingsUiActions.open("audits"),
+    },
+    {
+      id: "app.updates",
+      title: "Check for updates",
+      group,
+      keywords: ["update", "upgrade", "version", "new version", "banner"],
+      icon: RefreshCw,
+      run: () => settingsUiActions.open("updates"),
     },
   ];
 }

@@ -27,6 +27,7 @@ describe("⌘K entry points", () => {
     ["app.phone-notifications", "notifications"],
     ["app.schedules", "schedules"],
     ["app.audits", "audits"],
+    ["app.updates", "updates"],
   ] as const)("%s opens Settings at %s", (id, section) => {
     run(id);
     expect(settingsUi.open).toBe(true);

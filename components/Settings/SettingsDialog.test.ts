@@ -44,6 +44,9 @@ vi.mock("@/components/Schedules", () => ({
 vi.mock("@/components/Audits/AuditsPanel", () => ({
   AuditsPanel: stub("audits"),
 }));
+vi.mock("@/components/Updates/UpdatesSection", () => ({
+  UpdatesSection: stub("updates"),
+}));
 vi.mock("./NotificationsSection", () => ({
   NotificationsSection: stub("notifications"),
 }));

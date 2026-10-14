@@ -219,6 +219,18 @@ agent-os update
 
 It pulls the latest version, reinstalls dependencies, rebuilds, and starts AgentOS again if it was running. If you're already on the latest version, it says so and changes nothing.
 
+### Update from the app
+
+AgentOS checks its own git remote for a newer version every few hours. When there is one, a slim banner offers **Update now** and **Dismiss**. Dismissing hides it for that version only, in that browser; the next version shows it again. Nothing updates unless you choose it.
+
+**Settings → Updates** shows the installed and latest versions, has **Check for updates**, and a switch for the banner (it also stops the background checks).
+
+Update now pulls, installs and builds beside the running server, then restarts it and reloads the page. Terminals and chats keep running through the restart; reviews and task setups in progress start over. If something is working, you're asked first and can choose **Update when idle**, which waits until nothing is working (for up to a day) and can be cancelled.
+
+It refuses, and says why, when the checkout has local changes, isn't on the default branch, has commits the remote doesn't, or is a dev server. The progress and any error show in the banner, and the full output is in `agent-os-update.log` next to the database. Only this machine, your tailnet, or a paired device with **Can approve** can start an update.
+
+The restart uses `AGENTOS_RESTART` if you set it (for a service manager, for example), or `agent-os restart` when `agent-os start` started the server. Otherwise the update stops after building and tells you to restart. `AGENTOS_UPDATE_CHECK=off` turns the background checks off, and `AGENTOS_UPDATE_BANNER=off` pins the banner off.
+
 ## Reach it from other devices
 
 By default AgentOS answers on the computer itself. Open **Settings → Devices & access** to add other devices:

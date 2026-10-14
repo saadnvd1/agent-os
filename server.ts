@@ -44,6 +44,11 @@ import {
 import { lanEnabled } from "./lib/security/network-settings";
 import { startConnect } from "./lib/connect/serve";
 import { serverPort } from "./lib/connect/config";
+import { startUpdateChecks, updateChecksEnabled } from "./lib/updates/check";
+import {
+  reconcileOnBoot as reconcileUpdateRun,
+  startIdleWatcher,
+} from "./lib/updates/run";
 import { startTailnetHttps } from "./lib/security/tailnet-https";
 import {
   setStatusSource,
@@ -413,6 +418,17 @@ app.prepare().then(async () => {
   if (process.env.AGENTOS_ORCHESTRATOR !== "off") startOrchestratorWatcher();
   // Schedules tick here, once a minute, and nowhere else.
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
+  // Looking for a newer version, and running an update only when one is
+  // asked for (the banner, Settings > Updates).
+  try {
+    reconcileUpdateRun();
+  } catch (error) {
+    console.error("Reconciling the update run failed:", error);
+  }
+  if (updateChecksEnabled()) {
+    startUpdateChecks();
+    startIdleWatcher();
+  }
   startSettling();
   // Sessions that sat in Done for 30 days are archived.
   startAutoArchive();

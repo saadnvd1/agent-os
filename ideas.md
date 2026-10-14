@@ -12,6 +12,11 @@
 - [x] Mobile responsive - Better mobile layout
 - [ ] Dark/light theme toggle
 
+## Updates
+
+- [ ] Only show the update banner for minor releases (every merge is a new version today)
+- [ ] Release notes written per release, instead of the merged PR titles
+
 ## Machines (after multi-host V1)
 
 - [ ] Files, git and worktrees for sessions on other machines (run git over the host exec layer)
