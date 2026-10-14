@@ -19,12 +19,15 @@ export interface PasskeyRow {
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
+  // 'webauthn' (a browser passkey) or 'device' (a paired device's own key).
+  type: "webauthn" | "device";
+  device_id: string | null;
 }
 
 export type PasskeyView = Omit<PasskeyRow, "public_key" | "counter">;
 
 const VIEW = `id, transports, rp_id, name, registered_via, registered_from,
-  user_agent, created_at, last_used_at, revoked_at`;
+  user_agent, created_at, last_used_at, revoked_at, type, device_id`;
 
 export function listPasskeys(): PasskeyView[] {
   return getDb()
@@ -66,12 +69,14 @@ export function addPasskey(p: {
   via: string;
   from: string | null;
   userAgent: string | null;
+  type?: "webauthn" | "device";
+  deviceId?: string | null;
 }): PasskeyRow {
   getDb()
     .prepare(
       `INSERT INTO passkeys (id, public_key, counter, transports, rp_id, name,
-         registered_via, registered_from, user_agent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         registered_via, registered_from, user_agent, type, device_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       p.id,
@@ -82,7 +87,9 @@ export function addPasskey(p: {
       p.name.trim().slice(0, 80) || "Passkey",
       p.via,
       p.from,
-      p.userAgent?.slice(0, 300) ?? null
+      p.userAgent?.slice(0, 300) ?? null,
+      p.type ?? "webauthn",
+      p.deviceId ?? null
     );
   return getPasskey(p.id)!;
 }

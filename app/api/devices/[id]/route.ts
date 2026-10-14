@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  renameDevice,
-  revokeDevice,
-  setDeviceCanApprove,
-} from "@/lib/security/devices";
+import { renameDevice, setDeviceCanApprove } from "@/lib/security/devices";
+import { revokeDeviceAndKeys } from "@/lib/orchestrator/passkey-asks";
 import { requireLocalTrust } from "@/lib/security/route-guard";
 import { DEVICE_HEADER } from "@/lib/security/auth";
 import { demoMode } from "@/lib/security/demo";
@@ -43,7 +40,7 @@ export async function DELETE(request: NextRequest, { params }: Ctx) {
       { error: "Not available in the demo." },
       { status: 403 }
     );
-  if (!revokeDevice(id))
+  if (!revokeDeviceAndKeys(id, "Devices"))
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

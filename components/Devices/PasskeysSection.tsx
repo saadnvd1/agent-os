@@ -25,7 +25,8 @@ const when = (s: string) =>
 const fail = (e: Error) => toast.error(e.message);
 
 // Passkeys prove it's you approving an ask or resuming an orchestrator.
-// Each belongs to the host name it was made on.
+// A browser passkey belongs to the host name it was made on; the app keeps its
+// own key in the phone's Secure Enclave.
 export function PasskeysSection({ open }: { open: boolean }) {
   const { data } = usePasskeysQuery(open);
   const add = useAddPasskey();
@@ -64,7 +65,8 @@ export function PasskeysSection({ open }: { open: boolean }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{k.name}</p>
             <p className="text-muted-foreground truncate text-xs">
-              {k.rp_id} · added {when(k.created_at)}
+              {k.type === "device" ? "Device key (Face ID)" : k.rp_id} · added{" "}
+              {when(k.created_at)}
               {k.registered_from ? ` from ${k.registered_from}` : ""} · used{" "}
               {lastSeen(k.last_used_at)}
             </p>

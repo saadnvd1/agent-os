@@ -279,6 +279,14 @@ reset` yourself in a terminal on the machine: it refuses inside an
   AgentOS session or an agent's shell, asks you to type a confirmation, and
   makes the next passkey first-use again. Browsers offer passkeys only over
   https or on localhost.
+  **A paired device has its own key instead** (the app, Face ID or Touch ID):
+  a P-256 key made in the phone's Secure Enclave and registered per device
+  (`POST /api/presence/device-key`, same first-use and code rules, same asks).
+  It works on any host, since it isn't tied to a host name. The device asks
+  `/api/presence/options` with `method: "device"` and signs the message it
+  gets back (domain, challenge, purpose, binding, device id); the server
+  rebuilds that message itself and accepts it only from that device's own,
+  unrevoked key. Revoking a device revokes its key. `lib/security/device-keys.ts`.
 - **Header line and Pause:** its row reads like "Orchestrator · 3 running ·
   1 in review · 1 ask" from live data, and tapping it opens the chat, where
   the same line carries Pause/Resume. While paused it acts on nothing:

@@ -1,8 +1,10 @@
 import type { NextRequest } from "next/server";
-import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { requireApprover } from "@/lib/security/approver";
-import { relyingParty, verifyPresence } from "@/lib/security/presence";
-import { refusalResponse } from "@/lib/security/presence-http";
+import {
+  refusalResponse,
+  requirePresence,
+  type PresenceProof,
+} from "@/lib/security/presence-http";
 import { rulesPresence } from "@/lib/orchestrator/presence-binding";
 
 // A rule written here is Saad's, shown to the orchestrator as his word and
@@ -11,14 +13,15 @@ import { rulesPresence } from "@/lib/orchestrator/presence-binding";
 export async function provenAsSaad(
   request: NextRequest,
   workspaceId: string,
-  assertion: AuthenticationResponseJSON | undefined
+  proof: PresenceProof | undefined
 ): Promise<Response | null> {
   const gate = requireApprover(request);
   if (!gate.ok) return gate.response;
   try {
-    await verifyPresence(
-      relyingParty(request.headers),
-      assertion,
+    await requirePresence(
+      request,
+      gate.approver,
+      proof,
       "rules",
       rulesPresence(workspaceId)
     );

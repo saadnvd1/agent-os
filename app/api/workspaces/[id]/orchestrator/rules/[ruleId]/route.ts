@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import type { PresenceProof } from "@/lib/security/presence-http";
 import { removeRule, updateRule } from "@/lib/orchestrator/rules";
 import { provenAsSaad } from "../presence";
 
 type RouteParams = { params: Promise<{ id: string; ruleId: string }> };
 
-type Body = { text?: unknown; assertion?: AuthenticationResponseJSON };
+type Body = { text?: unknown } & PresenceProof;
 
 // The rule, its body, and Saad's passkey on it; or the refusal.
 async function target(
@@ -21,7 +21,7 @@ async function target(
       response: NextResponse.json({ error: "Bad rule id" }, { status: 400 }),
     };
   const body = (await request.json().catch(() => ({}))) as Body;
-  const refused = await provenAsSaad(request, id, body.assertion);
+  const refused = await provenAsSaad(request, id, body);
   if (refused) return { response: refused };
   return { workspaceId: id, ruleId: n, body };
 }

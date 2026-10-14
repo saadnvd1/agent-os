@@ -226,3 +226,4 @@
   pages (protection against a domain-wide blocklist; a purchase); live links
   that update; Mermaid diagrams in snapshots (they show as code today); share
   from the native app; per-day view counts.
+- [ ] `DELETE /api/devices/:id` has no approver check: any paired device can sign another out (it only removes approval power, never grants it)
