@@ -73,6 +73,7 @@ const recorded: { hostId: string; heavy: boolean }[] = [];
 vi.mock("@/lib/load/machines", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/load/machines")>()),
   localView: () => machine,
+  machineCapabilities: () => ["mac", "xcode", "simulator"],
   recordAutoStart: (hostId: string, heavy: boolean) => {
     recorded.push({ hostId, heavy });
   },
