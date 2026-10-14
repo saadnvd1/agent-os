@@ -28,7 +28,7 @@ export function PausedBanner({ sessionId }: { sessionId: string }) {
         className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
       />
       <p className="min-w-0 flex-1 text-sm">
-        {pauseSubtitle({ state, until })}
+        {pauseSubtitle({ state, until, note: session.pause_note })}
         <span className="text-muted-foreground block text-xs">
           Messages you send now are held and delivered together when it resumes.
         </span>

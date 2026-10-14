@@ -77,7 +77,13 @@ import { peerReading, peerSource, refreshPeers } from "../hosts/peer-load";
 import { hostLink, linkedHostIds } from "../hosts/remote-api";
 import { hostTasks } from "./remote";
 import { projectMachines } from "../hosts/project-machines";
-import { claimResume, dueResumes } from "./pause";
+import {
+  type DueResume,
+  claimResume,
+  dueResumes,
+  loadHoldFor,
+  setPauseNote,
+} from "./pause";
 
 export type QueueStatus =
   | "queued"
@@ -959,7 +965,18 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
        WHERE q.status IN ('queued', 'starting') ORDER BY q.position`
     )
     .all() as QueueRowWithWorkspace[];
-  const resumes = dueResumes();
+  const due = dueResumes();
+  // A deliberate resume starts past the slot limit; only a red machine holds
+  // it, and the task says so.
+  for (const d of due.filter((x) => x.manual)) {
+    const s = db
+      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .get(d.sessionId) as Session | undefined;
+    const load = s ? loadHoldFor(s) : null;
+    if (load) setPauseNote(d.sessionId, `held: ${load}`);
+    else await claimResume(d.sessionId, { reason: d.byKind, force: true });
+  }
+  const resumes = due.filter((x) => !x.manual);
   if (!rows.length && !resumes.length) return;
   const queued = rows.filter((r) => r.status === "queued");
   const used = usedFinishes();
@@ -1051,6 +1068,11 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
   const plan = planStarts(candidates, groups, home, now);
   for (const r of queued)
     noteWaiting(r, withStayReason(r, plan.explain.get(r.id)));
+  for (const d of resumes)
+    setPauseNote(
+      d.sessionId,
+      resumeWaitNote(d, plan.explain.get(`resume:${d.sessionId}`))
+    );
 
   for (const id of plan.start) {
     if (id.startsWith("resume:")) {
@@ -1065,6 +1087,20 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
         heavy: built.get(id)?.c.heavy,
       });
   }
+}
+
+// What a timed resume still waiting for its turn says on its task.
+function resumeWaitNote(
+  d: DueResume,
+  explain: { code: WaitCode | null; text: string | null } | undefined
+): string | null {
+  if (!explain) return null;
+  if (explain.code && explain.code !== "slot" && explain.text)
+    return `held: ${explain.text.replace(/^Waiting: /, "")}`;
+  const slots = slotState(d.projectId);
+  return slots.limit === null
+    ? "resuming: waiting for its turn"
+    : `resuming: waiting for a slot, ${slots.running} of ${slots.limit} running`;
 }
 
 // Writes why a row waits when that changed: its hold text and code. A bare

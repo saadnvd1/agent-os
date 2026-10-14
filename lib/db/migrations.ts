@@ -2299,6 +2299,17 @@ export const migrations: Migration[] = [
     },
   },
   {
+    key: "20261014T1900_pause_note",
+    up: (db) => {
+      // Why a resume that was asked for hasn't happened yet (waiting for a
+      // slot, held by load), shown on the task row. Additive.
+      const has = (
+        db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
+      ).some((c) => c.name === "pause_note");
+      if (!has) db.exec(`ALTER TABLE sessions ADD COLUMN pause_note TEXT`);
+    },
+  },
+  {
     key: "20261014T2000_chat_bookmarks",
     up: (db) => {
       // A person's marks on single chat items. No FK to sessions: a
