@@ -56,7 +56,7 @@ export type CopyMode = "clone" | "reflink" | "hardlink" | "copy";
 
 export const copyArgs = (mode: CopyMode, from: string, to: string) =>
   mode === "clone"
-    ? ["-Rc", from, to]
+    ? [process.platform === "darwin" ? "-Rc" : "-R", from, to]
     : mode === "reflink"
       ? ["-a", "--reflink=always", from, to]
       : mode === "hardlink"
