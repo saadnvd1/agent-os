@@ -44,11 +44,15 @@ describe("session lists", () => {
     expect(row.name).toBe("n");
   });
 
-  it("the sidebar list leaves out archived, merged, dropped and moved", () => {
-    const keep = [seed(), seed({ task_status: "running" })];
+  it("the sidebar list lists merged tasks, and leaves out archived, dropped and moved", () => {
+    const keep = [
+      seed(),
+      seed({ task_status: "running" }),
+      seed({ task_status: "merged" }),
+    ];
     const gone = [
       seed({ archived: true }),
-      seed({ task_status: "merged" }),
+      seed({ task_status: "merged", archived: true }),
       seed({ task_status: "dropped" }),
       seed({ task_status: "moved" }),
     ];

@@ -509,6 +509,28 @@ describe("Ongoing, Snoozed and settled", () => {
     expect(s.ongoing).toEqual([]);
   });
 
+  it("sorts finished tasks in Done by settled_at, else merged_at, else updated_at", () => {
+    const task = (id: string, over: Partial<Session>) =>
+      session(id, { task_status: "merged", ...over });
+    const s = shelves(
+      [
+        task("updated", { updated_at: utc(NOW - 3 * DAY) }),
+        task("merged", {
+          updated_at: utc(NOW - 9 * DAY),
+          merged_at: utc(NOW - 2 * DAY),
+        }),
+        task("settled", {
+          updated_at: utc(NOW - 9 * DAY),
+          merged_at: utc(NOW - 8 * DAY),
+          settled_at: utc(NOW - DAY),
+        }),
+      ],
+      {},
+      { tasks: { updated: "merged", merged: "merged", settled: "merged" } }
+    );
+    expect(s.done).toEqual(["settled", "merged", "updated"]);
+  });
+
   it("a settled session that needs you or runs is not in Done", () => {
     const s = shelves(
       [

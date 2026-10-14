@@ -56,15 +56,16 @@ export const queries = {
       `SELECT ${sessionListColumns(db)} FROM sessions ORDER BY updated_at DESC`
     ),
 
-  // The sidebar's sessions: not archived, and not a task that is over or
-  // lives on another machine.
+  // The sidebar's sessions: not archived, and not a dropped task (a
+  // rejection, not finished work) or one that lives on another machine.
+  // Merged tasks stay: they are the Done shelf.
   getSidebarSessions: (db: Database.Database) =>
     getStmt(
       db,
       `SELECT ${sessionListColumns(db)} FROM sessions
          WHERE archived_at IS NULL
            AND (task_status IS NULL
-                OR task_status NOT IN ('merged', 'dropped', 'moved'))
+                OR task_status NOT IN ('dropped', 'moved'))
          ORDER BY updated_at DESC`
     ),
 
