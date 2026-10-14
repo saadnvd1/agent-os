@@ -29,6 +29,7 @@ import type { TaskPR } from "../tasks/state";
 import { run } from "../tasks/gh";
 import { isAllowedBase } from "../tasks/session";
 import { git as runGit, gitFetch, revParse } from "../git-exec";
+import { addWorktree } from "../worktree-add";
 import { comparePatches } from "./patch";
 import { outputOf, type Runner } from "../stacks/git";
 import { restackedHeads, stackNotice } from "../stacks/restack";
@@ -289,7 +290,13 @@ async function rebaseAt(
 ): Promise<{ sha: string }> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-rebase-"));
   try {
-    await deps.runner("git", ["worktree", "add", "--detach", dir, head], repo);
+    await addWorktree(
+      (args, cwd) => deps.runner("git", args, cwd),
+      repo,
+      dir,
+      head,
+      ["--detach"]
+    );
     try {
       await deps.runner("git", ["rebase", onto], dir);
     } catch (error) {

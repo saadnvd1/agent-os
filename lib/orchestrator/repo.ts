@@ -9,15 +9,9 @@ import type { Session } from "../db";
 import { SKILL_DIRS } from "../agents/skill-dirs";
 import { getDefaultBranch } from "../git";
 import { getProject } from "../projects";
-import {
-  git,
-  gitFetch,
-  gitOk,
-  isGitError,
-  worktreeAdd,
-  worktreeRemove,
-} from "../git-exec";
+import { git, gitFetch, gitOk, isGitError, worktreeRemove } from "../git-exec";
 import { expandHome } from "../tasks/session";
+import { addWorktree } from "../worktree-add";
 
 export function repoOf(task: Session): string {
   const project = task.project_id ? getProject(task.project_id) : null;
@@ -169,7 +163,9 @@ export async function checkout(repo: string, sha: string): Promise<string> {
   const dir = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "aos-review-"))
   );
-  await worktreeAdd(repo, ["--detach", dir, sha]);
+  await addWorktree((args, cwd) => git(cwd, args), repo, dir, sha, [
+    "--detach",
+  ]);
   const staged = await git(dir, ["ls-files", "-s"]);
   for (const line of staged.split("\n"))
     if (line.startsWith("120000 "))
