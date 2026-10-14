@@ -25,6 +25,13 @@ import {
   type CallResult,
 } from "./agent-device";
 import {
+  RegionError,
+  cropToFrame,
+  frameOf,
+  reducedCopy,
+  takeRegion,
+} from "./screenshot";
+import {
   allLeases,
   bootedCount,
   dropLease,
@@ -320,7 +327,7 @@ async function wake(sessionId: string, lease: Lease): Promise<void> {
 export async function runSimulator(
   sessionId: string,
   args: string[]
-): Promise<CallResult & { screenshot: string | null }> {
+): Promise<CallResult & { screenshot: string | null; read: string | null }> {
   const { config, cwd } = declared(sessionId);
   let lease = getLease(sessionId);
   if (!lease || lease.state === "failed")
@@ -333,23 +340,58 @@ export async function runSimulator(
     await wake(sessionId, lease);
     lease = getLease(sessionId)!;
   }
+  let region: string | null = null;
+  if (args[0] === "screenshot") {
+    try {
+      ({ args, region } = takeRegion(args));
+    } catch (error) {
+      throw new SimulatorError((error as Error).message, 400);
+    }
+  }
+  const target = { udid: lease.udid!, sessionId, app: config.app, cwd };
   let argv: string[];
   try {
-    argv = buildArgs(args, {
-      udid: lease.udid!,
-      sessionId,
-      app: config.app,
-      cwd,
-    });
+    argv = buildArgs(args, target);
   } catch (error) {
     throw new SimulatorError((error as Error).message, 400);
   }
   const shot = screenshotPath(argv);
   if (shot) fs.mkdirSync(path.dirname(shot), { recursive: true });
   touchLease(sessionId);
+  // The element's frame comes from a fresh snapshot, before the shot, so a
+  // bad ref fails without writing anything.
+  let located: ReturnType<typeof frameOf> | null = null;
+  if (region) {
+    const snap = await callTool(
+      buildArgs(["snapshot", "-i", "--json"], target)
+    );
+    try {
+      if (snap.code) throw new RegionError(snap.stderr || "snapshot failed");
+      located = frameOf(snap.stdout, region);
+    } catch (error) {
+      if (error instanceof RegionError)
+        throw new SimulatorError(error.message, 400);
+      throw error;
+    }
+  }
   const result = await callTool(argv);
+  const taken = shot && fs.existsSync(shot) ? shot : null;
+  let note = "";
+  if (taken && located) {
+    try {
+      await cropToFrame(taken, located.frame, located.screen);
+    } catch (error) {
+      note = `region crop failed (${(error as Error).message}); kept the full screen\n`;
+    }
+  }
+  const read = taken ? await reducedCopy(taken) : null;
   touchLease(sessionId);
-  return { ...result, screenshot: shot && fs.existsSync(shot) ? shot : null };
+  return {
+    ...result,
+    stderr: result.stderr + note,
+    screenshot: taken,
+    read,
+  };
 }
 
 export async function simulatorLogs(sessionId: string, last: string) {
