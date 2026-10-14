@@ -66,13 +66,13 @@ describe("quick changes", () => {
   const orch = session("orch", { role: "orchestrator" });
 
   it("sit under their orchestrator while open", () => {
-    const open = session("q", { quick_of: "orch", task_status: "review" });
+    const open = session("q", { quick_of: "orch", task_status: "running" });
     const out = shelves([orch, open], {}, { tasks: { q: "review" } });
     expect(out.done).not.toContain("q");
     const owner = [...out.raw.ongoing, ...out.raw.done].find(
       (r) => r.session.id === "orch"
     );
-    expect(owner?.quick.map((r) => r.session.id)).toEqual(["q"]);
+    expect(owner?.quick?.map((r) => r.session.id)).toEqual(["q"]);
   });
 
   it("go to Done once merged, by task state or session row", () => {
