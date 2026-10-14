@@ -22,7 +22,7 @@ import type {
 } from "@/lib/chat/events";
 import type { SearchResult } from "@/lib/chat/find";
 import { addBody, touchBody } from "@/lib/chat/bodyCache";
-import { backgroundFailure } from "@/lib/chat/background";
+import { backgroundFailure, type TaskOutput } from "@/lib/chat/background";
 
 // The index of the item with `id`, searched from the end: what changes is
 // almost always the latest.
@@ -164,7 +164,7 @@ export function useChat(
   const searchRequests = useRef(
     new Map<string, (result: SearchResult) => void>()
   );
-  const [taskOutputs, setTaskOutputs] = useState<Record<string, string | null>>(
+  const [taskOutputs, setTaskOutputs] = useState<Record<string, TaskOutput>>(
     {}
   );
   const [canBackground, setCanBackground] = useState(false);
@@ -278,7 +278,10 @@ export function useChat(
           );
           if (message) toast(message, { duration: 2500 });
         } else if (m.type === "task_output") {
-          setTaskOutputs((prev) => ({ ...prev, [m.taskId]: m.text }));
+          setTaskOutputs((prev) => ({
+            ...prev,
+            [m.taskId]: { text: m.text, updatedAt: m.updatedAt },
+          }));
         } else if (m.type === "undo_preview") {
           setUndoPreview({ from: m.from, preview: m.preview });
         } else if (m.type === "undone") {

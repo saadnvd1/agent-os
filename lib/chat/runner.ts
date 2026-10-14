@@ -63,6 +63,7 @@ import { holdsQueue, settingUp } from "../sessions/setup-progress";
 import { firstMessageId, launchPending } from "../tasks/launch-gate";
 import type { ChatItem, FileSuggestion } from "./events";
 import { taskOutputTail } from "./task-output";
+import type { TaskOutput } from "./background";
 import { cutOffSessions, cutOffTurn, RESUME_NOTE } from "./interrupted";
 import { queueEvent } from "../orchestrator/events";
 import { restoreActivity, track } from "./activity";
@@ -881,7 +882,7 @@ export async function backgroundChatTask(
 export function chatTaskOutput(
   sessionId: string,
   taskId: string
-): string | null {
+): TaskOutput | null {
   const task = itemsOfKind(sessionId, "task").find((i) => i.taskId === taskId);
   if (task?.kind !== "task") return null;
   return taskOutputTail(taskId, task.outputFile);

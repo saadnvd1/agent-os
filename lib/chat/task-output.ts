@@ -2,6 +2,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+import type { TaskOutput } from "./background";
+
 const TAIL_BYTES = 6000;
 const found = new Map<string, string>();
 
@@ -48,19 +50,22 @@ function walk(dir: string, name: string, depth: number): string | null {
 export function taskOutputTail(
   taskId: string,
   knownFile?: string
-): string | null {
+): TaskOutput | null {
   const file =
     knownFile && fs.existsSync(knownFile) ? knownFile : findOutputFile(taskId);
   if (!file) return null;
   try {
-    const { size } = fs.statSync(file);
+    const { size, mtimeMs } = fs.statSync(file);
     const fd = fs.openSync(file, "r");
     try {
       const start = Math.max(0, size - TAIL_BYTES);
       const buf = Buffer.alloc(size - start);
       fs.readSync(fd, buf, 0, buf.length, start);
       const text = buf.toString("utf8");
-      return start > 0 ? text.slice(text.indexOf("\n") + 1) : text;
+      return {
+        text: start > 0 ? text.slice(text.indexOf("\n") + 1) : text,
+        updatedAt: mtimeMs,
+      };
     } finally {
       fs.closeSync(fd);
     }
