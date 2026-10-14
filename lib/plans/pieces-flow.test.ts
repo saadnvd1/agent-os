@@ -1,6 +1,8 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { execFileSync } from "child_process";
+import { randomUUID } from "crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { retireChat } = vi.hoisted(() => ({
@@ -19,10 +21,12 @@ vi.mock("../tasks", async (importOriginal) => ({
   createTask,
 }));
 
-import { db } from "../db";
+import { db, type Session } from "../db";
+import { createWorkspace, setProjectWorkspace } from "../workspaces";
+import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
-import { amendmentsOf } from "../orchestrator/amendments";
+import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
 import { pendingEvents } from "../orchestrator/events";
 import {
   PLAN_FILE,
@@ -35,9 +39,13 @@ import { sessionListColumns } from "../db/queries";
 import { rowGroup } from "../recipes/chip";
 import { recordTurn } from "../usage/turns";
 import {
+  checkContext,
   featureOfPlan,
+  getFeature,
   pieceOfSession,
   piecesOf,
+  planFor,
+  prOf,
   reviewGoal,
 } from "./features";
 import { editWaiting, realDeps, releaseAnyway, releasePieces } from "./release";
@@ -619,5 +627,242 @@ describe("stuck pieces", () => {
     await releasePieces(held, now + 41 * 60_000);
     expect(stuck()).toHaveLength(1);
     expect(stuck()[0].line).toMatch(/still waiting/);
+  });
+});
+
+// A feature seeded row by row, with the planning task in `parentProject`.
+function seedFeature(
+  rows: {
+    project: string;
+    status: string;
+    session?: string | null;
+    after?: number;
+  }[],
+  parentProject: string
+) {
+  const parent = seedSession({
+    projectId: parentProject,
+    name: "Share links",
+    view: "chat",
+    task: true,
+  });
+  const id = `feat-${parent}`;
+  db.prepare(
+    `INSERT INTO features (id, workspace_id, name, plan_session_id, plan_text, status)
+     VALUES (?, ?, 'Share links', ?, 'plan', 'building')`
+  ).run(id, wsOf(parentProject), parent);
+  rows.forEach((r, i) =>
+    db
+      .prepare(
+        `INSERT INTO feature_pieces (feature_id, position, name, slice, project_id, after_position, after_kind, status, session_id)
+         VALUES (?, ?, ?, 'slice', ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        i + 1,
+        `piece-${i + 1}`,
+        r.project,
+        r.after ?? null,
+        r.after ? "merged" : null,
+        r.status,
+        r.session ?? null
+      )
+  );
+  return { id, parent, workspace: wsOf(parentProject) };
+}
+
+const mergeIn = (id: string, project: string, pr: number) =>
+  db
+    .prepare(
+      `UPDATE sessions SET project_id = ?, task_status = 'merged', pr_number = ?, merged_at = datetime('now') WHERE id = ?`
+    )
+    .run(project, pr, id);
+
+const keys = (workspace: string, part: string) =>
+  pendingEvents(workspace).filter((e) => e.key.includes(part));
+
+// A merged task of a piece, in the given project.
+function mergedTask(project: string, pr: number) {
+  const id = randomUUID();
+  seedPieceSession(id);
+  mergeIn(id, project, pr);
+  return id;
+}
+
+// Only the starts of one feature: the database is shared by the whole file.
+function depsFor(featureId: string) {
+  const { d } = deps();
+  const start = d.start;
+  const seen: { piece: number; prompt: string }[] = [];
+  d.start = async (feature, piece, prompt, sessionId) => {
+    const id = await start(feature, piece, prompt, sessionId);
+    if (feature.id === featureId) seen.push({ piece: piece.position, prompt });
+    return id;
+  };
+  return { d, started: seen };
+}
+
+describe("work the parent already merged", () => {
+  it("Share links: the parent's PR is not credited to the other repo's piece, and covers its own", async () => {
+    const { app, api } = seedWorkspace();
+    // Piece 1 in the other repo carries the parent (the row shape from before
+    // pieces were routed by repo); piece 2 is in the parent's repo.
+    const f = seedFeature(
+      [
+        { project: api.id, status: "building" },
+        { project: app.id, status: "waiting", after: 1 },
+      ],
+      app.id
+    );
+    db.prepare(
+      `UPDATE feature_pieces SET session_id = ? WHERE feature_id = ? AND position = 1`
+    ).run(f.parent, f.id);
+    mergeIn(f.parent, app.id, 289);
+    const { d, started } = depsFor(f.id);
+    await releasePieces(d);
+    await releasePieces(d);
+    const [one, two] = piecesOf(f.id);
+    expect(one.status).toBe("blocked");
+    expect(one.note).toContain("#289");
+    expect(prOf(one)).toBeNull();
+    expect(two).toMatchObject({ status: "merged", session_id: f.parent });
+    expect(two.note).toContain("#289");
+    expect(started).toEqual([]);
+    expect(keys(f.workspace, "wrong-repo")).toHaveLength(1);
+    expect(keys(f.workspace, "parent-built")).toHaveLength(1);
+  });
+
+  it("each repo's piece merges in its own task and the parent's PR covers the second", async () => {
+    const { app, api } = seedWorkspace();
+    const piece1 = mergedTask(api.id, 17);
+    const f = seedFeature(
+      [
+        { project: api.id, status: "building", session: piece1 },
+        { project: app.id, status: "waiting", after: 1 },
+      ],
+      app.id
+    );
+    mergeIn(f.parent, app.id, 289);
+    const { d, started } = depsFor(f.id);
+    await releasePieces(d);
+    const pieces = piecesOf(f.id);
+    expect(pieces.map((p) => p.status)).toEqual(["merged", "merged"]);
+    expect(prOf(pieces[0])).toBe(17);
+    expect(prOf(pieces[1])).toBe(289);
+    expect(started).toEqual([]);
+    expect(getFeature(f.id)!.status).toBe("done");
+    expect(keys(f.workspace, "done-")[0].line).toContain("2 PRs");
+  });
+
+  it("the parent's own piece takes its merge and a later piece in that repo still starts", async () => {
+    const { app } = seedWorkspace();
+    const f = seedFeature([], app.id);
+    db.prepare(
+      `INSERT INTO feature_pieces (feature_id, position, name, slice, project_id, status, session_id)
+       VALUES (?, 1, 'piece-1', 's', ?, 'building', ?)`
+    ).run(f.id, app.id, f.parent);
+    db.prepare(
+      `INSERT INTO feature_pieces (feature_id, position, name, slice, project_id, after_position, after_kind, status)
+       VALUES (?, 2, 'piece-2', 's', ?, 1, 'merged', 'waiting')`
+    ).run(f.id, app.id);
+    mergeIn(f.parent, app.id, 250);
+    const { d, started } = depsFor(f.id);
+    await releasePieces(d);
+    const [one, two] = piecesOf(f.id);
+    expect(one.status).toBe("merged");
+    expect(two.status).toBe("building");
+    expect(started.map((s) => s.piece)).toEqual([2]);
+  });
+
+  it("a scope change on the parent holds the piece instead of crediting it; Release anyway starts it once", async () => {
+    const { app, api } = seedWorkspace();
+    const piece1 = mergedTask(api.id, 17);
+    const f = seedFeature(
+      [
+        { project: api.id, status: "building", session: piece1 },
+        { project: app.id, status: "waiting", after: 1 },
+      ],
+      app.id
+    );
+    amendBrief(f.workspace, f.parent, "only the store, not the dialog");
+    mergeIn(f.parent, app.id, 289);
+    const { d, started } = depsFor(f.id);
+    await releasePieces(d);
+    await releasePieces(d);
+    const two = piecesOf(f.id)[1];
+    expect(two.status).toBe("blocked");
+    expect(two.note).toContain("#289");
+    expect(started).toEqual([]);
+    expect(keys(f.workspace, "duplicate-")).toHaveLength(1);
+    expect(releaseAnyway(two.id)).toBe(true);
+    await releasePieces(d);
+    await releasePieces(d);
+    expect(started.map((s) => s.piece)).toEqual([2]);
+  });
+
+  it("holds a piece whose repo already merged a PR of this feature that no piece accounts for", async () => {
+    const { app, api } = seedWorkspace();
+    // Piece 1 (api) opened and merged its PR from the app project.
+    const stray = mergedTask(app.id, 300);
+    const f = seedFeature(
+      [
+        { project: api.id, status: "building", session: stray },
+        { project: app.id, status: "waiting" },
+      ],
+      api.id
+    );
+    const { d, started } = depsFor(f.id);
+    await releasePieces(d);
+    await releasePieces(d);
+    const [one, two] = piecesOf(f.id);
+    expect(one.status).toBe("blocked");
+    expect(two.status).toBe("blocked");
+    expect(two.note).toContain("#300");
+    expect(started).toEqual([]);
+    expect(keys(f.workspace, "duplicate-")).toHaveLength(1);
+  });
+});
+
+describe("repo names in a plan", () => {
+  const dirOf = (name: string) =>
+    path.join(fs.mkdtempSync(path.join(os.tmpdir(), "repos-")), name);
+  const project = (name: string, dir: string, ws: string) => {
+    fs.mkdirSync(dir, { recursive: true });
+    const p = createProject({ name, workingDirectory: dir });
+    setProjectWorkspace(p.id, ws);
+    return p;
+  };
+
+  it("resolves by project name, folder name or GitHub repo, case-insensitively", () => {
+    const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
+    const main = project("AgentOS", dirOf("agent-os"), ws.id);
+    const remote = dirOf("some-clone");
+    const share = project("Share", remote, ws.id);
+    execFileSync("git", ["init", "-q"], { cwd: remote });
+    execFileSync(
+      "git",
+      ["remote", "add", "origin", "git@github.com:Acme/share-api.git"],
+      { cwd: remote }
+    );
+    const ctx = checkContext({ project_id: main.id })!;
+    expect(ctx.find("agent-os")?.id).toBe(main.id);
+    expect(ctx.find("AGENT-OS")?.id).toBe(main.id);
+    expect(ctx.find("agentos")?.id).toBe(main.id);
+    expect(ctx.find("acme/share-api")?.id).toBe(share.id);
+    expect(ctx.find("share-api")?.id).toBe(share.id);
+    expect(ctx.find("nope")).toBeNull();
+    const plan = `# Plan\n\n## Pieces\n1. Core: x  (repo: agent-os)\n2. Api: y  (repo: acme/share-api)\n   after: 1 is merged\n   why split: (a)\n`;
+    const result = planFor({ project_id: main.id } as Session, plan)!;
+    expect(result.errors).toEqual([]);
+    expect(result.pieces.map((p) => p.project.id)).toEqual([main.id, share.id]);
+  });
+
+  it("refuses a name that fits two projects by folder; a project name wins over a folder", () => {
+    const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
+    const a = project("Alpha", dirOf("web"), ws.id);
+    project("Beta", dirOf("web"), ws.id);
+    expect(checkContext({ project_id: a.id })!.find("web")).toBeNull();
+    const named = project("web", dirOf("elsewhere"), ws.id);
+    expect(checkContext({ project_id: a.id })!.find("web")?.id).toBe(named.id);
   });
 });

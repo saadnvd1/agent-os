@@ -4,7 +4,7 @@
 // of its projects'.
 
 import type { Project } from "../db";
-import { git } from "../git-exec";
+import { git, gitSync } from "../git-exec";
 import { expandHome } from "../tasks/session";
 import { workspaceProjects } from "./brief";
 
@@ -27,6 +27,24 @@ export async function repoSlug(dir: string): Promise<string | null> {
   const url = await git(dir, ["config", "--get", "remote.origin.url"], {
     timeout: 10000,
   }).catch(() => "");
+  const slug = slugOfRemote(url);
+  slugs.set(dir, { at: Date.now(), slug });
+  return slug;
+}
+
+// The same, without waiting: a cached local `git config` read for callers that
+// can't be async. Null when the folder isn't a GitHub clone.
+export function repoSlugSync(dir: string): string | null {
+  const hit = slugs.get(dir);
+  if (hit && Date.now() - hit.at < SLUG_TTL_MS) return hit.slug;
+  let url = "";
+  try {
+    url = gitSync(dir, ["config", "--get", "remote.origin.url"], {
+      timeout: 5000,
+    });
+  } catch {
+    url = "";
+  }
   const slug = slugOfRemote(url);
   slugs.set(dir, { at: Date.now(), slug });
   return slug;
