@@ -56,7 +56,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   read: "The end of one session's terminal or chat, or an external session's screen, as plain text (capped at about 4k tokens).",
   cards: "Cards on this workspace's linked LumifyHub boards, by list.",
   logs: "Session logs AgentOS wrote when tasks merged: the last N headers (task, PR, cost, duration) of the workspace or one project, or one log in full (brief, plan, timeline, usage, outcome). Read straight from the database; nothing is summarised.",
-  send: "Message a session in this workspace over the bus. It arrives as its next prompt. When Saad changes a running task's scope, tell it with scope_change set, so its review judges the PR against the brief as amended.",
+  send: "Message a session in this workspace over the bus. It arrives as its next prompt. When Saad changes a running task's scope, tell it with scope_change set, so its review judges the PR against the brief as amended. A task still in the queue (by id or name) takes messages too: they are held and reach it with its first prompt; scope_change on one records the change on its brief at once.",
   orchestrators:
     "Every workspace, and whether it has an orchestrator you can message.",
   message_orchestrator:

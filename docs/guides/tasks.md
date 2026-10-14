@@ -133,6 +133,16 @@ verdict). A task's `plan` in `GET /api/tasks` carries `status` (`writing`,
 `ready` or `approved`), a title and capped text. Their shapes are in
 `lib/tasks/loop-types.ts`, which has no server imports so a client can share it.
 
+### Messages to a queued task
+
+A queued task takes messages (the orchestrator's `send`, `aos send`, the web
+and the API), by id or name. They're held with it and the reply says so. When
+it starts, they follow its brief in the first prompt under "Messages while
+queued", in order, so a plan-only or planned task sees them in the planning
+step. `scope_change` on a queued task records the change on its brief at
+once. Removing it from the queue discards its held messages. The queue view,
+`aos queue` and the orchestrator's queue summary show how many are held.
+
 ## Stacks
 
 A project whose board is linked to LumifyHub can run the whole board as

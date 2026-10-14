@@ -17,6 +17,12 @@ import { tmuxPane } from "./tmux-pane";
 import { hostLink } from "../hosts/remote-api";
 import { pauseHoldOf, pausedNote } from "../tasks/pause-hold";
 import { relayToHeldTask } from "../tasks/held-remote";
+import {
+  assertTakesMessages,
+  findQueuedTarget,
+  heldQueuedNote,
+  type QueuedTarget,
+} from "../tasks/queue-held";
 import { heldOrchestrator, heldTarget } from "./held-reply";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
 
@@ -115,13 +121,29 @@ export function resolveTarget(ref: string): {
   session: Session;
   note?: string;
 } {
+  const found = tryResolveTarget(ref);
+  if (!found.ok) throw new Error(found.error);
+  return found;
+}
+
+function tryResolveTarget(
+  ref: string
+):
+  | { ok: true; session: Session; note?: string }
+  | { ok: false; none: boolean; error: string } {
   const sessions = liveSessions();
   const r = resolveRef(ref, candidates(sessions));
   if (!r.ok)
-    throw new Error(
-      r.reason === "none" ? `${r.error}. Run: aos peers` : r.error
-    );
-  return { session: sessions.find((s) => s.id === r.id)!, note: r.note };
+    return {
+      ok: false,
+      none: r.reason === "none",
+      error: r.reason === "none" ? `${r.error}. Run: aos peers` : r.error,
+    };
+  return {
+    ok: true,
+    session: sessions.find((s) => s.id === r.id)!,
+    note: r.note,
+  };
 }
 
 export function resolveSession(ref: string): Session {
@@ -252,7 +274,13 @@ export async function sendMessage(opts: {
   // A message pulled from a linked machine, by its key there: one already
   // stored is not stored or delivered again.
   relayKey?: string;
-}): Promise<{ message: BusMessageView; delivery: Delivery; note?: string }> {
+}): Promise<{
+  message: BusMessageView;
+  delivery: Delivery;
+  note?: string;
+  // The task it was held for, when that task is still in the start queue.
+  heldForQueued?: boolean;
+}> {
   const body = opts.body.trim();
   if (!body) throw new Error("Message is empty");
   const from = sessionById(opts.fromId);
@@ -260,7 +288,14 @@ export async function sendMessage(opts: {
   // A held task's message to its orchestrator is kept for the holder to pull.
   const held = heldTarget(from, opts.to);
   if (from && held) return storeForHolder(from, held, body);
-  const { session: to, note } = resolveTarget(opts.to);
+  const target = tryResolveTarget(opts.to);
+  if (!target.ok) {
+    // A task still in the start queue has no session yet: hold it.
+    const queued = target.none ? findQueuedTarget(opts.to) : null;
+    if (!queued) throw new Error(target.error);
+    return storeForQueued(from, opts.fromLabel, queued, body, opts.relayKey);
+  }
+  const { session: to, note } = target;
   if (from && from.id === to.id)
     throw new Error("A session can't message itself");
   if (from && overRateLimit(pairTimestamps(from.id, to.id))) {
@@ -352,6 +387,45 @@ function storeForHolder(
     message,
     delivery: { state: "queued" as const },
     note: `${to.name} runs on ${to.heldFrom}: it gets this when that machine next checks in, within a few seconds`,
+  };
+}
+
+// A message for a task that hasn't started: kept with the queued task and
+// delivered in its first prompt. A schedule's `line` is only a wake line;
+// the body is what's held.
+function storeForQueued(
+  from: Session | undefined,
+  fromLabel: string | undefined,
+  to: QueuedTarget,
+  body: string,
+  relayKey?: string
+) {
+  assertTakesMessages(to);
+  if (from && overRateLimit(pairTimestamps(from.id, to.id)))
+    throw new Error(
+      `Too many messages between ${from.name} and ${to.name}; wait a few minutes`
+    );
+  const { lastInsertRowid } = db
+    .prepare(
+      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, relay_key, held_queued)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`
+    )
+    .run(
+      from?.id ?? null,
+      from?.name ?? fromLabel ?? HUMAN,
+      to.id,
+      to.name,
+      body,
+      relayKey ?? null
+    );
+  const message = toView(
+    db.prepare(`${SELECT} WHERE m.id = ?`).get(Number(lastInsertRowid)) as Row
+  );
+  return {
+    message,
+    delivery: { state: "queued" as const },
+    note: heldQueuedNote(to.name),
+    heldForQueued: true,
   };
 }
 

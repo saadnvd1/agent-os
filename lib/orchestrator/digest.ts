@@ -218,6 +218,8 @@ function queueSection(workspaceId: string): Section {
   const rows = db
     .prepare(
       `SELECT q.id, q.name, q.prompt, q.status, q.after_task, q.after_any, q.priority, q.note,
+         (SELECT COUNT(*) FROM bus_messages b WHERE b.to_id = q.id
+            AND b.held_queued = 1 AND b.delivered_at IS NULL AND b.read_at IS NULL) AS held,
          p.name AS project, a.name AS after_name
        FROM task_queue q JOIN projects p ON p.id = q.project_id
        LEFT JOIN sessions a ON a.id = q.after_task
@@ -235,6 +237,7 @@ function queueSection(workspaceId: string): Section {
     after_name: string | null;
     priority: string;
     note: string | null;
+    held: number;
   }[];
   return {
     title: "Queued tasks, in line order",
@@ -246,8 +249,11 @@ function queueSection(workspaceId: string): Section {
           : "";
       const status = r.status === "queued" ? "" : ` | ${r.status}`;
       const priority = r.priority === "normal" ? "" : ` | ${r.priority}`;
+      const held = r.held
+        ? ` | ${r.held} held message${r.held === 1 ? "" : "s"}`
+        : "";
       const why = r.note ? ` | ${clip(r.note, 100)}` : "";
-      return `- ${i + 1}. ${clip(r.name ?? r.prompt, 80)} (${r.project}, id ${shortId(r.id)})${after}${priority}${status}${why}`;
+      return `- ${i + 1}. ${clip(r.name ?? r.prompt, 80)} (${r.project}, id ${shortId(r.id)})${after}${priority}${status}${held}${why}`;
     }),
     more: "the sessions tool",
   };

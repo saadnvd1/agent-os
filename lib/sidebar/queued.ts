@@ -78,7 +78,13 @@ export function queuedSubtitle(item: QueuedTaskView): {
   if (item.after) return { lead: "After", after: item.after };
   const priority =
     item.priority === "normal" ? "" : ` · ${PRIORITY_LABEL[item.priority]}`;
-  return { lead: `#${item.rank} of ${item.of}${priority}`, after: null };
+  const held = item.held
+    ? ` · ${item.held} message${item.held === 1 ? "" : "s"} held`
+    : "";
+  return {
+    lead: `#${item.rank} of ${item.of}${priority}${held}`,
+    after: null,
+  };
 }
 
 // The priority choices for a waiting task's menu, the current one marked.
