@@ -12,6 +12,7 @@ import type { OrchestratorOverview } from "@/lib/orchestrator/overview";
 import { useSessionListMutations } from "./hooks/useSessionListMutations";
 import { useBulkDelete } from "./hooks/useBulkDelete";
 import { useSidebarData } from "./useSidebarData";
+import { useSessionTips } from "./useSessionTips";
 import { RowProvider, type RowContextValue } from "./RowContext";
 import { SidebarHeader } from "./SidebarHeader";
 import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
@@ -43,6 +44,7 @@ export function SessionList({
   pinControls,
 }: SessionListProps) {
   const data = useSidebarData(sessionStatuses);
+  useSessionTips(data);
   const { shelves, ui, project } = data;
   const mutations = useSessionListMutations({ onSelectSession: onSelect });
   const bulkDelete = useBulkDelete();

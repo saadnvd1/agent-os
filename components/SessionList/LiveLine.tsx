@@ -52,7 +52,7 @@ export function LiveLine({ compacting, prStage }: LiveInput) {
                 href={prStage.url}
                 target="_blank"
                 rel="noreferrer"
-                title={pr}
+                data-tip={pr}
                 aria-label={pr}
                 onClick={(e) => e.stopPropagation()}
                 className={cn(

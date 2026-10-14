@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ClipboardList, Pencil } from "lucide-react";
 import { NEED_LABEL, type SidebarRow } from "@/lib/sidebar/shelves";
+import { rowKindBadge, type RowKindBadge } from "@/lib/sidebar/row-badge";
 import { cn } from "@/lib/utils";
 
 // Amber when it needs you, red when it failed, green while it works, and a
@@ -26,7 +28,8 @@ export function RowDot({ row }: { row: SidebarRow }) {
   );
 }
 
-// What it needs from you, stalled, or a purple dot when it changed since you looked.
+// What it needs from you, stalled, its plan step, or a purple dot when it
+// changed since you looked.
 export function RowBadge({ row }: { row: SidebarRow }) {
   if (row.need) {
     const asks = row.status?.asks ?? 0;
@@ -50,8 +53,40 @@ export function RowBadge({ row }: { row: SidebarRow }) {
         Stalled
       </span>
     );
+  const kind = rowKindBadge(row);
+  if (kind) return <KindBadge badge={kind} />;
   if (row.unread) return <UnreadDot />;
   return null;
+}
+
+// Planning in blue, a plan waiting for approval in the primary colour:
+// an icon and a word, never colour alone.
+function KindBadge({ badge }: { badge: RowKindBadge }) {
+  const Icon = badge.kind === "planning" ? Pencil : ClipboardList;
+  return (
+    <span
+      data-tip={badge.tip}
+      className={cn(
+        "flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap",
+        badge.kind === "planning"
+          ? "bg-blue-500/15 text-blue-700 dark:text-blue-400"
+          : "bg-primary/15 text-primary"
+      )}
+    >
+      <Icon aria-hidden className="h-3 w-3" />
+      {badge.label}
+    </span>
+  );
+}
+
+// What belongs to the row above it (a conductor's workers, an
+// orchestrator's quick changes), behind a thin rule.
+export function NestRail({ children }: { children: ReactNode }) {
+  return (
+    <div className="border-foreground/10 ml-3.5 border-l pl-1.5">
+      {children}
+    </div>
+  );
 }
 
 export function UnreadDot() {

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ListTodo, Server, type LucideIcon } from "lucide-react";
 import {
   DONE_PAGE,
   doneLimit,
@@ -16,21 +16,35 @@ import { OrchestratorPinRow, OrchestratorStartRow } from "./OrchestratorPinRow";
 import { QueuedRow } from "./QueuedRow";
 import type { QueuedRow as QueuedRowData } from "@/lib/sidebar/queued";
 
-function ShelfLabel({
+// A shelf's header. Only groups that aren't a state (a machine, the line,
+// terminals) carry an icon; a shelf that asks for you counts in amber.
+export function ShelfLabel({
   label,
   count,
+  icon: Icon,
+  accent = false,
   collapsed,
   onToggle,
 }: {
   label: string;
   count?: number;
+  icon?: LucideIcon;
+  accent?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
 }) {
   const text = (
     <>
+      {Icon && <Icon aria-hidden className="h-3 w-3 shrink-0" />}
       {label}
-      {count !== undefined && ` · ${count}`}
+      {count !== undefined && (
+        <>
+          {" · "}
+          <span className={cn(accent && "text-amber-600 dark:text-amber-400")}>
+            {count}
+          </span>
+        </>
+      )}
       {onToggle && (
         <ChevronDown
           className={cn(
@@ -63,15 +77,19 @@ function ShelfLabel({
 function Shelf({
   label,
   count,
+  icon,
+  accent,
   children,
 }: {
   label: string;
   count?: number;
+  icon?: LucideIcon;
+  accent?: boolean;
   children: ReactNode;
 }) {
   return (
     <section aria-label={label}>
-      <ShelfLabel label={label} count={count} />
+      <ShelfLabel label={label} count={count} icon={icon} accent={accent} />
       {children}
     </section>
   );
@@ -80,9 +98,9 @@ function Shelf({
 // A linked machine's sessions no project here holds, under its name.
 export function MachineShelves({ groups }: { groups: MachineGroup[] }) {
   return groups.map((g) => (
-    <Shelf key={g.hostId} label={g.name} count={g.rows.length}>
+    <Shelf key={g.hostId} label={g.name} count={g.rows.length} icon={Server}>
       {g.rows.map((r) => (
-        <SessionRow key={r.session.id} row={r} />
+        <SessionRow key={r.session.id} row={r} inMachineShelf />
       ))}
     </Shelf>
   ));
@@ -108,6 +126,17 @@ export function SessionShelves({
   const shown = shelves.done.slice(0, doneLimit(donePages));
   const hidden = shelves.done.length - shown.length;
   const summary = doneSummary(shelves.done).text;
+  // Live work above, what's resting below a hairline.
+  const live =
+    shelves.orchestrators.length +
+      toStart.length +
+      shelves.pinned.length +
+      shelves.needsYou.length +
+      shelves.working.length +
+      shelves.inReview.length +
+      queued.length +
+      shelves.ongoing.length >
+    0;
   return (
     <>
       {shelves.orchestrators.length + toStart.length > 0 && (
@@ -128,7 +157,7 @@ export function SessionShelves({
         </Shelf>
       )}
       {shelves.needsYou.length > 0 && (
-        <Shelf label="Needs you" count={shelves.needsYou.length}>
+        <Shelf label="Needs you" count={shelves.needsYou.length} accent>
           {shelves.needsYou.map((r) => (
             <SessionRow key={r.session.id} row={r} />
           ))}
@@ -149,7 +178,7 @@ export function SessionShelves({
         </Shelf>
       )}
       {queued.length > 0 && (
-        <Shelf label="Queued" count={queued.length}>
+        <Shelf label="Queued" count={queued.length} icon={ListTodo}>
           {queued.map((r) => (
             <QueuedRow key={r.item.id} row={r} />
           ))}
@@ -161,6 +190,9 @@ export function SessionShelves({
             <SessionRow key={r.session.id} row={r} />
           ))}
         </Shelf>
+      )}
+      {live && shelves.snoozed.length + shelves.done.length > 0 && (
+        <div aria-hidden className="border-border mx-2.5 mt-2.5 border-t" />
       )}
       {shelves.snoozed.length > 0 && (
         <section aria-label="Snoozed">

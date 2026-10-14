@@ -11,9 +11,11 @@ export type RowMenuKind = "dropdown" | "context";
 
 // Every sidebar row's frame: a leading mark, title over subtitle, what's on
 // the right (hidden under the ⋯ on hover), and the same menu on ⋯ and on
-// right-click. Session rows and queued tasks both draw through it.
+// right-click. Session rows and queued tasks both draw through it. The
+// title is its hover tip (lib/hover-tip), or tipKey's when one resolves.
 export function RowShell({
   title,
+  tipKey,
   highlight,
   onClick,
   onActivate,
@@ -26,6 +28,7 @@ export function RowShell({
   menuButton = true,
 }: {
   title: string;
+  tipKey?: string;
   highlight?: "selected" | "active" | null;
   onClick?: (e: React.MouseEvent) => void;
   // Enter or Space on the row; without it the row isn't a button.
@@ -45,7 +48,8 @@ export function RowShell({
     <div
       role={onActivate ? "button" : undefined}
       tabIndex={onActivate ? 0 : undefined}
-      title={title}
+      data-tip={title}
+      data-tip-key={tipKey}
       onClick={onClick}
       onKeyDown={(e) => {
         if (!onActivate || e.target !== e.currentTarget) return;

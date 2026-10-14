@@ -1,7 +1,3 @@
-import {
-  startAuthentication,
-  startRegistration,
-} from "@simplewebauthn/browser";
 import type {
   AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
@@ -30,12 +26,20 @@ export const passkeysHere = () =>
 export const NO_PASSKEYS_HERE =
   "Approving this needs a passkey, and passkeys need https or localhost: approve it on the machine running AgentOS, or over Connect.";
 
+// The passkey library loads only when a passkey is used, fetched alongside
+// the server's options so the prompt waits on nothing extra.
+const webauthn = () => import("@simplewebauthn/browser");
+
 // Adds a passkey on this browser: free for the very first one, otherwise
 // with a code from a device that has one.
 export async function registerPasskey(enrollCode?: string): Promise<void> {
-  const { options } = await post<{
-    options: PublicKeyCredentialCreationOptionsJSON;
-  }>("/api/presence/register/options", { enrollCode });
+  const [{ startRegistration }, { options }] = await Promise.all([
+    webauthn(),
+    post<{ options: PublicKeyCredentialCreationOptionsJSON }>(
+      "/api/presence/register/options",
+      { enrollCode }
+    ),
+  ]);
   const response = await startRegistration({ optionsJSON: options });
   await post("/api/presence/register/verify", { response, enrollCode });
 }
@@ -55,6 +59,8 @@ export async function provePresence(req: {
     needsPasskey?: boolean;
     canBootstrap?: boolean;
   };
+  const lib = webauthn();
+  lib.catch(() => {}); // awaited below; an early throw mustn't leave it unhandled
   let answer = await post<Answer>("/api/presence/options", req);
   if (answer.needsPasskey) {
     if (!answer.canBootstrap)
@@ -65,5 +71,6 @@ export async function provePresence(req: {
     answer = await post<Answer>("/api/presence/options", req);
   }
   if (!answer.options) throw new Error("No passkey for this host");
+  const { startAuthentication } = await lib;
   return startAuthentication({ optionsJSON: answer.options });
 }

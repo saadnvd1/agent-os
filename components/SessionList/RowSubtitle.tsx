@@ -1,6 +1,6 @@
 "use client";
 
-import { Repeat, Layers } from "lucide-react";
+import { Repeat, Layers, Pause } from "lucide-react";
 import { HostBadge } from "@/components/Hosts";
 import { rowGroup } from "@/lib/recipes/chip";
 import type { Session } from "@/lib/db";
@@ -21,10 +21,12 @@ export function RowSubtitle({
   session,
   detail,
   live,
+  hideHost = false,
 }: {
   session: Session;
   detail?: string | null;
   live?: LiveInput;
+  hideHost?: boolean;
 }) {
   const ctx = useRowContext();
   // What its processes use, on a busy session: "3.1 cores · 4.2 GB".
@@ -61,29 +63,34 @@ export function RowSubtitle({
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       {pause ? (
-        <span className="min-w-0 truncate text-xs text-amber-600 dark:text-amber-400">
-          {pauseSubtitle({
-            state: pause,
-            until: session.paused_until
-              ? Date.parse(`${session.paused_until.replace(" ", "T")}Z`)
-              : null,
-            note: session.pause_note,
-          })}
+        <span className="flex min-w-0 items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+          <Pause aria-hidden className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            {pauseSubtitle({
+              state: pause,
+              until: session.paused_until
+                ? Date.parse(`${session.paused_until.replace(" ", "T")}Z`)
+                : null,
+              note: session.pause_note,
+            })}
+          </span>
         </span>
       ) : (
         <LiveLine {...live} />
       )}
       {group && (
         <span
-          className="text-muted-foreground/70 hidden min-w-0 shrink items-center gap-1 truncate text-xs @[14rem]:flex"
-          title={group.kind === "recipe" ? "A recipe run" : "A piece of a plan"}
+          className="text-muted-foreground/70 flex min-w-0 shrink-0 items-center gap-1 truncate text-xs @[14rem]:shrink"
+          data-tip={`${group.kind === "recipe" ? "Recipe run" : "Plan piece"}: ${group.text}`}
         >
           {group.kind === "recipe" ? (
             <Repeat aria-hidden className="h-3 w-3 shrink-0" />
           ) : (
             <Layers aria-hidden className="h-3 w-3 shrink-0" />
           )}
-          <span className="truncate">{group.text}</span>
+          <span className="sr-only truncate @[14rem]:not-sr-only">
+            {group.text}
+          </span>
         </span>
       )}
       {(project || detail || usage || session.placed_note) && (
@@ -98,7 +105,7 @@ export function RowSubtitle({
             .join(" · ")}
         </span>
       )}
-      <HostBadge hostId={session.host_id} />
+      {!hideHost && <HostBadge hostId={session.host_id} />}
     </span>
   );
 }

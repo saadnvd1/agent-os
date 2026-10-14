@@ -12,6 +12,7 @@ import {
 import { compactTimeAgo } from "@/lib/session-meta";
 import { wakeLabel } from "@/lib/sidebar/snooze";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
+import { rowKindBadge } from "@/lib/sidebar/row-badge";
 import { useMinuteTick } from "@/hooks/useMinuteTick";
 import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,7 @@ import { QuickChangeRow } from "./QuickChangeRow";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowShell, type RowMenuKind } from "./RowShell";
-import { RowBadge, RowDot, RowRename } from "./RowParts";
+import { NestRail, RowBadge, RowDot, RowRename } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
 
@@ -29,11 +30,12 @@ import { OrchestratorAsks } from "./OrchestratorAsks";
 export const SessionRow = memo(function SessionRow({
   row,
   muted = false,
-  nested = false,
+  inMachineShelf = false,
 }: {
   row: SidebarRow;
   muted?: boolean;
-  nested?: boolean;
+  // Under its machine's own shelf, which already names the machine.
+  inMachineShelf?: boolean;
 }) {
   const ctx = useRowContext();
   const { selectedIds } = useSnapshot(selectionStore);
@@ -69,9 +71,10 @@ export const SessionRow = memo(function SessionRow({
   );
 
   return (
-    <div className={cn(nested && "pl-5")}>
+    <div>
       <RowShell
         title={session.name}
+        tipKey={`session:${session.id}`}
         highlight={selected ? "selected" : active ? "active" : null}
         onClick={onClick}
         onActivate={() => ctx.onSelect(session.id)}
@@ -89,7 +92,7 @@ export const SessionRow = memo(function SessionRow({
         aside={
           <>
             {viaName && (
-              <span title={`Started by ${viaName}`} className="shrink-0">
+              <span data-tip={`Started by ${viaName}`} className="shrink-0">
                 <Workflow
                   aria-label={`Via orchestrator: ${viaName}`}
                   className="text-muted-foreground/60 h-3 w-3"
@@ -104,7 +107,7 @@ export const SessionRow = memo(function SessionRow({
         trailing={
           <>
             <RowBadge row={row} />
-            {!row.need && <RowTime row={row} />}
+            {!row.need && !rowKindBadge(row) && <RowTime row={row} />}
           </>
         }
         menu={menu}
@@ -132,6 +135,7 @@ export const SessionRow = memo(function SessionRow({
         )}
         <RowSubtitle
           session={session}
+          hideHost={inMachineShelf}
           detail={row.status?.detail}
           live={
             row.need
@@ -143,21 +147,28 @@ export const SessionRow = memo(function SessionRow({
       {session.role === "orchestrator" && row.need && (
         <OrchestratorAsks workspaceId={session.workspace_id} />
       )}
-      {row.workers.map((worker) => (
-        <SessionRow key={worker.session.id} row={worker} muted={muted} nested />
-      ))}
-      {row.quick?.map((q) => (
-        <QuickChangeRow key={q.session.id} row={q} />
-      ))}
+      {(row.workers.length > 0 || !!row.quick?.length) && (
+        <NestRail>
+          {row.workers.map((worker) => (
+            <SessionRow key={worker.session.id} row={worker} muted={muted} />
+          ))}
+          {row.quick?.map((q) => (
+            <QuickChangeRow key={q.session.id} row={q} />
+          ))}
+        </NestRail>
+      )}
     </div>
   );
 }, sameRowProps);
 
-function sameRowProps(
-  a: { row: SidebarRow; muted?: boolean; nested?: boolean },
-  b: { row: SidebarRow; muted?: boolean; nested?: boolean }
-) {
-  return a.muted === b.muted && a.nested === b.nested && sameRow(a.row, b.row);
+type RowProps = { row: SidebarRow; muted?: boolean; inMachineShelf?: boolean };
+
+function sameRowProps(a: RowProps, b: RowProps) {
+  return (
+    a.muted === b.muted &&
+    a.inMachineShelf === b.inMachineShelf &&
+    sameRow(a.row, b.row)
+  );
 }
 
 // Snoozed: when it wakes. Otherwise when it last did something.
