@@ -7,11 +7,25 @@ import {
 import { TASK_STATE_LABELS } from "../tasks/state-labels";
 import { cachedCheck } from "../updates/check";
 import {
+  ATTACHMENT_LIMITS,
   CLIENT_CONFIG_VERSION,
+  INTAKE_LIMITS,
+  VOICE_LIMITS,
+  type ClientFeatures,
   type ClientConfig,
 } from "./client-config-types";
 
 const startedAt = new Date(Date.now() - process.uptime() * 1000).toISOString();
+
+// Off when its env switch says so, for a server that wants it dark.
+export function featuresNow(): ClientFeatures {
+  const intake = process.env.AGENTOS_INTAKE !== "off";
+  return {
+    shakeToReport: intake,
+    shareIntake: intake,
+    voice: process.env.AGENTOS_VOICE !== "off",
+  };
+}
 
 export function clientConfig(): ClientConfig {
   return {
@@ -24,5 +38,9 @@ export function clientConfig(): ClientConfig {
     taskStates: TASK_STATE_LABELS,
     runStatuses: RUN_STATUS_LABELS,
     runTriggers: RUN_TRIGGER_LABELS,
+    features: featuresNow(),
+    intake: INTAKE_LIMITS,
+    attachments: ATTACHMENT_LIMITS,
+    voice: VOICE_LIMITS,
   };
 }

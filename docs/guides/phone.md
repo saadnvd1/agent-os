@@ -190,3 +190,9 @@ Check the address and the port: 3011 unless you changed it. Make sure the phone 
 
 **A push test says "Phone push not set up."**
 No paired phone has registered for push yet. Open the app on the phone, allow notifications, turn push on, and try again. A phone that shows a push error in its Devices row also shows the reason.
+
+## Reports, shares and dictation vocabulary
+
+A paired phone can send the workspace's orchestrator a bug report (a screenshot, the last minute of logs and the screen's state) or something shared from another app. `POST /api/orchestrators/:workspaceId/intake` takes a multipart `meta` JSON part and up to 8 `file` parts (25 MB in all), saves them under `intake/<workspace>/<date>/<clientId>/` beside the database, and delivers a short message to the orchestrator. Sending the same `clientId` again changes nothing. Shared text and URLs reach the agent inside an untrusted block, and executables and archives are refused. A device is limited to 20 requests per 10 minutes.
+
+`GET /api/voice/vocab?workspace=<id>` returns up to 100 short phrases (workspace, project and session names, slash commands and a few fixed words) for the phone's speech recogniser. Both need a paired device. `AGENTOS_INTAKE=off` and `AGENTOS_VOICE=off` turn the features off, and `GET /api/client-config` says which are on.

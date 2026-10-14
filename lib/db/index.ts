@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
+import { dbPath } from "./path";
 
 // Re-export types and queries
 export * from "./types";
@@ -11,7 +12,7 @@ export * from "./lumifyhub";
 export * from "./lumifyhub-docs";
 export * from "./stacks";
 
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "agent-os.db");
+const DB_PATH = dbPath();
 const LOCK_PATH = DB_PATH + ".init-lock";
 
 // Simple file-based lock for initialization

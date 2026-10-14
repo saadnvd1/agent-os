@@ -68,7 +68,9 @@ export type ChatOriginKind =
   // AgentOS itself: the load monitor, stacks.
   | "system"
   // The reader's own decision, made outside the composer (a plan carried out).
-  | "decision";
+  | "decision"
+  // The reader's phone: a shake report or something shared to AgentOS.
+  | "device";
 
 export interface ChatOrigin {
   kind: ChatOriginKind;

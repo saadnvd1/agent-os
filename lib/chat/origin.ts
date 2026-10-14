@@ -24,7 +24,8 @@ function fromText(text: string): ChatOrigin | null {
   return null;
 }
 
-// What sent a user item, or null when the reader typed it.
+// What sent a user item, or null when the reader typed it. A "device" origin
+// is only ever set by the server (lib/intake), so it is never read from text.
 export function originOf(item: UserItem): ChatOrigin | null {
   if (item.origin) return item.origin;
   if (item.peer)
