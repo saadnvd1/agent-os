@@ -36,7 +36,9 @@ import type { StackItemView } from "../stacks/types";
 import { doneSession } from "../done";
 import { archiveChecked } from "../done/archive";
 import { amendBrief, amendmentsOf } from "./amendments";
-import type { Session } from "../db";
+import { db, type Session } from "../db";
+import { resurrectSession } from "../resurrect";
+import { resolveEnded } from "../resurrect/find";
 import { approvePlanNow } from "../models/plan-step";
 import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
@@ -409,6 +411,30 @@ export async function archive(
   await archiveChecked(s.id);
   addNote(workspaceId, `Archived: ${s.name}.`);
   return `Archived ${s.name}: out of the sidebar, in Archived.`;
+}
+
+// Brings a dropped, done or archived session back, same id and conversation.
+// A task takes a running slot again, so it goes through the brakes like a
+// start; an unarchive or reopen starts nothing.
+export async function resurrect(
+  workspaceId: string,
+  ref: string,
+  reason: string
+): Promise<string> {
+  if (!reason.trim()) throw new Error("Say why it's restored");
+  const id = resolveEnded(ref, { workspaceId });
+  const row = db
+    .prepare(`SELECT task_status, archived_at FROM sessions WHERE id = ?`)
+    .get(id) as { task_status: string | null; archived_at: string | null };
+  const task =
+    row.task_status === "dropped" ||
+    (row.task_status === "done" && !row.archived_at);
+  const go = () => resurrectSession(id);
+  const out = task
+    ? await braked(workspaceId, "task", go, (o) => o.id)
+    : await go();
+  addNote(workspaceId, `Restored ${out.name}: ${reason.trim()}`);
+  return out.text;
 }
 
 // Stops the agent and keeps everything else: a chat's turn is interrupted,

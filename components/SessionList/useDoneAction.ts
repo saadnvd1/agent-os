@@ -3,6 +3,7 @@ import type { Session } from "@/lib/db";
 import {
   useArchiveSession,
   useDoneSession,
+  useResurrectSession,
   useUnarchiveSession,
 } from "@/data/done";
 import { useSettleSession } from "@/data/sessions/shelf";
@@ -67,4 +68,17 @@ export function useArchiveAction() {
         }),
       onError: (e) => toast.error(e.message, { duration: 12000 }),
     });
+}
+
+// Restore from a session's menu: the same conversation, its worktree back.
+export function useResurrectAction() {
+  const resurrect = useResurrectSession();
+  return (session: Session) => {
+    const id = toast.loading(`Restoring ${session.name}…`);
+    resurrect.mutate(session.id, {
+      onSuccess: (outcome) =>
+        toast.success(outcome.text, { id, duration: 8000 }),
+      onError: (e) => toast.error(e.message, { id, duration: 12000 }),
+    });
+  };
 }

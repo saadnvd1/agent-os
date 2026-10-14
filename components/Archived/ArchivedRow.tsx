@@ -3,7 +3,7 @@
 import { ArchiveRestore, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useUnarchiveSession } from "@/data/done";
+import { useResurrectSession } from "@/data/done";
 import type { ArchivedView } from "@/lib/done/archive";
 import { fromSqliteTime } from "@/lib/session-meta";
 
@@ -24,7 +24,7 @@ function when(at: string): string {
 }
 
 export function ArchivedRow({ session }: { session: ArchivedView }) {
-  const unarchive = useUnarchiveSession();
+  const restore = useResurrectSession();
   const kind = session.taskStatus ? STATUS[session.taskStatus] : "Session";
 
   return (
@@ -70,20 +70,24 @@ export function ArchivedRow({ session }: { session: ArchivedView }) {
               ? "Puts the entry back in the sidebar; its worktree was removed"
               : undefined
           }
-          disabled={unarchive.isPending}
+          disabled={restore.isPending}
           onClick={() =>
-            unarchive.mutate(session.id, {
-              onSuccess: () => toast.success(`${session.name} is back`),
+            restore.mutate(session.id, {
+              onSuccess: (outcome) => toast.success(outcome.text),
               onError: (e) => toast.error(e.message),
             })
           }
         >
-          {unarchive.isPending ? (
+          {restore.isPending ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <ArchiveRestore className="h-3.5 w-3.5" />
           )}
-          {session.worktreeRemoved ? "Restore entry" : "Unarchive"}
+          {session.taskStatus === "dropped"
+            ? "Restore"
+            : session.worktreeRemoved
+              ? "Restore entry"
+              : "Unarchive"}
         </Button>
       )}
     </div>

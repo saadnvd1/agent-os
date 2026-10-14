@@ -26,6 +26,7 @@ import { getProject } from "../projects";
 import { canSignOff } from "./state";
 import {
   forgetPR,
+  expandHome,
   getTaskSession,
   isAllowedBase,
   prFor,
@@ -34,6 +35,7 @@ import {
 import { dropSessionDatabase } from "../project-config/database";
 import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
+import { snapshotWorktree } from "../resurrect/snapshot";
 
 // Never deleted, whatever a setting says.
 export const PROTECTED_BRANCHES = new Set(["main", "master", "HEAD"]);
@@ -233,6 +235,12 @@ export async function dropTask(id: string): Promise<void> {
       `${names} ${children.length === 1 ? "is" : "are"} stacked on this task and built on its branch. Drop ${children.length === 1 ? "it" : "them"} first, or sign this one off.`
     );
   }
+  // Saved while the PR is closed below, and settled before the worktree goes:
+  // a restore finds its uncommitted files and plan here. Never throws.
+  const snapshot = snapshotWorktree(
+    session.worktree_path && expandHome(session.worktree_path),
+    id
+  );
   const pr = await prFor(session, true);
   if (pr?.state === "OPEN") {
     await run("gh", ["pr", "close", String(pr.number)], repo).catch(() => {});
@@ -245,5 +253,6 @@ export async function dropTask(id: string): Promise<void> {
     `UPDATE stack_items SET status = 'dropped' WHERE session_id = ?`
   ).run(id);
   syncTaskCardInBackground(session, "dropped", pr);
+  await snapshot;
   await cleanup(session, repo);
 }

@@ -34,7 +34,11 @@ import { schedulesUiActions } from "@/stores/schedulesUi";
 import { recipesUiActions } from "@/stores/recipesUi";
 import { rowGroup } from "@/lib/recipes/chip";
 import { finishActions } from "@/lib/sidebar/row-actions";
-import { useArchiveAction, useDoneAction } from "./useDoneAction";
+import {
+  useArchiveAction,
+  useDoneAction,
+  useResurrectAction,
+} from "./useDoneAction";
 import { useShelfActions } from "./useShelfActions";
 import {
   PAUSE_PRESETS,
@@ -106,6 +110,7 @@ function FinishItems({
 }) {
   const markDone = useDoneAction();
   const archive = useArchiveAction();
+  const restore = useResurrectAction();
   const actions = finishActions(session, plain);
   return (
     <>
@@ -113,6 +118,12 @@ function FinishItems({
         <Item onClick={() => markDone(session)}>
           <CircleCheck className={icon} />
           Done
+        </Item>
+      )}
+      {actions.includes("restore") && (
+        <Item onClick={() => restore(session)}>
+          <RotateCcw className={icon} />
+          Restore
         </Item>
       )}
       {actions.includes("archive") && (

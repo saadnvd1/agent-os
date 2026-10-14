@@ -36,6 +36,7 @@ export const TOOL_NAMES = {
   stop: name("stop"),
   done: name("done"),
   archive: name("archive"),
+  resurrect: name("resurrect"),
   add_project: name("add_project"),
   note: name("note"),
   question: name("question"),

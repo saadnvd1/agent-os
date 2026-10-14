@@ -6,6 +6,7 @@ import {
   archive,
   done,
   drop,
+  resurrect,
   moveTaskTo,
   send,
   stack,
@@ -64,6 +65,7 @@ const ACTING = new Set<ToolName>([
   "stack",
   "land",
   "drop",
+  "resurrect",
   "move",
   "approve_plan",
   "plan_pieces",
@@ -219,6 +221,10 @@ export async function runTool(
       return done(w, p(tool, raw).session);
     case "archive":
       return archive(w, p(tool, raw).session);
+    case "resurrect": {
+      const a = p(tool, raw);
+      return resurrect(w, a.session, a.reason);
+    }
     case "add_project": {
       const a = p(tool, raw);
       return addProject(w, a.path, a.name);

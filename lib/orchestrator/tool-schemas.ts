@@ -291,6 +291,12 @@ export const TOOL_SHAPES = {
   stop: { session },
   done: { session },
   archive: { session },
+  resurrect: {
+    session: ref(
+      "A dropped, done or archived session: its name, project/name or id (from the decision log, or as Saad named it)"
+    ),
+    reason: z.string().trim().min(1).max(2000),
+  },
   add_project: {
     path: z
       .string()
