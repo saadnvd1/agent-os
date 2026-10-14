@@ -6,14 +6,7 @@ import {
 } from "../tasks/pr-stage";
 import type { StatusBadge } from "./row-badge";
 
-export type LiveTone =
-  | "blue"
-  | "amber"
-  | "red"
-  | "green"
-  | "purple"
-  | "primary"
-  | "muted";
+export type LiveTone = "amber" | "red" | "green" | "primary" | "muted";
 
 export interface LivePart {
   text: string;
@@ -31,17 +24,17 @@ export const BADGE_TONE: Record<StatusBadge["kind"], LiveTone> = {
   failed: "red",
   stalled: "amber",
   starting: "muted",
-  planning: "blue",
+  planning: "muted",
   "plan-ready": "primary",
 };
 
 export const PR_STAGE_TONE: Record<PrStageName, LiveTone> = {
-  merged: "purple",
+  merged: "green",
   conflicts: "amber",
   "ci-failed": "red",
-  "ci-running": "blue",
-  "ci-settling": "blue",
-  "review-running": "blue",
+  "ci-running": "muted",
+  "ci-settling": "muted",
+  "review-running": "muted",
   "review-blocked": "red",
   waiting: "amber",
   armed: "green",
@@ -58,7 +51,7 @@ export function liveParts(input: {
 }): LivePart[] {
   const parts: LivePart[] = [];
   if (input.compacting)
-    parts.push({ text: "Compacting", tone: "blue", busy: true });
+    parts.push({ text: "Compacting", tone: "muted", busy: true });
   const b = input.badge;
   if (b)
     parts.push({
