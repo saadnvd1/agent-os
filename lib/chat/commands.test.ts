@@ -15,12 +15,52 @@ const cmd = (name: string, description = ""): ChatCommand => ({
 });
 
 describe("slashQuery", () => {
-  it("is active only while the message is a single /token", () => {
-    expect(slashQuery("/")).toBe("");
-    expect(slashQuery("/Comp")).toBe("comp");
+  it("opens on a / at the start of the input", () => {
+    expect(slashQuery("/")).toEqual({ query: "", start: 0 });
+    expect(slashQuery("/Comp")).toEqual({ query: "comp", start: 0 });
+  });
+
+  it("opens on a / after a space, anywhere in the text", () => {
+    expect(slashQuery("fix this then /code-re")).toEqual({
+      query: "code-re",
+      start: 14,
+    });
+    expect(slashQuery("hi /")).toEqual({ query: "", start: 3 });
+  });
+
+  it("opens after a newline or tab", () => {
+    expect(slashQuery("first\n/rev")).toEqual({ query: "rev", start: 6 });
+    expect(slashQuery("a\t/x")).toEqual({ query: "x", start: 2 });
+  });
+
+  it("stays shut inside a word, URL or path", () => {
+    expect(slashQuery("a/b")).toBeNull();
+    expect(slashQuery("http://x")).toBeNull();
+    expect(slashQuery("see src/lib/ch")).toBeNull();
+    expect(slashQuery("/usr/bin")).toBeNull();
+  });
+
+  it("closes once the token ends or there is none", () => {
     expect(slashQuery("/compact now")).toBeNull();
-    expect(slashQuery("hi /compact")).toBeNull();
+    expect(slashQuery("hi /compact ")).toBeNull();
     expect(slashQuery("")).toBeNull();
+  });
+
+  it("filters by the text before the caret", () => {
+    const text = "fix /co then ship";
+    expect(slashQuery(text.slice(0, 7))?.query).toBe("co");
+  });
+});
+
+describe("replacing the /token", () => {
+  it("leaves the text around it alone", () => {
+    const text = "fix this /co then ship";
+    const caret = 12;
+    const q = slashQuery(text.slice(0, caret))!;
+    const out =
+      text.slice(0, q.start) + insertCommand("code-review") + text.slice(caret);
+    expect(out).toBe("fix this /code-review  then ship");
+    expect(out.indexOf("/code-review")).toBe(q.start);
   });
 });
 
