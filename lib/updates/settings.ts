@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getSetting, putSetting } from "../settings-store";
 
 // Whether this server shows the update banner, and the checks behind it.
 // AGENTOS_UPDATE_BANNER=off pins it off, like the network settings.
@@ -17,22 +17,4 @@ export function bannerEnabled(env: Env = process.env): boolean {
 export const setBannerEnabled = (on: boolean) =>
   putSetting(KEY, on ? "1" : "0");
 
-export function getSetting(key: string): string | null {
-  const row = getDb()
-    .prepare(`SELECT value FROM settings WHERE key = ?`)
-    .get(key) as { value: string } | undefined;
-  return row?.value ?? null;
-}
-
-export function putSetting(key: string, value: string | null): void {
-  if (value === null) {
-    getDb().prepare(`DELETE FROM settings WHERE key = ?`).run(key);
-    return;
-  }
-  getDb()
-    .prepare(
-      `INSERT INTO settings (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-    )
-    .run(key, value);
-}
+export { getSetting, putSetting } from "../settings-store";

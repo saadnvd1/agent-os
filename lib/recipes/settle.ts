@@ -11,6 +11,7 @@ import { blockedReason } from "../tasks/state";
 import { runClaude, type ClaudeRunner } from "../orchestrator/claude-cli";
 import { releasePieces } from "../plans/release";
 import { queueEvent } from "../orchestrator/events";
+import { sessionEnded } from "../experiments/hooks";
 import { untrusted } from "../orchestrator/untrusted";
 import {
   cleanOutputs,
@@ -172,8 +173,10 @@ function finish(
       run.id
     ).changes;
   idleSince.delete(run.id);
-  if (changed)
+  if (changed) {
     tell(run, status, summary, result, session?.pr_number ?? run.pr_number);
+    if (run.session_id) void sessionEnded(run.session_id, "recipe-settled");
+  }
   return changed === 1;
 }
 

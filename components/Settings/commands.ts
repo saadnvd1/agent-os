@@ -3,6 +3,7 @@ import {
   ClipboardList,
   Clock,
   Cpu,
+  FlaskConical,
   GitMerge,
   LayoutGrid,
   RefreshCw,
@@ -110,6 +111,14 @@ export function settingsCommands(workspaceId: string | null): PaletteCommand[] {
       keywords: ["update", "upgrade", "version", "new version", "banner"],
       icon: RefreshCw,
       run: () => settingsUiActions.open("updates"),
+    },
+    {
+      id: "app.experiments",
+      title: "Experiments",
+      group,
+      keywords: ["experiment", "labs", "beta", "feature", "try"],
+      icon: FlaskConical,
+      run: () => settingsUiActions.open("experiments"),
     },
   ];
 }

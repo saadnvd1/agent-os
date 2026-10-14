@@ -26,6 +26,7 @@ import { canSignOff } from "./state";
 import { forgetPR, getTaskSession, prFor, projectPathFor } from "./session";
 import { dropSessionDatabase } from "../project-config/database";
 import { captureMergedTask } from "../session-logs";
+import { sessionEnded } from "../experiments/hooks";
 
 // Never deleted, whatever a setting says.
 export const PROTECTED_BRANCHES = new Set(["main", "master", "HEAD"]);
@@ -163,6 +164,7 @@ export async function signOffTask(
   pushMerged(id);
   // Reads the plan file now: cleanup below removes the worktree.
   void captureMergedTask(id, { head: opts.head ?? pr!.head ?? null });
+  void sessionEnded(id, "merged");
   const head = opts.head ?? pr!.head;
   resolveMergedTaskAsks(
     id,
