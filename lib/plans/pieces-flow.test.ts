@@ -7,6 +7,10 @@ const { retireChat } = vi.hoisted(() => ({
   retireChat: vi.fn(async () => {}),
 }));
 vi.mock("../chat/runner", () => ({ retireChat, sendQueuedNow: vi.fn() }));
+const { doneSession } = vi.hoisted(() => ({
+  doneSession: vi.fn(async () => ({})),
+}));
+vi.mock("../done", () => ({ doneSession }));
 const { createTask } = vi.hoisted(() => ({
   createTask: vi.fn(async (o: { id?: string }) => ({ id: o.id })),
 }));
@@ -53,7 +57,10 @@ const turn = {
 
 const ONE = "# Plan\nDo it.\n\n## Pieces\n1. Core: everything\n";
 
-function task(planOnly: boolean, planText: (api: string) => string) {
+function task(
+  planOnly: boolean,
+  planText: (api: string, app: string) => string
+) {
   const { app, api } = seedWorkspace();
   const id = seedSession({
     projectId: app.id,
@@ -74,12 +81,15 @@ function task(planOnly: boolean, planText: (api: string) => string) {
     () => null
   );
   preparePlanDir(worktree);
-  fs.writeFileSync(path.join(worktree, PLAN_FILE), planText(api.name));
+  fs.writeFileSync(
+    path.join(worktree, PLAN_FILE),
+    planText(api.name, app.name)
+  );
   return { id, app, api };
 }
 
-const TWO = (api: string) =>
-  `# Plan\n\n## Pieces\n1. Core: the engine  (repo: ${"app"})\n   owns: migration 80\n2. Hooks: the client  (repo: ${api})\n   after: 1 is merged\n   why split: (a)\n`;
+const TWO = (api: string, app: string) =>
+  `# Plan\n\n## Pieces\n1. Core: the engine  (repo: ${app})\n   owns: migration 80\n2. Hooks: the client  (repo: ${api})\n   after: 1 is merged\n   why split: (a)\n`;
 
 beforeEach(() => retireChat.mockClear());
 
@@ -444,5 +454,170 @@ describe("session list", () => {
       kind: "feature",
       text: expect.stringContaining("Piece 1/2"),
     });
+  });
+});
+
+const wsOf = (projectId: string) =>
+  (
+    db
+      .prepare(`SELECT workspace_id FROM projects WHERE id = ?`)
+      .get(projectId) as { workspace_id: string }
+  ).workspace_id;
+const eventsOf = (projectId: string, subject: string) =>
+  pendingEvents(wsOf(projectId))
+    .filter((e) => e.subject === subject)
+    .map((e) => e.line);
+
+// A plan whose first piece is in the other project.
+const ELSEWHERE = (api: string, app: string) =>
+  `# Plan\n\n## Pieces\n1. Store: the machine API  (repo: ${api})\n   owns: Connect migration 20261013\n2. Ui: the share dialog  (repo: ${app})\n   after: 1 is merged\n   why split: (a) + (b)\n   owns: migration 85\n`;
+
+describe("routing by repo", () => {
+  beforeEach(() => {
+    doneSession.mockClear();
+    createTask.mockClear();
+  });
+
+  it("a piece in another project starts as its own task there; the parent builds nothing", async () => {
+    const { id, api } = task(false, ELSEWHERE);
+    const send = vi.fn(async () => {});
+    await handoffAfterPlan(id, send);
+    expect(listQueue(id)).toEqual([]);
+    expect(send).not.toHaveBeenCalled();
+    expect(doneSession).toHaveBeenCalledWith(
+      id,
+      expect.objectContaining({ noMerge: true })
+    );
+    const feature = featureOfPlan(id)!;
+    const pieces = piecesOf(feature.id);
+    expect(pieces[0]).toMatchObject({ project_id: api.id, status: "building" });
+    expect(pieces[0].session_id).not.toBe(id);
+    expect(pieces[1].status).toBe("waiting");
+    expect(pieceOfSession(id)).toBeUndefined();
+    expect(createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: api.id })
+    );
+    expect(createTask.mock.calls[0][0]).toMatchObject({
+      prompt: expect.stringContaining("Work only in this task's repository"),
+    });
+    expect(eventsOf(api.id, id).join()).toMatch(/builds nothing itself/);
+  });
+
+  it("a lone piece named for another project is not built by the parent", async () => {
+    const { id, api } = task(
+      false,
+      (api) => `# Plan\n\n## Pieces\n1. Store: the API  (repo: ${api})\n`
+    );
+    await handoffAfterPlan(id, async () => {});
+    expect(listQueue(id)).toEqual([]);
+    const feature = featureOfPlan(id)!;
+    expect(piecesOf(feature.id)).toHaveLength(1);
+    expect(piecesOf(feature.id)[0].project_id).toBe(api.id);
+    expect(createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: api.id })
+    );
+  });
+
+  it("the parent still builds its own piece, and the brief forbids the others", async () => {
+    const { id } = task(false, TWO);
+    await handoffAfterPlan(id, async () => {});
+    const text = listQueue(id)[0].text;
+    expect(text).toContain("Work only in this task's repository");
+    expect(text).toContain("Don't create worktrees, branches or PRs");
+    expect(doneSession).not.toHaveBeenCalled();
+    expect(createTask).not.toHaveBeenCalled();
+  });
+});
+
+// The plan of a task whose second piece silently never started.
+const EXPERIMENTS = (_api: string, app: string) =>
+  `# Plan\n\n## Pieces\n1. Experiments framework: registry, metering  (repo: ${app})\n   owns: migration 85, table experiment_usage, settings keys \`experiments.*\`\n2. Learning cards: signal scripts, cards on finished sessions  (repo: ${app})\n   after: 1 is merged\n   why split: (b) — the framework merges first and the experiment is built on it\n   owns: migration 86, table learning_cards\n`;
+
+describe("a plan that builds as fewer pieces than it listed", () => {
+  it("says so to the orchestrator and tells the agent to build the folded work", async () => {
+    const { id, api } = task(false, EXPERIMENTS);
+    await handoffAfterPlan(id, async () => {});
+    const feature = featureOfPlan(id)!;
+    expect(feature.listed).toBe(2);
+    expect(feature.folded).toMatch(/Learning cards/);
+    expect(piecesOf(feature.id)).toHaveLength(1);
+    const text = listQueue(id)[0].text;
+    expect(text).toContain("Learning cards");
+    expect(text).toContain("Nothing else will build them");
+    const lines = eventsOf(api.id, id).join("\n");
+    expect(lines).toMatch(/listed 2 pieces, building 1/);
+    expect(lines).toMatch(/Learning cards folded into 1/);
+  });
+
+  it("when it merges the feature closes saying what was folded", async () => {
+    const { id, api } = task(false, EXPERIMENTS);
+    await handoffAfterPlan(id, async () => {});
+    merge(id);
+    const { d } = deps();
+    await releasePieces(d);
+    const done = eventsOf(api.id, id).find((l) => l.includes("is merged"));
+    expect(done).toMatch(/plan listed 2/);
+    expect(done).toMatch(/Learning cards/);
+  });
+});
+
+describe("pieces that can't be registered", () => {
+  const UNKNOWN = (api: string, app: string) =>
+    `# Plan\n\n## Pieces\n1. A: first  (repo: ${app})\n2. B: second  (repo: no-such-repo)\n   why split: (a)\n`;
+
+  it("holds the task for approval and raises an event instead of building on a guess", async () => {
+    const { id, api } = task(false, UNKNOWN);
+    const send = vi.fn(async () => {});
+    await handoffAfterPlan(id, send);
+    expect(send).not.toHaveBeenCalled();
+    expect(listQueue(id)).toEqual([]);
+    expect(
+      (
+        db.prepare(`SELECT plan_phase FROM sessions WHERE id = ?`).get(id) as {
+          plan_phase: string;
+        }
+      ).plan_phase
+    ).toBe("awaiting");
+    expect(eventsOf(api.id, id).join("\n")).toMatch(
+      /couldn't register its pieces: .*no-such-repo/
+    );
+    expect(featureOfPlan(id)).toBeUndefined();
+    // Approved anyway: built as one piece, and told why.
+    await approvePlan(id, undefined, async () => {});
+    expect(listQueue(id)[0].text).toContain("couldn't be registered");
+  });
+
+  it("holds the task when the Pieces block is unreadable", async () => {
+    const { id, api } = task(
+      false,
+      () => `# Plan\n\n## Pieces\n1. A: first\nsome stray line\n`
+    );
+    await handoffAfterPlan(id, async () => {});
+    expect(listQueue(id)).toEqual([]);
+    expect(eventsOf(api.id, id).join()).toMatch(/couldn't be read/);
+  });
+});
+
+describe("stuck pieces", () => {
+  it("one event per merge when the next piece still hasn't started", async () => {
+    const { id, feature } = await build();
+    merge(id);
+    const { BrakeRefused } = await import("../orchestrator/brakes");
+    const held = deps({
+      start: async () => {
+        throw new BrakeRefused("task", "paused");
+      },
+    }).d;
+    const now = Date.now();
+    await releasePieces(held, now + 5 * 60_000);
+    const stuck = () =>
+      pendingEvents(feature.workspace_id).filter((e) =>
+        e.key.includes("feature:stuck-")
+      );
+    expect(stuck()).toHaveLength(0);
+    await releasePieces(held, now + 40 * 60_000);
+    await releasePieces(held, now + 41 * 60_000);
+    expect(stuck()).toHaveLength(1);
+    expect(stuck()[0].line).toMatch(/still waiting/);
   });
 });

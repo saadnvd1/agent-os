@@ -22,8 +22,14 @@ import { queueEvent } from "../orchestrator/events";
 import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { addNote } from "../orchestrator/notes";
 import { amendBrief, amendmentsOf } from "../orchestrator/amendments";
-import { PIECES_PROMPT, pieceBrief } from "../plans/pieces";
-import { createFeature, planFor, planPathOf, splitOf } from "../plans/features";
+import { PIECES_PROMPT, foldedBrief, pieceBrief } from "../plans/pieces";
+import {
+  createFeature,
+  ownPieceOf,
+  planFor,
+  planPathOf,
+  splitOf,
+} from "../plans/features";
 
 export const PLAN_FILE = ".agentos/plan.md";
 
@@ -52,10 +58,11 @@ export function implementPrompt(
   amendment?: string,
   piece?: string
 ): string {
+  const where = ` Work only in this task's repository; if part of the work belongs in another repository, say so in your final message instead of doing it there.`;
   const base = piece
-    ? `The plan is in \`${PLAN_FILE}\`. ${piece}\nFinish it as the task's instructions above say. Where the plan turns out wrong, do what's right and say so.`
+    ? `The plan is in \`${PLAN_FILE}\`. ${piece}\nFinish it as the task's instructions above say. Where the plan turns out wrong, do what's right and say so.${where}`
     : planned
-      ? `The plan is in \`${PLAN_FILE}\`. Implement it now, finishing the task as its instructions above say. Where the plan turns out wrong, do what's right and say so.`
+      ? `The plan is in \`${PLAN_FILE}\`. Implement it now, finishing the task as its instructions above say. Where the plan turns out wrong, do what's right and say so.${where}`
       : `No plan was written to \`${PLAN_FILE}\`. Plan briefly, then implement the task, finishing it as its instructions above say.`;
   return amendment
     ? `${base}\n\nThe plan was approved with this change, which is now part of the task's scope:\n${amendment}`
@@ -104,7 +111,7 @@ function piecesLine(r: NonNullable<ReturnType<typeof planFor>>): string {
       ? ` after ${p.afterPosition} is ${p.afterKind}`
       : "";
     const why = p.reasons.length ? ` (${p.reasons.join("+")})` : "";
-    return `${p.position} ${p.name}${after}${why}`;
+    return `${p.position} ${p.name} [${p.project.name}]${after}${why}`;
   });
   const folded = r.folded.length ? `, ${r.folded.length} folded` : "";
   return `${r.pieces.length} pieces${folded}: ${parts.join("; ")}`;
@@ -130,6 +137,8 @@ function announcePlan(s: Session, ref: string | null, retried = false): void {
     if (summary.length) head += `\n${summary.map((l) => `- ${l}`).join("\n")}`;
     const pieces = planFor(s, fs.readFileSync(file, "utf8"));
     if (pieces && pieces.pieces.length > 1) head += `\n${piecesLine(pieces)}`;
+    if (pieces?.folded.length)
+      head += `\nPlan listed ${pieces.listed} pieces, building ${pieces.pieces.length}: ${pieces.folded.map((f) => `${f.name} folded (${f.why})`).join("; ")}`;
   } catch {
     // No plan file: the line says so.
   }
@@ -141,6 +150,46 @@ function announcePlan(s: Session, ref: string | null, retried = false): void {
     return;
   }
   queueEvent(workspaceId!, `plan-done:${s.id}`, s.id, head);
+}
+
+// Plans that build as other than one piece in this repository say so, once.
+function sayHowItSplit(
+  s: Session,
+  workspaceId: string,
+  split: NonNullable<ReturnType<typeof splitOf>>,
+  nothingOwn: boolean
+): void {
+  if (nothingOwn)
+    queueEvent(
+      workspaceId,
+      `plan-routed:${s.id}`,
+      s.id,
+      `Task "${s.name}" split its plan into ${split.pieces.length} ${split.pieces.length === 1 ? "piece" : "pieces"} and none is first in its own repository, so it builds nothing itself and ends; each piece starts as its own task: ${split.pieces.map((p) => `${p.position} ${p.name} [${p.project.name}]`).join("; ")}.`
+    );
+  else if (split.folded.length)
+    queueEvent(
+      workspaceId,
+      `plan-folded:${s.id}`,
+      s.id,
+      `Plan of "${s.name}" listed ${split.listed} pieces, building ${split.pieces.length}: ${split.folded.map((f) => `${f.name} folded into ${f.into} (${f.why})`).join("; ")}. The task was told to build the folded work too.`
+    );
+}
+
+// A planning task with no piece of its own is finished: its pieces are
+// started as tasks in their projects, now rather than on the next sweep.
+async function handOffToPieces(s: Session): Promise<void> {
+  try {
+    const { doneSession } = await import("../done");
+    await doneSession(s.id, { by: "direct", noMerge: true });
+  } catch (e) {
+    console.error(`Ending planning task ${s.id} failed:`, e);
+  }
+  try {
+    const { releasePieces } = await import("../plans/release");
+    await releasePieces();
+  } catch (e) {
+    console.error("Starting the pieces failed:", e);
+  }
 }
 
 function readPlan(s: Session): string | null {
@@ -180,8 +229,14 @@ async function startImplementing(
   });
   const id = implementMessageId(sessionId);
   const planText = readPlan(s);
-  const split = planText ? splitOf(s, planText) : null;
+  let split = planText ? splitOf(s, planText) : null;
   const workspaceId = sessionWorkspace(s);
+  // Approved despite pieces that couldn't be registered: built as one piece,
+  // and told so, rather than guessing which repository each belongs to.
+  const unreadable = split?.errors.length ? split.errors : null;
+  if (unreadable) split = null;
+  let nothingOwn = false;
+  let featureId: string | null = null;
   const claimed = db.transaction(() => {
     const changed = db
       .prepare(
@@ -193,18 +248,38 @@ async function startImplementing(
     setSessionModel(sessionId, routed);
     let piece: string | undefined;
     let note = amendment;
+    if (unreadable)
+      note = [
+        amendment,
+        `The plan's pieces couldn't be registered (${unreadable.join("; ")}); build the whole plan as one piece in this repository.`,
+      ]
+        .filter(Boolean)
+        .join("\n");
     if (split?.notBuilding.length)
       note = [amendment, `Not building: ${split.notBuilding.join("; ")}`]
         .filter(Boolean)
         .join("\n");
-    if (split && split.pieces.length > 1 && planText && workspaceId) {
-      const feature = createFeature(s, planText, split.pieces, workspaceId);
-      piece = pieceBrief(
-        split.pieces.length,
-        split.pieces[0],
-        planPathOf(feature.id)
-      );
+    if (split?.feature && planText && workspaceId) {
+      const feature = createFeature(s, planText, split.pieces, workspaceId, {
+        listed: split.listed,
+        folded: split.folded,
+      });
+      featureId = feature.id;
+      const own = ownPieceOf(split.pieces, s.project_id);
+      if (!own) nothingOwn = true;
+      else if (split.pieces.length === 1 && split.folded.length)
+        piece = foldedBrief(split);
+      else
+        piece = pieceBrief(
+          split.pieces.length,
+          own,
+          planPathOf(feature.id),
+          [],
+          own.project.name
+        );
     }
+    // Every piece is another task's: nothing for this one to implement.
+    if (nothingOwn) return true;
     enqueue(sessionId, {
       id,
       text: implementPrompt(
@@ -223,6 +298,12 @@ async function startImplementing(
     } catch (e) {
       console.error("plan-done event failed:", e);
     }
+  }
+  if (split?.feature && featureId && workspaceId)
+    sayHowItSplit(s, workspaceId, split, nothingOwn);
+  if (nothingOwn) {
+    await handOffToPieces(s);
+    return routed.ref;
   }
   await applySessionModel(sessionId, s.model_provider ?? ANTHROPIC, routed);
   await send(sessionId, id);
@@ -342,9 +423,12 @@ export async function handoffAfterPlan(
   deleteQueued(sessionId, planRetryMessageId(sessionId));
   const retried = waiting.get(sessionId)?.retried ?? false;
   forget(sessionId);
-  // No approvals mode doesn't stop at the plan to wait for one.
+  // No approvals mode doesn't stop at the plan to wait for one. Pieces that
+  // couldn't be registered always do: building on a guess is the bug.
   const auto = !!s.plan_only && noApprovalsOn();
-  if (!s.plan_only || auto) {
+  const planText = readPlan(s);
+  const pieceErrors = (planText ? splitOf(s, planText)?.errors : null) ?? [];
+  if ((!s.plan_only || auto) && !pieceErrors.length) {
     const ref = await startImplementing(
       s,
       "planning",
@@ -374,6 +458,14 @@ export async function handoffAfterPlan(
   } catch (e) {
     console.error("plan-done event failed:", e);
   }
+  const workspaceId = sessionWorkspace(s);
+  if (pieceErrors.length && workspaceId)
+    queueEvent(
+      workspaceId,
+      `plan-pieces:${s.id}`,
+      s.id,
+      `Plan of "${s.name}": couldn't register its pieces: ${pieceErrors.join("; ")}. It is held, not building. Message the task to fix the plan, or approve_plan to build it as one piece.`
+    );
   try {
     const text = readPlan(s);
     const planned = text ? planFor(s, text) : null;

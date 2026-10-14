@@ -39,7 +39,9 @@ export interface StackFacts {
   }[];
 }
 
-export const IDLE_NO_PR_MS = 30 * 60 * 1000;
+// How long after a task's turn ended with no PR before it is news: longer
+// than the open-PR cache, so a PR it just opened is seen first.
+export const NO_PR_AFTER_TURN_MS = 2 * 60 * 1000;
 
 function hash(text: string): string {
   let h = 0;
@@ -133,17 +135,23 @@ function sessionConditions(
   const shouldPR = (!!f.task || !!f.branch) && !f.quick && !runForSession(f.id);
   const finished = !!f.task && isFinished(f.task.state);
   const idleFor = now - f.lastActive;
+  // A turn that ended with no PR and nothing blocked is stuck: it may
+  // have opened a PR somewhere AgentOS doesn't look, or be waiting on
+  // nothing. Keyed on when it last did anything, so it is one event per
+  // stall and anything it does after makes the next stall a new one.
   if (
     shouldPR &&
     !pr &&
     !finished &&
     !f.plan?.awaiting &&
     f.status !== "running" &&
-    idleFor >= IDLE_NO_PR_MS
+    blocked === null &&
+    idleFor >= NO_PR_AFTER_TURN_MS
   )
     add(
-      "idle",
-      `${who}: idle ${Math.floor(idleFor / 60000)}m, no PR`,
+      `no-pr:${f.lastActive}`,
+      `${who}: ended its turn ${Math.floor(idleFor / 60000)}m ago with no PR${f.activity ? ` (last: ${untrusted(f.name, f.activity)})` : ""}. If it opened a PR in another repository, or finished without one, nothing tracks it.`,
+      false,
       false,
       true
     );

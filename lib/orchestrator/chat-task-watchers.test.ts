@@ -279,14 +279,14 @@ describe.each(VIEWS)("a %s task", (view) => {
     );
   });
 
-  it("raises idle with no PR after half an hour, and not while it works", async () => {
+  it("raises a turn-ended-with-no-PR event, and not while it works", async () => {
     const idle = task(view, {
       said: "Done thinking",
       state: "idle",
       at: minsAgo(40),
     });
     expect(await lines(idle.ws.workspace.id, idle.id)).toContainEqual(
-      expect.stringMatching(/idle 4\dm, no PR/)
+      expect.stringMatching(/ended its turn 4\dm ago with no PR/)
     );
     const busy = task(view, {
       said: "Working",

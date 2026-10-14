@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { conditionsFor, IDLE_NO_PR_MS, type StackFacts } from "./conditions";
+import {
+  conditionsFor,
+  NO_PR_AFTER_TURN_MS,
+  type StackFacts,
+} from "./conditions";
 import { facts, NOW, pr, withTask } from "./fixtures";
 import type { SessionFacts } from "./facts";
 
@@ -68,26 +72,47 @@ describe("conditionsFor", () => {
       lines([
         facts("s", {
           status: "idle",
-          lastActive: NOW - IDLE_NO_PR_MS - 60000,
+          lastActive: NOW - NO_PR_AFTER_TURN_MS - 60000,
           plan: { planned: true, reason: null, awaiting: true },
         }),
       ])
     ).toEqual([]);
   });
 
-  it("reads idle-with-no-PR as a low-value event", () => {
-    const idle = facts("s", {
+  it("raises one event per stall when a turn ended with no PR", () => {
+    const ended = facts("s", {
       status: "idle",
-      lastActive: NOW - IDLE_NO_PR_MS - 60000,
+      lastActive: NOW - 3 * 60000,
+      activity: null,
     });
-    const [c] = conditionsFor([idle], [], NOW);
+    const [c] = conditionsFor([ended], [], NOW);
     expect(c).toMatchObject({
-      line: "task add-auth: idle 31m, no PR",
-      low: true,
+      key: `no-pr:${NOW - 3 * 60000}:s`,
+      waiting: true,
+      low: false,
     });
+    expect(c.line).toMatch(/task add-auth: ended its turn 3m ago with no PR/);
+    // Within the grace, a PR it just opened would win.
     expect(
       lines([facts("s", { status: "idle", lastActive: NOW - 60000 })])
     ).toEqual([]);
+    // A BLOCKED: line is its own event.
+    expect(
+      lines([
+        facts("s", {
+          status: "idle",
+          lastActive: NOW - 3 * 60000,
+          task: { ...facts("s").task!, blocked: "need a key" },
+        }),
+      ]).join()
+    ).not.toMatch(/no PR/);
+    // Anything it does after makes the next stall a different event.
+    const [again] = conditionsFor(
+      [{ ...ended, lastActive: NOW - 90000 }],
+      [],
+      NOW + 120000
+    );
+    expect(again.key).not.toBe(c.key);
     expect(
       lines([
         facts("s", { task: null, branch: null, status: "idle", lastActive: 0 }),

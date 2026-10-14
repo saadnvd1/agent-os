@@ -7,6 +7,7 @@ import {
   markDelivered,
   pendingEvents,
   queueEvent,
+  queueEventOnce,
   recordConditions,
   REFIRE_MS,
   deliveriesSince,
@@ -321,5 +322,21 @@ describe("Away mode's own events", () => {
     queueEvent(w, "review:x", "s", "review finished", NOW);
     await deliver(NOW + BATCH_WINDOW_MS);
     expect(origins).toEqual([true, undefined]);
+  });
+});
+
+describe("queueEventOnce", () => {
+  it("leaves a key alone once it exists, delivered or not", () => {
+    const w = createWorkspace(`once-${Math.random()}`);
+    expect(queueEventOnce(w.id, "stuck-1", null, "first", NOW)).toBe(true);
+    expect(queueEventOnce(w.id, "stuck-1", null, "again", NOW + 1)).toBe(false);
+    expect(pendingEvents(w.id).map((e) => e.line)).toEqual(["first"]);
+    markDelivered(
+      pendingEvents(w.id).map((e) => e.id),
+      NOW + 2
+    );
+    expect(queueEventOnce(w.id, "stuck-1", null, "third", NOW + 3)).toBe(false);
+    expect(pendingEvents(w.id)).toEqual([]);
+    expect(queueEventOnce(w.id, "stuck-2", null, "other", NOW + 4)).toBe(true);
   });
 });
