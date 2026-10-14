@@ -88,7 +88,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   pause_task:
     "Pause a running task for a set time: its agent ends at the end of its current step (now true interrupts the step), its worktree and conversation stay, and it frees its slot so the next queued task can start. It resumes by itself at the time, ahead of new arrivals of the same priority, with whatever was held (CI and review notes, messages) in one continue prompt. Refused for a task that is merging, moving, setting up or waiting on Saad. Give a reason; it is shown with the pause.",
   resume_task:
-    "Resume a task you paused (or the scheduler did) now. A pause Saad set is his to lift: this refuses and says so.",
+    "Resume a task you paused (or the scheduler did) now: it starts at once, past the running-task limit, unless the machine load holds it (the answer says so). A pause Saad set is his to lift: this refuses and says so.",
   stop: "Stop a session's agent mid-turn, even while it's thinking, keeping its conversation, worktree and branch; your next message runs as its next turn.",
   done: "Finish a session whose work is complete: a task's open PR merges through the sign-off gates first (refused naming the failing gate), then its agent stops, its worktree is removed if nothing would be lost, and it lands on the sidebar's Done shelf; it no longer archives (use archive for that). Not a rejection.",
   archive:

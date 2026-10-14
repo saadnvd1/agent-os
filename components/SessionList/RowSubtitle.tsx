@@ -67,6 +67,7 @@ export function RowSubtitle({
             until: session.paused_until
               ? Date.parse(`${session.paused_until.replace(" ", "T")}Z`)
               : null,
+            note: session.pause_note,
           })}
         </span>
       ) : (

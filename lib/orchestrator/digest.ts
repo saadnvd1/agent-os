@@ -58,6 +58,7 @@ interface TaskRow {
   armed_at: string | null;
   pause_state: string | null;
   paused_until: string | null;
+  pause_note: string | null;
   placed_note: string | null;
 }
 
@@ -165,7 +166,7 @@ function tasksSection(
   const tasks = db
     .prepare(
       `SELECT s.id, s.name, p.name AS project, s.pr_number, s.pr_status, s.view,
-         s.merge_armed_at AS armed_at, s.pause_state, s.paused_until, s.placed_note
+         s.merge_armed_at AS armed_at, s.pause_state, s.paused_until, s.pause_note, s.placed_note
        FROM sessions s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
@@ -181,7 +182,7 @@ function tasksSection(
       const gates = gateState(checks.get(t.id), failures.get(t.id));
       const arm = t.armed_at ? " | armed to merge" : "";
       const paused = t.pause_state
-        ? ` | ${t.pause_state}${t.paused_until ? ` until ${t.paused_until} UTC` : t.pause_state === "paused" ? " until resumed" : ""}`
+        ? ` | ${t.pause_state}${t.paused_until ? ` until ${t.paused_until} UTC` : t.pause_state === "paused" ? " until resumed" : ""}${t.pause_note ? ` (${t.pause_note})` : ""}`
         : "";
       const placed = t.placed_note ? ` | ${t.placed_note}` : "";
       return `- ${clip(t.name, 80)} (${t.project ?? "?"}, ${t.view}, id ${shortId(t.id)}): ${pr}${arm}${paused}${placed}${gates ? ` | ${gates}` : ""}`;

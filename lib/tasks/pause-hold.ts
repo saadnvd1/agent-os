@@ -46,7 +46,7 @@ export function endPause(
        WHERE id = ? AND state != 'ended'`
     ).run(reason, row.id);
     db.prepare(
-      `UPDATE sessions SET pause_state = NULL, paused_until = NULL, pause_id = NULL
+      `UPDATE sessions SET pause_state = NULL, paused_until = NULL, pause_id = NULL, pause_note = NULL
        WHERE id = ? AND pause_id = ?`
     ).run(row.session_id, row.id);
   })();

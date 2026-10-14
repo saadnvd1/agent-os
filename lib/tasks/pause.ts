@@ -34,6 +34,9 @@ import { openBySubject, workSubject } from "../orchestrator/asks";
 import { queueEventOnce } from "../orchestrator/events";
 import { isPaused } from "../orchestrator/pause";
 import { isMerging } from "./finish";
+import { autoHold } from "./auto-hold";
+import { localView } from "../load/machines";
+import { machineHold } from "./schedule";
 import {
   continuePrompt,
   durationText,
@@ -373,7 +376,8 @@ export function resumeBlock(sessionId: string, actor: PauseBy): string | null {
 }
 
 // Marks a paused session's resume as due: a task then competes for a slot
-// (queue tick), anything else resumes at once.
+// (queue tick), anything else resumes at once. Only the timer uses this for
+// a task; a person or the orchestrator resuming goes through resumeNow.
 export function requestResume(sessionId: string, actor: PauseBy): void {
   const refusal = resumeBlock(sessionId, actor);
   if (refusal) throw new PauseRefused(refusal);
@@ -391,13 +395,73 @@ export function requestResume(sessionId: string, actor: PauseBy): void {
     );
 }
 
-// A person's Resume now: past the slot limit, like Start now.
-export async function resumeNow(sessionId: string, actor: PauseBy = "person") {
+// Why this machine's load rules out starting an agent now, or null. Only a
+// red (or still settling) machine holds a resume; amber doesn't.
+export function loadHoldFor(s: Session): string | null {
+  const project = s.project_id ? getProject(s.project_id) : null;
+  if (!project || isRemoteHost(s.host_id ?? project.host_id)) return null;
+  const hold = machineHold(
+    {
+      heavy: false,
+      needsUnmet: false,
+      remote: false,
+      priority: DEFAULT_PRIORITY,
+    },
+    localView(),
+    Date.now()
+  );
+  return hold?.code === "load_red" ? hold.text.replace(/^Waiting: /, "") : null;
+}
+
+// Why a resume this actor asked for must wait: this machine's load, and for
+// the orchestrator also what holds its own starts (it is paused, or the
+// usage window). Saad's own resume skips the second.
+export function resumeHoldFor(s: Session, actor: PauseBy): string | null {
+  const load = loadHoldFor(s);
+  if (load) return load;
+  if (actor !== "orchestrator") return null;
+  const ws = s.project_id ? getProject(s.project_id)?.workspace_id : null;
+  return autoHold(ws ?? null)?.text.replace(/^Waiting: /, "") ?? null;
+}
+
+export function setPauseNote(sessionId: string, note: string | null): void {
+  db.prepare(
+    `UPDATE sessions SET pause_note = ? WHERE id = ? AND pause_state = 'paused' AND COALESCE(pause_note, '') != COALESCE(?, '')`
+  ).run(note, sessionId, note);
+}
+
+export type ResumeOutcome =
+  | { outcome: "resumed" | "cancelled" }
+  | { outcome: "held"; note: string };
+
+// A deliberate Resume, by a person or the orchestrator: starts at once, past
+// the slot limit, like Start now. A machine in the red still holds it: it is
+// recorded as asked for, says why on the task, and goes when the load
+// calms.
+export async function resumeNow(
+  sessionId: string,
+  actor: PauseBy = "person"
+): Promise<ResumeOutcome> {
   const refusal = resumeBlock(sessionId, actor);
   if (refusal) throw new PauseRefused(refusal);
   const row = activePause(sessionId)!;
-  if (row.state === "pausing") return cancelPause(sessionId);
+  if (row.state === "pausing") {
+    cancelPause(sessionId);
+    return { outcome: "cancelled" };
+  }
+  const s = sessionOf(sessionId);
+  const why = s ? resumeHoldFor(s, actor) : null;
+  if (s && why && row.state === "paused") {
+    db.prepare(
+      `UPDATE task_pauses SET resume_requested_at = COALESCE(resume_requested_at, datetime('now')), resume_by_kind = ? WHERE id = ?`
+    ).run(actor, row.id);
+    const note = `held: ${why}`;
+    setPauseNote(sessionId, note);
+    nudge();
+    return { outcome: "held", note };
+  }
   await claimResume(sessionId, { reason: actor, force: true });
+  return { outcome: "resumed" };
 }
 
 export interface DueResume {
@@ -407,6 +471,8 @@ export interface DueResume {
   priority: Priority;
   dueAtMs: number;
   byKind: PauseBy;
+  // A person or the orchestrator asked: it isn't queued behind the slot limit.
+  resumeBy: PauseBy | null;
 }
 
 // Paused tasks whose time came (or that someone asked to resume), for the
@@ -414,7 +480,7 @@ export interface DueResume {
 export function dueResumes(): DueResume[] {
   const rows = db
     .prepare(
-      `SELECT p.id AS pause_id, p.session_id, p.by_kind, p.until_at, p.resume_requested_at,
+      `SELECT p.id AS pause_id, p.session_id, p.by_kind, p.until_at, p.resume_requested_at, p.resume_by_kind,
               s.project_id, s.priority
        FROM task_pauses p JOIN sessions s ON s.id = p.session_id
        WHERE p.state = 'paused' AND p.resume_requested_at IS NOT NULL
@@ -426,6 +492,7 @@ export function dueResumes(): DueResume[] {
     by_kind: PauseBy;
     until_at: string | null;
     resume_requested_at: string;
+    resume_by_kind: string | null;
     project_id: string | null;
     priority: string | null;
   }[];
@@ -438,6 +505,7 @@ export function dueResumes(): DueResume[] {
       priority: isPriority(r.priority) ? r.priority : DEFAULT_PRIORITY,
       dueAtMs: r.until_at ? ms(r.until_at) : ms(r.resume_requested_at),
       byKind: r.by_kind,
+      resumeBy: (r.resume_by_kind as PauseBy | null) ?? null,
     }));
 }
 
@@ -544,9 +612,9 @@ export async function claimResume(
         }),
         Date.now()
       );
-    db.prepare(`UPDATE sessions SET pause_state = 'resuming' WHERE id = ?`).run(
-      sessionId
-    );
+    db.prepare(
+      `UPDATE sessions SET pause_state = 'resuming', pause_note = NULL WHERE id = ?`
+    ).run(sessionId);
     return true;
   })();
   if (!claimed) return "gone";

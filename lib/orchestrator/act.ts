@@ -56,7 +56,7 @@ import {
   PauseRefused,
   activePause,
   requestPause,
-  requestResume,
+  resumeNow,
 } from "../tasks/pause";
 import { pauseUntil, type PausePreset } from "../sidebar/snooze";
 import type { Priority } from "../tasks/schedule-types";
@@ -533,14 +533,27 @@ export function pauseTask(
   return `Pausing ${task.name} ${now ? "now" : "at the end of its step"}. Its slot frees once it has stopped; an event says when.`;
 }
 
-export function resumeTask(workspaceId: string, ref: string): string {
+export async function resumeTask(
+  workspaceId: string,
+  ref: string
+): Promise<string> {
   const task = workspaceTask(workspaceId, ref);
   if (!activePause(task.id)) throw new Error(`${task.name} isn't paused`);
+  const slots = task.project_id ? slotState(task.project_id) : null;
+  let out;
   try {
-    requestResume(task.id, "orchestrator");
+    out = await resumeNow(task.id, "orchestrator");
   } catch (error) {
     if (error instanceof PauseRefused) throw new Error(error.message);
     throw error;
   }
-  return `${task.name} will resume as soon as it has a slot.`;
+  if (out.outcome === "held")
+    return `${task.name} is ${out.note}. It resumes by itself when that clears.`;
+  if (out.outcome === "cancelled")
+    return `${task.name} keeps running: its pause was cancelled.`;
+  const past = slots?.full
+    ? ` past the running-task limit (${slots.running} of ${slots.limit} running)`
+    : "";
+  addNote(workspaceId, `Resumed ${task.name} now${past}.`);
+  return `Resumed ${task.name} now${past}. It carries on with what was held for it.`;
 }

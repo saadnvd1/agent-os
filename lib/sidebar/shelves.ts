@@ -70,7 +70,11 @@ export interface SidebarRow {
   // Its agent is being stopped, is stopped, or is starting again
   // (lib/tasks/pause): until is when it resumes by itself (ms), null: when
   // someone resumes it.
-  paused?: { state: "pausing" | "paused" | "resuming"; until: number | null };
+  paused?: {
+    state: "pausing" | "paused" | "resuming";
+    until: number | null;
+    note?: string | null;
+  };
 }
 
 export interface Shelves {
@@ -261,6 +265,7 @@ function toRow(input: ShelfInput, session: Session, now: number): SidebarRow {
       paused: {
         state: pauseState,
         until: session.paused_until ? ms(session.paused_until) : null,
+        ...(session.pause_note && { note: session.pause_note }),
       },
     }),
     working:
@@ -421,6 +426,7 @@ export function sameRow(a: SidebarRow, b: SidebarRow): boolean {
     a.wakesAt === b.wakesAt &&
     a.paused?.state === b.paused?.state &&
     a.paused?.until === b.paused?.until &&
+    a.paused?.note === b.paused?.note &&
     a.settled === b.settled &&
     a.workers.length === b.workers.length &&
     a.workers.every((w, i) => sameRow(w, b.workers[i])) &&

@@ -63,7 +63,7 @@ describe("the scheduling tools", () => {
     expect(pauseState(t.id)).toBe("paused");
     expect(
       await runTool(t.workspace.id, "resume_task", { task: t.id })
-    ).toMatch(/will resume/);
+    ).toMatch(/Resumed worker now/);
   });
 
   it("can't lift a pause a person set, and says so", async () => {

@@ -89,8 +89,11 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    await resumeNow(id, "person");
-    return NextResponse.json({ pause: pauseViewOf(id) });
+    const out = await resumeNow(id, "person");
+    return NextResponse.json({
+      pause: pauseViewOf(id),
+      ...(out.outcome === "held" && { note: out.note }),
+    });
   } catch (error) {
     return fail(error);
   }

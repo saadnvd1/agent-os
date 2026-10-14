@@ -92,6 +92,8 @@ export interface Session {
   pause_state?: "pausing" | "paused" | "resuming" | null;
   paused_until?: string | null;
   pause_id?: number | null;
+  // Why a requested resume hasn't happened yet.
+  pause_note?: string | null;
   placed_note?: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;
