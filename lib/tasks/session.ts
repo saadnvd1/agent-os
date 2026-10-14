@@ -16,6 +16,7 @@ import { findPRStrict } from "./gh";
 import { currentBranch, git } from "../git-exec";
 import { lookupPR } from "./pr-poll";
 import { captureMergedTask } from "../session-logs";
+import { sessionEnded } from "../experiments/hooks";
 import { getOrchestrator } from "../orchestrator/home";
 import {
   pushCiFailed,
@@ -211,6 +212,7 @@ export async function prFor(
     if (pr.state === "MERGED") {
       if (session.pr_status !== "merged") pushMerged(session.id);
       void captureMergedTask(session.id, { head: pr.head });
+      void sessionEnded(session.id, "merged");
     }
   }
   // Only an answer just read from GitHub: a cached one may predate a

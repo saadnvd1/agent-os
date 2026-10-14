@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   ListChecks,
   ShieldOff,
+  FlaskConical,
   RefreshCw,
   Smartphone,
   X,
@@ -33,6 +34,7 @@ import { GlobalMergeSection } from "@/components/Merge/GlobalMergeSection";
 import { ModelsSection } from "@/components/Models/ModelsSection";
 import { SchedulesPanel } from "@/components/Schedules";
 import { UpdatesSection } from "@/components/Updates/UpdatesSection";
+import { ExperimentsSection } from "./ExperimentsSection";
 import { WorkspaceSettings } from "@/components/Workspaces";
 import { useSettingsUrl } from "@/hooks/useSettingsUrl";
 import { SETTINGS_SECTIONS, type SettingsSection } from "@/lib/settings-url";
@@ -106,6 +108,11 @@ export const SECTION_INFO: Record<
     hint: "Version, check for updates, the update banner",
     icon: RefreshCw,
   },
+  experiments: {
+    label: "Experiments",
+    hint: "Try features that aren't finished, and see what they cost",
+    icon: FlaskConical,
+  },
 };
 
 function SectionBody({
@@ -138,6 +145,8 @@ function SectionBody({
       return <SetupSection />;
     case "updates":
       return <UpdatesSection />;
+    case "experiments":
+      return <ExperimentsSection />;
   }
 }
 

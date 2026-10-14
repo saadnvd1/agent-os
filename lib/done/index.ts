@@ -32,6 +32,7 @@ import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
 import { hostLink } from "../hosts/remote-api";
 import { doneHeldTask } from "../tasks/held-remote";
 import { captureMergedTask } from "../session-logs";
+import { sessionEnded } from "../experiments/hooks";
 import { pushMerged } from "../notify/push/events";
 
 export interface DoneOptions {
@@ -112,6 +113,7 @@ function mark(s: Session, status: "merged" | "done", pr: TaskPR | null) {
       : `UPDATE sessions SET task_status = 'done' WHERE id = ?`
   ).run(s.id);
   syncTaskCardInBackground(s, status, pr);
+  void sessionEnded(s.id, status);
   if (status === "merged") {
     pushMerged(s.id);
     void captureMergedTask(s.id, { head: pr?.head });
