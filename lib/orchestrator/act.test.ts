@@ -184,6 +184,7 @@ describe("workspace scoping", () => {
       ["pause_task", { task: theirs, for: "1h", reason: "no" }],
       ["resume_task", { task: theirs }],
       ["set_priority", { task: theirs, priority: "urgent" }],
+      ["start_now", { task: theirs, reason: "no" }],
       ["review", { target: theirs }],
       ["sign_off", { task: theirs }],
     ];
@@ -638,6 +639,132 @@ describe("acting inside the workspace", () => {
       tone: "note",
       text: "Holding api work until CI is fixed",
     });
+  });
+});
+
+describe("starting past the running-task limit", () => {
+  const brief = (mine: ReturnType<typeof twoWorkspaces>["mine"], x = {}) => ({
+    plan: false,
+    plan_reason: "a clear edit",
+    project: mine.app.name,
+    ...x,
+  });
+  const limitOne = (w: string) =>
+    db
+      .prepare(`UPDATE workspaces SET max_running_tasks = 1 WHERE id = ?`)
+      .run(w);
+  const pause = (w: string, on: boolean) =>
+    db
+      .prepare(
+        `UPDATE workspaces SET orch_paused_at = ${on ? "datetime('now')" : "NULL"} WHERE id = ?`
+      )
+      .run(w);
+  const logged = (w: string) => listNotes(w).map((n) => n.text);
+
+  it("start_now starts a queued task past a full limit and logs why", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    limitOne(w);
+    started.length = 0;
+    const queued = await runTool(
+      w,
+      "start_task",
+      brief(mine, { prompt: "hotfix", name: "hotfix" })
+    );
+    expect(queued).toMatch(/^Queued/);
+    const id = queued.match(/id (\w{8})\)/)![1];
+    const text = await runTool(w, "start_now", {
+      task: id,
+      reason: "Saad hit it in prod",
+    });
+    expect(text).toMatch(/Started .*hotfix.* now, past the running-task limit/);
+    expect(started).toEqual(["hotfix"]);
+    expect(logged(w).join("\n")).toMatch(
+      /hotfix.*past the running-task limit.*Saad hit it in prod/
+    );
+  });
+
+  it("start_now is refused while paused, and the task stays queued", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    limitOne(w);
+    started.length = 0;
+    const queued = await runTool(
+      w,
+      "start_task",
+      brief(mine, { prompt: "waits", name: "waits" })
+    );
+    const id = queued.match(/id (\w{8})\)/)![1];
+    const notes = logged(w).length;
+    pause(w, true);
+    try {
+      await expect(
+        runTool(w, "start_now", { task: id, reason: "urgent" })
+      ).rejects.toThrow(/Paused/);
+    } finally {
+      pause(w, false);
+    }
+    expect(started).toEqual([]);
+    expect(logged(w)).toHaveLength(notes);
+    expect(
+      db.prepare(`SELECT status FROM task_queue WHERE id LIKE ?`).get(`${id}%`)
+    ).toEqual({ status: "queued" });
+  });
+
+  it("start_now refuses a task that isn't queued", async () => {
+    const { mine } = twoWorkspaces();
+    await expect(
+      runTool(mine.workspace.id, "start_now", {
+        task: "add-auth",
+        reason: "x",
+      })
+    ).rejects.toThrow(/already started/);
+  });
+
+  it("start_task with now starts at once past a full limit and logs why", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    limitOne(w);
+    started.length = 0;
+    const text = await runTool(
+      w,
+      "start_task",
+      brief(mine, {
+        prompt: "now task",
+        name: "now task",
+        now: true,
+        now_reason: "blocks the release",
+      })
+    );
+    expect(text).toMatch(
+      /^Started task "now task".*past the running-task limit/
+    );
+    expect(started).toEqual(["now task"]);
+    expect(logged(w).join("\n")).toMatch(
+      /now task.*past the running-task limit.*blocks the release/
+    );
+  });
+
+  it("start_task with now needs a reason and can't take an after", async () => {
+    const { mine } = twoWorkspaces();
+    const w = mine.workspace.id;
+    started.length = 0;
+    await expect(
+      runTool(w, "start_task", brief(mine, { prompt: "a", now: true }))
+    ).rejects.toThrow(/now_reason/);
+    await expect(
+      runTool(
+        w,
+        "start_task",
+        brief(mine, {
+          prompt: "b",
+          now: true,
+          now_reason: "x",
+          after: "add-auth",
+        })
+      )
+    ).rejects.toThrow(/now and after/);
+    expect(started).toEqual([]);
   });
 });
 

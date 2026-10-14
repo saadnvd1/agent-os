@@ -312,6 +312,26 @@ export interface QueueRequest {
   priority?: Priority;
   // "mac" pins it to a Mac; "any" says it needs nothing in particular.
   machine?: "any" | "mac";
+  // Start at once, past the running-task limit, instead of queueing for a
+  // slot. Still needs the machine it needs, and an orchestrator's start
+  // still passes its brakes.
+  now?: boolean;
+}
+
+// How full the workspace's running-task limit is for this project.
+export function slotState(projectId: string): {
+  running: number;
+  limit: number | null;
+  full: boolean;
+} {
+  const workspaceId = workspaceOf(projectId);
+  const limit = limitOf(workspaceId);
+  if (!workspaceId || limit === null)
+    return { running: 0, limit: null, full: false };
+  const running =
+    runningIn({ workspaceId, projectId }, true).length +
+    startingIn(workspaceId);
+  return { running, limit, full: running >= limit };
 }
 
 const waitingIn = (workspaceId: string) =>
@@ -349,8 +369,11 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
     }
   } else if (after)
     afterTask = resolveAfter(after, req.originWorkspaceId ?? workspaceId).id;
+  if (req.now && waits)
+    throw new Error("now and after don't go together: now starts it at once");
   const full =
     !req.planOnly &&
+    !req.now &&
     limit !== null &&
     !!workspaceId &&
     (runningIn({ workspaceId, projectId: project.id }, true).length +
@@ -364,9 +387,18 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
     throw new Error(`Machine is "any" or "mac"`);
   // The orchestrator's own starts wait out a loaded machine; a person's
   // direct start goes ahead, as "start now" always has.
+  if (
+    req.now &&
+    !req.planOnly &&
+    needsUnmetHere(project.id, req.prompt, setting)
+  )
+    throw new Error(
+      `Can't start now: this task needs a Mac, and this machine isn't one. Queue it without now.`
+    );
   const loaded =
     !waits &&
     !full &&
+    !req.now &&
     !req.planOnly &&
     !!req.originWorkspaceId &&
     loadHeldStart(project.id, req.prompt, setting);
@@ -426,7 +458,8 @@ export async function startOrQueue<T>(
   const queued = queueIfNeeded(req);
   if (queued) return { queued };
   const workspaceId = workspaceOf(req.projectId);
-  if (!workspaceId) return { started: await start() };
+  // A plan-only start never holds a slot, as its queue row doesn't.
+  if (!workspaceId || req.planOnly) return { started: await start() };
   reserved.set(workspaceId, (reserved.get(workspaceId) ?? 0) + 1);
   try {
     return { started: await start() };
@@ -539,6 +572,33 @@ function autoHold(workspaceId: string | null, planOnly = false): Hold | null {
   return window ? { code: "window", text: `Waiting: ${window}` } : null;
 }
 
+const requestNeeds = (
+  projectId: string,
+  workingDirectory: string,
+  prompt: string,
+  setting: Need[] | null
+): Need[] =>
+  setting ??
+  needsOf({
+    projectId,
+    projectPath: expandHome(workingDirectory),
+    prompt,
+  }).needs;
+
+// Whether the task needs something this machine lacks (a Mac).
+function needsUnmetHere(
+  projectId: string,
+  prompt: string,
+  setting: Need[] | null
+): boolean {
+  const project = getProject(projectId);
+  if (!project || isRemoteHost(project.host_id)) return false;
+  return !meetsNeeds(
+    requestNeeds(projectId, project.working_directory, prompt, setting),
+    machineCapabilities()
+  );
+}
+
 // Whether this machine's load rules out starting a task for this project now.
 function loadHeldStart(
   projectId: string,
@@ -547,13 +607,12 @@ function loadHeldStart(
 ): boolean {
   const project = getProject(projectId);
   if (!project || isRemoteHost(project.host_id)) return false;
-  const needs =
-    setting ??
-    needsOf({
-      projectId,
-      projectPath: expandHome(project.working_directory),
-      prompt,
-    }).needs;
+  const needs = requestNeeds(
+    projectId,
+    project.working_directory,
+    prompt,
+    setting
+  );
   const hold = machineHold(
     {
       heavy: heavyNeeds(needs),
@@ -593,6 +652,8 @@ interface StartOpts {
   // Start on this linked machine instead of the project's.
   placement?: Placement | null;
   heavy?: boolean;
+  // Pass this workspace's brakes even for a row no orchestrator queued.
+  brakeAs?: string;
 }
 
 async function startRow(
@@ -683,9 +744,10 @@ async function startRow(
   try {
     // The orchestrator's queued starts pass its brakes when they start,
     // a person's "start now" included: it skips only the limit and `after`.
-    const session = origin
+    const brakeWs = origin ?? opts.brakeAs;
+    const session = brakeWs
       ? await braked(
-          origin,
+          brakeWs,
           "task",
           () => createTask(task),
           (s) => s.id,
@@ -1088,6 +1150,67 @@ export async function startQueuedNow(id: string): Promise<StartOutcome> {
   if (!r || r.status !== "queued")
     throw new Error("That task isn't waiting in the queue");
   return startRow(r, { force: true });
+}
+
+export interface ForcedStart {
+  outcome: "started" | "held" | "failed";
+  // Why it is held, or what failed; empty when it started.
+  text: string;
+  // The running-task limit was full when it started.
+  wasFull: boolean;
+  running: number;
+  limit: number | null;
+  // It skipped an `after`.
+  skippedAfter: boolean;
+}
+
+// The orchestrator's start now: past the limit and `after`, never past
+// Pause, its brakes or a machine need. A held task stays queued.
+export async function startQueuedForOrchestrator(
+  workspaceId: string,
+  id: string
+): Promise<ForcedStart> {
+  const r = row(id);
+  const project = r ? getProject(r.project_id) : null;
+  if (!r || r.status !== "queued" || project?.workspace_id !== workspaceId)
+    throw new Error("That task isn't waiting in the queue");
+  const slots = slotState(r.project_id);
+  const base = {
+    wasFull: slots.full,
+    running: slots.running,
+    limit: slots.limit,
+    skippedAfter: !!(r.after_task || r.after_any),
+  };
+  const held = (text: string): ForcedStart => ({
+    ...base,
+    outcome: "held",
+    text,
+  });
+  if (isPaused(workspaceId)) return held("the orchestrator is paused by Saad");
+  if (isRemoteHost(r.host_id ?? project.host_id))
+    return held(
+      "it runs on another machine, and the orchestrator starts tasks on this one only"
+    );
+  if (
+    !meetsNeeds(
+      parseNeeds(r.machine_needs) ??
+        requestNeeds(project.id, project.working_directory, r.prompt, null),
+      machineCapabilities()
+    )
+  )
+    return held("it needs a Mac, and this machine isn't one");
+  try {
+    const outcome = await startRow(r, { force: true, brakeAs: workspaceId });
+    if (outcome === "started") return { ...base, outcome, text: "" };
+    return held("it could not be claimed just now; try again");
+  } catch (error) {
+    if (error instanceof BrakeRefused) return held(error.reason);
+    return {
+      ...base,
+      outcome: "failed",
+      text: row(id)?.error ?? String(error),
+    };
+  }
 }
 
 // A task still waiting in the line (or failed to start) by id, an id prefix

@@ -76,11 +76,12 @@ const greenView = (): MachineView => ({
   lastHeavyStartAt: null,
 });
 let machine: MachineView = greenView();
+let capabilities = ["mac", "xcode", "simulator"];
 const recorded: { hostId: string; heavy: boolean }[] = [];
 vi.mock("@/lib/load/machines", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/load/machines")>()),
   localView: () => machine,
-  machineCapabilities: () => ["mac", "xcode", "simulator"],
+  machineCapabilities: () => capabilities,
   recordAutoStart: (hostId: string, heavy: boolean) => {
     recorded.push({ hostId, heavy });
   },
@@ -135,6 +136,7 @@ const {
   removeQueued,
   setPriority,
   startOrQueue,
+  startQueuedForOrchestrator,
   startQueuedNow,
   tickQueue,
 } = await import("./queue");
@@ -169,6 +171,7 @@ beforeEach(() => {
   startedOn.clear();
   peers = {};
   machine = greenView();
+  capabilities = ["mac", "xcode", "simulator"];
   resetMachineStarts();
   db.prepare(`UPDATE task_queue SET status = 'removed'`).run();
 });
@@ -1004,5 +1007,139 @@ describe("placement on a linked machine", () => {
     await tick();
     expect(startedOn.get("home")).toBeUndefined();
     expect(started.map((s) => s.prompt)).toEqual(["home"]);
+  });
+});
+
+describe("the orchestrator's start now", () => {
+  const orchQueue = (t: ReturnType<typeof setup>, prompt: string, extra = {}) =>
+    queueIfNeeded({
+      projectId: t.app.id,
+      prompt,
+      originWorkspaceId: t.workspace.id,
+      ...extra,
+    })!;
+
+  it("starts past a full running-task limit", async () => {
+    const t = setup(1);
+    const q = orchQueue(t, "urgent fix");
+    expect(q).toMatchObject({ status: "queued" });
+    const out = await startQueuedForOrchestrator(t.workspace.id, q.id);
+    expect(out).toMatchObject({
+      outcome: "started",
+      wasFull: true,
+      running: 1,
+      limit: 1,
+    });
+    expect(started.map((s) => s.prompt)).toEqual(["urgent fix"]);
+    expect(statusOf(q.id)).toBe("started");
+  });
+
+  it("skips an after it was waiting on", async () => {
+    const t = setup(null);
+    const q = orchQueue(t, "early", { after: t.task });
+    const out = await startQueuedForOrchestrator(t.workspace.id, q.id);
+    expect(out).toMatchObject({ outcome: "started", skippedAfter: true });
+  });
+
+  it("is refused while paused, and stays queued", async () => {
+    const t = setup(1);
+    const q = orchQueue(t, "urgent fix");
+    setPaused(t.workspace.id, true);
+    const out = await startQueuedForOrchestrator(t.workspace.id, q.id);
+    expect(out).toMatchObject({ outcome: "held" });
+    expect(out.text).toMatch(/paused/);
+    expect(started).toEqual([]);
+    expect(statusOf(q.id)).toBe("queued");
+  });
+
+  it("keeps a task that needs a Mac off a machine that isn't one", async () => {
+    const t = setup(1);
+    const q = orchQueue(t, "ios", { machine: "mac" });
+    capabilities = ["linux"];
+    const out = await startQueuedForOrchestrator(t.workspace.id, q.id);
+    expect(out).toMatchObject({ outcome: "held" });
+    expect(out.text).toMatch(/Mac/);
+    expect(started).toEqual([]);
+    expect(statusOf(q.id)).toBe("queued");
+  });
+
+  it("refuses a task that isn't queued in that workspace", async () => {
+    const t = setup(1);
+    const other = seedWorkspace();
+    const q = orchQueue(t, "mine");
+    await expect(
+      startQueuedForOrchestrator(other.workspace.id, q.id)
+    ).rejects.toThrow(/isn't waiting/);
+  });
+});
+
+describe("now on a direct start", () => {
+  it("skips the full limit instead of queueing", () => {
+    const t = setup(1);
+    expect(queueIfNeeded({ projectId: t.app.id, prompt: "x" })).toMatchObject({
+      status: "queued",
+    });
+    expect(
+      queueIfNeeded({ projectId: t.app.id, prompt: "y", now: true })
+    ).toBeNull();
+  });
+
+  it("can't be combined with after", () => {
+    const t = setup(null);
+    expect(() =>
+      queueIfNeeded({
+        projectId: t.app.id,
+        prompt: "y",
+        now: true,
+        after: t.task,
+      })
+    ).toThrow(/now and after/);
+  });
+
+  it("refuses a Mac-only task on a machine that isn't one", () => {
+    const t = setup(1);
+    capabilities = ["linux"];
+    expect(() =>
+      queueIfNeeded({
+        projectId: t.app.id,
+        prompt: "ios",
+        machine: "mac",
+        now: true,
+      })
+    ).toThrow(/needs a Mac/);
+  });
+});
+
+describe("a plan-only task and the running-task limit", () => {
+  it("doesn't count while its plan waits for approval", () => {
+    const t = setup(1);
+    db.prepare(
+      `UPDATE sessions SET plan_only = 1, plan_phase = 'awaiting' WHERE id = ?`
+    ).run(t.task);
+    expect(queueIfNeeded({ projectId: t.app.id, prompt: "next" })).toBeNull();
+    db.prepare(
+      `UPDATE sessions SET plan_phase = 'implementing' WHERE id = ?`
+    ).run(t.task);
+    expect(
+      queueIfNeeded({ projectId: t.app.id, prompt: "next" })
+    ).toMatchObject({ status: "queued" });
+  });
+
+  it("holds no slot while it starts", async () => {
+    const t = setup(1);
+    let release!: () => void;
+    const slow = new Promise<void>((r) => (release = r));
+    finish(t.task);
+    const planning = startOrQueue(
+      { projectId: t.app.id, prompt: "plan", planOnly: true },
+      () => slow.then(() => "p")
+    );
+    const other = await startOrQueue(
+      { projectId: t.app.id, prompt: "b" },
+      async () => "b"
+    );
+    expect(other).toEqual({ started: "b" });
+    release();
+    await planning;
   });
 });

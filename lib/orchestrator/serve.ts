@@ -12,6 +12,7 @@ import {
   stackStatus,
   startSession,
   startTask,
+  startNow,
   setTaskPriority,
   pauseTask,
   resumeTask,
@@ -67,6 +68,7 @@ const ACTING = new Set<ToolName>([
   "approve_plan",
   "plan_pieces",
   "set_priority",
+  "start_now",
   "pause_task",
   "resume_task",
   "stop",
@@ -139,7 +141,13 @@ export async function runTool(
         planReason: a.plan_reason,
         priority: a.priority,
         machine: a.machine,
+        now: a.now,
+        nowReason: a.now_reason,
       });
+    }
+    case "start_now": {
+      const a = p(tool, raw);
+      return startNow(w, a.task, a.reason);
     }
     case "set_priority": {
       const a = p(tool, raw);

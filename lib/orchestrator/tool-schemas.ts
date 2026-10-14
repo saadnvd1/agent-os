@@ -128,6 +128,19 @@ export const TOOL_SHAPES = {
       .describe(
         'Where it may run: "mac" for work that needs this Mac (Xcode, a simulator); "any" if no machine need applies. Unset: the project\'s setting, else decided from its files'
       ),
+    now: z
+      .boolean()
+      .optional()
+      .describe(
+        "Start it at once, past the workspace's running-task limit, instead of queueing for a slot. Needs now_reason; not with after"
+      ),
+    now_reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .optional()
+      .describe("With now: why it can't wait for a slot; logged for Saad"),
     model: modelOverride,
     plan: z
       .boolean()
@@ -249,6 +262,15 @@ export const TOOL_SHAPES = {
   set_priority: {
     task: ref("A queued or running task: name, project/name or id"),
     priority: z.enum(PRIORITIES),
+  },
+  start_now: {
+    task: ref("A queued task: name, project/name or id"),
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .describe("Why it can't wait for a slot; logged for Saad"),
   },
   pause_task: {
     task,

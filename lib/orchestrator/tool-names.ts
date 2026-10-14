@@ -30,6 +30,7 @@ export const TOOL_NAMES = {
   drop: name("drop"),
   move: name("move"),
   set_priority: name("set_priority"),
+  start_now: name("start_now"),
   pause_task: name("pause_task"),
   resume_task: name("resume_task"),
   stop: name("stop"),
