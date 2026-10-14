@@ -132,3 +132,20 @@ describe("rowDetails", () => {
     expect(old.lines.at(-1)?.[1]).not.toMatch(/ago/);
   });
 });
+
+describe("plan badge placement", () => {
+  it("is drawn by the second line, never the hover-hidden slot", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = (f: string) => readFileSync(f, "utf8");
+    expect(src("components/SessionList/RowParts.tsx")).not.toMatch(
+      /rowKindBadge|KindBadge/
+    );
+    const sessionRow = src("components/SessionList/SessionRow.tsx");
+    const slot = sessionRow.slice(
+      sessionRow.indexOf("hoverHidden={"),
+      sessionRow.indexOf("menu={menu}")
+    );
+    expect(slot).not.toContain("rowKindBadge");
+    expect(sessionRow).toContain("kindBadge: rowKindBadge(row)");
+  });
+});

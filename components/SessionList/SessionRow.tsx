@@ -105,10 +105,10 @@ export const SessionRow = memo(function SessionRow({
             )}
           </>
         }
-        trailing={
+        hoverHidden={
           <>
             <RowBadge row={row} />
-            {!row.need && !rowKindBadge(row) && <RowTime row={row} />}
+            {!row.need && <RowTime row={row} />}
           </>
         }
         menu={menu}
@@ -141,7 +141,11 @@ export const SessionRow = memo(function SessionRow({
           live={
             row.need
               ? undefined
-              : { compacting: row.compacting, prStage: row.status?.prStage }
+              : {
+                  compacting: row.compacting,
+                  prStage: row.status?.prStage,
+                  kindBadge: rowKindBadge(row),
+                }
           }
         />
       </RowShell>

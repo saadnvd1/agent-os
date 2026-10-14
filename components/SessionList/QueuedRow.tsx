@@ -142,7 +142,7 @@ export function QueuedRow({ row }: { row: Row }) {
           )}
         />
       }
-      trailing={
+      hoverHidden={
         // Under the Queued heading a waiting one needs no badge.
         item.status !== "queued" && (
           <span
