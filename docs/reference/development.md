@@ -29,11 +29,25 @@ build leaves `.next` as it was.
 
 `scripts/autodeploy` waits for a merge to be 2 minutes old
 (`AGENTOS_SETTLE`), so a burst of merges is one build and one restart. Before
-it pulls, `scripts/wait-quiet` waits for the reviews and task setups the
+it pulls, `scripts/wait-quiet` waits for the reviews, task setups and
+simulator starts the
 server runs (`GET /api/busy`, loopback or tailnet only) to finish, for up to
 10 minutes (`AGENTOS_QUIET_WAIT`), then deploys anyway. A review a restart
 cuts off anyway runs again when the server starts, and its verdict arrives
 as usual.
+
+Restarts are also spaced `AGENTOS_MIN_GAP` seconds apart (default 600; 0 turns
+it off). A merge that lands inside the gap isn't dropped: the checkout stays
+as it was, and the newest head deploys on the first run after the gap ends.
+Each hold logs one line, `HELD <sha> <n>s left in the <gap>s restart gap`
+(once per head), so holds can be counted with `grep -c HELD`. For an urgent
+fix, put `[deploy-now]` in the commit message (any commit the deploy would
+take): the gap is skipped and the log says so. `scripts/autodeploy.test.ts`
+runs the script against a scratch origin.
+
+A task whose project declares `test` in `agentos.json` is told to run exactly
+that command, and that CI runs the full suite; without it the brief says to
+run the project's own checks.
 
 `scripts/perf/loadtest.mjs` starts a throwaway AgentOS (its own HOME,
 database, port and tmux socket) with N idle sessions and reports RSS, file

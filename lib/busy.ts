@@ -1,9 +1,14 @@
 import { db } from "./db";
+import { runningStarts } from "./simulator";
 
-// What a restart would cut off and have to start over: reviews and task
-// setups run in the server. (Chat turns run in their own workers and
+// What a restart would cut off and have to start over: reviews, task
+// setups and simulator starts run in the server. (Chat turns run in their own workers and
 // outlive it.) Older than half an hour is stuck, not in flight.
-export function inFlight(): { reviews: number; setups: number } {
+export function inFlight(): {
+  reviews: number;
+  setups: number;
+  simulatorStarts: number;
+} {
   const count = (sql: string) => (db.prepare(sql).get() as { n: number }).n;
   return {
     reviews: count(
@@ -16,5 +21,6 @@ export function inFlight(): { reviews: number; setups: number } {
        WHERE setup_status = 'running' AND archived_at IS NULL
          AND created_at > datetime('now', '-30 minutes')`
     ),
+    simulatorStarts: runningStarts(),
   };
 }

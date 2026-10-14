@@ -23,7 +23,7 @@ import { resolveModelForAgent } from "../model-catalog";
 import { providerFor } from "../models/resolve";
 import { preparePlanDir, PLAN_FILE } from "../models/plan-step";
 import { carryTaskState } from "./move-carry";
-import { buildTaskBrief } from "./brief";
+import { buildTaskBrief, declaredTest } from "./brief";
 import { expandHome } from "./session";
 import { ensureProject } from "./project-ref";
 import { checkoutBranchWorktree } from "./branch-worktree";
@@ -136,7 +136,11 @@ async function arrive(
     ? bundle.model
     : resolveModelForAgent("claude", bundle.model || project.default_model);
   const baseBranch = bundle.baseBranch ?? "main";
-  const brief = buildTaskBrief({ branch: bundle.branch, baseBranch });
+  const brief = buildTaskBrief({
+    branch: bundle.branch,
+    baseBranch,
+    test: declaredTest(worktreePath),
+  });
   // Checked and written with no await between, so two can't both pass.
   db.transaction(() => {
     refuseBusyBranch(project.id, bundle.branch);

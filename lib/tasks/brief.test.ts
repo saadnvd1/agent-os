@@ -44,3 +44,26 @@ describe("a stacked brief", () => {
     );
   });
 });
+
+describe("the checks line", () => {
+  it("tells the agent to run the declared test command and leave the full suite to CI", () => {
+    const brief = buildTaskBrief({
+      branch: "feature/x",
+      baseBranch: "main",
+      test: "npx vitest run <the test files you touched>",
+    });
+    expect(brief).toContain(
+      "Run exactly this to check your work: `npx vitest run <the test files you touched>`"
+    );
+    expect(brief).toMatch(/CI runs the full suite/);
+    expect(brief).not.toContain("Run the project's own checks");
+  });
+
+  it("keeps the general sentence when the project declares no test", () => {
+    const brief = buildTaskBrief({ branch: "feature/x", baseBranch: "main" });
+    expect(brief).toContain(
+      "Run the project's own checks (typecheck, tests, lint) when they exist"
+    );
+    expect(brief).not.toMatch(/CI runs the full suite/);
+  });
+});

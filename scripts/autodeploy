@@ -4,6 +4,11 @@
 # background. Chat turns live in workers and outlive the restart; reviews
 # and task setups don't, so the restart waits up to 10 minutes for them.
 #   sm add agentos-autodeploy "scripts/autodeploy" --cron "* * * * *"
+# Restarts are spaced AGENTOS_MIN_GAP seconds apart (10 minutes; 0 turns it
+# off): a head that lands inside the gap waits and is deployed, whatever it
+# has become by then, when the gap ends. A commit message with [deploy-now]
+# (in any commit the deploy would take) skips the gap. Each hold logs one line:
+#   HELD <sha> <seconds> left in the restart gap (since <last restart sha>)
 # Another machine (a server) runs it with AGENTOS_PUBLISH=0: deploy
 # only, and its own AGENTOS_RESTART. Only one machine publishes to npm.
 set -euo pipefail
@@ -44,6 +49,28 @@ if [ "$head" != "$deployed" ] && [ "$settle" -gt 0 ] &&
   exit 0
 fi
 
+# Restarts kill simulator starts and reviews in flight, so they are spaced
+# apart. The head isn't recorded as deployed while it waits, so it (or a
+# newer one) goes out as soon as the gap is over; nothing is dropped.
+gap="${AGENTOS_MIN_GAP:-600}"
+if [ "$head" != "$deployed" ] && [ "$gap" -gt 0 ]; then
+  last=$(cat "$state/restarted" 2>/dev/null || echo 0)
+  left=$(( last + gap - $(date +%s) ))
+  if [ "$left" -gt 0 ]; then
+    msgs=$(git log --format=%B "${deployed:+$deployed..}$head" 2>/dev/null || git log -1 --format=%B "$head")
+    if printf '%s' "$msgs" | grep -qF '[deploy-now]'; then
+      log "Restart gap skipped for ${head:0:7}: [deploy-now]"
+    else
+      # Once per head, not once per minute, so the log counts holds.
+      if [ "$(cat "$state/held" 2>/dev/null)" != "$head" ]; then
+        echo "$head" > "$state/held"
+        log "HELD ${head:0:7} ${left}s left in the ${gap}s restart gap"
+      fi
+      exit 0
+    fi
+  fi
+fi
+
 # A deploy that can't land says so once per commit, rather than retrying
 # quietly every minute (uncommitted edits in this checkout block the pull).
 alert() {
@@ -70,6 +97,7 @@ if [ "$head" != "$deployed" ]; then
   fi
   # The pull takes what landed while it waited, too.
   git rev-parse HEAD > "$state/deployed"
+  date +%s > "$state/restarted"
 fi
 
 # Publishing waits minutes for npm to serve a version, so it runs on its own
