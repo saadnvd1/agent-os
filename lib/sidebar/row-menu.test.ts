@@ -5,7 +5,7 @@ const base: RowMenuInput = {
   session: {
     role: null,
     quick_of: null,
-    pinned: 0,
+    pinned: false,
     view: "chat",
     agent_type: "claude",
     task_status: null,
@@ -75,7 +75,10 @@ describe("rowMenu", () => {
   });
 
   it("offers no Snooze to a pinned session", () => {
-    expect(menu({ s: { pinned: 1 } }).sections[2]).toEqual(["pause", "settle"]);
+    expect(menu({ s: { pinned: true } }).sections[2]).toEqual([
+      "pause",
+      "settle",
+    ]);
   });
 
   it("keeps a quick change to its PR, finishing and delete", () => {
