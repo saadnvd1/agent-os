@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
-import { ActiveTick } from "./RowShell";
+import { ActiveTick, ROW_MENU_CONTENT } from "./RowShell";
 import { RowRename, UnreadDot } from "./RowParts";
 import { QuickChangeRow } from "./QuickChangeRow";
 import { NestRail } from "./RowParts";
@@ -158,7 +158,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
         </DM.DropdownMenuTrigger>
         <DM.DropdownMenuContent
           align="end"
-          className="w-56"
+          className={ROW_MENU_CONTENT}
           onClick={(e) => e.stopPropagation()}
         >
           {menu("dropdown")}
@@ -171,7 +171,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
     <>
       <CM.ContextMenu>
         <CM.ContextMenuTrigger asChild>{content}</CM.ContextMenuTrigger>
-        <CM.ContextMenuContent className="w-56">
+        <CM.ContextMenuContent className={ROW_MENU_CONTENT}>
           {menu("context")}
         </CM.ContextMenuContent>
       </CM.ContextMenu>

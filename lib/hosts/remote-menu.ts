@@ -13,6 +13,10 @@ export const REMOTE_UNSUPPORTED = {
   schedule: (host: string) => `Check-ins can't message ${host} yet`,
 };
 
+// The one line that replaces the hidden items.
+export const remoteNote = (host: string) =>
+  `Runs on ${host}: fork, fresh start, project moves and check-ins happen there`;
+
 export type RemoteAction = keyof typeof REMOTE_UNSUPPORTED;
 
 /**
