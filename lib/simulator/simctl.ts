@@ -142,6 +142,16 @@ export async function shutdownDevice(device: {
   }
 }
 
+// Shut down only, never delete or erase. Also used for devices a project's
+// own scripts made, matched to a finished task by name (task-devices.ts).
+export async function shutdownByUdid(udid: string): Promise<void> {
+  try {
+    await run(["shutdown", udid]);
+  } catch (error) {
+    if (!/current state: Shutdown/i.test(String(error))) throw error;
+  }
+}
+
 export async function deleteDevice(device: {
   udid: string;
   name: string;

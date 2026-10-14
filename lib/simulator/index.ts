@@ -60,6 +60,7 @@ export class SimulatorError extends Error {
 }
 
 export { simulatorAvailable };
+export { shutTaskSimulators, shutFinishedTaskSimulators } from "./task-devices";
 
 const session = (id: string) =>
   db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
