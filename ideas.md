@@ -243,7 +243,8 @@
 - [x] Run read-only search subagents on a cheaper model than the parent session
 - [ ] A/B Sonnet against the parent model for reviewer subagents before changing the never-Haiku rule
 - [ ] Compact long Opus chats earlier so fewer turns re-read a very large context
-- [ ] Gate review: put the checklist in a cache-stable prefix instead of repeating it in every diff part
+- [x] Gate review: put the checklist in a cache-stable prefix instead of repeating it in every diff part
+- [ ] The card scope check re-sends the card and file list with every diff part; give it the same stable prefix
 - [ ] Record usage for titles, recipe drafts, PR text and summaries; bound the summarize input; run PR text through the hardened runner
 - [ ] Measure the extra model call behind chat prompt suggestions, then decide whether to keep it
 - [ ] Keep the scope check and gate review off Haiku

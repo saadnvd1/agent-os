@@ -4,7 +4,8 @@
  * detached checkout of that commit, with Read/Grep/Glob limited to it and no
  * shell, and its verdict is stored against the sha. When the task came from
  * a card, a second run checks the change against the card. A diff too big
- * to read whole is reviewed in parts (diff-parts.ts), each against the task,
+ * to read whole is reviewed in parts (diff-parts.ts), each against the task
+ * (the checklist rides in the system prompt, so parts 2..N read it from cache),
  * and fails if any part does; with merge approvals on it goes to Saad
  * instead, as does one too big even in parts. Both run in the background;
  * the orchestrator hears the verdict as an event.
@@ -40,8 +41,7 @@ import {
 import {
   combineVerdicts,
   REVIEW_SCHEMA,
-  reviewPrompt,
-  REVIEW_SYSTEM,
+  reviewRun,
   toVerdict,
 } from "./review-prompt";
 import { checkScope } from "./scope";
@@ -149,9 +149,13 @@ async function reviewJob(
     sha,
     kind: "review",
   });
+  const run = reviewRun(
+    { goal: target.goal, sha, base, files, skill, ...scope },
+    parts
+  );
   try {
     const verdicts = [];
-    for (const [i, part] of parts.entries()) {
+    for (let i = 0; i < parts.length; i++) {
       // Each part can take its own 15 minutes: a fresh row each time keeps
       // a long review from reading as one a restart left behind.
       if (i > 0)
@@ -163,17 +167,8 @@ async function reviewJob(
         });
       const answer = await claude({
         cwd: dir,
-        system: REVIEW_SYSTEM,
-        prompt: reviewPrompt({
-          goal: target.goal,
-          sha,
-          base,
-          files,
-          diff: part,
-          skill,
-          ...scope,
-          ...(parts.length > 1 ? { part: { n: i + 1, of: parts.length } } : {}),
-        }),
+        system: run.system,
+        prompt: run.prompts[i],
         schema: REVIEW_SCHEMA,
         tools: ["Read", "Grep", "Glob"],
         allow: [`Read(/${dir}/**)`, `Grep(/${dir}/**)`, `Glob(/${dir}/**)`],
